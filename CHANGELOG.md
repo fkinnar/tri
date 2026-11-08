@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Colors changed in darktable read back** (#371): darktable rewrites its colors but
+  leaves `xmp:Label` as is; a `Label` set earlier by other software (or by `tri`) hid the
+  change. In a darktable sidecar its colors are authoritative, one or several; `tri` puts
+  the fields back in agreement when it rewrites the file. Drop-down list for `[xmp]
+  embed` in the settings window.
 - **Ratings kept in step by themselves** (#368): with `[xmp] embed` = `internal`
   (internal and fixed disks) or `everywhere`, each rating also goes into the image
   (JPEG, PNG, WebP, TIFF, HEIC), and a rating merged from another program is written at

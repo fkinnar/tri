@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Couleurs changées dans darktable bien relues** (#371) : darktable réécrit ses
+  couleurs mais laisse `xmp:Label` tel quel ; un `Label` posé avant par un autre logiciel
+  (ou par `tri`) masquait le changement. Dans un sidecar de darktable, ses couleurs font
+  foi, une ou plusieurs ; `tri` remet les champs d'accord quand il récrit le fichier.
+  Liste déroulante pour `[xmp] embed` dans la fenêtre de réglages.
 - **Notes tenues à jour d'elles-mêmes** (#368) : avec `[xmp] embed` = `internal`
   (disques internes et fixés) ou `everywhere`, chaque note va aussi dans l'image (JPEG,
   PNG, WebP, TIFF, HEIC), et une note fusionnée depuis un autre logiciel est récrite

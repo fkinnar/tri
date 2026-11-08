@@ -54,8 +54,14 @@ Règles d'écriture :
 
 Règles de lecture : rejeté si `xmp:Rating = -1`, `xmpDM:pick = -1` ou
 `digiKam:PickLabel = 1` ; accepté si `xmpDM:pick = 1` ou `digiKam:PickLabel = 3`. Couleurs :
-`xmp:Label` d'abord (comme darktable), sinon `darktable:colorlabels`, sinon
-`digiKam:ColorLabel`. Les étoiles écrites « 3.0 » (certains logiciels) sont acceptées.
+dans un sidecar écrit par darktable (`darktable:xmp_version`), `darktable:colorlabels` seul,
+toutes ses couleurs (aucune s'il est absent) ; ailleurs, `xmp:Label` d'abord (comme
+darktable), sinon `darktable:colorlabels`, sinon `digiKam:ColorLabel`. Pourquoi : darktable
+réécrit ses couleurs depuis sa base à chaque changement mais ne touche jamais `xmp:Label`
+(« géré par une application extérieure ») ; un `Label` posé avant par un autre logiciel
+masquait ses changements. Le réglage une / plusieurs couleurs ne joue qu'à la modification
+dans `tri` (une nouvelle couleur remplace ou s'ajoute) : à la lecture, toutes les couleurs
+posées ailleurs sont montrées. Les étoiles écrites « 3.0 » (certains logiciels) sont acceptées.
 
 ## Quel sidecar
 

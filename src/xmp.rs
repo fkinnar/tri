@@ -740,6 +740,10 @@ impl Field {
 struct Raw {
     values: Vec<(Field, String)>,
     darktable_colors: Option<Vec<String>>,
+    /// Fichier écrit par darktable (`darktable:xmp_version`) : il réécrit
+    /// `darktable:colorlabels` depuis sa base à chaque changement, mais ne touche jamais
+    /// `xmp:Label` (« géré par une application extérieure », `src/common/exif.cc`).
+    darktable_written: bool,
 }
 
 impl Raw {
@@ -781,21 +785,31 @@ impl Raw {
             rating
         }
         .clamp(0, 5) as u8;
-        // Même priorité que darktable : xmp:Label d'abord.
-        let mut colors: Vec<Color> =
-            if let Some(c) = self.get(Field::Label).and_then(Color::from_label) {
-                vec![c]
-            } else if let Some(list) = &self.darktable_colors {
-                list.iter()
-                    .filter_map(|v| v.trim().parse().ok())
-                    .filter_map(Color::from_darktable)
-                    .collect()
-            } else {
-                self.int(Field::DigikamColor)
-                    .and_then(Color::from_digikam)
-                    .into_iter()
-                    .collect()
-            };
+        // Un sidecar de darktable : ses couleurs font foi, même absentes (aucune couleur).
+        // Un xmp:Label laissé là par un autre logiciel (ou par tri) n'est jamais remis à
+        // jour par darktable et masquait ses changements (retour du 08/11/2026 : couleur
+        // changée dans darktable, Label « Green » resté, colorlabels passé à 0).
+        let mut colors: Vec<Color> = if self.darktable_written {
+            self.darktable_colors
+                .iter()
+                .flatten()
+                .filter_map(|v| v.trim().parse().ok())
+                .filter_map(Color::from_darktable)
+                .collect()
+        // Sinon, même priorité que darktable à la lecture : xmp:Label d'abord.
+        } else if let Some(c) = self.get(Field::Label).and_then(Color::from_label) {
+            vec![c]
+        } else if let Some(list) = &self.darktable_colors {
+            list.iter()
+                .filter_map(|v| v.trim().parse().ok())
+                .filter_map(Color::from_darktable)
+                .collect()
+        } else {
+            self.int(Field::DigikamColor)
+                .and_then(Color::from_digikam)
+                .into_iter()
+                .collect()
+        };
         colors.sort();
         colors.dedup();
         Notes {
@@ -909,7 +923,10 @@ fn scan(xml: &str) -> Result<Raw> {
                     }
                 } else if description == Some(depth - 1)
                     && let Some((uri, local)) = scopes.resolve(&qname)
-                    && let Some(f) = Field::find(&uri, local)
+                    && let Some(f) = {
+                        note_darktable(&uri, local, &mut raw);
+                        Field::find(&uri, local)
+                    }
                 {
                     text.clear();
                     items.clear();
@@ -988,12 +1005,22 @@ fn store(raw: &mut Raw, field: Field, value: String, items: Vec<String>) {
     }
 }
 
+/// Repère un fichier écrit par darktable ([`Raw::darktable_written`]).
+fn note_darktable(uri: &str, local: &str, raw: &mut Raw) {
+    if uri == ns::DARKTABLE && local == "xmp_version" {
+        raw.darktable_written = true;
+    }
+}
+
 fn collect_attributes(start: &BytesStart<'_>, scopes: &Scopes, raw: &mut Raw) -> Result<()> {
     for attr in start.attributes() {
         let attr = attr.map_err(|e| XmpError::Malformed(e.to_string()))?;
         let key = attr.key.as_ref().to_string();
         if let Some((uri, local)) = scopes.resolve(&key)
-            && let Some(f) = Field::find(&uri, local)
+            && let Some(f) = {
+                note_darktable(&uri, local, raw);
+                Field::find(&uri, local)
+            }
         {
             let value = attr
                 .normalized_value(XmlVersion::Implicit1_0)
@@ -2070,6 +2097,62 @@ mod tests {
     #[test]
     fn reads_the_darktable_sidecar() {
         assert_eq!(parse(DARKTABLE).unwrap(), Notes::default());
+    }
+
+    /// Sidecar d'un JPEG réécrit par darktable (retour du 08/11/2026) : la couleur a changé
+    /// dans darktable (rouge), le `xmp:Label` posé avant par un autre logiciel est resté.
+    const DARKTABLE_STALE_LABEL: &str = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:digiKam="http://www.digikam.org/ns/1.0/"
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmlns:darktable="http://darktable.sf.net/"
+   digiKam:ColorLabel="4"
+   xmp:Label="Green"
+   xmp:Rating="3"
+   darktable:xmp_version="5">
+   <darktable:colorlabels>
+    <rdf:Seq>
+     <rdf:li>0</rdf:li>
+    </rdf:Seq>
+   </darktable:colorlabels>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>"#;
+
+    #[test]
+    fn in_a_darktable_sidecar_its_own_colours_win_over_a_stale_label() {
+        assert_eq!(
+            parse(DARKTABLE_STALE_LABEL).unwrap(),
+            notes(3, Flag::None, &[Color::Red])
+        );
+        // Toutes les couleurs retirées dans darktable : il efface colorlabels, pas Label.
+        let none = DARKTABLE_STALE_LABEL.replace(
+            "<darktable:colorlabels>\n    <rdf:Seq>\n     <rdf:li>0</rdf:li>\n    </rdf:Seq>\n   </darktable:colorlabels>",
+            "",
+        );
+        assert!(!none.contains("colorlabels"));
+        assert_eq!(parse(&none).unwrap(), notes(3, Flag::None, &[]));
+        // Réécrit par tri, les trois champs repartent d'accord (darktable relirait Label).
+        let out = apply(DARKTABLE_STALE_LABEL, &notes(3, Flag::None, &[Color::Red])).unwrap();
+        assert!(out.contains(r#"xmp:Label="Red""#), "{out}");
+        assert!(out.contains(r#"digiKam:ColorLabel="1""#), "{out}");
+        // Plusieurs couleurs dans darktable : toutes lues, quel que soit le réglage une /
+        // plusieurs couleurs (il ne joue qu'à la modification dans tri).
+        let several = DARKTABLE_STALE_LABEL.replace(
+            "<rdf:li>0</rdf:li>",
+            "<rdf:li>0</rdf:li>\n     <rdf:li>3</rdf:li>",
+        );
+        assert_eq!(
+            parse(&several).unwrap(),
+            notes(3, Flag::None, &[Color::Red, Color::Blue])
+        );
+        // Sans darktable:xmp_version (Lightroom, XnView…), Label garde la priorité.
+        let foreign = DARKTABLE_STALE_LABEL.replace(r#"darktable:xmp_version="5""#, "");
+        assert_eq!(
+            parse(&foreign).unwrap(),
+            notes(3, Flag::None, &[Color::Green])
+        );
     }
 
     #[test]

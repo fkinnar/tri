@@ -54,8 +54,13 @@ Writing rules:
 
 Reading rules: rejected if `xmp:Rating = -1`, `xmpDM:pick = -1` or
 `digiKam:PickLabel = 1`; accepted if `xmpDM:pick = 1` or `digiKam:PickLabel = 3`.
-Colors: `xmp:Label` first (like darktable), otherwise `darktable:colorlabels`, otherwise
-`digiKam:ColorLabel`. Stars written "3.0" (some software) are accepted.
+Colors: in a sidecar written by darktable (`darktable:xmp_version`), `darktable:colorlabels`
+alone, all its colors (none if it is missing); elsewhere, `xmp:Label` first (like
+darktable), otherwise `darktable:colorlabels`, otherwise `digiKam:ColorLabel`. Why:
+darktable rewrites its colors from its database at every change but never touches
+`xmp:Label` ("managed by an external application"); a `Label` set earlier by other software
+hid its changes. The one / several colors setting only matters when editing in `tri` (a new
+color replaces or is added): when reading, all the colors set elsewhere are shown. Stars written "3.0" (some software) are accepted.
 
 ## Which sidecar
 
