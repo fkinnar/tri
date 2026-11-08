@@ -19367,22 +19367,29 @@ mod tests {
             .unwrap();
         // Deux listes déroulantes : l'ordre, puis le rendu des vignettes (#246 ; la barre
         // des filtres n'en a plus).
-        let combo = |h: &Harness<'_, TriApp>, n: usize| {
-            h.get_all_by_role(egui::accesskit::Role::ComboBox)
-                .nth(n)
-                .unwrap()
-                .click()
+        // Ouvre la liste n° `n` jusqu'à voir `choice` : le clic d'ouverture se perd
+        // parfois sur la CI Windows (08/11/2026, #379).
+        let combo = |h: &mut Harness<'_, TriApp>, n: usize, choice: &str| {
+            for _ in 0..5 {
+                h.get_all_by_role(egui::accesskit::Role::ComboBox)
+                    .nth(n)
+                    .expect("liste déroulante")
+                    .click();
+                h.run_steps(2);
+                if h.query_by_label(choice).is_some() {
+                    return;
+                }
+            }
+            panic!("la liste n° {n} ne s'ouvre pas ({choice})");
         };
         // Les choix d'une liste une fois sa place arrêtée (clic tombé à côté sur la CI
         // Windows, 07/11/2026).
-        combo(&h, 0);
-        h.run_steps(2);
+        combo(&mut h, 0, &sort_name(other));
         click_settled(&mut h, &sort_name(other));
         h.run_steps(2);
         assert_eq!(h.state().order.key, other);
-        combo(&h, 1);
-        h.run_steps(2);
         // « RAW », puis « LibRaw » en gris.
+        combo(&mut h, 1, "RAW  LibRaw");
         click_settled(&mut h, "RAW  LibRaw");
         h.run_steps(2);
         assert_eq!(
