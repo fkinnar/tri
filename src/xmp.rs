@@ -1316,6 +1316,10 @@ pub fn apply_with(xml: &str, notes: &Notes, rules: Rules) -> Result<String> {
     // Espaces en attente : supprimés avec un élément retiré, recopiés sinon.
     let mut pending: Option<Event<'static>> = None;
     let mut child_indent = String::from("\n   ");
+    // darktable ne relit pas ses couleurs placées après `darktable:history` (constaté
+    // par l'utilisateur) : la liste va juste avant, à sa place dans les fichiers de
+    // darktable, sinon à la fin de la description.
+    let mut colors_written = false;
 
     let write = |writer: &mut Writer<Vec<u8>>, event: Event<'_>| -> Result<()> {
         writer
@@ -1373,6 +1377,18 @@ pub fn apply_with(xml: &str, notes: &Notes, rules: Rules) -> Result<String> {
                 {
                     child_indent = t.to_string();
                 }
+                if !colors_written
+                    && !dt_colors.is_empty()
+                    && first_description.is_some()
+                    && first_description == inside_description
+                    && inside_description == Some(depth - 1)
+                    && scopes
+                        .resolve(&qname)
+                        .is_some_and(|(u, l)| u == ns::DARKTABLE && l == "history")
+                {
+                    write_colors(&mut writer, &scopes, &dt_colors, &child_indent)?;
+                    colors_written = true;
+                }
                 if let Some(p) = pending.take() {
                     write(&mut writer, p)?;
                 }
@@ -1410,7 +1426,8 @@ pub fn apply_with(xml: &str, notes: &Notes, rules: Rules) -> Result<String> {
             }
             Event::End(ref e) => {
                 if inside_description == Some(depth) {
-                    if first_description == Some(depth) && !dt_colors.is_empty() {
+                    if first_description == Some(depth) && !dt_colors.is_empty() && !colors_written
+                    {
                         write_colors(&mut writer, &scopes, &dt_colors, &child_indent)?;
                     }
                     inside_description = None;
@@ -2161,6 +2178,52 @@ mod tests {
  </rdf:RDF>
 </x:xmpmeta>
 "#;
+
+    #[test]
+    fn the_darktable_list_goes_before_the_history() {
+        // darktable ne relit pas une liste placée après `darktable:history` (constaté par
+        // l'utilisateur, fichier écrit par une version précédente de tri).
+        let list = "   <darktable:colorlabels>\n    <rdf:Seq>\n     <rdf:li>0</rdf:li>\n    </rdf:Seq>\n   </darktable:colorlabels>\n";
+        let end = "   </darktable:history>\n";
+        assert!(DEVELOPED.contains(list) && DEVELOPED.contains(end));
+        let late = DEVELOPED
+            .replace(list, "")
+            .replace(end, &format!("{end}{list}"));
+        for (rules, colors) in [
+            (MULTIPLE, &[Color::Red, Color::Yellow, Color::Blue][..]),
+            (SINGLE, &[Color::Green][..]),
+        ] {
+            for xml in [DEVELOPED, late.as_str()] {
+                let out = apply_with(xml, &notes(3, Flag::None, colors), rules).unwrap();
+                let at = |tag: &str| {
+                    out.find(tag)
+                        .unwrap_or_else(|| panic!("{tag} absent :\n{out}"))
+                };
+                assert!(at("<darktable:masks_history>") < at("<darktable:colorlabels>"));
+                assert!(
+                    at("</darktable:colorlabels>") < at("<darktable:history>"),
+                    "{out}"
+                );
+                assert_eq!(out.matches("<darktable:colorlabels>").count(), 1);
+                assert!(
+                    out.contains("   </darktable:colorlabels>\n   <darktable:history>\n"),
+                    "{out}"
+                );
+                assert_eq!(parse_with(&out, rules).unwrap().colors, colors);
+            }
+        }
+        // Sans historique, la liste reste à la fin de la description.
+        let bare = DARKTABLE.replace(
+            "   <darktable:history>\n    <rdf:Seq/>\n   </darktable:history>\n",
+            "",
+        );
+        assert!(!bare.contains("darktable:history>"));
+        let out = apply_with(&bare, &notes(1, Flag::None, &[Color::Red]), SINGLE).unwrap();
+        assert!(
+            out.contains("</darktable:colorlabels>\n  </rdf:Description>"),
+            "{out}"
+        );
+    }
 
     #[test]
     fn stripping_darktable_keeps_the_notes_and_everything_else() {

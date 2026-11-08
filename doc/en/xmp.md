@@ -76,6 +76,12 @@ darktable).
   XnView… file), `xmp:Label` then digiKam are read. In an image (JPEG…), software that only
   reads `Label` (XnView, Windows Explorer) then does not see the colors.
 
+**Where the list goes**: `darktable:colorlabels` is written just before
+`darktable:history`, as darktable itself does. Placed after the history, darktable did not
+read the colors back ("keep the XMP" at startup had no effect; seen by a user, although
+element order has no meaning in XMP). Without a history, the list goes at the end of the
+description.
+
 Reading rules: rejected if `xmp:Rating = -1`, `xmpDM:pick = -1` or
 `digiKam:PickLabel = 1`; accepted if `xmpDM:pick = 1` or `digiKam:PickLabel = 3`. Stars
 written "3.0" (some software) are accepted. The rules (mode, priority, fields) apply to
