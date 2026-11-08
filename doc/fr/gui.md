@@ -632,7 +632,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   déplie sans toucher au même dossier dans l'arborescence. À la souris :
   **clic droit** sur un dossier, menu des mêmes actions (nouveau dossier, renommer,
   supprimer, favori ; décharger une carte ici, ou sur un support amovible : décharger,
-  éjecter), raccourci au survol.
+  éjecter ; afficher dans le Finder / l'Explorateur, 08/11/2026), raccourci au survol.
   **Panneau de droite** (27/10/2026, `TriApp::side_begin` / `side_end`) : ↑ ↓ / `j` `k`
   parcourent aussi les **réglages** au-dessus des EXIF (titres de section compris), un à
   la fois ; **Espace** / Entrée actionnent le réglage pointé (cocher, choisir, replier

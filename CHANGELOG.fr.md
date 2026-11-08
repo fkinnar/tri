@@ -8,6 +8,9 @@
   « Relire les notes depuis les images » ont le même dessin (une photo et son étoile)
   avec une flèche qui entre ou qui sort, pour qu'on voie que l'une est l'inverse de
   l'autre ; « Générer les sidecars » montre une feuille avec une étoile et un « + ».
+- **Afficher un dossier dans le gestionnaire de fichiers** (#375) : clic droit sur un
+  dossier, « Afficher dans le Finder » (l'Explorateur, le gestionnaire de fichiers), comme
+  pour une image.
 - **darktable voit les couleurs posées dans tri** (#373) : la liste
   `darktable:colorlabels` était écrite après l'historique de darktable, qui l'ignorait
   alors en resynchronisant les XMP modifiés au démarrage. Elle va maintenant avant

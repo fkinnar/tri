@@ -3226,6 +3226,9 @@ impl TriApp {
                             .response
                             .on_hover_text(t!("folder-menu-embed-tip"));
                         }
+                        // Afficher le dossier dans le Finder / l'Explorateur (demandé le
+                        // 08/11/2026), comme pour une image.
+                        entry(ui, Action::FileReveal, Action::FileReveal.label());
                         // Ouvrir le dossier dans un logiciel installé qui le sait
                         // (darktable ; demandé le 28/10/2026).
                         // Grisé s'il ne peut pas le recevoir : darktable déjà ouvert sous
@@ -3408,6 +3411,11 @@ impl TriApp {
                     self.import_notes(&images);
                 }
                 Action::FolderOpen => self.start_mount(&ctx, path),
+                Action::FileReveal => {
+                    if let Err(e) = tri::files::reveal(&path) {
+                        self.file_error = Some(e.to_string());
+                    }
+                }
                 Action::FolderOffload | Action::FolderEject => {
                     self.folder_drive_action(&ctx, action)
                 }
@@ -24741,6 +24749,26 @@ mod tests {
             run_until(&mut h, |app| app.cache_jobs.is_empty());
             assert_eq!(marker.is_dir(), kept);
         }
+    }
+
+    #[test]
+    fn a_folder_can_be_shown_in_the_file_manager() {
+        // Demandé le 08/11/2026 : clic droit sur un dossier, « Afficher dans le Finder ».
+        // Pas cliqué : le gestionnaire de fichiers s'ouvrirait vraiment.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        std::fs::create_dir(dir.path().join("séance")).unwrap();
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        h.run_steps(2);
+        h.get_by_label("séance").click_secondary();
+        h.run_steps(2);
+        assert!(h.query_by_label(&Action::FileReveal.label()).is_some());
     }
 
     #[test]

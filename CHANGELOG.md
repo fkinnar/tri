@@ -8,6 +8,8 @@
   back from the images" share the same picture (a photo with its star) with an arrow
   going in or coming out, so one reads as the reverse of the other; "Generate sidecars"
   shows a sheet with a star and a "+".
+- **Show a folder in the file manager** (#375): right-click on a folder, "Show in
+  Finder" (Explorer, file manager), like for an image.
 - **darktable sees colors set in tri** (#373): the `darktable:colorlabels` list was
   written after darktable's history, and darktable then ignored it when syncing changed
   XMP files at startup. It now goes before the history, where darktable puts it. Sidecars
