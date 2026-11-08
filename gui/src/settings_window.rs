@@ -1259,6 +1259,9 @@ impl SettingsWindow {
             if section.name == "keys" {
                 return self.keys_entries(ui, None);
             }
+            if section.name == "xmp.fields" {
+                return self.fields_table(ui, section);
+            }
             // Aucun logiciel trouvé : dit, avec ce que `tri` sait utiliser.
             if section.name == "develop" && self.found.is_empty() {
                 ui.label(t!("settings-found-none", list = supported_software()));
@@ -2059,6 +2062,97 @@ impl SettingsWindow {
         (response, new.map(Value::Str))
     }
 
+    /// `[xmp.fields]` en tableau (08/11/2026, idée de l'utilisateur : « bien plus net »
+    /// qu'une case par ligne) : une ligne par logiciel, ses champs XMP et ce qu'ils
+    /// portent, une case « géré » ; les étoiles (`xmp:Rating`), toujours gérées, en
+    /// dernière ligne pour mémoire.
+    fn fields_table(
+        &mut self,
+        ui: &mut Ui,
+        section: &tri::config_edit::Section,
+    ) -> Option<AppSettings> {
+        let rows: [(&str, &str, &str, &str); 4] = [
+            (
+                "label",
+                "settings-fields-label",
+                "xmp:Label",
+                "settings-fields-for-color",
+            ),
+            (
+                "darktable",
+                "settings-fields-darktable",
+                "darktable:colorlabels",
+                "settings-fields-for-colors",
+            ),
+            (
+                "digikam",
+                "settings-fields-digikam",
+                "digiKam:ColorLabel, digiKam:PickLabel",
+                "settings-fields-for-color-flag",
+            ),
+            (
+                "lightroom",
+                "settings-fields-lightroom",
+                "xmpDM:pick, xmpDM:good",
+                "settings-fields-for-flag",
+            ),
+        ];
+        let mut changed = None;
+        let mut set: Option<(String, bool)> = None;
+        egui::Grid::new("xmp_fields_table")
+            .striped(true)
+            .num_columns(4)
+            .spacing(vec2(18.0, 6.0))
+            .show(ui, |ui| {
+                for head in [
+                    "settings-fields-head-managed",
+                    "settings-fields-head-programs",
+                    "settings-fields-head-fields",
+                    "settings-fields-head-for",
+                ] {
+                    ui.label(RichText::new(t!(head)).strong());
+                }
+                ui.end_row();
+                for (key, programs, fields, what) in rows {
+                    let entry = section
+                        .groups
+                        .iter()
+                        .flat_map(|g| &g.entries)
+                        .find(|e| e.key == key);
+                    let mut on = entry
+                        .map(|e| self.current(&section.name, e))
+                        .is_none_or(|v| v != Value::Bool(false));
+                    let in_file = self.file.get(&section.name, key).is_some();
+                    let r = ui
+                        .checkbox(&mut on, "")
+                        .on_hover_text(format!("{}.{key}", section.name));
+                    if r.changed() {
+                        set = Some((key.to_string(), on));
+                    }
+                    let name = RichText::new(t!(programs));
+                    ui.label(if in_file { name.strong() } else { name });
+                    ui.label(RichText::new(fields).monospace());
+                    ui.weak(t!(what));
+                    ui.end_row();
+                }
+                let mut always = true;
+                ui.add_enabled(false, egui::Checkbox::new(&mut always, ""));
+                ui.weak(t!("settings-fields-all"));
+                ui.label(RichText::new("xmp:Rating").monospace());
+                ui.weak(t!("settings-fields-for-stars"));
+                ui.end_row();
+            });
+        if let Some((key, on)) = set {
+            changed = self.commit(&section.name, &key, Some(Value::Bool(on)));
+        }
+        for key in ["label", "darktable", "digikam", "lightroom"] {
+            if let Some(e) = self.errors.get(&(section.name.clone(), key.to_string())) {
+                ui.colored_label(ui.visuals().error_fg_color, e);
+            }
+        }
+        changed
+    }
+
     /// Champs de couleur gérés d'après le fichier (`[xmp.fields]`, cochés par défaut),
     /// pour l'éditeur de `[xmp] color_sources`.
     fn managed_color_sources(&self) -> Vec<tri::xmp::ColorSource> {
@@ -2246,60 +2340,158 @@ impl SettingsWindow {
     }
 }
 
-/// Éditeur de `[xmp] color_sources` : les champs gérés (`managed`, cochés dans
-/// `[xmp.fields]`) dans l'ordre de lecture, numérotés, en colonne, un bouton entre deux
-/// voisins pour les échanger ; grisé s'il en reste un seul (rien à ordonner). Les champs
-/// non gérés gardent leur place dans la valeur. Rend la réponse du premier élément (focus)
-/// et la nouvelle valeur si elle a changé.
+/// Éditeur de `[xmp] color_sources` (08/11/2026, idée de l'utilisateur : comme l'ordre
+/// des couleurs du tri, mais vertical) : les champs gérés (`managed`, cochés dans
+/// `[xmp.fields]`) dans l'ordre de lecture, numérotés, une ligne par champ qu'on glisse à
+/// sa place ; grisé s'il en reste un seul (rien à ordonner). Les champs non gérés gardent
+/// leur place dans la valeur. Rend la réponse de la première ligne (focus) et la nouvelle
+/// valeur si elle a changé.
 fn color_sources_editor(
     ui: &mut Ui,
     value: &Value,
     managed: &[tri::xmp::ColorSource],
 ) -> (egui::Response, Option<Value>) {
-    use tri::xmp::ColorSource;
+    use eframe::egui::{Sense, Stroke, pos2};
     let before = color_sources_of(value);
     let mut order = before;
     // Rangs, dans la valeur complète, des champs montrés.
     let shown: Vec<usize> = (0..3).filter(|&i| managed.contains(&before.0[i])).collect();
+    let movable = shown.len() > 1;
+    let row_size = vec2(300.0, 24.0);
     let response = ui
-        .add_enabled_ui(shown.len() > 1, |ui| {
+        .add_enabled_ui(movable, |ui| {
             ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 3.0;
                 if shown.is_empty() {
                     return ui.weak(t!("settings-color-sources-none"));
                 }
                 let mut first: Option<egui::Response> = None;
                 for (n, &i) in shown.iter().enumerate() {
-                    if n > 0 {
-                        let swap = ui
-                            .small_button(t!("settings-color-sources-swap-short"))
-                            .on_hover_text(t!("settings-color-sources-swap"));
-                        if swap.clicked() {
-                            order.0.swap(shown[n - 1], i);
-                        }
-                        first.get_or_insert(swap);
-                    }
                     let source = before.0[i];
                     let name = t!(&format!("settings-color-source-{}", source.id()));
-                    let label = ui.label(format!("{}. {name}", n + 1));
-                    first.get_or_insert(label);
+                    let sense = if movable {
+                        Sense::click_and_drag()
+                    } else {
+                        Sense::hover()
+                    };
+                    let (rect, response) = ui.allocate_exact_size(row_size, sense);
+                    let visuals = ui.visuals();
+                    let dragging = egui::DragAndDrop::payload::<SourceDrag>(ui.ctx())
+                        .is_some_and(|d| d.0 == n);
+                    let fill = if dragging {
+                        visuals.extreme_bg_color
+                    } else if response.hovered() && movable {
+                        visuals.widgets.hovered.weak_bg_fill
+                    } else {
+                        visuals.widgets.inactive.weak_bg_fill
+                    };
+                    ui.painter().rect_filled(rect, 4.0, fill);
+                    let text_color = if movable {
+                        visuals.text_color()
+                    } else {
+                        visuals.weak_text_color()
+                    };
+                    // Poignée : trois traits à gauche.
+                    if movable {
+                        for k in -1..=1 {
+                            let y = rect.center().y + k as f32 * 3.5;
+                            ui.painter().line_segment(
+                                [pos2(rect.left() + 7.0, y), pos2(rect.left() + 15.0, y)],
+                                Stroke::new(1.2, visuals.weak_text_color()),
+                            );
+                        }
+                    }
+                    ui.painter().text(
+                        pos2(rect.left() + 24.0, rect.center().y),
+                        egui::Align2::LEFT_CENTER,
+                        format!("{}. {name}", n + 1),
+                        egui::TextStyle::Body.resolve(ui.style()),
+                        text_color,
+                    );
+                    response.widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::accesskit::Role::ListItem, true, &name)
+                    });
+                    let response = if movable {
+                        response.dnd_set_drag_payload(SourceDrag(n));
+                        response.on_hover_cursor(egui::CursorIcon::Grab)
+                    } else {
+                        response
+                    };
+                    if response.dnd_hover_payload::<SourceDrag>().is_some() {
+                        ui.painter().rect_stroke(
+                            rect,
+                            4.0,
+                            Stroke::new(1.5, crate::marks::accent_bright(ui.visuals())),
+                            egui::StrokeKind::Outside,
+                        );
+                    }
+                    if let Some(d) = response.dnd_release_payload::<SourceDrag>() {
+                        order = move_source(before, &shown, d.0, n);
+                    }
+                    first.get_or_insert(response);
                 }
                 first.expect("au moins un champ")
             })
             .inner
         })
         .inner;
+    // La ligne glissée suit le pointeur.
+    if let Some(d) = egui::DragAndDrop::payload::<SourceDrag>(ui.ctx())
+        && let Some(pos) = ui.ctx().pointer_latest_pos()
+        && let Some(&i) = shown.get(d.0)
+    {
+        let painter = ui.ctx().layer_painter(egui::LayerId::new(
+            egui::Order::Tooltip,
+            egui::Id::unique("color_sources_drag"),
+        ));
+        let name = t!(&format!("settings-color-source-{}", before.0[i].id()));
+        painter.text(
+            pos + vec2(12.0, 0.0),
+            egui::Align2::LEFT_CENTER,
+            name,
+            egui::TextStyle::Body.resolve(ui.style()),
+            ui.visuals().strong_text_color(),
+        );
+    }
     let changed = (order != before).then(|| {
         Value::Toml(format!(
             "[{}]",
             order
                 .0
                 .iter()
-                .map(|s: &ColorSource| format!("\"{}\"", s.id()))
+                .map(|s| format!("\"{}\"", s.id()))
                 .collect::<Vec<_>>()
                 .join(", ")
         ))
     });
     (response, changed)
+}
+
+/// Ligne glissée dans l'éditeur de `[xmp] color_sources`, par son rang parmi les champs
+/// montrés.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SourceDrag(usize);
+
+/// `order` avec le champ montré au rang `from` déplacé au rang `to` (parmi les champs
+/// montrés, `shown` : leurs places dans la valeur complète) ; les champs cachés ne bougent
+/// pas.
+fn move_source(
+    order: tri::xmp::ColorSources,
+    shown: &[usize],
+    from: usize,
+    to: usize,
+) -> tri::xmp::ColorSources {
+    let mut visible: Vec<tri::xmp::ColorSource> = shown.iter().map(|&i| order.0[i]).collect();
+    if from >= visible.len() || to >= visible.len() {
+        return order;
+    }
+    let moved = visible.remove(from);
+    visible.insert(to, moved);
+    let mut out = order;
+    for (&i, s) in shown.iter().zip(visible) {
+        out.0[i] = s;
+    }
+    out
 }
 
 /// L'ordre de la valeur TOML de `[xmp] color_sources` (`["label", "darktable"]`) ; une
@@ -3136,18 +3328,36 @@ mod tests {
     }
 
     #[test]
-    fn the_colour_sources_are_reordered_by_swapping_neighbours() {
-        // 08/11/2026 : un ordre plutôt qu'un gagnant (darktable, Label, digiKam).
+    fn the_colour_sources_are_reordered_by_dragging() {
+        // 08/11/2026 : un ordre plutôt qu'un gagnant (darktable, Label, digiKam), qu'on
+        // glisse comme l'ordre des couleurs du tri, mais verticalement.
         crate::i18n::ensure();
+        use ColorSource::{Darktable, Digikam, Label};
+        use egui_kittest::kittest::NodeT;
         use egui_kittest::kittest::Queryable;
-        use tri::xmp::ColorSource;
+        use tri::xmp::{ColorSource, ColorSources};
         assert_eq!(
             color_sources_of(&Value::Toml(r#"["digikam", "nope", "digikam"]"#.into())).0,
-            [
-                ColorSource::Digikam,
-                ColorSource::Darktable,
-                ColorSource::Label
-            ]
+            [Digikam, Darktable, Label]
+        );
+        // Déplacer parmi les champs montrés ; un champ caché garde sa place.
+        let all = ColorSources([Darktable, Label, Digikam]);
+        assert_eq!(
+            move_source(all, &[0, 1, 2], 2, 0).0,
+            [Digikam, Darktable, Label]
+        );
+        assert_eq!(
+            move_source(all, &[0, 1, 2], 0, 2).0,
+            [Label, Digikam, Darktable]
+        );
+        assert_eq!(
+            move_source(all, &[1, 2], 1, 0).0,
+            [Darktable, Digikam, Label]
+        );
+        assert_eq!(
+            move_source(all, &[1, 2], 5, 0),
+            all,
+            "rang hors liste : rien"
         );
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
@@ -3163,54 +3373,77 @@ mod tests {
                 w,
             );
         h.run_steps(3);
-        // Premier bouton : darktable et Label échangés.
-        h.get_all_by_label("échanger").next().unwrap().click();
-        h.run_steps(2);
-        assert_eq!(
-            h.state()
-                .file
-                .get("xmp", "color_sources")
-                .map(|v| v.to_string()),
-            Some(r#"["label", "darktable", "digikam"]"#.to_string())
-        );
-        let loaded = tri::settings::load::<crate::settings::AppSettings>(Some(&path));
-        assert!(loaded.warning.is_none(), "{:?}", loaded.warning);
-        assert_eq!(
-            loaded.settings.xmp.color_sources.0,
-            [
-                ColorSource::Label,
-                ColorSource::Darktable,
-                ColorSource::Digikam
-            ]
-        );
-        // darktable décoché : il disparaît de la liste (garde sa place dans la valeur) ;
-        // un seul bouton, entre Label et digiKam.
+        let rows = |h: &egui_kittest::Harness<'_, SettingsWindow>| {
+            h.query_all_by_role(egui::accesskit::Role::ListItem)
+                .map(|n| n.accesskit_node().label().unwrap_or_default())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(rows(&h).len(), 3, "{:?}", rows(&h));
+        // darktable décoché : il disparaît de la liste.
         h.state_mut()
             .file
             .set("xmp.fields", "darktable", &Value::Bool(false))
             .unwrap();
         h.run_steps(2);
-        assert_eq!(h.get_all_by_label("échanger").count(), 1);
-        h.get_by_label("échanger").click();
-        h.run_steps(2);
-        assert_eq!(
-            h.state()
-                .file
-                .get("xmp", "color_sources")
-                .map(|v| v.to_string()),
-            Some(r#"["digikam", "darktable", "label"]"#.to_string())
-        );
-        // Label seul géré : rien à ordonner, aucun bouton.
+        assert_eq!(rows(&h).len(), 2, "{:?}", rows(&h));
+        assert!(rows(&h)[0].contains("xmp:Label"), "{:?}", rows(&h));
+        // Label seul géré : une ligne, rien à ordonner (grisée).
         h.state_mut()
             .file
             .set("xmp.fields", "digikam", &Value::Bool(false))
             .unwrap();
         h.run_steps(2);
-        assert_eq!(h.query_all_by_label("échanger").count(), 0);
+        assert_eq!(rows(&h).len(), 1, "{:?}", rows(&h));
         assert!(
-            h.query_by_label("1. xmp:Label (Lightroom, XnView…)")
-                .is_some()
+            h.query_all_by_role(egui::accesskit::Role::ListItem)
+                .all(|n| n.accesskit_node().is_disabled())
         );
+    }
+
+    #[test]
+    fn the_handled_fields_are_a_table() {
+        // 08/11/2026, idée de l'utilisateur : un tableau plutôt qu'une case par ligne.
+        crate::i18n::ensure();
+        use egui_kittest::kittest::NodeT;
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut w = SettingsWindow::open(&path).unwrap();
+        w.show_section("xmp.fields");
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(1400.0, 1000.0))
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, w: &mut SettingsWindow| {
+                    w.show(ui.ctx());
+                },
+                w,
+            );
+        h.run_steps(3);
+        for text in [
+            "Géré",
+            "Logiciels",
+            "Lightroom Classic",
+            "darktable:colorlabels",
+        ] {
+            assert!(h.query_by_label(text).is_some(), "{text}");
+        }
+        // Quatre cases actives (et celle des étoiles, grisée) ; décocher la deuxième
+        // (darktable) l'écrit dans le fichier.
+        let boxes: Vec<_> = h
+            .query_all_by_role(egui::accesskit::Role::CheckBox)
+            .filter(|n| !n.accesskit_node().is_disabled())
+            .collect();
+        assert_eq!(boxes.len(), 4);
+        boxes[1].click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state().file.get("xmp.fields", "darktable"),
+            Some(Value::Bool(false))
+        );
+        let loaded = tri::settings::load::<crate::settings::AppSettings>(Some(&path));
+        assert!(loaded.warning.is_none(), "{:?}", loaded.warning);
+        assert!(!loaded.settings.xmp.fields.darktable);
     }
 
     #[test]

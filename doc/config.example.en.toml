@@ -72,6 +72,13 @@ exposure = true
 # (IMAGE.xmp, Lightroom, Capture One, Bridge; shared by the RAF and the JPG of a pair).
 # An existing sidecar is always reused, the most recent one if both exist.
 sidecar = "darktable"
+# Ratings also written into the images themselves (JPEG, PNG, WebP, TIFF, HEIC; never a
+# RAW) on each rating, and merges coming from other programs propagated to every source:
+# "never" (on demand only: "Write the ratings into the images", tri --embed-notes),
+# "internal" (internal and fixed disks, not a card or a network share), "everywhere". A
+# folder can have its own setting (right-click on the folder), which wins. The ratings
+# always go to the sidecars too.
+embed = "never"
 # Several colours per image (like Darktable); false: only one, a new colour replaces the
 # previous one (like Lightroom). One: written into xmp:Label (read by Lightroom, XnView,
 # Windows Explorer…), darktable:colorlabels and digiKam:ColorLabel. Several: like
@@ -83,13 +90,6 @@ multiple_colors = false
 # (digiKam:ColorLabel). darktable rewrites its colour at every change but never touches
 # xmp:Label, which can lag behind: hence darktable first. A field left out is read last; a field unticked in [xmp.fields] is not read.
 color_sources = ["darktable", "label", "digikam"]
-# Ratings also written into the images themselves (JPEG, PNG, WebP, TIFF, HEIC; never a
-# RAW) on each rating, and merges coming from other programs propagated to every source:
-# "never" (on demand only: "Write the ratings into the images", tri --embed-notes),
-# "internal" (internal and fixed disks, not a card or a network share), "everywhere". A
-# folder can have its own setting (right-click on the folder), which wins. The ratings
-# always go to the sidecars too.
-embed = "never"
 
 # Fields handled per program (read and written), in sidecars and images: untick those of a
 # program you do not use. An unticked field is ignored: neither read, written nor removed

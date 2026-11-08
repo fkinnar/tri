@@ -67,8 +67,9 @@ liste à `0`, rouge, dans darktable).
   l'ordre de `[xmp] color_sources` (défaut : `["darktable", "label", "digikam"]`) : le
   premier champ qui porte une couleur l'emporte (darktable seulement s'il n'en a qu'une,
   numéro traduit). darktable en tête : sa couleur est celle qu'il affiche. Un champ oublié
-  est lu en dernier ; dans la fenêtre de réglages, seuls les champs cochés sont montrés,
-  un bouton « échanger » entre deux (grisé s'il n'en reste qu'un). Plusieurs couleurs posées dans darktable sont lues toutes : la prochaine
+  est lu en dernier ; dans la fenêtre de réglages, les champs cochés en colonne, qu'on
+  glisse à leur place (grisés s'il n'en reste qu'un). `[xmp.fields]` y est un tableau :
+  logiciel, champs XMP, ce qu'ils portent, une case « géré ». Plusieurs couleurs posées dans darktable sont lues toutes : la prochaine
   écriture ne les efface pas.
 - **Plusieurs** (comme darktable) : seul `darktable:colorlabels` est lu et écrit ;
   `xmp:Label` et `digiKam:ColorLabel` restent tels quels. Faute de liste (fichier de

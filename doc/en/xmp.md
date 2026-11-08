@@ -67,8 +67,9 @@ darktable).
   the order of `[xmp] color_sources` (default: `["darktable", "label", "digikam"]`): the
   first field that holds a color wins (darktable only if it holds a single one, number
   translated). darktable first: its color is the one it shows. A field left out is read
-  last; in the settings window, only the ticked fields are shown, a "swap" button between
-  two (greyed out when only one is left). Several colors set in
+  last; in the settings window, the ticked fields in a column, dragged into place (greyed
+  out when only one is left). `[xmp.fields]` is a table there: program, XMP fields, what
+  they hold, a "handled" box. Several colors set in
   darktable are all read: the next write does not erase them.
 - **Several** (like darktable): only `darktable:colorlabels` is read and written;
   `xmp:Label` and `digiKam:ColorLabel` stay as they are. Without a list (Lightroom,

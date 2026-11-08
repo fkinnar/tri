@@ -8,9 +8,8 @@
   `xmp:Label`, la liste de darktable et digiKam sont écrits ; quand `Label` et la couleur
   de darktable ou de digiKam diffèrent (darktable ne touche jamais `Label`, qui pouvait
   masquer une couleur changée chez lui), l'ordre de lecture `[xmp] color_sources` décide
-  (darktable, Label, digiKam par défaut ; boutons « échanger » dans la fenêtre de
-  réglages). En mode plusieurs couleurs, comme darktable, seule sa liste est lue et écrite.
-  `[xmp.fields]` : cases par logiciel (Label, darktable, digiKam, Lightroom), toutes
+  (darktable, Label, digiKam par défaut ; à glisser dans la fenêtre de réglages). En mode plusieurs couleurs, comme darktable, seule sa liste est lue et écrite.
+  `[xmp.fields]` (un tableau dans la fenêtre de réglages) : cases par logiciel (Label, darktable, digiKam, Lightroom), toutes
   cochées ; un champ décoché n'est ni lu ni écrit, il reste tel quel et sort de l'ordre de
   lecture. Liste déroulante pour `[xmp] embed` dans la
   fenêtre de réglages.
