@@ -2342,6 +2342,52 @@ impl Keymap {
         self.leader.as_ref().map(chord_label).unwrap_or_default()
     }
 
+    /// `text` avec ses références d'actions (`<core.view.source>`, identifiant entre
+    /// chevrons) remplacées par leurs raccourcis en vigueur (« r », plusieurs séparés par
+    /// « / », le leader écrit en clair), « sans raccourci » pour une action qui n'en a pas ;
+    /// `<leader>` seul, par le leader. Ailleurs (`<image>`), rien ne change. Décidé le
+    /// 08/11/2026 : les commentaires des réglages citaient des raccourcis périmés, écrits
+    /// en dur ; ils citent maintenant l'action (voir [`key_refs`]).
+    pub fn with_keys(&self, text: &str) -> String {
+        let leader = self.leader_label();
+        let mut out = String::with_capacity(text.len());
+        let mut rest = text;
+        while let Some(start) = rest.find('<') {
+            out.push_str(&rest[..start]);
+            let after = &rest[start + 1..];
+            let Some(end) = after.find('>') else {
+                out.push_str(&rest[start..]);
+                return out;
+            };
+            let inner = &after[..end];
+            let replaced = if inner == "leader" && !leader.is_empty() {
+                Some(leader.clone())
+            } else {
+                Action::ALL
+                    .into_iter()
+                    .find(|a| a.id() == inner)
+                    .map(|action| {
+                        let keys = self.keys_for(action);
+                        if keys.is_empty() {
+                            t!("keys-none-short")
+                        } else {
+                            keys.iter()
+                                .map(|k| k.replace("<leader>", &leader))
+                                .collect::<Vec<_>>()
+                                .join(" / ")
+                        }
+                    })
+            };
+            match replaced {
+                Some(keys) => out.push_str(&keys),
+                None => out.push_str(&rest[start..start + end + 2]),
+            }
+            rest = &after[end + 1..];
+        }
+        out.push_str(rest);
+        out
+    }
+
     /// Nom lisible d'un raccourci écrit dans `[keys]` (« gg » pour « g g »), le leader
     /// écrit `<leader>` (fenêtre de réglages) ; illisible : tel quel.
     pub fn spec_label(&self, spec: &str) -> String {
@@ -2737,6 +2783,29 @@ impl Sequencer {
         assert!(done.len() <= 1, "{done:?}");
         done.pop()
     }
+}
+
+/// Références d'actions d'un texte (`<core.view.source>` : ce qui, entre chevrons, a la
+/// forme d'un identifiant d'action, `a.b`), pour vérifier qu'elles existent toutes (voir
+/// [`Keymap::with_keys`]).
+#[cfg(test)]
+pub fn key_refs(text: &str) -> Vec<&str> {
+    let mut refs = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find('<') {
+        let after = &rest[start + 1..];
+        let Some(end) = after.find('>') else { break };
+        let inner = &after[..end];
+        if inner.contains('.')
+            && inner
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_'))
+        {
+            refs.push(inner);
+        }
+        rest = &after[end + 1..];
+    }
+    refs
 }
 
 #[cfg(test)]
@@ -3824,5 +3893,116 @@ mod tests {
         assert_eq!(parse_keys("Esc g"), parse_keys("Échap g"));
         assert_eq!(key_label_in(Language::En, Key::ArrowLeft), "Left arrow");
         assert_eq!(key_label_in(Language::Fr, Key::ArrowLeft), "Flèche gauche");
+    }
+
+    /// Raccourcis cités dans les textes (08/11/2026, retour de l'utilisateur : « Maj+B »
+    /// périmé, écrit en dur) : les commentaires des réglages citent l'action
+    /// (`<core.view.source>`), remplacée par ses raccourcis en vigueur ; les catalogues,
+    /// une variable remplie par le code. Ici : chaque référence existe, les deux langues
+    /// citent les mêmes, et plus aucun raccourci à modificateur écrit en dur (sauf la
+    /// syntaxe de `[keys]`, le leader par défaut de keys.toml et les clics de souris).
+    #[test]
+    fn texts_cite_actions_not_hardcoded_shortcuts() {
+        let fr = include_str!("../../doc/config.example.toml");
+        let en = include_str!("../../doc/config.example.en.toml");
+        let mut refs_fr = key_refs(fr);
+        let mut refs_en = key_refs(en);
+        for id in refs_fr.iter().chain(&refs_en) {
+            assert!(
+                Action::ALL.into_iter().any(|a| a.id() == *id),
+                "action inconnue : <{id}>"
+            );
+        }
+        refs_fr.sort_unstable();
+        refs_en.sort_unstable();
+        assert_eq!(
+            refs_fr, refs_en,
+            "les deux exemples citent les mêmes actions"
+        );
+        let hardcoded = regex_lite_free(&[fr, en]);
+        assert!(
+            hardcoded.is_empty(),
+            "raccourcis écrits en dur :\n{}",
+            hardcoded.join("\n")
+        );
+        for (name, catalog) in [
+            ("fr.ftl", include_str!("../locales/fr.ftl")),
+            ("en.ftl", include_str!("../locales/en.ftl")),
+        ] {
+            let found = regex_lite_free(&[catalog]);
+            assert!(found.is_empty(), "{name} :\n{}", found.join("\n"));
+            for id in key_refs(catalog) {
+                assert!(
+                    Action::ALL.into_iter().any(|a| a.id() == id),
+                    "{name} : action inconnue <{id}>"
+                );
+            }
+        }
+    }
+
+    /// Lignes qui écrivent un raccourci à modificateur (« Maj+B », « Ctrl+E »…), hors
+    /// exceptions : syntaxe de `[keys]` (« Maj+P » entre guillemets), leader par défaut de
+    /// keys.toml, clics de souris, préfixe affiché de Maj.
+    fn regex_lite_free(texts: &[&str]) -> Vec<String> {
+        let mut out = Vec::new();
+        for text in texts {
+            for line in text.lines() {
+                // F1 à F12 hors guillemets (« "F3" » : syntaxe de `[keys]`).
+                let fkey = line.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| {
+                    w.len() >= 2
+                        && w.starts_with('F')
+                        && w[1..].parse::<u8>().is_ok_and(|n| (1..=12).contains(&n))
+                        && !line.contains(&format!("\"{w}\""))
+                });
+                if fkey && !line.starts_with("key-f") {
+                    out.push(line.to_string());
+                }
+                for prefix in ["Maj+", "Shift+", "Ctrl+", "Cmd+", "Alt+"] {
+                    let mut rest = line;
+                    while let Some(at) = rest.find(prefix) {
+                        let after = &rest[at + prefix.len()..];
+                        let before = &rest[..at];
+                        let quoted = before.ends_with('"')
+                            || before.ends_with("« ")
+                            || before.ends_with('“');
+                        let mouse = after.starts_with("clic") || after.starts_with("click");
+                        let leader =
+                            after.starts_with("b, comme tmux") || after.starts_with("b, like tmux");
+                        let shown = line.starts_with("key-shift-prefix");
+                        if !(quoted || mouse || leader || shown) {
+                            out.push(line.to_string());
+                            break;
+                        }
+                        rest = after;
+                    }
+                }
+            }
+        }
+        out.sort();
+        out.dedup();
+        out
+    }
+
+    #[test]
+    fn action_references_become_the_shortcuts_in_use() {
+        crate::i18n::ensure();
+        let keymap = Keymap::default().with_leader("Ctrl+b").unwrap();
+        // Une touche ; une séquence après le leader, écrit en clair ; pas de raccourci ;
+        // ce qui n'est pas une action reste tel quel.
+        let text = keymap.with_keys(
+            "zoom <core.view.zoom>, rendu <core.develop.render>, <core.dev.next>, \
+             tri-gui <image>, <leader>",
+        );
+        assert!(text.starts_with("zoom z, rendu "), "{text}");
+        assert!(
+            !text.contains("<leader>") && text.contains("Ctrl"),
+            "{text}"
+        );
+        assert!(text.contains(&t!("keys-none-short")), "{text}");
+        assert!(text.contains("tri-gui <image>"), "{text}");
+        assert_eq!(
+            key_refs("a <core.view.zoom> b <image> <x.y>"),
+            ["core.view.zoom", "x.y"]
+        );
     }
 }

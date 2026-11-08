@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Cited shortcuts up to date** (#372): setting descriptions and a few messages
+  (full-screen key reminder, "Before" of a development, version presets…) cited
+  hard-coded shortcuts, some of them stale ("Shift+B" to see one's developments, "b" for
+  the render). They now cite the action, and the interface shows the shortcuts in use,
+  `[keys]` included; a test prevents writing them hard-coded again.
 - **Ratings kept in step by themselves** (#368): with `[xmp] embed` = `internal`
   (internal and fixed disks) or `everywhere`, each rating also goes into the image
   (JPEG, PNG, WebP, TIFF, HEIC), and a rating merged from another program is written at

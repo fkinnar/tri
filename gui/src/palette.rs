@@ -210,7 +210,7 @@ pub fn search(
                 item: Item::Setting(s.section.clone(), s.key.clone()),
                 title: format!("{} › {}", s.section_label, s.key),
                 keys: String::new(),
-                detail: s.doc.clone(),
+                detail: keymap.with_keys(&s.doc),
             };
             let names = vec![hit.title.clone()];
             // Un réglage ne « vaut » pas ici plus qu'ailleurs : il passe après les actions
@@ -326,7 +326,7 @@ pub fn history_hits(history: &[Item], keymap: &Keymap, settings: &[SettingRef]) 
                     item: item.clone(),
                     title: format!("{} › {}", s.section_label, s.key),
                     keys: String::new(),
-                    detail: s.doc.clone(),
+                    detail: keymap.with_keys(&s.doc),
                 }),
             Item::Action(_) | Item::Control(_) => None,
         })

@@ -116,7 +116,8 @@ exclude = []
 # fixed = ["Work", "Backup"]
 fixed = []
 # Surveillance des volumes (ms) : un disque ou une carte branchés apparaissent d'eux-mêmes
-# dans le panneau des dossiers ; 0 : pas de surveillance (F5 ou « Actualiser »).
+# dans le panneau des dossiers ; 0 : pas de surveillance (<core.view.refresh_folders> ou
+# « Actualiser »).
 watch_ms = 2000
 # Monter de lui-même un support amovible que le système n'a pas monté (Linux) ; sinon,
 # il apparaît grisé dans la section des périphériques, monté d'un clic.
@@ -126,9 +127,9 @@ auto_mount = true
 eject_lock_ms = 5000
 
 [develop]
-# Voir ses développements dans tri (Maj+B en plein écran, puis b : JPEG boîtier, rendu
-# RAW, développé) : darktable-cli refait l'image avec l'historique du sidecar .xmp, à la
-# demande (quelques secondes par image), gardée en cache et refaite si le .xmp change.
+# Voir ses développements dans tri (rendu affiché, <core.view.source> : JPEG boîtier,
+# rendu RAW, développé ; développer : <core.develop.render>) : darktable-cli refait
+# l'image avec l'historique du sidecar .xmp, à la demande (quelques secondes par image), gardée en cache et refaite si le .xmp change.
 # "auto" : cherché dans le PATH, aux emplacements habituels, puis sous Linux en AppImage
 # (~/AppImages, ~/Applications, ~/.local/bin, ~/bin, téléchargements, /opt) et en
 # Flatpak (org.darktable.Darktable) ; un chemin (darktable-cli, ou une AppImage) ;
@@ -156,7 +157,7 @@ art = "auto"
 default = "auto"
 
 [export]
-# Export d'images développées par Darktable (Ctrl+E), avec un préréglage par usage. Rien
+# Export d'images développées par Darktable (<core.file.export>), avec un préréglage par usage. Rien
 # n'est écrasé (darktable ajoute _01…).
 # Préréglage proposé par défaut (identifiant) pour un rendu de RAW, et pour une image déjà
 # développée (JPEG boîtier, JPEG…) ; dans la séance, le dernier choisi l'emporte. Inconnu
@@ -167,7 +168,7 @@ default_flat = "asis"
 # LibRaw, le JPEG développé par l'appareil) ; le JPEG prend ce suffixe :
 # DSCF0001.jpg (rendu du RAW) et DSCF0001-camera.jpg (JPEG de l'appareil).
 camera_suffix = "-camera"
-# Rapport d'export (Ctrl+Maj+E) : exports terminés gardés d'une session à l'autre, les
+# Rapport d'export (<core.file.export.report>) : exports terminés gardés d'une session à l'autre, les
 # plus récents (0 : sans limite) ; effaçable depuis le rapport.
 report_max = 500
 
@@ -361,7 +362,7 @@ previews = true
 pairs = true
 # Supprimer = mettre à la corbeille (récupérable) ; false : suppression définitive.
 trash = true
-# Éditeur externe (e) : vide, l'application que le système choisit pour chaque type
+# Éditeur externe (<core.file.edit>) : vide, l'application que le système choisit pour chaque type
 # d'image ; sinon le programme puis ses arguments, "{files}" (ou "{file}") remplacé par les
 # images (ajoutées à la fin sinon). Fenêtre de réglages : « Application du système » ou
 # « Autre application » (Parcourir…, arguments). Exemples : ["darktable"],
@@ -461,7 +462,7 @@ strictness_span = 3.0
 # pile de moins), à la position élevée à la puissance lambda ; vers la droite, une
 # moyenne de puissance lambda. Au-delà de 1 : départ plus doux du centre vers la gauche,
 # plus rapide vers la droite. Réglable aussi pour un dossier, curseur
-# « Progression du curseur » de la fenêtre de regroupement (Ctrl+G). La sévérité choisie
+# « Progression du curseur » de la fenêtre de regroupement (<core.stack.settings>). La sévérité choisie
 # est retenue pour chaque dossier.
 strictness_curve = 2.0
 # Bornes du curseur « Progression du curseur » : de 1 / strictness_curve_max à
@@ -473,7 +474,8 @@ max_gap_s = 60.0
 # Importance des pauses : une pause plus longue que la cadence du dossier (écart médian
 # entre deux images) éloigne les deux images, distance multipliée par
 # 1 + pause_weight × log2(pause / cadence). Deux images identiques restent ensemble ; 0 :
-# seul le contenu compte. Au centre du curseur « Importance des pauses » (Ctrl+G),
+# seul le contenu compte. Au centre du curseur « Importance des pauses »
+# (<core.stack.settings>),
 # retenu pour chaque dossier : plus faible en studio, plus forte en photo de rue.
 pause_weight = 0.1
 # Curseur « Importance des pauses » à fond à droite : pause_weight multiplié par cette
@@ -513,22 +515,22 @@ enabled = true
 # foncé, fond central gris neutre, qui ne fausse pas le jugement des images ; couleurs :
 # [gui.colors] neutral_*).
 theme = "dark"
-# Jeu de raccourcis : "classic" (flèches, Début / Fin, Suppr, Ctrl+C / Ctrl+X copier /
-# déplacer vers, Ctrl+Z / Ctrl+Y) ou "vim" (hjkl, gg / G, Ctrl+U / Ctrl+D, x, y, d) / y),
-# u / Ctrl+R). Le reste (notation, filtres, piles, zoom…) est commun. Tous les raccourcis
-# par défaut : keys.toml, livré avec le programme.
+# Jeu de raccourcis : "classic" (flèches, Début / Fin, Suppr, comme la plupart des
+# logiciels) ou "vim" (hjkl, gg / G, x, y, u, comme nvim). Le reste (notation, filtres,
+# piles, zoom…) est commun. Tous les raccourcis par défaut : keys.toml, livré avec le
+# programme ; ceux en vigueur : section Raccourcis [keys].
 profile = "classic"
-# Changer de panneau au clavier, comme tmux : le leader, puis h / l (ou les flèches) pour
-# le panneau de gauche / de droite, o pour le suivant. Le panneau qui a le clavier passe
-# ses touches d'abord (dossiers : flèches / hjkl, Entrée ouvre ; métadonnées : défiler,
-# y copie) ; les autres gardent leur effet ; Échap rend le clavier aux images. Le leader
-# puis ? : signaler un problème (formulaire de GitHub prérempli). Vide : celui des
+# Changer de panneau au clavier, comme tmux : le leader, puis une direction
+# (<core.panel.left>, <core.panel.right>), ou <core.panel.next> pour le suivant. Le
+# panneau qui a le clavier passe ses touches d'abord ; les autres gardent leur effet ;
+# Échap rend le clavier aux images. <core.app.report_issue> : signaler un problème
+# (formulaire de GitHub prérempli). Vide : celui des
 # raccourcis par défaut (keys.toml, livré avec le programme : Ctrl+b, comme tmux).
 leader = ""
 # Délai maximal entre deux touches d'une séquence (ms), comme le timeoutlen de vim : « gg »
 # (première image, profil vim) doit être tapé dans ce délai.
 key_sequence_timeout_ms = 1000
-# Touche qui est un raccourci et le début d'un autre (y copie, y w copie la pile) : délai
+# Touche qui est un raccourci et le début d'un autre (en vim, y copie, y ) la pile) : délai
 # d'attente de la suite (ms) avant d'agir seule.
 key_ambiguous_timeout_ms = 300
 # Menu des suites (comme which-key dans nvim) : après le début d'une séquence (le leader,
@@ -575,13 +577,13 @@ analysis_refilter_ms = 5000
 # Côté des boutons à icône du bandeau de notation (avance automatique, image précédente /
 # suivante), en points.
 bar_icon_size = 24.0
-# Barre de filtres (type, étoiles, drapeau, couleurs) affichée au démarrage ; Maj+F
-# l'affiche ou la masque.
+# Barre de filtres (type, étoiles, drapeau, couleurs) affichée au démarrage ;
+# <core.view.filter_bar> l'affiche ou la masque.
 filter_bar = true
 # Sans dossier en argument, rouvrir le dernier dossier ouvert (mémorisé dans le dossier de
 # données : ~/.local/share/tri, ~/Library/Application Support/tri, %APPDATA%\tri).
 reopen_last = true
-# Une image en argument (tri-gui <image>) : ouverte en mode concentration (F11), comme dans
+# Une image en argument (tri-gui <image>) : ouverte en mode concentration (<core.view.focus_mode>), comme dans
 # une visionneuse ; l'argument --focus le force dans tous les cas.
 image_focus = true
 # Ordre des images : "name" (nom, l'ordre du boîtier), "captured" (date de prise de vue,
@@ -605,23 +607,23 @@ remember_folder_view = true
 # toujours à la fermeture.
 window_save_ms = 1000
 # Bandeau de notation à la souris (drapeaux, étoiles, couleurs de l'image sélectionnée)
-# affiché au démarrage ; Maj+N l'affiche ou le masque. Le clic droit sur une image ouvre
+# affiché au démarrage ; <core.view.rating_bar> l'affiche ou le masque. Le clic droit sur une image ouvre
 # une boîte avec les mêmes contrôles.
 rating_bar = true
 # Barre du haut : icône et nom de l'application à gauche, comme Darktable (masquée, comme
-# tout le reste, en mode concentration : F11 ou Ctrl+Maj+F).
+# tout le reste, en mode concentration : <core.view.focus_mode>).
 title_bar = true
 # Taille du nom dans la barre du haut (points ; l'icône un peu plus grande), et durée de
-# l'indication « F11 pour en sortir » en entrant en mode concentration (ms).
+# l'indication pour en sortir en entrant en mode concentration (ms).
 title_bar_size = 26.0
 focus_mode_hint_ms = 3000
-# Après une note (clavier ou bandeau), passer à l'image suivante ; Maj+A l'active ou le
+# Après une note (clavier ou bandeau), passer à l'image suivante ; <core.rate.auto_advance> l'active ou le
 # désactive. Si la note fait sortir l'image d'un filtre, la suivante est déjà sélectionnée :
 # on ne saute pas une image. L'autre image d'une paire RAW+JPEG, notée en même temps, est
 # sautée.
 auto_advance = false
-# Annuler (u, Ctrl+Z) : nombre de pas gardés dans l'historique de la session (Ctrl+H le
-# montre). Rien n'est gardé d'un lancement à l'autre.
+# Annuler (<core.edit.undo>) : nombre de pas gardés dans l'historique de la session
+# (<core.edit.history> le montre). Rien n'est gardé d'un lancement à l'autre.
 history = 200
 
 [gui.grid]
@@ -636,7 +638,7 @@ cell_max = 600.0
 # agrandissant.
 info_min_cell = 110.0
 gap = 8.0
-# Infos sur les vignettes (nom, format, notes, badges) au démarrage ; Maj+T ou le bouton
+# Infos sur les vignettes (nom, format, notes, badges) au démarrage ; <core.view.grid_info> ou le bouton
 # du bas les masquent pour laisser toute la place à l'image (choix ensuite retenu).
 info = true
 # Hauteur réservée au nom du fichier sous la vignette.
@@ -678,15 +680,15 @@ filter_toast_ms = 1500
 # progression reste dans la barre d'état.
 develop_toast_ms = 6000
 # Piles (images semblables regroupées) affichées au démarrage ; false : chaque image
-# seule, Ctrl+S ou le bouton pile les affichent (instantané : les empreintes se
+# seule, <core.stack.mode> ou le bouton pile les affichent (instantané : les empreintes se
 # calculent en fond, voir [similarity] background).
 stacks = false
-# Recherche par nom de fichier (/ ou Ctrl+F en grille) : largeur du champ (points).
+# Recherche par nom de fichier (<core.search> en grille) : largeur du champ (points).
 search_width = 200.0
 # Largeur minimale de ce champ quand la barre manque de place (fenêtre étroite : le tri et
 # le nombre d'images passent alors dans un menu « … »).
 search_min_width = 80.0
-# Rendu affiché, le même en grille et en plein écran (r / Maj+R), retenu par dossier
+# Rendu affiché, le même en grille et en plein écran (<core.view.source> / <core.grid.render>), retenu par dossier
 # (ceci est la valeur d'un dossier jamais réglé) : "embedded" (JPEG boîtier, pour décharger
 # et trier ; une photo développée se replie sur son JPEG), "cover" (la couverture : le
 # développement préféré, sinon le plus récent), "darktable" ou "rapidraw" (toujours ce
@@ -694,7 +696,7 @@ search_min_width = 80.0
 # LibRaw, calculé en fond.
 render = "embedded"
 # Photos à développer pour le rendu choisi : "auto" (rendues en fond, une image après
-# l'autre) ou "manual" (Ctrl+Maj+B sur le dossier ; LibRaw en attendant). Les
+# l'autre) ou "manual" (<core.develop.folder> sur le dossier ; LibRaw en attendant). Les
 # développements (clones, copies) sont toujours rendus en fond : c'est leur vignette.
 develop = "auto"
 # Vignette dont le rendu est attendu : le cache est relu au plus une fois par cet
@@ -724,26 +726,27 @@ focus_point = true
 focus_marker = "square"
 focus_marker_size = 28.0
 focus_marker_width = 2.0
-# Aide-mémoire des touches (b, z, i, o, Échap) en haut à droite du plein écran ; masqué par
-# défaut : il mord sur l'image, et F1 ouvre l'aide complète.
+# Aide-mémoire de quelques touches en haut à droite du plein écran ; masqué par défaut : il
+# mord sur l'image, et <core.app.help> ouvre l'aide complète.
 key_hints = false
-# Mode concentration (F11) : infos (numéro, source, taille) et notes dessinées sur l'image,
-# puisque la barre d'état et le bandeau sont masqués ; Ctrl+I les masque ou les affiche.
+# Mode concentration (<core.view.focus_mode>) : infos (numéro, source, taille) et notes
+# dessinées sur l'image, puisque la barre d'état et le bandeau sont masqués ;
+# <core.view.image_info> les masque ou les affiche.
 image_info = true
-# 1:1 (z ou bouton « 1:1 ») centré sur le collimateur quand le boîtier l'a enregistré
+# 1:1 (<core.view.zoom> ou bouton « 1:1 ») centré sur le collimateur quand le boîtier l'a enregistré
 # (c'est là qu'on juge la netteté) ; sinon au milieu de l'image. Le double-clic, lui,
 # zoome sur le point cliqué.
 zoom_on_focus_point = true
-# Piles actives (Ctrl+S, bouton pile), en plein écran : flèches gauche / droite dans la
+# Piles actives (<core.stack.mode>, bouton pile), en plein écran : flèches gauche / droite dans la
 # pile, haut / bas à la pile d'avant / d'après ; au bout de la pile, true : on repart de l'autre
 # bout ; false : on s'arrête.
 stack_wrap = false
 # Plein écran, flèches gauche / droite : true : par chaque développement d'une photo
 # (darktable, ses clones, RapidRAW…) ; false : de photo en photo, chacune dans le rendu de
-# la grille (« Rendu affiché »), les autres développements avec Maj+W / Maj+Q. La
+# la grille (« Rendu affiché »), les autres avec « Développement suivant / précédent ». La
 # case « Passer en revue les développements » de la section Vue le change (retenu).
 review_developments = false
-# Piles actives, en plein écran, avance automatique après une note (Maj+A) : au bout de la
+# Piles actives, en plein écran, avance automatique après une note (<core.rate.auto_advance>) : au bout de la
 # pile, true : la première photo de la pile suivante (prime alors sur stack_wrap) ; false :
 # on reste sur la dernière.
 stack_advance_next = false
@@ -751,7 +754,8 @@ stack_advance_next = false
 # couverture ; "first" : sa première photo. Le bouton du bandeau, en mode pile, change ce
 # choix (retenu d'un lancement à l'autre).
 stack_enter = "cover"
-# Superpositions (o, Maj+O pour l'orientation, voir overlay.md) : épaisseur des traits (points) ; opacité
+# Superpositions (<core.view.overlay>, <core.view.overlay_orient> pour l'orientation, voir
+# overlay.md) : épaisseur des traits (points) ; opacité
 # des grilles intégrées (tiers, nombre d'or, diagonales), couleur : [gui.colors] overlay.
 overlay_line_width = 1.0
 overlay_opacity = 0.6
@@ -781,9 +785,10 @@ loupe_scale = 100
 # écran : un quart de loupe, une loupe entière ; bouger la souris la rend au pointeur.
 loupe_step = 80.0
 loupe_step_large = 320.0
-# Grossissement de la loupe tapé après le leader et m, sans Entrée : trois chiffres
+# Grossissement de la loupe tapé après <core.view.loupe_scale>, sans Entrée : trois chiffres
 # s'appliquent aussitôt (150 : 150 %) ; un ou deux chiffres après cette pause (ms), en
-# centaines ou en dizaines (2 : 200 %, 20 : 200 %, 01 : 10 %). Ctrl+K / Ctrl+J : un palier
+# centaines ou en dizaines (2 : 200 %, 20 : 200 %, 01 : 10 %). <core.view.loupe_zoom_in> /
+# <core.view.loupe_zoom_out> : un palier
 # (steps) de plus ou de moins. Un chiffre tapé juste après cette pause complète encore le
 # nombre (jamais une note). Pour la session ; loupe_scale reste la valeur de départ.
 loupe_digits_ms = 1000
@@ -813,16 +818,16 @@ focus_line = "accent"
 focus_line_width = 2.0
 # Côté des boutons à icône (actions sur le fichier, dans la boîte du clic droit), en points.
 icon_size = 34.0
-# Largeur minimale de l'aide (F1), en points.
+# Largeur minimale de l'aide (<core.app.help>), en points.
 help_width = 620.0
-# Défilement de l'aide au clavier : par flèche haut / bas, en points (pages : Page préc. /
-# suiv., Ctrl+U / Ctrl+D).
+# Défilement de l'aide au clavier : par flèche haut / bas, en points (pages :
+# <core.nav.page_up> / <core.nav.page_down>).
 help_scroll_line = 40.0
-# Aide « ici » (?, les raccourcis de l'endroit où l'on est, par-dessus l'écran) : taille
+# Aide « ici » (<core.app.help_here>, les raccourcis de l'endroit où l'on est, par-dessus l'écran) : taille
 # du texte et largeur d'une colonne de cartes, en points.
 help_here_text = 16.0
 help_here_column = 420.0
-# Palette de commandes (Ctrl+Maj+P, : en vim) : largeur en points, lignes montrées au plus
+# Palette de commandes (<core.app.palette>) : largeur en points, lignes montrées au plus
 # (0 : toutes ; elle défile).
 palette_width = 640.0
 palette_max = 0
@@ -843,7 +848,7 @@ max_errors = 5
 completions = 12
 
 [gui.compare]
-# Comparaison côte à côte des images sélectionnées (c). Images comparées au plus (au-delà,
+# Comparaison côte à côte des images sélectionnées (<core.view.compare>). Images comparées au plus (au-delà,
 # les premières) : chacune garde un aperçu, et en 1:1 son 1:1 (~100 Mo de mémoire graphique
 # pour 26 Mpx ; 21 en 1:1 : ~2 Go). 21 : à peu près la taille des vignettes sur un écran.
 max = 21
@@ -896,14 +901,14 @@ handle_size = 9.0
 handle_grab = 10.0
 
 [gui.folders]
-# Panneau des dossiers, à gauche de la grille : affiché au démarrage (Maj+D l'affiche ou le
-# masque), largeur initiale (points, le bord se tire à la souris), retrait par niveau,
+# Panneau des dossiers, à gauche de la grille : affiché au démarrage (<core.view.folders>
+# l'affiche ou le masque), largeur initiale (points, le bord se tire à la souris), retrait par niveau,
 # dossiers cachés (.xxx) montrés ou non.
 visible = true
 width = 240.0
 indent = 14.0
 hidden = false
-# Recherche de dossiers (/ ou Ctrl+F dans le panneau) : niveaux de sous-dossiers
+# Recherche de dossiers (<core.search> dans le panneau) : niveaux de sous-dossiers
 # parcourus au plus, et nombre de résultats au plus.
 search_depth = 4
 search_results = 200
@@ -929,8 +934,9 @@ type_check_ms = 20
 
 [gui.histogram]
 # Histogramme (données du capteur pour un RAW), en haut du panneau des métadonnées :
-# affiché au démarrage (touche i), échelle "ev" (IL sous la saturation) ou "linear"
-# (Maj+I bascule). Grand histogramme (Maj+E, ou clic sur l'histogramme du panneau) : part
+# affiché au démarrage (<core.view.histogram>), échelle "ev" (IL sous la saturation) ou
+# "linear" (<core.view.histogram_scale> bascule). Grand histogramme
+# (<core.view.histogram_large>, ou clic sur l'histogramme du panneau) : part
 # de la largeur de la fenêtre.
 visible = true
 scale = "ev"
@@ -938,7 +944,7 @@ large = 0.7
 # IL montrés en échelle IL : 0 = plage utile de l'image (~13,9 IL pour un RAW 14 bits,
 # ~11,7 pour un JPEG, valeurs sRGB ramenées en lumière linéaire) ; positif : plafond.
 ev_shown = 0.0
-# Zones saturées et bouchées superposées à l'image au démarrage (touche o), et leur
+# Zones saturées et bouchées superposées à l'image au démarrage (<core.view.clipping>), et leur
 # opacité. Zones saturées colorées par canal (clip_red / clip_green / clip_blue, mélangées
 # si deux canaux, clip_over si les trois) ; false : clip_over pour toute saturation.
 clipping = false
@@ -963,13 +969,14 @@ smoothing = 1.5
 # Intensité des surfaces de la courbe (0 à 1), mélangées en additif comme la lumière
 # (rouge + vert = jaune, les trois = blanc).
 fill_strength = 0.55
-# Statistiques du grand histogramme (Maj+E) : plage des ombres aux hautes lumières, sans
+# Statistiques du grand histogramme (<core.view.histogram_large>) : plage des ombres aux hautes lumières, sans
 # les pixels isolés (0,01 : centiles 1 % et 99 %).
 stats_tail = 0.01
 # Grand histogramme : diamètre des pastilles de canal (rouge, vert, bleu, blanc = tous ;
-# Maj+C les fait tourner) ; photo d'analyse (en gris, zones saturées / bouchées en
+# <core.view.histogram_channel> les fait tourner) ; photo d'analyse (en gris, zones saturées / bouchées en
 # analysis_over / analysis_under, du canal choisi) affichée à l'ouverture, à droite de
-# l'histogramme et à sa hauteur (p ou l'icône de photo la montrent ou la masquent) ;
+# l'histogramme et à sa hauteur (<core.histogram.photo> ou l'icône de photo la montrent ou la
+# masquent) ;
 # éclaircissement de son fond par rapport à celui de la boîte (0 à 1).
 channel_dot = 11.0
 analysis = false
@@ -986,17 +993,19 @@ camera_width = 1.5
 # (p l'affiche ou la masque). Calcul : section [sharpness] ; son seuil suit le curseur de
 # sévérité du flou.
 visible = false
-# Couleurs proposées, dans l'ordre de la rotation (Ctrl+P) : selon l'image, l'une ressort
+# Couleurs proposées, dans l'ordre de la rotation (<core.view.peaking_color>) : selon l'image, l'une ressort
 # mieux que l'autre.
 colors = ["#ff2828", "#28ff50", "#28b4ff"]
 # Opacité des contours (0 à 1).
 opacity = 1.0
-# Pas de la sévérité au clavier (Ctrl+J plus souple, Ctrl+K plus strict), sur une échelle
+# Pas de la sévérité au clavier (<core.view.sharpness_lenient> plus souple,
+# <core.view.sharpness_strict> plus strict), sur une échelle
 # de -1 (tout à gauche) à 1 (tout à droite).
 step = 0.1
 
 [gui.metadata]
-# Panneau des métadonnées, à droite : affiché au démarrage (Maj+M l'affiche ou le masque),
+# Panneau des métadonnées, à droite : affiché au démarrage (<core.view.metadata> l'affiche ou
+# le masque),
 # largeur initiale (points, le bord se tire à la souris), histogramme de l'image
 # sélectionnée en haut du panneau (grille et plein écran ; panneau masqué : sur l'image),
 # et sa hauteur.
@@ -1004,7 +1013,8 @@ visible = true
 width = 280.0
 histogram = true
 histogram_height = 120.0
-# Pas d'un curseur de sévérité du panneau au clavier (flèches gauche / droite, h / l),
+# Pas d'un curseur de sévérité du panneau au clavier (<core.metadata.left> /
+# <core.metadata.right>),
 # sur sa course de -1 à 1.
 slider_step = 0.1
 # Air sous chaque groupe de réglages du panneau, avant le sous-titre du suivant, en
@@ -1026,7 +1036,8 @@ title = "#50bedc"
 # progress = "#3c3c3c"
 # Cadre de la vignette survolée (le survol ne sélectionne pas).
 hover = "#b4b4b4"
-# Cadre des images sélectionnées (sélection multiple : Espace, v, Ctrl+A, Maj+clic…),
+# Cadre des images sélectionnées (sélection multiple : <core.select.toggle>,
+# <core.select.visual>, <core.select.all>, Maj+clic…),
 # distinct de l'image courante (fond plein) et du survol.
 marked = "#ffaa28"
 # Repère du collimateur de mise au point.
@@ -1067,7 +1078,7 @@ empty_mark = "#3c3c3c"
 warning = "#e6a03c"
 error = "#e65a5a"
 view_background = "#0c0c0c"
-# Fonds proposés tour à tour par Ctrl+L (grille et plein écran), après celui du thème ;
+# Fonds proposés tour à tour par <core.view.background> (grille et plein écran), après celui du thème ;
 # une couleur égale à celle du thème ou déjà dans la liste est sautée.
 backgrounds = ["#303030", "#000000", "#ffffff"]
 # Notes : étoiles ("accent" : couleur d'accent du thème, ou "#rrggbb"), pastilles
@@ -1100,7 +1111,8 @@ analysis_over = "#ffdc00"
 analysis_under = "#286eff"
 
 [keys]
-# Raccourcis, par identifiant d'action (liste dans l'aide, F1 ou ?, au survol d'une
+# Raccourcis, par identifiant d'action (liste dans l'aide, <core.app.help> ou
+# <core.app.help_here>, au survol d'une
 # action ; toutes les actions et leurs raccourcis par défaut : keys.toml, livré avec le
 # programme). Les raccourcis cités REMPLACENT ceux des profils pour cette action ; liste vide :
 # plus aucun. Une touche : "p", "Maj+P", "Ctrl+u", "Flèche gauche", "PageUp", "Échap" ;

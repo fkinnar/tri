@@ -4,6 +4,12 @@
 
 ## Non publié
 
+- **Raccourcis cités à jour** (#372) : les descriptions des réglages et quelques messages
+  (aide-mémoire du plein écran, « Avant » d'un développement, préréglages de version…)
+  citaient des raccourcis écrits en dur, parfois périmés (« Maj+B » pour voir ses
+  développements, « b » pour le rendu). Ils citent maintenant l'action, et l'interface
+  montre les raccourcis en vigueur, `[keys]` compris ; un test empêche d'en réécrire en
+  dur.
 - **Notes tenues à jour d'elles-mêmes** (#368) : avec `[xmp] embed` = `internal`
   (disques internes et fixés) ou `everywhere`, chaque note va aussi dans l'image (JPEG,
   PNG, WebP, TIFF, HEIC), et une note fusionnée depuis un autre logiciel est récrite

@@ -87,6 +87,23 @@ the order, or click (an available one is appended, a sorted one removed); the li
 written at every change (`SettingsWindow::color_order_editor`, dots in the theme's
 colours).
 
+
+### Shortcuts cited in texts (2026-11-08)
+
+A comment of `config.example.toml` (or an interface message) never cites a hard-coded
+shortcut, which goes stale as soon as `keys.toml` or its `[keys]` change (user report:
+"Shift+B" to see one's developments, which no longer existed). It cites the **action**,
+by its identifier between angle brackets: `<core.view.source>`. The settings window, the
+palette and the messages concerned pass the text through `Keymap::with_keys`, which puts
+the shortcuts in use instead ("r"; several separated by " / "; the leader written out,
+"Ctrl+b rr"), or "no shortcut". `<leader>` alone becomes the leader; the rest
+(`tri-gui <image>`) is unchanged. In the raw file, the identifier points to the `[keys]`
+section. The `texts_cite_actions_not_hardcoded_shortcuts` test checks that each
+reference exists, that both examples cite the same actions, and that no modifier
+shortcut nor F1 to F12 key is left hard-coded (except the `[keys]` syntax in quotes, the
+default leader of `keys.toml` and mouse clicks). The fixed keys of dialogs (Esc, Enter,
+palette arrows) are not actions: they stay written.
+
 ## Module `tri::settings` (engine)
 
 - **`EngineSettings`**: the engine sections (`PreviewSection`, `RenderSection`,

@@ -2208,7 +2208,7 @@ impl TriApp {
                 if !self.review_developments
                     && (self.developers.is_empty() || self.jpeg_source()) =>
             {
-                Some(t!("review-unusable"))
+                Some(self.keymap.with_keys(&t!("review-unusable")))
             }
             // Un rendu qu'on ne peut pas montrer : logiciel absent ou désactivé, ou la
             // couverture sans aucun logiciel (07/11/2026).
@@ -6637,11 +6637,11 @@ impl TriApp {
                     .is_some_and(|f| tri::media::is_development(&f.path))
                 {
                     self.dev_before = !self.dev_before;
-                    self.hint = Some(t!(if self.dev_before {
+                    self.hint = Some(self.keymap.with_keys(&t!(if self.dev_before {
                         "dev-before"
                     } else {
                         "dev-after"
-                    }));
+                    })));
                     self.request_zoom();
                     return;
                 }
@@ -10910,8 +10910,8 @@ impl TriApp {
         // 17/10/2026 : il mordait sur l'image, F1 ouvre l'aide).
         if self.gui.view.key_hints {
             let hint = match file.kind {
-                MediaKind::Raw => t!("view-hint-raw"),
-                MediaKind::Flat => t!("view-hint-flat"),
+                MediaKind::Raw => self.keymap.with_keys(&t!("view-hint-raw")),
+                MediaKind::Flat => self.keymap.with_keys(&t!("view-hint-flat")),
             };
             overlay(
                 &painter,
@@ -16249,7 +16249,7 @@ impl TriApp {
                     self.help_offset = _output.state.clamped_offset().y;
                 }
                 ui.add_space(6.0);
-                ui.weak(t!("help-close-hint"));
+                ui.weak(self.keymap.with_keys(&t!("help-close-hint")));
             });
         // Main « saisir » sur la barre de titre, comme sur le fond des autres boîtes (retour
         // du 31/10/2026) ; la barre d'egui ne la met pas d'elle-même.
@@ -16544,8 +16544,10 @@ impl eframe::App for TriApp {
                 .map(|p| (p.id.clone(), preset_name(p)))
                 .collect();
             let mut action = None;
+            let preset_tip = self.keymap.with_keys(&t!("crop-preset-tip"));
             egui::Panel::bottom("crop").show(ui, |ui| {
                 if let Some(crop) = &mut self.crop {
+                    crop.preset_tip = preset_tip;
                     action = crop.bar(
                         ui,
                         &profiles,
@@ -16624,7 +16626,7 @@ impl eframe::App for TriApp {
                 ui.label(if self.folder.files.is_empty() {
                     t!("empty-folder")
                 } else {
-                    t!("empty-filtered")
+                    self.keymap.with_keys(&t!("empty-filtered"))
                 });
             } else if self.mode == Mode::View {
                 self.viewer(ui);
