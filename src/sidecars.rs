@@ -30,6 +30,16 @@ pub trait Format: Send + Sync {
     fn existing(&self, image: &Path, index: &SidecarIndex) -> Option<PathBuf>;
     /// Où créer le sidecar de `image` quand il manque.
     fn new_path(&self, image: &Path, convention: Convention) -> PathBuf;
+    /// Sidecars existants de ce format pour `image` : [`Format::existing`], ou tous pour un
+    /// format qui peut en avoir plusieurs (le XMP, sous ses deux noms).
+    fn existing_all(&self, image: &Path, index: &SidecarIndex) -> Vec<PathBuf> {
+        self.existing(image, index).into_iter().collect()
+    }
+    /// Sidecars que la convention `convention` attend pour `image` (le XMP « les deux » :
+    /// deux) ; un manquant est créé à la demande ([`crate::notes::NoteBook::generate`]).
+    fn wanted(&self, image: &Path, convention: Convention) -> Vec<PathBuf> {
+        vec![self.new_path(image, convention)]
+    }
     /// Les notes du sidecar `sidecar`.
     fn read(&self, sidecar: &Path) -> Result<Notes, String>;
     /// Écrit `notes` dans le sidecar existant `sidecar`, le reste gardé ; vrai si le
@@ -59,6 +69,12 @@ impl Format for Xmp {
     }
     fn new_path(&self, image: &Path, convention: Convention) -> PathBuf {
         convention.sidecar(image)
+    }
+    fn existing_all(&self, image: &Path, index: &SidecarIndex) -> Vec<PathBuf> {
+        index.sidecars(image)
+    }
+    fn wanted(&self, image: &Path, convention: Convention) -> Vec<PathBuf> {
+        convention.sidecars(image)
     }
     fn read(&self, sidecar: &Path) -> Result<Notes, String> {
         crate::xmp::read_sidecar(sidecar).map_err(|e| e.to_string())

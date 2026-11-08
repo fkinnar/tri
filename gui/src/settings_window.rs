@@ -444,7 +444,7 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
         ("gui", "theme") => &["dark", "light", "system", "neutral"],
         ("gui", "sort") => &["name", "captured", "modified", "stars", "color", "flag"],
         ("gui", "raw_previews") => &["on-demand", "background"],
-        ("xmp", "sidecar") => &["darktable", "adobe"],
+        ("xmp", "sidecar") => &["darktable", "adobe", "both"],
         ("xmp", "embed") => &["never", "internal", "everywhere"],
         ("sidecars.rapidraw", "create") => &["auto", "always", "never"],
         ("i18n", "language") => &["auto", "fr", "en"],
@@ -473,6 +473,18 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
         ("gui.histogram", "scale") => &["ev", "linear"],
         _ => return None,
     })
+}
+
+/// Libellé d'une valeur de liste déroulante : traduit s'il existe
+/// (`settings-choice-<section>-<clé>-<valeur>`, 08/11/2026 : « Darktable », « Adobe »,
+/// « Les deux »), sinon la valeur telle qu'écrite dans le fichier.
+fn choice_text(section: &str, key: &str, value: &str) -> String {
+    let id = format!("settings-choice-{section}-{key}-{value}").replace(['.', '_'], "-");
+    if tri::i18n::has(tri::i18n::language(), &id) {
+        t!(&id)
+    } else {
+        value.to_string()
+    }
 }
 
 fn is_folder_key(key: &str) -> bool {
@@ -1732,11 +1744,15 @@ impl SettingsWindow {
                 Value::Str(s) if choices(section, &entry.key).is_some() => {
                     let mut v = s.clone();
                     let combo = egui::ComboBox::from_id_salt(("settings_choice", &id))
-                        .selected_text(&v)
+                        .selected_text(choice_text(section, &entry.key, &v))
                         .show_ui(ui, |ui| {
                             for choice in choices(section, &entry.key).unwrap_or_default() {
                                 if self.fits(section, &entry.key, choice) {
-                                    ui.selectable_value(&mut v, choice.to_string(), *choice);
+                                    ui.selectable_value(
+                                        &mut v,
+                                        choice.to_string(),
+                                        choice_text(section, &entry.key, choice),
+                                    );
                                 }
                             }
                         });

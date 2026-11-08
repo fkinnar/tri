@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- **Sidecars of both conventions** (#371): `[xmp] sidecar = "both"` creates and keeps up
+  to date `IMG.RAF.xmp` (darktable) and `IMG.xmp` (Lightroom, Capture One). Two XMP
+  sidecars of the same photo are now both read and merged (before: the most recent only).
+  "Generate sidecars" creates the ones the convention expects (set to Adobe, a folder of
+  darktable sidecars gets its `IMG.xmp`). Drop-down in plain words: "Darktable",
+  "Adobe", "Both".
 - **Colors: one or several, and fields per program** (#371): in one-colour mode,
   `xmp:Label`, darktable's list and digiKam are written; when `Label` and darktable's
   or digiKam's colour differ (darktable never touches `Label`, which could hide a colour

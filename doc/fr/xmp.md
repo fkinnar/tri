@@ -89,10 +89,18 @@ depuis la fenêtre de réglages (le dossier est relu).
 |---|---|---|
 | `Darktable` (défaut) | `DSCF0092.RAF.xmp` | darktable, digiKam : un sidecar par fichier |
 | `Adobe` | `DSCF0092.xmp` | Lightroom, Capture One, Bridge : partagé par le RAF et le JPG d'une paire |
+| `Both` (`"both"`) | les deux | passer de darktable à Lightroom ou Capture One |
 
-- s'il existe des sidecars, on **lit et écrit le plus récent** (date de modification) ;
-- sinon, on en crée un selon la convention de `[xmp] sidecar` : un utilisateur de Capture
-  One règle `"adobe"` une fois pour toutes ;
+- s'il existe des sidecars, on les **lit tous et on les écrit tous** : deux sidecars XMP
+  d'une même photo (`IMG.RAF.xmp` et `IMG.xmp`) sont deux sources, fusionnées comme les
+  autres ([`reconcile.md`](reconcile.md) ; jamais vues ensemble et en désaccord : un
+  conflit à trancher). Avant le 08/11/2026, seul le plus récent était lu ;
+- sinon, on en crée selon la convention de `[xmp] sidecar` : un utilisateur de Capture
+  One règle `"adobe"` une fois pour toutes ; `"both"` crée les deux ;
+- en notant, un sidecar existant est réutilisé quel que soit son nom (réglé sur Adobe, un
+  `IMG.RAF.xmp` existant suffit) ; **« Générer les sidecars »** (`tri --sidecars`, menu du
+  dossier) crée en revanche ceux que la convention attend et qui manquent (réglé sur
+  Adobe, un dossier de sidecars darktable reçoit ses `IMG.xmp`) ;
 - la recherche liste le dossier et compare les noms **sans tenir compte de la casse**
   (`IMG.XMP` est trouvé), avec les vrais noms du disque : sur macOS, `IMG.XMP` et `IMG.xmp`
   sont le même fichier, sur Linux deux fichiers distincts. `SidecarIndex` liste un dossier

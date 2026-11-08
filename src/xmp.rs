@@ -398,18 +398,44 @@ pub enum Convention {
     /// `IMAGE.xmp` : Lightroom, Capture One, Bridge. Partagé par les fichiers de même nom
     /// (le RAF et le JPG d'une paire).
     Adobe,
+    /// Les deux (08/11/2026, demandé par l'utilisateur : des sidecars darktable et passer
+    /// dans Lightroom ou Capture One) : chaque photo a ses deux sidecars, lus et écrits
+    /// ensemble, fusionnés comme toutes les sources ([`crate::reconcile`]).
+    Both,
 }
 
 impl Convention {
-    /// Chemin du sidecar de `image` selon cette convention.
+    /// Chemin du sidecar de `image` selon cette convention (les deux : celui de
+    /// darktable, voir [`Convention::sidecars`]).
     pub fn sidecar(self, image: &Path) -> PathBuf {
         match self {
-            Convention::Darktable => {
+            Convention::Darktable | Convention::Both => {
                 let mut name = image.as_os_str().to_owned();
                 name.push(".xmp");
                 PathBuf::from(name)
             }
             Convention::Adobe => image.with_extension("xmp"),
+        }
+    }
+
+    /// Identifiant dans la configuration (`[xmp] sidecar`).
+    pub fn id(self) -> &'static str {
+        match self {
+            Convention::Darktable => "darktable",
+            Convention::Adobe => "adobe",
+            Convention::Both => "both",
+        }
+    }
+
+    /// Chemins des sidecars de `image` selon cette convention : un, ou deux pour
+    /// [`Convention::Both`].
+    pub fn sidecars(self, image: &Path) -> Vec<PathBuf> {
+        match self {
+            Convention::Both => vec![
+                Convention::Darktable.sidecar(image),
+                Convention::Adobe.sidecar(image),
+            ],
+            single => vec![single.sidecar(image)],
         }
     }
 

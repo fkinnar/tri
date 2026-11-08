@@ -105,7 +105,7 @@ fn read_notes(
         Some(development) => vec![development.sidecar],
         None => sidecars::formats()
             .iter()
-            .filter_map(|f| f.existing(image, index))
+            .flat_map(|f| f.existing_all(image, index))
             .collect(),
     };
     if sidecars.len() > 1 {
@@ -206,7 +206,7 @@ fn remember(image: &Path, notes: &Notes) {
         Some(development) => vec![development.sidecar],
         None => sidecars::formats()
             .iter()
-            .filter_map(|f| f.existing(image, &index))
+            .flat_map(|f| f.existing_all(image, &index))
             .collect(),
     };
     let Ok(sources) = sources_of(image, &sidecars) else {
@@ -228,6 +228,14 @@ fn read_sidecar(sidecar: &Path) -> Result<Notes, String> {
 /// Écrit `notes` dans `sidecar`, de son format (le reste du fichier gardé).
 fn write_sidecar(sidecar: &Path, notes: &Notes) -> Result<(), String> {
     sidecars::of(sidecar).write(sidecar, notes).map(|_| ())
+}
+
+/// Vrai si `a` et `b` désignent le même chemin, sans tenir compte de la casse (`IMG.XMP`
+/// et `IMG.xmp`, voir [`SidecarIndex`]).
+fn same_path(a: &Path, b: &Path) -> bool {
+    a.as_os_str()
+        .to_string_lossy()
+        .eq_ignore_ascii_case(&b.as_os_str().to_string_lossy())
 }
 
 fn dir_of(image: &Path) -> PathBuf {
@@ -492,13 +500,24 @@ impl NoteBook {
         if crate::developments::get(image).is_some() {
             return Vec::new();
         }
-        sidecars::formats()
-            .iter()
-            .copied()
-            .filter(|f| f.id() == "xmp" || self.creates.contains(&f.id()))
-            .filter(|f| !entry.sidecars.iter().any(|s| f.owns(s)))
-            .map(|f| (f, f.new_path(image, self.convention)))
-            .collect()
+        let mut out = Vec::new();
+        for f in sidecars::formats().iter().copied() {
+            if f.id() != "xmp" && !self.creates.contains(&f.id()) {
+                continue;
+            }
+            if self.convention == Convention::Both && f.id() == "xmp" {
+                // Les deux : chacun des deux noms qui manque (comparés sans la casse).
+                for path in f.wanted(image, self.convention) {
+                    if !entry.sidecars.iter().any(|s| same_path(s, &path)) {
+                        out.push((f, path));
+                    }
+                }
+            } else if !entry.sidecars.iter().any(|s| f.owns(s)) {
+                // Un sidecar existant du format est réutilisé, quel que soit son nom.
+                out.push((f, f.new_path(image, self.convention)));
+            }
+        }
+        out
     }
 
     /// Vrai si des notes sont attendues d'une lecture en fond ([`NoteBook::pending`]).
@@ -782,11 +801,22 @@ impl NoteBook {
             // Par format : le sidecar manquant à créer, ou l'existant à réécrire (`rewrite`,
             // 31/10/2026 : « on a fait une bêtise, on veut régénérer »).
             let mut todo: Vec<(&'static dyn Format, PathBuf, bool)> = Vec::new();
+            // Chaque sidecar attendu par la convention (08/11/2026 : réglé sur Adobe, un
+            // dossier en sidecars darktable reçoit ses `IMG.xmp` ; « les deux » : les deux).
             for &format in formats {
-                match entry.sidecars.iter().find(|s| format.owns(s)) {
-                    Some(existing) if rewrite => todo.push((format, existing.clone(), true)),
-                    Some(_) => {}
-                    None => todo.push((format, format.new_path(image, self.convention), false)),
+                for path in format.wanted(image, self.convention) {
+                    let found = entry.sidecars.iter().find(|s| {
+                        if format.id() == "xmp" {
+                            same_path(s, &path)
+                        } else {
+                            format.owns(s)
+                        }
+                    });
+                    match found {
+                        Some(existing) if rewrite => todo.push((format, existing.clone(), true)),
+                        Some(_) => {}
+                        None => todo.push((format, path, false)),
+                    }
                 }
             }
             if todo.is_empty() {
@@ -1722,6 +1752,57 @@ mod tests {
             5,
             "recréé"
         );
+    }
+
+    #[test]
+    fn both_conventions_keep_two_sidecars_in_step() {
+        // 08/11/2026, demandé par l'utilisateur : des sidecars darktable, et passer dans
+        // Lightroom ou Capture One (`IMG.xmp`).
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        std::fs::write(d.join("A.RAF"), b"x").unwrap();
+        std::fs::write(d.join("B.RAF"), b"x").unwrap();
+        let files = crate::media::scan(d, 1).unwrap();
+        let a = d.join("A.RAF");
+        // Noter une photo sans sidecar : les deux sont créés.
+        let mut book = NoteBook::load_files(&files, Convention::Both);
+        book.edit(&a, |n| n.set_stars(4)).unwrap();
+        for sidecar in ["A.RAF.xmp", "A.xmp"] {
+            assert_eq!(
+                xmp::read_sidecar(&d.join(sidecar)).unwrap().stars,
+                4,
+                "{sidecar}"
+            );
+        }
+        // Les deux lus et écrits ensemble, sans conflit.
+        let mut book = NoteBook::load_files(&files, Convention::Both);
+        assert_eq!(book.sidecars(&a).len(), 2);
+        assert!(book.conflict(&a).is_none());
+        book.edit(&a, |n| n.toggle_color(Color::Green, false))
+            .unwrap();
+        for sidecar in ["A.RAF.xmp", "A.xmp"] {
+            assert_eq!(
+                xmp::read_sidecar(&d.join(sidecar)).unwrap(),
+                notes(4, Flag::None, &[Color::Green]),
+                "{sidecar}"
+            );
+        }
+        // Darktable seul : un sidecar existant (B.RAF.xmp) est réutilisé en notant, pas de
+        // second créé.
+        xmp::write_sidecar(&d.join("B.RAF.xmp"), &notes(2, Flag::None, &[])).unwrap();
+        let mut book = NoteBook::load_files(&files, Convention::Adobe);
+        let b = d.join("B.RAF");
+        book.edit(&b, |n| n.set_stars(3)).unwrap();
+        assert!(!d.join("B.xmp").exists(), "réutilisé, pas doublé");
+        // Mais « générer les sidecars », réglé sur Adobe, crée le B.xmp manquant.
+        let xmp_format = crate::sidecars::by_id("xmp").unwrap();
+        let done = book.generate(std::slice::from_ref(&b), &[xmp_format], false, false);
+        assert_eq!(done.created, [d.join("B.xmp")]);
+        assert_eq!(xmp::read_sidecar(&d.join("B.xmp")).unwrap().stars, 3);
+        assert_eq!(book.sidecars(&b).len(), 2, "relu : les deux");
+        // Plus rien à créer ensuite.
+        let again = book.generate(std::slice::from_ref(&b), &[xmp_format], false, false);
+        assert!(again.created.is_empty() && again.unchanged == 1);
     }
 
     #[test]

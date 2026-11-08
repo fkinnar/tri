@@ -3915,10 +3915,17 @@ impl TriApp {
         let mut rewrite = dialog.rewrite;
         let preview = dialog.preview.clone();
         let warning = Color32::from(self.gui.colors.warning);
+        let convention = self.settings.xmp.sidecar;
         let name = |c: Option<&'static str>| match c.and_then(tri::sidecars::by_id) {
             Some(f) => match f.engine() {
                 Some(e) => t!("sidecars-format", engine = e.name(), id = f.id()),
-                None => f.id().to_uppercase(),
+                // Le XMP selon `[xmp] sidecar` (08/11/2026 : réglé sur Adobe, un dossier
+                // de sidecars darktable reçoit ses `IMG.xmp`).
+                None => format!(
+                    "{} — {}",
+                    f.id().to_uppercase(),
+                    t!(&format!("settings-choice-xmp-sidecar-{}", convention.id()))
+                ),
             },
             None => t!("sidecars-all"),
         };

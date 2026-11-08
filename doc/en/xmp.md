@@ -88,10 +88,18 @@ the whole process: `xmp::set_rules`, set at start-up and live from the settings 
 |---|---|---|
 | `Darktable` (default) | `DSCF0092.RAF.xmp` | darktable, digiKam: one sidecar per file |
 | `Adobe` | `DSCF0092.xmp` | Lightroom, Capture One, Bridge: shared by the RAF and the JPG of a pair |
+| `Both` (`"both"`) | both | moving from darktable to Lightroom or Capture One |
 
-- if sidecars exist, the **most recent one is read and written** (modification date);
-- otherwise, one is created following the `[xmp] sidecar` convention: a Capture One user
-  sets `"adobe"` once and for all;
+- if sidecars exist, **all are read and all are written**: two XMP sidecars of the same
+  photo (`IMG.RAF.xmp` and `IMG.xmp`) are two sources, merged like the others
+  ([`reconcile.md`](reconcile.md); never seen together and disagreeing: a conflict to
+  settle). Before 08/11/2026, only the most recent was read;
+- otherwise, sidecars are created following the `[xmp] sidecar` convention: a Capture One
+  user sets `"adobe"` once and for all; `"both"` creates both;
+- when rating, an existing sidecar is reused whatever its name (set to Adobe, an existing
+  `IMG.RAF.xmp` is enough); **"Generate sidecars"** (`tri --sidecars`, folder menu)
+  however creates the ones the convention expects that are missing (set to Adobe, a folder
+  of darktable sidecars gets its `IMG.xmp`);
 - the search lists the folder and compares names **case-insensitively** (`IMG.XMP` is
   found), with the actual names on disk: on macOS, `IMG.XMP` and `IMG.xmp` are the same
   file, on Linux two distinct files. `SidecarIndex` lists a folder only once for all its
