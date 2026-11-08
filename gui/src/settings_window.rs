@@ -1259,13 +1259,15 @@ impl SettingsWindow {
             if section.name == "keys" {
                 return self.keys_entries(ui, None);
             }
-            if section.name == "xmp.fields" {
-                return self.fields_table(ui, section);
-            }
             // Aucun logiciel trouvé : dit, avec ce que `tri` sait utiliser.
             if section.name == "develop" && self.found.is_empty() {
                 ui.label(t!("settings-found-none", list = supported_software()));
             }
+        }
+        // Toujours en tableau, aussi dans les résultats d'une recherche (08/11/2026 : la
+        // recherche « xmp » montrait une case par ligne).
+        if section.name == "xmp.fields" {
+            return self.fields_table(ui, section);
         }
         for group in &section.groups {
             let entries: Vec<&Entry> = group
@@ -3444,6 +3446,10 @@ mod tests {
         let loaded = tri::settings::load::<crate::settings::AppSettings>(Some(&path));
         assert!(loaded.warning.is_none(), "{:?}", loaded.warning);
         assert!(!loaded.settings.xmp.fields.darktable);
+        // Aussi en tableau dans les résultats d'une recherche.
+        h.state_mut().query = "xmp".into();
+        h.run_steps(3);
+        assert!(h.query_by_label("Lightroom Classic").is_some());
     }
 
     #[test]
