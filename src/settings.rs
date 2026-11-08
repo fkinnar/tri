@@ -150,6 +150,22 @@ pub struct XmpSection {
     /// disques internes, ou partout ; un dossier peut avoir son propre réglage. Voir
     /// [`crate::embedded`], [`crate::reconcile`].
     pub embed: crate::embedded::Auto,
+    /// Une seule couleur : ordre de lecture des champs qui en portent une (la première
+    /// trouvée l'emporte). Voir [`crate::xmp::ColorSources`].
+    pub color_sources: crate::xmp::ColorSources,
+    /// Champs écrits, par logiciel (`[xmp.fields]`, tous par défaut) : lus et écrits.
+    pub fields: crate::xmp::Fields,
+}
+
+impl XmpSection {
+    /// Règles à donner à [`crate::xmp::set_rules`].
+    pub fn rules(&self) -> crate::xmp::Rules {
+        crate::xmp::Rules {
+            multiple: self.multiple_colors,
+            sources: self.color_sources,
+            fields: self.fields,
+        }
+    }
 }
 
 /// Section `[preview]` : voir [`preview::Settings`].

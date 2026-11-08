@@ -47,15 +47,41 @@ Règles d'écriture :
   mémorisées dans `tri:RatingBeforeReject` : annuler le rejet les restaure ;
 - **pas de bruit** : un champ qui vaudrait 0 n'est ajouté que s'il existait déjà (on met à
   jour `xmp:Rating="0"` de darktable, on n'ajoute pas `xmpDM:pick="0"` partout) ;
-- **une seule couleur** : `xmp:Label`, `digiKam:ColorLabel` et `darktable:colorlabels` ;
-  **plusieurs** : seulement `darktable:colorlabels`. darktable lit `xmp:Label` *avant* ses
-  propres couleurs (vérifié dans son code source) : l'écrire avec plusieurs couleurs lui en
-  ferait perdre.
+- **champs par logiciel** (`[xmp.fields]`, tous cochés par défaut) : `label`,
+  `darktable`, `digikam`, `lightroom`, lus et écrits ; un champ décoché est ignoré, ni lu,
+  ni écrit, ni retiré (il reste tel quel), et il sort de l'ordre `color_sources`.
+  `xmp:Rating` est toujours géré. Plusieurs couleurs demandent darktable (sa liste est le
+  seul champ qui en porte plusieurs) : sans lui, une seule.
+
+### Couleurs : une ou plusieurs (`[xmp] multiple_colors`)
+
+`xmp:Label` et `digiKam:ColorLabel` ne portent qu'une couleur ; `darktable:colorlabels`
+en porte plusieurs. darktable réécrit sa liste depuis sa base à chaque changement mais ne
+touche jamais `xmp:Label` (« géré par une application extérieure », vérifié dans son code
+source), et le lit *avant* sa liste quand il importe un fichier. Un `Label` posé avant par
+un autre logiciel peut donc rester en arrière (retour du 08/11/2026 : `Label="Green"`,
+liste à `0`, rouge, dans darktable).
+
+- **Une couleur** (défaut, comme Lightroom) : écrite dans `xmp:Label`,
+  `darktable:colorlabels` (darktable trouve sa liste) et `digiKam:ColorLabel`. Lue dans
+  l'ordre de `[xmp] color_sources` (défaut : `["darktable", "label", "digikam"]`) : le
+  premier champ qui porte une couleur l'emporte (darktable seulement s'il n'en a qu'une,
+  numéro traduit). darktable en tête : sa couleur est celle qu'il affiche. Un champ oublié
+  est lu en dernier ; dans la fenêtre de réglages, les champs cochés en colonne, qu'on
+  glisse à leur place (grisés s'il n'en reste qu'un). `[xmp.fields]` y est un tableau :
+  logiciel, champs XMP, ce qu'ils portent, une case « géré ». Plusieurs couleurs posées dans darktable sont lues toutes : la prochaine
+  écriture ne les efface pas.
+- **Plusieurs** (comme darktable) : seul `darktable:colorlabels` est lu et écrit ;
+  `xmp:Label` et `digiKam:ColorLabel` restent tels quels. Faute de liste (fichier de
+  Lightroom, XnView…), `xmp:Label` puis digiKam sont lus. Dans une image (JPEG…), les
+  logiciels qui ne lisent que `Label` (XnView, l'Explorateur Windows) ne voient alors pas
+  les couleurs.
 
 Règles de lecture : rejeté si `xmp:Rating = -1`, `xmpDM:pick = -1` ou
-`digiKam:PickLabel = 1` ; accepté si `xmpDM:pick = 1` ou `digiKam:PickLabel = 3`. Couleurs :
-`xmp:Label` d'abord (comme darktable), sinon `darktable:colorlabels`, sinon
-`digiKam:ColorLabel`. Les étoiles écrites « 3.0 » (certains logiciels) sont acceptées.
+`digiKam:PickLabel = 1` ; accepté si `xmpDM:pick = 1` ou `digiKam:PickLabel = 3`. Les
+étoiles écrites « 3.0 » (certains logiciels) sont acceptées. Les règles (mode, priorité,
+champs) valent pour tout le processus : `xmp::set_rules`, réglées au démarrage et à chaud
+depuis la fenêtre de réglages (le dossier est relu).
 
 ## Quel sidecar
 
@@ -63,10 +89,18 @@ Règles de lecture : rejeté si `xmp:Rating = -1`, `xmpDM:pick = -1` ou
 |---|---|---|
 | `Darktable` (défaut) | `DSCF0092.RAF.xmp` | darktable, digiKam : un sidecar par fichier |
 | `Adobe` | `DSCF0092.xmp` | Lightroom, Capture One, Bridge : partagé par le RAF et le JPG d'une paire |
+| `Both` (`"both"`) | les deux | passer de darktable à Lightroom ou Capture One |
 
-- s'il existe des sidecars, on **lit et écrit le plus récent** (date de modification) ;
-- sinon, on en crée un selon la convention de `[xmp] sidecar` : un utilisateur de Capture
-  One règle `"adobe"` une fois pour toutes ;
+- s'il existe des sidecars, on les **lit tous et on les écrit tous** : deux sidecars XMP
+  d'une même photo (`IMG.RAF.xmp` et `IMG.xmp`) sont deux sources, fusionnées comme les
+  autres ([`reconcile.md`](reconcile.md) ; jamais vues ensemble et en désaccord : un
+  conflit à trancher). Avant le 08/11/2026, seul le plus récent était lu ;
+- sinon, on en crée selon la convention de `[xmp] sidecar` : un utilisateur de Capture
+  One règle `"adobe"` une fois pour toutes ; `"both"` crée les deux ;
+- en notant, un sidecar existant est réutilisé quel que soit son nom (réglé sur Adobe, un
+  `IMG.RAF.xmp` existant suffit) ; **« Générer les sidecars »** (`tri --sidecars`, menu du
+  dossier) crée en revanche ceux que la convention attend et qui manquent (réglé sur
+  Adobe, un dossier de sidecars darktable reçoit ses `IMG.xmp`) ;
 - la recherche liste le dossier et compare les noms **sans tenir compte de la casse**
   (`IMG.XMP` est trouvé), avec les vrais noms du disque : sur macOS, `IMG.XMP` et `IMG.xmp`
   sont le même fichier, sur Linux deux fichiers distincts. `SidecarIndex` liste un dossier

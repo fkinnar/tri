@@ -1388,6 +1388,7 @@ fn run() -> AnyResult<()> {
     let settings = settings(&args);
     tri::i18n::set_language(settings.i18n.language.resolve());
     tri::reconcile::set_data_dir(settings.data_dir());
+    tri::xmp::set_rules(settings.xmp.rules());
 
     if let Some(level) = args.clear {
         let cache = settings.open_cache()?;

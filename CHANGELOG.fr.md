@@ -4,6 +4,23 @@
 
 ## Non publié
 
+- **Sidecars des deux conventions** (#371) : `[xmp] sidecar = "both"` crée et tient à
+  jour `IMG.RAF.xmp` (darktable) et `IMG.xmp` (Lightroom, Capture One). Deux sidecars XMP
+  d'une même photo sont désormais lus tous les deux et fusionnés (avant : le plus récent
+  seul). « Générer les sidecars » crée ceux que la convention attend (réglé sur Adobe, un
+  dossier de sidecars darktable reçoit ses `IMG.xmp`). Liste déroulante en clair :
+  « Darktable », « Adobe », « Les deux », avec le nom du fichier en gris. La boîte des
+  notes en désaccord montre la date de modification de chaque source (un indice : un
+  sidecar de 2012 face à un de 2026).
+- **Couleurs : une ou plusieurs, et champs par logiciel** (#371) : en mode une couleur,
+  `xmp:Label`, la liste de darktable et digiKam sont écrits ; quand `Label` et la couleur
+  de darktable ou de digiKam diffèrent (darktable ne touche jamais `Label`, qui pouvait
+  masquer une couleur changée chez lui), l'ordre de lecture `[xmp] color_sources` décide
+  (darktable, Label, digiKam par défaut ; à glisser dans la fenêtre de réglages). En mode plusieurs couleurs, comme darktable, seule sa liste est lue et écrite.
+  `[xmp.fields]` (un tableau dans la fenêtre de réglages) : cases par logiciel (Label, darktable, digiKam, Lightroom), toutes
+  cochées ; un champ décoché n'est ni lu ni écrit, il reste tel quel et sort de l'ordre de
+  lecture. Liste déroulante pour `[xmp] embed` dans la
+  fenêtre de réglages.
 - **Notes tenues à jour d'elles-mêmes** (#368) : avec `[xmp] embed` = `internal`
   (disques internes et fixés) ou `everywhere`, chaque note va aussi dans l'image (JPEG,
   PNG, WebP, TIFF, HEIC), et une note fusionnée depuis un autre logiciel est récrite

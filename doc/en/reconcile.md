@@ -70,7 +70,8 @@ their ratings.
 - An image in conflict carries an orange triangle at the top left of its thumbnail
   (`marks::conflict_sign`); a click, or a rating set on it, opens the "Ratings disagree"
   dialog: a table, one row per source (XMP, RapidRAW, RawTherapee, ART, "In the image")
-  and the previous ratings, one column per field. Only the fields in disagreement (in
+  and the previous ratings, each source's modification date (`Conflict::modified`, local
+  time: a hint), one column per field. Only the fields in disagreement (in
   bold) are chosen, by clicking the value wanted; a field where rows differ without a
   conflict (only one source changed it) is preselected on the merged value, and can be
   changed too (feedback of 2026-11-07: a different colour that could not be chosen); the

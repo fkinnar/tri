@@ -4,6 +4,23 @@
 
 ## Unreleased
 
+- **Sidecars of both conventions** (#371): `[xmp] sidecar = "both"` creates and keeps up
+  to date `IMG.RAF.xmp` (darktable) and `IMG.xmp` (Lightroom, Capture One). Two XMP
+  sidecars of the same photo are now both read and merged (before: the most recent only).
+  "Generate sidecars" creates the ones the convention expects (set to Adobe, a folder of
+  darktable sidecars gets its `IMG.xmp`). Drop-down in plain words: "Darktable",
+  "Adobe", "Both", with the file name in grey. The disagreeing-ratings dialog shows each
+  source's modification date (a hint: a 2012 sidecar against a 2026 one).
+- **Colors: one or several, and fields per program** (#371): in one-colour mode,
+  `xmp:Label`, darktable's list and digiKam are written; when `Label` and darktable's
+  or digiKam's colour differ (darktable never touches `Label`, which could hide a colour
+  changed there), the reading order `[xmp] color_sources` decides (darktable, Label,
+  digiKam by default; dragged into place in the settings window). In
+  several-colours mode, like darktable, only its list is read and written.
+  `[xmp.fields]` (a table in the settings window): one box per program (Label, darktable, digiKam, Lightroom), all
+  ticked; an unticked field is neither read nor written, stays as it is and leaves the
+  reading order. Drop-down list for `[xmp] embed` in the
+  settings window.
 - **Ratings kept in step by themselves** (#368): with `[xmp] embed` = `internal`
   (internal and fixed disks) or `everywhere`, each rating also goes into the image
   (JPEG, PNG, WebP, TIFF, HEIC), and a rating merged from another program is written at
