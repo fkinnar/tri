@@ -150,6 +150,22 @@ pub struct XmpSection {
     /// disques internes, ou partout ; un dossier peut avoir son propre réglage. Voir
     /// [`crate::embedded`], [`crate::reconcile`].
     pub embed: crate::embedded::Auto,
+    /// Une seule couleur : celle qui est lue quand `xmp:Label` et l'unique couleur de
+    /// darktable diffèrent (darktable, défaut, ou `label`). Voir [`crate::xmp::ColorRules`].
+    pub color_priority: crate::xmp::ColorPriority,
+    /// Champs écrits, par logiciel (`[xmp.write]`, tous par défaut).
+    pub write: crate::xmp::Written,
+}
+
+impl XmpSection {
+    /// Règles à donner à [`crate::xmp::set_rules`].
+    pub fn rules(&self) -> crate::xmp::Rules {
+        crate::xmp::Rules {
+            multiple: self.multiple_colors,
+            priority: self.color_priority,
+            write: self.write,
+        }
+    }
 }
 
 /// Section `[preview]` : voir [`preview::Settings`].

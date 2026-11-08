@@ -808,6 +808,7 @@ settings-section-render = RAW rendering
 settings-section-cache = Cache
 settings-section-scheduler = Background work
 settings-section-xmp = Ratings (XMP)
+settings-section-xmp-write = Ratings: fields written per program
 settings-section-sidecars-rapidraw = RapidRAW sidecars (ratings)
 settings-section-sidecars-rawtherapee = RawTherapee sidecars (ratings)
 settings-section-sidecars-art = ART sidecars (ratings)

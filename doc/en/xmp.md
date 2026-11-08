@@ -47,20 +47,35 @@ Writing rules:
   `tri:RatingBeforeReject`: undoing the rejection restores them;
 - **no noise**: a field that would be 0 is only added if it already existed (darktable's
   `xmp:Rating="0"` is updated, `xmpDM:pick="0"` is not added everywhere);
-- **a single color**: `xmp:Label`, `digiKam:ColorLabel` and `darktable:colorlabels`;
-  **several**: only `darktable:colorlabels`. darktable reads `xmp:Label` *before* its own
-  colors (checked in its source code): writing it with several colors would make it lose
-  some.
+- **fields per program** (`[xmp.write]`, all ticked by default): `label`, `darktable`,
+  `digikam`, `lightroom`; an unticked field is neither written nor removed, it stays as it
+  is (all are still read). `xmp:Rating` is always written.
+
+### Colors: one or several (`[xmp] multiple_colors`)
+
+`xmp:Label` and `digiKam:ColorLabel` hold a single color; `darktable:colorlabels` holds
+several. darktable rewrites its list from its database at every change but never touches
+`xmp:Label` ("managed by an external application", checked in its source code), and reads
+it *before* its list when importing a file. A `Label` set earlier by other software can
+therefore lag behind (report of 08/11/2026: `Label="Green"`, list at `0`, red, in
+darktable).
+
+- **One color** (default, like Lightroom): written into `xmp:Label`,
+  `darktable:colorlabels` (darktable finds its list) and `digiKam:ColorLabel`. Read from
+  `xmp:Label`; without a `Label`, darktable's single color stands in for it (number
+  translated). When they differ, `[xmp] color_priority` decides: `darktable` (default, the
+  color it shows) or `label`. Several colors set in darktable are all read: the next write
+  does not erase them.
+- **Several** (like darktable): only `darktable:colorlabels` is read and written;
+  `xmp:Label` and `digiKam:ColorLabel` stay as they are. Without a list (Lightroom,
+  XnView… file), `xmp:Label` then digiKam are read. In an image (JPEG…), software that only
+  reads `Label` (XnView, Windows Explorer) then does not see the colors.
 
 Reading rules: rejected if `xmp:Rating = -1`, `xmpDM:pick = -1` or
-`digiKam:PickLabel = 1`; accepted if `xmpDM:pick = 1` or `digiKam:PickLabel = 3`.
-Colors: in a sidecar written by darktable (`darktable:xmp_version`), `darktable:colorlabels`
-alone, all its colors (none if it is missing); elsewhere, `xmp:Label` first (like
-darktable), otherwise `darktable:colorlabels`, otherwise `digiKam:ColorLabel`. Why:
-darktable rewrites its colors from its database at every change but never touches
-`xmp:Label` ("managed by an external application"); a `Label` set earlier by other software
-hid its changes. The one / several colors setting only matters when editing in `tri` (a new
-color replaces or is added): when reading, all the colors set elsewhere are shown. Stars written "3.0" (some software) are accepted.
+`digiKam:PickLabel = 1`; accepted if `xmpDM:pick = 1` or `digiKam:PickLabel = 3`. Stars
+written "3.0" (some software) are accepted. The rules (mode, priority, fields) apply to
+the whole process: `xmp::set_rules`, set at start-up and live from the settings window
+(the folder is read again).
 
 ## Which sidecar
 

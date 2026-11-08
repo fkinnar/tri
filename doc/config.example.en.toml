@@ -73,8 +73,15 @@ exposure = true
 # An existing sidecar is always reused, the most recent one if both exist.
 sidecar = "darktable"
 # Several colours per image (like Darktable); false: only one, a new colour replaces the
-# previous one (like Lightroom).
+# previous one (like Lightroom). One: written into xmp:Label (read by Lightroom, XnView,
+# Windows Explorer…), darktable:colorlabels and digiKam:ColorLabel. Several: like
+# darktable, only darktable:colorlabels; xmp:Label and digiKam:ColorLabel are no longer
+# touched (they hold a single colour).
 multiple_colors = false
+# One colour: the one read when xmp:Label and darktable's colour differ. darktable rewrites
+# its own at every change but never touches xmp:Label, which can lag behind: "darktable"
+# (its colour, the one it shows) or "label".
+color_priority = "darktable"
 # Ratings also written into the images themselves (JPEG, PNG, WebP, TIFF, HEIC; never a
 # RAW) on each rating, and merges coming from other programs propagated to every source:
 # "never" (on demand only: "Write the ratings into the images", tri --embed-notes),
@@ -82,6 +89,20 @@ multiple_colors = false
 # folder can have its own setting (right-click on the folder), which wins. The ratings
 # always go to the sidecars too.
 embed = "never"
+
+# Fields written per program, in sidecars and images: untick those of a program you do not
+# use. An unticked field is neither written nor removed (it stays as it is); all are still
+# read. Stars (xmp:Rating, the standard) are always written.
+[xmp.write]
+# xmp:Label: the colour, in one-colour mode (Lightroom, Capture One, XnView, Windows
+# Explorer…).
+label = true
+# darktable:colorlabels: darktable's colours.
+darktable = true
+# digiKam:ColorLabel (in one-colour mode) and digiKam:PickLabel (accepted / rejected).
+digikam = true
+# xmpDM:pick and xmpDM:good: Lightroom Classic's accepted / rejected.
+lightroom = true
 
 # Sidecars of the development software (2026-10-31): one subsection per software that has
 # its own. An existing sidecar always receives the notes; a missing one is created

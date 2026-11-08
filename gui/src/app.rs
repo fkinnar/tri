@@ -1034,7 +1034,16 @@ impl TriApp {
         self.gui = new.gui;
         self.settings.i18n = new.i18n;
         self.settings.files = new.files;
+        // Règles des notes (une / plusieurs couleurs, priorité, champs écrits) : le dossier
+        // est relu avec les nouvelles.
+        let rules_changed = new.xmp.rules() != self.settings.xmp.rules();
         self.settings.xmp = new.xmp;
+        if rules_changed {
+            tri::xmp::set_rules(new.xmp.rules());
+            if !self.folder.dir.as_os_str().is_empty() {
+                self.reload_folder(None);
+            }
+        }
         self.settings.offload = new.offload;
         // Profils d'export, préréglages de recadrage, darktable : aussi à chaud.
         self.settings.export = new.export;

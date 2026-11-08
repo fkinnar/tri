@@ -73,8 +73,16 @@ exposure = true
 # Un sidecar existant est toujours réutilisé, le plus récent si les deux existent.
 sidecar = "darktable"
 # Plusieurs couleurs par image (comme Darktable) ; false : une seule, une nouvelle couleur
-# remplace la précédente (comme Lightroom).
+# remplace la précédente (comme Lightroom). Une seule : écrite dans xmp:Label (lu par
+# Lightroom, XnView, l'Explorateur Windows…), darktable:colorlabels et
+# digiKam:ColorLabel. Plusieurs : comme darktable, seulement
+# darktable:colorlabels ; xmp:Label et digiKam:ColorLabel ne sont plus touchés (ils ne
+# portent qu'une couleur).
 multiple_colors = false
+# Une seule couleur : celle qui est lue quand xmp:Label et la couleur de darktable diffèrent.
+# darktable réécrit la sienne à chaque changement mais ne touche jamais xmp:Label, qui peut
+# rester en arrière : "darktable" (sa couleur, celle qu'il affiche) ou "label".
+color_priority = "darktable"
 # Notes inscrites aussi dans les images elles-mêmes (JPEG, PNG, WebP, TIFF, HEIC ; jamais
 # un RAW) à chaque note, et fusions venues d'autres logiciels propagées à toutes les
 # sources : "never" (sur demande seulement : « Inscrire les notes dans les images »,
@@ -82,6 +90,20 @@ multiple_colors = false
 # réseau), "everywhere". Un dossier peut avoir son propre réglage (clic droit sur le
 # dossier), prioritaire. Les notes vont toujours aussi dans les sidecars.
 embed = "never"
+
+# Champs écrits par logiciel, dans les sidecars et les images : décocher ceux d'un logiciel
+# qu'on n'utilise pas. Un champ décoché n'est ni écrit ni retiré (il reste tel quel) ; tous
+# restent lus. Les étoiles (xmp:Rating, le standard) sont toujours écrites.
+[xmp.write]
+# xmp:Label : la couleur, en mode une couleur (Lightroom, Capture One, XnView, Explorateur
+# Windows…).
+label = true
+# darktable:colorlabels : les couleurs de darktable.
+darktable = true
+# digiKam:ColorLabel (en mode une couleur) et digiKam:PickLabel (accepté / rejeté).
+digikam = true
+# xmpDM:pick et xmpDM:good : accepté / rejeté de Lightroom Classic.
+lightroom = true
 
 # Sidecars des logiciels de développement (31/10/2026) : une sous-section par logiciel qui
 # a le sien. Un sidecar existant reçoit toujours les notes ; un sidecar manquant est créé

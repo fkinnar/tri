@@ -4,11 +4,14 @@
 
 ## Unreleased
 
-- **Colors changed in darktable read back** (#371): darktable rewrites its colors but
-  leaves `xmp:Label` as is; a `Label` set earlier by other software (or by `tri`) hid the
-  change. In a darktable sidecar its colors are authoritative, one or several; `tri` puts
-  the fields back in agreement when it rewrites the file. Drop-down list for `[xmp]
-  embed` in the settings window.
+- **Colors: one or several, and fields per program** (#371): in one-colour mode,
+  `xmp:Label`, darktable's list and digiKam are written; when `Label` and darktable's
+  colour differ (darktable never touches `Label`, which could hide a colour changed
+  there), `[xmp] color_priority` chooses (`darktable` by default, or `label`). In
+  several-colours mode, like darktable, only its list is read and written.
+  `[xmp.write]`: one box per program (Label, darktable, digiKam, Lightroom), all ticked;
+  an unticked field stays as it is. Drop-down lists for `[xmp] embed` and
+  `color_priority` in the settings window.
 - **Ratings kept in step by themselves** (#368): with `[xmp] embed` = `internal`
   (internal and fixed disks) or `everywhere`, each rating also goes into the image
   (JPEG, PNG, WebP, TIFF, HEIC), and a rating merged from another program is written at

@@ -47,21 +47,36 @@ Règles d'écriture :
   mémorisées dans `tri:RatingBeforeReject` : annuler le rejet les restaure ;
 - **pas de bruit** : un champ qui vaudrait 0 n'est ajouté que s'il existait déjà (on met à
   jour `xmp:Rating="0"` de darktable, on n'ajoute pas `xmpDM:pick="0"` partout) ;
-- **une seule couleur** : `xmp:Label`, `digiKam:ColorLabel` et `darktable:colorlabels` ;
-  **plusieurs** : seulement `darktable:colorlabels`. darktable lit `xmp:Label` *avant* ses
-  propres couleurs (vérifié dans son code source) : l'écrire avec plusieurs couleurs lui en
-  ferait perdre.
+- **champs par logiciel** (`[xmp.write]`, tous cochés par défaut) : `label`,
+  `darktable`, `digikam`, `lightroom` ; un champ décoché n'est ni écrit ni retiré, il reste
+  tel quel (tous restent lus). `xmp:Rating` est toujours écrit.
+
+### Couleurs : une ou plusieurs (`[xmp] multiple_colors`)
+
+`xmp:Label` et `digiKam:ColorLabel` ne portent qu'une couleur ; `darktable:colorlabels`
+en porte plusieurs. darktable réécrit sa liste depuis sa base à chaque changement mais ne
+touche jamais `xmp:Label` (« géré par une application extérieure », vérifié dans son code
+source), et le lit *avant* sa liste quand il importe un fichier. Un `Label` posé avant par
+un autre logiciel peut donc rester en arrière (retour du 08/11/2026 : `Label="Green"`,
+liste à `0`, rouge, dans darktable).
+
+- **Une couleur** (défaut, comme Lightroom) : écrite dans `xmp:Label`,
+  `darktable:colorlabels` (darktable trouve sa liste) et `digiKam:ColorLabel`. Lue dans
+  `xmp:Label` ; sans `Label`, la couleur unique de darktable en tient lieu (numéro
+  traduit). Quand les deux diffèrent, `[xmp] color_priority` décide : `darktable` (défaut,
+  la couleur qu'il affiche) ou `label`. Plusieurs couleurs posées dans darktable sont lues
+  toutes : la prochaine écriture ne les efface pas.
+- **Plusieurs** (comme darktable) : seul `darktable:colorlabels` est lu et écrit ;
+  `xmp:Label` et `digiKam:ColorLabel` restent tels quels. Faute de liste (fichier de
+  Lightroom, XnView…), `xmp:Label` puis digiKam sont lus. Dans une image (JPEG…), les
+  logiciels qui ne lisent que `Label` (XnView, l'Explorateur Windows) ne voient alors pas
+  les couleurs.
 
 Règles de lecture : rejeté si `xmp:Rating = -1`, `xmpDM:pick = -1` ou
-`digiKam:PickLabel = 1` ; accepté si `xmpDM:pick = 1` ou `digiKam:PickLabel = 3`. Couleurs :
-dans un sidecar écrit par darktable (`darktable:xmp_version`), `darktable:colorlabels` seul,
-toutes ses couleurs (aucune s'il est absent) ; ailleurs, `xmp:Label` d'abord (comme
-darktable), sinon `darktable:colorlabels`, sinon `digiKam:ColorLabel`. Pourquoi : darktable
-réécrit ses couleurs depuis sa base à chaque changement mais ne touche jamais `xmp:Label`
-(« géré par une application extérieure ») ; un `Label` posé avant par un autre logiciel
-masquait ses changements. Le réglage une / plusieurs couleurs ne joue qu'à la modification
-dans `tri` (une nouvelle couleur remplace ou s'ajoute) : à la lecture, toutes les couleurs
-posées ailleurs sont montrées. Les étoiles écrites « 3.0 » (certains logiciels) sont acceptées.
+`digiKam:PickLabel = 1` ; accepté si `xmpDM:pick = 1` ou `digiKam:PickLabel = 3`. Les
+étoiles écrites « 3.0 » (certains logiciels) sont acceptées. Les règles (mode, priorité,
+champs) valent pour tout le processus : `xmp::set_rules`, réglées au démarrage et à chaud
+depuis la fenêtre de réglages (le dossier est relu).
 
 ## Quel sidecar
 

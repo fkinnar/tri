@@ -807,6 +807,7 @@ settings-section-render = Rendu RAW
 settings-section-cache = Cache
 settings-section-scheduler = Calculs en arrière-plan
 settings-section-xmp = Notes (XMP)
+settings-section-xmp-write = Notes : champs écrits par logiciel
 settings-section-sidecars-rapidraw = Sidecars RapidRAW (notes)
 settings-section-sidecars-rawtherapee = Sidecars RawTherapee (notes)
 settings-section-sidecars-art = Sidecars ART (notes)
