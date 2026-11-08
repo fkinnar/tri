@@ -10,8 +10,9 @@
   changed there), the reading order `[xmp] color_sources` decides (darktable, Label,
   digiKam by default; "swap" buttons in the settings window). In
   several-colours mode, like darktable, only its list is read and written.
-  `[xmp.write]`: one box per program (Label, darktable, digiKam, Lightroom), all ticked;
-  an unticked field stays as it is. Drop-down list for `[xmp] embed` in the
+  `[xmp.fields]`: one box per program (Label, darktable, digiKam, Lightroom), all
+  ticked; an unticked field is neither read nor written, stays as it is and leaves the
+  reading order. Drop-down list for `[xmp] embed` in the
   settings window.
 - **Ratings kept in step by themselves** (#368): with `[xmp] embed` = `internal`
   (internal and fixed disks) or `everywhere`, each rating also goes into the image

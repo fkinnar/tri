@@ -81,7 +81,7 @@ multiple_colors = false
 # One colour: reading order of the fields that hold one, the first found wins: "darktable"
 # (darktable:colorlabels, if it holds a single colour), "label" (xmp:Label) and "digikam"
 # (digiKam:ColorLabel). darktable rewrites its colour at every change but never touches
-# xmp:Label, which can lag behind: hence darktable first. A field left out is read last.
+# xmp:Label, which can lag behind: hence darktable first. A field left out is read last; a field unticked in [xmp.fields] is not read.
 color_sources = ["darktable", "label", "digikam"]
 # Ratings also written into the images themselves (JPEG, PNG, WebP, TIFF, HEIC; never a
 # RAW) on each rating, and merges coming from other programs propagated to every source:
@@ -91,10 +91,12 @@ color_sources = ["darktable", "label", "digikam"]
 # always go to the sidecars too.
 embed = "never"
 
-# Fields written per program, in sidecars and images: untick those of a program you do not
-# use. An unticked field is neither written nor removed (it stays as it is); all are still
-# read. Stars (xmp:Rating, the standard) are always written.
-[xmp.write]
+# Fields handled per program (read and written), in sidecars and images: untick those of a
+# program you do not use. An unticked field is ignored: neither read, written nor removed
+# (it stays as it is), and it leaves color_sources. Stars (xmp:Rating, the standard) are
+# always handled. Several colours need darktable (its list is the only field that holds
+# several): without it, only one.
+[xmp.fields]
 # xmp:Label: the colour, in one-colour mode (Lightroom, Capture One, XnView, Windows
 # Explorer…).
 label = true

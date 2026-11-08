@@ -153,8 +153,8 @@ pub struct XmpSection {
     /// Une seule couleur : ordre de lecture des champs qui en portent une (la première
     /// trouvée l'emporte). Voir [`crate::xmp::ColorSources`].
     pub color_sources: crate::xmp::ColorSources,
-    /// Champs écrits, par logiciel (`[xmp.write]`, tous par défaut).
-    pub write: crate::xmp::Written,
+    /// Champs écrits, par logiciel (`[xmp.fields]`, tous par défaut) : lus et écrits.
+    pub fields: crate::xmp::Fields,
 }
 
 impl XmpSection {
@@ -163,7 +163,7 @@ impl XmpSection {
         crate::xmp::Rules {
             multiple: self.multiple_colors,
             sources: self.color_sources,
-            write: self.write,
+            fields: self.fields,
         }
     }
 }

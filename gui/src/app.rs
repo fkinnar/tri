@@ -20651,7 +20651,9 @@ mod tests {
         press(&mut h, Key::Space, Modifiers::SHIFT);
         type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Compare);
-        h.run_steps(5);
+        // Les images comparées affichées d'abord (leur place) : sans elles, pas de loupe
+        // (CI Windows lente, 08/11/2026, comme le test voisin le 07/11/2026).
+        run_until(&mut h, |app| app.loupe_rects.len() >= 2);
         h.state_mut().gui.zoom.loupe_delay_ms = 0;
         h.event(UiEvent::Key {
             key: Key::M,

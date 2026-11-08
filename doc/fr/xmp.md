@@ -47,9 +47,11 @@ Règles d'écriture :
   mémorisées dans `tri:RatingBeforeReject` : annuler le rejet les restaure ;
 - **pas de bruit** : un champ qui vaudrait 0 n'est ajouté que s'il existait déjà (on met à
   jour `xmp:Rating="0"` de darktable, on n'ajoute pas `xmpDM:pick="0"` partout) ;
-- **champs par logiciel** (`[xmp.write]`, tous cochés par défaut) : `label`,
-  `darktable`, `digikam`, `lightroom` ; un champ décoché n'est ni écrit ni retiré, il reste
-  tel quel (tous restent lus). `xmp:Rating` est toujours écrit.
+- **champs par logiciel** (`[xmp.fields]`, tous cochés par défaut) : `label`,
+  `darktable`, `digikam`, `lightroom`, lus et écrits ; un champ décoché est ignoré, ni lu,
+  ni écrit, ni retiré (il reste tel quel), et il sort de l'ordre `color_sources`.
+  `xmp:Rating` est toujours géré. Plusieurs couleurs demandent darktable (sa liste est le
+  seul champ qui en porte plusieurs) : sans lui, une seule.
 
 ### Couleurs : une ou plusieurs (`[xmp] multiple_colors`)
 
@@ -65,8 +67,8 @@ liste à `0`, rouge, dans darktable).
   l'ordre de `[xmp] color_sources` (défaut : `["darktable", "label", "digikam"]`) : le
   premier champ qui porte une couleur l'emporte (darktable seulement s'il n'en a qu'une,
   numéro traduit). darktable en tête : sa couleur est celle qu'il affiche. Un champ oublié
-  est lu en dernier ; dans la fenêtre de réglages, un bouton « échanger » entre deux
-  champs. Plusieurs couleurs posées dans darktable sont lues toutes : la prochaine
+  est lu en dernier ; dans la fenêtre de réglages, seuls les champs cochés sont montrés,
+  un bouton « échanger » entre deux (grisé s'il n'en reste qu'un). Plusieurs couleurs posées dans darktable sont lues toutes : la prochaine
   écriture ne les efface pas.
 - **Plusieurs** (comme darktable) : seul `darktable:colorlabels` est lu et écrit ;
   `xmp:Label` et `digiKam:ColorLabel` restent tels quels. Faute de liste (fichier de

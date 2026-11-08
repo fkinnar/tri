@@ -310,12 +310,12 @@ impl From<Vec<ColorSource>> for ColorSources {
     }
 }
 
-/// Champs que `tri` écrit, par logiciel (`[xmp.write]`, tous par défaut). Un champ
-/// décoché n'est ni écrit ni retiré : il reste tel quel. Tous restent lus. `xmp:Rating`
-/// (le standard) est toujours écrit.
+/// Champs que `tri` gère, par logiciel (`[xmp.fields]`, tous par défaut) : lus et écrits.
+/// Un champ décoché est ignoré : ni lu, ni écrit, ni retiré (il reste tel quel), et il
+/// sort de l'ordre de lecture des couleurs. `xmp:Rating` (le standard) est toujours géré.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Written {
+pub struct Fields {
     /// `xmp:Label` (Lightroom, Capture One, XnView, l'Explorateur Windows…), en mode une
     /// couleur.
     pub label: bool,
@@ -327,9 +327,9 @@ pub struct Written {
     pub lightroom: bool,
 }
 
-impl Written {
+impl Fields {
     /// Tous les champs (défaut).
-    pub const ALL: Written = Written {
+    pub const ALL: Fields = Fields {
         label: true,
         darktable: true,
         digikam: true,
@@ -337,14 +337,14 @@ impl Written {
     };
 }
 
-impl Default for Written {
-    fn default() -> Written {
-        Written::ALL
+impl Default for Fields {
+    fn default() -> Fields {
+        Fields::ALL
     }
 }
 
 /// Règles de lecture et d'écriture des notes (`[xmp] multiple_colors`,
-/// `[xmp] color_sources`, `[xmp.write]`), voir `doc/en/xmp.md`.
+/// `[xmp] color_sources`, `[xmp.fields]`), voir `doc/en/xmp.md`.
 ///
 /// - **Une couleur** : lue dans la première de `sources` qui en porte une ; écrite dans `xmp:Label`, `darktable:colorlabels`
 ///   et `digiKam:ColorLabel`. Plusieurs couleurs posées dans darktable sont lues toutes
@@ -358,15 +358,23 @@ pub struct Rules {
     pub multiple: bool,
     /// Une seule couleur : ordre de lecture (`[xmp] color_sources`).
     pub sources: ColorSources,
-    /// Champs écrits (`[xmp.write]`).
-    pub write: Written,
+    /// Champs écrits (`[xmp.fields]`).
+    pub fields: Fields,
+}
+
+impl Rules {
+    /// Plusieurs couleurs en vigueur : demandées, et darktable géré (sa liste est le seul
+    /// champ qui en porte plusieurs) ; sinon une seule.
+    pub fn several(&self) -> bool {
+        self.multiple && self.fields.darktable
+    }
 }
 
 /// Règles en vigueur pour tout le processus ([`set_rules`]).
 static RULES: std::sync::RwLock<Rules> = std::sync::RwLock::new(Rules {
     multiple: false,
     sources: ColorSources::DEFAULT,
-    write: Written::ALL,
+    fields: Fields::ALL,
 });
 
 /// Règles utilisées par [`parse`], [`apply`] et tout ce qui lit ou écrit les notes
@@ -905,20 +913,28 @@ impl Raw {
 
     /// Couleurs lues selon `rules` (voir [`Rules`]).
     fn colors(&self, rules: Rules) -> Vec<Color> {
-        let label = self.get(Field::Label).and_then(Color::from_label);
-        let darktable: Option<Vec<Color>> = self.darktable_colors.as_ref().map(|list| {
+        let fields = rules.fields;
+        let label = fields
+            .label
+            .then(|| self.get(Field::Label).and_then(Color::from_label))
+            .flatten();
+        let list = self.darktable_colors.as_ref().filter(|_| fields.darktable);
+        let darktable: Option<Vec<Color>> = list.map(|list| {
             list.iter()
                 .filter_map(|v| v.trim().parse().ok())
                 .filter_map(Color::from_darktable)
                 .collect()
         });
         let digikam = || {
-            self.int(Field::DigikamColor)
+            fields
+                .digikam
+                .then(|| self.int(Field::DigikamColor))
+                .flatten()
                 .and_then(Color::from_digikam)
                 .into_iter()
                 .collect()
         };
-        if rules.multiple {
+        if rules.several() {
             // Comme darktable une fois chez lui : ses couleurs ; les autres champs, dans
             // l'ordre choisi, seulement pour un fichier qui n'en a pas (Lightroom, XnView…).
             if let Some(list) = darktable {
@@ -944,8 +960,15 @@ impl Raw {
 
     fn notes(&self, rules: Rules) -> Notes {
         let rating = self.int(Field::Rating).unwrap_or(0);
-        let pick = self.int(Field::Pick).unwrap_or(0);
-        let pick_label = self.int(Field::PickLabel).unwrap_or(0);
+        let fields = rules.fields;
+        let pick = self
+            .int(Field::Pick)
+            .filter(|_| fields.lightroom)
+            .unwrap_or(0);
+        let pick_label = self
+            .int(Field::PickLabel)
+            .filter(|_| fields.digikam)
+            .unwrap_or(0);
         let flag = if rating == -1 || pick == -1 || pick_label == 1 {
             Flag::Rejected
         } else if pick == 1 || pick_label == 3 {
@@ -1187,12 +1210,12 @@ fn targets(notes: &Notes, existing: &Raw, rules: Rules) -> Vec<(Field, Option<St
         Flag::Accepted => (1, 3, Some("True")),
         Flag::Rejected => (-1, 1, Some("False")),
     };
-    // Champ non géré (`[xmp.write]`) : laissé tel quel.
+    // Champ non géré (`[xmp.fields]`) : laissé tel quel.
     let kept = |field: Field| existing.get(field).map(str::to_string);
     let managed = |field: Field| match field {
-        Field::Label => rules.write.label,
-        Field::DigikamColor | Field::PickLabel => rules.write.digikam,
-        Field::Pick | Field::Good => rules.write.lightroom,
+        Field::Label => rules.fields.label,
+        Field::DigikamColor | Field::PickLabel => rules.fields.digikam,
+        Field::Pick | Field::Good => rules.fields.lightroom,
         _ => true,
     };
     // Champs d'une seule couleur (Label, digiKam) : laissés tels quels en mode plusieurs
@@ -1200,7 +1223,7 @@ fn targets(notes: &Notes, existing: &Raw, rules: Rules) -> Vec<(Field, Option<St
     // sont lues en mode une couleur ; sinon la couleur, ou retirés sans couleur.
     let single = |field: Field, value: fn(Color) -> String| -> Option<String> {
         match notes.colors.as_slice() {
-            _ if rules.multiple => kept(field),
+            _ if rules.several() => kept(field),
             [] => None,
             [c] => Some(value(*c)),
             _ => kept(field),
@@ -1227,9 +1250,9 @@ fn targets(notes: &Notes, existing: &Raw, rules: Rules) -> Vec<(Field, Option<St
 }
 
 /// Couleurs de `darktable:colorlabels` après écriture : celles des notes, ou la liste
-/// existante telle quelle si darktable n'est pas géré (`[xmp.write]`).
+/// existante telle quelle si darktable n'est pas géré (`[xmp.fields]`).
 fn darktable_targets(notes: &Notes, existing: &Raw, rules: Rules) -> Vec<String> {
-    if rules.write.darktable {
+    if rules.fields.darktable {
         notes
             .colors
             .iter()
@@ -2301,7 +2324,7 @@ mod tests {
     const SINGLE: Rules = Rules {
         multiple: false,
         sources: ColorSources::DEFAULT,
-        write: Written::ALL,
+        fields: Fields::ALL,
     };
     const SINGLE_LABEL: Rules = Rules {
         multiple: false,
@@ -2310,12 +2333,12 @@ mod tests {
             ColorSource::Darktable,
             ColorSource::Digikam,
         ]),
-        write: Written::ALL,
+        fields: Fields::ALL,
     };
     const MULTIPLE: Rules = Rules {
         multiple: true,
         sources: ColorSources::DEFAULT,
-        write: Written::ALL,
+        fields: Fields::ALL,
     };
 
     /// `DARKTABLE_STALE_LABEL` avec la liste de darktable remplacée par `items`
@@ -2420,7 +2443,7 @@ mod tests {
     #[test]
     fn unchecked_fields_are_left_as_they_are() {
         let rules = Rules {
-            write: Written {
+            fields: Fields {
                 label: false,
                 darktable: false,
                 digikam: false,
@@ -2444,14 +2467,51 @@ mod tests {
         }
         // Darktable seul coché : sa liste suit, le reste non.
         let only_dt = Rules {
-            write: Written {
+            fields: Fields {
                 darktable: true,
-                ..rules.write
+                ..rules.fields
             },
             ..rules
         };
         let out = apply_with(DARKTABLE_STALE_LABEL, &full, only_dt).unwrap();
         assert!(out.contains("<rdf:li>3</rdf:li>") && out.contains(r#"xmp:Label="Green""#));
+        // Un champ décoché n'est pas lu non plus : il sort de l'ordre des couleurs.
+        assert_eq!(
+            parse_with(DARKTABLE_STALE_LABEL, rules).unwrap(),
+            notes(3, Flag::None, &[])
+        );
+        let label_only = Rules {
+            fields: Fields {
+                label: true,
+                ..rules.fields
+            },
+            ..rules
+        };
+        assert_eq!(
+            parse_with(DARKTABLE_STALE_LABEL, label_only).unwrap(),
+            notes(3, Flag::None, &[Color::Green])
+        );
+        let rejected_digikam = DARKTABLE_STALE_LABEL.replace(
+            r#"xmp:Rating="3""#,
+            r#"xmp:Rating="3" digiKam:PickLabel="1""#,
+        );
+        assert_eq!(
+            parse_with(&rejected_digikam, rules).unwrap().flag,
+            Flag::None
+        );
+        assert_eq!(
+            parse_with(&rejected_digikam, SINGLE).unwrap().flag,
+            Flag::Rejected
+        );
+        // Plusieurs couleurs sans darktable géré : une seule (sa liste est le seul champ
+        // qui en porte plusieurs).
+        let multiple_without_dt = Rules {
+            multiple: true,
+            ..label_only
+        };
+        assert!(!multiple_without_dt.several());
+        let out = apply_with(DARKTABLE_STALE_LABEL, &full, multiple_without_dt).unwrap();
+        assert!(out.contains(r#"xmp:Label="Blue""#), "{out}");
     }
 
     #[test]

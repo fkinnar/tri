@@ -1750,7 +1750,8 @@ impl SettingsWindow {
                 // Ordre de lecture des couleurs (08/11/2026) : les champs dans l'ordre, en
                 // colonne, un bouton entre deux voisins pour les échanger.
                 value if section == "xmp" && entry.key == "color_sources" => {
-                    let (r, changed) = color_sources_editor(ui, value);
+                    let managed = self.managed_color_sources();
+                    let (r, changed) = color_sources_editor(ui, value, &managed);
                     widget = Some(r);
                     new = changed;
                 }
@@ -2058,6 +2059,20 @@ impl SettingsWindow {
         (response, new.map(Value::Str))
     }
 
+    /// Champs de couleur gérés d'après le fichier (`[xmp.fields]`, cochés par défaut),
+    /// pour l'éditeur de `[xmp] color_sources`.
+    fn managed_color_sources(&self) -> Vec<tri::xmp::ColorSource> {
+        tri::xmp::ColorSource::ALL
+            .into_iter()
+            .filter(|s| {
+                !matches!(
+                    self.file.get("xmp.fields", s.id()),
+                    Some(Value::Bool(false))
+                )
+            })
+            .collect()
+    }
+
     /// Éditeur de `[sort] color_order` (idée de l'utilisateur, 31/10/2026) : à gauche,
     /// sous « Tri », cinq emplacements (pastilles vides) qui reçoivent les couleurs dans
     /// l'ordre voulu ; à droite, sous « Disponibles », les couleurs restantes. On glisse
@@ -2231,30 +2246,48 @@ impl SettingsWindow {
     }
 }
 
-/// Éditeur de `[xmp] color_sources` : les trois champs dans l'ordre de lecture, numérotés,
-/// en colonne, un bouton entre deux voisins pour les échanger. Rend la réponse du premier bouton
-/// (focus) et la nouvelle valeur si elle a changé.
-fn color_sources_editor(ui: &mut Ui, value: &Value) -> (egui::Response, Option<Value>) {
+/// Éditeur de `[xmp] color_sources` : les champs gérés (`managed`, cochés dans
+/// `[xmp.fields]`) dans l'ordre de lecture, numérotés, en colonne, un bouton entre deux
+/// voisins pour les échanger ; grisé s'il en reste un seul (rien à ordonner). Les champs
+/// non gérés gardent leur place dans la valeur. Rend la réponse du premier élément (focus)
+/// et la nouvelle valeur si elle a changé.
+fn color_sources_editor(
+    ui: &mut Ui,
+    value: &Value,
+    managed: &[tri::xmp::ColorSource],
+) -> (egui::Response, Option<Value>) {
     use tri::xmp::ColorSource;
     let before = color_sources_of(value);
     let mut order = before;
-    let mut first: Option<egui::Response> = None;
-    ui.vertical(|ui| {
-        for (i, source) in before.0.into_iter().enumerate() {
-            if i > 0 {
-                let swap = ui
-                    .small_button(t!("settings-color-sources-swap-short"))
-                    .on_hover_text(t!("settings-color-sources-swap"));
-                if swap.clicked() {
-                    order.0.swap(i - 1, i);
+    // Rangs, dans la valeur complète, des champs montrés.
+    let shown: Vec<usize> = (0..3).filter(|&i| managed.contains(&before.0[i])).collect();
+    let response = ui
+        .add_enabled_ui(shown.len() > 1, |ui| {
+            ui.vertical(|ui| {
+                if shown.is_empty() {
+                    return ui.weak(t!("settings-color-sources-none"));
                 }
-                first.get_or_insert(swap);
-            }
-            let name = t!(&format!("settings-color-source-{}", source.id()));
-            ui.label(format!("{}. {name}", i + 1));
-        }
-    });
-    let response = first.expect("trois sources");
+                let mut first: Option<egui::Response> = None;
+                for (n, &i) in shown.iter().enumerate() {
+                    if n > 0 {
+                        let swap = ui
+                            .small_button(t!("settings-color-sources-swap-short"))
+                            .on_hover_text(t!("settings-color-sources-swap"));
+                        if swap.clicked() {
+                            order.0.swap(shown[n - 1], i);
+                        }
+                        first.get_or_insert(swap);
+                    }
+                    let source = before.0[i];
+                    let name = t!(&format!("settings-color-source-{}", source.id()));
+                    let label = ui.label(format!("{}. {name}", n + 1));
+                    first.get_or_insert(label);
+                }
+                first.expect("au moins un champ")
+            })
+            .inner
+        })
+        .inner;
     let changed = (order != before).then(|| {
         Value::Toml(format!(
             "[{}]",
@@ -3149,6 +3182,34 @@ mod tests {
                 ColorSource::Darktable,
                 ColorSource::Digikam
             ]
+        );
+        // darktable décoché : il disparaît de la liste (garde sa place dans la valeur) ;
+        // un seul bouton, entre Label et digiKam.
+        h.state_mut()
+            .file
+            .set("xmp.fields", "darktable", &Value::Bool(false))
+            .unwrap();
+        h.run_steps(2);
+        assert_eq!(h.get_all_by_label("échanger").count(), 1);
+        h.get_by_label("échanger").click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .file
+                .get("xmp", "color_sources")
+                .map(|v| v.to_string()),
+            Some(r#"["digikam", "darktable", "label"]"#.to_string())
+        );
+        // Label seul géré : rien à ordonner, aucun bouton.
+        h.state_mut()
+            .file
+            .set("xmp.fields", "digikam", &Value::Bool(false))
+            .unwrap();
+        h.run_steps(2);
+        assert_eq!(h.query_all_by_label("échanger").count(), 0);
+        assert!(
+            h.query_by_label("1. xmp:Label (Lightroom, XnView…)")
+                .is_some()
         );
     }
 

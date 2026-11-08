@@ -10,8 +10,9 @@
   masquer une couleur changée chez lui), l'ordre de lecture `[xmp] color_sources` décide
   (darktable, Label, digiKam par défaut ; boutons « échanger » dans la fenêtre de
   réglages). En mode plusieurs couleurs, comme darktable, seule sa liste est lue et écrite.
-  `[xmp.write]` : cases par logiciel (Label, darktable, digiKam, Lightroom), toutes
-  cochées ; un champ décoché reste tel quel. Liste déroulante pour `[xmp] embed` dans la
+  `[xmp.fields]` : cases par logiciel (Label, darktable, digiKam, Lightroom), toutes
+  cochées ; un champ décoché n'est ni lu ni écrit, il reste tel quel et sort de l'ordre de
+  lecture. Liste déroulante pour `[xmp] embed` dans la
   fenêtre de réglages.
 - **Notes tenues à jour d'elles-mêmes** (#368) : avec `[xmp] embed` = `internal`
   (disques internes et fixés) ou `everywhere`, chaque note va aussi dans l'image (JPEG,

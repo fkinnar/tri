@@ -47,9 +47,11 @@ Writing rules:
   `tri:RatingBeforeReject`: undoing the rejection restores them;
 - **no noise**: a field that would be 0 is only added if it already existed (darktable's
   `xmp:Rating="0"` is updated, `xmpDM:pick="0"` is not added everywhere);
-- **fields per program** (`[xmp.write]`, all ticked by default): `label`, `darktable`,
-  `digikam`, `lightroom`; an unticked field is neither written nor removed, it stays as it
-  is (all are still read). `xmp:Rating` is always written.
+- **fields per program** (`[xmp.fields]`, all ticked by default): `label`, `darktable`,
+  `digikam`, `lightroom`, read and written; an unticked field is ignored, neither read,
+  written nor removed (it stays as it is), and it leaves the `color_sources` order.
+  `xmp:Rating` is always handled. Several colors need darktable (its list is the only
+  field that holds several): without it, only one.
 
 ### Colors: one or several (`[xmp] multiple_colors`)
 
@@ -65,7 +67,8 @@ darktable).
   the order of `[xmp] color_sources` (default: `["darktable", "label", "digikam"]`): the
   first field that holds a color wins (darktable only if it holds a single one, number
   translated). darktable first: its color is the one it shows. A field left out is read
-  last; in the settings window, a "swap" button between two fields. Several colors set in
+  last; in the settings window, only the ticked fields are shown, a "swap" button between
+  two (greyed out when only one is left). Several colors set in
   darktable are all read: the next write does not erase them.
 - **Several** (like darktable): only `darktable:colorlabels` is read and written;
   `xmp:Label` and `digiKam:ColorLabel` stay as they are. Without a list (Lightroom,

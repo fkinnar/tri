@@ -83,7 +83,7 @@ multiple_colors = false
 # l'emporte : "darktable" (darktable:colorlabels, s'il n'a qu'une couleur), "label"
 # (xmp:Label) et "digikam" (digiKam:ColorLabel). darktable réécrit sa couleur à chaque
 # changement mais ne touche jamais xmp:Label, qui peut rester en arrière : d'où darktable en
-# tête. Un champ oublié est lu en dernier.
+# tête. Un champ oublié est lu en dernier ; un champ décoché dans [xmp.fields] n'est pas lu.
 color_sources = ["darktable", "label", "digikam"]
 # Notes inscrites aussi dans les images elles-mêmes (JPEG, PNG, WebP, TIFF, HEIC ; jamais
 # un RAW) à chaque note, et fusions venues d'autres logiciels propagées à toutes les
@@ -93,10 +93,12 @@ color_sources = ["darktable", "label", "digikam"]
 # dossier), prioritaire. Les notes vont toujours aussi dans les sidecars.
 embed = "never"
 
-# Champs écrits par logiciel, dans les sidecars et les images : décocher ceux d'un logiciel
-# qu'on n'utilise pas. Un champ décoché n'est ni écrit ni retiré (il reste tel quel) ; tous
-# restent lus. Les étoiles (xmp:Rating, le standard) sont toujours écrites.
-[xmp.write]
+# Champs gérés par logiciel (lus et écrits), dans les sidecars et les images : décocher
+# ceux d'un logiciel qu'on n'utilise pas. Un champ décoché est ignoré : ni lu, ni écrit, ni
+# retiré (il reste tel quel), et il sort de color_sources. Les étoiles (xmp:Rating, le
+# standard) sont toujours gérées. Plusieurs couleurs demandent darktable (sa liste est le
+# seul champ qui en porte plusieurs) : sans lui, une seule.
+[xmp.fields]
 # xmp:Label : la couleur, en mode une couleur (Lightroom, Capture One, XnView, Explorateur
 # Windows…).
 label = true
