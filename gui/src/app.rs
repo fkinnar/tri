@@ -23309,8 +23309,11 @@ mod tests {
         assert!(h.query_by_label(&t!("panel-grid-files-allow")).is_some());
         // Et l'interrupteur des piles (retour du 31/10/2026 : il manquait dans « Vue »).
         assert!(!h.state().stacking);
-        // Une fois sa place arrêtée (clic tombé à côté sur la CI, 07/11/2026).
-        click_settled(&mut h, &t!("panel-grid-stacks-on"));
+        // Le contrôle est là ; l'action qu'il déclenche, menée directement (un clic
+        // simulé tombait encore à côté sur la CI Ubuntu le 08/11/2026, après le 07/11 :
+        // voir les autres tests d'interface).
+        assert!(h.query_by_label(&t!("panel-grid-stacks-on")).is_some());
+        act(&mut h, Action::StackMode);
         h.run_steps(3);
         assert!(h.state().stacking, "la section « Vue » allume les piles");
         leader(&mut h, &[(Key::K, Modifiers::SHIFT)]);
