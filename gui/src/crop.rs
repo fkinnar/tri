@@ -44,6 +44,9 @@ pub struct Crop {
     ratio_list_id: Option<egui::Id>,
     /// Les autres versions de l'image : un nom déjà pris est refusé (issue n° 14).
     others: Versions,
+    /// Bulle de la liste des préréglages, avec les raccourcis en vigueur (posée par
+    /// l'appelant avant [`Crop::bar`], 08/11/2026 : « p » écrit en dur, périmé).
+    pub preset_tip: String,
 }
 
 /// Ce que la barre du recadrage demande.
@@ -124,6 +127,7 @@ impl Crop {
             ratio_list_id: None,
             preset: None,
             others,
+            preset_tip: String::new(),
         };
         crop.name = crop.free_name(&default_name(ratio));
         crop
@@ -148,6 +152,7 @@ impl Crop {
             ratio_list_id: None,
             preset: None,
             others,
+            preset_tip: String::new(),
         }
     }
 
@@ -507,7 +512,7 @@ impl Crop {
                     }
                 })
                 .response
-                .on_hover_text(t!("crop-preset-tip"));
+                .on_hover_text(&self.preset_tip);
             ui.add_space(gap);
         }
         // Recadrage : le rapport dans une liste (retour du 07/11/2026 : plus lisible que

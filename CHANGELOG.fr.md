@@ -4,6 +4,12 @@
 
 ## Non publié
 
+- **Raccourcis cités à jour** (#372) : les descriptions des réglages et quelques messages
+  (aide-mémoire du plein écran, « Avant » d'un développement, préréglages de version…)
+  citaient des raccourcis écrits en dur, parfois périmés (« Maj+B » pour voir ses
+  développements, « b » pour le rendu). Ils citent maintenant l'action, et l'interface
+  montre les raccourcis en vigueur, `[keys]` compris ; un test empêche d'en réécrire en
+  dur. Une action sans raccourci n'a plus de « () » vide dans sa bulle.
 - **Sidecars des deux conventions** (#371) : `[xmp] sidecar = "both"` crée et tient à
   jour `IMG.RAF.xmp` (darktable) et `IMG.xmp` (Lightroom, Capture One). Deux sidecars XMP
   d'une même photo sont désormais lus tous les deux et fusionnés (avant : le plus récent

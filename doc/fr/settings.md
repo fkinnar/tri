@@ -87,6 +87,24 @@ On glisse une couleur d'un côté à l'autre ou dans l'ordre, ou on clique (une 
 s'ajoute à la fin, une triée se retire) ; la liste est écrite à chaque changement
 (`SettingsWindow::color_order_editor`, pastilles aux couleurs du thème).
 
+
+### Raccourcis cités dans les textes (08/11/2026)
+
+Un commentaire de `config.example.toml` (ou un message de l'interface) ne cite jamais un
+raccourci écrit en dur, qui se périme dès qu'on change `keys.toml` ou ses `[keys]`
+(retour de l'utilisateur : « Maj+B » pour voir ses développements, qui n'existait plus).
+Il cite l'**action**, par son identifiant entre chevrons : `<core.view.source>`. La
+fenêtre de réglages, la palette et les messages concernés passent le texte par
+`Keymap::with_keys`, qui met à la place les raccourcis en vigueur (« r » ; plusieurs
+séparés par « / » ; le leader écrit en clair, « Ctrl+b rr »), ou « sans raccourci ».
+`<leader>` seul devient le leader ; le reste (`tri-gui <image>`) ne change pas. Dans le
+fichier brut, l'identifiant renvoie à la section `[keys]`. Le test
+`texts_cite_actions_not_hardcoded_shortcuts` vérifie que chaque référence existe, que les
+deux exemples citent les mêmes actions, et qu'il ne reste aucun raccourci à modificateur
+ni touche F1 à F12 écrits en dur (sauf la syntaxe de `[keys]` entre guillemets, le
+leader par défaut de `keys.toml` et les clics de souris). Les touches fixes des boîtes
+(Échap, Entrée, flèches de la palette) ne sont pas des actions : elles restent écrites.
+
 ## Module `tri::settings` (moteur)
 
 - **`EngineSettings`** : les sections du moteur (`PreviewSection`, `RenderSection`,

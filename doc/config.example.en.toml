@@ -144,7 +144,7 @@ exclude = []
 # fixed = ["Work", "Backup"]
 fixed = []
 # Volume monitoring (ms): a disk or card that is plugged in appears by itself in the
-# folders panel; 0: no monitoring (F5 or "Refresh").
+# folders panel; 0: no monitoring (<core.view.refresh_folders> or "Refresh").
 watch_ms = 2000
 # Mount by itself a removable device the system did not mount (Linux); otherwise it
 # shows greyed in the devices section, mounted with a click.
@@ -154,8 +154,8 @@ auto_mount = true
 eject_lock_ms = 5000
 
 [develop]
-# See your developments in tri (Shift+B in full screen, then b: camera render, RAW
-# render, developed): darktable-cli redoes the image with the history of the .xmp
+# See your developments in tri (shown render, <core.view.source>: camera render, RAW
+# render, developed; develop: <core.develop.render>): darktable-cli redoes the image with the history of the .xmp
 # sidecar, on demand (a few seconds per image), kept in cache and redone if the .xmp
 # changes.
 # "auto": looked up in the PATH, in the usual locations, then on Linux as an AppImage
@@ -185,7 +185,7 @@ art = "auto"
 default = "auto"
 
 [export]
-# Export of images developed by Darktable (Ctrl+E), with one preset per use. Nothing is
+# Export of images developed by Darktable (<core.file.export>), with one preset per use. Nothing is
 # overwritten (darktable appends _01…).
 # Export preset offered by default (identifier) for a RAW render, and for an already
 # developed image (camera render, JPEG…); within the session, the last one chosen wins.
@@ -196,7 +196,7 @@ default_flat = "asis"
 # the JPEG developed by the camera); the JPEG gets this suffix:
 # DSCF0001.jpg (RAW render) and DSCF0001-camera.jpg (camera JPEG).
 camera_suffix = "-camera"
-# Export report (Ctrl+Shift+E): finished exports kept from one session to the next, the
+# Export report (<core.file.export.report>): finished exports kept from one session to the next, the
 # most recent ones (0: no limit); can be cleared from the report.
 report_max = 500
 
@@ -391,7 +391,7 @@ previews = true
 pairs = true
 # Delete = move to the trash (recoverable); false: permanent deletion.
 trash = true
-# External editor (e): empty, the application the system picks for each image type;
+# External editor (<core.file.edit>): empty, the application the system picks for each image type;
 # otherwise the program then its arguments, "{files}" (or "{file}") replaced by the images
 # (added at the end otherwise). Settings window: "System application" or "Other
 # application" (Browse…, arguments). Examples: ["darktable"],
@@ -492,7 +492,7 @@ strictness_span = 3.0
 # stack less), at the position raised to the power lambda; towards the right, a power
 # mean of order lambda. Above 1: gentler start from the centre to the left, faster to
 # the right. Can also be set for a folder, "Slider progression"
-# slider of the grouping window (Ctrl+G). The chosen strictness is remembered for each
+# slider of the grouping window (<core.stack.settings>). The chosen strictness is remembered for each
 # folder.
 strictness_curve = 2.0
 # Bounds of the "Slider progression" slider: from 1 / strictness_curve_max to
@@ -504,7 +504,7 @@ max_gap_s = 60.0
 # Weight of pauses: a pause longer than the folder's pace (median gap between two
 # images) moves the two images apart, distance multiplied by
 # 1 + pause_weight × log2(pause / pace). Two identical images stay together; 0: only
-# the content counts. Middle of the "Weight of pauses" slider (Ctrl+G), remembered for
+# the content counts. Middle of the "Weight of pauses" slider (<core.stack.settings>), remembered for
 # each folder: lower in the studio, higher in street photography.
 pause_weight = 0.1
 # "Weight of pauses" slider fully to the right: pause_weight multiplied by this value
@@ -543,22 +543,22 @@ enabled = true
 # panels, neutral grey central background, which doesn't skew the judgement of images;
 # colours: [gui.colors] neutral_*).
 theme = "dark"
-# Shortcut set: "classic" (arrows, Home / End, Delete, Ctrl+C / Ctrl+X copy /
-# move to, Ctrl+Z / Ctrl+Y) or "vim" (hjkl, gg / G, Ctrl+U / Ctrl+D, x, y, d) / y),
-# u / Ctrl+R). The rest (rating, filters, stacks, zoom…) is shared. Every default
-# shortcut: keys.toml, shipped with the program.
+# Shortcut set: "classic" (arrows, Home / End, Delete, like most programs) or "vim"
+# (hjkl, gg / G, x, y, u, like nvim). The rest (rating, filters, stacks, zoom…) is
+# shared. Every default shortcut: keys.toml, shipped with the program; the ones in use:
+# Shortcuts section [keys].
 profile = "classic"
-# Switch panels from the keyboard, like tmux: the leader, then h / l (or the arrows) for
-# the left / right panel, o for the next one. The panel that has the keyboard handles
-# its keys first (folders: arrows / hjkl, Enter opens; metadata: scroll,
-# y copies); the others keep their effect; Esc gives the keyboard back to the images. The
-# leader then ?: report a problem (prefilled GitHub form). Empty: the one of the default
+# Switch panels from the keyboard, like tmux: the leader, then a direction
+# (<core.panel.left>, <core.panel.right>), or <core.panel.next> for the next one. The
+# panel that has the keyboard handles its keys first; the others keep their effect; Esc
+# gives the keyboard back to the images. <core.app.report_issue>: report a problem
+# (prefilled GitHub form). Empty: the one of the default
 # shortcuts (keys.toml, shipped with the program: Ctrl+b, like tmux).
 leader = ""
 # Maximum delay between two keys of a sequence (ms), like vim's timeoutlen: "gg"
 # (first image, vim set) must be typed within this delay.
 key_sequence_timeout_ms = 1000
-# Key that is both a shortcut and the start of another (y copies, y w copies the stack):
+# Key that is both a shortcut and the start of another (in vim, y copies, y ) the stack):
 # how long to wait for the rest (ms) before acting alone.
 key_ambiguous_timeout_ms = 300
 # Menu of continuations (like which-key in nvim): after the start of a sequence (the
@@ -604,13 +604,13 @@ analysis_refilter_ms = 5000
 # Side of the icon buttons of the rating bar (auto-advance, previous /
 # next image), in points.
 bar_icon_size = 24.0
-# Filter bar (type, stars, flag, colours) shown at startup; Shift+F
+# Filter bar (type, stars, flag, colours) shown at startup; <core.view.filter_bar>
 # shows or hides it.
 filter_bar = true
 # Without a folder argument, reopen the last folder opened (remembered in the data
 # folder: ~/.local/share/tri, ~/Library/Application Support/tri, %APPDATA%\tri).
 reopen_last = true
-# An image argument (tri-gui <image>): opened in focus mode (F11), like in a viewer; the
+# An image argument (tri-gui <image>): opened in focus mode (<core.view.focus_mode>), like in a viewer; the
 # --focus argument forces it in every case.
 image_focus = true
 # Order of the images: "name" (the camera's order), "captured" (shooting date, several
@@ -634,23 +634,23 @@ remember_folder_view = true
 # closed.
 window_save_ms = 1000
 # Mouse rating bar (flags, stars, colours of the selected image)
-# shown at startup; Shift+N shows or hides it. Right-clicking an image opens
+# shown at startup; <core.view.rating_bar> shows or hides it. Right-clicking an image opens
 # a dialog with the same controls.
 rating_bar = true
 # Top bar: application icon and name on the left, like Darktable (hidden, like
-# everything else, in focus mode: F11 or Ctrl+Shift+F).
+# everything else, in focus mode: <core.view.focus_mode>).
 title_bar = true
 # Size of the name in the top bar (points; the icon slightly larger), and duration of
-# the "F11 to exit" hint when entering focus mode (ms).
+# the hint to exit when entering focus mode (ms).
 title_bar_size = 26.0
 focus_mode_hint_ms = 3000
-# After a rating (keyboard or rating bar), move to the next image; Shift+A turns it on or
+# After a rating (keyboard or rating bar), move to the next image; <core.rate.auto_advance> turns it on or
 # off. If the rating takes the image out of a filter, the next one is already selected:
 # no image is skipped. The other image of a RAW+JPEG pair, rated at the same time, is
 # skipped.
 auto_advance = false
-# Undo (u, Ctrl+Z): number of steps kept in the session history (Ctrl+H
-# shows it). Nothing is kept from one launch to the next.
+# Undo (<core.edit.undo>): number of steps kept in the session history
+# (<core.edit.history> shows it). Nothing is kept from one launch to the next.
 history = 200
 
 [gui.grid]
@@ -664,7 +664,7 @@ cell_max = 600.0
 # unreadable; the info setting does not change, it comes back when enlarging.
 info_min_cell = 110.0
 gap = 8.0
-# Info on the thumbnails (name, format, ratings, badges) at startup; Shift+T or the
+# Info on the thumbnails (name, format, ratings, badges) at startup; <core.view.grid_info> or the
 # button at the bottom hides it to give all the room to the image (choice then remembered).
 info = true
 # Height reserved for the file name under the thumbnail.
@@ -704,15 +704,15 @@ filter_toast_ms = 1500
 # Progress stays in the status bar.
 develop_toast_ms = 6000
 # Stacks (similar images grouped) shown at startup; false: each image
-# alone, Ctrl+S or the stack button shows them (instant: the fingerprints are
+# alone, <core.stack.mode> or the stack button shows them (instant: the fingerprints are
 # computed in the background, see [similarity] background).
 stacks = false
-# Search by file name (/ or Ctrl+F in the grid): width of the field (points).
+# Search by file name (<core.search> in the grid): width of the field (points).
 search_width = 200.0
 # Minimum width of this field when the bar lacks room (narrow window: the sort and the
 # number of images then go into a "…" menu).
 search_min_width = 80.0
-# Shown render, the same in the grid and full screen (r / Shift+R), kept per folder (this is the
+# Shown render, the same in the grid and full screen (<core.view.source> / <core.grid.render>), kept per folder (this is the
 # value of a folder never set): "embedded" (camera JPEG, to offload and cull; a developed
 # photo folds on its JPEG), "cover" (the cover: the preferred development, else the
 # latest), "darktable" or "rapidraw" (always this software), "libraw" (RAW render). An
@@ -720,7 +720,7 @@ search_min_width = 80.0
 # background.
 render = "embedded"
 # Photos to develop for the chosen render: "auto" (rendered in the background, one
-# image after another) or "manual" (Ctrl+Shift+B on the folder; LibRaw meanwhile).
+# image after another) or "manual" (<core.develop.folder> on the folder; LibRaw meanwhile).
 # Developments (clones, copies) are always rendered in the background: it is their
 # thumbnail.
 develop = "auto"
@@ -751,26 +751,27 @@ focus_point = true
 focus_marker = "square"
 focus_marker_size = 28.0
 focus_marker_width = 2.0
-# Key reminder (b, z, i, o, Esc) at the top right of full screen; hidden by
-# default: it covers part of the image, and F1 opens the full help.
+# Reminder of a few keys at the top right of full screen; hidden by default: it covers
+# part of the image, and <core.app.help> opens the full help.
 key_hints = false
-# Focus mode (F11): info (number, source, size) and ratings drawn on the image, since
-# the status bar and the rating bar are hidden; Ctrl+I hides or shows them.
+# Focus mode (<core.view.focus_mode>): info (number, source, size) and ratings drawn on
+# the image, since the status bar and the rating bar are hidden; <core.view.image_info>
+# hides or shows them.
 image_info = true
-# 1:1 (z or the "1:1" button) centred on the focus point when the camera recorded it
+# 1:1 (<core.view.zoom> or the "1:1" button) centred on the focus point when the camera recorded it
 # (that's where sharpness is judged); otherwise in the middle of the image. Double-click
 # zooms on the clicked point.
 zoom_on_focus_point = true
-# Active stacks (Ctrl+S, stack button), in full screen: left / right arrows within the
+# Active stacks (<core.stack.mode>, stack button), in full screen: left / right arrows within the
 # stack, up / down to the previous / next stack; at the end of the stack, true: start again
 # from the other end; false: stop.
 stack_wrap = false
 # Full screen, left / right arrows: true: through each development of a photo (darktable,
 # its clones, RapidRAW…); false: from photo to photo, each in the grid's render ("Shown
-# render"), the other developments with Shift+W / Shift+Q. The "Review the developments"
+# render"), the others with "Next / previous development". The "Review the developments"
 # checkbox of the View section changes it (remembered).
 review_developments = false
-# Active stacks, in full screen, auto advance after a rating (Shift+A): at the end of the
+# Active stacks, in full screen, auto advance after a rating (<core.rate.auto_advance>): at the end of the
 # stack, true: the first photo of the next stack (then takes precedence over stack_wrap);
 # false: stay on the last one.
 stack_advance_next = false
@@ -778,7 +779,8 @@ stack_advance_next = false
 # its first photo. The rating bar button, in stack mode, changes this choice (remembered
 # from one launch to the next).
 stack_enter = "cover"
-# Overlays (o, Shift+O for the orientation, see overlay.md): line thickness (points);
+# Overlays (<core.view.overlay>, <core.view.overlay_orient> for the orientation, see
+# overlay.md): line thickness (points);
 # opacity of the built-in grids (thirds, golden ratio, diagonals), colour: [gui.colors]
 # overlay.
 overlay_line_width = 1.0
@@ -809,9 +811,10 @@ loupe_scale = 100
 # loupe, a whole loupe; moving the mouse gives it back to the pointer.
 loupe_step = 80.0
 loupe_step_large = 320.0
-# Loupe magnification typed after the leader and m, without Enter: three digits apply at
+# Loupe magnification typed after <core.view.loupe_scale>, without Enter: three digits apply at
 # once (150: 150 %); one or two digits after this pause (ms), as hundreds or tens
-# (2: 200 %, 20: 200 %, 01: 10 %). Ctrl+K / Ctrl+J: one step (steps) up or down. A digit
+# (2: 200 %, 20: 200 %, 01: 10 %). <core.view.loupe_zoom_in> /
+# <core.view.loupe_zoom_out>: one step (steps) up or down. A digit
 # typed just after this pause still completes the number (never a rating). For the
 # session; loupe_scale stays the starting value.
 loupe_digits_ms = 1000
@@ -841,16 +844,16 @@ focus_line = "accent"
 focus_line_width = 2.0
 # Side of the icon buttons (file actions, in the right-click dialog), in points.
 icon_size = 34.0
-# Minimum width of the help (F1), in points.
+# Minimum width of the help (<core.app.help>), in points.
 help_width = 620.0
-# Keyboard scrolling of the help: per up / down arrow, in points (pages: Page Up /
-# Down, Ctrl+U / Ctrl+D).
+# Keyboard scrolling of the help: per up / down arrow, in points (pages:
+# <core.nav.page_up> / <core.nav.page_down>).
 help_scroll_line = 40.0
-# "Help here" (?, the shortcuts of where you are, over the screen): text size and width
+# "Help here" (<core.app.help_here>, the shortcuts of where you are, over the screen): text size and width
 # of a column of cards, in points.
 help_here_text = 16.0
 help_here_column = 420.0
-# Command palette (Ctrl+Shift+P, : in vim): width in points, most lines shown (0: all; it
+# Command palette (<core.app.palette>): width in points, most lines shown (0: all; it
 # scrolls).
 palette_width = 640.0
 palette_max = 0
@@ -871,7 +874,7 @@ max_errors = 5
 completions = 12
 
 [gui.compare]
-# Side-by-side comparison of the selected images (c). Maximum number of images compared
+# Side-by-side comparison of the selected images (<core.view.compare>). Maximum number of images compared
 # (beyond, the first ones): each keeps a preview, and at 1:1 its 1:1 (~100 MB of graphics
 # memory for 26 Mpx; 21 at 1:1: ~2 GB). 21: about the size of the thumbnails on a screen.
 max = 21
@@ -924,14 +927,14 @@ handle_size = 9.0
 handle_grab = 10.0
 
 [gui.folders]
-# Folders panel, left of the grid: shown at startup (Shift+D shows or
+# Folders panel, left of the grid: shown at startup (<core.view.folders> shows or
 # hides it), initial width (points, the edge can be dragged with the mouse), indent per
 # level, hidden folders (.xxx) shown or not.
 visible = true
 width = 240.0
 indent = 14.0
 hidden = false
-# Folder search (/ or Ctrl+F in the panel): maximum levels of subfolders
+# Folder search (<core.search> in the panel): maximum levels of subfolders
 # searched, and maximum number of results.
 search_depth = 4
 search_results = 200
@@ -957,8 +960,9 @@ type_check_ms = 20
 
 [gui.histogram]
 # Histogram (sensor data for a RAW), at the top of the metadata panel:
-# shown at startup (key i), scale "ev" (EV below saturation) or "linear"
-# (Shift+I toggles). Large histogram (Shift+E, or click the panel's histogram): share
+# shown at startup (<core.view.histogram>), scale "ev" (EV below saturation) or
+# "linear" (<core.view.histogram_scale> toggles). Large histogram
+# (<core.view.histogram_large>, or click the panel's histogram): share
 # of the window width.
 visible = true
 scale = "ev"
@@ -966,7 +970,7 @@ large = 0.7
 # EV shown on the EV scale: 0 = useful range of the image (~13.9 EV for a 14-bit RAW,
 # ~11.7 for a JPEG, sRGB values converted to linear light); positive: a cap.
 ev_shown = 0.0
-# Saturated and crushed zones overlaid on the image at startup (key o), and their
+# Saturated and crushed zones overlaid on the image at startup (<core.view.clipping>), and their
 # opacity. Saturated zones coloured per channel (clip_red / clip_green / clip_blue, mixed
 # if two channels, clip_over if all three); false: clip_over for any saturation.
 clipping = false
@@ -991,13 +995,14 @@ smoothing = 1.5
 # Intensity of the curve's filled areas (0 to 1), blended additively like light
 # (red + green = yellow, all three = white).
 fill_strength = 0.55
-# Statistics of the large histogram (Shift+E): range from shadows to highlights, without
+# Statistics of the large histogram (<core.view.histogram_large>): range from shadows to highlights, without
 # isolated pixels (0.01: 1 % and 99 % percentiles).
 stats_tail = 0.01
 # Large histogram: diameter of the channel dots (red, green, blue, white = all;
-# Shift+C cycles them); analysis photo (in grey, saturated / crushed zones in
+# <core.view.histogram_channel> cycles them); analysis photo (in grey, saturated / crushed zones in
 # analysis_over / analysis_under, of the chosen channel) shown on opening, right of
-# the histogram and at its height (p or the photo icon show or hide it);
+# the histogram and at its height (<core.histogram.photo> or the photo icon show or
+# hide it);
 # lightening of its background relative to the dialog's (0 to 1).
 channel_dot = 11.0
 analysis = false
@@ -1014,17 +1019,19 @@ camera_width = 1.5
 # (p shows or hides it). Computation: section [sharpness]; its threshold follows the blur
 # strictness slider.
 visible = false
-# Colours offered, in rotation order (Ctrl+P): depending on the image, one stands out
+# Colours offered, in rotation order (<core.view.peaking_color>): depending on the image, one stands out
 # better than another.
 colors = ["#ff2828", "#28ff50", "#28b4ff"]
 # Opacity of the edges (0 to 1).
 opacity = 1.0
-# Keyboard strictness step (Ctrl+J more lenient, Ctrl+K stricter), on a scale
+# Keyboard strictness step (<core.view.sharpness_lenient> more lenient,
+# <core.view.sharpness_strict> stricter), on a scale
 # from -1 (far left) to 1 (far right).
 step = 0.1
 
 [gui.metadata]
-# Metadata panel, on the right: shown at startup (Shift+M shows or hides it),
+# Metadata panel, on the right: shown at startup (<core.view.metadata> shows or
+# hides it),
 # initial width (points, the edge can be dragged with the mouse), histogram of the selected
 # image at the top of the panel (grid and full screen; panel hidden: over the image),
 # and its height.
@@ -1032,7 +1039,8 @@ visible = true
 width = 280.0
 histogram = true
 histogram_height = 120.0
-# Step of a strictness slider of the panel from the keyboard (left / right arrows, h / l),
+# Step of a strictness slider of the panel from the keyboard (<core.metadata.left> /
+# <core.metadata.right>),
 # over its range from -1 to 1.
 slider_step = 0.1
 # Air below each group of settings of the panel, before the next subheading, in line
@@ -1054,7 +1062,8 @@ title = "#50bedc"
 # progress = "#3c3c3c"
 # Frame of the hovered thumbnail (hovering doesn't select).
 hover = "#b4b4b4"
-# Frame of selected images (multiple selection: Space, v, Ctrl+A, Shift+click…),
+# Frame of selected images (multiple selection: <core.select.toggle>,
+# <core.select.visual>, <core.select.all>, Shift+click…),
 # distinct from the current image (solid background) and from hovering.
 marked = "#ffaa28"
 # Focus point marker.
@@ -1094,7 +1103,7 @@ empty_mark = "#3c3c3c"
 warning = "#e6a03c"
 error = "#e65a5a"
 view_background = "#0c0c0c"
-# Backgrounds offered in turn by Ctrl+L (grid and full screen), after the theme's; a
+# Backgrounds offered in turn by <core.view.background> (grid and full screen), after the theme's; a
 # colour equal to the theme's or already in the list is skipped.
 backgrounds = ["#303030", "#000000", "#ffffff"]
 # Ratings: stars ("accent": the theme's accent colour, or "#rrggbb"), picked / rejected
@@ -1127,7 +1136,8 @@ analysis_over = "#ffdc00"
 analysis_under = "#286eff"
 
 [keys]
-# Shortcuts, by action identifier (listed in the help, F1 or ?, when hovering an
+# Shortcuts, by action identifier (listed in the help, <core.app.help> or
+# <core.app.help_here>, when hovering an
 # action; every action and its default shortcuts: keys.toml, shipped with the
 # program). The shortcuts given REPLACE those of the sets for that action; empty list:
 # none at all. A key: "p", "Maj+P", "Ctrl+u", "Flèche gauche", "PageUp", "Échap";

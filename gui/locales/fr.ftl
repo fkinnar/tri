@@ -180,15 +180,21 @@ action-core-stack-enter = En entrant dans une pile : sa première photo (allumé
 dev-count-tip = { $n ->
     [one] { $n } développement
    *[other] { $n } développements
-  } · { $keys } : déplier / replier
+  } · { $has ->
+    [yes] clic ou { $keys }
+   *[no] clic
+  } : déplier / replier
 dev-clone = clone { $n }
 dev-copy = copie { $n }
 dev-none = Cette photo n'a pas de développement (darktable, RapidRAW)
-dev-before = Avant : le JPEG boîtier à la place du développement (b : retour)
+dev-before = Avant : le JPEG boîtier à la place du développement (<core.view.source> : retour)
 dev-after = Après : le développement
 dev-preferred = { $name } : couverture de la photo
 dev-preferred-none = Plus de développement préféré : la pile se replie sur le plus récent
-dev-fold-tip = Replier les développements ({ $keys }) · Alt+clic : replier et garder celui-ci en couverture
+dev-fold-tip = Replier les développements{ $has ->
+    [yes] {" "}({ $keys })
+   *[no] {""}
+  } · Alt+clic : replier et garder celui-ci en couverture
 dev-folded-already = Toutes les piles de développements sont repliées
 dev-badge-tip = Développement : { $name }
 dev-badge-tip-pending = Développement : { $name } (vignette de la photo en attendant son rendu)
@@ -361,7 +367,7 @@ crop-name-original-ratio = Version
 crop-name-taken-notice = Version non enregistrée : le nom « { $name } » est déjà pris
 crop-failed = Version non enregistrée : { $error }
 crop-preset-none = Préréglage
-crop-preset-tip = Préréglage de version : rapport, nom et préréglage d'export (p : suivant)
+crop-preset-tip = Préréglage de version : rapport, nom et préréglage d'export (<core.version.preset> : suivant)
 crop-preset-save = Enregistrer comme préréglage de version
 crop-preset-save-tip = Enregistrer comme préréglage de version : rapport, nom et export du cadre en cours, gardés dans les réglages
 crop-preset-saved = Préréglage « { $name } » enregistré
@@ -392,7 +398,7 @@ folders-section-personal = Dossiers personnels
 folders-section-favorites = Favoris
 folders-section-system = Système
 folders-refresh = Actualiser
-folders-refresh-tip = Relire les volumes et les dossiers (F5). Un disque branché apparaît aussi de lui-même en quelques secondes.
+folders-refresh-tip = Relire les volumes et les dossiers. Un disque branché apparaît aussi de lui-même en quelques secondes.
 folders-subfolders = Sous-dossiers
 folders-subfolders-tip = Afficher aussi les images des sous-dossiers ({ $n } niveaux au plus, [gui.folders] subfolders_depth)
 folders-collapse = Replier
@@ -465,8 +471,8 @@ view-info-preview-computing = { " " }· aperçu en cours de calcul
 view-info-raw-pending = { " " }· rendu RAW en cours
 view-info-full-computing = { " " }· calcul du 100 % en cours
 view-info-one-to-one-loading = { " " }· chargement du 1:1
-view-hint-raw = b : rendu boîtier / RAW   z : 1:1   i : histogramme   w : zones   Échap : grille
-view-hint-flat = z : 1:1   i : histogramme   w : zones   Échap : grille
+view-hint-raw = <core.view.source> : rendu   <core.view.zoom> : 1:1   <core.view.histogram> : histogramme   <core.view.clipping> : zones   <core.view.back> : grille
+view-hint-flat = <core.view.zoom> : 1:1   <core.view.histogram> : histogramme   <core.view.clipping> : zones   <core.view.back> : grille
 status-no-folder = aucun dossier
 status-images = { $n ->
     [one] { $n } image
@@ -592,7 +598,7 @@ badge-versions = { $n ->
 help-title = Raccourcis
 help-search-hint = Rechercher (ex. « pnd », « etoile 3 »)…
 help-no-match = Aucune action ne correspond.
-help-close-hint = Échap ou F1 pour fermer.
+help-close-hint = Échap ou <core.app.help> pour fermer.
 empty-folder-gone = Le dossier « { $name } » n'est plus là (disque débranché ?)
 empty-folder-gone-back = Il se rouvrira de lui-même quand le disque reviendra.
 empty-no-folder = Choisissez un dossier dans le panneau de gauche ({ $keys } l'affiche).
@@ -610,7 +616,7 @@ develop-toast-done = { $n ->
     [one] 1 développement refait
    *[other] { $n } développements refaits
 }
-empty-filtered = Aucune image pour ces filtres (f puis Échap pour les effacer).
+empty-filtered = Aucune image pour ces filtres (<core.filter.clear> pour les effacer).
 color-red = rouge
 color-yellow = jaune
 color-green = vert
@@ -1224,6 +1230,7 @@ keys-conflict = [keys] « { $spec } » attribué à { $first } et à { $second }
 keys-replaces = [keys] « { $spec } » ({ $action }) remplace le raccourci de { $other }
 keys-unknown-key = touche inconnue « { $text } »
 keys-empty = raccourci vide
+keys-none-short = sans raccourci
 key-shift-prefix = Maj+
 key-leader = <leader>
 key-sequence-then = { " puis " }
@@ -1479,7 +1486,7 @@ kw-core-filter-kind-raw = raw seuls masquer jpeg
 kw-core-filter-kind-flat = jpeg jpg seuls plates masquer raw
 kw-core-view-loupe = loupe zoom 100 pointeur agrandir grossir magnifier
 loupe-hold = Loupe : maintenez { $keys } en plein écran ou en comparaison.
-review-unusable = Pas de revue des développements en JPEG boîtier (ni sans logiciel de développement) : changez d'abord le rendu affiché (r).
+review-unusable = Pas de revue des développements en JPEG boîtier (ni sans logiciel de développement) : changez d'abord le rendu affiché (<core.view.source>).
 review-on = Revue des développements : chaque développement d'une photo, l'un après l'autre
 review-off = Revue des développements arrêtée : de photo en photo
 file-actions-on = Actions sur les fichiers autorisées

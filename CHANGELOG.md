@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- **Cited shortcuts up to date** (#372): setting descriptions and a few messages
+  (full-screen key reminder, "Before" of a development, version presets…) cited
+  hard-coded shortcuts, some of them stale ("Shift+B" to see one's developments, "b" for
+  the render). They now cite the action, and the interface shows the shortcuts in use,
+  `[keys]` included; a test prevents writing them hard-coded again. An action without a
+  shortcut no longer has an empty "()" in its tooltip.
 - **Sidecars of both conventions** (#371): `[xmp] sidecar = "both"` creates and keeps up
   to date `IMG.RAF.xmp` (darktable) and `IMG.xmp` (Lightroom, Capture One). Two XMP
   sidecars of the same photo are now both read and merged (before: the most recent only).

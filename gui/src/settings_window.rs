@@ -1283,7 +1283,7 @@ impl SettingsWindow {
         if only.is_none() && family(&section.name).is_none() {
             ui.label(section_title(ui, &section.name, true));
             if !section.doc.is_empty() {
-                ui.weak(&section.doc);
+                ui.weak(self.keymap.with_keys(&section.doc));
             }
             if needs_restart(&section.name, "") {
                 ui.label(t!("settings-section-restart"));
@@ -1315,7 +1315,7 @@ impl SettingsWindow {
             }
             if !group.doc.is_empty() {
                 ui.add_space(4.0);
-                ui.weak(&group.doc);
+                ui.weak(self.keymap.with_keys(&group.doc));
             }
             for entry in entries {
                 if let Some(s) = self.entry(ui, &section.name, entry) {
