@@ -1996,6 +1996,10 @@ impl TriApp {
     /// haut, puis les réglages — filtres et grille, en plein écran aussi —, et les
     /// métadonnées en bas, comme dans les autres logiciels.
     fn side_panel(&mut self, ui: &mut Ui) {
+        // Textes non sélectionnables : la flèche, pas le curseur de texte, sur les noms des
+        // filtres et les lignes des EXIF (retour du 09/11/2026, #386) ; on copie une ligne
+        // par son raccourci.
+        ui.style_mut().interaction.selectable_labels = false;
         self.meta_has_histogram = false;
         self.side_items.clear();
         // Pas pendant l'édition d'une version : il vaut pour l'image entière, pas pour le
@@ -2900,6 +2904,8 @@ impl TriApp {
     /// Panneau des dossiers : l'arborescence du moteur ([`Tree`]), dessinée ligne par
     /// ligne. Le triangle déplie ou replie ; un clic sur le nom ouvre le dossier.
     fn folder_panel(&mut self, ui: &mut Ui) {
+        // Comme le panneau de droite : la flèche sur les textes (#386).
+        ui.style_mut().interaction.selectable_labels = false;
         if self.focus == crate::actions::Scope::Folders {
             panel_focus_fill(ui, &self.gui.dialogs);
         }

@@ -9,7 +9,8 @@
   width, and becomes the pointed row; the open folder keeps its accent background
   separately. Hovered controls lose egui's white frame everywhere, like the bar icons.
   The metadata copy shortcut (`y`, `Ctrl+C` / `Cmd+C`) copies the EXIF row under the
-  mouse without a click.
+  mouse without a click. The pointer stays an arrow over the panels' texts (filter
+  names, EXIF rows) instead of the text cursor.
 - **Leaving a comparison opened from full screen** (#379, fixes #376): it went back to
   the grid; it now goes back to full screen, on the active image ("Back to full screen"
   button). Opened from the grid, it still goes back to the grid.
