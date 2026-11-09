@@ -27893,7 +27893,12 @@ mod tests {
         assert_eq!(toasts.len(), 1, "une bulle de fin d'export");
         let toast = &toasts[0];
         assert_eq!(toast.text, "1 image exportée");
-        assert!(toast.dest.ends_with("photos/export"), "{}", toast.dest);
+        // Comparé en chemin : `\` sous Windows.
+        assert!(
+            Path::new(&toast.dest).ends_with(Path::new("photos").join("export")),
+            "{}",
+            toast.dest
+        );
         assert!(!toast.error);
         assert!(
             toast
