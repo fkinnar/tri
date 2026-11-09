@@ -2662,6 +2662,7 @@ impl TriApp {
                 let mut menu: Option<(usize, MetaMenu)> = None;
                 let mut hover = None;
                 let moved = ui.input(|i| i.pointer.delta() != Vec2::ZERO);
+                let mut cells: Vec<Rect> = Vec::new();
                 let grid = egui::Grid::new("metadata")
                     .num_columns(2)
                     .spacing(vec2(10.0, 4.0))
@@ -2689,44 +2690,7 @@ impl TriApp {
                                 job.append(&format!("{sep}{note}"), 0.0, format(weak));
                             }
                             let b = ui.add(egui::Label::new(job).wrap().sense(Sense::click()));
-                            let rect = a.rect.union(b.rect).expand(2.0);
-                            // Survol (issue n° 383) : la bande sur toute la largeur, et la
-                            // souris qui bouge pointe la ligne, comme le clavier (pas
-                            // pendant une sélection de plusieurs lignes).
-                            let band = Rect::from_x_y_ranges(
-                                ui.clip_rect().x_range(),
-                                rect.expand(1.0).y_range(),
-                            );
-                            let hovered = ui.rect_contains_pointer(band);
-                            if hovered {
-                                hover = Some(i);
-                                if moved && !self.meta_selecting() && self.meta_cursor != i {
-                                    self.meta_cursor = i;
-                                    // Les lignes du dessus sont déjà peintes.
-                                    ui.ctx().request_repaint();
-                                }
-                            }
-                            // Sélection (y la copie) ; la ligne pointée en bande : au
-                            // clavier, sinon sous la souris ; pointée dans la sélection :
-                            // les deux bandes, plus marquée.
-                            // Un peu plus marquée que la ligne pointée, pour les distinguer.
-                            if focused && several && selected.contains(&i) {
-                                cursor_row(ui, rect, self.gui.dialogs.cursor_tint * 1.8);
-                            }
-                            // Après un Ctrl+clic, plus de ligne pointée marquée (retour du
-                            // 09/11/2026 : la ligne retirée gardait la bande du curseur et
-                            // semblait toujours sélectionnée).
-                            let pointed = if focused {
-                                i == self.meta_cursor && self.meta_cursor_shown
-                            } else {
-                                hovered
-                            };
-                            if pointed {
-                                cursor_row(ui, rect, self.gui.dialogs.cursor_tint);
-                            }
-                            if focused && i == self.meta_cursor && scroll {
-                                ui.scroll_to_rect(rect, Some(egui::Align::Center));
-                            }
+                            cells.push(a.rect.union(b.rect));
                             if a.clicked() || b.clicked() {
                                 clicked = Some((i, ui.input(|inp| inp.modifiers)));
                             }
@@ -2753,6 +2717,63 @@ impl TriApp {
                             ui.end_row();
                         }
                     });
+                // Bandes des lignes (survol, sélection, ligne pointée), calculées après la
+                // grille : coupées au milieu de l'espace entre deux lignes, arrondi au pixel,
+                // 1 pixel de chaque côté, pour toujours le même interligne (retour du
+                // 09/11/2026 : les libellés n'ont pas la hauteur de leur ligne, les bandes
+                // laissaient des écarts inégaux).
+                let mid = |i: usize| ((cells[i].bottom() + cells[i + 1].top()) / 2.0).round();
+                let x = ui.clip_rect().x_range();
+                for i in 0..cells.len() {
+                    let top = if i == 0 {
+                        (cells[0].top() - 2.0).round()
+                    } else {
+                        mid(i - 1)
+                    };
+                    let bottom = if i + 1 == cells.len() {
+                        (cells[i].bottom() + 2.0).round()
+                    } else {
+                        mid(i)
+                    };
+                    let band = Rect::from_x_y_ranges(x, top + 1.0..=bottom - 1.0);
+                    // Survol (issue n° 383) : la bande sur toute la largeur, et la souris qui
+                    // bouge pointe la ligne, comme le clavier (pas pendant une sélection de
+                    // plusieurs lignes).
+                    let hovered = ui.rect_contains_pointer(Rect::from_x_y_ranges(x, top..=bottom));
+                    if hovered {
+                        hover = Some(i);
+                        if moved && !self.meta_selecting() && self.meta_cursor != i {
+                            self.meta_cursor = i;
+                            // Les bandes du dessus sont déjà peintes.
+                            ui.ctx().request_repaint();
+                        }
+                    }
+                    // Sélection (y la copie), un peu plus marquée que la ligne pointée pour
+                    // les distinguer ; la ligne pointée : au clavier, sinon sous la souris.
+                    if focused && several && selected.contains(&i) {
+                        meta_band(ui, band, self.gui.dialogs.cursor_tint * 1.8);
+                    }
+                    // Après un Ctrl+clic, plus de ligne pointée marquée (retour du
+                    // 09/11/2026 : la ligne retirée gardait la bande du curseur et semblait
+                    // toujours sélectionnée).
+                    let pointed = if focused {
+                        i == self.meta_cursor && self.meta_cursor_shown
+                    } else {
+                        hovered
+                    };
+                    // Ligne cliquée (retour du 09/11/2026) : un repère pour le Maj+clic ou
+                    // le Ctrl+clic suivant, qui reste quand la souris s'en va ; plus marqué
+                    // que le survol, moins que la sélection.
+                    let anchor = focused && !several && self.meta_clicked == Some(i);
+                    if anchor {
+                        meta_band(ui, band, self.gui.dialogs.cursor_tint * 1.4);
+                    } else if pointed {
+                        meta_band(ui, band, self.gui.dialogs.cursor_tint);
+                    }
+                    if focused && i == self.meta_cursor && scroll {
+                        ui.scroll_to_rect(band, Some(egui::Align::Center));
+                    }
+                }
                 // Toute la zone des lignes, interlignes compris : la flèche (#386 ; entre
                 // deux lignes, egui touchait encore la voisine et donnait la main).
                 let area = Rect::from_x_y_ranges(
@@ -17958,6 +17979,16 @@ fn panel_focus_fill(ui: &Ui, dialogs: &crate::settings::DialogSettings) {
 /// panneau défile).
 fn cursor_row(ui: &Ui, rect: Rect, tint: f32) {
     cursor_band(ui, ui.clip_rect().x_range(), rect, tint);
+}
+
+/// Bande d'une ligne des métadonnées : exactement `rect` (déjà arrondi au pixel, sans
+/// l'élargissement de [`cursor_band`]).
+fn meta_band(ui: &Ui, band: Rect, tint: f32) {
+    let fill = ui
+        .visuals()
+        .text_color()
+        .gamma_multiply(tint.clamp(0.0, 1.0));
+    ui.painter().rect_filled(band, 0.0, fill);
 }
 
 /// La bande du curseur sur la largeur `x` (la palette : celle de ses lignes, pas l'écran,

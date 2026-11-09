@@ -616,7 +616,11 @@ system one ("cold" measurements, experiments).
   "EXIF" title select everything; the selection is the grey band across the whole width
   (no more blue background per row), a little stronger than the pointed row; after a
   Ctrl+click the pointed row is no longer marked (the removed row otherwise looked still
-  selected), again with the keyboard or a plain click. **Right-click** on a row: copy the value, the
+  selected), again with the keyboard or a plain click.
+  The clicked row keeps an intermediate band (stronger than hovering, lighter than the
+  selection): the start of the next Shift+click or Ctrl+click; the bands are computed
+  after the grid, cut in the middle of the gap and rounded to the pixel (always 2 pixels
+  between two bands). **Right-click** on a row: copy the value, the
   selection (if the row is part of it), everything. **Without a click**
   (#383): the panel's copy shortcut (`y`, `Ctrl+C` / `Cmd+C`, Shift+`y`) copies the row
   under the mouse even when the panel does not have the keyboard
