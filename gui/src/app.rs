@@ -864,6 +864,9 @@ pub struct TriApp {
     help_here: Option<(crate::cheatsheet::Place, crate::cheatsheet::Sections)>,
     /// Défilement de l'aide « ici » demandé au clavier, à faire à la prochaine image.
     help_here_scroll: f32,
+    /// Recherche tapée dans l'aide « ici » (#382) : ne garde que les actions qui y
+    /// répondent, lettres trouvées surlignées.
+    help_here_query: String,
     /// Palette de commandes ouverte (Ctrl+Maj+P, `:` en vim).
     palette: Option<PaletteState>,
     /// Ce qu'on a lancé depuis la palette, le plus récent d'abord (`palette-history` du
@@ -1481,6 +1484,7 @@ impl TriApp {
             help_search: None,
             help_here: None,
             help_here_scroll: 0.0,
+            help_here_query: String::new(),
             palette: None,
             palette_history: data
                 .as_deref()
@@ -6317,7 +6321,13 @@ impl TriApp {
         // texte, pas des raccourcis ; seules les touches qui ne tapent rien (Échap, F1…)
         // agissent. Sans cela, taper « q » dans le nom d'un dossier quittait l'application.
         if ctx.egui_wants_keyboard_input() {
-            chords.retain(|(c, _)| c.trigger.types_no_text());
+            // Aide « ici » (#382) : on y tape la recherche, mais sa touche (`?`) la
+            // referme toujours.
+            let help_here = self.help_here.is_some();
+            chords.retain(|(c, _)| {
+                c.trigger.types_no_text()
+                    || (help_here && self.keymap.chord_action(*c) == Some(Action::HelpHere))
+            });
         }
         // La valeur du zoom tapée dans la barre du bas : Échap la referme, sans revenir à
         // la grille.
@@ -6450,10 +6460,13 @@ impl TriApp {
                 }
                 continue;
             }
-            // Aide « ici » : `?` ou Échap la ferment, F1 passe à la liste complète ; rien
-            // d'autre ne passe derrière.
+            // Aide « ici » : `?` ou Échap la ferment (Échap efface d'abord la recherche,
+            // #382), F1 passe à la liste complète ; rien d'autre ne passe derrière.
             if self.help_here.is_some() {
                 match action {
+                    Action::Back if !self.help_here_query.is_empty() => {
+                        self.help_here_query.clear();
+                    }
                     Action::Back | Action::HelpHere => self.help_here = None,
                     Action::Help => {
                         self.help_here = None;
@@ -6703,6 +6716,7 @@ impl TriApp {
                     let place = self.help_place();
                     let sections = crate::cheatsheet::sections(&self.keymap, place);
                     self.help_here = Some((place, sections));
+                    self.help_here_query.clear();
                 }
             }
             Action::Settings => self.open_settings(),
@@ -14892,6 +14906,8 @@ impl TriApp {
                         window.search(&text);
                     } else if self.help {
                         self.help_search = Some(text);
+                    } else if self.help_here.is_some() {
+                        self.help_here_query = text;
                     }
                 }
             }
@@ -16391,9 +16407,24 @@ impl TriApp {
     /// l'on est, par thème, en colonnes de cartes, en grand pour se lire d'un coup d'œil.
     /// Un clic la ferme.
     fn help_here_overlay(&mut self, ctx: &egui::Context) {
-        let Some((place, sections)) = &self.help_here else {
+        let Some((place, all)) = &self.help_here else {
             return;
         };
+        // Recherche (#382) : la même que F1 et la palette (mots des deux langues, fautes
+        // de frappe pardonnées), limitée aux raccourcis de l'endroit.
+        let query = self.help_here_query.trim().to_string();
+        let found: Option<HashSet<Action>> = (!query.is_empty()).then(|| {
+            help_rows(&self.keymap, &query)
+                .into_iter()
+                .map(|(a, _)| a)
+                .collect()
+        });
+        let sections = match &found {
+            Some(found) => crate::cheatsheet::filtered(all, |a| found.contains(&a)),
+            None => all.clone(),
+        };
+        let sections = &sections;
+        let mut typed = std::mem::take(&mut self.help_here_query);
         let screen = ctx.content_rect();
         let accent = crate::marks::accent_mark(ctx);
         let size = self.gui.dialogs.help_here_text;
@@ -16434,6 +16465,21 @@ impl TriApp {
                                 .strong()
                                 .color(accent),
                         );
+                        ui.add_space(size * 0.5);
+                        // On tape dès l'ouverture : le champ garde le clavier (Échap le
+                        // lui reprendrait).
+                        let field = ui.add(
+                            egui::TextEdit::singleline(&mut typed)
+                                .id(egui::Id::unique("help_here_search"))
+                                .hint_text(t!("help-here-search-hint"))
+                                .font(egui::FontId::proportional(size))
+                                .desired_width(card.min(inner.width())),
+                        );
+                        field.request_focus();
+                        if sections.is_empty() {
+                            ui.add_space(size);
+                            ui.label(egui::RichText::new(t!("help-no-match")).size(size).weak());
+                        }
                     });
                     ui.add_space(size);
                     ScrollArea::vertical()
@@ -16448,7 +16494,7 @@ impl TriApp {
                                         ui.set_width(card - size);
                                         for &i in list {
                                             let (group, rows) = &sections[i];
-                                            help_here_card(ui, *group, rows, size, accent);
+                                            help_here_card(ui, *group, rows, size, accent, &query);
                                             ui.add_space(size * 0.8);
                                         }
                                     });
@@ -16462,6 +16508,7 @@ impl TriApp {
                     });
                 });
             });
+        self.help_here_query = typed;
         if close {
             self.help_here = None;
         }
@@ -18658,6 +18705,35 @@ pub(crate) fn keys_job(
     job
 }
 
+/// `text` en `size`, les lettres que trouve la recherche `query` à la couleur `marked`,
+/// soulignées (aide « ici », #382), le reste en `color`.
+fn marked_job(
+    text: &str,
+    query: &str,
+    size: f32,
+    color: Color32,
+    marked: Color32,
+) -> egui::text::LayoutJob {
+    let marks = tri::fuzzy::matched_chars(query, text);
+    let font = egui::FontId::proportional(size);
+    let plain = egui::TextFormat::simple(font.clone(), color);
+    let found = egui::TextFormat {
+        underline: egui::Stroke::new(1.0, marked),
+        ..egui::TextFormat::simple(font, marked)
+    };
+    let mut job = egui::text::LayoutJob::default();
+    let mut buf = [0u8; 4];
+    for (i, c) in text.chars().enumerate() {
+        let format = if marks.binary_search(&i).is_ok() {
+            found.clone()
+        } else {
+            plain.clone()
+        };
+        job.append(c.encode_utf8(&mut buf), 0.0, format);
+    }
+    job
+}
+
 /// `label` sans sa précision finale entre parenthèses : le menu des suites se lit d'un
 /// coup d'œil (retour du 07/11/2026 : « ça alourdit ») ; F1 et la palette la gardent.
 fn without_aside(label: &str) -> String {
@@ -18742,6 +18818,7 @@ fn help_here_card(
     rows: &[crate::cheatsheet::Row],
     size: f32,
     accent: Color32,
+    query: &str,
 ) {
     egui::Frame::new()
         .fill(ui.visuals().panel_fill)
@@ -18782,7 +18859,11 @@ fn help_here_card(
                         },
                     );
                     ui.add_space(size * 0.5);
-                    ui.add(egui::Label::new(egui::RichText::new(&row.label).size(size)).wrap());
+                    // Lettres trouvées par la recherche à l'accent (#382).
+                    let text = ui.visuals().text_color();
+                    ui.add(
+                        egui::Label::new(marked_job(&row.label, query, size, text, accent)).wrap(),
+                    );
                 });
                 if i % 2 == 1 {
                     let r = line.response.rect;
@@ -19550,6 +19631,60 @@ mod tests {
         assert_eq!(place, Some(Place::Folders));
         press(&mut h, Key::Questionmark, Modifiers::SHIFT);
         assert!(h.state().help_here.is_none());
+    }
+
+    #[test]
+    fn typing_in_the_question_mark_help_filters_it() {
+        // #382 : `?` ouvert, on tape : seules les actions qui répondent restent (la même
+        // recherche que F1, mots des deux langues) ; Échap efface la recherche, un second
+        // Échap ferme ; `?` ferme toujours.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Questionmark, Modifiers::SHIFT);
+        h.run_steps(2);
+        let zoom = Action::ToggleZoom.label();
+        let stars = Action::Stars(3).label();
+        let shown =
+            |h: &Harness<'_, TriApp>, label: &str| h.query_all_by_label(label).next().is_some();
+        // « Image suivante » : aussi un bouton de la barre du bas ; compté.
+        let next = Action::NavNext.label();
+        let count = |h: &Harness<'_, TriApp>| h.query_all_by_label(&next).count();
+        let with_help = count(&h);
+        // La grille : pas de zoom, mais les étoiles.
+        assert!(shown(&h, &stars));
+        type_text(&mut h, "etoile");
+        h.run_steps(2);
+        assert_eq!(h.state().help_here_query, "etoile");
+        assert!(shown(&h, &stars), "les étoiles restent");
+        assert_eq!(count(&h), with_help - 1, "le reste part");
+        // Les lettres tapées ne déclenchent rien derrière (« e » ouvrirait l'éditeur).
+        assert!(h.state().help_here.is_some());
+        assert!(h.state().file_dialog.is_none());
+        // En anglais aussi, et sans résultat : le dire.
+        h.state_mut().help_here_query = "rating".into();
+        h.run_steps(2);
+        assert!(shown(&h, &stars));
+        h.state_mut().help_here_query = "xqzw".into();
+        h.run_steps(2);
+        h.get_by_label("Aucune action ne correspond.");
+        // Échap : la recherche s'efface, l'aide reste ; puis se ferme.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().help_here_query.is_empty());
+        assert!(h.state().help_here.is_some());
+        h.run_steps(2);
+        assert_eq!(count(&h), with_help, "tout revient");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().help_here.is_none());
+        // `?` ferme pendant qu'on tape ; rouverte, la recherche est vide.
+        press(&mut h, Key::Questionmark, Modifiers::SHIFT);
+        h.run_steps(2);
+        type_text(&mut h, "zo");
+        h.run_steps(2);
+        assert!(!shown(&h, &zoom), "pas de zoom dans la grille");
+        press(&mut h, Key::Questionmark, Modifiers::SHIFT);
+        assert!(h.state().help_here.is_none());
+        press(&mut h, Key::Questionmark, Modifiers::SHIFT);
+        assert!(h.state().help_here_query.is_empty());
     }
 
     #[test]

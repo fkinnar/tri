@@ -34,3 +34,7 @@ serve:
   the start of a word of the text (without accents or case, singular as plural). For
   what must not come up on a resemblance: the control rows of the palette ("nettes" is
   inside "vignettes", not at its start; "rendu" looks like "réduire").
+- **Letters to highlight** (2026-11-09, `matched_chars`, #382): for each typed word, its
+  passage in one piece if it is there (at the start of a word preferably; singular too),
+  otherwise its letters in order. A word found only through a typo is not highlighted.
+  Used by the `?` help to show what matched.
