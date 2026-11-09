@@ -2,6 +2,13 @@
 
 *[English version](CHANGELOG.md)*
 
+## Non publié
+
+- **Cercle du drapeau vide sur les vignettes** (#396) : sans note, le cercle gris du
+  drapeau (en bas à droite) avait un trait plus épais que celui de la couleur (en haut à
+  droite) ; il reprenait l'icône du neutre des contrôles de notation, dont le trait grandit
+  avec la taille. Les deux cercles sont maintenant dessinés pareil (#394).
+
 ## 1.0.0-beta.1 — 09/11/2026
 
 Première bêta : notes accordées avec darktable et inscrites dans les images (notes dans
