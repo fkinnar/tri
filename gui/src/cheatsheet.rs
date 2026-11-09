@@ -129,6 +129,8 @@ pub fn applies(action: Action, place: Place) -> bool {
 /// Une ligne de l'aide « ici » : touches, libellé.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
+    /// L'action (filtre de la recherche, #382).
+    pub action: Action,
     /// Touches (« Flèche gauche / h »).
     pub keys: String,
     /// Ce que fait l'action.
@@ -150,6 +152,7 @@ pub fn sections(keymap: &Keymap, place: Place) -> Sections {
             .filter_map(|&a| {
                 let keys = keymap.keys_for(a);
                 (!keys.is_empty()).then(|| Row {
+                    action: a,
                     keys: keys.join(" / "),
                     label: a.label(),
                 })
@@ -160,6 +163,18 @@ pub fn sections(keymap: &Keymap, place: Place) -> Sections {
         }
     }
     sections
+}
+
+/// Les lignes de `sections` dont l'action est gardée par `keep`, thèmes vides retirés
+/// (recherche dans l'aide « ici », #382).
+pub fn filtered(sections: &Sections, keep: impl Fn(Action) -> bool) -> Sections {
+    sections
+        .iter()
+        .filter_map(|(group, rows)| {
+            let rows: Vec<Row> = rows.iter().filter(|r| keep(r.action)).cloned().collect();
+            (!rows.is_empty()).then_some((*group, rows))
+        })
+        .collect()
 }
 
 #[cfg(test)]

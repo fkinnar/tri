@@ -325,6 +325,7 @@ place-crop = Version
 place-histogram = Large histogram
 place-folders = Folders panel
 place-metadata = Metadata panel
+help-here-search-hint = Type to filter…
 help-here-title = Shortcuts here: { $place }
 help-here-footer = { $help }: every action, with a search · { $leader } = { $keys } (a pause after a key shows what follows) · Esc or click: close
 palette-title = Command palette
