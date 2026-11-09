@@ -2722,20 +2722,26 @@ impl TriApp {
                 // 1 pixel de chaque côté, pour toujours le même interligne (retour du
                 // 09/11/2026 : les libellés n'ont pas la hauteur de leur ligne, les bandes
                 // laissaient des écarts inégaux).
-                let mid = |i: usize| ((cells[i].bottom() + cells[i + 1].top()) / 2.0).round();
+                // Au pixel de l'écran, pas au point d'egui : sur un écran mis à l'échelle
+                // (Retina, 125 %), l'interligne faisait 2 ou 3 pixels selon la ligne
+                // (retour du 09/11/2026).
+                let ppp = ui.ctx().pixels_per_point();
+                let snap = |v: f32| (v * ppp).round() / ppp;
+                let pad = (ppp.round().max(1.0)) / ppp;
+                let mid = |i: usize| snap((cells[i].bottom() + cells[i + 1].top()) / 2.0);
                 let x = ui.clip_rect().x_range();
                 for i in 0..cells.len() {
                     let top = if i == 0 {
-                        (cells[0].top() - 2.0).round()
+                        snap(cells[0].top() - 2.0)
                     } else {
                         mid(i - 1)
                     };
                     let bottom = if i + 1 == cells.len() {
-                        (cells[i].bottom() + 2.0).round()
+                        snap(cells[i].bottom() + 2.0)
                     } else {
                         mid(i)
                     };
-                    let band = Rect::from_x_y_ranges(x, top + 1.0..=bottom - 1.0);
+                    let band = Rect::from_x_y_ranges(x, top + pad..=bottom - pad);
                     // Survol (issue n° 383) : la bande sur toute la largeur, et la souris qui
                     // bouge pointe la ligne, comme le clavier (pas pendant une sélection de
                     // plusieurs lignes).

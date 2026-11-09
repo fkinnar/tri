@@ -665,7 +665,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   La ligne cliquée garde une bande intermédiaire (plus marquée que le survol, moins que
   la sélection) : le départ du Maj+clic ou du Ctrl+clic suivant ; les bandes sont
   calculées après la grille, coupées au milieu de l'interligne et arrondies au pixel
-  (toujours 2 pixels entre deux bandes). **Clic droit** sur une ligne : copier
+  de l'écran, pas au point d'egui (toujours le même écart entre deux bandes, écran mis à
+  l'échelle compris). **Clic droit** sur une ligne : copier
   la valeur, la sélection (si la ligne en fait partie), tout. **Sans
   clic** (#383) : le raccourci de copie du panneau (`y`, `Ctrl+C` / `Cmd+C`, Maj+`y`)
   copie la ligne sous la souris même quand le panneau n'a pas le clavier

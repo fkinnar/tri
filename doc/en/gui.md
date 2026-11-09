@@ -619,8 +619,8 @@ system one ("cold" measurements, experiments).
   selected), again with the keyboard or a plain click.
   The clicked row keeps an intermediate band (stronger than hovering, lighter than the
   selection): the start of the next Shift+click or Ctrl+click; the bands are computed
-  after the grid, cut in the middle of the gap and rounded to the pixel (always 2 pixels
-  between two bands). **Right-click** on a row: copy the value, the
+  after the grid, cut in the middle of the gap and rounded to the screen's pixel, not egui's
+  point (always the same gap between two bands, scaled screens included). **Right-click** on a row: copy the value, the
   selection (if the row is part of it), everything. **Without a click**
   (#383): the panel's copy shortcut (`y`, `Ctrl+C` / `Cmd+C`, Shift+`y`) copies the row
   under the mouse even when the panel does not have the keyboard
