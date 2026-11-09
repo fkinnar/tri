@@ -806,6 +806,9 @@ pub struct TriApp {
     /// Ligne des métadonnées sous la souris à la dernière image dessinée (issue n° 383) :
     /// le raccourci de copie du panneau la copie, même sans le clavier.
     meta_hover: Option<usize>,
+    /// Pointeur sur la zone des lignes des métadonnées, interlignes compris : la flèche
+    /// (#386).
+    meta_area: bool,
     /// L'histogramme est en tête du panneau : premier élément pointable (Entrée l'ouvre
     /// en grand).
     meta_has_histogram: bool,
@@ -1409,6 +1412,7 @@ impl TriApp {
             focus: crate::actions::Scope::Images,
             meta_cursor: 0,
             meta_hover: None,
+            meta_area: false,
             meta_rows: Vec::new(),
             meta_has_histogram: false,
             meta_anchor: None,
@@ -2572,6 +2576,7 @@ impl TriApp {
     /// ligne par donnée, pointables au clavier et copiables.
     fn metadata_panel(&mut self, ui: &mut Ui) {
         self.meta_hover = None;
+        self.meta_area = false;
         let Some(file) = self.files.get(self.selected).cloned() else {
             ui.weak(t!("panel-no-image"));
             return;
@@ -2637,7 +2642,7 @@ impl TriApp {
                 let mut clicked = None;
                 let mut hover = None;
                 let moved = ui.input(|i| i.pointer.delta() != Vec2::ZERO);
-                egui::Grid::new("metadata")
+                let grid = egui::Grid::new("metadata")
                     .num_columns(2)
                     .spacing(vec2(10.0, 4.0))
                     .show(ui, |ui| {
@@ -2701,6 +2706,13 @@ impl TriApp {
                             ui.end_row();
                         }
                     });
+                // Toute la zone des lignes, interlignes compris : la flèche (#386 ; entre
+                // deux lignes, egui touchait encore la voisine et donnait la main).
+                let area = Rect::from_x_y_ranges(
+                    ui.clip_rect().x_range(),
+                    grid.response.rect.expand(3.0).y_range(),
+                );
+                self.meta_area = ui.rect_contains_pointer(area);
                 self.meta_rows = rows;
                 self.meta_hover = hover;
                 // Clic : pointe la ligne (et donne le clavier au panneau) ; Maj+clic : étend.
@@ -16682,7 +16694,7 @@ impl eframe::App for TriApp {
                     // Lignes des EXIF : la flèche (retour du 09/11/2026) ; un clic n'y fait
                     // que pointer la ligne. La main le jour où un clic y fera quelque chose
                     // (créer un filtre…).
-                    if self.meta_hover.is_none() {
+                    if !self.meta_area {
                         hand_over_clickable(ui);
                     }
                 });
@@ -28167,6 +28179,16 @@ mod tests {
             hover(&mut h, at);
         }
         assert_eq!(cursor(&h), egui::CursorIcon::Default, "ligne des EXIF");
+        // Entre deux lignes aussi (egui y touchait la voisine).
+        let a = h.get_by_label(&label).rect();
+        let next = h.state().meta_rows[2].label.clone();
+        let b = h.get_by_label(&next).rect();
+        let between = pos2(a.center().x, (a.bottom() + b.top()) / 2.0);
+        assert_eq!(
+            hover(&mut h, between),
+            egui::CursorIcon::Default,
+            "entre deux lignes"
+        );
     }
 
     fn cursor(h: &Harness<'_, TriApp>) -> egui::CursorIcon {
