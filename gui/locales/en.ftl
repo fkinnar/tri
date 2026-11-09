@@ -1155,6 +1155,7 @@ filter-developed-none = not developed
 filter-developed-engine = developed in { $engine }
 filter-developed-tip = Development software: the images developed in one of the checked software, shown in the latest one; none checked: the images without development, in their LibRaw render
 filter-developed-unusable = No developed photo in this folder: the "Developed" filter has nothing to show.
+filter-developed-off = "Developed" filter off: none of its development software is active any more.
 develop-with = Develop with
 develop-with-choose = choose…
 develop-with-libraw = RAW render (LibRaw)

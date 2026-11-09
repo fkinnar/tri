@@ -1100,15 +1100,48 @@ impl TriApp {
             self.settings.develop.high_quality,
         );
         trace(|| format!("logiciels de développement : {developers:?}"));
-        engine.developers.replace(developers.clone());
+        self.set_developers(developers);
+    }
+
+    /// Logiciels de développement actifs remplacés (réglages appliqués) : moteur,
+    /// fenêtre de réglages, rendu de la grille et filtre « Développées » suivent.
+    fn set_developers(&mut self, developers: tri::develop::Developers) {
+        if let Some(engine) = &self.engine {
+            engine.developers.replace(developers.clone());
+        }
         if let Some(w) = &mut self.settings_window {
             w.set_developers(developers.engines(), developers.found());
         }
         self.developers = developers;
         self.fit_grid_render();
         self.refresh_any_developed();
+        // #395 : le filtre « Développées » ne reste pas allumé sans logiciel à montrer.
+        if self.drop_inactive_developed() {
+            self.notice = Some((t!("filter-developed-off"), false));
+            self.apply_filter();
+        }
         // Les développements des seuls logiciels actifs (un logiciel coché ou décoché).
         self.refilter(Reveal::Minimal);
+    }
+
+    /// Éteint le filtre « Développées » quand plus aucun de ses logiciels n'est actif
+    /// (#395 : il restait allumé jusqu'à ce qu'on l'éteigne à la main) : aucun logiciel
+    /// actif, ou aucun de ceux qui étaient cochés. Les logiciels inactifs disparaissent
+    /// de sa liste (sans être oubliés : réactivés, ils reviennent cochés). Vrai s'il
+    /// vient d'être éteint.
+    fn drop_inactive_developed(&mut self) -> bool {
+        if !self.developed_on {
+            return false;
+        }
+        let engines = self.developers.engines();
+        let lost = engines.is_empty()
+            || self.developed_checked.as_ref().is_some_and(|checked| {
+                !checked.is_empty() && !checked.iter().any(|e| engines.contains(e))
+            });
+        if lost {
+            self.developed_on = false;
+        }
+        lost
     }
 
     /// Vrai s'il y a au moins un développement dans le dossier (#305) : une image de
@@ -2298,8 +2331,9 @@ impl TriApp {
         ui.add_space(self.gui.dialogs.spacing);
         for (action, on, _) in self.content_toggles() {
             self.control(ui, Control::Filter(action), Host::Panel);
-            // Allumé : de l'air sous ses réglages.
-            if on {
+            // Allumé : de l'air sous ses réglages (#395 : pas de ligne vide quand il n'en a
+            // pas).
+            if on && self.filter_has_settings(action) {
                 ui.add_space(self.gui.dialogs.spacing);
             }
         }
@@ -2337,20 +2371,20 @@ impl TriApp {
         }
     }
 
-    /// Logiciels du filtre « développées », en cases à cocher à plat : les installés (et
-    /// un logiciel coché puis désinstallé) ; aucun coché : les images sans développement.
+    /// Vrai si le filtre `action`, allumé, montre des réglages dessous : toujours, sauf
+    /// « Développées » avec un seul logiciel actif (sa case le vise, #301).
+    fn filter_has_settings(&self, action: Action) -> bool {
+        action != Action::FilterDeveloped || self.developers.engines().len() > 1
+    }
+
+    /// Logiciels du filtre « développées », en cases à cocher à plat : les actifs
+    /// seulement (#395 : un logiciel désactivé disparaît de la liste) ; aucun coché : les
+    /// images sans développement.
     fn developed_checkboxes(&mut self, ui: &mut Ui) {
-        let engines = self.developers.engines();
+        let listed = self.developers.engines();
         let rule = self.developed_rule().unwrap_or_default();
         let mut checked = rule.engines.clone();
-        let mut listed = engines.clone();
-        listed.extend(checked.iter().filter(|e| !engines.contains(e)));
-        // Un seul logiciel : la case « Développées » suffit (#301 : deux cases pour la même
-        // chose).
-        if listed.len() <= 1 {
-            return;
-        }
-        for engine in listed {
+        for &engine in &listed {
             let mut on = checked.contains(&engine);
             // Aucun développement de ce logiciel dans le dossier : grisé (coché ou non, il
             // ne change rien).
@@ -2371,7 +2405,13 @@ impl TriApp {
             }
         }
         if checked != rule.engines {
+            // Les logiciels inactifs cochés restent retenus (réactivés, ils reviennent
+            // cochés).
+            if let Some(before) = &self.developed_checked {
+                checked.extend(before.iter().filter(|e| !listed.contains(e)));
+            }
             checked.sort();
+            checked.dedup();
             self.developed_checked = Some(checked);
             self.apply_filter();
         }
@@ -5406,6 +5446,11 @@ impl TriApp {
         self.blur_rule = view.blur;
         self.well_exposed = view.well_exposed;
         self.developed_on = view.developed;
+        // Retenu allumé, mais ses logiciels ne sont plus actifs (#395). Pas avant le
+        // démarrage du moteur : les logiciels ne sont pas encore cherchés.
+        if self.engine.is_some() {
+            self.drop_inactive_developed();
+        }
         self.filter_inverted = view.inverted;
         if let Some(order) = view.order {
             self.order = order;
@@ -6065,6 +6110,12 @@ impl TriApp {
             developers: shared,
         });
         self.fit_grid_render();
+        // Dossier rouvert avec le filtre « Développées » retenu allumé, ses logiciels
+        // désactivés depuis (#395).
+        if self.drop_inactive_developed() {
+            self.notice = Some((t!("filter-developed-off"), false));
+            self.apply_filter();
+        }
     }
 
     /// Rendu des vignettes ramené à un choix possible : un logiciel retenu d'une session
@@ -11427,13 +11478,14 @@ impl TriApp {
         let engines = self.developers.engines();
         self.developed_on.then(|| tri::develop::DevelopedRule {
             engines: match &self.developed_checked {
-                // Un seul logiciel, sans case à lui (#301) : la case « Développées » le
-                // vise, quoi qu'un réglage d'avant ait retenu.
-                Some(checked)
-                    if engines.len() > 1 || checked.iter().any(|e| !engines.contains(e)) =>
-                {
-                    checked.clone()
-                }
+                // Les logiciels cochés encore actifs (#395 : un logiciel désactivé sort
+                // du filtre). Un seul logiciel, sans case à lui (#301) : la case
+                // « Développées » le vise, quoi qu'un réglage d'avant ait retenu.
+                Some(checked) if engines.len() > 1 => checked
+                    .iter()
+                    .copied()
+                    .filter(|e| engines.contains(e))
+                    .collect(),
                 _ => engines,
             },
         })
@@ -19590,6 +19642,136 @@ mod tests {
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().developed_on);
         assert_eq!(h.state().files.len(), all);
+    }
+
+    #[test]
+    fn disabling_the_development_software_takes_it_out_of_the_developed_filter() {
+        // #395 : le filtre « Développées » restait allumé après avoir désactivé tous les
+        // logiciels. Un logiciel désactivé sort de la liste (sa case disparaît) ; plus
+        // aucun de ses logiciels actif : le filtre s'éteint.
+        use tri::develop::{Developers, Engine};
+        let fake = |engines: &[Engine]| {
+            engines.iter().fold(Developers::none(), |d, &e| {
+                d.with(Arc::new(FakeDeveloper(e)))
+            })
+        };
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().metadata_panel = true;
+        let all = [Engine::Darktable, Engine::RapidRaw, Engine::RawTherapee];
+        h.state_mut().developers = fake(&all);
+        h.state_mut().any_developed = true;
+        h.state_mut().developed_on = true;
+        h.state_mut().developed_checked = Some(vec![Engine::Darktable, Engine::RapidRaw]);
+        h.run_steps(3);
+        assert!(h.query_by_label("RapidRAW").is_some());
+        // RapidRAW désactivé : hors du filtre et de la liste, le filtre reste allumé.
+        h.state_mut().developers = fake(&[Engine::Darktable, Engine::RawTherapee]);
+        assert!(!h.state_mut().drop_inactive_developed());
+        assert!(h.state().developed_on);
+        assert_eq!(
+            h.state().developed_rule().unwrap().engines,
+            [Engine::Darktable]
+        );
+        h.run_steps(3);
+        assert!(h.query_by_label("RapidRAW").is_none());
+        assert!(h.query_by_label("RawTherapee").is_some());
+        // Réactivé : il revient coché.
+        h.state_mut().developers = fake(&all);
+        assert_eq!(
+            h.state().developed_rule().unwrap().engines,
+            [Engine::Darktable, Engine::RapidRaw]
+        );
+        // Aucun des logiciels cochés n'est plus actif : éteint.
+        h.state_mut().developers = fake(&[Engine::RawTherapee, Engine::Art]);
+        assert!(h.state_mut().drop_inactive_developed());
+        assert!(!h.state().developed_on);
+        // Plus aucun logiciel : éteint, et l'interrupteur disparaît.
+        h.state_mut().developed_on = true;
+        h.state_mut().developed_checked = None;
+        h.state_mut().developers = Developers::none();
+        assert!(h.state_mut().drop_inactive_developed());
+        assert!(!h.state().developed_on);
+        assert!(
+            !h.state()
+                .content_toggles()
+                .iter()
+                .any(|(a, _, _)| *a == Action::FilterDeveloped)
+        );
+        // Éteint, il n'y a rien à faire.
+        assert!(!h.state_mut().drop_inactive_developed());
+    }
+
+    #[test]
+    fn disabling_one_of_two_software_keeps_the_developed_filter_on() {
+        // Retour du 09/11/2026 sur #395 : darktable et RapidRAW actifs, filtre allumé, les
+        // deux cochés ; RapidRAW désactivé dans les réglages : la case « Développées » se
+        // décochait, et une ligne vide restait dessous.
+        use tri::develop::Engine;
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        h.state_mut().metadata_panel = true;
+        let darktable = dir.path().join("darktable-cli");
+        let rapidraw = dir.path().join("rapidraw");
+        std::fs::write(&darktable, "").unwrap();
+        std::fs::write(&rapidraw, "").unwrap();
+        let develop = |rapidraw: &str| {
+            let mut settings = AppSettings::default();
+            settings.develop.darktable = darktable.to_string_lossy().into_owned();
+            settings.develop.rapidraw = rapidraw.to_string();
+            settings.develop.rawtherapee = String::new();
+            settings.develop.art = String::new();
+            settings
+        };
+        let ctx = h.ctx.clone();
+        h.state_mut()
+            .apply_settings(&ctx, develop(&rapidraw.to_string_lossy()));
+        assert_eq!(
+            h.state().developers.engines(),
+            [Engine::Darktable, Engine::RapidRaw]
+        );
+        h.state_mut().any_developed = true;
+        h.run_steps(3);
+        // Le filtre allumé par sa case, les deux logiciels cochés par les leurs.
+        h.get_by_label("Développées").click();
+        h.run_steps(3);
+        assert!(h.state().developed_on);
+        h.state_mut().developed_checked = Some(vec![Engine::Darktable, Engine::RapidRaw]);
+        h.run_steps(3);
+        // Haut de ce qui suit la case « Développées » dans le panneau de droite.
+        let next = |h: &Harness<'_, TriApp>| {
+            use egui_kittest::kittest::NodeT;
+            let row = h
+                .get_all_by_role(egui::accesskit::Role::CheckBox)
+                .find(|n| {
+                    n.accesskit_node()
+                        .label()
+                        .is_some_and(|l| l.starts_with("Filtre : développées"))
+                })
+                .unwrap()
+                .rect();
+            let below = h.root().children_recursive().filter_map(|n| {
+                let r = n.accesskit_node().bounding_box()?;
+                (r.x0 as f32 >= row.min.x && r.y0 as f32 > row.max.y).then_some(r.y0 as f32)
+            });
+            below.fold(f32::INFINITY, f32::min)
+        };
+        assert!(h.query_by_label("RapidRAW").is_some());
+        h.state_mut().apply_settings(&ctx, develop(""));
+        h.run_steps(5);
+        assert!(h.state().developed_on, "le filtre reste allumé");
+        assert_eq!(h.state().notice, None);
+        assert_eq!(
+            h.state().developed_rule().unwrap().engines,
+            [Engine::Darktable]
+        );
+        assert!(h.query_by_label("RapidRAW").is_none());
+        // Un seul logiciel, pas de réglages sous la case : rien ne la suit, la suite du
+        // panneau est à la même place que filtre éteint.
+        let on = next(&h);
+        h.state_mut().developed_on = false;
+        h.run_steps(3);
+        assert_eq!(on, next(&h), "pas de ligne vide sous « Développées »");
     }
 
     #[test]

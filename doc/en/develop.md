@@ -230,7 +230,12 @@ when none is checked. The checked boxes are kept from one session to the next
 (`gui-state.toml`, `developed_engines`); at first launch, all the installed software.
 With a single software installed (#301, 2026-11-05): no box of its own, the "Developed"
 box targets it. A software without any development in the folder is greyed out in the
-list (2026-11-05, `TriApp::developed_in`).
+list (2026-11-05, `TriApp::developed_in`). A software disabled in the settings (or no
+longer found) **leaves the list** and the filter (#395, 2026-11-09), without being
+forgotten: enabled again, it comes back checked. When none of the filter's software is
+active any more (none at all, or none of the checked ones), the filter **turns itself
+off** and says so in the status bar (`TriApp::drop_inactive_developed`, also on reopening
+a folder whose filter was kept on).
 Engine: `develop::DevelopedRule` (checked software) and `DevelopedFilter` (`Filter`
 trait), which read the sidecars (`Engine::sidecar`: non-empty darktable history,
 RapidRAW's `.rrdata`); a flat image has no development. A content filter: cleared by
