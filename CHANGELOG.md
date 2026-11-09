@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Ctrl+Shift+click in the EXIF rows** (#401): Ctrl+Shift+click (Cmd+Shift+click) adds
+  the range from the last clicked row to the selection, keeping what was already
+  selected; Shift+click alone still replaces it. A Ctrl+click now also counts as the
+  last clicked row, as in the Finder and the Explorer (#390).
 - **Search in the `?` help** (#402): with the `?` help open, typing filters the list as
   you type, with the same fuzzy search as F1 and the palette (words of both languages,
   typos forgiven); the letters found are highlighted. Esc clears the search, a second
