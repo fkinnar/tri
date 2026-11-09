@@ -644,9 +644,10 @@ system one ("cold" measurements, experiments).
   common `Dialog` frame); "grab" elsewhere, to move the dialog. **In the bars and
   panels too** (2026-11-09, #386: a hand on the bar icons, an arrow on the panels'
   checkboxes, inconsistent): the hand on everything clickable (buttons, checkboxes and
-  their label, lists, sliders, folder and EXIF rows; `hand_over_clickable`, and
+  their label, lists, sliders, folder rows; `hand_over_clickable`, and
   `interact_cursor` for egui's buttons everywhere, menus included); not on the images
-  (grid, full screen).
+  (grid, full screen), nor on the EXIF rows (a click only points at the row there; the
+  hand the day it does something).
 - **File actions** (2026-10-17, engine: `tri::files`, see `files.md`): rename (`F2`),
   move to trash (`Delete`, `Backspace` — the Mac "delete" key — or `x`, as in vim; `dd`
   removed on 2026-10-18), show in the Finder / file manager (`Shift+R`), open in the

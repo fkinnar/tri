@@ -11,7 +11,7 @@
   les icônes des barres. Le raccourci de copie des métadonnées (`y`, `Ctrl+C` /
   `Cmd+C`) copie la ligne EXIF sous la souris, sans clic. Le pointeur est une main sur
   tout ce qui se clique dans les barres et les panneaux (boutons, cases et leur libellé,
-  listes, lignes), comme dans les boîtes, au lieu d'un mélange de main, de flèche et de
+  listes, lignes des dossiers), comme dans les boîtes, au lieu d'un mélange de main, de flèche et de
   curseur de texte.
 - **Sortie d'une comparaison ouverte du plein écran** (#379, corrige #376) : elle
   ramenait à la grille ; elle ramène maintenant au plein écran, sur l'image active

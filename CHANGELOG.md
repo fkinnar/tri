@@ -10,7 +10,7 @@
   separately. Hovered controls lose egui's white frame everywhere, like the bar icons.
   The metadata copy shortcut (`y`, `Ctrl+C` / `Cmd+C`) copies the EXIF row under the
   mouse without a click. The pointer is a hand over everything clickable in the bars
-  and panels (buttons, checkboxes and their label, lists, rows), like in dialogs, instead
+  and panels (buttons, checkboxes and their label, lists, folder rows), like in dialogs, instead
   of a mix of hand, arrow and text cursor.
 - **Leaving a comparison opened from full screen** (#379, fixes #376): it went back to
   the grid; it now goes back to full screen, on the active image ("Back to full screen"

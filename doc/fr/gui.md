@@ -689,9 +689,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   le cadre commun `Dialog`) ; « saisir » ailleurs, pour déplacer la boîte. **Dans les
   barres et les panneaux aussi** (09/11/2026, #386 : la main sur les icônes des barres,
   la flèche sur les cases des panneaux, pas cohérent) : la main sur tout ce qui se clique
-  (boutons, cases et leur libellé, listes, curseurs, lignes des dossiers et des EXIF ;
+  (boutons, cases et leur libellé, listes, curseurs, lignes des dossiers ;
   `hand_over_clickable`, et `interact_cursor` pour les boutons d'egui partout, menus
-  compris) ; pas sur les images (grille, plein écran).
+  compris) ; pas sur les images (grille, plein écran), ni sur les lignes des EXIF (un
+  clic n'y fait que pointer la ligne ; la main le jour où il fera quelque chose).
 - **Actions sur les fichiers** (17/10/2026, moteur : `tri::files`, voir `files.md`) :
   renommer (`F2`), mettre à la corbeille (`Suppr`, `Backspace` — la touche « effacer »
   des Mac — ou `x`, comme dans vim ; `dd` retiré le 18/10/2026), afficher dans le Finder / le gestionnaire de

@@ -16679,7 +16679,12 @@ impl eframe::App for TriApp {
                     ScrollArea::vertical()
                         .auto_shrink(false)
                         .show(ui, |ui| self.side_panel(ui));
-                    hand_over_clickable(ui);
+                    // Lignes des EXIF : la flèche (retour du 09/11/2026) ; un clic n'y fait
+                    // que pointer la ligne. La main le jour où un clic y fera quelque chose
+                    // (créer un filtre…).
+                    if self.meta_hover.is_none() {
+                        hand_over_clickable(ui);
+                    }
                 });
             metadata_rect = Some(panel.response.rect);
         }
@@ -28152,6 +28157,16 @@ mod tests {
             egui::CursorIcon::Default,
             "vignette"
         );
+        // Lignes des EXIF : la flèche, un clic n'y fait que pointer.
+        run_until(&mut h, |app| app.meta_rows.len() > 2);
+        let label = h.state().meta_rows[1].label.clone();
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while h.state().meta_hover != Some(1) {
+            assert!(Instant::now() < deadline, "survol jamais vu");
+            let at = h.get_by_label(&label).rect().center();
+            hover(&mut h, at);
+        }
+        assert_eq!(cursor(&h), egui::CursorIcon::Default, "ligne des EXIF");
     }
 
     fn cursor(h: &Harness<'_, TriApp>) -> egui::CursorIcon {
