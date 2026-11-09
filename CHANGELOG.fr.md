@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Plusieurs lignes EXIF** (#386, corrige #384) : Maj+clic, Ctrl+clic (Cmd+clic sur
+  macOS), Ctrl+A et une icône à côté du titre « EXIF » pour tout sélectionner ; la
+  sélection est une bande grise sur la ligne au lieu de cadres bleus. Le clic droit sur
+  une ligne copie sa valeur, la sélection ou tout.
 - **Survol dans les panneaux latéraux** (#386, corrige #383 et #385) : la ligne sous la
   souris (dossiers, EXIF) prend la même bande gris clair que le curseur du clavier, sur
   toute la largeur, et devient la ligne pointée ; le dossier ouvert garde son fond

@@ -587,6 +587,26 @@ pub fn icon_button(ui: &mut Ui, size: f32, label: &str, tip: &str) -> (Rect, Res
     (rect, response)
 }
 
+/// Icône « tout sélectionner » dans `rect` : un cadre et trois lignes pleines (les lignes
+/// des métadonnées, toutes prises ; #384).
+pub fn select_all(painter: &Painter, rect: Rect, color: Color32) {
+    let (w, h) = (rect.width(), rect.height());
+    let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
+    painter.rect_stroke(
+        rect,
+        w * 0.12,
+        Stroke::new((w * 0.08).max(1.2), color),
+        egui::StrokeKind::Inside,
+    );
+    for y in [0.3, 0.5, 0.7] {
+        painter.rect_filled(
+            Rect::from_min_max(p(0.22, y - 0.05), p(0.78, y + 0.05)),
+            0.5,
+            color,
+        );
+    }
+}
+
 /// Flèche épaisse vers la gauche dans `rect` : prendre toute la ligne (boîte des conflits
 /// de notes, issue n° 368).
 pub fn take_row_arrow(painter: &Painter, rect: Rect, color: Color32) {

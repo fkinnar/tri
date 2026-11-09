@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Several EXIF rows** (#386, fixes #384): Shift+click, Ctrl+click (Cmd+click on macOS),
+  Ctrl+A and an icon next to the "EXIF" title to select everything; the selection is a
+  grey band across the row instead of blue boxes. Right-click on a row copies its value,
+  the selection or everything.
 - **Hovering in the side panels** (#386, fixes #383 and #385): the row under the mouse
   (folders, EXIF) gets the same light grey band as the keyboard cursor, across the whole
   width, and becomes the pointed row; the open folder keeps its accent background

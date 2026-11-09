@@ -654,7 +654,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   l'histogramme en grand ; Maj + ↑ ↓ / Maj + `j` `k`
   (ou Maj+clic) étendent la sélection, `y` la copie (une ligne : la valeur ; plusieurs :
   « libellé : valeur » par ligne ; `Ctrl+C` / `Cmd+C` aussi), Maj+`y` copie tout le
-  panneau ; un clic sur une ligne la pointe et donne le clavier au panneau. **Sans
+  panneau ; un clic sur une ligne la pointe et donne le clavier au panneau.
+  **Plusieurs lignes** (09/11/2026, #384) : Maj+clic étend depuis la dernière ligne
+  cliquée, Ctrl+clic (Cmd+clic sur macOS) ajoute ou retire une ligne, Ctrl+A et l'icône
+  au bout du titre « EXIF » sélectionnent tout ; la sélection est la bande grise sur
+  toute la largeur (plus de fond bleu par ligne). **Clic droit** sur une ligne : copier
+  la valeur, la sélection (si la ligne en fait partie), tout. **Sans
   clic** (#383) : le raccourci de copie du panneau (`y`, `Ctrl+C` / `Cmd+C`, Maj+`y`)
   copie la ligne sous la souris même quand le panneau n'a pas le clavier
   (`Keymap::panel_action`) ; ailleurs, la touche garde son effet (`Ctrl+C` : copier

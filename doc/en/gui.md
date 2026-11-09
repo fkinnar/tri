@@ -610,7 +610,12 @@ system one ("cold" measurements, experiments).
   large; Shift + ↑ ↓ / Shift + `j` `k`
   (or Shift+click) extend the selection, `y` copies it (one row: the value; several:
   "label: value" per row; `Ctrl+C` / `Cmd+C` too), Shift+`y` copies the whole panel; a
-  click on a row points at it and gives the keyboard to the panel. **Without a click**
+  click on a row points at it and gives the keyboard to the panel. **Several rows**
+  (2026-11-09, #384): Shift+click extends from the last clicked row, Ctrl+click
+  (Cmd+click on macOS) adds or removes a row, Ctrl+A and the icon at the end of the
+  "EXIF" title select everything; the selection is the grey band across the whole width
+  (no more blue background per row). **Right-click** on a row: copy the value, the
+  selection (if the row is part of it), everything. **Without a click**
   (#383): the panel's copy shortcut (`y`, `Ctrl+C` / `Cmd+C`, Shift+`y`) copies the row
   under the mouse even when the panel does not have the keyboard
   (`Keymap::panel_action`); elsewhere, the key keeps its effect (`Ctrl+C`: copy the
