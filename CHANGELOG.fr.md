@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Ctrl+Maj+clic dans les lignes EXIF** (#401) : Ctrl+Maj+clic (Cmd+Maj+clic) ajoute la
+  plage depuis la dernière ligne cliquée à la sélection, en gardant ce qui était
+  sélectionné ; Maj+clic seul la remplace toujours. Un Ctrl+clic compte maintenant aussi
+  comme dernière ligne cliquée, comme dans le Finder et l'Explorateur (#390).
 - **Filtre « Développées » après avoir désactivé les logiciels** (#397) : filtre allumé,
   désactiver tous les logiciels de développement dans les réglages le laissait visible et
   actif jusqu'à ce qu'on l'éteigne à la main. Un logiciel désactivé sort maintenant de la

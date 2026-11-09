@@ -2836,7 +2836,8 @@ impl TriApp {
                 self.meta_hover = hover;
                 // Clic : pointe la ligne (et donne le clavier au panneau) ; Maj+clic : étend
                 // depuis la ligne pointée ; Ctrl+clic (Cmd sur macOS) : ajoute ou retire la
-                // ligne (#384).
+                // ligne (#384) ; Ctrl+Maj+clic : ajoute la plage depuis la dernière ligne
+                // cliquée, en gardant le reste (#390, comme le Finder et l'Explorateur).
                 if let Some((i, modifiers)) = clicked {
                     // Changé après le dessin des lignes : redessiner, sinon l'écran garde
                     // un clic de retard (retour du 09/11/2026 : Ctrl+clic sur « Nom » ne
@@ -2849,7 +2850,19 @@ impl TriApp {
                     let start = self.meta_clicked.unwrap_or(self.meta_cursor);
                     // Ctrl ou Cmd, sur tous les systèmes (retour du 09/11/2026 : Ctrl+clic
                     // sur macOS ne faisait qu'un clic simple).
-                    if modifiers.command || modifiers.ctrl {
+                    if (modifiers.command || modifiers.ctrl) && modifiers.shift {
+                        let mut extra = if self.meta_selecting() {
+                            self.meta_selection()
+                        } else {
+                            Default::default()
+                        };
+                        extra.extend(start.min(i)..=start.max(i));
+                        self.meta_anchor = None;
+                        self.meta_extra = extra;
+                        // La plage suivante part du même endroit.
+                        self.meta_clicked = Some(start);
+                        self.meta_cursor_shown = false;
+                    } else if modifiers.command || modifiers.ctrl {
                         // La sélection en cours devient une liste, puis la ligne bascule ;
                         // sans sélection, la ligne cliquée avant (s'il y en a une) et
                         // celle-ci, sinon celle-ci seule (retour du 09/11/2026 : dès la
@@ -2864,6 +2877,8 @@ impl TriApp {
                         }
                         self.meta_anchor = None;
                         self.meta_extra = extra;
+                        // Départ d'un Ctrl+Maj+clic suivant (#390).
+                        self.meta_clicked = Some(i);
                         self.meta_cursor_shown = false;
                     } else if modifiers.shift {
                         self.meta_extra.clear();
@@ -26381,8 +26396,9 @@ mod tests {
         click(&mut h, 2, Modifiers::CTRL, &|app| {
             app.meta_selection().into_iter().collect::<Vec<_>>() == [0]
         });
-        // Maj+clic : de la ligne cliquée à celle-ci.
-        click(&mut h, 2, Modifiers::SHIFT, &|app| {
+        // Maj+clic : de la dernière ligne cliquée (la 2, Ctrl+clic compris, #390) à
+        // celle-ci, à la place de la sélection.
+        click(&mut h, 0, Modifiers::SHIFT, &|app| {
             app.meta_selection().into_iter().collect::<Vec<_>>() == [0, 1, 2]
         });
         assert_eq!(picked(&h), [0, 1, 2]);
@@ -26413,6 +26429,53 @@ mod tests {
         h.run_steps(3);
         let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
         assert!(notice.contains(&label), "{notice}");
+    }
+
+    #[test]
+    fn ctrl_shift_click_adds_a_range_of_metadata_rows() {
+        // #390 : Ctrl+Maj+clic (Cmd+Maj+clic) ajoute la plage depuis la dernière ligne
+        // cliquée, en gardant ce qui était sélectionné ; Maj+clic seul la remplace.
+        let (mut h, _dir) = harness();
+        h.state_mut().metadata_panel = true;
+        run_until(&mut h, |app| app.meta_rows.len() >= 4);
+        let picked = |app: &TriApp| -> Vec<usize> { app.meta_selection().into_iter().collect() };
+        // Repris tant que l'état voulu n'est pas atteint (clics parfois perdus en CI).
+        let click = |h: &mut Harness<'_, TriApp>, i: usize, m: Modifiers, want: &[usize]| {
+            let deadline = Instant::now() + Duration::from_secs(60);
+            while picked(h.state()) != want {
+                assert!(
+                    Instant::now() < deadline,
+                    "attendu {want:?}, sélection {:?}",
+                    picked(h.state())
+                );
+                let label = h.state().meta_rows[i].label.clone();
+                let at = h.get_by_label(&label).rect().center();
+                h.event(UiEvent::ModifiersChanged(m));
+                h.event(UiEvent::PointerMoved(at));
+                for pressed in [true, false] {
+                    h.event(UiEvent::PointerButton {
+                        pos: at,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: m,
+                    });
+                }
+                h.run_steps(2);
+                h.event(UiEvent::ModifiersChanged(Modifiers::NONE));
+                h.run_steps(1);
+            }
+        };
+        let ctrl_shift = Modifiers::COMMAND | Modifiers::SHIFT;
+        // Un clic, un Ctrl+clic, puis Ctrl+Maj+clic : la plage depuis le Ctrl+clic (toute
+        // la plage, pas seulement la ligne cliquée), la ligne d'avant gardée.
+        click(&mut h, 3, Modifiers::NONE, &[3]);
+        click(&mut h, 0, Modifiers::COMMAND, &[0, 3]);
+        click(&mut h, 2, ctrl_shift, &[0, 1, 2, 3]);
+        // Maj+clic seul : la plage depuis le même départ remplace tout.
+        click(&mut h, 1, Modifiers::SHIFT, &[0, 1]);
+        // Avec Ctrl plutôt que Cmd aussi (macOS : les deux), depuis un simple clic.
+        click(&mut h, 0, Modifiers::NONE, &[0]);
+        click(&mut h, 2, Modifiers::CTRL | Modifiers::SHIFT, &[0, 1, 2]);
     }
 
     #[test]
