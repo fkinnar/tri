@@ -6,7 +6,7 @@
 > V1", except bugs. Feedback goes through the repository's *issues*;
 > each topic below has its own, linked next to its name.
 
-## Already there (alpha 8)
+## Already there (beta 1)
 
 Grid and full screen (camera render, RAW render, 1:1, continuous zoom, loupe), XMP
 ratings compatible with darktable / Lightroom / digiKam, filters (ratings, sharpness,
