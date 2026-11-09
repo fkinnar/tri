@@ -609,7 +609,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   0 pour aucun), la barre d'état le dit ; la ligne pointée au clavier
   (dossiers, métadonnées, résultats de recherche) est une **bande grise discrète** sur
   toute la largeur (`[gui.dialogs] cursor_tint`, `cursor_row` ; cadre d'accent avant le
-  25/10/2026, trop voyant et coupé à gauche quand le panneau défilait) ;
+  25/10/2026, trop voyant et coupé à gauche quand le panneau défilait). **Le survol
+  pointe** (09/11/2026, #383, #385) : la souris qui bouge sur une ligne des dossiers ou
+  des EXIF y met la bande (une seule bande, le clavier repart de là) ; panneau sans le
+  clavier, la bande suit la souris. Le dossier ouvert garde son fond d'accent, à part ;
+  plus de fond ni de cadre d'egui autour du nom survolé. Partout, le survol d'un
+  contrôle n'a plus de cadre blanc, seulement son fond gris clair, comme les icônes des
+  barres (`Theme::apply`) ;
   un clic dans un panneau lui donne le clavier, un clic dans la zone des images le leur
   rend (`TriApp::click_focus`, 22/10/2026 ; les boîtes ouvertes par-dessus ne comptent
   pas). **Ses touches passent d'abord, les autres
@@ -648,7 +654,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   l'histogramme en grand ; Maj + ↑ ↓ / Maj + `j` `k`
   (ou Maj+clic) étendent la sélection, `y` la copie (une ligne : la valeur ; plusieurs :
   « libellé : valeur » par ligne ; `Ctrl+C` / `Cmd+C` aussi), Maj+`y` copie tout le
-  panneau ; un clic sur une ligne la pointe et donne le clavier au panneau. Grand
+  panneau ; un clic sur une ligne la pointe et donne le clavier au panneau. **Sans
+  clic** (#383) : le raccourci de copie du panneau (`y`, `Ctrl+C` / `Cmd+C`, Maj+`y`)
+  copie la ligne sous la souris même quand le panneau n'a pas le clavier
+  (`Keymap::panel_action`) ; ailleurs, la touche garde son effet (`Ctrl+C` : copier
+  l'image vers…). Grand
   histogramme ouvert : `r`, `g`, `b` un canal, `a` tous (il prend les touches le temps
   d'être ouvert : `b` n'y change pas la source). Un seul keymap : chaque action dit son panneau (`Action::scope`) ; à la
   recherche d'une touche, celle du panneau actif l'emporte sur l'action générale, et les

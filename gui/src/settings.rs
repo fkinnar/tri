@@ -426,6 +426,9 @@ impl Theme {
         for theme in [egui::Theme::Dark, egui::Theme::Light] {
             ctx.style_mut_of(theme, |style| {
                 style.visuals.error_fg_color = colors.error.into();
+                // Survol sans cadre (issue n° 385) : le fond gris clair seul, comme les
+                // icônes des barres ; le cadre blanc d'egui tranchait dans les panneaux.
+                style.visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
             });
         }
         for (theme, accent) in [

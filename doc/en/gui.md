@@ -573,7 +573,7 @@ system one ("cold" measurements, experiments).
   the left / right panel, `o` to the next one (leader then `b`: report a problem,
   2026-10-22; the help writes it `<leader> h`, #175, since it can be changed) (folders,
   images, metadata; a hidden panel
-  is shown, folders only exist in the grid). The active panel has a slightly lighter background (darker in the light theme, `[gui.dialogs] focus_panel_tint`; an accent outline until 2026-10-25, issue #78: with the accent cursor, the double frame was heavy; the metadata cursor no longer frames the histogram, issue #77) and a **line at the top** (2026-10-26, #77: the background alone did not show enough; `focus_line` = `"accent"` or `"#rrggbb"`, `focus_line_width`, 0 for none); the line under the keyboard cursor (folders, metadata, search results) is a **discreet grey band** across the whole width (`[gui.dialogs] cursor_tint`, `cursor_row`; an accent frame before 2026-10-25, too loud and cut on the left when the panel scrolled), the
+  is shown, folders only exist in the grid). The active panel has a slightly lighter background (darker in the light theme, `[gui.dialogs] focus_panel_tint`; an accent outline until 2026-10-25, issue #78: with the accent cursor, the double frame was heavy; the metadata cursor no longer frames the histogram, issue #77) and a **line at the top** (2026-10-26, #77: the background alone did not show enough; `focus_line` = `"accent"` or `"#rrggbb"`, `focus_line_width`, 0 for none); the line under the keyboard cursor (folders, metadata, search results) is a **discreet grey band** across the whole width (`[gui.dialogs] cursor_tint`, `cursor_row`; an accent frame before 2026-10-25, too loud and cut on the left when the panel scrolled). **Hovering points** (2026-11-09, #383, #385): the mouse moving over a row of the folders or the EXIF puts the band there (a single band, the keyboard carries on from it); in a panel without the keyboard, the band follows the mouse. The open folder keeps its accent background, separately; no more egui background or frame around the hovered name. Everywhere, a hovered control no longer has a white frame, only its light grey background, like the bar icons (`Theme::apply`); the
   status bar says so; a click in a panel gives it the keyboard, a click in the images
   area gives it back to them (`TriApp::click_focus`, 2026-10-22; dialogs opened on top
   do not count). **Its keys go first, the others keep their effect** (user's
@@ -610,7 +610,11 @@ system one ("cold" measurements, experiments).
   large; Shift + ↑ ↓ / Shift + `j` `k`
   (or Shift+click) extend the selection, `y` copies it (one row: the value; several:
   "label: value" per row; `Ctrl+C` / `Cmd+C` too), Shift+`y` copies the whole panel; a
-  click on a row points at it and gives the keyboard to the panel. Large histogram open:
+  click on a row points at it and gives the keyboard to the panel. **Without a click**
+  (#383): the panel's copy shortcut (`y`, `Ctrl+C` / `Cmd+C`, Shift+`y`) copies the row
+  under the mouse even when the panel does not have the keyboard
+  (`Keymap::panel_action`); elsewhere, the key keeps its effect (`Ctrl+C`: copy the
+  image to…). Large histogram open:
   `r`, `g`, `b` one channel, `a` all (it takes the keys while open: `b` does not change
   the source there). A single keymap: each action states its panel (`Action::scope`);
   when looking up a key, the active panel's one wins over the general action, and
