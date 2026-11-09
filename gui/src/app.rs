@@ -2696,8 +2696,10 @@ impl TriApp {
                             let hovered = ui.rect_contains_pointer(band);
                             if hovered {
                                 hover = Some(i);
-                                if moved && !self.meta_selecting() {
+                                if moved && !self.meta_selecting() && self.meta_cursor != i {
                                     self.meta_cursor = i;
+                                    // Les lignes du dessus sont déjà peintes.
+                                    ui.ctx().request_repaint();
                                 }
                             }
                             // Sélection (y la copie) ; la ligne pointée en bande : au
@@ -2756,6 +2758,10 @@ impl TriApp {
                 // depuis la ligne pointée ; Ctrl+clic (Cmd sur macOS) : ajoute ou retire la
                 // ligne (#384).
                 if let Some((i, modifiers)) = clicked {
+                    // Changé après le dessin des lignes : redessiner, sinon l'écran garde
+                    // un clic de retard (retour du 09/11/2026 : Ctrl+clic sur « Nom » ne
+                    // se voyait qu'au clic suivant).
+                    ui.ctx().request_repaint();
                     self.focus = crate::actions::Scope::Metadata;
                     self.side_cursor = None;
                     // Départ : la dernière ligne cliquée (la souris qui passe déplace la
@@ -3500,8 +3506,13 @@ impl TriApp {
             self.tree.toggle_row(i);
         }
         // La souris pointe la ligne survolée (le clavier repart de là).
-        if let Some(i) = hover_point.filter(|_| toggle.is_none()) {
+        if let Some(i) = hover_point.filter(|_| toggle.is_none())
+            && self.tree.cursor() != Some(i)
+        {
             self.tree.set_cursor(i);
+            // Changée après le dessin : redessiner, sinon la bande garde une ligne de
+            // retard quand la souris s'arrête.
+            ui.ctx().request_repaint();
         }
         // Clic sur un dossier : il devient la ligne pointée et le panneau prend le clavier,
         // comme un clic dans les métadonnées (retour du 22/10/2026 : pas cohérent).
@@ -15339,6 +15350,7 @@ impl TriApp {
         marks::select_all(ui.painter(), rect.shrink(side * 0.2), color);
         if response.clicked() {
             self.select_all_metadata();
+            ui.ctx().request_repaint();
         }
     }
 
