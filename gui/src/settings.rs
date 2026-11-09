@@ -429,6 +429,11 @@ impl Theme {
                 // Survol sans cadre (issue n° 385) : le fond gris clair seul, comme les
                 // icônes des barres ; le cadre blanc d'egui tranchait dans les panneaux.
                 style.visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
+                // La main sur les boutons d'egui partout, menus du clic droit et listes
+                // ouvertes compris (#386) ; les autres éléments qui se cliquent :
+                // `hand_over_clickable` dans les barres et les panneaux, `Dialog` dans les
+                // boîtes.
+                style.visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);
             });
         }
         for (theme, accent) in [

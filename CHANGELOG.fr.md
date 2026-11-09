@@ -9,8 +9,10 @@
   toute la largeur, et devient la ligne pointée ; le dossier ouvert garde son fond
   d'accent, à part. Plus de cadre blanc d'egui au survol des contrôles, partout, comme
   les icônes des barres. Le raccourci de copie des métadonnées (`y`, `Ctrl+C` /
-  `Cmd+C`) copie la ligne EXIF sous la souris, sans clic. Le pointeur reste une flèche
-  sur les textes des panneaux (noms des filtres, lignes EXIF), plus le curseur de texte.
+  `Cmd+C`) copie la ligne EXIF sous la souris, sans clic. Le pointeur est une main sur
+  tout ce qui se clique dans les barres et les panneaux (boutons, cases et leur libellé,
+  listes, lignes), comme dans les boîtes, au lieu d'un mélange de main, de flèche et de
+  curseur de texte.
 - **Sortie d'une comparaison ouverte du plein écran** (#379, corrige #376) : elle
   ramenait à la grille ; elle ramène maintenant au plein écran, sur l'image active
   (bouton « Retour au plein écran »). Ouverte de la grille, elle ramène toujours à la

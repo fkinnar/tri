@@ -614,8 +614,7 @@ system one ("cold" measurements, experiments).
   (#383): the panel's copy shortcut (`y`, `Ctrl+C` / `Cmd+C`, Shift+`y`) copies the row
   under the mouse even when the panel does not have the keyboard
   (`Keymap::panel_action`); elsewhere, the key keeps its effect (`Ctrl+C`: copy the
-  image to…). Texts of both side panels are not selectable: the arrow on hover, not the
-  text cursor. Large histogram open:
+  image to…). Texts of both side panels are not selectable: no text cursor on hover. Large histogram open:
   `r`, `g`, `b` one channel, `a` all (it takes the keys while open: `b` does not change
   the source there). A single keymap: each action states its panel (`Action::scope`);
   when looking up a key, the active panel's one wins over the general action, and
@@ -642,7 +641,12 @@ system one ("cold" measurements, experiments).
   cache always follows. The work is done in the background (`TriApp::cache_job`), message
   in the status bar.
 - **Pointer in dialogs**: the hand on everything clickable (`interact_cursor` in the
-  common `Dialog` frame); "grab" elsewhere, to move the dialog.
+  common `Dialog` frame); "grab" elsewhere, to move the dialog. **In the bars and
+  panels too** (2026-11-09, #386: a hand on the bar icons, an arrow on the panels'
+  checkboxes, inconsistent): the hand on everything clickable (buttons, checkboxes and
+  their label, lists, sliders, folder and EXIF rows; `hand_over_clickable`, and
+  `interact_cursor` for egui's buttons everywhere, menus included); not on the images
+  (grid, full screen).
 - **File actions** (2026-10-17, engine: `tri::files`, see `files.md`): rename (`F2`),
   move to trash (`Delete`, `Backspace` — the Mac "delete" key — or `x`, as in vim; `dd`
   removed on 2026-10-18), show in the Finder / file manager (`Shift+R`), open in the

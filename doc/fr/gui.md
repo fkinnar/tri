@@ -658,8 +658,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   clic** (#383) : le raccourci de copie du panneau (`y`, `Ctrl+C` / `Cmd+C`, Maj+`y`)
   copie la ligne sous la souris même quand le panneau n'a pas le clavier
   (`Keymap::panel_action`) ; ailleurs, la touche garde son effet (`Ctrl+C` : copier
-  l'image vers…). Textes des deux panneaux latéraux non sélectionnables : la flèche au
-  survol, pas le curseur de texte. Grand
+  l'image vers…). Textes des deux panneaux latéraux non sélectionnables : plus de curseur
+  de texte au survol. Grand
   histogramme ouvert : `r`, `g`, `b` un canal, `a` tous (il prend les touches le temps
   d'être ouvert : `b` n'y change pas la source). Un seul keymap : chaque action dit son panneau (`Action::scope`) ; à la
   recherche d'une touche, celle du panneau actif l'emporte sur l'action générale, et les
@@ -686,7 +686,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (cochée) ; renommage : le cache suit toujours. Le travail se fait en fond
   (`TriApp::cache_job`), message dans la barre d'état.
 - **Pointeur dans les boîtes** : la main sur tout ce qui se clique (`interact_cursor` dans
-  le cadre commun `Dialog`) ; « saisir » ailleurs, pour déplacer la boîte.
+  le cadre commun `Dialog`) ; « saisir » ailleurs, pour déplacer la boîte. **Dans les
+  barres et les panneaux aussi** (09/11/2026, #386 : la main sur les icônes des barres,
+  la flèche sur les cases des panneaux, pas cohérent) : la main sur tout ce qui se clique
+  (boutons, cases et leur libellé, listes, curseurs, lignes des dossiers et des EXIF ;
+  `hand_over_clickable`, et `interact_cursor` pour les boutons d'egui partout, menus
+  compris) ; pas sur les images (grille, plein écran).
 - **Actions sur les fichiers** (17/10/2026, moteur : `tri::files`, voir `files.md`) :
   renommer (`F2`), mettre à la corbeille (`Suppr`, `Backspace` — la touche « effacer »
   des Mac — ou `x`, comme dans vim ; `dd` retiré le 18/10/2026), afficher dans le Finder / le gestionnaire de

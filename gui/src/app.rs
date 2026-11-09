@@ -1996,7 +1996,7 @@ impl TriApp {
     /// haut, puis les réglages — filtres et grille, en plein écran aussi —, et les
     /// métadonnées en bas, comme dans les autres logiciels.
     fn side_panel(&mut self, ui: &mut Ui) {
-        // Textes non sélectionnables : la flèche, pas le curseur de texte, sur les noms des
+        // Textes non sélectionnables : pas de curseur de texte sur les noms des
         // filtres et les lignes des EXIF (retour du 09/11/2026, #386) ; on copie une ligne
         // par son raccourci.
         ui.style_mut().interaction.selectable_labels = false;
@@ -2904,7 +2904,7 @@ impl TriApp {
     /// Panneau des dossiers : l'arborescence du moteur ([`Tree`]), dessinée ligne par
     /// ligne. Le triangle déplie ou replie ; un clic sur le nom ouvre le dossier.
     fn folder_panel(&mut self, ui: &mut Ui) {
-        // Comme le panneau de droite : la flèche sur les textes (#386).
+        // Comme le panneau de droite : pas de curseur de texte (#386).
         ui.style_mut().interaction.selectable_labels = false;
         if self.focus == crate::actions::Scope::Folders {
             panel_focus_fill(ui, &self.gui.dialogs);
@@ -16571,14 +16571,21 @@ impl eframe::App for TriApp {
         self.focus_mode_hint(&ctx);
         // Barre du haut : icône et nom, à gauche (comme darktable).
         if self.gui.title_bar && !self.focus_mode {
-            egui::Panel::top("title").show(ui, |ui| self.title_bar(ui));
+            egui::Panel::top("title").show(ui, |ui| {
+                self.title_bar(ui);
+                hand_over_clickable(ui);
+            });
         }
         let status_click = if self.focus_mode {
             None
         } else {
             steps.mark("titre");
             egui::Panel::bottom("status")
-                .show(ui, |ui| self.status_bar(ui))
+                .show(ui, |ui| {
+                    let shown = self.status_bar(ui);
+                    hand_over_clickable(ui);
+                    shown
+                })
                 .inner
         };
         match status_click.or(self.task_click.take()) {
@@ -16672,6 +16679,7 @@ impl eframe::App for TriApp {
                     ScrollArea::vertical()
                         .auto_shrink(false)
                         .show(ui, |ui| self.side_panel(ui));
+                    hand_over_clickable(ui);
                 });
             metadata_rect = Some(panel.response.rect);
         }
@@ -16679,7 +16687,10 @@ impl eframe::App for TriApp {
             let panel = egui::Panel::left("folders")
                 .resizable(true)
                 .default_size(self.gui.folders.width)
-                .show(ui, |ui| self.folder_panel(ui));
+                .show(ui, |ui| {
+                    self.folder_panel(ui);
+                    hand_over_clickable(ui);
+                });
             steps.mark("dossiers");
             folders_rect = Some(panel.response.rect);
         }
@@ -16707,6 +16718,7 @@ impl eframe::App for TriApp {
                         self.gui.grid.bar_label_scale,
                     );
                 }
+                hand_over_clickable(ui);
             });
             match action {
                 Some(crate::crop::BarAction::Save) => self.save_crop(),
@@ -16721,7 +16733,10 @@ impl eframe::App for TriApp {
             && !self.files.is_empty()
             && self.error.is_none()
         {
-            egui::Panel::bottom("rating").show(ui, |ui| self.rating_bar(ui));
+            egui::Panel::bottom("rating").show(ui, |ui| {
+                self.rating_bar(ui);
+                hand_over_clickable(ui);
+            });
         }
         // En plein écran aussi (retour du 30/10/2026 : on note par passes, en changeant de
         // filtre entre deux, sans repasser par la grille).
@@ -16732,7 +16747,10 @@ impl eframe::App for TriApp {
             // Pas pendant l'édition d'une version (retour du 07/11/2026 : sans objet).
             && self.crop.is_none()
         {
-            egui::Panel::top("filters").show(ui, |ui| self.filter_bar(ui));
+            egui::Panel::top("filters").show(ui, |ui| {
+                self.filter_bar(ui);
+                hand_over_clickable(ui);
+            });
         }
         // Fond central : celui choisi (Ctrl+L), sinon gris neutre avec ce thème (grille et
         // plein écran).
@@ -17705,6 +17723,22 @@ fn drag_preview(ctx: &egui::Context) {
                 ui.weak(verb);
             });
         });
+}
+
+/// La main sur ce qui se clique dans une barre ou un panneau (retour du 09/11/2026,
+/// #386 : la main sur les icônes des barres, la flèche sur les cases et les listes des
+/// panneaux, pas cohérent), comme dans les boîtes ([`Dialog`]) : sous le pointeur, un
+/// élément qui se clique (bouton, case et son libellé, liste, curseur, ligne pointable)
+/// et dont le pointeur n'est pas déjà choisi (champ de texte, poignée). Pas sur les images
+/// (grille, plein écran), où la main serait partout.
+fn hand_over_clickable(ui: &Ui) {
+    let ctx = ui.ctx();
+    if ui.ui_contains_pointer()
+        && ctx.output(|o| o.cursor_icon) == egui::CursorIcon::Default
+        && ctx.viewport(|v| v.hits.click.is_some_and(|w| w.sense.senses_click()))
+    {
+        ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
 }
 
 /// Fond du panneau qui a le clavier, peint avant son contenu : le fond des panneaux
@@ -28075,6 +28109,49 @@ mod tests {
         let back = h.state().zoom.unwrap();
         assert!((back - start).length() < 1e-4, "retour au point de départ");
         assert_eq!(h.state().selected, 0, "se déplacer ne change pas d'image");
+    }
+
+    #[test]
+    fn the_hand_is_on_everything_clickable_but_not_on_the_images() {
+        // Retour du 09/11/2026 (#386) : la main sur les icônes des barres, la flèche sur
+        // les cases des panneaux ; la main partout où l'on clique, comme dans les boîtes.
+        let (mut h, _dir) = harness();
+        h.state_mut().folder_panel = true;
+        h.state_mut().metadata_panel = true;
+        h.run_steps(3);
+        let hover = |h: &mut Harness<'_, TriApp>, at: egui::Pos2| {
+            h.hover_at(at + vec2(1.0, 0.0));
+            h.run_steps(1);
+            h.hover_at(at);
+            h.run_steps(2);
+            cursor(h)
+        };
+        let icon = h.get_by_label("Actualiser").rect().center();
+        assert_eq!(hover(&mut h, icon), egui::CursorIcon::PointingHand, "icône");
+        let panel = h.state().gui.folders.width;
+        let check = h
+            .query_all_by_role(egui::accesskit::Role::CheckBox)
+            .map(|n| n.rect())
+            .find(|r| r.left() > panel)
+            .expect("une case du panneau de droite");
+        assert_eq!(
+            hover(&mut h, check.center()),
+            egui::CursorIcon::PointingHand,
+            "case"
+        );
+        run_until(&mut h, |app| app.cell_rects.iter().any(|(i, _)| *i == 0));
+        let cell = h
+            .state()
+            .cell_rects
+            .iter()
+            .find(|(i, _)| *i == 0)
+            .unwrap()
+            .1;
+        assert_eq!(
+            hover(&mut h, cell.center()),
+            egui::CursorIcon::Default,
+            "vignette"
+        );
     }
 
     fn cursor(h: &Harness<'_, TriApp>) -> egui::CursorIcon {
