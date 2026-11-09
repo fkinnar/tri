@@ -10,6 +10,10 @@
   checked when enabled again); when none of the filter's software is active any more, the
   filter turns itself off and says so in the status bar (#395). With a single software
   left, no more empty line under the filter's box.
+- **Empty flag circle on the thumbnails** (#396): with nothing set, the flag's grey circle
+  (bottom right) had a thicker stroke than the colour's (top right); it reused the neutral
+  icon of the rating controls, whose stroke grows with its size. Both circles are now
+  drawn alike (#394).
 
 ## 1.0.0-beta.1 — 2026-11-09
 

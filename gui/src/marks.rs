@@ -259,14 +259,17 @@ pub fn thumbnail_notes(
     if notes.stars == 0 && placeholders {
         painter.add(Shape::closed_line(star_points(star_at(0), radius), empty));
     }
+    let (first, outer) = colour_dot_geometry(area, size);
     let flag_at = pos2(area.max.x - inset, area.max.y - inset);
     if notes.flag != Flag::None {
         painter.circle_filled(flag_at, radius + rim, RIM);
         flag(painter, flag_at, radius, notes.flag, colors);
     } else if placeholders {
-        neutral_ring(painter, flag_at, radius + rim, placeholder);
+        // Même cercle que la pastille de couleur vide au-dessus (#394) : le cercle du
+        // neutre des contrôles (`neutral_ring`) a un trait proportionnel au rayon, plus
+        // épais à la taille d'une vignette.
+        painter.circle_stroke(flag_at, outer - rim / 2.0, empty);
     }
-    let (first, outer) = colour_dot_geometry(area, size);
     let color_at = |k: usize| pos2(first.x - k as f32 * (size + gap), first.y);
     for (k, &color) in notes.colors.iter().enumerate() {
         let c = color_at(k);
@@ -1593,5 +1596,42 @@ mod tests {
         };
         // 4 éléments, 3 espaces, plus l'espace qui sépare étoiles et couleurs.
         assert_eq!(row_width(&notes, size), 4.0 * 10.0 + 3.0 * 2.5 + 2.5);
+    }
+
+    /// Cercles dessinés par `thumbnail_notes` sur une vignette sans aucune note.
+    fn empty_circles(size: f32) -> Vec<eframe::egui::epaint::CircleShape> {
+        let ctx = eframe::egui::Context::default();
+        let mut output = ctx.run_ui(Default::default(), |ui| {
+            let area = Rect::from_min_size(pos2(0.0, 0.0), vec2(200.0, 150.0));
+            thumbnail_notes(
+                ui.painter(),
+                area,
+                &Notes::default(),
+                size,
+                &Colors::default(),
+                true,
+            );
+        });
+        output.textures_delta.clear();
+        output
+            .shapes
+            .into_iter()
+            .filter_map(|c| match c.shape {
+                Shape::Circle(circle) => Some(circle),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_empty_flag_and_colour_circles_are_alike() {
+        // #394 : le cercle du drapeau vide avait un trait plus épais que celui de la
+        // pastille de couleur vide.
+        for size in [10.0, 16.0, 24.0] {
+            let circles = empty_circles(size);
+            assert_eq!(circles.len(), 2, "{circles:?}");
+            assert_eq!(circles[0].stroke, circles[1].stroke);
+            assert_eq!(circles[0].radius, circles[1].radius);
+        }
     }
 }

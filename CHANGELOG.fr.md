@@ -10,6 +10,10 @@
   liste du filtre (réactivé, il revient coché) ; quand plus aucun des logiciels du filtre
   n'est actif, le filtre s'éteint de lui-même et le dit dans la barre d'état (#395). Avec
   un seul logiciel restant, plus de ligne vide sous la case du filtre.
+- **Cercle du drapeau vide sur les vignettes** (#396) : sans note, le cercle gris du
+  drapeau (en bas à droite) avait un trait plus épais que celui de la couleur (en haut à
+  droite) ; il reprenait l'icône du neutre des contrôles de notation, dont le trait grandit
+  avec la taille. Les deux cercles sont maintenant dessinés pareil (#394).
 
 ## 1.0.0-beta.1 — 09/11/2026
 

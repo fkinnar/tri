@@ -719,8 +719,8 @@ system one ("cold" measurements, experiments).
     ratings: the grid's badges, blown / blocked (click: large histogram) and blurry
     (click: sharpness map; issue #9);
   - **click on a thumbnail mark** (#257, 2026-10-31): the stars (bottom left, all five
-    slots even empty), the flag (bottom right, neutral ring included) or the colours (top
-    right) open a **small picker** of that group, right there (`mark_picker`,
+    slots even empty), the flag (bottom right, neutral ring included: drawn like the empty
+    colour dot above it, same circle and stroke, #394) or the colours (top right) open a **small picker** of that group, right there (`mark_picker`,
     `marks::thumbnail_mark_zones`, the bar's controls split into `flag_controls` /
     `star_controls` / `color_controls`); a star or a flag closes it, colours stay open
     (several to tick), Escape closes; hand cursor over the marks;
