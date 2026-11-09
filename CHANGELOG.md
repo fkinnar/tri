@@ -2,6 +2,13 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
+## Unreleased
+
+- **Empty flag circle on the thumbnails** (#396): with nothing set, the flag's grey circle
+  (bottom right) had a thicker stroke than the colour's (top right); it reused the neutral
+  icon of the rating controls, whose stroke grows with its size. Both circles are now
+  drawn alike (#394).
+
 ## 1.0.0-beta.1 — 2026-11-09
 
 First beta: ratings kept in step with darktable and inside the images (embedded ratings,
