@@ -10,6 +10,10 @@
   s'efface après quelques secondes (`[gui.grid] export_toast_ms`), attend tant que le
   pointeur est dessus ; une erreur reste jusqu'à ce qu'on la ferme, même quand d'autres
   exports finissent après (#381).
+- **Ctrl+Maj+clic dans les lignes EXIF** (#401) : Ctrl+Maj+clic (Cmd+Maj+clic) ajoute la
+  plage depuis la dernière ligne cliquée à la sélection, en gardant ce qui était
+  sélectionné ; Maj+clic seul la remplace toujours. Un Ctrl+clic compte maintenant aussi
+  comme dernière ligne cliquée, comme dans le Finder et l'Explorateur (#390).
 - **Recherche dans l'aide `?`** (#402) : l'aide `?` ouverte, taper filtre la liste au fil
   de la frappe, avec la même recherche floue que F1 et la palette (mots des deux langues,
   fautes de frappe pardonnées) ; les lettres trouvées sont surlignées. Échap efface la

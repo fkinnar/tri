@@ -657,7 +657,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   panneau ; un clic sur une ligne la pointe et donne le clavier au panneau.
   **Plusieurs lignes** (09/11/2026, #384) : Maj+clic étend depuis la dernière ligne
   cliquée, Ctrl+clic ou Cmd+clic ajoute ou retire une ligne (la première
-  aussi, seule), Ctrl+A et l'icône
+  aussi, seule), **Ctrl+Maj+clic** (Cmd+Maj+clic ; #390) ajoute la plage depuis la
+  dernière ligne cliquée en gardant le reste, comme le Finder et l'Explorateur (un
+  Ctrl+clic compte aussi comme dernière ligne cliquée, pour Maj+clic aussi), Ctrl+A et l'icône
   au bout du titre « EXIF » sélectionnent tout ; la sélection est la bande grise sur
   toute la largeur (plus de fond bleu par ligne), un peu plus marquée que la ligne
   pointée ; après un Ctrl+clic, la ligne pointée n'est plus marquée (la ligne retirée
