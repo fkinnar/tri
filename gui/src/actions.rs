@@ -1917,6 +1917,15 @@ impl Keymap {
         self.focus = focus;
     }
 
+    /// Action liée à la seule touche `chord` (sans séquence en cours) : `?` qui referme
+    /// l'aide « ici » pendant qu'on y tape une recherche (#382).
+    pub fn chord_action(&self, chord: Chord) -> Option<Action> {
+        match self.lookup(&[chord]) {
+            Lookup::Action(a) | Lookup::Ambiguous(a) => Some(a),
+            Lookup::Prefix | Lookup::None => None,
+        }
+    }
+
     /// Action du panneau `scope` liée à `chord` seule (sans séquence), même si le panneau
     /// n'a pas le clavier : la copie de la ligne des métadonnées sous la souris (issue
     /// n° 383).

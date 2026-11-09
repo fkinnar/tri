@@ -1071,7 +1071,12 @@ source…) in the grid, crop and versions outside full screen, what only applies
 grid (thumbnail render, pages, sort…) elsewhere. Actions without a key are left out
 (they stay in F1). Modal: `?` or Esc close, `F1` switches to the full list, a click
 closes; arrows and pages scroll. At the bottom, a reminder of F1 and of the leader in
-force.
+force. **Search** (#382, 2026-11-09): typing filters the list as you type (field under the
+title, keyboard taken at opening), with the same fuzzy search as F1 and the palette
+(`help_rows`: words of both languages, typos forgiven), limited to the shortcuts of the
+place (`cheatsheet::filtered`); the letters found are in the accent colour, underlined
+(`fuzzy::matched_chars`). Typed letters trigger nothing behind; `?` still closes
+(`Keymap::chord_action`). Esc clears the search, a second Esc closes.
 
 ### Command palette (2026-11-06)
 
@@ -1490,6 +1495,7 @@ during a window's opening fade showed it half transparent.
   `settings:<section>` (settings window opened on a section: `settings:keys`),
   `export_toast` (end-of-export bubble, as after an export of the selected image,
   without exporting anything), `search:<text>` (typed in the search of the open settings window or help:
+  `search:<text>` (typed in the search of the open settings window, help or `?` help:
   `search:vim`). An unknown
   step is reported and ignored.
   Example: `core.view.open,core.view.zoom,wait:1500,core.nav.next,wait:30,shot`.

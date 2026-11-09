@@ -82,6 +82,57 @@ fn word_score(word: &[char], text: &[char]) -> Option<i32> {
         .max()
 }
 
+/// Lettres de `text` à surligner pour `query` (indices de caractères, triés, sans
+/// doublon) : pour chaque mot tapé, sans accents ni casse, son passage d'un seul tenant
+/// s'il y est (au début d'un mot de préférence ; au singulier aussi), sinon ses lettres
+/// dans l'ordre (« pnd » dans « panneau des dossiers »). Un mot trouvé seulement à une
+/// faute près n'est pas surligné. Aide « ici » (`?`, #382).
+pub fn matched_chars(query: &str, text: &str) -> Vec<usize> {
+    let text: Vec<char> = text.chars().map(fold).collect();
+    let starts_word = |i: usize| i == 0 || !text[i - 1].is_alphanumeric();
+    let mut marks = Vec::new();
+    for word in query.split_whitespace() {
+        let word: Vec<char> = word.chars().map(fold).collect();
+        let stem = singular(&word);
+        let at = |w: &[char]| -> Option<usize> {
+            let fits = |i: &usize| text[*i..].starts_with(w);
+            let candidates = 0..text.len().saturating_sub(w.len().saturating_sub(1));
+            candidates
+                .clone()
+                .filter(|&i| starts_word(i))
+                .find(fits)
+                .or_else(|| candidates.clone().find(fits))
+        };
+        if let Some(i) = at(&word)
+            .map(|i| (i, word.len()))
+            .or_else(|| at(stem).map(|i| (i, stem.len())))
+            .filter(|(_, n)| *n > 0)
+        {
+            marks.extend(i.0..i.0 + i.1);
+            continue;
+        }
+        // Lettres éparpillées : la première correspondance dans l'ordre.
+        let mut pos = 0;
+        let mut found = Vec::new();
+        for &c in &word {
+            match (pos..text.len()).find(|&i| text[i] == c) {
+                Some(i) => {
+                    found.push(i);
+                    pos = i + 1;
+                }
+                None => {
+                    found.clear();
+                    break;
+                }
+            }
+        }
+        marks.extend(found);
+    }
+    marks.sort_unstable();
+    marks.dedup();
+    marks
+}
+
 /// Correspondance d'une requête dans une entrée (réglage, action de l'aide), pour ranger
 /// les résultats : une correspondance **exacte** (chaque mot tapé apparaît tel quel,
 /// « vim » dans « … vim nvim … ») passe avant une correspondance **proche** (chaque mot
@@ -246,6 +297,22 @@ impl crate::filter::Filter for NameFilter<'_> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn matched_chars_marks_the_typed_words() {
+        let marks = |q: &str, t: &str| matched_chars(q, t);
+        // D'un seul tenant, sans accents ni casse, au début d'un mot de préférence.
+        assert_eq!(marks("etoile", "3 étoiles"), (2..8).collect::<Vec<_>>());
+        assert_eq!(marks("dos", "Panneau des dossiers"), vec![12, 13, 14]);
+        // Pluriel tapé, singulier dans le texte.
+        assert_eq!(marks("notes", "Note"), vec![0, 1, 2, 3]);
+        // Lettres éparpillées, dans l'ordre.
+        assert_eq!(marks("pnd", "Panneau des dossiers"), vec![0, 2, 8]);
+        // Deux mots ; rien pour un mot absent ; requête vide : rien.
+        assert_eq!(marks("zo pl", "Zoom plein"), vec![0, 1, 5, 6]);
+        assert!(marks("xyz", "Zoom").is_empty());
+        assert!(marks("", "Zoom").is_empty());
+    }
     use super::*;
 
     #[test]

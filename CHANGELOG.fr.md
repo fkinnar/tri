@@ -10,6 +10,10 @@
   s'efface après quelques secondes (`[gui.grid] export_toast_ms`), attend tant que le
   pointeur est dessus ; une erreur reste jusqu'à ce qu'on la ferme, même quand d'autres
   exports finissent après (#381).
+- **Recherche dans l'aide `?`** (#402) : l'aide `?` ouverte, taper filtre la liste au fil
+  de la frappe, avec la même recherche floue que F1 et la palette (mots des deux langues,
+  fautes de frappe pardonnées) ; les lettres trouvées sont surlignées. Échap efface la
+  recherche, un second Échap ferme ; `?` ferme toujours (#382).
 - **Filtre « Développées » après avoir désactivé les logiciels** (#397) : filtre allumé,
   désactiver tous les logiciels de développement dans les réglages le laissait visible et
   actif jusqu'à ce qu'on l'éteigne à la main. Un logiciel désactivé sort maintenant de la

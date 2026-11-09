@@ -324,6 +324,7 @@ place-crop = Version
 place-histogram = Grand histogramme
 place-folders = Panneau des dossiers
 place-metadata = Panneau des métadonnées
+help-here-search-hint = Tapez pour filtrer…
 help-here-title = Raccourcis ici : { $place }
 help-here-footer = { $help } : toutes les actions, avec recherche · { $leader } = { $keys } (une pause après une touche montre la suite) · Échap ou clic : fermer
 palette-title = Palette de commandes
