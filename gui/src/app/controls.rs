@@ -273,7 +273,7 @@ impl TriApp {
             check.changed() || icon.clicked() || label.clicked()
         });
         self.side_end(ui, item, row.response.rect, row.inner);
-        if on {
+        if on && self.filter_has_settings(action) {
             ui.indent(action.id(), |ui| {
                 let width = panel_slider_width(ui);
                 match action {

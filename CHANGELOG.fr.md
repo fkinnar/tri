@@ -10,6 +10,12 @@
   s'efface après quelques secondes (`[gui.grid] export_toast_ms`), attend tant que le
   pointeur est dessus ; une erreur reste jusqu'à ce qu'on la ferme, même quand d'autres
   exports finissent après (#381).
+- **Filtre « Développées » après avoir désactivé les logiciels** (#397) : filtre allumé,
+  désactiver tous les logiciels de développement dans les réglages le laissait visible et
+  actif jusqu'à ce qu'on l'éteigne à la main. Un logiciel désactivé sort maintenant de la
+  liste du filtre (réactivé, il revient coché) ; quand plus aucun des logiciels du filtre
+  n'est actif, le filtre s'éteint de lui-même et le dit dans la barre d'état (#395). Avec
+  un seul logiciel restant, plus de ligne vide sous la case du filtre.
 - **Cercle du drapeau vide sur les vignettes** (#396) : sans note, le cercle gris du
   drapeau (en bas à droite) avait un trait plus épais que celui de la couleur (en haut à
   droite) ; il reprenait l'icône du neutre des contrôles de notation, dont le trait grandit
