@@ -36,3 +36,7 @@ servir aussi :
   au début d'un mot du texte (sans accents ni casse, au singulier comme au pluriel). Pour
   ce qui ne doit pas sortir sur une ressemblance : les lignes de contrôle de la palette
   (« nettes » est dans « vignettes », pas au début ; « rendu » ressemble à « réduire »).
+- **Lettres à surligner** (09/11/2026, `matched_chars`, #382) : pour chaque mot tapé, son
+  passage d'un seul tenant s'il y est (au début d'un mot de préférence ; au singulier
+  aussi), sinon ses lettres dans l'ordre. Un mot trouvé seulement à une faute près n'est
+  pas surligné. Sert à l'aide `?` pour montrer ce qui a été trouvé.

@@ -1139,7 +1139,13 @@ les actions du panneau ; pour les images, sauf ce qui ne vaut que sur une image 
 hors du plein écran, ce qui ne vaut qu'en grille (rendu des vignettes, pages, tri…)
 ailleurs. Les actions sans touche n'y sont pas (elles restent dans F1). Modale : `?` ou
 Échap ferment, `F1` passe à la liste complète, un clic ferme ; les flèches et les pages
-font défiler. En bas, le rappel de F1 et du leader en vigueur.
+font défiler. En bas, le rappel de F1 et du leader en vigueur. **Recherche** (#382,
+09/11/2026) : taper filtre la liste au fil de la frappe (champ sous le titre, clavier pris
+à l'ouverture), avec la même recherche floue que F1 et la palette (`help_rows` : mots des
+deux langues, fautes de frappe pardonnées), limitée aux raccourcis de l'endroit
+(`cheatsheet::filtered`) ; les lettres trouvées sont à l'accent, soulignées
+(`fuzzy::matched_chars`). Les lettres tapées ne déclenchent rien derrière ; `?` ferme
+toujours (`Keymap::chord_action`). Échap efface la recherche, un second Échap ferme.
 
 ### Palette de commandes (06/11/2026)
 
@@ -1572,7 +1578,7 @@ moitié transparente.
   prêt : pour voir un état intermédiaire), `rating_dialog` (boîte du clic droit pour
   l'image sélectionnée), `settings:<section>` (fenêtre de réglages ouverte sur une
   section : `settings:keys`), `search:<texte>` (tapé dans la recherche de la fenêtre de
-  réglages ou de l'aide ouverte : `search:vim`). Une étape inconnue est signalée et ignorée.
+  réglages, de l'aide ou de l'aide `?` ouverte : `search:vim`). Une étape inconnue est signalée et ignorée.
   Exemple : `core.view.open,core.view.zoom,wait:1500,core.nav.next,wait:30,shot`.
 - **Journal des plantages** (`gui/src/crash.rs`, 19/10/2026) : toute erreur Rust est
   consignée (message, fichier et ligne, fil, pile d'appels) dans `crash.log` du dossier de
