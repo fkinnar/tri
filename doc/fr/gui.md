@@ -1571,7 +1571,8 @@ moitié transparente.
   laisser le moteur travailler), `shot` (capture immédiate, sans attendre que tout soit
   prêt : pour voir un état intermédiaire), `rating_dialog` (boîte du clic droit pour
   l'image sélectionnée), `settings:<section>` (fenêtre de réglages ouverte sur une
-  section : `settings:keys`), `search:<texte>` (tapé dans la recherche de la fenêtre de
+  section : `settings:keys`), `export_toast` (bulle de fin d'export, comme après l'export
+  de l'image sélectionnée, sans rien exporter), `search:<texte>` (tapé dans la recherche de la fenêtre de
   réglages ou de l'aide ouverte : `search:vim`). Une étape inconnue est signalée et ignorée.
   Exemple : `core.view.open,core.view.zoom,wait:1500,core.nav.next,wait:30,shot`.
 - **Journal des plantages** (`gui/src/crash.rs`, 19/10/2026) : toute erreur Rust est

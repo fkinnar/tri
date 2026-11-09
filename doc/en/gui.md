@@ -1488,7 +1488,8 @@ during a window's opening fade showed it half transparent.
   work), `shot` (immediate capture, without waiting for everything to be ready: to see an
   intermediate state), `rating_dialog` (right-click dialog for the selected image),
   `settings:<section>` (settings window opened on a section: `settings:keys`),
-  `search:<text>` (typed in the search of the open settings window or help:
+  `export_toast` (end-of-export bubble, as after an export of the selected image,
+  without exporting anything), `search:<text>` (typed in the search of the open settings window or help:
   `search:vim`). An unknown
   step is reported and ignored.
   Example: `core.view.open,core.view.zoom,wait:1500,core.nav.next,wait:30,shot`.

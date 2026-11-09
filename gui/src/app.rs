@@ -850,6 +850,10 @@ pub struct TriApp {
     /// Bandeau des développements à refaire : depuis quand, et fini (avec le nombre
     /// refait) ou en cours.
     develop_toast: Option<(Instant, Option<usize>)>,
+    /// Bulles de fin d'export (#381), la plus ancienne d'abord, voir
+    /// [`TriApp::export_toasts`] : une par export fini, chacune avec son délai (une
+    /// erreur n'est jamais remplacée par le bilan d'un export suivant).
+    export_toasts: Vec<ExportToast>,
     /// Curseur clavier déplacé : à faire défiler jusqu'à lui.
     scroll_to_cursor: bool,
     /// Fenêtre de réglages ouverte.
@@ -981,6 +985,46 @@ pub struct TriApp {
     notes_since: Instant,
     /// Dernière image affichée en plein écran (pour la trace).
     last_shown: (usize, Option<Level>),
+}
+
+/// Bulle de fin d'export (#381).
+struct ExportToast {
+    /// Depuis quand elle est montrée (remis à zéro tant que le pointeur est dessus).
+    at: Instant,
+    /// Bilan (« 3 images exportées »).
+    text: String,
+    /// Dossier de destination, sous le bilan (vide : rien).
+    dest: String,
+    /// Échec (tout ou partie) : reste jusqu'à « Fermer ».
+    error: bool,
+    /// Fichier montré par « Ouvrir le dossier » : le premier écrit, si tous sont dans le
+    /// même dossier.
+    reveal: Option<PathBuf>,
+    /// Fichiers écrits dans plusieurs dossiers (à côté de chaque image) : « Voir le
+    /// rapport » à la place.
+    several_folders: bool,
+}
+
+impl ExportToast {
+    fn new(text: String, error: bool, written: &[PathBuf]) -> ExportToast {
+        let folder = written.first().and_then(|f| f.parent());
+        let one_folder = written.iter().all(|f| f.parent() == folder);
+        ExportToast {
+            at: Instant::now(),
+            text,
+            dest: String::new(),
+            error,
+            reveal: written.first().filter(|_| one_folder).cloned(),
+            several_folders: !one_folder,
+        }
+    }
+}
+
+/// Lien ou bouton cliqué dans la bulle de fin d'export.
+enum ToastAction {
+    Reveal,
+    Report,
+    Close,
 }
 
 /// Nom affiché d'une image : son nom de fichier ; pour un développement, celui de sa
@@ -1444,6 +1488,7 @@ impl TriApp {
             filter_seen: Default::default(),
             filter_toast_at: None,
             develop_toast: None,
+            export_toasts: Vec::new(),
             scroll_to_cursor: false,
             help_search: None,
             help_here: None,
@@ -13021,6 +13066,24 @@ impl TriApp {
             return;
         };
         let dest = crate::files::tilde(&job.dest);
+        // Fichiers écrits, pour la bulle de fin (#381) ; aucune bulle pour un export
+        // arrêté.
+        let written = match &result {
+            Ok(report) => Some(report.written.clone()),
+            Err(tri::develop::DevelopError::Cancelled) => None,
+            Err(_) => Some(Vec::new()),
+        };
+        let toast_title = match &result {
+            Ok(report) if report.failed == 0 => {
+                Some(t!("export-toast-done", n = report.written.len()))
+            }
+            Ok(report) => Some(t!(
+                "export-toast-partial",
+                n = report.written.len(),
+                failed = report.failed
+            )),
+            _ => None,
+        };
         // Au rapport d'export, gardé d'une session à l'autre.
         let entry = job.entry(&result);
         let max = self.settings.export.report_max;
@@ -13036,7 +13099,11 @@ impl TriApp {
         }
         self.notice = Some(match result {
             Ok(report) if report.failed == 0 => {
-                let mut text = t!("export-done", n = report.written.len(), dest = dest);
+                let mut text = t!(
+                    "export-done",
+                    n = report.written.len(),
+                    dest = dest.as_str()
+                );
                 if report.passthrough > 0 {
                     text.push_str(&t!("export-done-passthrough", n = report.passthrough));
                 }
@@ -13047,7 +13114,7 @@ impl TriApp {
                     "export-partial",
                     n = report.written.len(),
                     failed = report.failed,
-                    dest = dest
+                    dest = dest.as_str()
                 ),
                 true,
             ),
@@ -13055,7 +13122,132 @@ impl TriApp {
             Err(e) => (e.to_string(), true),
         });
         self.export_notice = self.notice.as_ref().map(|(text, _)| text.clone());
+        // Bulle au milieu de l'écran (#381 : la fin de l'export passait inaperçue dans la
+        // barre d'état). Pas pour un export arrêté à la main : on le sait déjà.
+        if let (Some(written), Some((_, error))) = (written, &self.notice)
+            && self.gui.grid.export_toast_ms > 0
+        {
+            // Le bilan en titre, le dossier dessous en plus petit (un long chemin coupé
+            // au milieu d'une phrase se lisait mal).
+            let title = match &toast_title {
+                Some(title) => title.clone(),
+                None => self
+                    .notice
+                    .as_ref()
+                    .map(|(t, _)| t.clone())
+                    .unwrap_or_default(),
+            };
+            let mut toast = ExportToast::new(title, *error, &written);
+            toast.dest = dest.clone();
+            self.export_toasts.push(toast);
+        }
         self.export_job = None;
+    }
+
+    /// Bulles de fin d'export au milieu de la zone des images (#381), l'une sous l'autre :
+    /// le bilan, le dossier, et « Ouvrir le dossier » (le premier fichier écrit montré
+    /// dans le gestionnaire de fichiers ; écrits dans plusieurs dossiers : « Voir le
+    /// rapport »). Chacune s'efface d'elle-même (`[gui.grid] export_toast_ms`), sauf tant
+    /// que le pointeur est dessus ; une erreur reste jusqu'à « Fermer ».
+    fn export_toasts(&mut self, ui: &mut Ui) {
+        let total = Duration::from_millis(self.gui.grid.export_toast_ms);
+        self.export_toasts
+            .retain(|t| t.error || t.at.elapsed() < total);
+        if self.export_toasts.is_empty() {
+            return;
+        }
+        let pad = self.gui.dialogs.spacing * 2.0;
+        let title = self.gui.dialogs.title_size * 1.2;
+        let width = ui.max_rect().width() * 0.6;
+        let mut actions: Vec<(usize, ToastAction)> = Vec::new();
+        let mut hovered: Vec<usize> = Vec::new();
+        let area = egui::Area::new(egui::Id::unique("export-toasts"))
+            .order(egui::Order::Foreground)
+            .pivot(egui::Align2::CENTER_CENTER)
+            .fixed_pos(ui.max_rect().center())
+            .show(ui.ctx(), |ui| {
+                ui.vertical_centered(|ui| {
+                    for (k, toast) in self.export_toasts.iter().enumerate() {
+                        // Le dernier tiers s'efface, comme la bulle du filtre.
+                        let alpha = if toast.error {
+                            1.0
+                        } else {
+                            let left = total.saturating_sub(toast.at.elapsed()).as_secs_f32()
+                                / total.as_secs_f32().max(f32::EPSILON);
+                            (left * 3.0).min(1.0)
+                        };
+                        let frame = ui.scope(|ui| {
+                            ui.multiply_opacity(alpha);
+                            egui::Frame::new()
+                                .fill(Color32::from_black_alpha(200))
+                                .corner_radius(pad)
+                                .inner_margin(pad)
+                                .show(ui, |ui| {
+                                    ui.set_max_width(width);
+                                    ui.vertical_centered(|ui| {
+                                        let color = if toast.error {
+                                            ui.visuals().error_fg_color
+                                        } else {
+                                            Color32::WHITE
+                                        };
+                                        ui.label(
+                                            egui::RichText::new(&toast.text)
+                                                .size(title)
+                                                .color(color),
+                                        );
+                                        if !toast.dest.is_empty() {
+                                            ui.label(
+                                                egui::RichText::new(&toast.dest)
+                                                    .color(Color32::from_gray(190)),
+                                            );
+                                        }
+                                        ui.add_space(pad / 2.0);
+                                        if toast.reveal.is_some() {
+                                            if ui.link(t!("export-toast-open-folder")).clicked() {
+                                                actions.push((k, ToastAction::Reveal));
+                                            }
+                                        } else if toast.several_folders
+                                            && ui.link(t!("export-toast-report")).clicked()
+                                        {
+                                            actions.push((k, ToastAction::Report));
+                                        }
+                                        if toast.error
+                                            && ui.button(t!("export-toast-close")).clicked()
+                                        {
+                                            actions.push((k, ToastAction::Close));
+                                        }
+                                    });
+                                })
+                                .response
+                        });
+                        // Pointeur dessus : elle attend (le temps de viser le lien).
+                        if frame.inner.contains_pointer() {
+                            hovered.push(k);
+                        }
+                        ui.add_space(pad / 2.0);
+                    }
+                });
+            });
+        let _ = area;
+        for k in hovered {
+            self.export_toasts[k].at = Instant::now();
+        }
+        // Une action par image au plus (un clic) ; la bulle cliquée s'en va.
+        if let Some((k, action)) = actions.pop() {
+            let toast = self.export_toasts.remove(k);
+            match action {
+                ToastAction::Reveal => {
+                    if let Some(file) = &toast.reveal
+                        && let Err(e) = tri::files::reveal(file)
+                    {
+                        self.file_error = Some(e.to_string());
+                    }
+                }
+                ToastAction::Report => self.export_report = true,
+                ToastAction::Close => {}
+            }
+        }
+        ui.ctx().request_repaint();
     }
 
     /// Niveaux parcourus à l'ouverture d'un dossier (1 : le dossier seul).
@@ -14793,6 +14985,16 @@ impl TriApp {
                         shot.forced = true;
                     }
                     return;
+                }
+                Step::ExportToast => {
+                    if let Some(file) = self.files.get(self.selected) {
+                        let written = [file.path.clone()];
+                        let dest = file.path.parent().unwrap_or(Path::new(""));
+                        let mut toast =
+                            ExportToast::new(t!("export-toast-done", n = 1), false, &written);
+                        toast.dest = crate::files::tilde(dest);
+                        self.export_toasts.push(toast);
+                    }
                 }
                 Step::RatingDialog => {
                     if let Some(file) = self.files.get(self.selected) {
@@ -17034,6 +17236,7 @@ impl eframe::App for TriApp {
             }
             self.filter_toast(ui);
             self.develop_toast(ui);
+            self.export_toasts(ui);
         });
         self.click_focus(&ctx, folders_rect, metadata_rect, center.response.rect);
         self.position_mark(&ctx, center.response.rect);
@@ -17108,6 +17311,9 @@ enum Step {
     /// Ouvrir la boîte du clic droit pour l'image sélectionnée (`rating_dialog`), qu'aucune
     /// action clavier n'ouvre.
     RatingDialog,
+    /// Montrer la bulle de fin d'export (`export_toast`, #381) pour l'image sélectionnée,
+    /// comme après un export réussi : pour la capture, sans rien exporter.
+    ExportToast,
     /// Ouvrir la fenêtre de réglages sur une section (`settings:keys`, `settings:gui.zoom`).
     Settings(String),
     /// Taper dans la recherche de la boîte ouverte, palette, réglages ou aide
@@ -17137,6 +17343,7 @@ fn parse_actions(list: &str) -> Vec<Step> {
                     .map(|ms| Step::Wait(Duration::from_millis(ms))),
                 None if id == "shot" => Some(Step::Shot),
                 None if id == "rating_dialog" => Some(Step::RatingDialog),
+                None if id == "export_toast" => Some(Step::ExportToast),
                 None if id.starts_with("settings:") => {
                     Some(Step::Settings(id["settings:".len()..].to_string()))
                 }
@@ -27408,6 +27615,66 @@ mod tests {
     }
 
     #[test]
+    fn the_end_of_export_bubbles_fade_unless_they_are_errors() {
+        // #381 : une bulle par export fini ; un succès s'efface de lui-même, une erreur
+        // reste jusqu'à « Fermer », même quand d'autres exports finissent après (retour du
+        // 09/11/2026) ; écrits dans plusieurs dossiers : « Voir le rapport ».
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let toast = |text: &str, error: bool, names: &[&str]| {
+            let written: Vec<PathBuf> = names.iter().map(|n| dir.path().join(n)).collect();
+            ExportToast::new(text.into(), error, &written)
+        };
+        let ms = h.state().gui.grid.export_toast_ms;
+        let long_ago = Instant::now() - Duration::from_millis(ms + 1000);
+        // Succès, un seul dossier : « Ouvrir le dossier », puis plus rien le temps passé.
+        h.state_mut().export_toasts.push(toast(
+            "2 images exportées",
+            false,
+            &["out/a.jpg", "out/b.jpg"],
+        ));
+        h.run_steps(2);
+        h.get_by_label("Ouvrir le dossier");
+        assert!(h.query_by_label("Fermer").is_none());
+        h.state_mut().export_toasts[0].at = long_ago;
+        h.run_steps(2);
+        assert!(h.state().export_toasts.is_empty());
+        assert!(h.query_by_label("Ouvrir le dossier").is_none());
+        // Une erreur, puis un succès : les deux à l'écran ; le temps passé, l'erreur reste.
+        h.state_mut()
+            .export_toasts
+            .push(toast("1 exportée, 1 en échec", true, &["out/a.jpg"]));
+        h.state_mut()
+            .export_toasts
+            .push(toast("3 images exportées", false, &["web/a.jpg"]));
+        h.run_steps(2);
+        h.get_by_label("1 exportée, 1 en échec");
+        h.get_by_label("3 images exportées");
+        for t in &mut h.state_mut().export_toasts {
+            t.at = long_ago;
+        }
+        h.run_steps(2);
+        assert_eq!(h.state().export_toasts.len(), 1);
+        assert!(h.state().export_toasts[0].error);
+        // Plusieurs dossiers : le rapport, qui les liste tous ; l'erreur reste.
+        h.state_mut().export_toasts.push(toast(
+            "2 images exportées",
+            false,
+            &["a/x.jpg", "b/y.jpg"],
+        ));
+        h.run_steps(2);
+        h.get_by_label("Voir le rapport").click();
+        h.run_steps(2);
+        assert!(h.state().export_report);
+        assert_eq!(h.state().export_toasts.len(), 1);
+        h.state_mut().export_report = false;
+        h.run_steps(2);
+        h.get_by_label("Fermer").click();
+        h.run_steps(2);
+        assert!(h.state().export_toasts.is_empty());
+    }
+
+    #[test]
     fn ctrl_e_offers_the_export_profiles_and_remembers_the_choice() {
         let (mut h, dir) = harness();
         h.run_steps(3);
@@ -27438,6 +27705,22 @@ mod tests {
         let notice = h.state().notice.clone().unwrap();
         assert!(notice.0.contains("1 image exportée"), "{notice:?}");
         assert!(dir.path().join("photos/export/img0.jpg").is_file());
+        // Bulle de fin au milieu de l'écran (#381), avec « Ouvrir le dossier » (pas
+        // cliqué : il ouvrirait le vrai gestionnaire de fichiers).
+        let toasts = &h.state().export_toasts;
+        assert_eq!(toasts.len(), 1, "une bulle de fin d'export");
+        let toast = &toasts[0];
+        assert_eq!(toast.text, "1 image exportée");
+        assert!(toast.dest.ends_with("photos/export"), "{}", toast.dest);
+        assert!(!toast.error);
+        assert!(
+            toast
+                .reveal
+                .as_ref()
+                .is_some_and(|f| f.ends_with("export/img0.jpg"))
+        );
+        h.run_steps(2);
+        h.get_by_label("Ouvrir le dossier");
         // Rapport d'export : gardé dans le dossier de données, bouton à côté du bilan.
         let data = h
             .state()

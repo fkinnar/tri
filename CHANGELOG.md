@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **End of an export in the middle of the screen** (#399): the summary ("3 images
+  exported", the folder) also shows in a bubble over the images, with "Open the folder"
+  ("Show the report" when the files went to several folders). It fades after a few
+  seconds (`[gui.grid] export_toast_ms`), waits while the pointer is on it; an error
+  stays until closed, even when other exports finish after it (#381).
 - **Empty flag circle on the thumbnails** (#396): with nothing set, the flag's grey circle
   (bottom right) had a thicker stroke than the colour's (top right); it reused the neutral
   icon of the rating controls, whose stroke grows with its size. Both circles are now

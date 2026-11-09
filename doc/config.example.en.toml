@@ -703,6 +703,10 @@ filter_toast_ms = 1500
 # the background): time on screen at the start, then at the end (milliseconds; 0: never).
 # Progress stays in the status bar.
 develop_toast_ms = 6000
+# End-of-export bubble in the middle of the screen, with "Open the folder": duration
+# (milliseconds; 0: never). Kept while the pointer is on it; an error stays until it is
+# closed.
+export_toast_ms = 5000
 # Stacks (similar images grouped) shown at startup; false: each image
 # alone, <core.stack.mode> or the stack button shows them (instant: the fingerprints are
 # computed in the background, see [similarity] background).
