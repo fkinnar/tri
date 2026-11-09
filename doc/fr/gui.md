@@ -659,7 +659,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   cliquée, Ctrl+clic ou Cmd+clic ajoute ou retire une ligne (la première
   aussi, seule), Ctrl+A et l'icône
   au bout du titre « EXIF » sélectionnent tout ; la sélection est la bande grise sur
-  toute la largeur (plus de fond bleu par ligne). **Clic droit** sur une ligne : copier
+  toute la largeur (plus de fond bleu par ligne), un peu plus marquée que la ligne
+  pointée ; après un Ctrl+clic, la ligne pointée n'est plus marquée (la ligne retirée
+  semblait sinon toujours sélectionnée), de nouveau au clavier ou au clic simple. **Clic droit** sur une ligne : copier
   la valeur, la sélection (si la ligne en fait partie), tout. **Sans
   clic** (#383) : le raccourci de copie du panneau (`y`, `Ctrl+C` / `Cmd+C`, Maj+`y`)
   copie la ligne sous la souris même quand le panneau n'a pas le clavier

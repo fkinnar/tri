@@ -820,6 +820,9 @@ pub struct TriApp {
     /// Dernière ligne des métadonnées cliquée sans modificateur : départ de Maj+clic et de
     /// Ctrl+clic (la souris qui passe déplace la ligne pointée).
     meta_clicked: Option<usize>,
+    /// Ligne pointée marquée d'une bande ; pas après un Ctrl+clic (on travaille à la
+    /// souris), de nouveau au clavier ou au clic simple.
+    meta_cursor_shown: bool,
     /// Titre de la dernière section du panneau de droite dessinée (icône « tout
     /// sélectionner » des EXIF à son bout).
     section_title_rect: Option<Rect>,
@@ -1426,6 +1429,7 @@ impl TriApp {
             meta_anchor: None,
             meta_extra: Default::default(),
             meta_clicked: None,
+            meta_cursor_shown: true,
             section_title_rect: None,
             side_items: Vec::new(),
             side_detached: false,
@@ -2705,11 +2709,15 @@ impl TriApp {
                             // Sélection (y la copie) ; la ligne pointée en bande : au
                             // clavier, sinon sous la souris ; pointée dans la sélection :
                             // les deux bandes, plus marquée.
+                            // Un peu plus marquée que la ligne pointée, pour les distinguer.
                             if focused && several && selected.contains(&i) {
-                                cursor_row(ui, rect, self.gui.dialogs.cursor_tint);
+                                cursor_row(ui, rect, self.gui.dialogs.cursor_tint * 1.8);
                             }
+                            // Après un Ctrl+clic, plus de ligne pointée marquée (retour du
+                            // 09/11/2026 : la ligne retirée gardait la bande du curseur et
+                            // semblait toujours sélectionnée).
                             let pointed = if focused {
-                                i == self.meta_cursor
+                                i == self.meta_cursor && self.meta_cursor_shown
                             } else {
                                 hovered
                             };
@@ -2784,9 +2792,11 @@ impl TriApp {
                         }
                         self.meta_anchor = None;
                         self.meta_extra = extra;
+                        self.meta_cursor_shown = false;
                     } else if modifiers.shift {
                         self.meta_extra.clear();
                         self.meta_anchor.get_or_insert(start);
+                        self.meta_cursor_shown = true;
                     } else {
                         self.clear_meta_selection();
                         self.meta_clicked = Some(i);
@@ -6701,6 +6711,7 @@ impl TriApp {
             }
             Action::MetaUp | Action::MetaSelectUp => {
                 if action == Action::MetaSelectUp {
+                    self.meta_cursor_shown = true;
                     self.meta_anchor.get_or_insert(self.meta_cursor);
                 } else {
                     self.clear_meta_selection();
@@ -6710,6 +6721,7 @@ impl TriApp {
             }
             Action::MetaDown | Action::MetaSelectDown => {
                 if action == Action::MetaSelectDown {
+                    self.meta_cursor_shown = true;
                     self.meta_anchor.get_or_insert(self.meta_cursor);
                 } else {
                     self.clear_meta_selection();
@@ -15324,6 +15336,7 @@ impl TriApp {
         self.side_cursor = None;
         self.meta_extra.clear();
         self.meta_clicked = None;
+        self.meta_cursor_shown = true;
         self.meta_anchor = Some(0);
         self.meta_cursor = self.meta_rows.len().saturating_sub(1);
     }
@@ -15359,6 +15372,7 @@ impl TriApp {
         self.meta_anchor = None;
         self.meta_extra.clear();
         self.meta_clicked = None;
+        self.meta_cursor_shown = true;
     }
 
     /// Décharger ou éjecter le support amovible pointé dans le panneau des dossiers : les
@@ -26157,6 +26171,46 @@ mod tests {
         h.run_steps(3);
         let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
         assert!(notice.contains(&label), "{notice}");
+    }
+
+    #[test]
+    fn ctrl_click_after_select_all_takes_the_row_out_at_once() {
+        // Retour du 09/11/2026 : Ctrl+A, puis Ctrl+clic sur « Nom » ne semblait rien
+        // retirer (la ligne gardait la bande du curseur), Ctrl+clic sur la suivante
+        // retirait « Nom ».
+        let (mut h, _dir) = harness();
+        h.state_mut().metadata_panel = true;
+        run_until(&mut h, |app| app.meta_rows.len() >= 3);
+        h.state_mut().select_all_metadata();
+        h.run_steps(2);
+        let label = h.state().meta_rows[0].label.clone();
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while h.state().meta_anchor.is_some() {
+            assert!(Instant::now() < deadline, "clic jamais reçu");
+            let at = h.get_by_label(&label).rect().center();
+            h.event(UiEvent::ModifiersChanged(Modifiers::CTRL));
+            h.event(UiEvent::PointerMoved(at));
+            for pressed in [true, false] {
+                h.event(UiEvent::PointerButton {
+                    pos: at,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Modifiers::CTRL,
+                });
+            }
+            h.run_steps(1);
+        }
+        let picked = h.state().meta_selection();
+        assert!(!picked.contains(&0), "Nom retiré : {picked:?}");
+        assert_eq!(picked.len(), h.state().meta_rows.len() - 1);
+        assert!(
+            !h.state().meta_cursor_shown,
+            "plus de bande du curseur sur Nom"
+        );
+        // Au clavier, la ligne pointée revient.
+        h.event(UiEvent::ModifiersChanged(Modifiers::NONE));
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        assert!(h.state().meta_cursor_shown);
     }
 
     fn run_until(h: &mut Harness<'_, TriApp>, done: impl Fn(&TriApp) -> bool) {
