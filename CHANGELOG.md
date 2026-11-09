@@ -8,7 +8,8 @@
   disabling every development software in the settings left it visible and active until
   turned off by hand. A disabled software now leaves the filter's list (it comes back
   checked when enabled again); when none of the filter's software is active any more, the
-  filter turns itself off and says so in the status bar (#395).
+  filter turns itself off and says so in the status bar (#395). With a single software
+  left, no more empty line under the filter's box.
 
 ## 1.0.0-beta.1 — 2026-11-09
 

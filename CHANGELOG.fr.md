@@ -8,7 +8,8 @@
   désactiver tous les logiciels de développement dans les réglages le laissait visible et
   actif jusqu'à ce qu'on l'éteigne à la main. Un logiciel désactivé sort maintenant de la
   liste du filtre (réactivé, il revient coché) ; quand plus aucun des logiciels du filtre
-  n'est actif, le filtre s'éteint de lui-même et le dit dans la barre d'état (#395).
+  n'est actif, le filtre s'éteint de lui-même et le dit dans la barre d'état (#395). Avec
+  un seul logiciel restant, plus de ligne vide sous la case du filtre.
 
 ## 1.0.0-beta.1 — 09/11/2026
 
