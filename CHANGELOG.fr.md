@@ -2,7 +2,12 @@
 
 *[English version](CHANGELOG.md)*
 
-## Non publié
+## 1.0.0-beta.1 — 09/11/2026
+
+Première bêta : notes accordées avec darktable et inscrites dans les images (notes dans
+les images, fusion et conflits, listes de couleurs), palette de commandes et aide, zoom
+et loupe au clavier, comparaison jusqu'à 21 images, versions, révision des raccourcis,
+et les corrections des tests de bout en bout sur macOS, Linux et Windows.
 
 - **Compteur d'images de la barre des filtres** (#386) : « 570/571 » pour 570 photos ; un
   sidecar RapidRAW (`.rrdata`) comptait dans le total du dossier alors que son

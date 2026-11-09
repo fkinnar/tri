@@ -2,7 +2,12 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
-## Unreleased
+## 1.0.0-beta.1 — 2026-11-09
+
+First beta: ratings kept in step with darktable and inside the images (embedded ratings,
+merge and conflicts, colour lists), command palette and help, zoom and loupe from the
+keyboard, comparison of up to 21 images, versions, a review of the shortcuts, and the
+fixes from the end-to-end tests on macOS, Linux and Windows.
 
 - **Image count of the filter bar** (#386): "570/571" for 570 photos; a RapidRAW sidecar
   (`.rrdata`) counted in the folder total while its development was hidden, RapidRAW
