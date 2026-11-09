@@ -709,6 +709,10 @@ filter_toast_ms = 1500
 # en fond) : durée à l'écran au départ, puis à la fin (millisecondes ; 0 : jamais). La
 # progression reste dans la barre d'état.
 develop_toast_ms = 6000
+# Bulle de fin d'export au milieu de l'écran, avec « Ouvrir le dossier » : durée
+# (millisecondes ; 0 : jamais). Gardée tant que le pointeur est dessus ; une erreur reste
+# jusqu'à ce qu'on la ferme.
+export_toast_ms = 5000
 # Piles (images semblables regroupées) affichées au démarrage ; false : chaque image
 # seule, <core.stack.mode> ou le bouton pile les affichent (instantané : les empreintes se
 # calculent en fond, voir [similarity] background).

@@ -383,7 +383,14 @@ Crop presets are created the same way (see `versions.md`).
     this time only (Tab completion), with the rule recalled and the actual destination
     of the first image.
   - **Export**: Enter. It runs in the background, with a progress bar in the status bar
-    (× button to stop it), then a summary.
+    (× button to stop it), then a summary. The summary also shows **in the middle of the
+    screen** (#381, 2026-11-09: the end of an export went unnoticed in the status bar):
+    "3 images exported", the folder below, and **"Open the folder"** (the first written
+    file shown in the file manager; files written in several folders: "Show the report"
+    instead). It fades after `[gui.grid] export_toast_ms` (5 s; 0: never shown), waits
+    while the pointer is on it, and an error stays until "Close". One bubble per export,
+    one under the other (`TriApp::export_toasts`): an error is never replaced by the
+    summary of a later export. Not shown for an export stopped by hand.
 - **Export report** (`Ctrl+Shift+E`, action `core.file.export.report`; user's idea from
   2026-10-20): the list of finished exports, most recent at the top, in a scrolling area
   of limited height. For each: preset, version, files written out of images requested,

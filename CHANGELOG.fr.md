@@ -4,6 +4,12 @@
 
 ## Non publié
 
+- **Fin d'un export au milieu de l'écran** (#399) : le bilan (« 3 images exportées », le
+  dossier) s'affiche aussi dans une bulle sur les images, avec « Ouvrir le dossier »
+  (« Voir le rapport » quand les fichiers sont partis dans plusieurs dossiers). Il
+  s'efface après quelques secondes (`[gui.grid] export_toast_ms`), attend tant que le
+  pointeur est dessus ; une erreur reste jusqu'à ce qu'on la ferme, même quand d'autres
+  exports finissent après (#381).
 - **Ctrl+Maj+clic dans les lignes EXIF** (#401) : Ctrl+Maj+clic (Cmd+Maj+clic) ajoute la
   plage depuis la dernière ligne cliquée à la sélection, en gardant ce qui était
   sélectionné ; Maj+clic seul la remplace toujours. Un Ctrl+clic compte maintenant aussi

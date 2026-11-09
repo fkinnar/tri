@@ -690,6 +690,14 @@ export-done = { $n ->
 export-done-passthrough = { " " }({ $n } without recompression)
 export-partial = { $n } exported, { $failed } failed (unreadable by Darktable?), to { $dest }
 export-cancelled = Export stopped (files already written are kept).
+export-toast-done = { $n ->
+    [one] 1 image exported
+   *[other] { $n } images exported
+}
+export-toast-partial = { $n } exported, { $failed } failed
+export-toast-open-folder = Open the folder
+export-toast-report = Show the report
+export-toast-close = Close
 export-progress = Export “{ $profile }” { $done }/{ $total }
 export-cancel = Stop the export
 export-report-title = Export report

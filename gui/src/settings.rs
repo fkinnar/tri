@@ -634,6 +634,10 @@ pub struct GridSettings {
     /// nouveau en fond) : durée à l'écran au départ, puis à la fin (millisecondes ; 0 :
     /// jamais). La progression reste dans la barre d'état.
     pub develop_toast_ms: u64,
+    /// Bulle de fin d'export au milieu de l'écran, avec « Ouvrir le dossier » (#381) :
+    /// durée (millisecondes ; 0 : jamais). Gardée tant que le pointeur est dessus ; une
+    /// erreur reste jusqu'à ce qu'on la ferme.
+    pub export_toast_ms: u64,
     /// Piles affichées au démarrage (sinon chaque image seule ; Ctrl+S bascule). Les
     /// empreintes se calculent en fond quand même (`[similarity] background`) : la
     /// bascule est instantanée.
@@ -679,6 +683,7 @@ impl Default for GridSettings {
             bar_label_scale: 0.85,
             filter_toast_ms: 1500,
             develop_toast_ms: 6000,
+            export_toast_ms: 5000,
             stacks: false,
             search_width: 200.0,
             search_min_width: 80.0,

@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **End of an export in the middle of the screen** (#399): the summary ("3 images
+  exported", the folder) also shows in a bubble over the images, with "Open the folder"
+  ("Show the report" when the files went to several folders). It fades after a few
+  seconds (`[gui.grid] export_toast_ms`), waits while the pointer is on it; an error
+  stays until closed, even when other exports finish after it (#381).
 - **Ctrl+Shift+click in the EXIF rows** (#401): Ctrl+Shift+click (Cmd+Shift+click) adds
   the range from the last clicked row to the selection, keeping what was already
   selected; Shift+click alone still replaces it. A Ctrl+click now also counts as the

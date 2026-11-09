@@ -388,7 +388,15 @@ Les préréglages de recadrage se créent de la même façon (voir `versions.md`
     fois (complétion par Tab), avec la règle rappelée et la destination réelle de la
     première image.
   - **Export** : Entrée. Il se fait en fond, avec une barre de progression dans la barre
-    d'état (bouton × pour l'arrêter), puis un bilan.
+    d'état (bouton × pour l'arrêter), puis un bilan. Le bilan s'affiche aussi **au milieu
+    de l'écran** (#381, 09/11/2026 : la fin d'un export passait inaperçue dans la barre
+    d'état) : « 3 images exportées », le dossier dessous, et **« Ouvrir le dossier »** (le
+    premier fichier écrit montré dans le gestionnaire de fichiers ; fichiers écrits dans
+    plusieurs dossiers : « Voir le rapport » à la place). Il s'efface après
+    `[gui.grid] export_toast_ms` (5 s ; 0 : jamais montré), attend tant que le pointeur est
+    dessus, et une erreur reste jusqu'à « Fermer ». Une bulle par export, l'une sous
+    l'autre (`TriApp::export_toasts`) : une erreur n'est jamais remplacée par le bilan
+    d'un export suivant. Rien pour un export arrêté à la main.
 - **Rapport d'export** (`Ctrl+Maj+E`, action `core.file.export.report` ; idée de
   l'utilisateur du 20/10/2026) : la liste des exports terminés, les plus récents en
   haut, dans une zone à hauteur limitée qui défile. Pour chacun : préréglage, version,
