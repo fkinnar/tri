@@ -671,8 +671,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   clic** (#383) : le raccourci de copie du panneau (`y`, `Ctrl+C` / `Cmd+C`, Maj+`y`)
   copie la ligne sous la souris même quand le panneau n'a pas le clavier
   (`Keymap::panel_action`) ; ailleurs, la touche garde son effet (`Ctrl+C` : copier
-  l'image vers…). Textes des deux panneaux latéraux non sélectionnables : plus de curseur
-  de texte au survol. Grand
+  l'image vers…). Textes des deux panneaux latéraux et des barres non sélectionnables :
+  plus de curseur de texte au survol (`bar_texts`). Grand
   histogramme ouvert : `r`, `g`, `b` un canal, `a` tous (il prend les touches le temps
   d'être ouvert : `b` n'y change pas la source). Un seul keymap : chaque action dit son panneau (`Action::scope`) ; à la
   recherche d'une touche, celle du panneau actif l'emporte sur l'action générale, et les

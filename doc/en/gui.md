@@ -625,7 +625,8 @@ system one ("cold" measurements, experiments).
   (#383): the panel's copy shortcut (`y`, `Ctrl+C` / `Cmd+C`, Shift+`y`) copies the row
   under the mouse even when the panel does not have the keyboard
   (`Keymap::panel_action`); elsewhere, the key keeps its effect (`Ctrl+C`: copy the
-  image to…). Texts of both side panels are not selectable: no text cursor on hover. Large histogram open:
+  image to…). Texts of both side panels and of the bars are not selectable: no text cursor
+  on hover (`bar_texts`). Large histogram open:
   `r`, `g`, `b` one channel, `a` all (it takes the keys while open: `b` does not change
   the source there). A single keymap: each action states its panel (`Action::scope`);
   when looking up a key, the active panel's one wins over the general action, and

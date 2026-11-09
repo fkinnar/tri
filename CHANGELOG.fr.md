@@ -16,7 +16,7 @@
   `Cmd+C`) copie la ligne EXIF sous la souris, sans clic. Le pointeur est une main sur
   tout ce qui se clique dans les barres et les panneaux (boutons, cases et leur libellé,
   listes, lignes des dossiers), comme dans les boîtes, au lieu d'un mélange de main, de flèche et de
-  curseur de texte.
+  curseur de texte ; plus de curseur de texte sur les textes des barres non plus.
 - **Sortie d'une comparaison ouverte du plein écran** (#379, corrige #376) : elle
   ramenait à la grille ; elle ramène maintenant au plein écran, sur l'image active
   (bouton « Retour au plein écran »). Ouverte de la grille, elle ramène toujours à la

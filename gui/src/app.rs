@@ -16773,6 +16773,7 @@ impl eframe::App for TriApp {
         // Barre du haut : icône et nom, à gauche (comme darktable).
         if self.gui.title_bar && !self.focus_mode {
             egui::Panel::top("title").show(ui, |ui| {
+                bar_texts(ui);
                 self.title_bar(ui);
                 hand_over_clickable(ui);
             });
@@ -16783,6 +16784,7 @@ impl eframe::App for TriApp {
             steps.mark("titre");
             egui::Panel::bottom("status")
                 .show(ui, |ui| {
+                    bar_texts(ui);
                     let shown = self.status_bar(ui);
                     hand_over_clickable(ui);
                     shown
@@ -16863,6 +16865,7 @@ impl eframe::App for TriApp {
                             .frame(frame)
                             .show_separator_line(false)
                             .show(ui, |ui| {
+                                bar_texts(ui);
                                 ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
                                     self.tasks_ui(ui, &tasks, false)
                                 })
@@ -16914,6 +16917,7 @@ impl eframe::App for TriApp {
             let mut action = None;
             let preset_tip = self.keymap.with_keys(&t!("crop-preset-tip"));
             egui::Panel::bottom("crop").show(ui, |ui| {
+                bar_texts(ui);
                 if let Some(crop) = &mut self.crop {
                     crop.preset_tip = preset_tip;
                     action = crop.bar(
@@ -16940,6 +16944,7 @@ impl eframe::App for TriApp {
             && self.error.is_none()
         {
             egui::Panel::bottom("rating").show(ui, |ui| {
+                bar_texts(ui);
                 self.rating_bar(ui);
                 hand_over_clickable(ui);
             });
@@ -16954,6 +16959,7 @@ impl eframe::App for TriApp {
             && self.crop.is_none()
         {
             egui::Panel::top("filters").show(ui, |ui| {
+                bar_texts(ui);
                 self.filter_bar(ui);
                 hand_over_clickable(ui);
             });
@@ -17940,6 +17946,12 @@ enum MetaMenu {
     Selection,
     /// Tout le panneau.
     All,
+}
+
+/// Textes d'une barre non sélectionnables (retour du 09/11/2026 : le curseur de texte sur
+/// le nom du dossier et le compte d'images de la barre d'état), comme dans les panneaux.
+fn bar_texts(ui: &mut Ui) {
+    ui.style_mut().interaction.selectable_labels = false;
 }
 
 /// La main sur ce qui se clique dans une barre ou un panneau (retour du 09/11/2026,
@@ -28507,6 +28519,13 @@ mod tests {
             hover(&mut h, cell.center()),
             egui::CursorIcon::Default,
             "vignette"
+        );
+        // Texte de la barre d'état : la flèche, pas le curseur de texte.
+        let count = h.get_by_label_contains("3 images").rect().center();
+        assert_eq!(
+            hover(&mut h, count),
+            egui::CursorIcon::Default,
+            "barre d'état"
         );
         // Lignes des EXIF : la flèche, un clic n'y fait que pointer.
         run_until(&mut h, |app| app.meta_rows.len() > 2);
