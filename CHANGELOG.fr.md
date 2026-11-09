@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Compteur d'images de la barre des filtres** (#386) : « 570/571 » pour 570 photos ; un
+  sidecar RapidRAW (`.rrdata`) comptait dans le total du dossier alors que son
+  développement était masqué, RapidRAW étant absent ou désactivé. Le total laisse
+  maintenant de côté les développements de ces logiciels, comme la grille.
 - **Plusieurs lignes EXIF** (#386, corrige #384) : Maj+clic, Ctrl+clic ou Cmd+clic pour
   ajouter ou retirer une ligne, Ctrl+A et une icône à côté du titre « EXIF » pour tout sélectionner ; la
   sélection est une bande grise sur la ligne au lieu de cadres bleus. Le clic droit sur

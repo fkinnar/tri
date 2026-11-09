@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Image count of the filter bar** (#386): "570/571" for 570 photos; a RapidRAW sidecar
+  (`.rrdata`) counted in the folder total while its development was hidden, RapidRAW
+  being absent or disabled. The total now leaves out the developments of such software,
+  like the grid.
 - **Several EXIF rows** (#386, fixes #384): Shift+click, Ctrl+click or Cmd+click to add or remove a row,
   Ctrl+A and an icon next to the "EXIF" title to select everything; the selection is a
   grey band across the row instead of blue boxes. Right-click on a row copies its value,

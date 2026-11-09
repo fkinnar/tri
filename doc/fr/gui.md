@@ -811,7 +811,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Panneau de droite en sections** (réorganisation du 27/10/2026, idée de
   l'utilisateur ; `TriApp::side_panel`) : la barre des filtres ne garde que ce qui se
   règle d'un clic (étoiles, drapeaux, interrupteurs nettes / bien exposées /
-  développées, couleurs) et la recherche par nom, avec le nombre d'images, l'inversion
+  développées, couleurs) et la recherche par nom, avec le nombre d'images (« affichées / du dossier » ; le total
+  sans les développements des logiciels absents ou désactivés, masqués de la grille,
+  `TriApp::folder_total`, 09/11/2026), l'inversion
   et l'effacement ; les **réglages** passent dans le panneau de droite, en sections
   titrées comme celles du panneau des dossiers (`section_title` : majuscules, gras, à
   l'accent, `[gui.folders] section_scale`, écart `section_gap` au-dessus), repliables

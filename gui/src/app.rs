@@ -467,6 +467,10 @@ pub struct TriApp {
     /// Dernier refiltrage de la grille (filtres sur l'analyse pendant son calcul : au plus
     /// toutes les `[gui] analysis_refilter_ms`, issue n° 73).
     refiltered_at: Instant,
+    /// Images du dossier pour le compteur « affichées / du dossier » : sans les
+    /// développements des logiciels absents ou désactivés, masqués de la grille (retour du
+    /// 09/11/2026 : 570/571 pour 570 RAF, un `.rrdata` de RapidRAW désactivé comptait).
+    folder_total: usize,
     /// Carte de netteté affichée en 1:1 (`p`).
     peaking: bool,
     /// Collimateur de mise au point affiché (`m`).
@@ -1274,6 +1278,7 @@ impl TriApp {
             sort_pending: false,
             exposure_refilter_pending: false,
             refiltered_at: Instant::now(),
+            folder_total: 0,
             progress_hidden_until: None,
             tasks_open: false,
             #[cfg(test)]
@@ -4963,6 +4968,12 @@ impl TriApp {
         // Type de fichier et recherche par nom (`/`) : la base, jamais inversée. Sans les
         // développements des logiciels absents ou désactivés (07/11/2026).
         let engines = self.developers.engines();
+        self.folder_total = self
+            .folder
+            .files
+            .iter()
+            .filter(|f| tri::developments::get(&f.path).is_none_or(|d| engines.contains(&d.engine)))
+            .count();
         let base = tri::fuzzy::NameFilter {
             query: &self.name_query,
         }
@@ -14006,7 +14017,7 @@ impl TriApp {
                 ui.weak(t!(
                     "filter-bar-count",
                     shown = self.files.len(),
-                    n = self.folder.files.len()
+                    n = self.folder_total
                 ))
                 .on_hover_text(t!("filter-bar-count-tip"));
                 // Recherche par nom : en grille seulement (retour du 06/11/2026 : en vue
@@ -26260,6 +26271,27 @@ mod tests {
         h.event(UiEvent::ModifiersChanged(Modifiers::NONE));
         press(&mut h, Key::ArrowDown, Modifiers::NONE);
         assert!(h.state().meta_cursor_shown);
+    }
+
+    #[test]
+    fn the_folder_count_leaves_out_developments_of_absent_software() {
+        // Retour du 09/11/2026 : 570/571 pour 570 RAF ; un `.rrdata` de RapidRAW (absent
+        // ou désactivé, son développement masqué de la grille) comptait dans le total.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        std::fs::write(
+            dir.path().join("photos").join("img0.jpg.rrdata"),
+            br#"{"adjustments": {"exposure": 1}}"#,
+        )
+        .unwrap();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| {
+            app.folder.files.len() == 4 && app.loading.is_none()
+        });
+        h.run_steps(3);
+        assert_eq!(h.state().files.len(), 3, "développement masqué");
+        let count = t!("filter-bar-count", shown = 3, n = 3);
+        assert!(h.query_by_label(&count).is_some(), "3/3, pas 3/4");
     }
 
     fn run_until(h: &mut Harness<'_, TriApp>, done: impl Fn(&TriApp) -> bool) {
