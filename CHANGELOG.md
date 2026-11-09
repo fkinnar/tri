@@ -2,6 +2,14 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
+## Unreleased
+
+- **"Developed" filter after disabling the software** (#397): with the filter on,
+  disabling every development software in the settings left it visible and active until
+  turned off by hand. A disabled software now leaves the filter's list (it comes back
+  checked when enabled again); when none of the filter's software is active any more, the
+  filter turns itself off and says so in the status bar (#395).
+
 ## 1.0.0-beta.1 — 2026-11-09
 
 First beta: ratings kept in step with darktable and inside the images (embedded ratings,

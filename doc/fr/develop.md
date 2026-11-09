@@ -238,7 +238,13 @@ nomme le logiciel s'il est seul, les sigles s'ils sont plusieurs (« DT + RR »,
 session à l'autre (`gui-state.toml`, `developed_engines`) ; au premier lancement, tous
 les logiciels installés. Un seul logiciel installé (#301, 05/11/2026) : pas de case à
 lui, la case « Développées » le vise. Un logiciel sans aucun développement dans le
-dossier est grisé dans la liste (05/11/2026, `TriApp::developed_in`). Moteur : `develop::DevelopedRule` (logiciels cochés) et
+dossier est grisé dans la liste (05/11/2026, `TriApp::developed_in`). Un logiciel
+désactivé dans les réglages (ou introuvable) **sort de la liste** et du filtre (#395,
+09/11/2026), sans être oublié : réactivé, il revient coché. Quand plus aucun des
+logiciels du filtre n'est actif (aucun du tout, ou aucun des cochés), le filtre
+**s'éteint de lui-même** et le dit dans la barre d'état
+(`TriApp::drop_inactive_developed`, aussi en rouvrant un dossier dont le filtre était
+retenu allumé). Moteur : `develop::DevelopedRule` (logiciels cochés) et
 `DevelopedFilter` (trait `Filter`), qui lisent les sidecars (`Engine::sidecar` :
 historique darktable non vide, `.rrdata` de RapidRAW) ; une image plate n'a pas de
 développement. Filtre sur le contenu : effacé par `f Échap`, inversible (`f i`).

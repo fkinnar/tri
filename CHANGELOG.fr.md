@@ -2,6 +2,14 @@
 
 *[English version](CHANGELOG.md)*
 
+## Non publié
+
+- **Filtre « Développées » après avoir désactivé les logiciels** (#397) : filtre allumé,
+  désactiver tous les logiciels de développement dans les réglages le laissait visible et
+  actif jusqu'à ce qu'on l'éteigne à la main. Un logiciel désactivé sort maintenant de la
+  liste du filtre (réactivé, il revient coché) ; quand plus aucun des logiciels du filtre
+  n'est actif, le filtre s'éteint de lui-même et le dit dans la barre d'état (#395).
+
 ## 1.0.0-beta.1 — 09/11/2026
 
 Première bêta : notes accordées avec darktable et inscrites dans les images (notes dans

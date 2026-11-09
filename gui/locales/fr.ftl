@@ -1154,6 +1154,7 @@ filter-developed-none = sans développement
 filter-developed-engine = développées dans { $engine }
 filter-developed-tip = Logiciels de développement : les images développées dans l'un des logiciels cochés, montrées dans le plus récent ; aucun coché : les images sans développement, en rendu LibRaw
 filter-developed-unusable = Aucune photo développée dans ce dossier : le filtre « Développées » n'a rien à montrer.
+filter-developed-off = Filtre « Développées » éteint : plus aucun de ses logiciels de développement n'est actif.
 develop-with = Développer avec
 develop-with-choose = choisir…
 develop-with-libraw = Rendu RAW (LibRaw)
