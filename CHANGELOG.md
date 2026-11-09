@@ -4,7 +4,7 @@
 
 ## Unreleased
 
-- **Several EXIF rows** (#386, fixes #384): Shift+click, Ctrl+click (Cmd+click on macOS),
+- **Several EXIF rows** (#386, fixes #384): Shift+click, Ctrl+click or Cmd+click to add or remove a row,
   Ctrl+A and an icon next to the "EXIF" title to select everything; the selection is a
   grey band across the row instead of blue boxes. Right-click on a row copies its value,
   the selection or everything.

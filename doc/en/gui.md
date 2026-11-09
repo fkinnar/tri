@@ -612,7 +612,7 @@ system one ("cold" measurements, experiments).
   "label: value" per row; `Ctrl+C` / `Cmd+C` too), Shift+`y` copies the whole panel; a
   click on a row points at it and gives the keyboard to the panel. **Several rows**
   (2026-11-09, #384): Shift+click extends from the last clicked row, Ctrl+click
-  (Cmd+click on macOS) adds or removes a row, Ctrl+A and the icon at the end of the
+  or Cmd+click adds or removes a row (the first one too, alone), Ctrl+A and the icon at the end of the
   "EXIF" title select everything; the selection is the grey band across the whole width
   (no more blue background per row). **Right-click** on a row: copy the value, the
   selection (if the row is part of it), everything. **Without a click**

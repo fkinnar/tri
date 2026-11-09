@@ -2761,12 +2761,17 @@ impl TriApp {
                     // Départ : la dernière ligne cliquée (la souris qui passe déplace la
                     // ligne pointée), sinon la ligne pointée au clavier.
                     let start = self.meta_clicked.unwrap_or(self.meta_cursor);
-                    if modifiers.command {
-                        // La sélection en cours devient une liste, puis la ligne bascule.
+                    // Ctrl ou Cmd, sur tous les systèmes (retour du 09/11/2026 : Ctrl+clic
+                    // sur macOS ne faisait qu'un clic simple).
+                    if modifiers.command || modifiers.ctrl {
+                        // La sélection en cours devient une liste, puis la ligne bascule ;
+                        // sans sélection, la ligne cliquée avant (s'il y en a une) et
+                        // celle-ci, sinon celle-ci seule (retour du 09/11/2026 : dès la
+                        // première ligne voulue).
                         let mut extra = if self.meta_selecting() {
                             self.meta_selection()
                         } else {
-                            std::iter::once(start).collect()
+                            self.meta_clicked.into_iter().collect()
                         };
                         if !extra.remove(&i) {
                             extra.insert(i);
@@ -26089,6 +26094,11 @@ mod tests {
                 h.run_steps(1);
             }
         };
+        // Ctrl+clic d'abord : cette ligne seule (pas aussi la ligne pointée).
+        click(&mut h, 1, Modifiers::COMMAND, &|app| {
+            !app.meta_extra.is_empty()
+        });
+        assert_eq!(picked(&h), [1]);
         click(&mut h, 0, Modifiers::NONE, &|app| {
             app.meta_clicked == Some(0)
         });
@@ -26100,7 +26110,7 @@ mod tests {
         let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
         assert!(notice.contains("2 lignes"), "{notice}");
         // Ctrl+clic de nouveau : la ligne sort de la sélection.
-        click(&mut h, 2, Modifiers::COMMAND, &|app| {
+        click(&mut h, 2, Modifiers::CTRL, &|app| {
             app.meta_selection().into_iter().collect::<Vec<_>>() == [0]
         });
         // Maj+clic : de la ligne cliquée à celle-ci.
