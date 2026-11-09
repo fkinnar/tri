@@ -609,7 +609,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   0 pour aucun), la barre d'état le dit ; la ligne pointée au clavier
   (dossiers, métadonnées, résultats de recherche) est une **bande grise discrète** sur
   toute la largeur (`[gui.dialogs] cursor_tint`, `cursor_row` ; cadre d'accent avant le
-  25/10/2026, trop voyant et coupé à gauche quand le panneau défilait) ;
+  25/10/2026, trop voyant et coupé à gauche quand le panneau défilait). **Le survol
+  pointe** (09/11/2026, #383, #385) : la souris qui bouge sur une ligne des dossiers ou
+  des EXIF y met la bande (une seule bande, le clavier repart de là) ; panneau sans le
+  clavier, la bande suit la souris. Le dossier ouvert garde son fond d'accent, à part ;
+  plus de fond ni de cadre d'egui autour du nom survolé. Partout, le survol d'un
+  contrôle n'a plus de cadre blanc, seulement son fond gris clair, comme les icônes des
+  barres (`Theme::apply`) ;
   un clic dans un panneau lui donne le clavier, un clic dans la zone des images le leur
   rend (`TriApp::click_focus`, 22/10/2026 ; les boîtes ouvertes par-dessus ne comptent
   pas). **Ses touches passent d'abord, les autres
@@ -648,7 +654,25 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   l'histogramme en grand ; Maj + ↑ ↓ / Maj + `j` `k`
   (ou Maj+clic) étendent la sélection, `y` la copie (une ligne : la valeur ; plusieurs :
   « libellé : valeur » par ligne ; `Ctrl+C` / `Cmd+C` aussi), Maj+`y` copie tout le
-  panneau ; un clic sur une ligne la pointe et donne le clavier au panneau. Grand
+  panneau ; un clic sur une ligne la pointe et donne le clavier au panneau.
+  **Plusieurs lignes** (09/11/2026, #384) : Maj+clic étend depuis la dernière ligne
+  cliquée, Ctrl+clic ou Cmd+clic ajoute ou retire une ligne (la première
+  aussi, seule), Ctrl+A et l'icône
+  au bout du titre « EXIF » sélectionnent tout ; la sélection est la bande grise sur
+  toute la largeur (plus de fond bleu par ligne), un peu plus marquée que la ligne
+  pointée ; après un Ctrl+clic, la ligne pointée n'est plus marquée (la ligne retirée
+  semblait sinon toujours sélectionnée), de nouveau au clavier ou au clic simple.
+  La ligne cliquée garde une bande intermédiaire (plus marquée que le survol, moins que
+  la sélection) : le départ du Maj+clic ou du Ctrl+clic suivant ; les bandes sont
+  calculées après la grille, coupées au milieu de l'interligne et arrondies au pixel
+  de l'écran, pas au point d'egui (toujours le même écart entre deux bandes, écran mis à
+  l'échelle compris). **Clic droit** sur une ligne : copier
+  la valeur, la sélection (si la ligne en fait partie), tout. **Sans
+  clic** (#383) : le raccourci de copie du panneau (`y`, `Ctrl+C` / `Cmd+C`, Maj+`y`)
+  copie la ligne sous la souris même quand le panneau n'a pas le clavier
+  (`Keymap::panel_action`) ; ailleurs, la touche garde son effet (`Ctrl+C` : copier
+  l'image vers…). Textes des deux panneaux latéraux et des barres non sélectionnables :
+  plus de curseur de texte au survol (`bar_texts`). Grand
   histogramme ouvert : `r`, `g`, `b` un canal, `a` tous (il prend les touches le temps
   d'être ouvert : `b` n'y change pas la source). Un seul keymap : chaque action dit son panneau (`Action::scope`) ; à la
   recherche d'une touche, celle du panneau actif l'emporte sur l'action générale, et les
@@ -675,7 +699,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (cochée) ; renommage : le cache suit toujours. Le travail se fait en fond
   (`TriApp::cache_job`), message dans la barre d'état.
 - **Pointeur dans les boîtes** : la main sur tout ce qui se clique (`interact_cursor` dans
-  le cadre commun `Dialog`) ; « saisir » ailleurs, pour déplacer la boîte.
+  le cadre commun `Dialog`) ; « saisir » ailleurs, pour déplacer la boîte. **Dans les
+  barres et les panneaux aussi** (09/11/2026, #386 : la main sur les icônes des barres,
+  la flèche sur les cases des panneaux, pas cohérent) : la main sur tout ce qui se clique
+  (boutons, cases et leur libellé, listes, curseurs, lignes des dossiers ;
+  `hand_over_clickable`, et `interact_cursor` pour les boutons d'egui partout, menus
+  compris) ; pas sur les images (grille, plein écran), ni sur les lignes des EXIF (un
+  clic n'y fait que pointer la ligne ; la main le jour où il fera quelque chose).
 - **Actions sur les fichiers** (17/10/2026, moteur : `tri::files`, voir `files.md`) :
   renommer (`F2`), mettre à la corbeille (`Suppr`, `Backspace` — la touche « effacer »
   des Mac — ou `x`, comme dans vim ; `dd` retiré le 18/10/2026), afficher dans le Finder / le gestionnaire de
@@ -781,7 +811,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Panneau de droite en sections** (réorganisation du 27/10/2026, idée de
   l'utilisateur ; `TriApp::side_panel`) : la barre des filtres ne garde que ce qui se
   règle d'un clic (étoiles, drapeaux, interrupteurs nettes / bien exposées /
-  développées, couleurs) et la recherche par nom, avec le nombre d'images, l'inversion
+  développées, couleurs) et la recherche par nom, avec le nombre d'images (« affichées / du dossier » ; le total
+  sans les développements des logiciels absents ou désactivés, masqués de la grille,
+  `TriApp::folder_total`, 09/11/2026), l'inversion
   et l'effacement ; les **réglages** passent dans le panneau de droite, en sections
   titrées comme celles du panneau des dossiers (`section_title` : majuscules, gras, à
   l'accent, `[gui.folders] section_scale`, écart `section_gap` au-dessus), repliables

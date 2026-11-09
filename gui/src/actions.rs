@@ -1917,6 +1917,16 @@ impl Keymap {
         self.focus = focus;
     }
 
+    /// Action du panneau `scope` liée à `chord` seule (sans séquence), même si le panneau
+    /// n'a pas le clavier : la copie de la ligne des métadonnées sous la souris (issue
+    /// n° 383).
+    pub fn panel_action(&self, scope: Scope, chord: Chord) -> Option<Action> {
+        self.bindings
+            .iter()
+            .find(|(k, a)| k.as_slice() == [chord] && a.scope() == Some(scope))
+            .map(|&(_, a)| a)
+    }
+
     /// Vrai si `key` seule (sans modificateur) déclenche une action ou commence une
     /// séquence, dans le panneau des images.
     pub fn binds(&self, key: Key) -> bool {

@@ -467,6 +467,10 @@ pub struct TriApp {
     /// Dernier refiltrage de la grille (filtres sur l'analyse pendant son calcul : au plus
     /// toutes les `[gui] analysis_refilter_ms`, issue n° 73).
     refiltered_at: Instant,
+    /// Images du dossier pour le compteur « affichées / du dossier » : sans les
+    /// développements des logiciels absents ou désactivés, masqués de la grille (retour du
+    /// 09/11/2026 : 570/571 pour 570 RAF, un `.rrdata` de RapidRAW désactivé comptait).
+    folder_total: usize,
     /// Carte de netteté affichée en 1:1 (`p`).
     peaking: bool,
     /// Collimateur de mise au point affiché (`m`).
@@ -803,12 +807,29 @@ pub struct TriApp {
     /// copier la valeur).
     meta_cursor: usize,
     meta_rows: Vec<tri::metadata::Row>,
+    /// Ligne des métadonnées sous la souris à la dernière image dessinée (issue n° 383) :
+    /// le raccourci de copie du panneau la copie, même sans le clavier.
+    meta_hover: Option<usize>,
+    /// Pointeur sur la zone des lignes des métadonnées, interlignes compris : la flèche
+    /// (#386).
+    meta_area: bool,
     /// L'histogramme est en tête du panneau : premier élément pointable (Entrée l'ouvre
     /// en grand).
     meta_has_histogram: bool,
     /// Début d'une sélection de plusieurs lignes (Maj + flèches, Maj+clic) ; `None` : la
     /// ligne pointée seule.
     meta_anchor: Option<usize>,
+    /// Lignes ajoutées une à une à la sélection (Ctrl+clic, Cmd+clic sur macOS ; #384).
+    meta_extra: std::collections::BTreeSet<usize>,
+    /// Dernière ligne des métadonnées cliquée sans modificateur : départ de Maj+clic et de
+    /// Ctrl+clic (la souris qui passe déplace la ligne pointée).
+    meta_clicked: Option<usize>,
+    /// Ligne pointée marquée d'une bande ; pas après un Ctrl+clic (on travaille à la
+    /// souris), de nouveau au clavier ou au clic simple.
+    meta_cursor_shown: bool,
+    /// Titre de la dernière section du panneau de droite dessinée (icône « tout
+    /// sélectionner » des EXIF à son bout).
+    section_title_rect: Option<Rect>,
     /// Réglages du panneau de droite au clavier (retour du 27/10/2026) : éléments
     /// pointables dessinés (vrai : un titre de section), dans l'ordre, au-dessus des
     /// lignes des EXIF.
@@ -1257,6 +1278,7 @@ impl TriApp {
             sort_pending: false,
             exposure_refilter_pending: false,
             refiltered_at: Instant::now(),
+            folder_total: 0,
             progress_hidden_until: None,
             tasks_open: false,
             #[cfg(test)]
@@ -1405,9 +1427,15 @@ impl TriApp {
             history_open: false,
             focus: crate::actions::Scope::Images,
             meta_cursor: 0,
+            meta_hover: None,
+            meta_area: false,
             meta_rows: Vec::new(),
             meta_has_histogram: false,
             meta_anchor: None,
+            meta_extra: Default::default(),
+            meta_clicked: None,
+            meta_cursor_shown: true,
+            section_title_rect: None,
             side_items: Vec::new(),
             side_detached: false,
             palette_items: None,
@@ -1992,6 +2020,10 @@ impl TriApp {
     /// haut, puis les réglages — filtres et grille, en plein écran aussi —, et les
     /// métadonnées en bas, comme dans les autres logiciels.
     fn side_panel(&mut self, ui: &mut Ui) {
+        // Textes non sélectionnables : pas de curseur de texte sur les noms des
+        // filtres et les lignes des EXIF (retour du 09/11/2026, #386) ; on copie une ligne
+        // par son raccourci.
+        ui.style_mut().interaction.selectable_labels = false;
         self.meta_has_histogram = false;
         self.side_items.clear();
         // Pas pendant l'édition d'une version : il vaut pour l'image entière, pas pour le
@@ -2028,6 +2060,9 @@ impl TriApp {
             }
         }
         if self.panel_section(ui, "exif", t!("panel-section-exif")) {
+            if !self.files.is_empty() {
+                self.meta_select_all_icon(ui);
+            }
             self.metadata_panel(ui);
         } else {
             // Rien à copier ni à pointer sous une section repliée.
@@ -2188,6 +2223,7 @@ impl TriApp {
             rect.max,
         );
         self.side_end(ui, i, rect, clicked);
+        self.section_title_rect = Some(rect);
         clicked |= match key {
             Some(SideKey::Activate) => true,
             Some(SideKey::Left) => open,
@@ -2563,6 +2599,8 @@ impl TriApp {
     /// Métadonnées de l'image sélectionnée (section « Exif » du panneau de droite) : une
     /// ligne par donnée, pointables au clavier et copiables.
     fn metadata_panel(&mut self, ui: &mut Ui) {
+        self.meta_hover = None;
+        self.meta_area = false;
         let Some(file) = self.files.get(self.selected).cloned() else {
             ui.weak(t!("panel-no-image"));
             return;
@@ -2621,12 +2659,16 @@ impl TriApp {
                 // Le curseur ne parcourt que les lignes (issue n° 77 : l'histogramme encadré
                 // n'avait pas de sens ; Entrée l'ouvre en grand de toute façon).
                 self.meta_cursor = self.meta_cursor.min(rows.len().saturating_sub(1));
-                // Lignes sélectionnées.
-                let (lo, hi) = self.meta_range();
-                let picked = |i: usize| (lo..=hi).contains(&i);
-                let selection_fill = ui.visuals().selection.bg_fill.gamma_multiply(0.5);
+                // Lignes sélectionnées (#384) : une bande sur toute la largeur, comme la
+                // ligne pointée (le fond bleu par ligne était lourd sur plusieurs lignes).
+                let selected = self.meta_selection();
+                let several = selected.len() > 1 || !self.meta_extra.is_empty();
                 let mut clicked = None;
-                egui::Grid::new("metadata")
+                let mut menu: Option<(usize, MetaMenu)> = None;
+                let mut hover = None;
+                let moved = ui.input(|i| i.pointer.delta() != Vec2::ZERO);
+                let mut cells: Vec<Rect> = Vec::new();
+                let grid = egui::Grid::new("metadata")
                     .num_columns(2)
                     .spacing(vec2(10.0, 4.0))
                     .show(ui, |ui| {
@@ -2653,34 +2695,154 @@ impl TriApp {
                                 job.append(&format!("{sep}{note}"), 0.0, format(weak));
                             }
                             let b = ui.add(egui::Label::new(job).wrap().sense(Sense::click()));
-                            let rect = a.rect.union(b.rect).expand(2.0);
-                            // Sélection (y la copie) ; la ligne pointée au clavier en bande.
-                            if focused && picked(i) && hi > lo {
-                                ui.painter().rect_filled(rect, 3.0, selection_fill);
-                            }
-                            if focused && i == self.meta_cursor {
-                                cursor_row(ui, rect, self.gui.dialogs.cursor_tint);
-                                if scroll {
-                                    ui.scroll_to_rect(rect, Some(egui::Align::Center));
-                                }
-                            }
+                            cells.push(a.rect.union(b.rect));
                             if a.clicked() || b.clicked() {
-                                clicked = Some((i, ui.input(|inp| inp.modifiers.shift)));
+                                clicked = Some((i, ui.input(|inp| inp.modifiers)));
                             }
+                            // Clic droit (#384) : copier la ligne, la sélection, tout.
+                            let in_selection = several && selected.contains(&i);
+                            let menu_ui = |ui: &mut Ui| {
+                                let mut entry = |ui: &mut Ui, text: String, choice: MetaMenu| {
+                                    if ui.button(text).clicked() {
+                                        menu = Some((i, choice));
+                                        ui.close();
+                                    }
+                                };
+                                entry(ui, t!("metadata-menu-copy"), MetaMenu::Row);
+                                if in_selection {
+                                    entry(
+                                        ui,
+                                        t!("metadata-menu-copy-selection", n = selected.len()),
+                                        MetaMenu::Selection,
+                                    );
+                                }
+                                entry(ui, t!("metadata-menu-copy-all"), MetaMenu::All);
+                            };
+                            a.union(b).context_menu(menu_ui);
                             ui.end_row();
                         }
                     });
+                // Bandes des lignes (survol, sélection, ligne pointée), calculées après la
+                // grille : coupées au milieu de l'espace entre deux lignes, arrondi au pixel,
+                // 1 pixel de chaque côté, pour toujours le même interligne (retour du
+                // 09/11/2026 : les libellés n'ont pas la hauteur de leur ligne, les bandes
+                // laissaient des écarts inégaux).
+                // Au pixel de l'écran, pas au point d'egui : sur un écran mis à l'échelle
+                // (Retina, 125 %), l'interligne faisait 2 ou 3 pixels selon la ligne
+                // (retour du 09/11/2026).
+                let ppp = ui.ctx().pixels_per_point();
+                let snap = |v: f32| (v * ppp).round() / ppp;
+                let pad = (ppp.round().max(1.0)) / ppp;
+                let mid = |i: usize| snap((cells[i].bottom() + cells[i + 1].top()) / 2.0);
+                let x = ui.clip_rect().x_range();
+                for i in 0..cells.len() {
+                    let top = if i == 0 {
+                        snap(cells[0].top() - 2.0)
+                    } else {
+                        mid(i - 1)
+                    };
+                    let bottom = if i + 1 == cells.len() {
+                        snap(cells[i].bottom() + 2.0)
+                    } else {
+                        mid(i)
+                    };
+                    let band = Rect::from_x_y_ranges(x, top + pad..=bottom - pad);
+                    // Survol (issue n° 383) : la bande sur toute la largeur, et la souris qui
+                    // bouge pointe la ligne, comme le clavier (pas pendant une sélection de
+                    // plusieurs lignes).
+                    let hovered = ui.rect_contains_pointer(Rect::from_x_y_ranges(x, top..=bottom));
+                    if hovered {
+                        hover = Some(i);
+                        if moved && !self.meta_selecting() && self.meta_cursor != i {
+                            self.meta_cursor = i;
+                            // Les bandes du dessus sont déjà peintes.
+                            ui.ctx().request_repaint();
+                        }
+                    }
+                    // Sélection (y la copie), un peu plus marquée que la ligne pointée pour
+                    // les distinguer ; la ligne pointée : au clavier, sinon sous la souris.
+                    if focused && several && selected.contains(&i) {
+                        meta_band(ui, band, self.gui.dialogs.cursor_tint * 1.8);
+                    }
+                    // Après un Ctrl+clic, plus de ligne pointée marquée (retour du
+                    // 09/11/2026 : la ligne retirée gardait la bande du curseur et semblait
+                    // toujours sélectionnée).
+                    let pointed = if focused {
+                        i == self.meta_cursor && self.meta_cursor_shown
+                    } else {
+                        hovered
+                    };
+                    // Ligne cliquée (retour du 09/11/2026) : un repère pour le Maj+clic ou
+                    // le Ctrl+clic suivant, qui reste quand la souris s'en va ; plus marqué
+                    // que le survol, moins que la sélection.
+                    let anchor = focused && !several && self.meta_clicked == Some(i);
+                    if anchor {
+                        meta_band(ui, band, self.gui.dialogs.cursor_tint * 1.4);
+                    } else if pointed {
+                        meta_band(ui, band, self.gui.dialogs.cursor_tint);
+                    }
+                    if focused && i == self.meta_cursor && scroll {
+                        ui.scroll_to_rect(band, Some(egui::Align::Center));
+                    }
+                }
+                // Toute la zone des lignes, interlignes compris : la flèche (#386 ; entre
+                // deux lignes, egui touchait encore la voisine et donnait la main).
+                let area = Rect::from_x_y_ranges(
+                    ui.clip_rect().x_range(),
+                    grid.response.rect.expand(3.0).y_range(),
+                );
+                self.meta_area = ui.rect_contains_pointer(area);
                 self.meta_rows = rows;
-                // Clic : pointe la ligne (et donne le clavier au panneau) ; Maj+clic : étend.
-                if let Some((i, shift)) = clicked {
+                self.meta_hover = hover;
+                // Clic : pointe la ligne (et donne le clavier au panneau) ; Maj+clic : étend
+                // depuis la ligne pointée ; Ctrl+clic (Cmd sur macOS) : ajoute ou retire la
+                // ligne (#384).
+                if let Some((i, modifiers)) = clicked {
+                    // Changé après le dessin des lignes : redessiner, sinon l'écran garde
+                    // un clic de retard (retour du 09/11/2026 : Ctrl+clic sur « Nom » ne
+                    // se voyait qu'au clic suivant).
+                    ui.ctx().request_repaint();
                     self.focus = crate::actions::Scope::Metadata;
                     self.side_cursor = None;
-                    if shift {
-                        self.meta_anchor.get_or_insert(self.meta_cursor);
-                    } else {
+                    // Départ : la dernière ligne cliquée (la souris qui passe déplace la
+                    // ligne pointée), sinon la ligne pointée au clavier.
+                    let start = self.meta_clicked.unwrap_or(self.meta_cursor);
+                    // Ctrl ou Cmd, sur tous les systèmes (retour du 09/11/2026 : Ctrl+clic
+                    // sur macOS ne faisait qu'un clic simple).
+                    if modifiers.command || modifiers.ctrl {
+                        // La sélection en cours devient une liste, puis la ligne bascule ;
+                        // sans sélection, la ligne cliquée avant (s'il y en a une) et
+                        // celle-ci, sinon celle-ci seule (retour du 09/11/2026 : dès la
+                        // première ligne voulue).
+                        let mut extra = if self.meta_selecting() {
+                            self.meta_selection()
+                        } else {
+                            self.meta_clicked.into_iter().collect()
+                        };
+                        if !extra.remove(&i) {
+                            extra.insert(i);
+                        }
                         self.meta_anchor = None;
+                        self.meta_extra = extra;
+                        self.meta_cursor_shown = false;
+                    } else if modifiers.shift {
+                        self.meta_extra.clear();
+                        self.meta_anchor.get_or_insert(start);
+                        self.meta_cursor_shown = true;
+                    } else {
+                        self.clear_meta_selection();
+                        self.meta_clicked = Some(i);
                     }
                     self.meta_cursor = i;
+                }
+                if let Some((i, choice)) = menu {
+                    let ctx = ui.ctx().clone();
+                    let rows: Vec<usize> = match choice {
+                        MetaMenu::Row => vec![i],
+                        MetaMenu::Selection => self.meta_selection().into_iter().collect(),
+                        MetaMenu::All => (0..self.meta_rows.len()).collect(),
+                    };
+                    self.copy_metadata(&ctx, &rows);
                 }
             }
         }
@@ -2872,6 +3034,8 @@ impl TriApp {
     /// Panneau des dossiers : l'arborescence du moteur ([`Tree`]), dessinée ligne par
     /// ligne. Le triangle déplie ou replie ; un clic sur le nom ouvre le dossier.
     fn folder_panel(&mut self, ui: &mut Ui) {
+        // Comme le panneau de droite : pas de curseur de texte (#386).
+        ui.style_mut().interaction.selectable_labels = false;
         if self.focus == crate::actions::Scope::Folders {
             panel_focus_fill(ui, &self.gui.dialogs);
         }
@@ -2976,6 +3140,9 @@ impl TriApp {
         let cursor = self.tree.cursor().filter(|_| focused);
         let scroll = focused && std::mem::take(&mut self.scroll_to_cursor);
         let accent = Color32::from(self.gui.title_color());
+        let moved =
+            ui.input(|i| i.pointer.delta() != Vec2::ZERO) && ui.ctx().dragged_id().is_none();
+        let mut hover_point: Option<usize> = None;
         ScrollArea::both().auto_shrink(false).show(ui, |ui| {
             // Une section par nature d'emplacement, chacune sous son titre (demandé le
             // 20/10/2026) : disques, dossier personnel, favoris, puis la racine.
@@ -3001,6 +3168,14 @@ impl TriApp {
                 }
                 let line = ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 2.0;
+                    // Survol de la ligne : la bande dessous seule (issue n° 385), sans le
+                    // fond ni le cadre d'egui autour du nom ou du triangle.
+                    let widgets = &mut ui.visuals_mut().widgets;
+                    for w in [&mut widgets.hovered, &mut widgets.active] {
+                        w.weak_bg_fill = Color32::TRANSPARENT;
+                        w.bg_fill = Color32::TRANSPARENT;
+                        w.bg_stroke = egui::Stroke::NONE;
+                    }
                     ui.add_space(row.depth as f32 * f.indent);
                     let tip = if row.expanded {
                         t!("folders-collapse")
@@ -3333,12 +3508,25 @@ impl TriApp {
                         }
                     }
                 });
-                // Curseur clavier : une bande discrète sur toute la largeur.
-                if cursor == Some(i) {
+                // Survol (issue n° 385) : la bande sur toute la largeur, et la souris qui
+                // bouge pointe la ligne, comme le clavier ; le dossier ouvert garde son
+                // fond d'accent, à part.
+                let band = Rect::from_x_y_ranges(
+                    ui.clip_rect().x_range(),
+                    line.response.rect.expand(1.0).y_range(),
+                );
+                let hovered = ui.rect_contains_pointer(band);
+                if hovered && moved {
+                    hover_point = Some(i);
+                }
+                // Ligne pointée : une bande discrète sur toute la largeur ; au clavier si
+                // le panneau l'a, sinon sous la souris.
+                let pointed = if focused { cursor == Some(i) } else { hovered };
+                if pointed {
                     cursor_row(ui, line.response.rect, self.gui.dialogs.cursor_tint);
-                    if scroll {
-                        line.response.scroll_to_me(Some(egui::Align::Center));
-                    }
+                }
+                if cursor == Some(i) && scroll {
+                    line.response.scroll_to_me(Some(egui::Align::Center));
                 }
             }
             // Sections repliées après la dernière ligne.
@@ -3358,6 +3546,15 @@ impl TriApp {
         // l'arborescence se déplient chacun de leur côté.
         if let Some(i) = toggle {
             self.tree.toggle_row(i);
+        }
+        // La souris pointe la ligne survolée (le clavier repart de là).
+        if let Some(i) = hover_point.filter(|_| toggle.is_none())
+            && self.tree.cursor() != Some(i)
+        {
+            self.tree.set_cursor(i);
+            // Changée après le dessin : redessiner, sinon la bande garde une ligne de
+            // retard quand la souris s'arrête.
+            ui.ctx().request_repaint();
         }
         // Clic sur un dossier : il devient la ligne pointée et le panneau prend le clavier,
         // comme un clic dans les métadonnées (retour du 22/10/2026 : pas cohérent).
@@ -4771,6 +4968,12 @@ impl TriApp {
         // Type de fichier et recherche par nom (`/`) : la base, jamais inversée. Sans les
         // développements des logiciels absents ou désactivés (07/11/2026).
         let engines = self.developers.engines();
+        self.folder_total = self
+            .folder
+            .files
+            .iter()
+            .filter(|f| tri::developments::get(&f.path).is_none_or(|d| engines.contains(&d.engine)))
+            .count();
         let base = tri::fuzzy::NameFilter {
             query: &self.name_query,
         }
@@ -6078,6 +6281,7 @@ impl TriApp {
         self.keymap.set_focus(focus);
         // Touche ambiguë (`y` avant `y w`) restée sans suite : son action, d'abord.
         let mut actions: Vec<Action> = self.sequencer.expire(now).into_iter().collect();
+        let hover = self.meta_hover.filter(|_| self.metadata_panel_shown());
         for (chord, repeated) in chords {
             // Échap dans le menu des suites : abandonne la séquence, sans revenir en arrière
             // (comme dans which-key), sauf s'il en est une suite (`f Échap`).
@@ -6092,6 +6296,23 @@ impl TriApp {
                     .any(|n| n.chord == escape)
             {
                 self.sequencer.cancel();
+                continue;
+            }
+            // Ligne des métadonnées sous la souris (issue n° 383) : le raccourci de copie du
+            // panneau la copie sans clic, même quand le panneau n'a pas le clavier.
+            if let Some(row) = hover
+                && focus != crate::actions::Scope::Metadata
+                && self.sequencer.prefix(now).is_none()
+                && let Some(copy @ (Action::MetaCopy | Action::MetaCopyAll)) = self
+                    .keymap
+                    .panel_action(crate::actions::Scope::Metadata, chord)
+            {
+                let rows: Vec<usize> = if copy == Action::MetaCopyAll {
+                    (0..self.meta_rows.len()).collect()
+                } else {
+                    vec![row]
+                };
+                self.copy_metadata(ctx, &rows);
                 continue;
             }
             let fed = self.feed_chord(chord, now);
@@ -6468,13 +6689,13 @@ impl TriApp {
                 } else if !self.meta_rows.is_empty() {
                     self.side_cursor = None;
                     self.meta_cursor = 0;
-                    self.meta_anchor = None;
+                    self.clear_meta_selection();
                 }
                 self.scroll_to_cursor = true;
             }
             Action::MetaUp if self.meta_cursor == 0 && !self.side_items.is_empty() => {
                 self.side_cursor = Some(self.side_items.len() - 1);
-                self.meta_anchor = None;
+                self.clear_meta_selection();
                 self.scroll_to_cursor = true;
             }
             Action::MetaSelectUp | Action::MetaSelectDown if self.side_cursor.is_some() => {}
@@ -6491,7 +6712,7 @@ impl TriApp {
                 };
                 if let Some(&to) = to {
                     self.side_cursor = Some(to);
-                    self.meta_anchor = None;
+                    self.clear_meta_selection();
                     self.scroll_to_cursor = true;
                 }
             }
@@ -6528,18 +6749,20 @@ impl TriApp {
             }
             Action::MetaUp | Action::MetaSelectUp => {
                 if action == Action::MetaSelectUp {
+                    self.meta_cursor_shown = true;
                     self.meta_anchor.get_or_insert(self.meta_cursor);
                 } else {
-                    self.meta_anchor = None;
+                    self.clear_meta_selection();
                 }
                 self.meta_cursor = self.meta_cursor.saturating_sub(1);
                 self.scroll_to_cursor = true;
             }
             Action::MetaDown | Action::MetaSelectDown => {
                 if action == Action::MetaSelectDown {
+                    self.meta_cursor_shown = true;
                     self.meta_anchor.get_or_insert(self.meta_cursor);
                 } else {
-                    self.meta_anchor = None;
+                    self.clear_meta_selection();
                 }
                 let last = self.meta_rows.len().saturating_sub(1);
                 self.meta_cursor = (self.meta_cursor + 1).min(last);
@@ -6577,42 +6800,12 @@ impl TriApp {
             // Curseur dans les réglages : pas de ligne des EXIF à copier.
             Action::MetaCopy if self.side_cursor.is_some() => {}
             Action::MetaCopy | Action::MetaCopyAll => {
-                let (lo, hi) = if action == Action::MetaCopyAll {
-                    (0, usize::MAX)
+                let rows: Vec<usize> = if action == Action::MetaCopyAll {
+                    (0..self.meta_rows.len()).collect()
                 } else {
-                    self.meta_range()
+                    self.meta_selection().into_iter().collect()
                 };
-                let rows: Vec<&tri::metadata::Row> = self
-                    .meta_rows
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, _)| (lo..=hi).contains(i))
-                    .map(|(_, r)| r)
-                    .collect();
-                match rows.as_slice() {
-                    [] => {}
-                    // Une ligne : la valeur seule (à coller dans un champ).
-                    [row] => {
-                        ctx.copy_text(row.text());
-                        self.notice =
-                            Some((t!("metadata-copied", label = row.label.clone()), false));
-                    }
-                    // Plusieurs : « libellé : valeur », une par ligne.
-                    many => {
-                        let text: Vec<String> = many
-                            .iter()
-                            .map(|r| {
-                                t!(
-                                    "metadata-copy-line",
-                                    label = r.label.clone(),
-                                    value = r.text()
-                                )
-                            })
-                            .collect();
-                        ctx.copy_text(text.join("\n"));
-                        self.notice = Some((t!("metadata-copied-lines", n = many.len()), false));
-                    }
-                }
+                self.copy_metadata(ctx, &rows);
             }
             // Échap dans un champ de recherche : la recherche d'abord.
             Action::Back if self.search_escape(ctx) => {}
@@ -7132,6 +7325,13 @@ impl TriApp {
                 } else {
                     self.selection.start_visual(&self.files, self.selected);
                 }
+            }
+            // Panneau des métadonnées au clavier : toutes ses lignes (#384).
+            Action::SelectAll
+                if self.effective_focus() == crate::actions::Scope::Metadata
+                    && self.side_cursor.is_none() =>
+            {
+                self.select_all_metadata();
             }
             Action::SelectAll => self.selection.select_all(&self.files),
             Action::SelectClear => self.selection.clear(),
@@ -13817,7 +14017,7 @@ impl TriApp {
                 ui.weak(t!(
                     "filter-bar-count",
                     shown = self.files.len(),
-                    n = self.folder.files.len()
+                    n = self.folder_total
                 ))
                 .on_hover_text(t!("filter-bar-count-tip"));
                 // Recherche par nom : en grille seulement (retour du 06/11/2026 : en vue
@@ -15151,6 +15351,68 @@ impl TriApp {
         (anchor.min(self.meta_cursor), anchor.max(self.meta_cursor))
     }
 
+    /// Lignes sélectionnées des métadonnées : la plage (ancre, Maj) et les lignes
+    /// ajoutées une à une (Ctrl+clic, #384) ; sans sélection, la ligne pointée seule.
+    fn meta_selection(&self) -> std::collections::BTreeSet<usize> {
+        let mut rows = self.meta_extra.clone();
+        if self.meta_anchor.is_some() || rows.is_empty() {
+            let (lo, hi) = self.meta_range();
+            rows.extend(lo..=hi);
+        }
+        rows
+    }
+
+    /// Une sélection de plusieurs lignes est en cours (la souris ne déplace plus la ligne
+    /// pointée).
+    fn meta_selecting(&self) -> bool {
+        self.meta_anchor.is_some() || !self.meta_extra.is_empty()
+    }
+
+    /// Toutes les lignes des métadonnées sélectionnées, le clavier au panneau (#384).
+    fn select_all_metadata(&mut self) {
+        self.focus = crate::actions::Scope::Metadata;
+        self.side_cursor = None;
+        self.meta_extra.clear();
+        self.meta_clicked = None;
+        self.meta_cursor_shown = true;
+        self.meta_anchor = Some(0);
+        self.meta_cursor = self.meta_rows.len().saturating_sub(1);
+    }
+
+    /// Icône « tout sélectionner » au bout du titre de la section des EXIF (#384).
+    fn meta_select_all_icon(&mut self, ui: &mut Ui) {
+        let Some(title) = self.section_title_rect else {
+            return;
+        };
+        let side = ui.text_style_height(&egui::TextStyle::Body) + 4.0;
+        let rect = Rect::from_center_size(
+            pos2(title.right() - side / 2.0 - 4.0, title.center().y),
+            vec2(side, side),
+        );
+        let label = t!("metadata-select-all");
+        let response = ui.interact(rect, ui.scope_id().with("exif_select_all"), Sense::click());
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &label));
+        let response = response.on_hover_text(self.action_tip(Action::SelectAll));
+        if response.hovered() {
+            let fill = ui.visuals().widgets.hovered.weak_bg_fill;
+            ui.painter().rect_filled(rect, 4.0, fill);
+        }
+        let color = ui.style().interact(&response).fg_stroke.color;
+        marks::select_all(ui.painter(), rect.shrink(side * 0.2), color);
+        if response.clicked() {
+            self.select_all_metadata();
+            ui.ctx().request_repaint();
+        }
+    }
+
+    /// Plus de sélection : la ligne pointée seule.
+    fn clear_meta_selection(&mut self) {
+        self.meta_anchor = None;
+        self.meta_extra.clear();
+        self.meta_clicked = None;
+        self.meta_cursor_shown = true;
+    }
+
     /// Décharger ou éjecter le support amovible pointé dans le panneau des dossiers : les
     /// mêmes boîtes que les icônes de la ligne (confirmation), près du centre.
     fn folder_drive_action(&mut self, ctx: &egui::Context, action: Action) {
@@ -15727,6 +15989,41 @@ impl TriApp {
 
     /// Donne `chord` au séquenceur ; s'il ouvre une saisie de grossissement, retient la
     /// touche (retapée : 100 %) et si le menu des suites était affiché.
+    /// Copie les lignes `picked` des métadonnées (rangs, dans l'ordre du panneau) : une
+    /// ligne, sa valeur seule ; plusieurs, « libellé : valeur » une par ligne.
+    fn copy_metadata(&mut self, ctx: &egui::Context, picked: &[usize]) {
+        let rows: Vec<&tri::metadata::Row> = self
+            .meta_rows
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| picked.contains(i))
+            .map(|(_, r)| r)
+            .collect();
+        match rows.as_slice() {
+            [] => {}
+            // Une ligne : la valeur seule (à coller dans un champ).
+            [row] => {
+                ctx.copy_text(row.text());
+                self.notice = Some((t!("metadata-copied", label = row.label.clone()), false));
+            }
+            // Plusieurs : « libellé : valeur », une par ligne.
+            many => {
+                let text: Vec<String> = many
+                    .iter()
+                    .map(|r| {
+                        t!(
+                            "metadata-copy-line",
+                            label = r.label.clone(),
+                            value = r.text()
+                        )
+                    })
+                    .collect();
+                ctx.copy_text(text.join("\n"));
+                self.notice = Some((t!("metadata-copied-lines", n = many.len()), false));
+            }
+        }
+    }
+
     fn feed_chord(&mut self, chord: crate::actions::Chord, now: Instant) -> Vec<Action> {
         let held = self.sequencer.is_held();
         let fed = self.sequencer.feed(&self.keymap, chord, now);
@@ -16486,14 +16783,23 @@ impl eframe::App for TriApp {
         self.focus_mode_hint(&ctx);
         // Barre du haut : icône et nom, à gauche (comme darktable).
         if self.gui.title_bar && !self.focus_mode {
-            egui::Panel::top("title").show(ui, |ui| self.title_bar(ui));
+            egui::Panel::top("title").show(ui, |ui| {
+                bar_texts(ui);
+                self.title_bar(ui);
+                hand_over_clickable(ui);
+            });
         }
         let status_click = if self.focus_mode {
             None
         } else {
             steps.mark("titre");
             egui::Panel::bottom("status")
-                .show(ui, |ui| self.status_bar(ui))
+                .show(ui, |ui| {
+                    bar_texts(ui);
+                    let shown = self.status_bar(ui);
+                    hand_over_clickable(ui);
+                    shown
+                })
                 .inner
         };
         match status_click.or(self.task_click.take()) {
@@ -16570,6 +16876,7 @@ impl eframe::App for TriApp {
                             .frame(frame)
                             .show_separator_line(false)
                             .show(ui, |ui| {
+                                bar_texts(ui);
                                 ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
                                     self.tasks_ui(ui, &tasks, false)
                                 })
@@ -16587,6 +16894,12 @@ impl eframe::App for TriApp {
                     ScrollArea::vertical()
                         .auto_shrink(false)
                         .show(ui, |ui| self.side_panel(ui));
+                    // Lignes des EXIF : la flèche (retour du 09/11/2026) ; un clic n'y fait
+                    // que pointer la ligne. La main le jour où un clic y fera quelque chose
+                    // (créer un filtre…).
+                    if !self.meta_area {
+                        hand_over_clickable(ui);
+                    }
                 });
             metadata_rect = Some(panel.response.rect);
         }
@@ -16594,7 +16907,10 @@ impl eframe::App for TriApp {
             let panel = egui::Panel::left("folders")
                 .resizable(true)
                 .default_size(self.gui.folders.width)
-                .show(ui, |ui| self.folder_panel(ui));
+                .show(ui, |ui| {
+                    self.folder_panel(ui);
+                    hand_over_clickable(ui);
+                });
             steps.mark("dossiers");
             folders_rect = Some(panel.response.rect);
         }
@@ -16612,6 +16928,7 @@ impl eframe::App for TriApp {
             let mut action = None;
             let preset_tip = self.keymap.with_keys(&t!("crop-preset-tip"));
             egui::Panel::bottom("crop").show(ui, |ui| {
+                bar_texts(ui);
                 if let Some(crop) = &mut self.crop {
                     crop.preset_tip = preset_tip;
                     action = crop.bar(
@@ -16622,6 +16939,7 @@ impl eframe::App for TriApp {
                         self.gui.grid.bar_label_scale,
                     );
                 }
+                hand_over_clickable(ui);
             });
             match action {
                 Some(crate::crop::BarAction::Save) => self.save_crop(),
@@ -16636,7 +16954,11 @@ impl eframe::App for TriApp {
             && !self.files.is_empty()
             && self.error.is_none()
         {
-            egui::Panel::bottom("rating").show(ui, |ui| self.rating_bar(ui));
+            egui::Panel::bottom("rating").show(ui, |ui| {
+                bar_texts(ui);
+                self.rating_bar(ui);
+                hand_over_clickable(ui);
+            });
         }
         // En plein écran aussi (retour du 30/10/2026 : on note par passes, en changeant de
         // filtre entre deux, sans repasser par la grille).
@@ -16647,7 +16969,11 @@ impl eframe::App for TriApp {
             // Pas pendant l'édition d'une version (retour du 07/11/2026 : sans objet).
             && self.crop.is_none()
         {
-            egui::Panel::top("filters").show(ui, |ui| self.filter_bar(ui));
+            egui::Panel::top("filters").show(ui, |ui| {
+                bar_texts(ui);
+                self.filter_bar(ui);
+                hand_over_clickable(ui);
+            });
         }
         // Fond central : celui choisi (Ctrl+L), sinon gris neutre avec ce thème (grille et
         // plein écran).
@@ -17622,6 +17948,39 @@ fn drag_preview(ctx: &egui::Context) {
         });
 }
 
+/// Entrée du clic droit sur une ligne des métadonnées (#384).
+#[derive(Clone, Copy)]
+enum MetaMenu {
+    /// La valeur de la ligne.
+    Row,
+    /// Les lignes sélectionnées.
+    Selection,
+    /// Tout le panneau.
+    All,
+}
+
+/// Textes d'une barre non sélectionnables (retour du 09/11/2026 : le curseur de texte sur
+/// le nom du dossier et le compte d'images de la barre d'état), comme dans les panneaux.
+fn bar_texts(ui: &mut Ui) {
+    ui.style_mut().interaction.selectable_labels = false;
+}
+
+/// La main sur ce qui se clique dans une barre ou un panneau (retour du 09/11/2026,
+/// #386 : la main sur les icônes des barres, la flèche sur les cases et les listes des
+/// panneaux, pas cohérent), comme dans les boîtes ([`Dialog`]) : sous le pointeur, un
+/// élément qui se clique (bouton, case et son libellé, liste, curseur, ligne pointable)
+/// et dont le pointeur n'est pas déjà choisi (champ de texte, poignée). Pas sur les images
+/// (grille, plein écran), où la main serait partout.
+fn hand_over_clickable(ui: &Ui) {
+    let ctx = ui.ctx();
+    if ui.ui_contains_pointer()
+        && ctx.output(|o| o.cursor_icon) == egui::CursorIcon::Default
+        && ctx.viewport(|v| v.hits.click.is_some_and(|w| w.sense.senses_click()))
+    {
+        ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+}
+
 /// Fond du panneau qui a le clavier, peint avant son contenu : le fond des panneaux
 /// mêlé de la couleur du texte (`[gui.dialogs] focus_panel_tint`), donc un peu plus
 /// clair en thème sombre, un peu plus foncé en thème clair. Remplace le liseré d'accent
@@ -17649,6 +18008,16 @@ fn panel_focus_fill(ui: &Ui, dialogs: &crate::settings::DialogSettings) {
 /// panneau défile).
 fn cursor_row(ui: &Ui, rect: Rect, tint: f32) {
     cursor_band(ui, ui.clip_rect().x_range(), rect, tint);
+}
+
+/// Bande d'une ligne des métadonnées : exactement `rect` (déjà arrondi au pixel, sans
+/// l'élargissement de [`cursor_band`]).
+fn meta_band(ui: &Ui, band: Rect, tint: f32) {
+    let fill = ui
+        .visuals()
+        .text_color()
+        .gamma_multiply(tint.clamp(0.0, 1.0));
+    ui.painter().rect_filled(band, 0.0, fill);
 }
 
 /// La bande du curseur sur la largeur `x` (la palette : celle de ses lignes, pas l'écran,
@@ -25715,6 +26084,216 @@ mod tests {
     /// d'autres threads), au plus 20 s.
     // Ligne de l'appel dans le message d'échec : savoir ce qui n'est jamais arrivé.
     #[track_caller]
+    #[test]
+    fn a_metadata_line_under_the_pointer_is_pointed_and_copied_without_a_click() {
+        // Issue n° 383 : la ligne survolée en bande, pointée, et le raccourci de copie du
+        // panneau la copie sans clic, le clavier restant aux images.
+        use crate::actions::Scope;
+        let (mut h, _dir) = harness();
+        h.state_mut().metadata_panel = true;
+        run_until(&mut h, |app| app.meta_rows.len() > 2);
+        let label = h.state().meta_rows[1].label.clone();
+        // Repris tant que le survol n'est pas vu (mise en page qui bouge au remplissage).
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while h.state().meta_hover != Some(1) {
+            assert!(Instant::now() < deadline, "survol jamais vu");
+            let at = h.get_by_label(&label).rect().center();
+            h.event(UiEvent::PointerMoved(at - vec2(0.0, 1.0)));
+            h.event(UiEvent::PointerMoved(at));
+            h.run_steps(2);
+        }
+        assert_eq!(h.state().meta_cursor, 1, "la souris pointe la ligne");
+        assert_eq!(h.state().focus, Scope::Images, "sans prendre le clavier");
+        press(&mut h, Key::C, Modifiers::CTRL);
+        assert!(h.state().file_dialog.is_none(), "pas la copie de l'image");
+        let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
+        assert!(notice.contains(&label), "copiée : {notice}");
+        // Hors du panneau, Ctrl+C copie de nouveau l'image.
+        h.event(UiEvent::PointerMoved(pos2(1.0, 1.0)));
+        h.run_steps(2);
+        assert_eq!(h.state().meta_hover, None);
+        press(&mut h, Key::C, Modifiers::CTRL);
+        assert!(h.state().file_dialog.is_some(), "copie de l'image");
+    }
+
+    #[test]
+    fn a_folder_under_the_pointer_is_pointed() {
+        // Issue n° 385 : la ligne survolée devient la ligne pointée (une seule bande), le
+        // dossier ouvert ne change qu'au clic.
+        let (mut h, dir) = harness();
+        let seance = dir.path().join("séance-1");
+        std::fs::create_dir(&seance).unwrap();
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        h.state_mut().folder_panel = true;
+        h.run_steps(3);
+        let opened = h.state().folder.dir.clone();
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while h.state().tree.cursor_path().as_ref() != Some(&seance) {
+            assert!(Instant::now() < deadline, "survol jamais vu");
+            let at = h.get_by_label("séance-1").rect().center();
+            h.event(UiEvent::PointerMoved(at - vec2(0.0, 1.0)));
+            h.event(UiEvent::PointerMoved(at));
+            h.run_steps(2);
+        }
+        assert_eq!(h.state().folder.dir, opened, "pas ouvert au survol");
+    }
+
+    #[test]
+    fn several_metadata_rows_are_picked_with_ctrl_and_shift_and_copied_from_the_menu() {
+        // Issue n° 384 : Ctrl+clic, Maj+clic, tout sélectionner (icône, Ctrl+A), et le clic
+        // droit pour copier.
+        use crate::actions::Scope;
+        let (mut h, _dir) = harness();
+        h.state_mut().metadata_panel = true;
+        run_until(&mut h, |app| app.meta_rows.len() >= 3);
+        let picked = |h: &Harness<'_, TriApp>| -> Vec<usize> {
+            h.state().meta_selection().into_iter().collect()
+        };
+        // Repris tant que l'état voulu n'est pas atteint (clics parfois perdus en CI).
+        let click = |h: &mut Harness<'_, TriApp>,
+                     i: usize,
+                     m: Modifiers,
+                     done: &dyn Fn(&TriApp) -> bool| {
+            let deadline = Instant::now() + Duration::from_secs(60);
+            while !done(h.state()) {
+                assert!(Instant::now() < deadline, "clic jamais reçu");
+                let label = h.state().meta_rows[i].label.clone();
+                let at = h.get_by_label(&label).rect().center();
+                h.event(UiEvent::ModifiersChanged(m));
+                h.event(UiEvent::PointerMoved(at));
+                for pressed in [true, false] {
+                    h.event(UiEvent::PointerButton {
+                        pos: at,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: m,
+                    });
+                }
+                h.run_steps(2);
+                h.event(UiEvent::ModifiersChanged(Modifiers::NONE));
+                h.run_steps(1);
+            }
+        };
+        // Ctrl+clic d'abord : cette ligne seule (pas aussi la ligne pointée).
+        click(&mut h, 1, Modifiers::COMMAND, &|app| {
+            !app.meta_extra.is_empty()
+        });
+        assert_eq!(picked(&h), [1]);
+        click(&mut h, 0, Modifiers::NONE, &|app| {
+            app.meta_clicked == Some(0)
+        });
+        assert_eq!(h.state().focus, Scope::Metadata);
+        click(&mut h, 2, Modifiers::COMMAND, &|app| {
+            app.meta_selection().into_iter().collect::<Vec<_>>() == [0, 2]
+        });
+        press(&mut h, Key::C, Modifiers::CTRL);
+        let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
+        assert!(notice.contains("2 lignes"), "{notice}");
+        // Ctrl+clic de nouveau : la ligne sort de la sélection.
+        click(&mut h, 2, Modifiers::CTRL, &|app| {
+            app.meta_selection().into_iter().collect::<Vec<_>>() == [0]
+        });
+        // Maj+clic : de la ligne cliquée à celle-ci.
+        click(&mut h, 2, Modifiers::SHIFT, &|app| {
+            app.meta_selection().into_iter().collect::<Vec<_>>() == [0, 1, 2]
+        });
+        assert_eq!(picked(&h), [0, 1, 2]);
+        // Ctrl+A, le panneau ayant le clavier : toutes les lignes.
+        press(&mut h, Key::J, Modifiers::NONE);
+        press(&mut h, Key::A, Modifiers::CTRL);
+        let all: Vec<usize> = (0..h.state().meta_rows.len()).collect();
+        assert_eq!(picked(&h), all);
+        // L'icône du titre, depuis les images.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        press(&mut h, Key::J, Modifiers::NONE);
+        h.state_mut().clear_meta_selection();
+        h.run_steps(2);
+        h.get_by_label("Tout sélectionner").click();
+        h.run_steps(3);
+        assert_eq!(h.state().focus, Scope::Metadata);
+        assert_eq!(picked(&h), all);
+        // Clic droit sur une ligne : copier sa valeur.
+        let label = h.state().meta_rows[1].label.clone();
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while h.query_by_label("Copier la valeur").is_none() {
+            assert!(Instant::now() < deadline, "menu jamais ouvert");
+            h.get_by_label(&label).click_secondary();
+            h.run_steps(3);
+        }
+        assert!(h.query_by_label_contains("Copier la sélection").is_some());
+        h.get_by_label("Copier la valeur").click();
+        h.run_steps(3);
+        let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
+        assert!(notice.contains(&label), "{notice}");
+    }
+
+    #[test]
+    fn ctrl_click_after_select_all_takes_the_row_out_at_once() {
+        // Retour du 09/11/2026 : Ctrl+A, puis Ctrl+clic sur « Nom » ne semblait rien
+        // retirer (la ligne gardait la bande du curseur), Ctrl+clic sur la suivante
+        // retirait « Nom ».
+        let (mut h, _dir) = harness();
+        h.state_mut().metadata_panel = true;
+        run_until(&mut h, |app| app.meta_rows.len() >= 3);
+        h.state_mut().select_all_metadata();
+        h.run_steps(2);
+        let label = h.state().meta_rows[0].label.clone();
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while h.state().meta_anchor.is_some() {
+            assert!(Instant::now() < deadline, "clic jamais reçu");
+            let at = h.get_by_label(&label).rect().center();
+            h.event(UiEvent::ModifiersChanged(Modifiers::CTRL));
+            h.event(UiEvent::PointerMoved(at));
+            for pressed in [true, false] {
+                h.event(UiEvent::PointerButton {
+                    pos: at,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Modifiers::CTRL,
+                });
+            }
+            h.run_steps(1);
+        }
+        let picked = h.state().meta_selection();
+        assert!(!picked.contains(&0), "Nom retiré : {picked:?}");
+        assert_eq!(picked.len(), h.state().meta_rows.len() - 1);
+        assert!(
+            !h.state().meta_cursor_shown,
+            "plus de bande du curseur sur Nom"
+        );
+        // Au clavier, la ligne pointée revient.
+        h.event(UiEvent::ModifiersChanged(Modifiers::NONE));
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        assert!(h.state().meta_cursor_shown);
+    }
+
+    #[test]
+    fn the_folder_count_leaves_out_developments_of_absent_software() {
+        // Retour du 09/11/2026 : 570/571 pour 570 RAF ; un `.rrdata` de RapidRAW (absent
+        // ou désactivé, son développement masqué de la grille) comptait dans le total.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        std::fs::write(
+            dir.path().join("photos").join("img0.jpg.rrdata"),
+            br#"{"adjustments": {"exposure": 1}}"#,
+        )
+        .unwrap();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| {
+            app.folder.files.len() == 4 && app.loading.is_none()
+        });
+        h.run_steps(3);
+        assert_eq!(h.state().files.len(), 3, "développement masqué");
+        let count = t!("filter-bar-count", shown = 3, n = 3);
+        assert!(h.query_by_label(&count).is_some(), "3/3, pas 3/4");
+    }
+
     fn run_until(h: &mut Harness<'_, TriApp>, done: impl Fn(&TriApp) -> bool) {
         // Large : les machines d'intégration continue sont plus lentes (20 s ne suffisaient
         // pas au zoom sur une image de 4000 × 3000) ; rapide quand tout va bien.
@@ -27930,6 +28509,76 @@ mod tests {
         let back = h.state().zoom.unwrap();
         assert!((back - start).length() < 1e-4, "retour au point de départ");
         assert_eq!(h.state().selected, 0, "se déplacer ne change pas d'image");
+    }
+
+    #[test]
+    fn the_hand_is_on_everything_clickable_but_not_on_the_images() {
+        // Retour du 09/11/2026 (#386) : la main sur les icônes des barres, la flèche sur
+        // les cases des panneaux ; la main partout où l'on clique, comme dans les boîtes.
+        let (mut h, _dir) = harness();
+        h.state_mut().folder_panel = true;
+        h.state_mut().metadata_panel = true;
+        h.run_steps(3);
+        let hover = |h: &mut Harness<'_, TriApp>, at: egui::Pos2| {
+            h.hover_at(at + vec2(1.0, 0.0));
+            h.run_steps(1);
+            h.hover_at(at);
+            h.run_steps(2);
+            cursor(h)
+        };
+        let icon = h.get_by_label("Actualiser").rect().center();
+        assert_eq!(hover(&mut h, icon), egui::CursorIcon::PointingHand, "icône");
+        let panel = h.state().gui.folders.width;
+        let check = h
+            .query_all_by_role(egui::accesskit::Role::CheckBox)
+            .map(|n| n.rect())
+            .find(|r| r.left() > panel)
+            .expect("une case du panneau de droite");
+        assert_eq!(
+            hover(&mut h, check.center()),
+            egui::CursorIcon::PointingHand,
+            "case"
+        );
+        run_until(&mut h, |app| app.cell_rects.iter().any(|(i, _)| *i == 0));
+        let cell = h
+            .state()
+            .cell_rects
+            .iter()
+            .find(|(i, _)| *i == 0)
+            .unwrap()
+            .1;
+        assert_eq!(
+            hover(&mut h, cell.center()),
+            egui::CursorIcon::Default,
+            "vignette"
+        );
+        // Texte de la barre d'état : la flèche, pas le curseur de texte.
+        let count = h.get_by_label_contains("3 images").rect().center();
+        assert_eq!(
+            hover(&mut h, count),
+            egui::CursorIcon::Default,
+            "barre d'état"
+        );
+        // Lignes des EXIF : la flèche, un clic n'y fait que pointer.
+        run_until(&mut h, |app| app.meta_rows.len() > 2);
+        let label = h.state().meta_rows[1].label.clone();
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while h.state().meta_hover != Some(1) {
+            assert!(Instant::now() < deadline, "survol jamais vu");
+            let at = h.get_by_label(&label).rect().center();
+            hover(&mut h, at);
+        }
+        assert_eq!(cursor(&h), egui::CursorIcon::Default, "ligne des EXIF");
+        // Entre deux lignes aussi (egui y touchait la voisine).
+        let a = h.get_by_label(&label).rect();
+        let next = h.state().meta_rows[2].label.clone();
+        let b = h.get_by_label(&next).rect();
+        let between = pos2(a.center().x, (a.bottom() + b.top()) / 2.0);
+        assert_eq!(
+            hover(&mut h, between),
+            egui::CursorIcon::Default,
+            "entre deux lignes"
+        );
     }
 
     fn cursor(h: &Harness<'_, TriApp>) -> egui::CursorIcon {

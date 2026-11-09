@@ -4,6 +4,22 @@
 
 ## Unreleased
 
+- **Image count of the filter bar** (#386): "570/571" for 570 photos; a RapidRAW sidecar
+  (`.rrdata`) counted in the folder total while its development was hidden, RapidRAW
+  being absent or disabled. The total now leaves out the developments of such software,
+  like the grid.
+- **Several EXIF rows** (#386, fixes #384): Shift+click, Ctrl+click or Cmd+click to add or remove a row,
+  Ctrl+A and an icon next to the "EXIF" title to select everything; the selection is a
+  grey band across the row instead of blue boxes. Right-click on a row copies its value,
+  the selection or everything.
+- **Hovering in the side panels** (#386, fixes #383 and #385): the row under the mouse
+  (folders, EXIF) gets the same light grey band as the keyboard cursor, across the whole
+  width, and becomes the pointed row; the open folder keeps its accent background
+  separately. Hovered controls lose egui's white frame everywhere, like the bar icons.
+  The metadata copy shortcut (`y`, `Ctrl+C` / `Cmd+C`) copies the EXIF row under the
+  mouse without a click. The pointer is a hand over everything clickable in the bars
+  and panels (buttons, checkboxes and their label, lists, folder rows), like in dialogs, instead
+  of a mix of hand, arrow and text cursor; no text cursor over the bars' texts either.
 - **Leaving a comparison opened from full screen** (#379, fixes #376): it went back to
   the grid; it now goes back to full screen, on the active image ("Back to full screen"
   button). Opened from the grid, it still goes back to the grid.

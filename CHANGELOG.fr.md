@@ -4,6 +4,23 @@
 
 ## Non publié
 
+- **Compteur d'images de la barre des filtres** (#386) : « 570/571 » pour 570 photos ; un
+  sidecar RapidRAW (`.rrdata`) comptait dans le total du dossier alors que son
+  développement était masqué, RapidRAW étant absent ou désactivé. Le total laisse
+  maintenant de côté les développements de ces logiciels, comme la grille.
+- **Plusieurs lignes EXIF** (#386, corrige #384) : Maj+clic, Ctrl+clic ou Cmd+clic pour
+  ajouter ou retirer une ligne, Ctrl+A et une icône à côté du titre « EXIF » pour tout sélectionner ; la
+  sélection est une bande grise sur la ligne au lieu de cadres bleus. Le clic droit sur
+  une ligne copie sa valeur, la sélection ou tout.
+- **Survol dans les panneaux latéraux** (#386, corrige #383 et #385) : la ligne sous la
+  souris (dossiers, EXIF) prend la même bande gris clair que le curseur du clavier, sur
+  toute la largeur, et devient la ligne pointée ; le dossier ouvert garde son fond
+  d'accent, à part. Plus de cadre blanc d'egui au survol des contrôles, partout, comme
+  les icônes des barres. Le raccourci de copie des métadonnées (`y`, `Ctrl+C` /
+  `Cmd+C`) copie la ligne EXIF sous la souris, sans clic. Le pointeur est une main sur
+  tout ce qui se clique dans les barres et les panneaux (boutons, cases et leur libellé,
+  listes, lignes des dossiers), comme dans les boîtes, au lieu d'un mélange de main, de flèche et de
+  curseur de texte ; plus de curseur de texte sur les textes des barres non plus.
 - **Sortie d'une comparaison ouverte du plein écran** (#379, corrige #376) : elle
   ramenait à la grille ; elle ramène maintenant au plein écran, sur l'image active
   (bouton « Retour au plein écran »). Ouverte de la grille, elle ramène toujours à la

@@ -573,7 +573,7 @@ system one ("cold" measurements, experiments).
   the left / right panel, `o` to the next one (leader then `b`: report a problem,
   2026-10-22; the help writes it `<leader> h`, #175, since it can be changed) (folders,
   images, metadata; a hidden panel
-  is shown, folders only exist in the grid). The active panel has a slightly lighter background (darker in the light theme, `[gui.dialogs] focus_panel_tint`; an accent outline until 2026-10-25, issue #78: with the accent cursor, the double frame was heavy; the metadata cursor no longer frames the histogram, issue #77) and a **line at the top** (2026-10-26, #77: the background alone did not show enough; `focus_line` = `"accent"` or `"#rrggbb"`, `focus_line_width`, 0 for none); the line under the keyboard cursor (folders, metadata, search results) is a **discreet grey band** across the whole width (`[gui.dialogs] cursor_tint`, `cursor_row`; an accent frame before 2026-10-25, too loud and cut on the left when the panel scrolled), the
+  is shown, folders only exist in the grid). The active panel has a slightly lighter background (darker in the light theme, `[gui.dialogs] focus_panel_tint`; an accent outline until 2026-10-25, issue #78: with the accent cursor, the double frame was heavy; the metadata cursor no longer frames the histogram, issue #77) and a **line at the top** (2026-10-26, #77: the background alone did not show enough; `focus_line` = `"accent"` or `"#rrggbb"`, `focus_line_width`, 0 for none); the line under the keyboard cursor (folders, metadata, search results) is a **discreet grey band** across the whole width (`[gui.dialogs] cursor_tint`, `cursor_row`; an accent frame before 2026-10-25, too loud and cut on the left when the panel scrolled). **Hovering points** (2026-11-09, #383, #385): the mouse moving over a row of the folders or the EXIF puts the band there (a single band, the keyboard carries on from it); in a panel without the keyboard, the band follows the mouse. The open folder keeps its accent background, separately; no more egui background or frame around the hovered name. Everywhere, a hovered control no longer has a white frame, only its light grey background, like the bar icons (`Theme::apply`); the
   status bar says so; a click in a panel gives it the keyboard, a click in the images
   area gives it back to them (`TriApp::click_focus`, 2026-10-22; dialogs opened on top
   do not count). **Its keys go first, the others keep their effect** (user's
@@ -610,7 +610,23 @@ system one ("cold" measurements, experiments).
   large; Shift + ↑ ↓ / Shift + `j` `k`
   (or Shift+click) extend the selection, `y` copies it (one row: the value; several:
   "label: value" per row; `Ctrl+C` / `Cmd+C` too), Shift+`y` copies the whole panel; a
-  click on a row points at it and gives the keyboard to the panel. Large histogram open:
+  click on a row points at it and gives the keyboard to the panel. **Several rows**
+  (2026-11-09, #384): Shift+click extends from the last clicked row, Ctrl+click
+  or Cmd+click adds or removes a row (the first one too, alone), Ctrl+A and the icon at the end of the
+  "EXIF" title select everything; the selection is the grey band across the whole width
+  (no more blue background per row), a little stronger than the pointed row; after a
+  Ctrl+click the pointed row is no longer marked (the removed row otherwise looked still
+  selected), again with the keyboard or a plain click.
+  The clicked row keeps an intermediate band (stronger than hovering, lighter than the
+  selection): the start of the next Shift+click or Ctrl+click; the bands are computed
+  after the grid, cut in the middle of the gap and rounded to the screen's pixel, not egui's
+  point (always the same gap between two bands, scaled screens included). **Right-click** on a row: copy the value, the
+  selection (if the row is part of it), everything. **Without a click**
+  (#383): the panel's copy shortcut (`y`, `Ctrl+C` / `Cmd+C`, Shift+`y`) copies the row
+  under the mouse even when the panel does not have the keyboard
+  (`Keymap::panel_action`); elsewhere, the key keeps its effect (`Ctrl+C`: copy the
+  image to…). Texts of both side panels and of the bars are not selectable: no text cursor
+  on hover (`bar_texts`). Large histogram open:
   `r`, `g`, `b` one channel, `a` all (it takes the keys while open: `b` does not change
   the source there). A single keymap: each action states its panel (`Action::scope`);
   when looking up a key, the active panel's one wins over the general action, and
@@ -637,7 +653,13 @@ system one ("cold" measurements, experiments).
   cache always follows. The work is done in the background (`TriApp::cache_job`), message
   in the status bar.
 - **Pointer in dialogs**: the hand on everything clickable (`interact_cursor` in the
-  common `Dialog` frame); "grab" elsewhere, to move the dialog.
+  common `Dialog` frame); "grab" elsewhere, to move the dialog. **In the bars and
+  panels too** (2026-11-09, #386: a hand on the bar icons, an arrow on the panels'
+  checkboxes, inconsistent): the hand on everything clickable (buttons, checkboxes and
+  their label, lists, sliders, folder rows; `hand_over_clickable`, and
+  `interact_cursor` for egui's buttons everywhere, menus included); not on the images
+  (grid, full screen), nor on the EXIF rows (a click only points at the row there; the
+  hand the day it does something).
 - **File actions** (2026-10-17, engine: `tri::files`, see `files.md`): rename (`F2`),
   move to trash (`Delete`, `Backspace` — the Mac "delete" key — or `x`, as in vim; `dd`
   removed on 2026-10-18), show in the Finder / file manager (`Shift+R`), open in the
@@ -734,7 +756,8 @@ system one ("cold" measurements, experiments).
 - **Right panel in sections** (reorganisation of 2026-10-27, the user's idea;
   `TriApp::side_panel`): the filter bar keeps only what is set with a click (stars, flags,
   sharp / well exposed / developed switches, colours) and the name search, with the image
-  count, invert and clear; the **settings** move to the right panel, in titled sections
+  count ("shown / in the folder"; the total without the developments of absent or
+  disabled software, hidden from the grid, `TriApp::folder_total`, 2026-11-09), invert and clear; the **settings** move to the right panel, in titled sections
   like the folder panel's (`section_title`: capitals, bold, accent colour,
   `[gui.folders] section_scale`, a `section_gap` above), folded by a click on the title, in
   the usual order of other software (Lightroom): **Histogram** on top, **Filters** and
