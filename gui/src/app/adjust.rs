@@ -89,6 +89,8 @@ impl TriApp {
         self.adjust_shot.clear();
         self.adjust_stale.clear();
         self.adjust_bases.clear();
+        self.big_stale.clear();
+        self.big_sent.clear();
         self.adjust_map
             .write()
             .unwrap_or_else(|e| e.into_inner())
@@ -108,6 +110,12 @@ impl TriApp {
         if let Some(ctx) = &self.repaint {
             ctx.request_repaint();
         }
+        // Les grandes images restent à l'écran et sont recalculées en fond, puis remplacées
+        // d'un coup (retour du 10/11/2026 : jetées, la vue retombait sur la vignette le
+        // temps du rechargement ; l'image « gigotait » et la barre d'état changeait à chaque
+        // mouvement de curseur). Chaque changement est numéroté : une image revenue du
+        // chargeur n'est à jour que si elle a été demandée après le dernier.
+        self.adjust_epoch += 1;
         let keys: Vec<(PathBuf, Level)> = self
             .big
             .keys()
@@ -115,7 +123,7 @@ impl TriApp {
             .cloned()
             .collect();
         for key in keys {
-            self.big.remove(&key);
+            self.big_stale.insert(key, self.adjust_epoch);
         }
         // Le chargeur reçoit la liste à nouveau, même identique.
         self.wanted.clear();

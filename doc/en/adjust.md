@@ -204,7 +204,11 @@ tint, around 0, a difference. Only the **layer touched** goes: changing the blac
 white doesn't re-match the exposure. While dragging, **the whole selection follows live**,
 and all thumbnails change together: each is redrawn in place from its unadjusted
 thumbnail, kept in memory for the gesture (no disk, no decoding at every frame); images
-and their sidecars are written on release.
+and their sidecars are written on release. In full screen, the large image **stays on
+screen** while it is recomputed in the background, then is replaced at once (before,
+dropped, the view fell back on the thumbnail: the image "wiggled" and the status bar
+changed at every movement); every change is numbered, an image back from the loader is
+up to date only if it was requested after the last one.
 
 ### Copy / paste
 

@@ -574,6 +574,13 @@ pub struct TriApp {
     adjust_gesture: Option<adjust::Gesture>,
     /// Vignettes à redessiner avec leurs nouveaux réglages, toutes à la fois.
     adjust_stale: HashSet<PathBuf>,
+    /// Grandes images affichées dont les réglages ont changé : gardées à l'écran,
+    /// redemandées au chargeur ; numéro du changement.
+    big_stale: HashMap<(PathBuf, Level), u64>,
+    /// Numéro du dernier changement connu quand chacune a été redemandée.
+    big_sent: HashMap<(PathBuf, Level), u64>,
+    /// Compteur des changements de réglages.
+    adjust_epoch: u64,
     /// Vignettes sans réglage (image et niveau) gardées le temps d'un geste.
     adjust_bases: HashMap<(PathBuf, Level), tri::bitmap::Bitmap>,
     /// Réglages copiés (« Copier »), à coller.
@@ -1401,6 +1408,9 @@ impl TriApp {
             adjust_sync: true,
             adjust_gesture: None,
             adjust_stale: HashSet::new(),
+            big_stale: HashMap::new(),
+            big_sent: HashMap::new(),
+            adjust_epoch: 0,
             adjust_bases: HashMap::new(),
             adjust_clipboard: None,
             log_view: None,
@@ -8500,6 +8510,17 @@ impl TriApp {
                 continue;
             }
             self.wanted.retain(|w| *w != key);
+            // Recalculée après un changement de réglages : à jour si demandée après le
+            // dernier ; l'ancienne reste affichée jusqu'au remplacement, dans cette image.
+            if let Some(&marked) = self.big_stale.get(&key)
+                && self.big_sent.get(&key).is_some_and(|&sent| sent >= marked)
+            {
+                self.big_stale.remove(&key);
+                self.big_sent.remove(&key);
+            }
+            if loaded.image.is_some() {
+                self.big.remove(&key);
+            }
             match loaded.image {
                 Some(image) if !self.make_room(&key, &image) => {
                     self.over_budget.insert(key);
@@ -8583,7 +8604,7 @@ impl TriApp {
             let level = view::pick(kind, source, zoomed, developed, |l| self.ready(index, l));
             if let Some(level) = level.filter(|&l| l != Level::Thumbnail) {
                 let key = (self.files[index].path.clone(), level);
-                if !self.loaded(index, level)
+                if (!self.loaded(index, level) || self.big_stale.contains_key(&key))
                     && !self.missing.contains(&key)
                     && !self.over_budget.contains(&key)
                 {
@@ -8598,6 +8619,11 @@ impl TriApp {
             wanted.iter().map(|(f, l)| (f.path.clone(), *l)).collect();
         if keys != self.wanted {
             trace(|| format!("chargeur : {keys:?}"));
+            for key in &keys {
+                if self.big_stale.contains_key(key) {
+                    self.big_sent.insert(key.clone(), self.adjust_epoch);
+                }
+            }
             self.wanted = keys;
             engine.loader.want(wanted);
         }
@@ -28468,6 +28494,46 @@ mod tests {
         assert_ne!(
             layers.correction.gains, cold.correction.gains,
             "the cold balance replaced"
+        );
+    }
+
+    #[test]
+    fn an_adjusted_large_image_stays_on_screen_until_its_new_version_arrives() {
+        // Retour du 10/11/2026 : à chaque mouvement de curseur, la grande image était jetée
+        // et la vue retombait sur la vignette le temps du rechargement (l'image « gigotait »,
+        // la barre d'état changeait).
+        let (mut h, _dir) = harness_with(640, 480);
+        run_until(&mut h, |app| app.files.len() == 3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            let path = &app.files[0].path;
+            app.big.keys().any(|(p, _)| p == path)
+        });
+        let path = h.state().files[0].path.clone();
+        let key = h
+            .state()
+            .big
+            .keys()
+            .find(|(p, _)| *p == path)
+            .cloned()
+            .unwrap();
+        let old = h.state_mut().big.get(&key).unwrap().texture.id();
+        let mut layers = tri::adjust::Layers::default();
+        layers.correction.exposure = 1.0;
+        h.state_mut().adjust_live(&path, layers);
+        assert!(h.state().big.contains(&key), "still shown");
+        assert!(h.state().big_stale.contains_key(&key));
+        h.run_steps(1);
+        assert_eq!(
+            h.state().last_shown.1,
+            Some(key.1),
+            "no fallback to the thumbnail"
+        );
+        run_until(&mut h, |app| app.big_stale.is_empty());
+        assert_ne!(
+            h.state_mut().big.get(&key).unwrap().texture.id(),
+            old,
+            "replaced"
         );
     }
 

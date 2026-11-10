@@ -212,7 +212,11 @@ positifs, suivent bien une règle de 3 ; la teinte, autour de 0, un écart. Seul
 Pendant le glissement, **toute la sélection suit en direct**, et toutes les vignettes
 changent ensemble : chacune est redessinée sur place d'après sa vignette sans réglage,
 gardée en mémoire le temps du geste (ni disque ni décodage à chaque image) ; les images
-et leurs sidecars sont écrits au relâchement.
+et leurs sidecars sont écrits au relâchement. En plein écran, la grande image **reste
+affichée** pendant qu'elle est recalculée en fond, puis est remplacée d'un coup (avant,
+jetée, la vue retombait sur la vignette : l'image « gigotait » et la barre d'état
+changeait à chaque mouvement) ; chaque changement est numéroté, une image revenue du
+chargeur n'est à jour que si elle a été demandée après le dernier.
 
 ### Copier / coller
 
