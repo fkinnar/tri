@@ -154,8 +154,9 @@ try (feedback of 2026-11-10):
   signs); at the bounds (-100 % to 200 %), the dragged channel stops where the others
   can't follow. Checking the box on a mix not at 100 % rescales it (`Mixer::set_locked`,
   `Mixer::rescaled`).
-- Common buttons: **"Copy adjustments"** / **"Paste adjustments"** (see below),
-  **"Harmonise the selection"** (exposure and balance of the selected images matched to
+- Buttons **as icons** (name and explanation in the tooltip): auto exposure (circled
+  "A"), eyedropper, and at the bottom **"Copy adjustments"** / **"Paste adjustments"**
+  (see below), **"Harmonise the selection"** (exposure and balance of the selected images matched to
   the current image, style and black and white untouched; one step), **"Before"** (every
   image without its adjustments, toggle, sidecars untouched), **"Reset"**.
 
@@ -178,8 +179,10 @@ Exposure is additive, not proportional: EV is already a relative scale (+0.2 EV 
 × 1.15 on every image); a rule of three on EV would brighten the images already corrected
 more, and wouldn't work from 0. Kelvins, always positive, do follow a rule of three;
 tint, around 0, a difference. Only the **layer touched** goes: changing the black and
-white doesn't re-match the exposure. While dragging, only the current image moves on
-screen; the selection follows on release.
+white doesn't re-match the exposure. While dragging, **the whole selection follows live**,
+and all thumbnails change together: each is redrawn in place from its unadjusted
+thumbnail, kept in memory for the gesture (no disk, no decoding at every frame); images
+and their sidecars are written on release.
 
 ### Copy / paste
 

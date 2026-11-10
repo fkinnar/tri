@@ -159,7 +159,8 @@ essai (retours du 10/11/2026) :
   opposés) ; aux bornes (-100 % à 200 %), le canal tiré s'arrête là où les autres ne
   suivent plus. Cocher la case sur un mélange qui n'est pas à 100 % le remet à l'échelle
   (`Mixer::set_locked`, `Mixer::rescaled`).
-- Boutons communs : **« Copier les réglages »** / **« Coller les réglages »** (voir plus
+- Boutons **en icônes** (nom et explication en bulle) : exposition auto (« A » cerclé),
+  pipette, et en bas, **« Copier les réglages »** / **« Coller les réglages »** (voir plus
   bas), **« Harmoniser la sélection »** (exposition et balance des images sélectionnées
   alignées sur l'image courante, sans toucher au style ni au noir et blanc ; un pas),
   **« Avant »** (toutes les images sans leurs réglages, bascule, sidecars intacts),
@@ -185,8 +186,10 @@ L'exposition est additive et non proportionnelle : l'IL est déjà une échelle 
 plus les images déjà corrigées et ne marcherait pas depuis 0. Les kelvins, toujours
 positifs, suivent bien une règle de 3 ; la teinte, autour de 0, un écart. Seule la
 **couche touchée** part : changer le noir et blanc ne réharmonise pas l'exposition.
-Pendant le glissement, seule l'image courante bouge à l'écran ; la sélection suit au
-relâchement.
+Pendant le glissement, **toute la sélection suit en direct**, et toutes les vignettes
+changent ensemble : chacune est redessinée sur place d'après sa vignette sans réglage,
+gardée en mémoire le temps du geste (ni disque ni décodage à chaque image) ; les images
+et leurs sidecars sont écrits au relâchement.
 
 ### Copier / coller
 

@@ -16,7 +16,8 @@
   paste adjustments (exposure and balance matched to the copied image), "Harmonise the
   selection", "Before" to compare. Stored in the sidecar under `tri:`; shown on
   thumbnails and large images. Every slider of the interface now moves by large steps,
-  and finely with Shift (`[gui] slider_fine_speed`).
+  and finely with Shift (`[gui] slider_fine_speed`); both side panels have a minimum
+  width (280 points) that the dragged edge respects.
   `tri --adjust <reference> <images>… --to <folder>` sets the reference and applies its
   adjustments to the others: exposure and balance matched to the reference (a photo at
   -1 EV gets about +1 EV), creative offset and black and white copied. It writes the

@@ -976,7 +976,9 @@ handle_grab = 10.0
 # l'affiche ou le masque), largeur initiale (points, le bord se tire à la souris), retrait par niveau,
 # dossiers cachés (.xxx) montrés ou non.
 visible = true
-width = 240.0
+width = 280.0
+# Largeur minimale (points) : le bord tiré à la souris ne descend pas plus bas.
+min_width = 280.0
 indent = 14.0
 hidden = false
 # Recherche de dossiers (<core.search> dans le panneau) : niveaux de sous-dossiers
@@ -1082,6 +1084,8 @@ step = 0.1
 # et sa hauteur.
 visible = true
 width = 280.0
+# Largeur minimale (points) : le bord tiré à la souris ne descend pas plus bas.
+min_width = 280.0
 histogram = true
 histogram_height = 120.0
 # Pas d'un curseur de sévérité du panneau au clavier (<core.metadata.left> /

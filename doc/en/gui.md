@@ -1580,6 +1580,10 @@ blurry background among landscapes), it wrongly flagged sharp photos.
 - **Double-click on a slider: default value**, everywhere (like Lightroom): blur and
   stacks back to the middle, stack time gap to `[similarity] max_gap_s`. Any new slider
   must do the same.
+- **Minimum width of the panels** (`[gui.metadata] min_width`, `[gui.folders]
+  min_width`, 280 points, the same on both sides; feedback of 2026-11-10): the dragged
+  edge doesn't go below it (before, the panel shrank then went back to the width of its
+  content). The adjustment lists shrink to fit.
 - **One slider for the whole interface** (`gui/src/fine_slider.rs`, feedback of
   2026-11-10): **dragging** moves by large steps (0.1 EV, 50 K…); **Shift + drag**
   adjusts finely, relative and geared down (`[gui] slider_fine_speed`, 1/10), by small

@@ -1581,6 +1581,167 @@ pub fn square_loupe_icon(painter: &Painter, rect: Rect, color: Color32) {
     );
 }
 
+/// Bouton carré à icône qui reste allumé (`selected`, fond d'accent) : pipette armée,
+/// « avant ». Comme [`icon_button`] sinon.
+pub fn icon_toggle(
+    ui: &mut Ui,
+    size: f32,
+    label: &str,
+    tip: &str,
+    selected: bool,
+) -> (Rect, Response) {
+    let (rect, response) = ui.allocate_exact_size(vec2(size, size), Sense::click());
+    response.widget_info(|| WidgetInfo::selected(Role::Button, ui.is_enabled(), selected, label));
+    let response = response
+        .on_hover_text(tip)
+        .on_disabled_hover_text(tip)
+        .on_hover_cursor(CursorIcon::PointingHand);
+    let visuals = ui.style().interact_selectable(&response, selected);
+    if selected || response.hovered() || response.has_focus() {
+        ui.painter().rect(
+            rect,
+            visuals.corner_radius,
+            visuals.weak_bg_fill,
+            visuals.bg_stroke,
+            egui::StrokeKind::Inside,
+        );
+    }
+    (rect, response)
+}
+
+/// Exposition automatique : un « A » dans un cercle (le mode auto des boîtiers).
+pub fn auto_exposure(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let (c, r) = (rect.center(), s * 0.4);
+    let stroke = Stroke::new((s * 0.08).max(1.2), color);
+    painter.circle_stroke(c, r, stroke);
+    // Le A : deux jambages et une barre.
+    let (top, left, right) = (
+        c + vec2(0.0, -r * 0.62),
+        c + vec2(-r * 0.5, r * 0.55),
+        c + vec2(r * 0.5, r * 0.55),
+    );
+    painter.line_segment([left, top], stroke);
+    painter.line_segment([top, right], stroke);
+    painter.line_segment(
+        [c + vec2(-r * 0.27, r * 0.12), c + vec2(r * 0.27, r * 0.12)],
+        stroke,
+    );
+}
+
+/// Pipette : un tube en biais, sa pointe en bas à gauche, la poire en haut à droite.
+pub fn eyedropper(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let p = |x: f32, y: f32| rect.center() + vec2((x - 0.5) * s, (y - 0.5) * s);
+    let stroke = Stroke::new((s * 0.09).max(1.2), color);
+    // Tube : deux bords parallèles, de la pointe à la bague.
+    painter.line_segment([p(0.14, 0.86), p(0.56, 0.44)], stroke);
+    painter.line_segment([p(0.22, 0.86), p(0.56, 0.52)], stroke);
+    painter.line_segment([p(0.14, 0.86), p(0.22, 0.86)], stroke);
+    // Bague, perpendiculaire au tube.
+    painter.line_segment([p(0.46, 0.40), p(0.64, 0.58)], stroke);
+    // Poire.
+    painter.circle_filled(p(0.70, 0.30), s * 0.17, color);
+}
+
+/// Coller : un presse-papiers (planche et pince).
+pub fn paste_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let stroke = Stroke::new((s * 0.09).max(1.2), color);
+    let board = Rect::from_center_size(
+        rect.center() + vec2(0.0, s * 0.05),
+        vec2(s * 0.62, s * 0.74),
+    );
+    painter.rect_stroke(board, s * 0.08, stroke, egui::StrokeKind::Inside);
+    let clip = Rect::from_center_size(pos2(board.center().x, board.top()), vec2(s * 0.3, s * 0.16));
+    painter.rect_filled(clip, s * 0.04, color);
+    // Deux lignes de texte sur la planche.
+    for y in [0.52, 0.68] {
+        let y = rect.top() + s * y;
+        painter.line_segment(
+            [
+                pos2(board.left() + s * 0.14, y),
+                pos2(board.right() - s * 0.14, y),
+            ],
+            Stroke::new((s * 0.06).max(1.0), color),
+        );
+    }
+}
+
+/// Harmoniser : trois barres de hauteurs différentes ramenées sur une même ligne
+/// (pointillée) : les images alignées sur une référence.
+pub fn harmonise_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let base = rect.center().y + s * 0.38;
+    let level = rect.center().y - s * 0.12;
+    let w = s * 0.18;
+    for (i, top) in [0.30f32, -0.05, 0.15].into_iter().enumerate() {
+        let x = rect.center().x + (i as f32 - 1.0) * s * 0.28;
+        let bar = Rect::from_min_max(
+            pos2(x - w / 2.0, rect.center().y + top * s),
+            pos2(x + w / 2.0, base),
+        );
+        painter.rect_filled(bar, 1.0, color);
+    }
+    // La ligne visée.
+    let stroke = Stroke::new((s * 0.06).max(1.0), color);
+    let (left, right) = (rect.center().x - s * 0.46, rect.center().x + s * 0.46);
+    let dash = s * 0.1;
+    let mut x = left;
+    while x < right {
+        painter.line_segment([pos2(x, level), pos2((x + dash).min(right), level)], stroke);
+        x += dash * 1.8;
+    }
+}
+
+/// Avant / après : un carré coupé en biais, une moitié pleine.
+pub fn before_after(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let square = Rect::from_center_size(rect.center(), vec2(s * 0.72, s * 0.72));
+    painter.rect_stroke(
+        square,
+        s * 0.06,
+        Stroke::new((s * 0.08).max(1.2), color),
+        egui::StrokeKind::Inside,
+    );
+    painter.add(Shape::convex_polygon(
+        vec![square.left_top(), square.right_top(), square.left_bottom()],
+        color,
+        Stroke::NONE,
+    ));
+}
+
+/// Réinitialiser : une flèche circulaire tournée vers l'arrière (comme « annuler »).
+pub fn reset_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let c = rect.center();
+    let r = rect.width().min(rect.height()) * 0.38;
+    let stroke = Stroke::new((r * 0.24).max(1.5), color);
+    // De -120° à 180°, dans le sens inverse d'« actualiser ».
+    let (start, end) = (-2.0 * PI / 3.0, PI);
+    let steps = 28;
+    let points: Vec<Pos2> = (0..=steps)
+        .map(|i| {
+            let t = start + (end - start) * i as f32 / steps as f32;
+            c + vec2(t.cos(), t.sin()) * r
+        })
+        .collect();
+    let tip = points[0];
+    painter.add(Shape::line(points, stroke));
+    // Pointe au début de l'arc, tangente, dans le sens du retour.
+    let dir = -vec2(-start.sin(), start.cos());
+    let side = vec2(-dir.y, dir.x);
+    let h = r * 0.8;
+    painter.add(Shape::convex_polygon(
+        vec![
+            tip + dir * h * 0.35,
+            tip - dir * h * 0.65 + side * h * 0.7,
+            tip - dir * h * 0.65 - side * h * 0.7,
+        ],
+        color,
+        Stroke::NONE,
+    ));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1668,6 +1668,10 @@ photos nettes.
 - **Double-clic sur un curseur : valeur par défaut**, partout (comme Lightroom) : flou et
   piles au centre, écart de temps des piles à `[similarity] max_gap_s`. Toute nouvelle
   glissière doit faire de même.
+- **Largeur minimale des panneaux** (`[gui.metadata] min_width`, `[gui.folders]
+  min_width`, 280 points, la même des deux côtés ; retour du 10/11/2026) : le bord tiré ne
+  descend pas plus bas (avant, le panneau se rétrécissait puis reprenait la largeur de son
+  contenu). Les listes des réglages se compriment pour tenir.
 - **Un seul curseur dans toute l'interface** (`gui/src/fine_slider.rs`, retours du
   10/11/2026) : **glisser** avance par grands crans (0,1 IL, 50 K…) ; **Maj + glisser**
   règle finement, relatif et démultiplié (`[gui] slider_fine_speed`, 1/10), par petits

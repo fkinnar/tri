@@ -970,7 +970,9 @@ handle_grab = 10.0
 # hides it), initial width (points, the edge can be dragged with the mouse), indent per
 # level, hidden folders (.xxx) shown or not.
 visible = true
-width = 240.0
+width = 280.0
+# Minimum width (points): the edge dragged with the mouse doesn't go below it.
+min_width = 280.0
 indent = 14.0
 hidden = false
 # Folder search (<core.search> in the panel): maximum levels of subfolders
@@ -1076,6 +1078,8 @@ step = 0.1
 # and its height.
 visible = true
 width = 280.0
+# Minimum width (points): the edge dragged with the mouse doesn't go below it.
+min_width = 280.0
 histogram = true
 histogram_height = 120.0
 # Step of a strictness slider of the panel from the keyboard (<core.metadata.left> /

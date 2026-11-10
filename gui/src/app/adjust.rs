@@ -87,6 +87,8 @@ impl TriApp {
         self.adjust_read = mpsc::channel();
         self.adjust_dirty = None;
         self.adjust_shot.clear();
+        self.adjust_stale.clear();
+        self.adjust_bases.clear();
         self.adjust_map
             .write()
             .unwrap_or_else(|e| e.into_inner())
@@ -97,9 +99,10 @@ impl TriApp {
     /// Les textures de `path` sont refaites (réglages changés) : vignette et grandes
     /// images.
     pub(super) fn drop_adjusted_textures(&mut self, path: &Path) {
-        let owned = path.to_path_buf();
-        self.textures.remove(&owned);
-        self.texture_levels.remove(&owned);
+        // La vignette est redessinée sur place, avec les autres, à la fin de l'image
+        // affichée ([`TriApp::adjust_refresh_thumbnails`]) : jetée, elle revenait au
+        // compte-gouttes du chargement de la grille.
+        self.adjust_stale.insert(path.to_path_buf());
         let keys: Vec<(PathBuf, Level)> = self
             .big
             .keys()
@@ -113,24 +116,93 @@ impl TriApp {
         self.wanted.clear();
     }
 
+    /// Vignettes dont les réglages ont changé, redessinées **toutes ensemble** (retour du
+    /// 10/11/2026) : la texture existante est remplacée sur place, d'après la vignette
+    /// sans réglage gardée en mémoire le temps du geste (ni disque ni décodage à chaque
+    /// image du glissement). Une vignette pas encore chargée l'est normalement.
+    pub(super) fn adjust_refresh_thumbnails(&mut self, ctx: &egui::Context) {
+        if self.adjust_stale.is_empty() {
+            if !ctx.input(|i| i.pointer.any_down()) {
+                self.adjust_bases.clear();
+            }
+            return;
+        }
+        let stale: Vec<PathBuf> = self.adjust_stale.drain().collect();
+        for path in stale {
+            let (Some(texture), Some(level)) = (
+                self.textures.get(&path).cloned(),
+                self.texture_levels.get(&path).copied(),
+            ) else {
+                continue;
+            };
+            let Some(index) = self.files.iter().position(|f| f.path == path) else {
+                continue;
+            };
+            let key = (path.clone(), level);
+            if !self.adjust_bases.contains_key(&key) {
+                let Some(bitmap) = self.grid_bitmap(index, level) else {
+                    self.textures.remove(&path);
+                    self.texture_levels.remove(&path);
+                    continue;
+                };
+                self.adjust_bases.insert(key.clone(), bitmap);
+            }
+            let mut bitmap = self.adjust_bases[&key].clone();
+            let kind = self.files[index].kind;
+            crate::adjust_view::apply(&self.adjust_map, &path, kind, level, &mut bitmap);
+            let image = ColorImage::from_rgb(
+                [bitmap.width as usize, bitmap.height as usize],
+                &bitmap.data,
+            );
+            let mut texture = texture;
+            texture.set(image, TextureOptions::LINEAR);
+        }
+        ctx.request_repaint();
+    }
+
     /// Réglages de `path` changés à l'écran (curseur en cours) : montrés tout de suite,
     /// enregistrés quand on lâche ([`TriApp::adjust_commit`]).
     pub(super) fn adjust_live(&mut self, path: &Path, layers: Layers) {
-        {
-            let mut shared = self.adjust_map.write().unwrap_or_else(|e| e.into_inner());
-            // Début du geste : l'état d'avant, pour reporter l'écart sur la sélection.
-            if self.adjust_gesture.as_ref().is_none_or(|(p, _)| p != path) {
-                let before = shared.layers.get(path).copied().unwrap_or_default();
-                self.adjust_gesture = Some((path.to_path_buf(), before));
+        // Début du geste : l'état d'avant de l'image et de la sélection synchronisée, pour
+        // y reporter l'écart en direct (retour du 10/11/2026 : toutes les vignettes
+        // ensemble, pas seulement au relâchement).
+        if self.adjust_gesture.as_ref().is_none_or(|g| g.path != path) {
+            let before = self.adjust_layers_now(path);
+            let shot = self.adjust_shot_now(path);
+            let mut targets = Vec::new();
+            for target in self.adjust_sync_targets(path) {
+                let current = self.adjust_layers_now(&target);
+                let target_shot = self.adjust_shot_now(&target);
+                targets.push((target, current, target_shot));
             }
-            if layers.is_none() {
-                shared.layers.remove(path);
-            } else {
-                shared.layers.insert(path.to_path_buf(), layers);
+            self.adjust_gesture = Some(Gesture {
+                path: path.to_path_buf(),
+                before,
+                shot,
+                targets,
+            });
+        }
+        let mut shown = vec![(path.to_path_buf(), layers)];
+        if let Some(g) = &self.adjust_gesture {
+            for (target, current, target_shot) in &g.targets {
+                let new = tri::adjust::propagate(&g.before, &layers, g.shot, current, *target_shot);
+                shown.push((target.clone(), new));
             }
         }
-        self.adjust_known.insert(path.to_path_buf());
-        self.drop_adjusted_textures(path);
+        {
+            let mut shared = self.adjust_map.write().unwrap_or_else(|e| e.into_inner());
+            for (image, l) in &shown {
+                if l.is_none() {
+                    shared.layers.remove(image);
+                } else {
+                    shared.layers.insert(image.clone(), *l);
+                }
+            }
+        }
+        for (image, _) in &shown {
+            self.adjust_known.insert(image.clone());
+            self.drop_adjusted_textures(image);
+        }
         self.adjust_dirty = Some(path.to_path_buf());
     }
 
@@ -146,16 +218,13 @@ impl TriApp {
         };
         let after = self.adjust_layers(&path).unwrap_or_default();
         let mut changes = vec![(path.clone(), Some(after))];
-        if let Some((gesture, before)) = self.adjust_gesture.take()
-            && gesture == path
-            && before != after
+        if let Some(g) = self.adjust_gesture.take()
+            && g.path == path
         {
-            let shot = self.adjust_shot_now(&path);
-            for target in self.adjust_sync_targets(&path) {
-                let current = self.adjust_layers_now(&target);
-                let target_shot = self.adjust_shot_now(&target);
-                let new = tri::adjust::propagate(&before, &after, shot, &current, target_shot);
-                changes.push((target, Some(new)));
+            // Ce qui est montré depuis le début du geste, calculé de la même façon.
+            for (target, current, target_shot) in &g.targets {
+                let new = tri::adjust::propagate(&g.before, &after, g.shot, current, *target_shot);
+                changes.push((target.clone(), Some(new)));
             }
         }
         self.save_adjustments(changes);
@@ -569,35 +638,59 @@ impl TriApp {
         }
         ui.add_space(6.0);
         ui.separator();
+        // Boutons communs, en icônes (retour du 10/11/2026), nom et explication en bulle.
         let (mut copy, mut paste, mut harmonise, mut toggle, mut reset) =
             (false, false, false, false, false);
-        ui.horizontal_wrapped(|ui| {
-            copy = ui
-                .button(t!("adjust-copy"))
-                .on_hover_text(t!("adjust-copy-tip"))
-                .clicked();
-            paste = ui
-                .add_enabled(
-                    self.adjust_clipboard.is_some(),
-                    egui::Button::new(t!("adjust-paste")),
-                )
-                .on_hover_text(t!("adjust-paste-tip"))
-                .on_disabled_hover_text(t!("adjust-paste-tip"))
-                .clicked();
-            harmonise = ui
-                .add_enabled(n > 1, egui::Button::new(t!("adjust-harmonise")))
-                .on_hover_text(t!("adjust-harmonise-tip"))
-                .on_disabled_hover_text(t!("adjust-harmonise-tip"))
-                .clicked();
-        });
-        ui.horizontal_wrapped(|ui| {
-            toggle = ui
-                .selectable_label(self.showing_original(), t!("adjust-before"))
-                .on_hover_text(t!("adjust-before-tip"))
-                .clicked();
-            reset = ui
-                .add_enabled(!layers.is_none(), egui::Button::new(t!("adjust-reset")))
-                .clicked();
+        let back = ui.visuals().panel_fill;
+        let has_clip = self.adjust_clipboard.is_some();
+        let original = self.showing_original();
+        ui.horizontal(|ui| {
+            copy = icon(
+                ui,
+                true,
+                "adjust-copy",
+                "adjust-copy-tip",
+                None,
+                &|p, r, c| marks::copy_icon(p, r, c, back),
+            )
+            .clicked();
+            paste = icon(
+                ui,
+                has_clip,
+                "adjust-paste",
+                "adjust-paste-tip",
+                None,
+                &marks::paste_icon,
+            )
+            .clicked();
+            harmonise = icon(
+                ui,
+                n > 1,
+                "adjust-harmonise",
+                "adjust-harmonise-tip",
+                None,
+                &marks::harmonise_icon,
+            )
+            .clicked();
+            ui.add_space(8.0);
+            toggle = icon(
+                ui,
+                true,
+                "adjust-before",
+                "adjust-before-tip",
+                Some(original),
+                &marks::before_after,
+            )
+            .clicked();
+            reset = icon(
+                ui,
+                !layers.is_none(),
+                "adjust-reset",
+                "adjust-reset-tip",
+                None,
+                &marks::reset_icon,
+            )
+            .clicked();
         });
         // Curseurs, cases, listes : montrés tout de suite, enregistrés (et reportés sur la
         // sélection) au relâchement.
@@ -652,6 +745,15 @@ impl TriApp {
             self.adjust_apply_to_selection();
         }
     }
+}
+
+/// Un geste en cours sur l'image courante : ses réglages d'avant et la couleur de sa
+/// prise de vue, et pour chaque image synchronisée, les siens et la sienne.
+pub(super) struct Gesture {
+    path: PathBuf,
+    before: Layers,
+    shot: [f32; 3],
+    targets: Vec<(PathBuf, Layers, [f32; 3])>,
 }
 
 /// Onglet de la section.
@@ -722,6 +824,39 @@ fn adjust_tab(ui: &mut Ui, name: &str, selected: bool, active: bool) -> egui::Re
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// Un bouton à icône de la section : `label` (clé du nom, pour l'accessibilité) et `tip`
+/// (clé de la bulle, avec le nom en tête) ; `toggle` : allumé ou non (pipette, avant).
+fn icon(
+    ui: &mut Ui,
+    enabled: bool,
+    label: &str,
+    tip: &str,
+    toggle: Option<bool>,
+    draw: &dyn Fn(&egui::Painter, Rect, Color32),
+) -> egui::Response {
+    ui.add_enabled_ui(enabled, |ui| {
+        let size = ui.spacing().interact_size.y + 4.0;
+        let (name, tip) = (t!(label), format!("{}\n{}", t!(label), t!(tip)));
+        let (rect, response) = match toggle {
+            Some(on) => marks::icon_toggle(ui, size, &name, &tip, on),
+            None => marks::icon_button(ui, size, &name, &tip),
+        };
+        let color = if !ui.is_enabled() {
+            ui.visuals().weak_text_color()
+        } else {
+            ui.style()
+                .interact_selectable(&response, toggle.unwrap_or(false))
+                .text_color()
+        };
+        draw(ui.painter(), rect.shrink(3.0), color);
+        response
+    })
+    .inner
+}
+
+/// Largeur au plus des listes (balance, filtre) ; moins si le panneau est étroit.
+const COMBO_WIDTH: f32 = 170.0;
+
 /// Largeur du champ de valeur à droite des curseurs (tous alignés).
 const FIELD_WIDTH: f32 = 76.0;
 
@@ -790,10 +925,15 @@ fn base_tab(
 ) {
     let ev = t!("adjust-ev-suffix");
     let name = title_row(ui, t!("adjust-exposure"), |ui| {
-        pending.auto_exposure = ui
-            .button(t!("adjust-auto"))
-            .on_hover_text(t!("adjust-auto-exposure-tip"))
-            .clicked();
+        pending.auto_exposure = icon(
+            ui,
+            true,
+            "adjust-auto",
+            "adjust-auto-exposure-tip",
+            None,
+            &marks::auto_exposure,
+        )
+        .clicked();
     });
     let r = setting_slider(
         ui,
@@ -814,11 +954,19 @@ fn base_tab(
     let current = wb_choice(shot, layers.correction.gains, presets);
     let name = title_row(ui, t!("adjust-temperature"), |ui| {
         // De droite à gauche : la pipette, puis la liste.
-        pending.eyedropper = ui
-            .selectable_label(eyedropper, t!("adjust-eyedropper"))
-            .on_hover_text(t!("adjust-eyedropper-tip"))
-            .clicked();
+        pending.eyedropper = icon(
+            ui,
+            true,
+            "adjust-eyedropper",
+            "adjust-eyedropper-tip",
+            Some(eyedropper),
+            &marks::eyedropper,
+        )
+        .clicked();
+        // Compressible : le panneau ne s'élargit pas pour un nom de préréglage.
         egui::ComboBox::from_id_salt("adjust_wb_preset")
+            .width(ui.available_width().min(COMBO_WIDTH))
+            .truncate()
             .selected_text(current.map_or_else(|| t!("adjust-wb-custom"), wb_name))
             .show_ui(ui, |ui| {
                 let mut choices = vec![WhiteBalance::AsShot, WhiteBalance::Auto];
@@ -926,6 +1074,8 @@ fn mono_tab(ui: &mut Ui, layers: &mut Layers) {
     };
     title_row(ui, t!("adjust-filter"), |ui| {
         egui::ComboBox::from_id_salt("adjust_mono_preset")
+            .width(ui.available_width().min(COMBO_WIDTH))
+            .truncate()
             .selected_text(shown)
             .show_ui(ui, |ui| {
                 if ui.selectable_label(!on, t!("adjust-mono-none")).clicked() {

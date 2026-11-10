@@ -1285,6 +1285,8 @@ pub struct FolderSettings {
     pub visible: bool,
     /// Largeur initiale (points) ; le bord se tire à la souris.
     pub width: f32,
+    /// Largeur minimale (points), la même que le panneau de droite par défaut.
+    pub min_width: f32,
     /// Retrait par niveau de l'arborescence (points).
     pub indent: f32,
     /// Montrer les dossiers cachés (`.xxx`).
@@ -1317,7 +1319,8 @@ impl Default for FolderSettings {
     fn default() -> Self {
         Self {
             visible: true,
-            width: 240.0,
+            width: 280.0,
+            min_width: 280.0,
             indent: 14.0,
             hidden: false,
             search_depth: 4,
@@ -1370,6 +1373,9 @@ pub struct MetadataSettings {
     pub visible: bool,
     /// Largeur initiale (points) ; le bord se tire à la souris.
     pub width: f32,
+    /// Largeur minimale (points) : le bord tiré ne descend pas plus bas (avant, le panneau
+    /// se rétrécissait puis reprenait la largeur de son contenu).
+    pub min_width: f32,
     /// Histogramme de l'image sélectionnée en haut du panneau, en grille comme en plein
     /// écran (panneau masqué : en surimpression sur l'image en plein écran).
     pub histogram: bool,
@@ -1388,6 +1394,7 @@ impl Default for MetadataSettings {
         Self {
             visible: true,
             width: 280.0,
+            min_width: 280.0,
             histogram: true,
             histogram_height: 120.0,
             slider_step: 0.1,

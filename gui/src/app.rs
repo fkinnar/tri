@@ -569,7 +569,11 @@ pub struct TriApp {
     adjust_sync: bool,
     /// Geste en cours sur l'image courante : ses réglages d'avant, pour reporter l'écart
     /// sur la sélection au relâchement.
-    adjust_gesture: Option<(PathBuf, tri::adjust::Layers)>,
+    adjust_gesture: Option<adjust::Gesture>,
+    /// Vignettes à redessiner avec leurs nouveaux réglages, toutes à la fois.
+    adjust_stale: HashSet<PathBuf>,
+    /// Vignettes sans réglage (image et niveau) gardées le temps d'un geste.
+    adjust_bases: HashMap<(PathBuf, Level), tri::bitmap::Bitmap>,
     /// Réglages copiés (« Copier »), à coller.
     adjust_clipboard: Option<adjust::AdjustClip>,
     /// Fenêtre du journal de l'application (issue n° 398).
@@ -1393,6 +1397,8 @@ impl TriApp {
             adjust_tab: Default::default(),
             adjust_sync: true,
             adjust_gesture: None,
+            adjust_stale: HashSet::new(),
+            adjust_bases: HashMap::new(),
             adjust_clipboard: None,
             log_view: None,
             log_view_since: 0,
@@ -11692,17 +11698,8 @@ impl TriApp {
         index: usize,
         level: Level,
     ) -> Option<TextureHandle> {
-        let engine = self.engine.as_ref()?;
+        let mut bitmap = self.grid_bitmap(index, level)?;
         let file = &self.files[index];
-        let key = preview::key(file, level, &engine.preview).ok()?;
-        let mut bitmap = if level == Level::Thumbnail {
-            engine.cache.get(&key)?
-        } else {
-            let side = engine.preview.sizes.thumbnail;
-            tri::jpeg::decode(&engine.cache.get_bytes(&key)?, side)
-                .ok()?
-                .fit(side)
-        };
         crate::adjust_view::apply(&self.adjust_map, &file.path, file.kind, level, &mut bitmap);
         let image = ColorImage::from_rgb(
             [bitmap.width as usize, bitmap.height as usize],
@@ -11713,6 +11710,23 @@ impl TriApp {
         self.textures.insert(file.path.clone(), texture.clone());
         self.texture_levels.insert(file.path.clone(), level);
         Some(texture)
+    }
+
+    /// La vignette `index` au niveau `level`, sans réglage (tirée du cache).
+    fn grid_bitmap(&self, index: usize, level: Level) -> Option<tri::bitmap::Bitmap> {
+        let engine = self.engine.as_ref()?;
+        let file = &self.files[index];
+        let key = preview::key(file, level, &engine.preview).ok()?;
+        if level == Level::Thumbnail {
+            engine.cache.get(&key)
+        } else {
+            let side = engine.preview.sizes.thumbnail;
+            Some(
+                tri::jpeg::decode(&engine.cache.get_bytes(&key)?, side)
+                    .ok()?
+                    .fit(side),
+            )
+        }
     }
 
     /// Politique des rendus RAW de fond : tout le dossier quand la grille les montre.
@@ -17501,6 +17515,7 @@ impl eframe::App for TriApp {
             let panel = egui::Panel::right("metadata")
                 .resizable(true)
                 .default_size(self.gui.metadata.width)
+                .min_size(self.gui.metadata.min_width)
                 .show(ui, |ui| {
                     if self.focus == crate::actions::Scope::Metadata {
                         panel_focus_fill(ui, &self.gui.dialogs);
@@ -17555,6 +17570,7 @@ impl eframe::App for TriApp {
             let panel = egui::Panel::left("folders")
                 .resizable(true)
                 .default_size(self.gui.folders.width)
+                .min_size(self.gui.folders.min_width)
                 .show(ui, |ui| {
                     self.folder_panel(ui);
                     hand_over_clickable(ui);
@@ -17710,6 +17726,7 @@ impl eframe::App for TriApp {
         self.export_report_dialog(&ctx);
         self.log_errors();
         self.adjust_commit(&ctx);
+        self.adjust_refresh_thumbnails(&ctx);
         if let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) {
             self.adjust_layers(&path);
         }
@@ -28410,6 +28427,23 @@ mod tests {
         h.get_by_label("Synchroniser 3 images");
         assert!(h.state().adjust_sync, "checked by default");
         h.state_mut().adjust_live(&paths[0], with_ev(0.5));
+        // Pendant le geste déjà, toute la sélection suit (toutes les vignettes ensemble).
+        let shown = |app: &TriApp, p: &PathBuf| {
+            app.adjust_map
+                .read()
+                .unwrap()
+                .layers
+                .get(p)
+                .map(|l| l.correction.exposure)
+        };
+        assert_eq!(
+            shown(h.state(), &paths[1]).map(|e| (e * 100.0).round()),
+            Some(120.0)
+        );
+        assert!(
+            h.state().adjust_stale.contains(&paths[2]),
+            "redrawn with the others"
+        );
         let ctx = h.ctx.clone();
         h.state_mut().adjust_commit(&ctx);
         let ev = |p: &PathBuf| {

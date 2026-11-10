@@ -18,7 +18,8 @@
   (exposition et balance harmonisées sur l'image copiée), « Harmoniser la sélection »,
   « Avant » pour comparer. Enregistrés dans le sidecar sous `tri:` ; montrés sur les
   vignettes et les grandes images. Tous les curseurs de l'interface avancent désormais
-  par grands crans, et finement avec Maj (`[gui] slider_fine_speed`).
+  par grands crans, et finement avec Maj (`[gui] slider_fine_speed`) ; les deux panneaux
+  latéraux ont une largeur minimale (280 points) que le bord tiré respecte.
   `tri --adjust <référence> <images>… --to <dossier>` règle la référence et applique ses
   réglages aux autres : exposition et balance harmonisées sur la référence (une photo à
   -1 IL reçoit environ +1 IL), décalage créatif et noir et blanc copiés. Écrit les JPEG
