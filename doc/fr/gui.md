@@ -807,9 +807,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     vignettes, alors que la note allait à l'image cliquée. Derrière la boîte, rien ne
     bouge : ni survol, ni navigation ; seules les touches de notation (pour cette image)
     et Échap agissent. Elle reste ouverte pour poser plusieurs notes, et se ferme par
-    Échap, « Fermer » ou un clic à côté. Elle s'ouvre **au point du clic** (`modal_at`),
-    pas au centre : sur un grand écran, le trajet jusqu'au centre était long (retour du
-    17/10/2026, même chose pour la confirmation d'éjection, ouverte près de l'icône) ;
+    Échap, « Fermer » ou un clic à côté. Ouverte d'abord au point du clic (17/10/2026),
+    elle s'ouvre **au centre** depuis le 10/11/2026, comme toutes les boîtes : `modal_at`
+    avec `CENTRED`, placée d'après sa taille réelle (mesurée à l'image précédente ; sa
+    largeur suit, son haut reste où sa première taille l'a mis) ;
   - **réaction au survol** (même retour) : sur les étoiles, pastilles et drapeaux
     cliquables (bandeau, boîte, barre de filtres), pointeur en main et fond surligné
     (`marks::clickable`) ;
@@ -823,7 +824,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   - contrôles nommés pour l'accessibilité (`WidgetInfo`), ce qui permet aussi aux tests
     d'interface de cliquer « 3 étoiles ».
 - **Déchargement d'une carte** (17/10/2026) : icône « décharger » sur chaque volume non
-  fixé du panneau des dossiers ; boîte près du clic : inventaire en fond, racine et
+  fixé du panneau des dossiers ; boîte au centre : inventaire en fond, racine et
   dossier de la séance (proposé `AAAA-MM-JJ_` ; racine mémorisée), cases à cocher (RAW seulement,
   ouvrir le dossier, éjecter la carte, supprimer de la carte les fichiers copiés et
   vérifiés), copie vérifiée en fond avec progression et « Interrompre », puis suites

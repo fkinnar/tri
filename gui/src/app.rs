@@ -3105,7 +3105,7 @@ impl TriApp {
                         && card.join("DCIM").is_dir()
                         && self.ejecting.is_none()
                     {
-                        let at = ctx.content_rect().center() - vec2(160.0, 120.0);
+                        let at = CENTRED;
                         let mut dialog = OffloadDialog::new(
                             card,
                             at,
@@ -3799,7 +3799,7 @@ impl TriApp {
                                 if response.clicked() {
                                     // Au centre, comme les autres boîtes (#252 ; près du
                                     // clic avant).
-                                    let at = ui.ctx().content_rect().center() - vec2(210.0, 160.0);
+                                    let at = CENTRED;
                                     offload = Some((row.path.clone(), at));
                                 }
                             }
@@ -3813,7 +3813,7 @@ impl TriApp {
                             if response.clicked() {
                                 // Au centre, comme les autres boîtes (#282 ; au coin de
                                 // l'icône avant).
-                                let at = ui.ctx().content_rect().center() - vec2(160.0, 120.0);
+                                let at = CENTRED;
                                 eject = Some((row.path.clone(), at));
                             }
                         }
@@ -3911,13 +3911,13 @@ impl TriApp {
                 // Clic droit : une boîte pour choisir le logiciel (26/10/2026).
                 Action::DevelopFolder => {
                     // Au centre, comme les autres boîtes (#282 ; sous le pointeur avant).
-                    let at = ctx.content_rect().center() - vec2(180.0, 120.0);
+                    let at = CENTRED;
                     self.develop_folder_dialog = Some((path, at, None));
                 }
                 Action::Sidecars => {
                     let images: Vec<PathBuf> =
                         self.folder.files.iter().map(|f| f.path.clone()).collect();
-                    let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                    let at = CENTRED;
                     let title = t!("sidecars-title-folder", folder = folder_name(&path));
                     self.open_sidecars_dialog(images, title, at);
                 }
@@ -3970,7 +3970,7 @@ impl TriApp {
                     } else {
                         tri::files::TransferMode::Move
                     };
-                    let at = ctx.content_rect().center() - vec2(210.0, 160.0);
+                    let at = CENTRED;
                     self.file_dialog = Some(crate::files::FileDialog::transfer(
                         crate::files::Source::Images(paths),
                         mode,
@@ -4072,7 +4072,7 @@ impl TriApp {
             return;
         };
         let (mut go, mut cancel) = (false, false);
-        let at = ctx.content_rect().center() - vec2(180.0, 120.0);
+        let at = CENTRED;
         let title = t!("download-title", version = download.version.as_str());
         let modal = modal_at("download_dialog", at)
             .title(title)
@@ -4139,7 +4139,7 @@ impl TriApp {
         let current = self.build.version.as_str();
         let build = &self.build;
         let mut close = false;
-        let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+        let at = CENTRED;
         let modal = modal_at("update_dialog", at)
             .title(t!("update-title"))
             .show(ctx, |ui| {
@@ -4215,7 +4215,7 @@ impl TriApp {
             .any(|r| r.path == root && r.kind == Some(PlaceKind::Volume) && r.ejectable);
         // Au centre (retour du 10/11/2026 : près du pointeur, la boîte débordait en bas) ;
         // recentrée d'après sa vraie taille dès sa première image.
-        let at = ctx.content_rect().center();
+        let at = CENTRED;
         self.disk_clear = Some(DiskClear {
             root,
             removable,
@@ -4243,7 +4243,6 @@ impl TriApp {
         let size = dialog.size;
         let (mut confirm, mut cancel) = (false, false);
         let modal = modal_at("disk_clear_dialog", dialog.at)
-            .centred()
             .title(title)
             .show(ctx, |ui| {
                 match size {
@@ -5014,7 +5013,7 @@ impl TriApp {
         let Some(remote) = self.remote.as_mut().filter(|r| r.shown) else {
             return;
         };
-        let at = ctx.content_rect().center() - vec2(200.0, 120.0);
+        let at = CENTRED;
         let title = t!("remote-title", name = remote.server.name());
         let (mut start, mut cancel, mut hide) = (false, false, false);
         let modal = modal_at("remote_dialog", at).title(title).show(ctx, |ui| {
@@ -5150,7 +5149,7 @@ impl TriApp {
             return;
         };
         let os = std::env::consts::OS;
-        let at = ctx.content_rect().center() - vec2(180.0, 120.0);
+        let at = CENTRED;
         let title = t!("login-title", name = login.server.name());
         let (mut connect, mut cancel) = (false, false);
         let modal = modal_at("login_dialog", at).title(title).show(ctx, |ui| {
@@ -7743,7 +7742,7 @@ impl TriApp {
                         } else {
                             Action::FileCopy
                         };
-                        let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                        let at = CENTRED;
                         self.file_action(file_action, paths, at);
                     }
                     None => {
@@ -7763,7 +7762,7 @@ impl TriApp {
                     .map(|p| tri::media::source(p).into_owned())
                     .filter(|p| seen.insert(p.clone()))
                     .collect();
-                let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                let at = CENTRED;
                 self.file_action(Action::FileDelete, paths, at);
             }
             Action::FileRename
@@ -7795,7 +7794,7 @@ impl TriApp {
                         .unwrap_or_default(),
                 };
                 // Au clavier : boîte vers le centre de la fenêtre.
-                let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                let at = CENTRED;
                 self.file_action(action, paths, at);
             }
             Action::SelectToggle => {
@@ -8192,11 +8191,7 @@ impl TriApp {
     fn rate_path(&mut self, path: PathBuf, action: Action) {
         // Sources en désaccord : d'abord trancher (noter écraserait l'une d'elles).
         if self.folder.notes.conflict(&path).is_some() {
-            let at = self
-                .repaint
-                .as_ref()
-                .map_or(pos2(200.0, 200.0), |c| c.content_rect().center())
-                - vec2(200.0, 120.0);
+            let at = CENTRED;
             self.conflict_dialog = Some(ConflictDialog::new(path, at));
             return;
         }
@@ -8535,11 +8530,11 @@ impl TriApp {
             | Action::FileEdit
             | Action::FileCopy
             | Action::FileMove => {
-                let at = pos2(200.0, 200.0);
+                let at = CENTRED;
                 self.file_action(action, vec![path], at);
             }
             Action::FileDeletePhoto => {
-                let at = pos2(200.0, 200.0);
+                let at = CENTRED;
                 let photo = tri::media::source(&path).into_owned();
                 self.file_action(Action::FileDelete, vec![photo], at);
             }
@@ -12559,10 +12554,9 @@ impl TriApp {
             && let Some(file) = self.files.get(index)
         {
             let path = file.path.clone();
-            // Près du clic : pas de long trajet jusqu'au centre d'un grand écran.
-            let at = response
-                .interact_pointer_pos()
-                .unwrap_or(response.rect.center());
+            // Au centre, comme toutes les boîtes (retour du 10/11/2026 : d'abord près du
+            // clic, la seule à part).
+            let at = CENTRED;
             self.select(index);
             self.rating_dialog = Some((path, at));
         }
@@ -15548,7 +15542,7 @@ impl TriApp {
                 }
                 Step::RatingDialog => {
                     if let Some(file) = self.files.get(self.selected) {
-                        let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                        let at = CENTRED;
                         self.rating_dialog = Some((file.path.clone(), at));
                     }
                 }
@@ -15832,11 +15826,7 @@ impl TriApp {
             .iter()
             .find(|p| self.folder.notes.conflict(p).is_some())
         {
-            let at = self
-                .repaint
-                .as_ref()
-                .map_or(pos2(200.0, 200.0), |c| c.content_rect().center())
-                - vec2(200.0, 120.0);
+            let at = CENTRED;
             self.conflict_dialog = Some(ConflictDialog::new(first.clone(), at));
         }
         let jobs: Vec<(PathBuf, tri::xmp::Notes)> = images
@@ -15899,11 +15889,7 @@ impl TriApp {
             self.history.push(step);
         }
         if let Some(first) = conflicted.first() {
-            let at = self
-                .repaint
-                .as_ref()
-                .map_or(pos2(200.0, 200.0), |c| c.content_rect().center())
-                - vec2(200.0, 120.0);
+            let at = CENTRED;
             self.conflict_dialog = Some(ConflictDialog::new(first.clone(), at));
         }
         let changed = report.iter().filter(|(_, r)| *r == Ok(true)).count();
@@ -15954,13 +15940,13 @@ impl TriApp {
     /// Créer, renommer, supprimer un dossier depuis le panneau des dossiers : la boîte
     /// (nom à saisir, ou confirmation avec ce que contient le dossier). Les emplacements
     /// (volume, dossier personnel, racine) ne se renomment ni ne se suppriment.
-    fn folder_edit_action(&mut self, ctx: &egui::Context, action: Action) {
+    fn folder_edit_action(&mut self, _ctx: &egui::Context, action: Action) {
         if self.refuses_file_action(action) {
             return;
         }
         let Some(i) = self.tree.cursor() else { return };
         let row = self.tree.rows()[i].clone();
-        let at = ctx.content_rect().center() - vec2(160.0, 120.0);
+        let at = CENTRED;
         if action != Action::FolderCreate && row.depth == 0 {
             self.notice = Some((t!("folders-place-root", name = row.name), true));
             return;
@@ -15992,7 +15978,7 @@ impl TriApp {
     /// pas.
     fn transfer_folder(
         &mut self,
-        ctx: &egui::Context,
+        _ctx: &egui::Context,
         path: PathBuf,
         copy: bool,
         dest: Option<&Path>,
@@ -16011,7 +15997,7 @@ impl TriApp {
         } else {
             tri::files::TransferMode::Move
         };
-        let at = ctx.content_rect().center() - vec2(210.0, 160.0);
+        let at = CENTRED;
         self.file_dialog = Some(crate::files::FileDialog::transfer(
             crate::files::Source::Folder(path),
             mode,
@@ -16024,7 +16010,7 @@ impl TriApp {
     /// Ajoute le dossier pointé dans le panneau des dossiers aux favoris, ou l'en retire.
     /// Boîte « Nom du favori » pour le dossier pointé (s'il est favori), nom actuel
     /// proposé.
-    fn name_favorite(&mut self, ctx: &egui::Context) {
+    fn name_favorite(&mut self, _ctx: &egui::Context) {
         let Some(i) = self.tree.cursor() else { return };
         let row = self.tree.rows()[i].clone();
         if !row.favorite {
@@ -16039,7 +16025,7 @@ impl TriApp {
         self.file_dialog = Some(crate::files::FileDialog::NameFavorite {
             path: row.path,
             name,
-            at: ctx.content_rect().center() - vec2(160.0, 120.0),
+            at: CENTRED,
             fresh: true,
         });
     }
@@ -16204,7 +16190,7 @@ impl TriApp {
         if row.kind == Some(PlaceKind::Device) {
             match action {
                 Action::FolderEject => {
-                    let at = ctx.content_rect().center() - vec2(160.0, 120.0);
+                    let at = CENTRED;
                     self.eject_dialog = Some((row.path, at));
                 }
                 _ => self.start_mount(ctx, row.path),
@@ -16225,7 +16211,7 @@ impl TriApp {
                 .filter(|r| r.kind == Some(PlaceKind::Volume) && r.ejectable)
                 .map(|r| (r.path, r.name))
                 .collect();
-            let at = ctx.content_rect().center() - vec2(160.0, 120.0);
+            let at = CENTRED;
             match OffloadDialog::here(
                 &row.path,
                 sources,
@@ -16246,7 +16232,7 @@ impl TriApp {
             self.notice = Some((t!("folders-not-removable", name = row.name), true));
             return;
         }
-        let at = ctx.content_rect().center() - vec2(160.0, 120.0);
+        let at = CENTRED;
         if action == Action::FolderEject {
             self.eject_dialog = Some((row.path, at));
         } else if self.offload.is_none() && self.ejecting.is_none() {
@@ -16336,7 +16322,7 @@ impl TriApp {
         }
         let mut target = None;
         let (mut undo, mut redo) = (false, false);
-        let at = ctx.content_rect().center() - vec2(220.0, 200.0);
+        let at = CENTRED;
         let position = self.history.position();
         let modal = modal_at("history_dialog", at)
             .title(t!("history-title"))
@@ -16567,7 +16553,7 @@ impl TriApp {
         if !self.group_dialog {
             return;
         }
-        let at = ctx.content_rect().center() - vec2(200.0, 160.0);
+        let at = CENTRED;
         let default_gap = self.settings.similarity.max_gap_s;
         let default_curve = self.settings.similarity.strictness_curve;
         let max_curve = self
@@ -19041,9 +19027,14 @@ pub(crate) fn modal_at(id: &str, at: egui::Pos2) -> Dialog {
         title: None,
         free_width: false,
         closable: true,
-        centred: false,
+        centred: at == CENTRED,
     }
 }
+
+/// Position « au centre de la fenêtre » à passer à [`modal_at`] : la boîte s'y place
+/// d'après sa taille réelle (retour du 10/11/2026 : un décalage fixe depuis le centre la
+/// plaçait de travers selon sa largeur).
+pub(crate) const CENTRED: egui::Pos2 = egui::pos2(-1.0e6, -1.0e6);
 
 /// Boîte « Générer les sidecars » (31/10/2026, suite de #253) : les sidecars de notes
 /// manquants d'une sélection ou d'un dossier, pour un logiciel ou tous, avec le compte de
@@ -19073,8 +19064,9 @@ pub(crate) struct Dialog {
     free_width: bool,
     /// Croix de fermeture à droite du titre (issue n° 39 : la même dans toutes les boîtes).
     closable: bool,
-    /// Au centre de la fenêtre d'après sa taille réelle (mesurée à l'image précédente),
-    /// tant qu'on ne la déplace pas.
+    /// Au centre de la fenêtre ([`CENTRED`]) d'après sa taille réelle (mesurée à l'image
+    /// précédente), tant qu'on ne la déplace pas ; sa largeur suit, son haut reste où sa
+    /// première taille l'a mis (un contenu qui grandit ne la fait pas sauter).
     centred: bool,
 }
 
@@ -19135,13 +19127,6 @@ impl Dialog {
         self
     }
 
-    /// Au centre de la fenêtre, d'après sa taille réelle (retour du 10/11/2026 : un
-    /// décalage fixe la plaçait de travers selon sa largeur).
-    pub(crate) fn centred(mut self) -> Self {
-        self.centred = true;
-        self
-    }
-
     /// Sans croix : travail en cours qu'on ne peut pas interrompre (copie, suppression).
     pub(crate) fn busy(mut self) -> Self {
         self.closable = false;
@@ -19164,8 +19149,10 @@ impl Dialog {
         let pos_id = self.id.with("position");
         let size_id = self.id.with("size");
         let start = match ctx.data(|data| data.get_temp::<egui::Vec2>(size_id)) {
-            Some(size) if self.centred => ctx.content_rect().center() - size / 2.0,
-            _ => self.start,
+            _ if !self.centred => self.start,
+            Some(size) => ctx.content_rect().center() - size / 2.0,
+            // Première image, taille encore inconnue : à peu près au centre.
+            None => ctx.content_rect().center() - vec2(d.min_width / 2.0, 80.0),
         };
         let pos = ctx
             .data(|data| data.get_temp::<egui::Pos2>(pos_id))
@@ -19289,8 +19276,11 @@ impl Dialog {
             ctx.request_repaint();
         }
         if self.centred {
-            let size = response.response.rect.size();
-            if ctx.data(|data| data.get_temp::<egui::Vec2>(size_id)) != Some(size) {
+            let measured = response.response.rect.size();
+            let known = ctx.data(|data| data.get_temp::<egui::Vec2>(size_id));
+            // La hauteur de la première mesure seulement.
+            let size = vec2(measured.x, known.map_or(measured.y, |k| k.y));
+            if known != Some(size) {
                 ctx.data_mut(|data| data.insert_temp(size_id, size));
                 ctx.request_repaint();
             }
@@ -24240,11 +24230,9 @@ mod tests {
         });
         h.run_steps(5);
         assert_eq!(h.state().selected, 2, "le clic droit sélectionne");
+        // Au centre, comme toutes les boîtes (retour du 10/11/2026).
         let at = h.state().rating_dialog.as_ref().unwrap().1;
-        assert!(
-            rect.contains(at),
-            "boîte ouverte au point du clic, pas au centre"
-        );
+        assert_eq!(at, CENTRED, "boîte ouverte au centre");
         assert!(
             h.query_by_label("Fermer").is_some(),
             "boîte de notation ouverte"
@@ -25190,7 +25178,8 @@ mod tests {
             download,
             chosen: 0,
         });
-        h.run_steps(2);
+        // La boîte se centre d'après sa taille, mesurée à la première image.
+        h.run_steps(4);
         assert!(h.query_by_label("AppImage").is_some());
         h.get_by_label("tar.gz").click();
         h.run_steps(2);

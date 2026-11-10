@@ -498,7 +498,7 @@ Proposition : sortir cette étape du logiciel de développement.
       écran), écriture immédiate, erreurs dans la barre d'état. Filtres (choix du
       17/10/2026) : préfixe `f` au clavier + barre de filtres masquable à la souris
       (Maj+F) ; noter le RAF note aussi le JPG de la paire. Notation à la souris : bandeau
-      masquable (Maj+N) et boîte modale au clic droit (ouverte au point du clic), survol
+      masquable (Maj+N) et boîte modale au clic droit (au centre depuis le 10/11/2026, d'abord au point du clic), survol
       visible (17/10/2026). Recliquer une note posée ne l'efface pas : contrôles « 0
       étoile » et « sans drapeau » à part (retour : danger en tri rapide). Notes vérifiées
       dans darktable par l'utilisateur ; autres logiciels : testeurs à trouver. À discuter plus tard : filtres

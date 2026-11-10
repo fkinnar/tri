@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Dialogs in the centre** (#409): confirmations and dialogs open in the centre of the
+  window from their real size (a fixed offset put them askew), the right-click rating
+  dialog included.
 - **Clear the cache kept with the photos** (#409): on a folder or drive that keeps its
   cache (`.tri-cache`), right click, Preferences, "Clear the cache of this folder…" (or
   "of this drive"), confirmed by a dialog with its size; the cache stays kept there. An

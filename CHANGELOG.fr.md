@@ -4,6 +4,9 @@
 
 ## Non publié
 
+- **Boîtes au centre** (#409) : les confirmations et boîtes s'ouvrent au centre de la
+  fenêtre d'après leur taille réelle (un décalage fixe les mettait de travers), la boîte
+  de notation du clic droit comprise.
 - **Vider le cache gardé avec les photos** (#409) : sur un dossier ou un disque qui garde
   son cache (`.tri-cache`), clic droit, Préférences, « Vider le cache de ce dossier… »
   (ou « de ce disque »), confirmé par une boîte avec sa taille ; le cache reste gardé là.

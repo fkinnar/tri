@@ -753,9 +753,10 @@ system one ("cold" measurements, experiments).
     2026-10-17): the mouse leaving the menu selected other thumbnails, while the rating
     went to the clicked image. Behind the dialog, nothing moves: no hover, no navigation;
     only the rating keys (for this image) and Esc act. It stays open to set several
-    ratings, and closes with Esc, "Close" or a click outside. It opens **at the click
-    point** (`modal_at`), not in the centre: on a large screen, the way to the centre was
-    long (feedback of 2026-10-17, same for the eject confirmation, opened near the icon);
+    ratings, and closes with Esc, "Close" or a click outside. First opened at the
+    click point (2026-10-17), it opens **in the centre** since 2026-11-10, like every
+    dialog: `modal_at` with `CENTRED`, placed from its real size (measured on the previous
+    frame; its width follows, its top stays where its first size put it);
   - **reaction on hover** (same feedback): on the clickable stars, dots and flags (bar,
     dialog, filter bar), hand pointer and highlighted background (`marks::clickable`);
   - each click triggers the same action as the keyboard. **Flag**: clicking it again does
@@ -768,7 +769,7 @@ system one ("cold" measurements, experiments).
   - controls named for accessibility (`WidgetInfo`), which also lets the interface tests
     click "3 stars".
 - **Card offload** (2026-10-17): "offload" icon on each non-fixed volume of the folders
-  panel; dialog near the click: inventory in the background, root and session folder
+  panel; dialog in the centre: inventory in the background, root and session folder
   (suggested `YYYY-MM-DD_`; root remembered), checkboxes (RAW only, open the folder,
   eject the card, delete the copied and verified files from the card), verified copy in
   the background with progress and "Interrupt", then the ticked follow-ups chained
