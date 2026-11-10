@@ -4,7 +4,7 @@
 
 ## Unreleased
 
-- **Viewing adjustments, engine and command line** (#PRNUM): exposure, white balance and
+- **Viewing adjustments, engine and command line** (#404): exposure, white balance and
   black and white (channel mixer, colour-filter presets), to compare and cull a series.
   `tri --adjust <reference> <images>… --to <folder>` sets the reference and applies its
   adjustments to the others: exposure and balance matched to the reference (a photo at

@@ -4,7 +4,7 @@
 
 ## Non publié
 
-- **Réglages de visualisation, moteur et ligne de commande** (#PRNUM) : exposition,
+- **Réglages de visualisation, moteur et ligne de commande** (#404) : exposition,
   balance des blancs et noir et blanc (mélangeur de canaux, préréglages façon filtres
   colorés), pour comparer et trier une série. `tri --adjust <référence> <images>… --to
   <dossier>` règle la référence et applique ses réglages aux autres : exposition et
