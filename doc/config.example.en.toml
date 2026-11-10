@@ -1012,6 +1012,11 @@ open_wait_ms = 150
 # delay (ms; share mounted by GVFS on Linux, one network round trip per file) makes the
 # rest rely on names: an image is recognised by its extension.
 type_check_ms = 20
+# Right-click on a folder: groups shown at the top level of the menu rather than as a
+# submenu, between two lines ("open" Access, "files" Folder, "notes" Ratings, "develop"
+# Development, "preferences" Preferences). The small button at the top right of a submenu,
+# or on the title of a group, adds or removes it here.
+menu_inline = ["open", "files"]
 
 [gui.histogram]
 # Histogram (sensor data for a RAW), at the top of the metadata panel:

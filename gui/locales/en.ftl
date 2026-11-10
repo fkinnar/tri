@@ -112,6 +112,11 @@ action-core-file-delete = Move to trash…
 action-core-file-reveal = { $os ->
     [macos] Show in Finder
     [windows] Show in Explorer
+    [nemo] Show in Nemo
+    [nautilus] Show in Files
+    [dolphin] Show in Dolphin
+    [thunar] Show in Thunar
+    [caja] Show in Caja
    *[other] Show in the file manager
 }
 action-core-file-edit = Open in the external editor
@@ -519,7 +524,6 @@ log-copy = Copy
 log-copy-tip = Copy this entry and its detail
 log-copy-all = Copy all
 log-copy-all-tip = Copy the entries shown, with their detail
-log-reveal = Show in file manager
 report-title = Report a problem
 report-log-intro = The latest log entries will help understand the problem. They will be attached to the GitHub form.
 report-log-privacy = Read them before sending: paths contain the names of your folders. Edit or delete anything you like.
@@ -843,7 +847,6 @@ export-report-errors = { $n ->
     [one] 1 failure
    *[other] { $n } failures
 }
-export-report-reveal = Show in the file manager
 export-report-clear = Clear the list
 export-report-open = Export report
 rename-failed = cannot rename: { $error }
@@ -1077,7 +1080,7 @@ folder-contents = { $files ->
 }, everything included.
 folder-failed = { $error }
 folders-place-root = "{ $name }" is a place: it cannot be renamed, moved or deleted
-folder-menu-new = New folder…
+folder-menu-new = New…
 folder-menu-rename = Rename…
 folder-menu-move = Move to…
 folder-menu-copy = Copy to…
@@ -1137,7 +1140,7 @@ action-plugin-art-develop = Develop in ART (the shown image)
 action-plugin-rawtherapee-open_folder = Folders: open the pointed folder in RawTherapee
 action-plugin-art-open_folder = Folders: open the pointed folder in ART
 action-core-develop-folder = Develop the whole folder in the background (each image in the software of its development)
-folder-menu-develop = Develop the whole folder…
+folder-menu-develop = Develop all…
 action-core-file-embed_notes = Write the ratings into the images (JPEG, PNG, WebP, TIFF, HEIC)
 kw-core-file-embed-notes = write embed ratings stars images files jpeg header embedded explorer windows spotlight
 folder-menu-embed-notes = Write the ratings into the images
@@ -1149,7 +1152,14 @@ embed-failed = { $n } images did not receive their ratings: { $first }
 action-core-file-import_notes = Read the ratings back from the images (changed in another program)
 kw-core-file-import-notes = read import load ratings stars images files jpeg header embedded xnview explorer
 folder-menu-import-notes = Read the ratings back from the images
-folder-menu-adjust = Adjustments
+folder-menu-adjust = Auto adjustments
+folder-group-open = Access
+folder-group-files = Folder
+folder-group-notes = Ratings
+folder-group-develop = Development
+folder-group-preferences = Preferences
+menu-group-inline = Show this group at the top level of the menu
+menu-group-fold = Fold this group back into a submenu
 folder-menu-adjust-auto = Auto
 folder-menu-adjust-exposure = Exposure
 folder-menu-adjust-balance = White balance
@@ -1190,7 +1200,7 @@ conflict-flag-accepted = accepted
 conflict-flag-rejected = rejected
 folder-menu-embed = Ratings in the images
 folder-menu-embed-tip = Write the ratings into the images of this folder by itself (not its subfolders), whatever the general setting
-folder-embed-default = As in the settings ({ $level })
+folder-embed-default = As in the settings
 folder-embed-always = Always
 folder-embed-never = Never
 folder-embed-set-default = { $name }: ratings in the images as in the settings

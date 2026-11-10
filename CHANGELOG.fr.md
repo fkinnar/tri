@@ -4,6 +4,13 @@
 
 ## Non publié
 
+- **Menu du clic droit sur un dossier rangé** (#407) : en groupes, Accès (afficher dans
+  le gestionnaire de fichiers, nommé : Finder, Explorateur, Nemo, Dolphin… ; ouvrir dans
+  darktable, favori), Dossier, Notes, Développement et
+  Préférences ; décharger reste en bas. Chaque groupe est un sous-menu
+  que le petit bouton en haut à droite installe au premier niveau, entre deux traits (et
+  l'icône sur son titre le replie) : chacun compose son menu, retenu pour tous les
+  dossiers (`[gui.folders] menu_inline`).
 - **Réglages de visualisation** (#404) : exposition, balance des blancs et noir et blanc
   (mélangeur de canaux), pour comparer et trier une série. Une nouvelle section
   « Réglages » du panneau de droite, en onglets : Base (exposition avec « Auto », à priorité aux hautes lumières ; balance

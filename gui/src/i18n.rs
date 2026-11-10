@@ -28,21 +28,49 @@ pub fn register() {
     }
 }
 
-/// Système, pour les textes qui en dépendent (« Afficher dans le Finder »).
+/// Gestionnaire de fichiers du système, pour les textes qui le nomment (« Afficher dans le
+/// Finder », « … dans l'Explorateur », « … dans Nemo » ; retour du 10/11/2026) :
+/// `macos`, `windows`, sous Linux celui du bureau (`XDG_CURRENT_DESKTOP`), sinon `other`.
 pub fn os() -> &'static str {
     if cfg!(target_os = "macos") {
         "macos"
     } else if cfg!(windows) {
         "windows"
     } else {
-        "other"
+        linux_file_manager(&std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default())
     }
+}
+
+/// Gestionnaire de fichiers d'un bureau Linux (`XDG_CURRENT_DESKTOP`, des noms séparés
+/// par « : ») ; `other` s'il est inconnu (le libellé reste générique).
+fn linux_file_manager(desktop: &str) -> &'static str {
+    for name in desktop.split(':').map(str::to_ascii_lowercase) {
+        let manager = match name.as_str() {
+            "x-cinnamon" | "cinnamon" => "nemo",
+            "kde" => "dolphin",
+            "xfce" => "thunar",
+            "mate" => "caja",
+            "gnome" | "unity" | "ubuntu" | "pop" => "nautilus",
+            _ => continue,
+        };
+        return manager;
+    }
+    "other"
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::Path;
+
+    #[test]
+    fn the_linux_file_manager_follows_the_desktop() {
+        assert_eq!(linux_file_manager("X-Cinnamon"), "nemo");
+        assert_eq!(linux_file_manager("ubuntu:GNOME"), "nautilus");
+        assert_eq!(linux_file_manager("KDE"), "dolphin");
+        assert_eq!(linux_file_manager("Hyprland"), "other");
+        assert_eq!(linux_file_manager(""), "other");
+    }
 
     #[test]
     fn every_id_used_by_the_interface_exists_in_every_language() {

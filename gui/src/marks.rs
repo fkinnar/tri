@@ -1742,6 +1742,36 @@ pub fn reset_icon(painter: &Painter, rect: Rect, color: Color32) {
     ));
 }
 
+/// Icône « au premier niveau du menu » d'un sous-menu (issue n° 406) : une flèche vers
+/// le coin haut-gauche, arrêtée par l'angle (⇱).
+pub fn menu_inline(painter: &Painter, rect: Rect, color: Color32) {
+    corner_arrow(painter, rect, -1.0, color);
+}
+
+/// Icône « replier en sous-menu » d'un groupe déplié (issue n° 406) : la flèche vers le
+/// coin bas-droite (⇲).
+pub fn menu_fold(painter: &Painter, rect: Rect, color: Color32) {
+    corner_arrow(painter, rect, 1.0, color);
+}
+
+/// Flèche diagonale vers un coin (`dir` -1 : haut-gauche, 1 : bas-droite) et l'angle qui
+/// l'arrête.
+fn corner_arrow(painter: &Painter, rect: Rect, dir: f32, color: Color32) {
+    let c = rect.center();
+    let r = rect.width().min(rect.height()) * 0.4;
+    let stroke = Stroke::new((r * 0.18).max(1.0), color);
+    let corner = c + vec2(r, r) * dir;
+    // L'angle : deux traits depuis le coin.
+    painter.line_segment([corner, corner - vec2(r * 1.4, 0.0) * dir], stroke);
+    painter.line_segment([corner, corner - vec2(0.0, r * 1.4) * dir], stroke);
+    // La flèche : du coin opposé vers l'angle, pointe comprise.
+    let tip = c + vec2(r, r) * dir * 0.55;
+    let tail = c - vec2(r, r) * dir * 0.7;
+    painter.line_segment([tail, tip], stroke);
+    painter.line_segment([tip, tip - vec2(r * 0.6, 0.0) * dir], stroke);
+    painter.line_segment([tip, tip - vec2(0.0, r * 0.6) * dir], stroke);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
