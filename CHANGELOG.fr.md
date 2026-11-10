@@ -12,7 +12,8 @@
   tracé pour une balance auto sur cette partie), Style (décalage créatif : exposition, chaleur,
   teinte, contraste, saturation), N&B (filtres en
   préréglages, mélange gardé à 100 % quand il est normalisé) et Valeurs (le tableau à
-  reporter dans un logiciel de développement). Plusieurs images sélectionnées :
+  reporter dans un logiciel de développement) ; un double-clic sur un onglet le remet à
+  zéro. Plusieurs images sélectionnées :
   « Synchroniser N images » applique chaque changement à toutes (un curseur décale chaque
   image d'autant, la température du même rapport ; un bouton, auto ou préréglage,
   recalcule chacune ; un seul pas à annuler). Aussi copier / coller les réglages

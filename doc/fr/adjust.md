@@ -157,7 +157,9 @@ essai (retours du 10/11/2026) :
 - **« Synchroniser N images »**, en tête : grisée avec une seule image, cochée par défaut
   dès qu'il y en a plusieurs. Voir plus bas.
 - **Quatre onglets**, retenus dans la session, un point « • » sur ceux qui changent
-  l'image (un réglage caché se voit) :
+  l'image (un réglage caché se voit) ; **double-clic sur un onglet : remis à zéro** (base :
+  exposition et balance de la prise de vue ; style ; noir et blanc : la couleur), sur la
+  sélection synchronisée aussi :
   - **Base** : exposition et **« Auto »** ; température (K), avec la liste des balances
     (telle que prise, auto sur toute l'image, préréglages avec leurs kelvins) et la
     **« Pipette »** (en plein écran, un clic sur une zone qui devrait être grise, `[gui]

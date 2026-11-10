@@ -617,6 +617,7 @@ impl TriApp {
             }
         });
         ui.add_space(6.0);
+        let mut tab_reset = None;
         // Onglets ; un point sur ceux qui changent l'image (un réglage caché se voit).
         ui.horizontal_wrapped(|ui| {
             let tabs = [
@@ -634,8 +635,14 @@ impl TriApp {
                 (AdjustTab::Values, "adjust-tab-values", false),
             ];
             for (tab, key, active) in tabs {
-                if adjust_tab(ui, &t!(key), self.adjust_tab == tab, active).clicked() {
+                let response = adjust_tab(ui, &t!(key), self.adjust_tab == tab, active);
+                if response.clicked() {
                     self.adjust_tab = tab;
+                }
+                // Double-clic : l'onglet remis à zéro (retour du 10/11/2026), comme un
+                // curseur.
+                if response.double_clicked_slider(ui) {
+                    tab_reset = Some(tab);
                 }
             }
         });
@@ -752,6 +759,18 @@ impl TriApp {
         if reset {
             self.adjust_each(&file.path, layers, |_, _, _, _| Some(Layers::default()));
         }
+        // Un onglet remis à zéro, sur la sélection synchronisée aussi (un seul pas).
+        if let Some(tab) = tab_reset.filter(|&t| t != AdjustTab::Values) {
+            self.adjust_each(&file.path, layers, move |_, _, mut l, _| {
+                match tab {
+                    AdjustTab::Base => l.correction = tri::adjust::Adjust::default(),
+                    AdjustTab::Style => l.creative = None,
+                    AdjustTab::Mono => l.mono = None,
+                    AdjustTab::Values => {}
+                }
+                Some(l)
+            });
+        }
         if toggle {
             self.toggle_before_after();
         }
@@ -809,7 +828,7 @@ struct Pending {
     eyedropper: bool,
 }
 
-/// Un onglet de la section : largeur fixe, point compris, le nom calé à gauche et le
+/// Un onglet de la section (double-clic : remis à zéro) : largeur fixe, point compris, le nom calé à gauche et le
 /// point « • » dans sa place réservée quand l'onglet change l'image (retour du
 /// 10/11/2026 : les onglets bougeaient quand le point apparaissait).
 fn adjust_tab(ui: &mut Ui, name: &str, selected: bool, active: bool) -> egui::Response {

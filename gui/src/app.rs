@@ -28538,6 +28538,47 @@ mod tests {
     }
 
     #[test]
+    fn double_clicking_a_tab_resets_it() {
+        // Retour du 10/11/2026 : double-clic sur un onglet des réglages, remis à zéro (le
+        // style ici, la base gardée), comme un curseur.
+        let (mut h, _dir) = harness();
+        h.set_size(vec2(1000.0, 2400.0));
+        run_until(&mut h, |app| app.files.len() == 3);
+        let path = h.state().files[0].path.clone();
+        let mut both = tri::adjust::Layers::default();
+        both.correction.exposure = 0.5;
+        both.creative = Some(tri::adjust::Adjust {
+            exposure: 0.3,
+            ..Default::default()
+        });
+        h.state_mut()
+            .save_adjustments(vec![(path.clone(), Some(both))]);
+        h.state_mut().adjust_tab = adjust::AdjustTab::Mono;
+        h.run_steps(2);
+        // Le banc d'essai avance de 0,5 s par image : délai du double-clic élargi.
+        h.ctx
+            .options_mut(|o| o.input_options.max_double_click_delay = 5.0);
+        let tab = h.get_by_label("Style").rect().center();
+        h.input_mut().events.push(egui::Event::PointerMoved(tab));
+        h.run_steps(1);
+        for _ in 0..2 {
+            for pressed in [true, false] {
+                h.input_mut().events.push(egui::Event::PointerButton {
+                    pos: tab,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                });
+                h.run_steps(1);
+            }
+        }
+        h.run_steps(2);
+        let left = tri::adjust::read(&path).unwrap().expect("base kept");
+        assert_eq!(left.creative, None, "style reset");
+        assert_eq!(left.correction.exposure, 0.5, "base kept");
+    }
+
+    #[test]
     fn harmonising_the_selection_aligns_the_base_only_in_one_step() {
         // #137 : « Harmoniser la sélection » aligne exposition et balance des autres
         // images sur l'image courante, sans toucher au style ni au noir et blanc ; un seul
