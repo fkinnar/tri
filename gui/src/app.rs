@@ -3537,56 +3537,58 @@ impl TriApp {
                                 entry(ui, Action::FolderForget, t!("folder-menu-forget"));
                                 ui.separator();
                             }
-                            // Premier niveau : ce qu'on fait souvent et sans risque (issue n° 406,
-                            // menu devenu touffu) ; le reste en groupes.
-                            // Afficher le dossier dans le Finder / l'Explorateur (demandé le
-                            // 08/11/2026), comme pour une image.
-                            entry(ui, Action::FileReveal, Action::FileReveal.label());
-                            // Ouvrir le dossier dans un logiciel installé qui le sait
-                            // (darktable ; demandé le 28/10/2026).
-                            // Grisé s'il ne peut pas le recevoir : darktable déjà ouvert sous
-                            // Windows (une seconde instance plantait sous macOS avant `open -a`,
-                            // retour du 28/10/2026).
-                            for engine in self.developers.folder_openers() {
-                                let action = Action::FolderOpenIn(engine);
-                                let open = self.engine_blocked(engine);
-                                let tip = if open {
-                                    t!("folder-open-in-running", name = engine.name())
-                                } else {
-                                    self.action_tip(action)
-                                };
-                                let button = ui
-                                    .add_enabled(
-                                        !open,
-                                        egui::Button::new(t!(
-                                            "folder-menu-open-in",
-                                            name = engine.name()
-                                        )),
-                                    )
-                                    .on_hover_text(&tip)
-                                    .on_disabled_hover_text(&tip);
-                                if button.clicked() {
-                                    open_in = Some((row.path.clone(), action));
-                                    egui::Popup::close_all(ui.ctx());
-                                }
-                            }
-                            let favorite = if row.favorite {
-                                t!("folder-menu-favorite-remove")
-                            } else {
-                                t!("folder-menu-favorite-add")
-                            };
-                            entry(ui, Action::FolderFavorite, favorite);
-                            if row.favorite {
-                                entry(
-                                    ui,
-                                    Action::FolderFavoriteName,
-                                    t!("folder-menu-favorite-name"),
-                                );
-                            }
                             let mut groups = MenuGroups::new(
                                 &f.menu_inline,
                                 (t!("menu-group-inline"), t!("menu-group-fold")),
                             );
+                            // Accès (issue n° 406 : d'abord au premier niveau, puis un groupe
+                            // comme les autres, retour du 10/11/2026).
+                            groups.group(ui, "open", &t!("folder-group-open"), |ui| {
+                                // Afficher le dossier dans le Finder / l'Explorateur (demandé le
+                                // 08/11/2026), comme pour une image.
+                                entry(ui, Action::FileReveal, Action::FileReveal.label());
+                                // Ouvrir le dossier dans un logiciel installé qui le sait
+                                // (darktable ; demandé le 28/10/2026).
+                                // Grisé s'il ne peut pas le recevoir : darktable déjà ouvert sous
+                                // Windows (une seconde instance plantait sous macOS avant `open -a`,
+                                // retour du 28/10/2026).
+                                for engine in self.developers.folder_openers() {
+                                    let action = Action::FolderOpenIn(engine);
+                                    let open = self.engine_blocked(engine);
+                                    let tip = if open {
+                                        t!("folder-open-in-running", name = engine.name())
+                                    } else {
+                                        self.action_tip(action)
+                                    };
+                                    let button = ui
+                                        .add_enabled(
+                                            !open,
+                                            egui::Button::new(t!(
+                                                "folder-menu-open-in",
+                                                name = engine.name()
+                                            )),
+                                        )
+                                        .on_hover_text(&tip)
+                                        .on_disabled_hover_text(&tip);
+                                    if button.clicked() {
+                                        open_in = Some((row.path.clone(), action));
+                                        egui::Popup::close_all(ui.ctx());
+                                    }
+                                }
+                                let favorite = if row.favorite {
+                                    t!("folder-menu-favorite-remove")
+                                } else {
+                                    t!("folder-menu-favorite-add")
+                                };
+                                entry(ui, Action::FolderFavorite, favorite);
+                                if row.favorite {
+                                    entry(
+                                        ui,
+                                        Action::FolderFavoriteName,
+                                        t!("folder-menu-favorite-name"),
+                                    );
+                                }
+                            });
                             groups.group(ui, "files", &t!("folder-group-files"), |ui| {
                                 entry(ui, Action::FolderCreate, t!("folder-menu-new"));
                                 if row.depth > 0 {
@@ -26282,8 +26284,8 @@ mod tests {
         h.state_mut().tree = Tree::with_places(vec![place], false);
         h.state_mut().tree.expand(dir.path());
         h.run_steps(2);
-        // Par défaut : « Dossier » déplié, « Notes » en sous-menu.
-        assert_eq!(h.state().gui.folders.menu_inline, ["files"]);
+        // Par défaut : « Accès » et « Dossier » dépliés, « Notes » en sous-menu.
+        assert_eq!(h.state().gui.folders.menu_inline, ["open", "files"]);
         h.get_by_label("séance").click_secondary();
         h.run_steps(2);
         assert!(h.query_by_label(&t!("folder-menu-rename")).is_some());
@@ -26293,7 +26295,10 @@ mod tests {
         assert!(h.query_by_label(&t!("folder-embed-always")).is_some());
         h.get_by_label(&t!("menu-group-inline")).click();
         h.run_steps(3);
-        assert_eq!(h.state().gui.folders.menu_inline, ["files", "notes"]);
+        assert_eq!(
+            h.state().gui.folders.menu_inline,
+            ["open", "files", "notes"]
+        );
         let text = std::fs::read_to_string(&config).unwrap();
         assert!(text.contains("menu_inline"), "{text}");
         // Le menu reste ouvert, le groupe à son premier niveau, sans sous-menu.
@@ -26303,16 +26308,16 @@ mod tests {
         );
         assert!(h.query_by_label(&t!("folder-embed-always")).is_some());
         assert!(h.query_by_label(&t!("folder-group-notes")).is_none());
-        // Repliés tous les deux : deux boutons « replier » ; celui des notes, le plus bas.
+        // Trois groupes dépliés : trois boutons « replier » ; celui des notes, le plus bas.
         h.query_all_by_label(&t!("menu-group-fold"))
             .max_by(|a, b| a.rect().top().total_cmp(&b.rect().top()))
             .unwrap()
             .click();
         h.run_steps(3);
-        assert_eq!(h.state().gui.folders.menu_inline, ["files"]);
+        assert_eq!(h.state().gui.folders.menu_inline, ["open", "files"]);
         // De nouveau un sous-menu (sous le pointeur : il peut s'ouvrir au survol).
         assert!(h.query_by_label(&t!("folder-group-notes")).is_some());
-        assert_eq!(h.query_all_by_label(&t!("menu-group-fold")).count(), 1);
+        assert_eq!(h.query_all_by_label(&t!("menu-group-fold")).count(), 2);
     }
 
     #[test]

@@ -1150,6 +1150,7 @@ action-core-file-import_notes = Read the ratings back from the images (changed i
 kw-core-file-import-notes = read import load ratings stars images files jpeg header embedded xnview explorer
 folder-menu-import-notes = Read the ratings back from the images
 folder-menu-adjust = Auto adjustments
+folder-group-open = Access
 folder-group-files = Folder
 folder-group-notes = Ratings
 folder-group-develop = Development

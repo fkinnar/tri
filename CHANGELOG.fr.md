@@ -4,9 +4,9 @@
 
 ## Non publié
 
-- **Menu du clic droit sur un dossier rangé** (#407) : au premier niveau, ce qu'on fait
-  souvent (afficher dans le Finder, ouvrir dans darktable, favori, décharger) ; le reste en
-  groupes, Dossier, Notes, Développement et Préférences. Chaque groupe est un sous-menu
+- **Menu du clic droit sur un dossier rangé** (#407) : en groupes, Accès (afficher dans
+  le Finder, ouvrir dans darktable, favori), Dossier, Notes, Développement et
+  Préférences ; décharger reste en bas. Chaque groupe est un sous-menu
   que le petit bouton en haut à droite installe au premier niveau, entre deux traits (et
   l'icône sur son titre le replie) : chacun compose son menu, retenu pour tous les
   dossiers (`[gui.folders] menu_inline`).

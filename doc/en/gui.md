@@ -597,15 +597,16 @@ system one ("cold" measurements, experiments).
   **right click** on a folder, menu of the same actions (new folder, rename, delete,
   favourite; offload a card here, or on a removable drive: offload, eject; show in the
   Finder / Explorer, 2026-11-08), shortcut on hover.
-  Arranged in groups (2026-11-10, issue #406, `gui/src/menu_groups.rs`): at the top
-  level, show in the Finder, open in darktable, favourite, offload; then **Folder** (new,
+  Arranged in groups (2026-11-10, issue #406, `gui/src/menu_groups.rs`): **Access**
+  (show in the Finder, open in darktable, favourite), **Folder** (new,
   rename, move, copy, delete), **Ratings** (sidecars, ratings in the images),
   **Development** (develop the whole folder, auto adjustments) and **Preferences**
   (cache). A group is a submenu, its title at the top (small grey capitals); the small
   button on its right puts it
   **at the top level**, between two lines, its title in small capitals on the top line,
   with the icon that folds it back. The choice holds for every folder
-  (`[gui.folders] menu_inline`, "Folder" unfolded by default); the menu stays open while
+  (`[gui.folders] menu_inline`, "Access" and "Folder" unfolded by default; offload stays at
+  the bottom); the menu stays open while
   being arranged (each entry closes it itself).
   **Right panel** (2026-10-27, `TriApp::side_begin` / `side_end`): ↑ ↓ / `j` `k` also go
   through the **settings** above the EXIF (section titles included), one at a time;

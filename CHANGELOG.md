@@ -4,9 +4,9 @@
 
 ## Unreleased
 
-- **Tidier right-click menu on a folder** (#407): what is done often at the top level
-  (show in the Finder, open in darktable, favourite, offload); the rest in groups, Folder,
-  Ratings, Development and Preferences. Each group is a submenu that the small button at
+- **Tidier right-click menu on a folder** (#407): in groups, Access (show in the Finder,
+  open in darktable, favourite), Folder, Ratings, Development and Preferences; offload
+  stays at the bottom. Each group is a submenu that the small button at
   its top right puts at the top level, between two lines (and the icon on its title folds
   it back): everyone arranges their own menu, kept for every folder
   (`[gui.folders] menu_inline`).

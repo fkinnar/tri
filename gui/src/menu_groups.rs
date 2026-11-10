@@ -51,7 +51,9 @@ impl<'a> MenuGroups<'a> {
             add(ui);
             self.after_inline = true;
         } else {
-            if self.first || self.after_inline {
+            // Le trait au-dessus d'un sous-menu : seulement sous un groupe déplié (en tête
+            // du menu, rien à séparer).
+            if self.after_inline {
                 ui.separator();
             }
             let tip = self.tips.0.clone();

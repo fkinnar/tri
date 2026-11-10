@@ -1149,6 +1149,7 @@ action-core-file-import_notes = Relire les notes depuis les images (changées da
 kw-core-file-import-notes = relire importer lire notes étoiles images fichiers jpeg en-tête embarqué xnview explorateur
 folder-menu-import-notes = Relire les notes depuis les images
 folder-menu-adjust = Réglages auto
+folder-group-open = Accès
 folder-group-files = Dossier
 folder-group-notes = Notes
 folder-group-develop = Développement
