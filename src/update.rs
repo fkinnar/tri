@@ -228,6 +228,33 @@ pub fn issue_url(build: &Build, settings: &UpdateSettings) -> String {
     )
 }
 
+/// Longueur maximale, une fois encodées, des lignes du journal jointes au formulaire : les
+/// adresses trop longues sont refusées (GitHub, navigateurs ; ~8 000 caractères au total).
+pub const MAX_LOGS_PARAM: usize = 6000;
+
+/// Paramètre `&logs=…` du formulaire de signalement (champ « Journal » du modèle) : les
+/// lignes du journal choisies, encodées ; trop longues, les plus anciennes sont retirées
+/// (la fin, la plus récente, compte le plus). Vide : rien.
+pub fn logs_param(text: &str) -> String {
+    let text = text.trim();
+    if text.is_empty() {
+        return String::new();
+    }
+    let mut start = 0;
+    loop {
+        let encoded = encode(&text[start..]);
+        if encoded.len() <= MAX_LOGS_PARAM {
+            return format!("&logs={encoded}");
+        }
+        // Une ligne de moins au début (ou un caractère, sur une ligne démesurée).
+        let rest = &text[start..];
+        start += rest
+            .find('\n')
+            .map(|i| i + 1)
+            .unwrap_or_else(|| rest.chars().next().map_or(rest.len(), char::len_utf8));
+    }
+}
+
 /// Encodage d'un paramètre d'adresse (RFC 3986 : seuls lettres, chiffres et `-._~`
 /// restent tels quels).
 fn encode(text: &str) -> String {
@@ -547,6 +574,17 @@ pub fn check(build: &Build, settings: &UpdateSettings) -> Result<Status, UpdateE
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_log_lines_are_encoded_and_cut_from_the_oldest() {
+        assert_eq!(logs_param("  "), "");
+        assert_eq!(logs_param("a b\nc"), "&logs=a%20b%0Ac");
+        let long: String = (0..2000).map(|n| format!("line {n}\n")).collect();
+        let param = logs_param(&long);
+        assert!(param.len() <= MAX_LOGS_PARAM + "&logs=".len());
+        assert!(param.contains("line%201999"), "the newest lines are kept");
+        assert!(!param.contains("line%200%0A"), "the oldest are dropped");
+    }
 
     #[test]
     fn the_issue_form_is_prefilled_with_version_and_system() {

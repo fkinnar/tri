@@ -540,6 +540,19 @@ enabled = true
 # Exemple :
 # dir = "/chemin/vers/données"
 
+[log]
+# Journal de l'application (tri.log, dans le dossier des données) : avertissements et
+# erreurs avec tout leur détail (image, logiciel, code de sortie, messages…), et les
+# plantages. Consultable dans tri (palette : « Journal »), joint au signalement d'un
+# problème.
+# Taille au-delà de laquelle le journal passe à un nouveau fichier (Ko).
+max_kb = 1024
+# Anciens fichiers gardés (tri.1.log, tri.2.log…) ; 0 : aucun.
+keep = 3
+# Trace détaillée (étapes du chargement des images, images lentes) aussi au journal :
+# pour reproduire un problème à la demande. Volumineux, à couper ensuite.
+trace = false
+
 [gui]
 # "dark", "light", "system" ou "neutral" (gris neutre, façon Lightroom : panneaux gris
 # foncé, fond central gris neutre, qui ne fausse pas le jugement des images ; couleurs :
@@ -571,8 +584,11 @@ key_menu = true
 # l'affiche pas.
 key_menu_delay_ms = 400
 # Diagnostic (TRI_GUI_TRACE=1) : une image de l'interface plus lente que ce délai (ms) est
-# tracée avec la durée de ses étapes.
+# tracée avec la durée de ses étapes. Avec [log] trace, aussi au journal.
 trace_slow_ms = 100
+# Signaler un problème : dernières entrées du journal proposées dans le formulaire,
+# modifiables avant l'envoi (0 : aucune).
+report_log_entries = 20
 # Flèches et Entrée dans l'aide, les menus et la palette : en symboles, pris dans
 # une police du système qui les a (Apple Symbols, DejaVu Sans, Segoe UI Symbol ; celle de
 # l'interface n'en a pas). Vide : la première trouvée ; un chemin : cette police ;

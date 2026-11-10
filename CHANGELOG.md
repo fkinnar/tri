@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- **Application log** (#PRNUM): errors keep a short message in the status bar, and their
+  full detail goes to `tri.log` in the data folder: for a development software that
+  fails, the image, the command, the exit code and all its messages; also failed
+  exports, thumbnails and previews, an invalid configuration, crashes (`crash.log` is
+  taken in). Click an error to open the log on its detail. The log window (palette, or
+  the help's "Log" button) shows the newest entries first, filters by level, searches,
+  copies, and shows the file. "Report a problem" offers the latest lines, to read and
+  edit before they are attached to the form. New `[log]` section (size, kept files,
+  detailed trace) and `[gui] report_log_entries` (#398).
 - **End of an export in the middle of the screen** (#399): the summary ("3 images
   exported", the folder) also shows in a bubble over the images, with "Open the folder"
   ("Show the report" when the files went to several folders). It fades after a few

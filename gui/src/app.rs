@@ -541,6 +541,19 @@ pub struct TriApp {
     export_notice: Option<String>,
     /// Échec de la dernière action sur un fichier (barre d'état).
     file_error: Option<String>,
+    /// Fenêtre du journal de l'application (issue n° 398).
+    log_view: Option<crate::log_view::LogView>,
+    /// Image (passe d'egui) où elle s'est ouverte (même raison que `export_report_since`).
+    log_view_since: u64,
+    /// Erreurs de la barre d'état déjà écrites au journal, avec les entrées qui s'y
+    /// rapportent (les détails écrits par le moteur juste avant, puis le message montré) :
+    /// un clic sur l'erreur ouvre le journal sur elles.
+    logged_errors: Vec<(String, Vec<String>)>,
+    /// Numéro de la dernière entrée du journal rattachée à une erreur montrée.
+    log_mark: u64,
+    /// Signalement d'un problème en préparation : les dernières lignes du journal,
+    /// modifiables avant l'envoi (des chemins contiennent des noms de dossiers personnels).
+    report_draft: Option<String>,
     /// Notes en cours d'inscription dans les images ([`TriApp::embed_notes`]) : le bilan
     /// (images changées, erreurs) arrive par ce canal.
     embed_job: Option<std::sync::mpsc::Receiver<EmbedReport>>,
@@ -1091,6 +1104,7 @@ impl TriApp {
         if new.gui.theme != self.gui.theme || new.gui.colors != self.gui.colors {
             new.gui.theme.apply(ctx, &new.gui.colors);
         }
+        tri::log::set_settings(new.engine().log.clone());
         let (keymap, warnings) = new.keymap();
         self.keymap = keymap;
         // Raccourcis ou langue changés : l'aide se prépare à nouveau.
@@ -1338,6 +1352,11 @@ impl TriApp {
             export_report_since: 0,
             export_notice: None,
             file_error: None,
+            log_view: None,
+            log_view_since: 0,
+            logged_errors: Vec::new(),
+            log_mark: tri::log::last_number(),
+            report_draft: None,
             embed_job: None,
             selection: Default::default(),
             scores: HashMap::new(),
@@ -6469,6 +6488,20 @@ impl TriApp {
                 }
                 continue;
             }
+            // Journal : Échap ou son raccourci le ferment.
+            if self.log_view.is_some() {
+                if matches!(action, Action::Back | Action::Log) {
+                    self.log_view = None;
+                }
+                continue;
+            }
+            // Signalement en préparation : Échap l'abandonne.
+            if self.report_draft.is_some() {
+                if action == Action::Back {
+                    self.report_draft = None;
+                }
+                continue;
+            }
             // Rapport d'export : Échap ou son raccourci le ferment.
             if self.export_report {
                 if matches!(action, Action::Back | Action::ExportReport) {
@@ -6766,9 +6799,11 @@ impl TriApp {
             }
             Action::Settings => self.open_settings(),
             Action::CheckUpdate => self.check_update(ctx),
-            Action::ReportIssue => {
-                let url = tri::update::issue_url(&self.build, &self.settings.update);
-                ctx.open_url(egui::OpenUrl::new_tab(url));
+            Action::ReportIssue => self.prepare_report(ctx),
+            Action::Log => {
+                if self.log_view.take().is_none() {
+                    self.open_log(ctx, Vec::new());
+                }
             }
             Action::Undo => {
                 let result = self.history.undo(self.settings.xmp.sidecar);
@@ -12014,21 +12049,22 @@ impl TriApp {
                 {
                     clicked = Some(StatusClick::KeepTexturesBudget);
                 }
-                // Un clic efface le message (#157 : une erreur restait affichée).
-                let label = if *error {
-                    ui.colored_label(self.gui.colors.error, text)
-                } else {
-                    ui.label(text)
-                };
-                if dismissable(label).clicked() {
+                // Un clic efface le message (#157 : une erreur restait affichée) ; une
+                // erreur ouvre aussi le journal sur son détail (issue n° 398).
+                if *error {
+                    let label = ui.colored_label(self.gui.colors.error, text);
+                    if error_link(label).clicked() {
+                        clicked = Some(StatusClick::OpenLog(self.logged_error(text)));
+                    }
+                } else if dismissable(ui.label(text)).clicked() {
                     clicked = Some(StatusClick::DismissMessages);
                 }
             }
             for error in [&self.note_error, &self.file_error].into_iter().flatten() {
                 ui.separator();
                 let label = ui.colored_label(self.gui.colors.error, error);
-                if dismissable(label).clicked() {
-                    clicked = Some(StatusClick::DismissMessages);
+                if error_link(label).clicked() {
+                    clicked = Some(StatusClick::OpenLog(self.logged_error(error)));
                 }
             }
             if let Some(hint) = &self.hint {
@@ -15937,6 +15973,129 @@ impl TriApp {
         }
     }
 
+    /// Écrit au journal les erreurs que la barre d'état vient de montrer (une fois
+    /// chacune), avec les entrées que le moteur a écrites depuis la précédente : leur
+    /// détail. Un clic sur l'erreur ouvre le journal sur elles.
+    fn log_errors(&mut self) {
+        let shown: Vec<String> = self
+            .notice
+            .iter()
+            .filter(|(_, error)| *error)
+            .map(|(text, _)| text.clone())
+            .chain(self.note_error.clone())
+            .chain(self.file_error.clone())
+            .collect();
+        self.logged_errors.retain(|(text, _)| shown.contains(text));
+        for text in shown {
+            if self.logged_errors.iter().any(|(t, _)| *t == text) {
+                continue;
+            }
+            let from = self.log_mark + 1;
+            tri::log::write(tri::log::Level::Error, "gui", &text, "");
+            let to = tri::log::last_number();
+            self.log_mark = to;
+            let ids = (from..=to).rev().map(tri::log::id_of).collect();
+            self.logged_errors.push((text, ids));
+        }
+    }
+
+    /// Rang de l'erreur `text` dans celles écrites au journal.
+    fn logged_error(&self, text: &str) -> Option<usize> {
+        self.logged_errors.iter().position(|(t, _)| t == text)
+    }
+
+    /// Ouvre le journal, `focus` : entrées à mettre en avant.
+    fn open_log(&mut self, ctx: &egui::Context, focus: Vec<String>) {
+        self.log_view = Some(crate::log_view::LogView::open(tri::log::dir(), focus));
+        self.log_view_since = ctx.cumulative_pass_nr();
+    }
+
+    /// Fenêtre du journal : voir [`crate::log_view`].
+    fn log_dialog(&mut self, ctx: &egui::Context) {
+        let accent = Color32::from(self.gui.colors.accent);
+        let Some(view) = &mut self.log_view else {
+            return;
+        };
+        match view.show(ctx, accent) {
+            Some(crate::log_view::LogAction::Reveal(path)) => {
+                if let Err(e) = tri::files::reveal(&path) {
+                    self.file_error = Some(e.to_string());
+                }
+            }
+            Some(crate::log_view::LogAction::Close)
+                if ctx.cumulative_pass_nr() > self.log_view_since =>
+            {
+                self.log_view = None;
+            }
+            Some(crate::log_view::LogAction::Close) | None => {}
+        }
+    }
+
+    /// Signaler un problème : les dernières entrées du journal sont proposées, à relire
+    /// (des chemins contiennent des noms personnels) avant d'ouvrir le formulaire.
+    /// Sans journal ou sans entrée à proposer (`report_log_entries = 0`), le formulaire
+    /// directement.
+    fn prepare_report(&mut self, ctx: &egui::Context) {
+        match tri::log::dir() {
+            Some(dir) if self.gui.report_log_entries > 0 => {
+                self.report_draft = Some(tri::log::tail(&dir, self.gui.report_log_entries));
+            }
+            _ => {
+                let url = tri::update::issue_url(&self.build, &self.settings.update);
+                ctx.open_url(egui::OpenUrl::new_tab(url));
+            }
+        }
+    }
+
+    /// Boîte du signalement : les lignes du journal modifiables, puis le formulaire de
+    /// GitHub prérempli (version, système, lignes gardées).
+    fn report_dialog(&mut self, ctx: &egui::Context) {
+        let Some(draft) = &mut self.report_draft else {
+            return;
+        };
+        let size = ctx.content_rect().size();
+        let at = ctx.content_rect().center() - vec2(320.0, size.y * 0.3);
+        let mut send: Option<bool> = None;
+        let modal = modal_at("report_issue", at)
+            .title(t!("report-title"))
+            .show(ctx, |ui| {
+                ui.set_width(640.0);
+                ui.label(t!("report-log-intro"));
+                ui.weak(t!("report-log-privacy"));
+                ui.add_space(4.0);
+                egui::ScrollArea::vertical()
+                    .max_height(size.y * 0.45)
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::TextEdit::multiline(draft)
+                                .font(egui::TextStyle::Monospace)
+                                .desired_width(f32::INFINITY)
+                                .desired_rows(10)
+                                .hint_text(t!("report-log-empty")),
+                        );
+                    });
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    if ui.button(t!("report-with-log")).clicked() {
+                        send = Some(true);
+                    }
+                    if ui.button(t!("report-without-log")).clicked() {
+                        send = Some(false);
+                    }
+                });
+            });
+        if let Some(with_log) = send {
+            let mut url = tri::update::issue_url(&self.build, &self.settings.update);
+            if with_log {
+                url.push_str(&tri::update::logs_param(draft));
+            }
+            ctx.open_url(egui::OpenUrl::new_tab(url));
+            self.report_draft = None;
+        } else if modal.should_close() {
+            self.report_draft = None;
+        }
+    }
+
     /// Fenêtre de regroupement (`Ctrl+G`, comme Capture One) : regrouper ou non, le seuil
     /// (la grille derrière suit en direct), l'écart de temps maximal ; le seuil est retenu
     /// pour le dossier à la fermeture.
@@ -16722,6 +16881,7 @@ impl TriApp {
         let mut check_update = false;
         let mut download = None;
         let mut report = false;
+        let mut open_log = false;
         let opening = self.help_search.is_none();
         let mut query = self.help_search.take().unwrap_or_default();
         // Défilement au clavier (retour du 18/10/2026) : les touches de navigation du
@@ -16848,6 +17008,14 @@ impl TriApp {
                     {
                         report = true;
                     }
+                    // Le journal (issue n° 398), à côté : ce qu'on y joint.
+                    if ui
+                        .small_button(t!("help-log"))
+                        .on_hover_text(t!("action-core-app-log"))
+                        .clicked()
+                    {
+                        open_log = true;
+                    }
                 });
                 ui.add_space(6.0);
                 // Recherche floue à la fzf : on tape dès l'ouverture.
@@ -16957,6 +17125,10 @@ impl TriApp {
         }
         if report {
             self.perform(ctx, Action::ReportIssue);
+        }
+        if open_log {
+            self.help = false;
+            self.open_log(ctx, Vec::new());
         }
     }
 
@@ -17124,6 +17296,16 @@ impl eframe::App for TriApp {
                 self.notice = None;
                 self.note_error = None;
                 self.file_error = None;
+            }
+            Some(StatusClick::OpenLog(i)) => {
+                let focus = i
+                    .and_then(|i| self.logged_errors.get(i))
+                    .map(|(_, ids)| ids.clone())
+                    .unwrap_or_default();
+                self.notice = None;
+                self.note_error = None;
+                self.file_error = None;
+                self.open_log(ui.ctx(), focus);
             }
             Some(StatusClick::KeepTexturesBudget) => self.keep_textures_budget(),
             Some(StatusClick::CancelExport) => {
@@ -17376,6 +17558,9 @@ impl eframe::App for TriApp {
         self.settings_window(&ctx);
         self.history_dialog(&ctx);
         self.export_report_dialog(&ctx);
+        self.log_errors();
+        self.log_dialog(&ctx);
+        self.report_dialog(&ctx);
         self.group_window(&ctx);
         self.rating_dialog(&ctx);
         self.conflict_dialog(&ctx);
@@ -17740,6 +17925,9 @@ enum StatusClick {
     RetryEject,
     /// Effacer les messages de la barre d'état (#157 : une erreur en rouge restait).
     DismissMessages,
+    /// Une erreur (son rang dans `logged_errors`) : ouvrir le journal sur son détail
+    /// (issue n° 398), et l'effacer.
+    OpenLog(Option<usize>),
     /// Garder dans la configuration le budget de mémoire graphique abaissé après une
     /// erreur (07/11/2026 : pas assez de mémoire aujourd'hui, sans doute pas plus demain).
     KeepTexturesBudget,
@@ -17755,6 +17943,15 @@ fn stars_op_name(op: tri::notes::StarsOp) -> String {
 }
 
 /// Message de la barre d'état qu'un clic efface : main au survol, et l'invite.
+/// Une erreur de la barre d'état : main au survol, un clic ouvre le journal sur son
+/// détail et l'efface.
+fn error_link(label: egui::Response) -> egui::Response {
+    label
+        .interact(Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(t!("status-error-tip"))
+}
+
 fn dismissable(label: egui::Response) -> egui::Response {
     label
         .interact(Sense::click())
@@ -18914,7 +19111,7 @@ pub(crate) fn keys_job(
 
 /// `text` en `size`, les lettres que trouve la recherche `query` à la couleur `marked`,
 /// soulignées (aide « ici », #382), le reste en `color`.
-fn marked_job(
+pub(crate) fn marked_job(
     text: &str,
     query: &str,
     size: f32,
@@ -22132,12 +22329,9 @@ mod tests {
         let egui::TextureId::Managed(n) = id else {
             panic!("{id:?}")
         };
-        crate::crash::gpu_error(
-            None,
-            &format!(
-                "Validation Error\n  BindGroup with 'egui_texid_Managed({n})' label is invalid"
-            ),
-        );
+        crate::crash::gpu_error(&format!(
+            "Validation Error\n  BindGroup with 'egui_texid_Managed({n})' label is invalid"
+        ));
         h.run_steps(2);
         assert!(
             !h.state().big.contains(&key),
@@ -27992,6 +28186,60 @@ mod tests {
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert_eq!(h.state().grid_render, GridRender::Cover);
         assert_eq!(h.state().source, Source::Developed);
+    }
+
+    #[test]
+    fn an_error_shown_goes_to_the_log_and_a_click_opens_it_on_its_detail() {
+        // #398 : la barre d'état garde un message court ; le moteur écrit le détail au
+        // journal, l'erreur montrée y va aussi (une fois), et un clic ouvre le journal sur
+        // elles, dépliées.
+        let (mut h, dir) = harness();
+        let log_dir = dir.path().join("data");
+        tri::log::set_thread_dir(Some(log_dir.clone()));
+        h.run_steps(2);
+        let detail = tri::log::error(
+            "develop",
+            "Darktable failed: bad xmp",
+            "image: a.RAF\nexit: 1",
+        )
+        .unwrap();
+        let text = "1 échec (Darktable : bad xmp)";
+        h.state_mut().notice = Some((text.into(), true));
+        h.run_steps(3);
+        let entries = tri::log::read(&log_dir);
+        assert_eq!(entries.len(), 2, "logged once, not at every frame");
+        assert_eq!(
+            (entries[0].source.as_str(), entries[0].message.as_str()),
+            ("gui", text)
+        );
+        assert_eq!(entries[1].id, detail);
+        h.get_by_label(text).click();
+        h.run_steps(2);
+        let view = h.state().log_view.as_ref().expect("log open");
+        assert!(view.focus.contains(&detail) && view.focus.contains(&entries[0].id));
+        assert!(h.state().notice.is_none(), "the message is cleared");
+        h.get_by_label("image: a.RAF\nexit: 1");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().log_view.is_none());
+        tri::log::set_thread_dir(None);
+    }
+
+    #[test]
+    fn reporting_a_problem_offers_the_latest_log_entries_to_edit() {
+        let (mut h, dir) = harness();
+        let log_dir = dir.path().join("data");
+        tri::log::set_thread_dir(Some(log_dir));
+        tri::log::error("export", "export failed: disk full", "image: b.RAF");
+        h.run_steps(2);
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::ReportIssue);
+        h.run_steps(2);
+        let draft = h.state().report_draft.clone().expect("draft offered");
+        assert!(draft.contains("export failed: disk full") && draft.contains("image: b.RAF"));
+        h.get_by_label("Les dernières entrées du journal aideront à comprendre le problème. Elles seront jointes au formulaire de GitHub.");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().report_draft.is_none(), "Esc drops it");
+        tri::log::set_thread_dir(None);
     }
 
     #[test]

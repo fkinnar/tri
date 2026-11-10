@@ -4,6 +4,16 @@
 
 ## Non publié
 
+- **Journal de l'application** (#PRNUM) : une erreur garde un message court dans la barre
+  d'état, et tout son détail va dans `tri.log`, au dossier de données : pour un logiciel
+  de développement en échec, l'image, la commande, le code de sortie et tous ses
+  messages ; aussi les exports, vignettes et aperçus ratés, une configuration invalide,
+  les plantages (`crash.log` y est repris). Un clic sur une erreur ouvre le journal sur
+  son détail. La fenêtre du journal (palette, ou bouton « Journal » de l'aide) montre les
+  entrées les plus récentes d'abord, filtre par gravité, cherche, copie et affiche le
+  fichier. « Signaler un problème » propose les dernières lignes, à relire et modifier
+  avant de les joindre au formulaire. Nouvelle section `[log]` (taille, fichiers gardés,
+  trace détaillée) et `[gui] report_log_entries` (#398).
 - **Fin d'un export au milieu de l'écran** (#399) : le bilan (« 3 images exportées », le
   dossier) s'affiche aussi dans une bulle sur les images, avec « Ouvrir le dossier »
   (« Voir le rapport » quand les fichiers sont partis dans plusieurs dossiers). Il

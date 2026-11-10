@@ -260,6 +260,7 @@ pub fn navigate(
         | Action::Settings
         | Action::CheckUpdate
         | Action::ReportIssue
+        | Action::Log
         | Action::Quit
         | Action::Stars(_)
         | Action::Color(_)

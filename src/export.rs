@@ -739,8 +739,22 @@ pub fn export(
         for c in &conf {
             cmd.args(["--conf", c]);
         }
+        let line = crate::develop::command_line(&cmd);
         let (status, message) = run_darktable(cmd, total, cancel, report, &mut progress)?;
         if !status.success() {
+            // Tout le détail au journal (issue n° 398) ; le bilan n'en garde qu'une ligne.
+            crate::log::error(
+                "export",
+                &format!("darktable export failed ({status})"),
+                &format!(
+                    "command: {line}\noutput:\n{}",
+                    if message.trim().is_empty() {
+                        "(empty)"
+                    } else {
+                        message.trim_end()
+                    }
+                ),
+            );
             errors.push(message);
         }
         Ok(())
@@ -775,6 +789,18 @@ pub fn export(
     }
     report.failed = total.saturating_sub(report.written.len());
     Ok(report)
+}
+
+/// Une image qui n'a pas pu être exportée : au journal (issue n° 398), et la ligne du
+/// rapport d'export.
+fn failed_image(image: &Path, error: &dyn std::fmt::Display) -> (PathBuf, String) {
+    let error = error.to_string();
+    crate::log::error(
+        "export",
+        &format!("export failed: {error}"),
+        &format!("image: {}", image.display()),
+    );
+    (image.to_path_buf(), error)
 }
 
 /// Lance darktable (`cmd`, sorties lues au fil de l'eau) jusqu'au bout : chaque fichier
@@ -1521,7 +1547,7 @@ pub fn export_rapidraw(
                     );
                 }
                 Err(DevelopError::Cancelled) => return Err(DevelopError::Cancelled),
-                Err(e) => report.errors.push((image.clone(), e.to_string())),
+                Err(e) => report.errors.push(failed_image(image, &e)),
             }
         }
         Ok(())
@@ -1568,7 +1594,7 @@ pub fn export_profile_tool(
                     );
                 }
                 Err(DevelopError::Cancelled) => return Err(DevelopError::Cancelled),
-                Err(e) => report.errors.push((image.clone(), e.to_string())),
+                Err(e) => report.errors.push(failed_image(image, &e)),
             }
         }
         Ok(())
@@ -1632,25 +1658,36 @@ fn rapidraw_one(
     if let Some(file) = &adjustments {
         command.arg("--adjustments").arg(file);
     }
-    let child = command
+    command
         .arg("--output")
         .arg(&tiff)
         .args(["--format", "tiff", "--tiff-bit-depth", "16"])
         .stdin(Stdio::null())
         .stdout(messages.try_clone().map_err(|e| failed(&e))?)
-        .stderr(messages)
-        .spawn()
-        .map_err(|e| failed(&e))?;
+        .stderr(messages);
+    let child = command.spawn().map_err(|e| {
+        crate::develop::tool_failed(
+            Engine::RapidRaw,
+            Some(image),
+            &command,
+            None,
+            &e.to_string(),
+            "rapidraw export",
+        )
+    })?;
     let status = crate::develop::wait(child, Engine::RapidRaw, cancel)?;
     let text = std::fs::read_to_string(&log).unwrap_or_default();
     if !status.success() || !tiff.is_file() {
         if text.contains("already running") {
             return Err(failed(&crate::t!("develop-rapidraw-open")));
         }
-        let last = text.lines().rev().find(|l| !l.trim().is_empty());
-        return Err(DevelopError::Failed(
+        return Err(crate::develop::tool_failed(
             Engine::RapidRaw,
-            last.unwrap_or("rapidraw export").trim().to_string(),
+            Some(image),
+            &command,
+            Some(status),
+            &text,
+            "rapidraw export",
         ));
     }
     let pixels = match crate::flat::decode_deep(&tiff).map_err(|e| failed(&e))? {
@@ -1718,7 +1755,7 @@ pub fn export_libraw(
                 );
             }
             Err(DevelopError::Cancelled) => return Err(DevelopError::Cancelled),
-            Err(e) => report.errors.push((image.clone(), e.to_string())),
+            Err(e) => report.errors.push(failed_image(image, &e)),
         }
     }
     report.failed = report.errors.len();
@@ -1917,7 +1954,7 @@ pub fn export_via_tiff(
                         report.written.last().expect("ajouté"),
                     );
                 }
-                Err(e) => report.errors.push((images[i].clone(), e.to_string())),
+                Err(e) => report.errors.push(failed_image(&images[i], &e)),
             }
         }
         if report.written.is_empty() && report.errors.is_empty() && total > 0 {

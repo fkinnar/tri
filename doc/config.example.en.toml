@@ -538,6 +538,18 @@ enabled = true
 # Example:
 # dir = "/chemin/vers/données"
 
+[log]
+# Application log (tri.log, in the data folder): warnings and errors with their full
+# detail (image, software, exit code, messages…), and crashes. Viewable in tri (palette:
+# "Log"), attached to a problem report.
+# Size beyond which the log moves on to a new file (KB).
+max_kb = 1024
+# Older files kept (tri.1.log, tri.2.log…); 0: none.
+keep = 3
+# Detailed trace (image loading steps, slow frames) in the log too: to reproduce a
+# problem on request. Large, switch it off afterwards.
+trace = false
+
 [gui]
 # "dark", "light", "system" or "neutral" (neutral grey, Lightroom-style: dark grey
 # panels, neutral grey central background, which doesn't skew the judgement of images;
@@ -569,8 +581,11 @@ key_menu = true
 # does not show it.
 key_menu_delay_ms = 400
 # Diagnostics (TRI_GUI_TRACE=1): a frame of the interface slower than this delay (ms) is
-# traced with the duration of its steps.
+# traced with the duration of its steps. With [log] trace, in the log too.
 trace_slow_ms = 100
+# Report a problem: latest log entries offered in the form, editable before sending (0:
+# none).
+report_log_entries = 20
 # Arrows and Enter in the help, the menus and the palette: as symbols, taken from
 # a system font that has them (Apple Symbols, DejaVu Sans, Segoe UI Symbol; the
 # interface's has none). Empty: the first found; a path: that font; "none": spelled out

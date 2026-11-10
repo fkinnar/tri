@@ -915,13 +915,22 @@ fn finish(
             }];
         }
         Err(Failure::Cancelled) => return Vec::new(),
-        Err(Failure::Error(error)) => vec![Event::Failed {
-            generation,
-            index,
-            path,
-            level,
-            error,
-        }],
+        Err(Failure::Error(error)) => {
+            // Au journal (issue n° 398) : une vignette ou un aperçu raté n'est montré que
+            // par une case vide ou une mention, sans le fichier ni la raison.
+            crate::log::warning(
+                "preview",
+                &format!("{level:?} failed: {error}"),
+                &format!("image: {}", path.display()),
+            );
+            vec![Event::Failed {
+                generation,
+                index,
+                path,
+                level,
+                error,
+            }]
+        }
     };
     if let Some(i) = TRACKED
         .iter()

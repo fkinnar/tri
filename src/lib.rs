@@ -16,6 +16,7 @@
 //! - [`metadata`] : métadonnées de prise de vue (LibRaw, EXIF), lignes à afficher ;
 //! - [`notes`] : notes d'un dossier en mémoire, modification, filtres sur les notes ;
 //! - [`offload`] : déchargement d'une carte vers un dossier local (copie vérifiée) ;
+//! - [`log`] : journal de l'application (`tri.log`), erreurs avec leur détail ;
 //! - [`places`] : emplacements (volumes montés, dossier personnel, racine) et sous-dossiers.
 //!
 //! Le moteur ne dépend d'aucune bibliothèque d'affichage. Voir `doc/en/README.md`.
@@ -39,6 +40,7 @@ pub mod fuzzy;
 pub mod history;
 pub mod i18n;
 pub mod jpeg;
+pub mod log;
 pub mod media;
 pub mod metadata;
 pub mod neighbourhood;
