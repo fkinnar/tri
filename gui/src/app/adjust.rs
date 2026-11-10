@@ -546,12 +546,7 @@ impl TriApp {
                 (AdjustTab::Values, "adjust-tab-values", false),
             ];
             for (tab, key, active) in tabs {
-                let text = if active {
-                    format!("{} •", t!(key))
-                } else {
-                    t!(key)
-                };
-                if ui.selectable_label(self.adjust_tab == tab, text).clicked() {
+                if adjust_tab(ui, &t!(key), self.adjust_tab == tab, active).clicked() {
                     self.adjust_tab = tab;
                 }
             }
@@ -722,6 +717,45 @@ struct Pending {
     auto_exposure: bool,
     white_balance: Option<WhiteBalance>,
     eyedropper: bool,
+}
+
+/// Un onglet de la section : largeur fixe, point compris, le nom calé à gauche et le
+/// point « • » dans sa place réservée quand l'onglet change l'image (retour du
+/// 10/11/2026 : les onglets bougeaient quand le point apparaissait).
+fn adjust_tab(ui: &mut Ui, name: &str, selected: bool, active: bool) -> egui::Response {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let padding = ui.spacing().button_padding;
+    let painter = ui.painter().clone();
+    let text = painter.layout_no_wrap(name.to_string(), font.clone(), Color32::WHITE);
+    let dot = painter.layout_no_wrap(" •".to_string(), font, Color32::WHITE);
+    let size = vec2(
+        text.size().x + dot.size().x + 2.0 * padding.x,
+        (text.size().y + 2.0 * padding.y).max(ui.spacing().interact_size.y),
+    );
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), selected, name)
+    });
+    if ui.is_rect_visible(rect) {
+        let visuals = ui.style().interact_selectable(&response, selected);
+        if selected || response.hovered() || response.has_focus() {
+            painter.rect(
+                rect,
+                visuals.corner_radius,
+                visuals.weak_bg_fill,
+                visuals.bg_stroke,
+                egui::StrokeKind::Inside,
+            );
+        }
+        let color = visuals.text_color();
+        let top = rect.center().y - text.size().y / 2.0;
+        let x = rect.left() + padding.x;
+        painter.galley_with_override_text_color(egui::pos2(x, top), text.clone(), color);
+        if active {
+            painter.galley_with_override_text_color(egui::pos2(x + text.size().x, top), dot, color);
+        }
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 /// Largeur du champ de valeur à droite des curseurs (tous alignés).

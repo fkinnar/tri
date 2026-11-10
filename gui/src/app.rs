@@ -28465,8 +28465,7 @@ mod tests {
         h.state_mut()
             .save_adjustments(vec![(path.clone(), Some(layers))]);
         h.run_steps(2);
-        // Le point signale l'onglet actif.
-        h.get_by_label("Style •").click();
+        h.get_by_label("Style").click();
         h.run_steps(2);
         h.get_by_label("Décalage créatif").click();
         h.run_steps(3);
