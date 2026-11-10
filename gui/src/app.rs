@@ -4213,9 +4213,9 @@ impl TriApp {
             .rows()
             .iter()
             .any(|r| r.path == root && r.kind == Some(PlaceKind::Volume) && r.ejectable);
-        // Au centre, comme les autres confirmations du panneau (retour du 10/11/2026 : près
-        // du pointeur, la boîte débordait en bas).
-        let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+        // Au centre (retour du 10/11/2026 : près du pointeur, la boîte débordait en bas) ;
+        // recentrée d'après sa vraie taille dès sa première image.
+        let at = ctx.content_rect().center();
         self.disk_clear = Some(DiskClear {
             root,
             removable,
@@ -4243,6 +4243,7 @@ impl TriApp {
         let size = dialog.size;
         let (mut confirm, mut cancel) = (false, false);
         let modal = modal_at("disk_clear_dialog", dialog.at)
+            .centred()
             .title(title)
             .show(ctx, |ui| {
                 match size {
@@ -19040,6 +19041,7 @@ pub(crate) fn modal_at(id: &str, at: egui::Pos2) -> Dialog {
         title: None,
         free_width: false,
         closable: true,
+        centred: false,
     }
 }
 
@@ -19071,6 +19073,9 @@ pub(crate) struct Dialog {
     free_width: bool,
     /// Croix de fermeture à droite du titre (issue n° 39 : la même dans toutes les boîtes).
     closable: bool,
+    /// Au centre de la fenêtre d'après sa taille réelle (mesurée à l'image précédente),
+    /// tant qu'on ne la déplace pas.
+    centred: bool,
 }
 
 /// Réponse de [`Dialog::show`] : celle de la `Modal` d'egui, plus la croix.
@@ -19130,6 +19135,13 @@ impl Dialog {
         self
     }
 
+    /// Au centre de la fenêtre, d'après sa taille réelle (retour du 10/11/2026 : un
+    /// décalage fixe la plaçait de travers selon sa largeur).
+    pub(crate) fn centred(mut self) -> Self {
+        self.centred = true;
+        self
+    }
+
     /// Sans croix : travail en cours qu'on ne peut pas interrompre (copie, suppression).
     pub(crate) fn busy(mut self) -> Self {
         self.closable = false;
@@ -19150,9 +19162,14 @@ impl Dialog {
             .data(|data| data.get_temp(dialog_settings_id()))
             .unwrap_or_default();
         let pos_id = self.id.with("position");
+        let size_id = self.id.with("size");
+        let start = match ctx.data(|data| data.get_temp::<egui::Vec2>(size_id)) {
+            Some(size) if self.centred => ctx.content_rect().center() - size / 2.0,
+            _ => self.start,
+        };
         let pos = ctx
             .data(|data| data.get_temp::<egui::Pos2>(pos_id))
-            .unwrap_or(self.start);
+            .unwrap_or(start);
         let area = egui::Area::new(self.id)
             .kind(egui::UiKind::Modal)
             .sense(Sense::hover())
@@ -19270,6 +19287,13 @@ impl Dialog {
         if moved != egui::Vec2::ZERO {
             ctx.data_mut(|data| data.insert_temp(pos_id, pos + moved));
             ctx.request_repaint();
+        }
+        if self.centred {
+            let size = response.response.rect.size();
+            if ctx.data(|data| data.get_temp::<egui::Vec2>(size_id)) != Some(size) {
+                ctx.data_mut(|data| data.insert_temp(size_id, size));
+                ctx.request_repaint();
+            }
         }
         DialogResponse {
             modal: response,
