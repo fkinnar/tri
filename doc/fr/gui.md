@@ -711,12 +711,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   pas interrompre. L'aide, fenêtre d'egui, avait déjà la sienne.
 - **Cache gardé avec les photos** (24/10/2026, issue n° 55) : clic droit sur un dossier
   du panneau, « Garder le cache dans ce dossier » (sur un disque amovible : « sur ce
-  disque »), ou « Ne plus garder le cache ici » ; pas proposé là où `[cache] location`
+  disque »), ou « Ne plus garder le cache dans ce dossier » (« sur ce disque ») ; pas proposé là où `[cache] location`
   le met déjà. À l'ouverture d'un dossier, `location` (`disk`, `folder`) s'applique s'il
   est encore chez l'utilisateur. Déplacement d'un dossier : case « Emporter le cache »
   (cochée) ; renommage : le cache suit toujours. Le travail se fait en fond
   (`TriApp::cache_job`), message dans la barre d'état. Là où il est gardé, « Vider le
-  cache ici… » (groupe Préférences, 10/11/2026) : sa taille mesurée en fond, confirmée
+  cache de ce dossier… » (« de ce disque ») (groupe Préférences, 10/11/2026) : sa taille mesurée en fond, confirmée
   dans le menu même (« Vider 820 Mo ? », Vider / Annuler), puis l'espace libéré dans la
   barre d'état ; le cache reste gardé là. Le cache général se vide depuis la fenêtre de
   réglages (section Cache).

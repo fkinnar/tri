@@ -3716,7 +3716,13 @@ impl TriApp {
                                 use tri::cache::Location;
                                 let here = cache.disk_of(&row.path).as_deref() == Some(&row.path);
                                 let text = if here {
-                                    Some(t!("folder-menu-cache-release"))
+                                    // Dossier ou disque, comme pour le garder (retour du
+                                    // 10/11/2026 : « ici » sonnait faux).
+                                    Some(if removable {
+                                        t!("folder-menu-cache-release-disk")
+                                    } else {
+                                        t!("folder-menu-cache-release-folder")
+                                    })
                                 } else if removable {
                                     (location != Location::Disk)
                                         .then(|| t!("folder-menu-cache-disk"))
@@ -3776,7 +3782,11 @@ impl TriApp {
                                             }
                                             _ => {
                                                 if ui
-                                                    .button(t!("folder-menu-cache-clear"))
+                                                    .button(if removable {
+                                                        t!("folder-menu-cache-clear-disk")
+                                                    } else {
+                                                        t!("folder-menu-cache-clear-folder")
+                                                    })
                                                     .on_hover_text(t!(
                                                         "folder-menu-cache-clear-tip"
                                                     ))
@@ -26373,7 +26383,7 @@ mod tests {
         let marker = seance.join(tri::cache::DISK_DIR);
         for (label, kept) in [
             (t!("folder-menu-cache-folder"), true),
-            (t!("folder-menu-cache-release"), false),
+            (t!("folder-menu-cache-release-folder"), false),
         ] {
             h.get_by_label("séance").click_secondary();
             h.run_steps(2);
@@ -26497,7 +26507,8 @@ mod tests {
         h.run_steps(2);
         h.get_by_label(&t!("folder-group-preferences")).hover();
         h.run_steps(3);
-        h.get_by_label(&t!("folder-menu-cache-clear")).click();
+        h.get_by_label(&t!("folder-menu-cache-clear-folder"))
+            .click();
         let ask = t!(
             "folder-menu-cache-clear-ask",
             size = crate::cache_panel::size_text(4096)
