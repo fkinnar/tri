@@ -558,6 +558,12 @@ pub struct TriApp {
     /// Pipette armée (plein écran) : le prochain clic sur l'image neutralise la balance
     /// sur la zone cliquée.
     adjust_eyedropper: bool,
+    /// Couleur de l'éclairage de la prise de vue de chaque image (kelvins des réglages),
+    /// lue avec ses réglages.
+    adjust_shot: HashMap<PathBuf, [f32; 3]>,
+    /// Décalage créatif et noir et blanc décochés dans la session : retrouvés en recochant.
+    adjust_creative_memory: HashMap<PathBuf, tri::adjust::Adjust>,
+    adjust_mono_memory: HashMap<PathBuf, tri::adjust::Mixer>,
     /// Fenêtre du journal de l'application (issue n° 398).
     log_view: Option<crate::log_view::LogView>,
     /// Image (passe d'egui) où elle s'est ouverte (même raison que `export_report_since`).
@@ -1375,6 +1381,9 @@ impl TriApp {
             adjust_read: mpsc::channel(),
             adjust_dirty: None,
             adjust_eyedropper: false,
+            adjust_shot: HashMap::new(),
+            adjust_creative_memory: HashMap::new(),
+            adjust_mono_memory: HashMap::new(),
             log_view: None,
             log_view_since: 0,
             logged_errors: Vec::new(),
@@ -11082,7 +11091,8 @@ impl TriApp {
                         }
                         None => center,
                     };
-                    if response.dragged() {
+                    // La pipette trace un cadre : pas de déplacement.
+                    if response.dragged() && !self.adjust_eyedropper {
                         let d = response.drag_delta();
                         center -= vec2(d.x / size.x, d.y / size.y);
                     }
@@ -11170,18 +11180,68 @@ impl TriApp {
         };
         let peaking = self.peaking_overlay(&painter, &file, shown, image_rect, peaking_uv);
 
-        // Pipette des réglages (#137) : un clic sur une zone qui devrait être grise.
+        // Pipette des réglages (#137) : un clic sur une zone qui devrait être grise, ou un
+        // cadre tracé (balance auto sur cette partie de l'image).
         if self.adjust_eyedropper && shown_crop.is_none() {
             if response.hovered() {
                 ctx.set_cursor_icon(egui::CursorIcon::Crosshair);
             }
-            if response.clicked()
-                && let (Some(rect), Some(pos)) = (image_rect, response.interact_pointer_pos())
+            let to_image = |pos: egui::Pos2| {
+                image_rect.map(|rect| {
+                    let rel = view::relative(rect, pos);
+                    let p = uv.min + vec2(rel.x * uv.width(), rel.y * uv.height());
+                    pos2(p.x.clamp(0.0, 1.0), p.y.clamp(0.0, 1.0))
+                })
+            };
+            let origin = ctx.input(|i| i.pointer.press_origin());
+            if response.dragged()
+                && let (Some(a), Some(b)) = (origin, response.interact_pointer_pos())
             {
-                let rel = view::relative(rect, pos);
-                let point = uv.min + vec2(rel.x * uv.width(), rel.y * uv.height());
+                let frame = Rect::from_two_pos(a, b);
+                painter.rect_stroke(
+                    frame,
+                    0.0,
+                    egui::Stroke::new(1.5, Color32::WHITE),
+                    egui::StrokeKind::Middle,
+                );
+                painter.rect_stroke(
+                    frame.expand(1.5),
+                    0.0,
+                    egui::Stroke::new(1.0, Color32::BLACK),
+                    egui::StrokeKind::Middle,
+                );
+            }
+            let zone = if response.drag_stopped() {
+                match (
+                    origin.and_then(to_image),
+                    response.interact_pointer_pos().and_then(to_image),
+                ) {
+                    (Some(a), Some(b)) => {
+                        let r = Rect::from_two_pos(a, b);
+                        Some(if r.width() < 0.005 || r.height() < 0.005 {
+                            self.adjust_point_zone(r.center())
+                        } else {
+                            tri::adjust::Zone {
+                                x: r.min.x,
+                                y: r.min.y,
+                                w: r.width(),
+                                h: r.height(),
+                            }
+                        })
+                    }
+                    _ => None,
+                }
+            } else if response.clicked() {
+                response
+                    .interact_pointer_pos()
+                    .and_then(to_image)
+                    .map(|p| self.adjust_point_zone(p))
+            } else {
+                None
+            };
+            if let Some(zone) = zone {
                 self.adjust_eyedropper = false;
-                self.adjust_pick(&file.path, point);
+                self.adjust_pick(&file.path, zone);
             }
         }
         self.open_rating_dialog(&response, index);
@@ -28305,6 +28365,51 @@ mod tests {
     }
 
     #[test]
+    fn the_creative_offset_and_black_and_white_are_checkboxes_with_visible_filters() {
+        // Retours du 10/11/2026 : décalage créatif sous une case, comme le noir et blanc
+        // (décochée puis recochée : ses valeurs reviennent) ; filtres en boutons ; mélange
+        // normalisé.
+        let (mut h, _dir) = harness();
+        // Section en bas du panneau de droite : tout visible, sans défiler.
+        h.set_size(vec2(1000.0, 2400.0));
+        run_until(&mut h, |app| app.files.len() == 3);
+        let path = h.state().files[0].path.clone();
+        h.state_mut().selected = 0;
+        let layers = tri::adjust::Layers {
+            creative: Some(tri::adjust::Adjust {
+                exposure: 0.4,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        h.state_mut()
+            .save_adjustments(vec![(path.clone(), Some(layers))]);
+        h.run_steps(2);
+        h.get_by_label("Décalage créatif").click();
+        h.run_steps(3);
+        assert_eq!(
+            tri::adjust::read(&path).unwrap(),
+            None,
+            "unchecked: no offset"
+        );
+        h.get_by_label("Décalage créatif").click();
+        h.run_steps(3);
+        let back = tri::adjust::read(&path).unwrap().expect("checked again");
+        assert_eq!(back.creative.map(|c| c.exposure), Some(0.4), "values back");
+        h.get_by_label("Noir et blanc").click();
+        h.run_steps(3);
+        h.get_by_label("Filtre rouge").click();
+        h.run_steps(3);
+        let mono = tri::adjust::read(&path)
+            .unwrap()
+            .and_then(|l| l.mono)
+            .unwrap();
+        assert_eq!(mono.preset_name(), Some("red"));
+        assert!(mono.normalise, "normalised by default");
+        h.get_by_label("Normalisé");
+    }
+
+    #[test]
     fn an_error_shown_goes_to_the_log_and_a_click_opens_it_on_its_detail() {
         // #398 : la barre d'état garde un message court ; le moteur écrit le détail au
         // journal, l'erreur montrée y va aussi (une fois), et un clic ouvre le journal sur
@@ -28582,9 +28687,10 @@ mod tests {
         assert_eq!(h.state().version_shown, Some((image.clone(), 0)));
         h.run_steps(2);
         // La liste des versions, dans le bandeau du bas (le panneau de droite a aussi celle
-        // du tri).
+        // du tri, et celle de la balance des réglages) : celle qui montre une version.
         let versions_list = |h: &Harness<'_, TriApp>| {
             h.query_all_by_role(egui::accesskit::Role::ComboBox)
+                .filter(|n| n.value().is_some_and(|v| v.starts_with("Versions")))
                 .max_by(|a, b| a.rect().min.y.total_cmp(&b.rect().min.y))
                 .expect("liste des versions")
                 .click();

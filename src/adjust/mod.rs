@@ -27,6 +27,58 @@ use serde::{Deserialize, Serialize};
 use crate::bitmap::Bitmap;
 use crate::xmp::{self, Convention};
 
+pub mod kelvin;
+
+/// Section `[adjust]` du fichier de configuration : réglages de visualisation.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AdjustSettings {
+    /// Exposition automatique : luminance médiane visée, en lumière linéaire (0,18 : le
+    /// gris moyen des posemètres).
+    pub auto_exposure_target: f32,
+    /// Préréglages de balance des blancs, en kelvins (teinte nulle).
+    pub daylight: f32,
+    /// Voir `daylight`.
+    pub cloudy: f32,
+    /// Voir `daylight`.
+    pub shade: f32,
+    /// Voir `daylight`.
+    pub tungsten: f32,
+    /// Voir `daylight`.
+    pub fluorescent: f32,
+    /// Voir `daylight`.
+    pub flash: f32,
+}
+
+impl Default for AdjustSettings {
+    fn default() -> Self {
+        AdjustSettings {
+            auto_exposure_target: 0.18,
+            daylight: 5500.0,
+            cloudy: 6500.0,
+            shade: 7500.0,
+            tungsten: 2850.0,
+            fluorescent: 3800.0,
+            flash: 5500.0,
+        }
+    }
+}
+
+impl AdjustSettings {
+    /// Préréglages de balance en kelvins, dans l'ordre de la liste : (identifiant,
+    /// kelvins).
+    pub fn white_balance_presets(&self) -> [(&'static str, f32); 6] {
+        [
+            ("daylight", self.daylight),
+            ("cloudy", self.cloudy),
+            ("shade", self.shade),
+            ("tungsten", self.tungsten),
+            ("fluorescent", self.fluorescent),
+            ("flash", self.flash),
+        ]
+    }
+}
+
 /// Gains rouge et bleu de la balance des blancs, relatifs à la balance de base de l'image
 /// (celle de la prise de vue) : `1.0` partout, rien. Le vert sert de référence.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -76,8 +128,8 @@ impl Gains {
     }
 
     /// Écart en « plus chaud / plus froid », en IL : log₂(rouge / bleu). Positif : plus
-    /// chaud. Pour le rapport, à défaut d'une température en kelvins (chaque logiciel la
-    /// calcule avec son propre modèle du boîtier).
+    /// chaud. Pour le décalage créatif, relatif ; la correction se montre en kelvins
+    /// ([`kelvin`]).
     pub fn warmth(self) -> f32 {
         (self.red / self.blue).log2()
     }
@@ -134,15 +186,25 @@ pub struct Mixer {
     pub green: f32,
     /// Part du bleu.
     pub blue: f32,
+    /// Normalisé : les parts sont ramenées à une somme de 100 % à l'application (la
+    /// luminosité ne bouge pas quand on change le mélange). Par défaut ; écrit seulement
+    /// quand il est coupé.
+    #[serde(skip_serializing_if = "is_true")]
+    pub normalise: bool,
+}
+
+fn is_true(v: &bool) -> bool {
+    *v
 }
 
 impl Default for Mixer {
-    /// La luminance (Rec. 709) : un noir et blanc « neutre ».
+    /// La luminance (Rec. 709) : un noir et blanc « neutre », normalisé.
     fn default() -> Self {
         Mixer {
             red: 0.2126,
             green: 0.7152,
             blue: 0.0722,
+            normalise: true,
         }
     }
 }
@@ -159,7 +221,45 @@ impl Mixer {
             "blue" => (0.0, 0.3, 0.7),
             _ => return None,
         };
-        Some(Mixer { red, green, blue })
+        Some(Mixer {
+            red,
+            green,
+            blue,
+            normalise: true,
+        })
+    }
+
+    /// Préréglages proposés, dans l'ordre.
+    pub const PRESETS: [&'static str; 6] = ["neutral", "red", "orange", "yellow", "green", "blue"];
+
+    /// Somme des parts.
+    pub fn sum(self) -> f32 {
+        self.red + self.green + self.blue
+    }
+
+    /// Les parts appliquées (rouge, vert, bleu) : ramenées à 100 % si normalisé (une somme
+    /// presque nulle reste telle quelle).
+    pub fn weights(self) -> [f32; 3] {
+        let sum = self.sum();
+        let k = if self.normalise && sum.abs() > 1e-3 {
+            1.0 / sum
+        } else {
+            1.0
+        };
+        [self.red * k, self.green * k, self.blue * k]
+    }
+
+    /// Même mélange (aux arrondis près), normalisé ou non.
+    pub fn same_mix(self, other: Mixer) -> bool {
+        let close = |a: f32, b: f32| (a - b).abs() < 5e-4;
+        close(self.red, other.red) && close(self.green, other.green) && close(self.blue, other.blue)
+    }
+
+    /// Le préréglage qui a ce mélange, s'il y en a un.
+    pub fn preset_name(self) -> Option<&'static str> {
+        Self::PRESETS
+            .into_iter()
+            .find(|p| Mixer::preset(p).is_some_and(|m| m.same_mix(self)))
     }
 }
 
@@ -172,8 +272,10 @@ pub struct Layers {
     /// Correction : base commune (exposition harmonisée, balance neutre), propre à
     /// l'image.
     pub correction: Adjust,
-    /// Décalage créatif, le même pour la série.
-    pub creative: Adjust,
+    /// Décalage créatif, le même pour la série, s'il y en a un (case de l'interface,
+    /// comme le noir et blanc).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub creative: Option<Adjust>,
     /// Noir et blanc, s'il y en a un.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mono: Option<Mixer>,
@@ -182,12 +284,12 @@ pub struct Layers {
 impl Layers {
     /// Exposition et balance au total (correction puis décalage créatif).
     pub fn total(&self) -> Adjust {
-        self.correction.then(self.creative)
+        self.correction.then(self.creative.unwrap_or_default())
     }
 
     /// Vrai si l'image n'a aucun réglage.
     pub fn is_none(&self) -> bool {
-        self.total().is_none() && self.mono.is_none()
+        self.correction.is_none() && self.creative.is_none() && self.mono.is_none()
     }
 
     /// Éléments de `tri:Adjust` : un seul, en JSON ; aucun sans réglage.
@@ -231,6 +333,19 @@ pub fn write(
         before,
         after,
     })
+}
+
+/// Couleur de l'éclairage de la prise de vue de `image` (sRGB linéaire, vert = 1), base
+/// de ses kelvins : lue par LibRaw pour un RAW (dès l'ouverture, sans décompresser),
+/// [`kelvin::D65`] pour une image plate ou un RAW sans balance connue.
+pub fn shot_white(image: &Path, kind: crate::media::MediaKind) -> [f32; 3] {
+    if kind != crate::media::MediaKind::Raw {
+        return kelvin::D65;
+    }
+    crate::raw::RawFile::open(image)
+        .ok()
+        .and_then(|raw| raw.as_shot_white())
+        .unwrap_or(kelvin::D65)
 }
 
 /// Courbe d'une image 8 bits selon sa source : un rendu LibRaw (aperçu standard ou 1:1 d'un
@@ -361,13 +476,14 @@ pub fn apply_bitmap(bitmap: &mut Bitmap, transfer: Transfer, adjust: Adjust, mon
     let out = transfer.to_coded();
     let k = adjust.exposure.exp2();
     let (kr, kg, kb) = (k * adjust.gains.red, k, k * adjust.gains.blue);
+    let mono = mono.map(Mixer::weights);
     for px in bitmap.data.as_chunks_mut::<3>().0 {
         let r = lin[px[0] as usize] * kr;
         let g = lin[px[1] as usize] * kg;
         let b = lin[px[2] as usize] * kb;
         match mono {
-            Some(m) => {
-                let y = encode(&out, m.red * r + m.green * g + m.blue * b);
+            Some([mr, mg, mb]) => {
+                let y = encode(&out, mr * r + mg * g + mb * b);
                 *px = [y, y, y];
             }
             None => {
@@ -500,7 +616,10 @@ pub fn apply_to(
     // Décalage créatif et noir et blanc d'abord : ils comptent dans la mesure.
     out.creative = match modes.creative {
         Mode::Absolute | Mode::Harmonise => reference.creative,
-        Mode::Offset => target.creative.then(reference.creative),
+        Mode::Offset => match (target.creative, reference.creative) {
+            (Some(t), Some(r)) => Some(t.then(r)),
+            (t, r) => t.or(r),
+        },
         Mode::Keep => target.creative,
     };
     if modes.mono != Mode::Keep {
@@ -547,6 +666,21 @@ pub fn apply_to(
     out
 }
 
+/// Exposition automatique : la correction d'exposition qui amène la luminance médiane de
+/// l'image (sans réglage, sa balance corrigée) à `target` (lumière linéaire, 0,18 : le gris
+/// moyen des posemètres).
+pub fn auto_exposure(base: &Base, gains: Gains, target: f32) -> f32 {
+    let have = measure_adjusted(
+        base,
+        Adjust {
+            exposure: 0.0,
+            gains,
+        },
+        None,
+    );
+    (target.max(1e-4) / have.luminance).log2()
+}
+
 /// Le rapport d'une image : les valeurs à reporter à la main dans un logiciel de
 /// développement (première étape, avant d'écrire dans leurs formats).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -557,29 +691,34 @@ pub struct Report {
     pub creative_exposure: f32,
     /// Exposition totale à reporter (IL).
     pub exposure: f32,
+    /// Balance de la prise de vue : kelvins et teinte ([`kelvin`]).
+    pub shot_kelvin: (f32, f32),
+    /// Balance totale (correction puis décalage créatif) : kelvins et teinte.
+    pub kelvin: (f32, f32),
     /// Balance totale : chaleur (IL, log₂ rouge / bleu ; positif : plus chaud).
     pub warmth: f32,
     /// Balance totale : teinte (IL ; positif : magenta, négatif : vert).
     pub tint: f32,
     /// Gains totaux.
     pub gains: Gains,
-    /// Mélange du noir et blanc, en pour cent (rouge, vert, bleu).
+    /// Mélange du noir et blanc appliqué, en pour cent (rouge, vert, bleu).
     pub mixer: Option<[f32; 3]>,
 }
 
-/// Le rapport de `layers`.
-pub fn report(layers: &Layers) -> Report {
+/// Le rapport de `layers`, pour une image prise sous un éclairage de couleur `shot`
+/// ([`kelvin::D65`] sans données du boîtier).
+pub fn report(layers: &Layers, shot: [f32; 3]) -> Report {
     let total = layers.total();
     Report {
         correction_exposure: layers.correction.exposure,
-        creative_exposure: layers.creative.exposure,
+        creative_exposure: layers.creative.unwrap_or_default().exposure,
         exposure: total.exposure,
+        shot_kelvin: kelvin::of_gains(shot, Gains::NONE),
+        kelvin: kelvin::of_gains(shot, total.gains),
         warmth: total.gains.warmth(),
         tint: total.gains.tint(),
         gains: total.gains,
-        mixer: layers
-            .mono
-            .map(|m| [m.red * 100.0, m.green * 100.0, m.blue * 100.0]),
+        mixer: layers.mono.map(|m| m.weights().map(|v| v * 100.0)),
     }
 }
 
@@ -721,8 +860,13 @@ mod tests {
             },
             None,
         );
-        let mut ref_layers = Layers::default();
-        ref_layers.creative.exposure = 0.3;
+        let ref_layers = Layers {
+            creative: Some(Adjust {
+                exposure: 0.3,
+                ..Adjust::default()
+            }),
+            ..Layers::default()
+        };
         let out = apply_to(
             &ref_layers,
             &base(&reference),
@@ -849,15 +993,77 @@ mod tests {
                 exposure: 1.0,
                 gains: Gains::from_warmth_tint(-0.2, 0.0),
             },
-            creative: Adjust {
+            creative: Some(Adjust {
                 exposure: 0.3,
                 gains: Gains::from_warmth_tint(0.1, 0.0),
-            },
+            }),
             mono: None,
         };
-        let r = report(&layers);
+        let r = report(&layers, kelvin::D65);
         assert!(close(r.exposure, 1.3, 1e-5));
         assert!(close(r.warmth, -0.1, 1e-4));
         assert_eq!(r.mixer, None);
+        assert!((r.shot_kelvin.0 - 6504.0).abs() < 60.0, "{r:?}");
+        assert!(
+            r.kelvin.0 < r.shot_kelvin.0,
+            "cooler overall: fewer kelvins"
+        );
+    }
+
+    #[test]
+    fn a_normalised_mix_keeps_the_brightness() {
+        let mut mixer = Mixer::preset("orange").unwrap();
+        mixer.red *= 2.0;
+        let w = mixer.weights();
+        assert!(close(w.iter().sum::<f32>(), 1.0, 1e-5), "{w:?}");
+        mixer.normalise = false;
+        assert!(mixer.weights()[0] > 1.0);
+        assert_eq!(
+            Mixer::preset("yellow").unwrap().preset_name(),
+            Some("yellow")
+        );
+        assert!(mixer.preset_name().is_none());
+        // Écrit seulement quand il est coupé, relu à l'identique.
+        let json = serde_json::to_string(&mixer).unwrap();
+        assert!(json.contains("normalise"), "{json}");
+        assert_eq!(serde_json::from_str::<Mixer>(&json).unwrap(), mixer);
+        let on = Mixer::default();
+        let json = serde_json::to_string(&on).unwrap();
+        assert!(!json.contains("normalise"), "{json}");
+        assert_eq!(serde_json::from_str::<Mixer>(&json).unwrap(), on);
+    }
+
+    #[test]
+    fn auto_exposure_brings_the_median_to_mid_grey() {
+        let dark = flat(4, 4, [40, 40, 40]);
+        let ev = auto_exposure(&base(&dark), Gains::NONE, 0.18);
+        let mut fixed = dark.clone();
+        apply_bitmap(
+            &mut fixed,
+            SRGB,
+            Adjust {
+                exposure: ev,
+                ..Adjust::default()
+            },
+            None,
+        );
+        let y = measure(&fixed, SRGB, None).luminance;
+        assert!(ev > 0.0 && close(y, 0.18, 0.01), "{ev} {y}");
+    }
+
+    #[test]
+    fn a_creative_offset_without_values_is_kept() {
+        // Case cochée, curseurs à zéro : gardé (l'interface montre la case cochée).
+        let layers = Layers {
+            creative: Some(Adjust::default()),
+            ..Layers::default()
+        };
+        assert!(!layers.is_none());
+        let items = Layers::items(Some(&layers));
+        assert_eq!(Layers::from_items(&items), Some(layers));
+        // Ancien format : décalage créatif sans Option.
+        let old = r#"{"correction":{"exposure":0.5},"creative":{"exposure":0.25}}"#;
+        let read = Layers::from_items(&[old.to_string()]).unwrap();
+        assert_eq!(read.creative.unwrap().exposure, 0.25);
     }
 }

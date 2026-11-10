@@ -553,6 +553,21 @@ keep = 3
 # pour reproduire un problème à la demande. Volumineux, à couper ensuite.
 trace = false
 
+[adjust]
+# Réglages de visualisation (section « Réglages » du panneau de droite, tri --adjust).
+# Exposition automatique : luminance médiane visée, en lumière linéaire (0.18 : le gris
+# moyen des posemètres ; plus haut, des images plus claires).
+auto_exposure_target = 0.18
+# Préréglages de balance des blancs, en kelvins (teinte nulle). Les kelvins de tri sont
+# proches de ceux des logiciels de développement, pas identiques (chacun a son modèle du
+# boîtier).
+daylight = 5500
+cloudy = 6500
+shade = 7500
+tungsten = 2850
+fluorescent = 3800
+flash = 5500
+
 [gui]
 # "dark", "light", "system" ou "neutral" (gris neutre, façon Lightroom : panneaux gris
 # foncé, fond central gris neutre, qui ne fausse pas le jugement des images ; couleurs :

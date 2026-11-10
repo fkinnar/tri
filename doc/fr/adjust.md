@@ -17,7 +17,7 @@ Les réglages d'une image (`Layers`) sont des couches, qu'on peut refaire sépar
 | Couche | Rôle | Part vers les autres images (mode par défaut) |
 |---|---|---|
 | `correction` (exposition, balance) | ramener l'image à une base commune | **harmonisée** : calculée pour chaque image |
-| `creative` (exposition, balance) | l'intention, la même pour la série | **copiée** (le même décalage) |
+| `creative` (exposition, balance), facultatif | l'intention, la même pour la série | **copiée** (le même décalage) |
 | `mono` (mélangeur) | noir et blanc | **copié** |
 
 Trois modes (`Mode`) peuvent être forcés couche par couche (`Modes`) :
@@ -30,14 +30,49 @@ Trois modes (`Mode`) peuvent être forcés couche par couche (`Modes`) :
 ## Valeurs
 
 - **Exposition** en IL.
-- **Balance des blancs** en gains rouge et bleu (`Gains`), relatifs à la balance de base de
-  l'image, le vert servant de référence. Pour les curseurs et le rapport : **chaleur**
-  (log₂ rouge / bleu, positif = plus chaud) et **teinte** (positif = magenta). Pas de
-  kelvins : chaque logiciel les calcule avec son propre modèle du boîtier ; un écart par
-  rapport à la prise de vue se reporte mieux.
-- **Mélangeur** : part du rouge, du vert, du bleu (1,0 = 100 %), somme libre. Préréglages
-  façon filtres colorés : `neutral` (luminance Rec. 709), `red`, `orange`, `yellow`,
-  `green`, `blue`.
+- **Balance des blancs** enregistrée en gains rouge et bleu (`Gains`), relatifs à la
+  balance de la prise de vue, le vert servant de référence. Montrée et tapée en
+  **kelvins et teinte** pour la correction (voir plus bas) ; le décalage créatif garde
+  **chaleur** (log₂ rouge / bleu, positif = plus chaud) et **teinte** (positif =
+  magenta), relatives.
+- **Mélangeur** : part du rouge, du vert, du bleu (1,0 = 100 %). **Normalisé** par
+  défaut : les parts sont ramenées à une somme de 100 % à l'application, déplacer un
+  curseur ne change pas la luminosité (`normalise`, écrit dans le sidecar seulement quand
+  il est coupé). Préréglages façon filtres colorés : `neutral` (luminance Rec. 709),
+  `red`, `orange`, `yellow`, `green`, `blue`.
+
+## Kelvins (`adjust::kelvin`)
+
+Retour du 10/11/2026 : la chaleur relative ne parlait pas ; on tape une température comme
+dans un logiciel de développement. Les kelvins ne sont qu'une **présentation** des gains
+enregistrés :
+
+- un éclairage (K, teinte) est un point du plan CIE 1960 (u, v) : le lieu de Planck à K
+  (approximation de Krystek), décalé perpendiculairement de `teinte / 3000` (Duv ;
+  positif : vers le vert, donc l'image vire au magenta, comme dans Lightroom) ;
+- sa couleur en sRGB linéaire est celle d'un blanc éclairé par lui, dans un rendu
+  équilibré pour D65 ;
+- l'image montrée est équilibrée pour l'éclairage de la prise de vue, de couleur `shot` :
+  pour un RAW, la neutre du boîtier (`1 / cam_mul`) ramenée à la balance « lumière du
+  jour » de LibRaw (`pre_mul`, D65) puis passée par `rgb_cam`
+  (`RawFile::as_shot_white`, lue à l'ouverture, sans décompresser) ; D65 supposé pour une
+  image plate. Équilibrer pour un autre éclairage `W`, c'est multiplier chaque canal par
+  `shot / W` (von Kries dans l'espace de sortie), ramené au vert.
+
+Approximation assumée : chaque logiciel calcule ses kelvins avec son propre modèle du
+boîtier ; ceux de tri en sont proches, pas identiques (sur un RAF X-T4 en balance auto,
+environ 5 970 K avec une teinte verte, cohérent avec la table de températures du
+boîtier).
+
+Préréglages (`[adjust]`, teinte nulle) : lumière du jour 5 500 K, nuageux 6 500, ombre
+7 500, tungstène 2 850, fluorescent 3 800, flash 5 500 ; plus « telle que prise » (aucun
+gain) et « auto » (monde gris).
+
+## Exposition automatique
+
+`auto_exposure` : la correction qui amène la luminance médiane de l'image (sa balance
+corrigée, sans les autres réglages) à `[adjust] auto_exposure_target` (0,18, le gris
+moyen des posemètres).
 
 ## Où ils s'appliquent
 
@@ -94,12 +129,17 @@ logiciels de développement : on reporte ces valeurs à la main.
 Section **« Réglages »** du panneau de droite (en bas, après les EXIF ; grille et plein
 écran), pour l'image courante (`gui/src/app/adjust.rs`) :
 
-- **Correction** : exposition, chaleur, teinte ; « Neutraliser la balance » (monde gris,
-  sur la vignette) ; en plein écran, **« Pipette »** puis un clic sur une zone qui devrait
-  être grise (`[gui] adjust_eyedropper_size`, 4 % de l'image).
-- **Décalage créatif** : exposition, chaleur, teinte.
-- **Noir et blanc** : case, préréglages (neutre, filtres rouge, orange, jaune, vert, bleu),
-  rouge / vert / bleu en %.
+- **Correction** : exposition et **« Auto »** ; température (K) et teinte ; la liste des
+  balances (telle que prise, auto sur toute l'image, préréglages avec leurs kelvins) ;
+  **« Pipette »** : en plein écran, un clic sur une zone qui devrait être grise (`[gui]
+  adjust_eyedropper_size`, 4 % de l'image) ou un **cadre tracé** pour une balance auto
+  sur cette partie de l'image ; depuis la grille, le bouton ouvre le plein écran. Toutes
+  les valeurs se **tapent** : clic sur le champ à côté du curseur (exposition au centième
+  d'IL, kelvins à l'unité).
+- **Décalage créatif** : case, puis exposition, chaleur, teinte. Décochée puis recochée
+  dans la session : ses valeurs reviennent.
+- **Noir et blanc** : case, filtres en boutons (neutre, rouge, orange, jaune, vert, bleu),
+  rouge / vert / bleu en %, **« Normalisé »** et le total du mélange.
 - Le **rapport** sous les curseurs (exposition totale, correction, créatif ; balance ;
   mélange), et **« Copier les valeurs »**.
 - **« Appliquer à la sélection »** : les réglages de l'image courante vers les autres
@@ -123,12 +163,13 @@ Actions sans raccourci par défaut, dans la palette : `core.adjust.before_after`
 ## Ligne de commande
 
 ```
-tri --adjust <référence> <image>... --to <dossier> [--ev IL] [--neutral auto|x,y,l,h]
-    [--creative-ev IL] [--warmth IL] [--tint IL] [--mono <préréglage>|r,v,b] [--embedded]
+tri --adjust <référence> <image>... --to <dossier> [--ev IL|auto] [--neutral auto|x,y,l,h]
+    [--kelvin K[,teinte]|<préréglage>] [--creative-ev IL] [--warmth IL] [--tint IL]
+    [--mono <préréglage>|r,v,b] [--embedded]
 ```
 
-La première image est la référence, réglée par les options (`--ev` et `--neutral` : sa
-correction ; `--creative-ev`, `--warmth`, `--tint` : le décalage créatif ; `--mono` : un
+La première image est la référence, réglée par les options (`--ev`, `--neutral` et
+`--kelvin` : sa correction, `--ev auto` l'exposition automatique ; `--creative-ev`, `--warmth`, `--tint` : le décalage créatif ; `--mono` : un
 préréglage ou trois pourcentages). Les suivantes reçoivent ses réglages en mode par
 défaut. Chaque image est écrite en `<nom>-adjusted.jpg` dans `--to` (jamais à côté des
 photos), à la taille des aperçus (`--side`), et son rapport est affiché. Un RAW est rendu
@@ -144,7 +185,10 @@ tri --adjust DSCF0101.RAF DSCF0102.RAF DSCF0103.RAF --to /tmp/essai \
 
 ## Tests
 
-`src/adjust.rs` : un IL double la lumière (sRGB et BT.709), courbes réversibles,
+`src/adjust/kelvin.rs` : D65 ≈ 6 500 K, kelvins et couleurs inverses, plus de kelvins
+réchauffent l'image et une teinte positive ajoute du magenta, gains ↔ kelvins.
+`src/adjust/mod.rs` : un IL double la lumière (sRGB et BT.709), courbes réversibles,
 mélangeur, chaleur / teinte, pipette sur une zone grise, harmonisation d'une image à
 -1 IL, balance alignée sur la référence corrigée, série en noir et blanc mesurée après le
-mélange, modes forcés, rapport. `tests/cli.rs` : une copie à -1 IL reçoit environ +1 IL.
+mélange, modes forcés, rapport, mélange normalisé, exposition automatique, décalage
+créatif gardé coché sans valeurs. `tests/cli.rs` : une copie à -1 IL reçoit environ +1 IL.

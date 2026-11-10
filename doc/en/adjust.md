@@ -18,7 +18,7 @@ An image's adjustments (`Layers`) are layers that can be redone separately:
 | Layer | Role | Goes to other images as (default mode) |
 |---|---|---|
 | `correction` (exposure, balance) | bring the image to a common base | **harmonised**: computed for each image |
-| `creative` (exposure, balance) | the intent, the same for the series | **copied** (the same offset) |
+| `creative` (exposure, balance), optional | the intent, the same for the series | **copied** (the same offset) |
 | `mono` (mixer) | black and white | **copied** |
 
 Modes (`Mode`) can be forced layer by layer (`Modes`):
@@ -31,13 +31,43 @@ Modes (`Mode`) can be forced layer by layer (`Modes`):
 ## Values
 
 - **Exposure** in EV.
-- **White balance** as red and blue gains (`Gains`), relative to the image's base
-  balance, green being the reference. For sliders and the report: **warmth** (log₂ red /
-  blue, positive = warmer) and **tint** (positive = magenta). No Kelvin: each program
-  computes it with its own camera model; a difference from the as-shot balance carries
-  over better.
-- **Mixer**: share of red, green, blue (1.0 = 100 %), free sum. Colour-filter presets:
-  `neutral` (Rec. 709 luminance), `red`, `orange`, `yellow`, `green`, `blue`.
+- **White balance** stored as red and blue gains (`Gains`), relative to the image's
+  as-shot balance, green being the reference. Shown and typed in **kelvins and tint**
+  for the correction (see below); the creative offset keeps **warmth** (log₂ red / blue,
+  positive = warmer) and **tint** (positive = magenta), relative.
+- **Mixer**: share of red, green, blue (1.0 = 100 %). **Normalised** by default: the
+  shares are brought back to a sum of 100 % when applied, so moving a slider doesn't
+  change the brightness (`normalise`, written in the sidecar only when switched off).
+  Colour-filter presets: `neutral` (Rec. 709 luminance), `red`, `orange`, `yellow`,
+  `green`, `blue`.
+
+## Kelvins (`adjust::kelvin`)
+
+Feedback of 2026-11-10: relative warmth didn't speak; a temperature is typed as in a
+development program. Kelvins are only a **presentation** of the stored gains:
+
+- an illuminant (K, tint) is a point of the CIE 1960 (u, v) plane: the Planckian locus at
+  K (Krystek's approximation), moved perpendicularly by `tint / 3000` (Duv; positive:
+  towards green, so the image turns magenta, as in Lightroom);
+- its colour in linear sRGB is that of a white lit by it, in a D65-balanced render;
+- the image shown is balanced for the as-shot illuminant, of colour `shot`: for a RAW,
+  the camera neutral (`1 / cam_mul`) brought to LibRaw's daylight balance (`pre_mul`,
+  D65) then through `rgb_cam` (`RawFile::as_shot_white`, read on opening, no unpacking);
+  D65 assumed for a flat image. Balancing for another illuminant `W` multiplies each
+  channel by `shot / W` (von Kries in the output space), normalised to green.
+
+Accepted approximation: every program computes its kelvins with its own camera model;
+tri's are close, not identical (on an X-T4 RAF in auto WB, about 5,970 K with a green
+tint, consistent with the camera's own temperature table).
+
+Presets (`[adjust]`, zero tint): daylight 5,500 K, cloudy 6,500, shade 7,500, tungsten
+2,850, fluorescent 3,800, flash 5,500; plus "as shot" (no gains) and "auto" (grey world).
+
+## Automatic exposure
+
+`auto_exposure`: the correction that brings the image's median luminance (its balance
+corrected, without the other adjustments) to `[adjust] auto_exposure_target` (0.18,
+the mid grey of light meters).
 
 ## Where they apply
 
@@ -94,12 +124,17 @@ these values are copied by hand.
 **"Adjustments"** section of the right panel (at the bottom, after EXIF; grid and full
 screen), for the current image (`gui/src/app/adjust.rs`):
 
-- **Correction**: exposure, warmth, tint; "Neutralise the balance" (grey world, on the
-  thumbnail); in full screen, **"Eyedropper"** then a click on a zone that should be grey
-  (`[gui] adjust_eyedropper_size`, 4 % of the image).
-- **Creative offset**: exposure, warmth, tint.
-- **Black and white**: checkbox, presets (neutral, red, orange, yellow, green, blue
-  filters), red / green / blue in %.
+- **Correction**: exposure and **"Auto"**; temperature (K) and tint; the white balance
+  list (as shot, auto on the whole image, presets with their kelvins); **"Eyedropper"**:
+  in full screen, a click on a zone that should be grey (`[gui]
+  adjust_eyedropper_size`, 4 % of the image) or a **frame drawn** for an auto balance on
+  that part of the image; from the grid, the button opens the full screen. Every value
+  can be **typed**: click the field next to the slider (exposure to the hundredth of an
+  EV, kelvins to the unit).
+- **Creative offset**: checkbox, then exposure, warmth, tint. Unchecked then checked
+  again in the session: its values come back.
+- **Black and white**: checkbox, filter buttons (neutral, red, orange, yellow, green,
+  blue), red / green / blue in %, **"Normalised"** and the total of the mix.
 - The **report** under the sliders (total exposure, correction, creative; balance; mix),
   and **"Copy the values"**.
 - **"Apply to selection"**: the current image's adjustments to the other selected images,
@@ -122,12 +157,13 @@ Actions without a default shortcut, in the palette: `core.adjust.before_after`,
 ## Command line
 
 ```
-tri --adjust <reference> <image>... --to <folder> [--ev EV] [--neutral auto|x,y,w,h]
-    [--creative-ev EV] [--warmth EV] [--tint EV] [--mono <preset>|r,g,b] [--embedded]
+tri --adjust <reference> <image>... --to <folder> [--ev EV|auto] [--neutral auto|x,y,w,h]
+    [--kelvin K[,tint]|<preset>] [--creative-ev EV] [--warmth EV] [--tint EV]
+    [--mono <preset>|r,g,b] [--embedded]
 ```
 
-The first image is the reference, set by the options (`--ev` and `--neutral`: its
-correction; `--creative-ev`, `--warmth`, `--tint`: the creative offset; `--mono`: a
+The first image is the reference, set by the options (`--ev`, `--neutral` and
+`--kelvin`: its correction, `--ev auto` the automatic exposure; `--creative-ev`, `--warmth`, `--tint`: the creative offset; `--mono`: a
 preset or three percentages). The following ones get its adjustments in the default
 mode. Each image is written as `<name>-adjusted.jpg` in `--to` (never next to the
 photos), at the preview size (`--side`), and its report is printed. A RAW is rendered by
@@ -143,7 +179,10 @@ tri --adjust DSCF0101.RAF DSCF0102.RAF DSCF0103.RAF --to /tmp/try \
 
 ## Tests
 
-`src/adjust.rs`: one EV doubles the light (sRGB and BT.709), reversible curves, mixer,
+`src/adjust/kelvin.rs`: D65 ≈ 6,500 K, kelvins and colours inverse, more kelvins warm the
+image and a positive tint adds magenta, gains ↔ kelvins. `src/adjust/mod.rs`: one EV
+doubles the light (sRGB and BT.709), reversible curves, mixer,
 warmth / tint, eyedropper on a grey zone, harmonising an image at -1 EV, balance aligned
 on the corrected reference, black and white series measured after the mix, forced modes,
-report. `tests/cli.rs`: a copy at -1 EV gets about +1 EV.
+report, normalised mix, automatic exposure, creative offset kept when checked without
+values. `tests/cli.rs`: a copy at -1 EV gets about +1 EV.

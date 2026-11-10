@@ -6,16 +6,20 @@
 
 - **Viewing adjustments** (#404): exposure, white balance and black and white (channel
   mixer, colour-filter presets), to compare and cull a series. A new "Adjustments"
-  section in the right panel sets them for the current image: correction, creative
-  offset, black and white, "Neutralise the balance", an eyedropper in full screen, the
-  values to copy into a development software, "Before" to compare, and "Apply to
-  selection" (exposure and balance matched to the current image, one undo step). Stored
+  section in the right panel sets them for the current image: exposure with "Auto",
+  white balance in kelvins and tint (as shot, auto, daylight, cloudy, shade, tungsten,
+  fluorescent and flash presets; values can be typed), an eyedropper (click a grey zone,
+  or draw a frame for an auto balance on that part), a creative offset and a black and
+  white under checkboxes (filter buttons, normalised mix), the values to copy into a
+  development software, "Before" to compare, and "Apply to selection" (exposure and
+  balance matched to the current image, one undo step). Stored
   in the sidecar under `tri:`; shown on thumbnails and large images.
   `tri --adjust <reference> <images>… --to <folder>` sets the reference and applies its
   adjustments to the others: exposure and balance matched to the reference (a photo at
   -1 EV gets about +1 EV), creative offset and black and white copied. It writes the
-  adjusted JPEGs and prints the values to copy into a development software. On a RAW,
-  exposure is applied to the sensor data (#137).
+  adjusted JPEGs and prints the values to copy into a development software (`--ev auto`,
+  `--kelvin`). On a RAW, exposure is applied to the sensor data. New `[adjust]` section:
+  automatic exposure target, kelvins of the presets (#137).
 - **Application log** (#403): errors keep a short message in the status bar, and their
   full detail goes to `tri.log` in the data folder: for a development software that
   fails, the image, the command, the exit code and all its messages; also failed

@@ -368,6 +368,19 @@ impl RawFile {
         }
     }
 
+    /// Couleur de l'éclairage de la prise de vue en sRGB linéaire (vert = 1), dès
+    /// l'ouverture : la neutre du boîtier (`1 / cam_mul`), ramenée à la balance
+    /// « lumière du jour » de LibRaw (`pre_mul`, D65) puis passée par `rgb_cam`. Base des
+    /// kelvins des réglages ([`crate::adjust::kelvin`]). `None` sans balance connue.
+    pub fn as_shot_white(&self) -> Option<[f32; 3]> {
+        let mut info = std::mem::MaybeUninit::<ffi::RawInfo>::uninit();
+        let info = unsafe {
+            ffi::tri_libraw_raw_info(self.ptr, info.as_mut_ptr());
+            info.assume_init()
+        };
+        shot_white(&info.cam_mul, &info.pre_mul, &info.rgb_cam)
+    }
+
     /// Données brutes du capteur : décompresse le RAW (`libraw_unpack`, sans
     /// dématriçage) et donne accès aux valeurs de la mosaïque, à leur profondeur réelle
     /// (12, 14 ou 16 bits selon le boîtier), avec les niveaux de noir et de blanc. Base de
@@ -625,6 +638,18 @@ fn luma_weights(info: &ffi::RawInfo) -> [f32; 3] {
     let sum: f32 = mixed.iter().sum();
     let sum = if sum.abs() > 1e-6 { sum } else { 1.0 };
     std::array::from_fn(|c| wb[c] / wb[1] * mixed[c] / sum)
+}
+
+/// Voir [`RawFile::as_shot_white`].
+fn shot_white(cam_mul: &[f32; 4], pre_mul: &[f32; 4], rgb_cam: &[[f32; 4]; 3]) -> Option<[f32; 3]> {
+    let usable = |m: &[f32; 4]| (0..3).all(|c| m[c] > 0.0 && m[c].is_finite());
+    if !usable(cam_mul) || !usable(pre_mul) || rgb_cam.iter().flatten().all(|&v| v == 0.0) {
+        return None;
+    }
+    let neutral: [f32; 3] = std::array::from_fn(|c| pre_mul[c] / cam_mul[c]);
+    let rgb: [f32; 3] =
+        std::array::from_fn(|row| (0..3).map(|c| rgb_cam[row][c] * neutral[c]).sum());
+    (rgb.iter().all(|&v| v > 0.0 && v.is_finite())).then(|| rgb.map(|v| v / rgb[1]))
 }
 
 /// Plus petit côté de bloc (diviseur de la période) dont chaque bloc aligné contient les

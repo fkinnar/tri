@@ -6,19 +6,30 @@
 //! appliqués aux textures ([`crate::adjust_view`]).
 
 use super::*;
-use tri::adjust::{Gains, Layers, Mixer};
+use tri::adjust::{Gains, Layers, Mixer, kelvin};
 
-/// Réglages lus en fond : l'image et ce que son sidecar contient.
-pub(super) type AdjustRead = (PathBuf, Option<Layers>);
+/// Réglages lus en fond : l'image, ce que son sidecar contient et la couleur de
+/// l'éclairage de sa prise de vue (base des kelvins).
+pub(super) type AdjustRead = (PathBuf, Option<Layers>, [f32; 3]);
 
-/// Bornes des curseurs.
+/// Bornes des curseurs (limites du modèle, pas des réglages de l'utilisateur).
 const EXPOSURE_RANGE: std::ops::RangeInclusive<f32> = -3.0..=3.0;
+const KELVIN_RANGE: std::ops::RangeInclusive<f32> = 2000.0..=12000.0;
+const KELVIN_TINT_RANGE: std::ops::RangeInclusive<f32> = -150.0..=150.0;
 const WARMTH_RANGE: std::ops::RangeInclusive<f32> = -1.5..=1.5;
 const TINT_RANGE: std::ops::RangeInclusive<f32> = -0.5..=0.5;
 const MIXER_RANGE: std::ops::RangeInclusive<f32> = -100.0..=200.0;
 
-/// Préréglages du noir et blanc proposés, dans l'ordre de la liste.
-const MIXER_PRESETS: [&str; 6] = ["neutral", "red", "orange", "yellow", "green", "blue"];
+/// Choix de la liste des balances.
+#[derive(Clone, Copy, PartialEq)]
+enum WhiteBalance {
+    /// Telle que prise (réglage du boîtier).
+    AsShot,
+    /// Monde gris sur toute l'image.
+    Auto,
+    /// Un préréglage en kelvins.
+    Preset(&'static str, f32),
+}
 
 impl TriApp {
     /// Réglages connus de `path` (`None` : aucun, ou pas encore lus : la lecture part en
@@ -27,9 +38,15 @@ impl TriApp {
         self.adjust_poll();
         if !self.adjust_known.contains(path) && self.adjust_pending.insert(path.to_path_buf()) {
             let (tx, target) = (self.adjust_read.0.clone(), path.to_path_buf());
+            let kind = self
+                .files
+                .iter()
+                .find(|f| f.path == path)
+                .map_or(tri::media::MediaKind::Flat, |f| f.kind);
             tri::cache::defer_job(format!("adjust:{}", target.display()), move || {
                 let layers = tri::adjust::read(&target).ok().flatten();
-                let _ = tx.send((target, layers));
+                let shot = tri::adjust::shot_white(&target, kind);
+                let _ = tx.send((target, layers, shot));
             });
         }
         self.adjust_map
@@ -43,8 +60,9 @@ impl TriApp {
     /// Réglages arrivés de la lecture en fond : retenus, et les images concernées
     /// rechargées.
     pub(super) fn adjust_poll(&mut self) {
-        while let Ok((path, layers)) = self.adjust_read.1.try_recv() {
+        while let Ok((path, layers, shot)) = self.adjust_read.1.try_recv() {
             self.adjust_pending.remove(&path);
+            self.adjust_shot.insert(path.clone(), shot);
             if !self.adjust_known.insert(path.clone()) {
                 continue; // déjà connus (posés dans la session entre-temps)
             }
@@ -65,6 +83,9 @@ impl TriApp {
         self.adjust_pending.clear();
         self.adjust_read = mpsc::channel();
         self.adjust_dirty = None;
+        self.adjust_shot.clear();
+        self.adjust_creative_memory.clear();
+        self.adjust_mono_memory.clear();
         self.adjust_map
             .write()
             .unwrap_or_else(|e| e.into_inner())
@@ -204,7 +225,7 @@ impl TriApp {
         })
     }
 
-    /// « Neutraliser » : la balance de la correction rend la dominante de l'image neutre
+    /// Balance « auto » : la balance de la correction rend la dominante de l'image neutre
     /// (monde gris, sur la vignette).
     fn adjust_neutralise(&mut self, path: &Path, mut layers: Layers) -> Option<Layers> {
         let base = self.adjust_base(path)?;
@@ -213,24 +234,49 @@ impl TriApp {
         Some(layers)
     }
 
-    /// Pipette : la balance de la correction rend neutre la zone autour de `point` (en
-    /// fractions de l'image), mesurée sur la vignette sans réglage.
-    pub(super) fn adjust_pick(&mut self, path: &Path, point: egui::Pos2) {
-        let Some(base) = self.adjust_base(path) else {
-            self.notice = Some((t!("adjust-apply-wait"), false));
-            return;
-        };
-        let half = self.gui.adjust_eyedropper_size / 2.0;
-        let zone = tri::adjust::Zone {
+    /// Couleur de l'éclairage de la prise de vue de `path` (D65 tant qu'elle n'est pas
+    /// lue, ou pour une image plate).
+    fn adjust_shot_of(&self, path: &Path) -> [f32; 3] {
+        self.adjust_shot.get(path).copied().unwrap_or(kelvin::D65)
+    }
+
+    /// Zone de la pipette autour de `point` (en fractions de l'image) : un carré de
+    /// `[gui] adjust_eyedropper_size`.
+    pub(super) fn adjust_point_zone(&self, point: egui::Pos2) -> tri::adjust::Zone {
+        let half = (self.gui.adjust_eyedropper_size / 2.0).clamp(0.001, 0.5);
+        tri::adjust::Zone {
             x: (point.x - half).clamp(0.0, 1.0 - 2.0 * half),
             y: (point.y - half).clamp(0.0, 1.0 - 2.0 * half),
             w: 2.0 * half,
             h: 2.0 * half,
+        }
+    }
+
+    /// Pipette : la balance de la correction rend neutre `zone` (un point cliqué : une zone
+    /// grise ; une zone tracée : sa moyenne, « auto » sur cette partie de l'image), mesurée
+    /// sur la vignette sans réglage.
+    pub(super) fn adjust_pick(&mut self, path: &Path, zone: tri::adjust::Zone) {
+        let Some(base) = self.adjust_base(path) else {
+            self.notice = Some((t!("adjust-apply-wait"), false));
+            return;
         };
         let cast = tri::adjust::measure(&base.bitmap, base.transfer, Some(zone)).cast;
         let mut layers = self.adjust_layers(path).unwrap_or_default();
         layers.correction.gains = tri::adjust::neutral(cast);
         self.save_adjustments(vec![(path.to_path_buf(), Some(layers))]);
+    }
+
+    /// Exposition automatique de la correction (médiane vers `[adjust]
+    /// auto_exposure_target`), mesurée sur la vignette.
+    fn adjust_auto_exposure(&mut self, path: &Path, mut layers: Layers) -> Option<Layers> {
+        let base = self.adjust_base(path)?;
+        let ev = tri::adjust::auto_exposure(
+            &base,
+            layers.correction.gains,
+            self.settings.adjust.auto_exposure_target,
+        );
+        layers.correction.exposure = ev.clamp(*EXPOSURE_RANGE.start(), *EXPOSURE_RANGE.end());
+        Some(layers)
     }
 
     /// « Appliquer à la sélection » : les réglages de l'image courante partent vers les
@@ -319,94 +365,168 @@ impl TriApp {
             response.changed()
         };
         let ev = t!("adjust-ev-suffix");
+        let shot = self.adjust_shot_of(&file.path);
+        let mut auto_exposure = false;
+        let mut white_balance = None;
         // Correction.
         ui.label(egui::RichText::new(t!("adjust-correction")).strong());
         egui::Grid::new("adjust_correction")
             .num_columns(2)
             .show(ui, |ui| {
-                edited |= slider(
-                    ui,
-                    t!("adjust-exposure"),
-                    &mut layers.correction.exposure,
-                    EXPOSURE_RANGE,
-                    &ev,
-                    0.0,
-                );
-                let (mut warmth, mut tint) = (
-                    layers.correction.gains.warmth(),
-                    layers.correction.gains.tint(),
-                );
-                let wb = slider(ui, t!("adjust-warmth"), &mut warmth, WARMTH_RANGE, "", 0.0)
-                    | slider(ui, t!("adjust-tint"), &mut tint, TINT_RANGE, "", 0.0);
-                if wb {
-                    layers.correction.gains = Gains::from_warmth_tint(warmth, tint);
+                let name = ui.label(t!("adjust-exposure")).id;
+                let response = ui
+                    .horizontal(|ui| {
+                        let r = labelled_slider(
+                            ui,
+                            name,
+                            &mut layers.correction.exposure,
+                            EXPOSURE_RANGE,
+                            0.01,
+                            2,
+                            &ev,
+                        );
+                        auto_exposure = ui
+                            .small_button(t!("adjust-auto"))
+                            .on_hover_text(t!("adjust-auto-exposure-tip"))
+                            .clicked();
+                        r
+                    })
+                    .inner;
+                ui.end_row();
+                if response.double_clicked_slider(ui) {
+                    layers.correction.exposure = 0.0;
+                    edited = true;
+                } else if response.changed() {
+                    edited = true;
+                }
+                // Balance en kelvins et teinte (présentation des gains relatifs).
+                let (k0, t0) = kelvin::of_gains(shot, layers.correction.gains);
+                let (shot_k, shot_t) = kelvin::of_gains(shot, Gains::NONE);
+                let (mut k, mut tint) = (k0.round(), t0.round());
+                let name = ui.label(t!("adjust-temperature")).id;
+                let rk = labelled_slider_with(ui, name, &mut k, KELVIN_RANGE, 1.0, 0, " K", true);
+                ui.end_row();
+                let name = ui.label(t!("adjust-tint")).id;
+                let rt = labelled_slider(ui, name, &mut tint, KELVIN_TINT_RANGE, 1.0, 0, "");
+                ui.end_row();
+                let mut wb = rk.changed() || rt.changed();
+                if rk.double_clicked_slider(ui) || rt.double_clicked_slider(ui) {
+                    // Double-clic : la balance de la prise de vue.
+                    (k, tint) = (shot_k, shot_t);
+                    layers.correction.gains = Gains::NONE;
+                    edited = true;
+                    wb = false;
+                }
+                if wb && ((k - k0.round()).abs() > 0.5 || (tint - t0.round()).abs() > 0.5) {
+                    layers.correction.gains = kelvin::gains(shot, k, tint);
                     edited = true;
                 }
             });
-        let mut neutralise = false;
         ui.horizontal_wrapped(|ui| {
-            neutralise = ui
-                .button(t!("adjust-neutral"))
-                .on_hover_text(t!("adjust-neutral-tip"))
-                .clicked();
-            // Pipette : en plein écran, là où l'on voit l'image en grand.
-            if self.mode == Mode::View
-                && ui
-                    .selectable_label(self.adjust_eyedropper, t!("adjust-eyedropper"))
-                    .on_hover_text(t!("adjust-eyedropper-tip"))
-                    .clicked()
+            let presets = self.settings.adjust.white_balance_presets();
+            let current = wb_choice(shot, layers.correction.gains, &presets);
+            egui::ComboBox::from_id_salt("adjust_wb_preset")
+                .selected_text(current.map_or_else(|| t!("adjust-wb-custom"), wb_name))
+                .show_ui(ui, |ui| {
+                    let mut choices = vec![WhiteBalance::AsShot, WhiteBalance::Auto];
+                    choices.extend(presets.iter().map(|&(id, k)| WhiteBalance::Preset(id, k)));
+                    for choice in choices {
+                        if ui
+                            .selectable_label(current == Some(choice), wb_name(choice))
+                            .clicked()
+                        {
+                            white_balance = Some(choice);
+                        }
+                    }
+                })
+                .response
+                .on_hover_text(t!("adjust-wb-tip"));
+            // Pipette : dans la grille, ouvre le plein écran, où l'image est en grand.
+            if ui
+                .selectable_label(self.adjust_eyedropper, t!("adjust-eyedropper"))
+                .on_hover_text(t!("adjust-eyedropper-tip"))
+                .clicked()
             {
                 self.adjust_eyedropper = !self.adjust_eyedropper;
+                if self.adjust_eyedropper && self.mode == Mode::Grid {
+                    self.open_view();
+                }
             }
         });
         ui.add_space(4.0);
-        // Décalage créatif.
-        ui.label(egui::RichText::new(t!("adjust-creative")).strong())
-            .on_hover_text(t!("adjust-creative-tip"));
-        egui::Grid::new("adjust_creative")
-            .num_columns(2)
-            .show(ui, |ui| {
-                edited |= slider(
-                    ui,
-                    t!("adjust-exposure"),
-                    &mut layers.creative.exposure,
-                    EXPOSURE_RANGE,
-                    &ev,
-                    0.0,
+        // Décalage créatif : une case, comme le noir et blanc.
+        let mut creative_on = layers.creative.is_some();
+        if ui
+            .checkbox(&mut creative_on, t!("adjust-creative"))
+            .on_hover_text(t!("adjust-creative-tip"))
+            .changed()
+        {
+            if creative_on {
+                layers.creative = Some(
+                    self.adjust_creative_memory
+                        .remove(&file.path)
+                        .unwrap_or_default(),
                 );
-                let (mut cw, mut ct) =
-                    (layers.creative.gains.warmth(), layers.creative.gains.tint());
-                if slider(ui, t!("adjust-warmth"), &mut cw, WARMTH_RANGE, "", 0.0)
-                    | slider(ui, t!("adjust-tint"), &mut ct, TINT_RANGE, "", 0.0)
-                {
-                    layers.creative.gains = Gains::from_warmth_tint(cw, ct);
-                    edited = true;
-                }
-            });
+            } else if let Some(c) = layers.creative.take() {
+                self.adjust_creative_memory.insert(file.path.clone(), c);
+            }
+            edited = true;
+        }
+        if let Some(mut creative) = layers.creative {
+            egui::Grid::new("adjust_creative")
+                .num_columns(2)
+                .show(ui, |ui| {
+                    edited |= slider(
+                        ui,
+                        t!("adjust-exposure"),
+                        &mut creative.exposure,
+                        EXPOSURE_RANGE,
+                        &ev,
+                        0.0,
+                    );
+                    let (mut cw, mut ct) = (creative.gains.warmth(), creative.gains.tint());
+                    if slider(ui, t!("adjust-warmth"), &mut cw, WARMTH_RANGE, "", 0.0)
+                        | slider(ui, t!("adjust-creative-tint"), &mut ct, TINT_RANGE, "", 0.0)
+                    {
+                        creative.gains = Gains::from_warmth_tint(cw, ct);
+                        edited = true;
+                    }
+                });
+            layers.creative = Some(creative);
+        }
         ui.add_space(4.0);
         // Noir et blanc.
         let mut mono = layers.mono.is_some();
         if ui.checkbox(&mut mono, t!("adjust-mono")).changed() {
-            layers.mono = mono.then(Mixer::default);
+            if mono {
+                layers.mono = Some(
+                    self.adjust_mono_memory
+                        .remove(&file.path)
+                        .unwrap_or_default(),
+                );
+            } else if let Some(m) = layers.mono.take() {
+                self.adjust_mono_memory.insert(file.path.clone(), m);
+            }
             edited = true;
         }
         if let Some(mut mixer) = layers.mono {
-            let current = MIXER_PRESETS
-                .iter()
-                .find(|p| Mixer::preset(p) == Some(mixer))
-                .map_or_else(|| t!("adjust-mono-custom"), |p| mixer_name(p));
-            egui::ComboBox::from_id_salt("adjust_mono_preset")
-                .selected_text(current)
-                .show_ui(ui, |ui| {
-                    for p in MIXER_PRESETS {
-                        if ui.selectable_label(false, mixer_name(p)).clicked()
-                            && let Some(m) = Mixer::preset(p)
-                        {
-                            mixer = m;
-                            edited = true;
-                        }
+            // Préréglages en boutons, visibles d'un coup d'œil (retour du 10/11/2026).
+            let current = mixer.preset_name();
+            ui.horizontal_wrapped(|ui| {
+                for p in Mixer::PRESETS {
+                    if ui
+                        .selectable_label(current == Some(p), mixer_name(p))
+                        .clicked()
+                        && let Some(m) = Mixer::preset(p)
+                    {
+                        mixer = Mixer {
+                            normalise: mixer.normalise,
+                            ..m
+                        };
+                        edited = true;
                     }
-                });
+                }
+            });
             let neutral = Mixer::default();
             let mut percent = [mixer.red * 100.0, mixer.green * 100.0, mixer.blue * 100.0];
             let defaults = [neutral.red, neutral.green, neutral.blue].map(|v| v * 100.0);
@@ -429,17 +549,28 @@ impl TriApp {
                         }
                     }
                 });
-            mixer = Mixer {
-                red: percent[0] / 100.0,
-                green: percent[1] / 100.0,
-                blue: percent[2] / 100.0,
-            };
+            mixer.red = percent[0] / 100.0;
+            mixer.green = percent[1] / 100.0;
+            mixer.blue = percent[2] / 100.0;
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .checkbox(&mut mixer.normalise, t!("adjust-mono-normalise"))
+                    .on_hover_text(t!("adjust-mono-normalise-tip"))
+                    .changed()
+                {
+                    edited = true;
+                }
+                ui.weak(t!(
+                    "adjust-mono-total",
+                    total = format!("{:.0}", mixer.sum() * 100.0)
+                ));
+            });
             layers.mono = Some(mixer);
         }
         ui.add_space(6.0);
         // Rapport : les valeurs à reporter dans un logiciel de développement.
         if !layers.is_none() {
-            let report = adjust_report_text(&layers);
+            let report = adjust_report_text(&layers, shot);
             ui.weak(&report);
             if ui
                 .small_button(t!("adjust-copy-report"))
@@ -468,9 +599,33 @@ impl TriApp {
                 .add_enabled(!layers.is_none(), egui::Button::new(t!("adjust-reset")))
                 .clicked();
         });
-        if neutralise && let Some(n) = self.adjust_neutralise(&file.path, layers) {
-            layers = n;
-            edited = true;
+        let mut button = false;
+        match white_balance {
+            Some(WhiteBalance::AsShot) => {
+                layers.correction.gains = Gains::NONE;
+                (edited, button) = (true, true);
+            }
+            Some(WhiteBalance::Preset(_, k)) => {
+                layers.correction.gains = kelvin::gains(shot, k, 0.0);
+                (edited, button) = (true, true);
+            }
+            Some(WhiteBalance::Auto) => match self.adjust_neutralise(&file.path, layers) {
+                Some(n) => {
+                    layers = n;
+                    (edited, button) = (true, true);
+                }
+                None => self.notice = Some((t!("adjust-apply-wait"), false)),
+            },
+            None => {}
+        }
+        if auto_exposure {
+            match self.adjust_auto_exposure(&file.path, layers) {
+                Some(n) => {
+                    layers = n;
+                    (edited, button) = (true, true);
+                }
+                None => self.notice = Some((t!("adjust-apply-wait"), false)),
+            }
         }
         if reset {
             layers = Layers::default();
@@ -479,7 +634,7 @@ impl TriApp {
         if edited && layers != before {
             self.adjust_live(&file.path, layers);
             // Un bouton : enregistré tout de suite ; un curseur : au relâchement.
-            if neutralise || reset {
+            if button || reset {
                 self.adjust_commit(ui.ctx());
             }
         }
@@ -495,7 +650,8 @@ impl TriApp {
 }
 
 /// Un curseur et sa valeur modifiable, tous deux nommés par le libellé `name` (lecteurs
-/// d'écran, tests) : le champ de valeur d'un `Slider` d'egui n'a pas de nom à lui.
+/// d'écran, tests) : le champ de valeur d'un `Slider` d'egui n'a pas de nom à lui. Un clic
+/// sur la valeur permet de la taper.
 fn labelled_slider(
     ui: &mut Ui,
     name: egui::Id,
@@ -505,11 +661,27 @@ fn labelled_slider(
     decimals: usize,
     suffix: &str,
 ) -> egui::Response {
+    labelled_slider_with(ui, name, value, range, step, decimals, suffix, false)
+}
+
+/// [`labelled_slider`], en échelle logarithmique au besoin (kelvins).
+#[allow(clippy::too_many_arguments)]
+fn labelled_slider_with(
+    ui: &mut Ui,
+    name: egui::Id,
+    value: &mut f32,
+    range: std::ops::RangeInclusive<f32>,
+    step: f64,
+    decimals: usize,
+    suffix: &str,
+    logarithmic: bool,
+) -> egui::Response {
     ui.horizontal(|ui| {
         let slider = ui
             .add(
                 egui::Slider::new(value, range.clone())
                     .step_by(step)
+                    .logarithmic(logarithmic)
                     .show_value(false),
             )
             .labelled_by(name);
@@ -521,10 +693,46 @@ fn labelled_slider(
                     .fixed_decimals(decimals)
                     .suffix(suffix),
             )
-            .labelled_by(name);
+            .labelled_by(name)
+            .on_hover_text(t!("adjust-type-value"));
         slider.union(field)
     })
     .inner
+}
+
+/// Balance de la liste qui correspond à `gains` (prise de vue `shot`), s'il y en a une.
+fn wb_choice(
+    shot: [f32; 3],
+    gains: Gains,
+    presets: &[(&'static str, f32)],
+) -> Option<WhiteBalance> {
+    if gains.is_none() {
+        return Some(WhiteBalance::AsShot);
+    }
+    let (k, tint) = kelvin::of_gains(shot, gains);
+    presets
+        .iter()
+        .find(|&&(_, pk)| (k - pk).abs() < 10.0 && tint.abs() < 1.0)
+        .map(|&(id, pk)| WhiteBalance::Preset(id, pk))
+}
+
+/// Nom affiché d'une balance de la liste.
+fn wb_name(choice: WhiteBalance) -> String {
+    match choice {
+        WhiteBalance::AsShot => t!("adjust-wb-as-shot"),
+        WhiteBalance::Auto => t!("adjust-wb-auto"),
+        WhiteBalance::Preset(id, k) => t!(
+            match id {
+                "daylight" => "adjust-wb-daylight",
+                "cloudy" => "adjust-wb-cloudy",
+                "shade" => "adjust-wb-shade",
+                "tungsten" => "adjust-wb-tungsten",
+                "fluorescent" => "adjust-wb-fluorescent",
+                _ => "adjust-wb-flash",
+            },
+            kelvin = format!("{k:.0}")
+        ),
+    }
 }
 
 /// Nom affiché d'un préréglage de noir et blanc.
@@ -540,8 +748,8 @@ fn mixer_name(preset: &str) -> String {
 }
 
 /// Le rapport de `layers`, à reporter à la main (et à copier).
-pub(super) fn adjust_report_text(layers: &Layers) -> String {
-    let r = tri::adjust::report(layers);
+pub(super) fn adjust_report_text(layers: &Layers, shot: [f32; 3]) -> String {
+    let r = tri::adjust::report(layers, shot);
     let signed = |v: f32| {
         let text = tri::i18n::decimal(v as f64, 2);
         if v >= 0.0 { format!("+{text}") } else { text }
@@ -555,8 +763,10 @@ pub(super) fn adjust_report_text(layers: &Layers) -> String {
     if !r.gains.is_none() {
         lines.push(t!(
             "adjust-report-balance",
-            warmth = signed(r.warmth),
-            tint = signed(r.tint)
+            kelvin = format!("{:.0}", r.kelvin.0),
+            tint = format!("{:+.0}", r.kelvin.1),
+            shot_kelvin = format!("{:.0}", r.shot_kelvin.0),
+            shot_tint = format!("{:+.0}", r.shot_kelvin.1)
         ));
     }
     if let Some([red, green, blue]) = r.mixer {

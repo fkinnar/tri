@@ -195,11 +195,11 @@ cli-usage =
       tri --reveal <image>
       tri --edit <image>...
       tri --export <préréglage> <image>... [--to <dossier>] [--libraw|--embedded] [--passthrough] [--dry-run]
-      tri --adjust <référence> <image>... --to <dossier> [--ev IL] [--neutral auto|x,y,l,h] [--creative-ev IL] [--warmth IL] [--tint IL] [--mono neutral|red|orange|yellow|green|blue|r,v,b] [--embedded] [--side N]
+      tri --adjust <référence> <image>... --to <dossier> [--ev IL|auto] [--neutral auto|x,y,l,h] [--kelvin K[,teinte]|daylight|cloudy|shade|tungsten|fluorescent|flash] [--creative-ev IL] [--warmth IL] [--tint IL] [--mono neutral|red|orange|yellow|green|blue|r,v,b] [--embedded] [--side N]
     option commune : --config FICHIER (réglages ; défaut : emplacement du système)
 cli-unknown-convention = convention inconnue : { $value } (darktable ou adobe)
 cli-adjust-not-an-image = pas une image : { $path }
-cli-adjust-report = { $image } : exposition { $exposure } IL (correction { $correction }, créatif { $creative }), chaleur { $warmth } IL, teinte { $tint } IL, N&B { $mixer } → { $out }
+cli-adjust-report = { $image } : exposition { $exposure } IL (correction { $correction }, créatif { $creative }), balance { $kelvin } K, teinte { $tint }, N&B { $mixer } → { $out }
 cli-unknown-option = option inconnue : { $option }
 cli-extra-argument = argument en trop : { $argument }
 cli-cache = cache : { $path }

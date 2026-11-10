@@ -54,6 +54,8 @@ pub struct AppSettings {
     pub data: tri::settings::DataSection,
     /// `[log]` (moteur) : journal de l'application.
     pub log: tri::log::LogSettings,
+    /// `[adjust]` (moteur) : réglages de visualisation.
+    pub adjust: tri::adjust::AdjustSettings,
     /// `[files]` (moteur).
     pub files: tri::files::FileSettings,
     /// `[sharpness]` (moteur).
@@ -95,6 +97,7 @@ impl AppSettings {
             offload: self.offload.clone(),
             data: self.data.clone(),
             log: self.log.clone(),
+            adjust: self.adjust,
             files: self.files.clone(),
             sharpness: self.sharpness,
             similarity: self.similarity,

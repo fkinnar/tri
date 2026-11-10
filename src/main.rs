@@ -157,8 +157,11 @@ struct Args {
 /// Réglages de `--adjust` (issue n° 137), pour la référence.
 #[derive(Default)]
 struct AdjustArgs {
-    /// `--ev` : correction d'exposition.
+    /// `--ev` : correction d'exposition (`auto` : exposition automatique).
     ev: f32,
+    auto_ev: bool,
+    /// `--kelvin K[,teinte]|préréglage` : balance de la correction en kelvins.
+    kelvin: Option<String>,
     /// `--neutral auto|x,y,w,h` : balance neutralisée (monde gris, ou zone en fractions).
     neutral: Option<Option<tri::adjust::Zone>>,
     /// `--creative-ev`, `--warmth`, `--tint` : décalage créatif.
@@ -184,7 +187,28 @@ fn parse_mixer(text: &str) -> AnyResult<tri::adjust::Mixer> {
             red: red / 100.0,
             green: green / 100.0,
             blue: blue / 100.0,
+            normalise: false,
         }),
+        _ => Err(usage().into()),
+    }
+}
+
+/// `--kelvin` : `K[,teinte]` ou un préréglage de `[adjust]` (`daylight`, `cloudy`…).
+fn parse_kelvin(text: &str, settings: &tri::adjust::AdjustSettings) -> AnyResult<(f32, f32)> {
+    if let Some((_, k)) = settings
+        .white_balance_presets()
+        .into_iter()
+        .find(|(id, _)| *id == text)
+    {
+        return Ok((k, 0.0));
+    }
+    let parts: Vec<f32> = text
+        .split(',')
+        .map(|p| p.trim().parse::<f32>())
+        .collect::<Result<_, _>>()?;
+    match parts.as_slice() {
+        [k] => Ok((*k, 0.0)),
+        [k, tint] => Ok((*k, *tint)),
         _ => Err(usage().into()),
     }
 }
@@ -292,7 +316,11 @@ fn parse() -> AnyResult<Args> {
                 args.export_profile = Some(value()?);
             }
             "--adjust" => args.file_action = Some(FileAction::Adjust),
-            "--ev" => args.adjust.ev = value()?.parse()?,
+            "--ev" => match value()?.as_str() {
+                "auto" => args.adjust.auto_ev = true,
+                v => args.adjust.ev = v.parse()?,
+            },
+            "--kelvin" => args.adjust.kelvin = Some(value()?),
             "--neutral" => args.adjust.neutral = Some(parse_zone(&value()?)?),
             "--creative-ev" => args.adjust.creative_ev = value()?.parse()?,
             "--warmth" => args.adjust.warmth = value()?.parse()?,
@@ -1343,15 +1371,28 @@ fn adjust(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
             exposure: a.ev,
             gains: Gains::NONE,
         },
-        creative: Adjust {
+        creative: Some(Adjust {
             exposure: a.creative_ev,
             gains: Gains::from_warmth_tint(a.warmth, a.tint),
-        },
+        })
+        .filter(|c| !c.is_none()),
         mono: a.mono,
     };
+    let shot = |file: &tri::media::MediaFile| tri::adjust::shot_white(&file.path, file.kind);
     if let Some(zone) = a.neutral {
         reference.correction.gains = tri::adjust::neutral(
             tri::adjust::measure(&reference_base.bitmap, reference_base.transfer, zone).cast,
+        );
+    }
+    if let Some(spec) = &a.kelvin {
+        let (kelvin, tint) = parse_kelvin(spec, &settings.adjust)?;
+        reference.correction.gains = tri::adjust::kelvin::gains(shot(&files[0]), kelvin, tint);
+    }
+    if a.auto_ev {
+        reference.correction.exposure = tri::adjust::auto_exposure(
+            &reference_base,
+            reference.correction.gains,
+            settings.adjust.auto_exposure_target,
         );
     }
     std::fs::create_dir_all(to)?;
@@ -1387,7 +1428,7 @@ fn adjust(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
         let out = to.join(format!("{stem}-adjusted.jpg"));
         let jpeg = tri::jpeg::encode(&bitmap, 92, tri::jpeg::Chroma::Full)?;
         std::fs::write(&out, jpeg)?;
-        let r = tri::adjust::report(&layers);
+        let r = tri::adjust::report(&layers, shot(file));
         println!(
             "{}",
             t!(
@@ -1396,8 +1437,8 @@ fn adjust(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
                 exposure = format!("{:+.2}", r.exposure),
                 correction = format!("{:+.2}", r.correction_exposure),
                 creative = format!("{:+.2}", r.creative_exposure),
-                warmth = format!("{:+.2}", r.warmth),
-                tint = format!("{:+.2}", r.tint),
+                kelvin = format!("{:.0}", r.kelvin.0),
+                tint = format!("{:+.0}", r.kelvin.1),
                 mixer = r.mixer.map_or_else(
                     || "-".to_string(),
                     |m| format!("{:.0}/{:.0}/{:.0}", m[0], m[1], m[2])
