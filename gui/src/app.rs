@@ -3249,9 +3249,8 @@ impl TriApp {
         // Clic droit : garder le cache dans ce dossier / sur ce disque, ou plus ici.
         let mut cache_menu: Option<(PathBuf, bool)> = None;
         let mut embed_menu: Option<(PathBuf, Option<bool>)> = None;
-        // Réglages automatiques de tout le dossier ouvert (vrai : exposition ; faux :
-        // balance).
-        let mut adjust_menu: Option<bool> = None;
+        // Réglages automatiques de tout le dossier ouvert.
+        let mut adjust_menu: Option<adjust::FolderAuto> = None;
         let location = self.settings.cache.location;
         let cache = self.engine.as_ref().map(|e| e.cache.clone());
         let mut dropped: Option<(Dragged, PathBuf)> = None;
@@ -3589,12 +3588,19 @@ impl TriApp {
                             // Réglages auto de toutes ses images (retour du 10/11/2026) :
                             // chacune d'après la sienne, mesurée sur sa vignette.
                             ui.menu_button(t!("folder-menu-adjust"), |ui| {
-                                for (exposure, text) in [
-                                    (true, t!("folder-menu-adjust-exposure")),
-                                    (false, t!("folder-menu-adjust-balance")),
+                                for (what, text) in [
+                                    (adjust::FolderAuto::Both, t!("folder-menu-adjust-auto")),
+                                    (
+                                        adjust::FolderAuto::Exposure,
+                                        t!("folder-menu-adjust-exposure"),
+                                    ),
+                                    (
+                                        adjust::FolderAuto::Balance,
+                                        t!("folder-menu-adjust-balance"),
+                                    ),
                                 ] {
                                     if ui.button(text).clicked() {
-                                        adjust_menu = Some(exposure);
+                                        adjust_menu = Some(what);
                                         // Tout le menu, pas seulement le sous-menu (retour
                                         // du 10/11/2026 : resté ouvert, on aurait dit que
                                         // rien ne se passait).
@@ -3788,9 +3794,9 @@ impl TriApp {
         if let Some((path, on)) = cache_menu {
             self.keep_cache_in(path, on);
         }
-        if let Some(exposure) = adjust_menu {
+        if let Some(what) = adjust_menu {
             let ctx = ui.ctx().clone();
-            self.adjust_folder_auto(&ctx, exposure);
+            self.adjust_folder_auto(&ctx, what);
         }
         if let Some((path, value)) = embed_menu {
             // Le menu fermé se voit tout de suite.
@@ -28611,7 +28617,7 @@ mod tests {
     }
 
     #[test]
-    fn the_folder_menu_sets_auto_exposure_on_every_image_in_one_step() {
+    fn the_folder_menu_sets_auto_adjustments_on_every_image_in_one_step() {
         // Retour du 10/11/2026 : clic droit sur le dossier, « Réglages », exposition auto
         // de toutes ses images (chacune d'après la sienne).
         let (mut h, dir) = harness();
@@ -28636,8 +28642,8 @@ mod tests {
         h.run_steps(3);
         h.get_by_label("Réglages").hover();
         h.run_steps(3);
-        // Celle du menu (l'icône du panneau de droite porte le même nom).
-        h.query_all_by_label("Exposition auto")
+        // « Auto » : balance puis exposition (celle du menu, à gauche).
+        h.query_all_by_label("Auto")
             .min_by(|a, b| a.rect().left().total_cmp(&b.rect().left()))
             .unwrap()
             .click();
@@ -28658,6 +28664,12 @@ mod tests {
             .collect();
         assert!(evs.iter().all(|&e| e != 0.0), "{evs:?}");
         assert!(evs[0] != evs[1], "each from its own: {evs:?}");
+        // « Auto » : la balance aussi (pas sur la première, (0, 100, 160) : rien de
+        // mesurable, un canal à zéro).
+        for p in &paths[1..] {
+            let l = tri::adjust::read(p).unwrap().unwrap();
+            assert!(!l.correction.gains.is_none(), "balance set too: {l:?}");
+        }
         let ctx = h.ctx.clone();
         h.state_mut().perform(&ctx, Action::Undo);
         for p in &paths {

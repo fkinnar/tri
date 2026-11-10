@@ -11,8 +11,8 @@
   grey zone or draw a frame for an auto balance on that part), Style (creative offset: exposure, warmth, tint, contrast,
   saturation),
   B&W (filter presets, mix kept at 100 % when normalised) and Values (the table to copy
-  into a development software); a double-click on a tab resets it; the open folder's right-click menu sets auto exposure
-  or auto white balance on all its images. With several images selected, "Sync N images" applies
+  into a development software); a double-click on a tab resets it; the open folder's right-click menu sets automatic
+  exposure, white balance or both on all its images, in the background. With several images selected, "Sync N images" applies
   every change to all of them (a slider shifts each image by as much, temperature by the
   same ratio; a button, auto or preset, computes each one; one undo step). Also copy /
   paste adjustments (exposure and balance matched to the copied image), "Harmonise the

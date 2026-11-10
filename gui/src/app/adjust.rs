@@ -431,13 +431,14 @@ impl TriApp {
         Some(layers)
     }
 
-    /// Clic droit sur le dossier ouvert, « Réglages » : exposition (`exposure`) ou balance
-    /// automatique de toutes ses images, chacune d'après la sienne (retour du 10/11/2026).
+    /// Clic droit sur le dossier ouvert, « Réglages » : exposition, balance, ou les deux
+    /// (`what`) automatiques de toutes ses images, chacune d'après la sienne (retour du
+    /// 10/11/2026).
     /// Calculé **en tâche de fond** (lire et mesurer des centaines de vignettes figeait
     /// l'interface, et le menu restait affiché jusqu'au mouvement suivant de la souris) ;
     /// le résultat arrive dans [`TriApp::adjust_folder_poll`], un seul pas de l'historique.
     /// Une image sans vignette prête est laissée de côté.
-    pub(super) fn adjust_folder_auto(&mut self, ctx: &egui::Context, exposure: bool) {
+    pub(super) fn adjust_folder_auto(&mut self, ctx: &egui::Context, what: FolderAuto) {
         let Some(engine) = self.engine.as_ref() else {
             return;
         };
@@ -468,12 +469,14 @@ impl TriApp {
                     missing += 1;
                     continue;
                 };
-                if exposure {
+                // La balance d'abord : l'exposition se mesure balance corrigée.
+                if what != FolderAuto::Exposure {
+                    layers.correction.gains = tri::adjust::auto_balance(&base, &settings);
+                }
+                if what != FolderAuto::Balance {
                     let ev = tri::adjust::auto_exposure(&base, layers.correction.gains, &settings);
                     layers.correction.exposure =
                         ev.clamp(*EXPOSURE_RANGE.start(), *EXPOSURE_RANGE.end());
-                } else {
-                    layers.correction.gains = tri::adjust::auto_balance(&base, &settings);
                 }
                 changes.push((file.path, Some(layers)));
             }
@@ -870,6 +873,17 @@ impl TriApp {
             self.adjust_apply_to_selection();
         }
     }
+}
+
+/// Réglages automatiques d'un dossier (clic droit, « Réglages »).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum FolderAuto {
+    /// Balance puis exposition.
+    Both,
+    /// Exposition seule.
+    Exposure,
+    /// Balance seule.
+    Balance,
 }
 
 /// Résultat des réglages automatiques d'un dossier : les réglages calculés, et le nombre

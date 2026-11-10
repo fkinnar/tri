@@ -188,8 +188,9 @@ try (feedback of 2026-11-10):
 
 ### A whole folder
 
-Right-click the **open folder**, **"Adjustments"**: auto exposure or auto white balance
-of every image (even hidden by a filter), each from its own, measured on its thumbnail;
+Right-click the **open folder**, **"Adjustments"**: **Auto** (balance then exposure:
+exposure is measured with the balance corrected), **Exposure** or **White balance**,
+automatic, on every image (even hidden by a filter), each from its own, measured on its thumbnail;
 **in the background** (the interface doesn't freeze, the menu closes at once); one
 history step, images without a thumbnail ready left out (summary in the status bar).
 Only the open folder, like the notes entries: its thumbnails are there.
