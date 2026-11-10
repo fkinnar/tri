@@ -26568,6 +26568,8 @@ mod tests {
         );
         let title = t!("cache-clear-folder-question", name = "séance");
         assert!(h.query_by_label(&title).is_some());
+        // La taille arrivée, la boîte se recentre d'après sa nouvelle taille.
+        h.run_steps(3);
         h.get_by_label(&t!("cache-clear-confirm")).click();
         h.run_steps(2);
         run_until(&mut h, |app| app.cache_jobs.is_empty());
