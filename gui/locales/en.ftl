@@ -441,6 +441,7 @@ adjust-paste = Paste adjustments
 adjust-paste-tip = On this image (and the synced selection): exposure and balance matched to the copied image, style and black and white copied
 adjust-harmonise = Harmonise the selection
 adjust-harmonise-tip = Exposure and balance of the selected images matched to this image, style and black and white untouched
+adjust-picked = Eyedropper: balance { $kelvin } K, tint { $tint }
 adjust-copied = adjustments of { $name } copied
 adjust-paste-empty = nothing to paste: copy an image's adjustments first
 adjust-missing = { $missing ->

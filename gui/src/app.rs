@@ -28360,6 +28360,45 @@ mod tests {
     }
 
     #[test]
+    fn the_eyedropper_neutralises_the_clicked_zone_in_full_screen() {
+        // Retour du 10/11/2026 : « la pipette ne fonctionne pas ».
+        let (mut h, _dir) = harness_images(vec![(
+            "img0.jpg",
+            image::RgbImage::from_pixel(640, 480, image::Rgb([110, 120, 150])),
+        )]);
+        run_until(&mut h, |app| {
+            app.files.len() == 1 && app.adjust_base(&app.files[0].path).is_some()
+        });
+        let path = h.state().files[0].path.clone();
+        // Section en bas du panneau de droite : visible sans défiler.
+        h.set_size(vec2(1000.0, 1400.0));
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(3);
+        assert_eq!(h.state().mode, Mode::View);
+        h.get_by_label("Pipette").click();
+        h.run_steps(3);
+        assert!(h.state().adjust_eyedropper, "armed");
+        let pos = egui::pos2(360.0, 700.0);
+        h.event(UiEvent::PointerMoved(pos));
+        h.run_steps(1);
+        for pressed in [true, false] {
+            h.event(UiEvent::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            });
+            h.run_steps(1);
+        }
+        h.run_steps(3);
+        assert!(!h.state().adjust_eyedropper, "used once");
+        let notice = h.state().notice.clone().unwrap().0;
+        assert!(notice.starts_with("Pipette"), "{notice}");
+        let layers = tri::adjust::read(&path).unwrap().expect("balance set");
+        assert!(layers.correction.gains.red > 1.05, "{layers:?}");
+    }
+
+    #[test]
     fn harmonising_the_selection_aligns_the_base_only_in_one_step() {
         // #137 : « Harmoniser la sélection » aligne exposition et balance des autres
         // images sur l'image courante, sans toucher au style ni au noir et blanc ; un seul

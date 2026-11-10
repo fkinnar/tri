@@ -440,6 +440,7 @@ adjust-paste = Coller les réglages
 adjust-paste-tip = Sur cette image (et la sélection synchronisée) : exposition et balance harmonisées sur l'image copiée, style et noir et blanc copiés
 adjust-harmonise = Harmoniser la sélection
 adjust-harmonise-tip = L'exposition et la balance des images sélectionnées alignées sur cette image, sans toucher au style ni au noir et blanc
+adjust-picked = Pipette : balance { $kelvin } K, teinte { $tint }
 adjust-copied = réglages de { $name } copiés
 adjust-paste-empty = rien à coller : copiez d'abord les réglages d'une image
 adjust-missing = { $missing ->

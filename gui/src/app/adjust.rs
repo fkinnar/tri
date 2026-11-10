@@ -436,6 +436,18 @@ impl TriApp {
         let cast = tri::adjust::measure(&base.bitmap, base.transfer, Some(zone)).cast;
         let mut layers = self.adjust_layers_now(path);
         layers.correction.gains = tri::adjust::neutral(cast);
+        // Un retour visible (retour du 10/11/2026 : sur un gris déjà neutre, rien ne bouge à
+        // l'écran et la pipette semblait sans effet).
+        let shot = self.adjust_shot_now(path);
+        let (k, tint) = kelvin::of_gains(shot, layers.correction.gains);
+        self.notice = Some((
+            t!(
+                "adjust-picked",
+                kelvin = format!("{k:.0}"),
+                tint = format!("{tint:+.0}")
+            ),
+            false,
+        ));
         let mut changes = vec![(path.to_path_buf(), Some(layers))];
         let modes = Modes {
             exposure: LayerMode::Keep,
