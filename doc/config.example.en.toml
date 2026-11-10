@@ -555,6 +555,11 @@ trace = false
 # Automatic exposure: target median luminance, in linear light (0.18: the mid grey of
 # light meters; higher, brighter images).
 auto_exposure_target = 0.18
+# Highlight priority: when brightening, stop when this percentile of the luminance (0.99:
+# the brightest 1 %) reaches auto_exposure_highlight_target; when darkening, when it comes
+# down to it (a low-key portrait doesn't burn, a snow scene doesn't turn grey).
+auto_exposure_highlights = 0.99
+auto_exposure_highlight_target = 0.6
 # White balance presets, in kelvins (zero tint). tri's kelvins are close to those of
 # development software, not identical (each has its own model of the camera).
 daylight = 5500

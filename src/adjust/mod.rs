@@ -36,6 +36,12 @@ pub struct AdjustSettings {
     /// Exposition automatique : luminance médiane visée, en lumière linéaire (0,18 : le
     /// gris moyen des posemètres).
     pub auto_exposure_target: f32,
+    /// Exposition automatique : centile des hautes lumières (0,99 : le 1 % le plus clair).
+    pub auto_exposure_highlights: f32,
+    /// Exposition automatique : niveau (lumière linéaire) que ces hautes lumières ne
+    /// dépassent pas en éclaircissant, et sous lequel elles ne descendent pas en
+    /// assombrissant.
+    pub auto_exposure_highlight_target: f32,
     /// Préréglages de balance des blancs, en kelvins (teinte nulle).
     pub daylight: f32,
     /// Voir `daylight`.
@@ -54,6 +60,8 @@ impl Default for AdjustSettings {
     fn default() -> Self {
         AdjustSettings {
             auto_exposure_target: 0.18,
+            auto_exposure_highlights: 0.99,
+            auto_exposure_highlight_target: 0.6,
             daylight: 5500.0,
             cloudy: 6500.0,
             shade: 7500.0,
@@ -790,19 +798,68 @@ pub fn propagate(
     out
 }
 
-/// Exposition automatique : la correction d'exposition qui amène la luminance médiane de
-/// l'image (sans réglage, sa balance corrigée) à `target` (lumière linéaire, 0,18 : le gris
-/// moyen des posemètres).
-pub fn auto_exposure(base: &Base, gains: Gains, target: f32) -> f32 {
-    let have = measure_adjusted(
-        base,
+/// Exposition automatique, **à priorité aux hautes lumières** (retour du 10/11/2026 : sur
+/// un portrait en low-key, pull et fond sombres, viser la médiane donnait +3,3 IL et un
+/// visage brûlé) :
+///
+/// - visée : la luminance médiane de l'image (sans réglage, sa balance corrigée) vers
+///   `auto_exposure_target` (0,18, le gris moyen des posemètres) ;
+/// - pour éclaircir, on s'arrête quand les hautes lumières (le centile
+///   `auto_exposure_highlights`) atteignent `auto_exposure_highlight_target` ;
+/// - pour assombrir, on s'arrête quand elles y descendent (une scène de neige ne devient
+///   pas grise).
+pub fn auto_exposure(base: &Base, gains: Gains, settings: &AdjustSettings) -> f32 {
+    let mut copy = base.bitmap.clone();
+    apply_bitmap(
+        &mut copy,
+        base.transfer,
         Adjust {
             exposure: 0.0,
             gains,
         },
         None,
     );
-    (target.max(1e-4) / have.luminance).log2()
+    let histogram = luminance_histogram(&copy, base.transfer);
+    let median = percentile(&histogram, 0.5);
+    let high = percentile(
+        &histogram,
+        settings.auto_exposure_highlights.clamp(0.5, 1.0),
+    );
+    let wanted = (settings.auto_exposure_target.max(1e-4) / median).log2();
+    let room = (settings.auto_exposure_highlight_target.clamp(1e-3, 1.0) / high).log2();
+    if wanted > 0.0 {
+        wanted.min(room.max(0.0))
+    } else {
+        wanted.max(room.min(0.0))
+    }
+}
+
+/// Histogramme de la luminance linéaire (Rec. 709) de `bitmap`, en 4096 cases.
+fn luminance_histogram(bitmap: &Bitmap, transfer: Transfer) -> Vec<u32> {
+    let lin = transfer.to_linear();
+    let mut histogram = vec![0u32; 4096];
+    for px in bitmap.data.as_chunks::<3>().0 {
+        let y = 0.2126 * lin[px[0] as usize]
+            + 0.7152 * lin[px[1] as usize]
+            + 0.0722 * lin[px[2] as usize];
+        histogram[((y * 4095.0).round() as usize).min(4095)] += 1;
+    }
+    histogram
+}
+
+/// Centile `p` (0..1) d'un histogramme de [`luminance_histogram`], en lumière linéaire
+/// (jamais tout à fait 0 : il sert de diviseur).
+fn percentile(histogram: &[u32], p: f32) -> f32 {
+    let total: u64 = histogram.iter().map(|&n| u64::from(n)).sum();
+    let wanted = (total as f64 * f64::from(p)).ceil().max(1.0) as u64;
+    let mut seen = 0u64;
+    for (i, &n) in histogram.iter().enumerate() {
+        seen += u64::from(n);
+        if seen >= wanted {
+            return (i as f32 / 4095.0).max(1.0 / 4095.0);
+        }
+    }
+    1.0
 }
 
 /// Le rapport d'une image : les valeurs à reporter à la main dans un logiciel de
@@ -1225,7 +1282,7 @@ mod tests {
     #[test]
     fn auto_exposure_brings_the_median_to_mid_grey() {
         let dark = flat(4, 4, [40, 40, 40]);
-        let ev = auto_exposure(&base(&dark), Gains::NONE, 0.18);
+        let ev = auto_exposure(&base(&dark), Gains::NONE, &AdjustSettings::default());
         let mut fixed = dark.clone();
         apply_bitmap(
             &mut fixed,
@@ -1238,6 +1295,37 @@ mod tests {
         );
         let y = measure(&fixed, SRGB, None).luminance;
         assert!(ev > 0.0 && close(y, 0.18, 0.01), "{ev} {y}");
+    }
+
+    #[test]
+    fn auto_exposure_keeps_the_highlights_of_a_low_key_portrait() {
+        // Retour du 10/11/2026 : fond et pull sombres (90 %), visage clair (10 %) ; la
+        // médiane seule aurait éclairci de plus de 3 IL et brûlé le visage.
+        let mut image = flat(10, 10, [45, 45, 45]);
+        for px in image.data.as_chunks_mut::<3>().0.iter_mut().take(10) {
+            *px = [185, 185, 185];
+        }
+        let settings = AdjustSettings::default();
+        let ev = auto_exposure(&base(&image), Gains::NONE, &settings);
+        let face = SRGB.decode(185.0 / 255.0);
+        assert!((0.0..0.5).contains(&ev), "{ev}");
+        assert!(close(
+            face * ev.exp2(),
+            settings.auto_exposure_highlight_target,
+            0.02
+        ));
+        // Neige : très claire partout, assombrie jusqu'aux hautes lumières à la cible.
+        let snow = flat(4, 4, [235, 235, 235]);
+        let ev = auto_exposure(&base(&snow), Gains::NONE, &settings);
+        let white = SRGB.decode(235.0 / 255.0);
+        assert!(
+            close(
+                white * ev.exp2(),
+                settings.auto_exposure_highlight_target,
+                0.02
+            ),
+            "{ev}"
+        );
     }
 
     #[test]

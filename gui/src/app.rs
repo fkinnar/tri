@@ -28471,6 +28471,21 @@ mod tests {
         h.state_mut().perform(&ctx, Action::AdjustPaste);
         let pasted = tri::adjust::read(&paths[2]).unwrap().expect("pasted");
         assert_eq!(pasted.mono, mono.mono);
+        // Réinitialiser toute la sélection, même quand l'image courante n'a rien (retour du
+        // 10/11/2026 : le bouton restait grisé).
+        h.state_mut().adjust_sync = true;
+        h.state_mut()
+            .save_adjustments(vec![(paths[1].clone(), None)]);
+        let files = h.state().files.clone();
+        h.state_mut().selection.select_all(&files);
+        h.state_mut().selected = 1;
+        h.set_size(vec2(1000.0, 2400.0));
+        h.run_steps(3);
+        h.get_by_label("Réinitialiser").click();
+        h.run_steps(3);
+        for path in &paths {
+            assert_eq!(tri::adjust::read(path).unwrap(), None, "all reset");
+        }
     }
 
     #[test]

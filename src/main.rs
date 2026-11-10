@@ -1392,7 +1392,7 @@ fn adjust(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
         reference.correction.exposure = tri::adjust::auto_exposure(
             &reference_base,
             reference.correction.gains,
-            settings.adjust.auto_exposure_target,
+            &settings.adjust,
         );
     }
     std::fs::create_dir_all(to)?;

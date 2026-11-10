@@ -6,7 +6,7 @@
 
 - **Réglages de visualisation** (#404) : exposition, balance des blancs et noir et blanc
   (mélangeur de canaux), pour comparer et trier une série. Une nouvelle section
-  « Réglages » du panneau de droite, en onglets : Base (exposition avec « Auto » ; balance
+  « Réglages » du panneau de droite, en onglets : Base (exposition avec « Auto », à priorité aux hautes lumières ; balance
   en kelvins et teinte, préréglages telle que prise, auto, lumière du jour, nuageux,
   ombre, tungstène, fluorescent et flash ; pipette : clic sur une zone grise ou cadre
   tracé pour une balance auto sur cette partie), Style (décalage créatif), N&B (filtres en

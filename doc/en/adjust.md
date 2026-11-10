@@ -67,7 +67,12 @@ Presets (`[adjust]`, zero tint): daylight 5,500 K, cloudy 6,500, shade 7,500, tu
 
 `auto_exposure`: the correction that brings the image's median luminance (its balance
 corrected, without the other adjustments) to `[adjust] auto_exposure_target` (0.18,
-the mid grey of light meters).
+the mid grey of light meters), **with highlight priority**: when brightening, it stops
+when the `auto_exposure_highlights` percentile (0.99) reaches
+`auto_exposure_highlight_target` (0.6); when darkening, when it comes down to it.
+Feedback of 2026-11-10: on a low-key portrait (dark sweater and background, spot metering
+on the face), the median alone gave +3.3 EV and a burnt face; highlight priority gives
++0.3 EV. A snow scene isn't brought down to grey either.
 
 ## Where they apply
 

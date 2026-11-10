@@ -400,11 +400,7 @@ impl TriApp {
     /// mesurée sur la vignette de `path`.
     fn auto_exposure_of(&self, path: &Path, mut layers: Layers) -> Option<Layers> {
         let base = self.adjust_base(path)?;
-        let ev = tri::adjust::auto_exposure(
-            &base,
-            layers.correction.gains,
-            self.settings.adjust.auto_exposure_target,
-        );
+        let ev = tri::adjust::auto_exposure(&base, layers.correction.gains, &self.settings.adjust);
         layers.correction.exposure = ev.clamp(*EXPOSURE_RANGE.start(), *EXPOSURE_RANGE.end());
         Some(layers)
     }
@@ -644,6 +640,9 @@ impl TriApp {
         let back = ui.visuals().panel_fill;
         let has_clip = self.adjust_clipboard.is_some();
         let original = self.showing_original();
+        // Réinitialiser une sélection synchronisée, même si l'image courante n'a rien
+        // (retour du 10/11/2026 : le bouton restait grisé).
+        let synced = !self.adjust_sync_targets(&file.path).is_empty();
         ui.horizontal(|ui| {
             copy = icon(
                 ui,
@@ -684,7 +683,7 @@ impl TriApp {
             .clicked();
             reset = icon(
                 ui,
-                !layers.is_none(),
+                !layers.is_none() || synced,
                 "adjust-reset",
                 "adjust-reset-tip",
                 None,

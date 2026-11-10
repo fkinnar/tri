@@ -72,7 +72,12 @@ gain) et « auto » (monde gris).
 
 `auto_exposure` : la correction qui amène la luminance médiane de l'image (sa balance
 corrigée, sans les autres réglages) à `[adjust] auto_exposure_target` (0,18, le gris
-moyen des posemètres).
+moyen des posemètres), **à priorité aux hautes lumières** : en éclaircissant, on s'arrête
+quand le centile `auto_exposure_highlights` (0,99) atteint
+`auto_exposure_highlight_target` (0,6) ; en assombrissant, quand il y descend. Retour du
+10/11/2026 : sur un portrait en low-key (pull et fond sombres, mesure spot sur le visage),
+la médiane seule donnait +3,3 IL et un visage brûlé ; la priorité aux hautes lumières
+donne +0,3 IL. Une scène de neige, elle, n'est pas ramenée au gris.
 
 ## Où ils s'appliquent
 

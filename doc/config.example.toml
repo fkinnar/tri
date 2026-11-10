@@ -558,6 +558,12 @@ trace = false
 # Exposition automatique : luminance médiane visée, en lumière linéaire (0.18 : le gris
 # moyen des posemètres ; plus haut, des images plus claires).
 auto_exposure_target = 0.18
+# Priorité aux hautes lumières : en éclaircissant, on s'arrête quand ce centile de la
+# luminance (0.99 : le 1 % le plus clair) atteint auto_exposure_highlight_target ; en
+# assombrissant, quand il y descend (un portrait en low-key ne brûle pas, une scène de
+# neige ne devient pas grise).
+auto_exposure_highlights = 0.99
+auto_exposure_highlight_target = 0.6
 # Préréglages de balance des blancs, en kelvins (teinte nulle). Les kelvins de tri sont
 # proches de ceux des logiciels de développement, pas identiques (chacun a son modèle du
 # boîtier).
