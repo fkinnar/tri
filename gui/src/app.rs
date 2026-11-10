@@ -3591,7 +3591,10 @@ impl TriApp {
                                 ] {
                                     if ui.button(text).clicked() {
                                         adjust_menu = Some(exposure);
-                                        ui.close();
+                                        // Tout le menu, pas seulement le sous-menu (retour
+                                        // du 10/11/2026 : resté ouvert, on aurait dit que
+                                        // rien ne se passait).
+                                        egui::Popup::close_all(ui.ctx());
                                     }
                                 }
                             })
@@ -3611,7 +3614,7 @@ impl TriApp {
                                 ] {
                                     if ui.radio(current == value, label).clicked() {
                                         embed_menu = Some((row.path.clone(), value));
-                                        ui.close();
+                                        egui::Popup::close_all(ui.ctx());
                                     }
                                 }
                             })
@@ -3783,8 +3786,13 @@ impl TriApp {
         }
         if let Some(exposure) = adjust_menu {
             self.adjust_folder_auto(exposure);
+            // Le menu fermé et la grille réglée se voient tout de suite (sans image de plus,
+            // le menu restait affiché jusqu'au prochain mouvement de la souris).
+            ui.ctx().request_repaint();
         }
         if let Some((path, value)) = embed_menu {
+            // Le menu fermé se voit tout de suite.
+            ui.ctx().request_repaint();
             match self.folder.notes.set_folder_embed(&path, value) {
                 Ok(()) => {
                     let name = folder_name(&path);
@@ -28603,12 +28611,37 @@ mod tests {
     fn the_folder_menu_sets_auto_exposure_on_every_image_in_one_step() {
         // Retour du 10/11/2026 : clic droit sur le dossier, « Réglages », exposition auto
         // de toutes ses images (chacune d'après la sienne).
-        let (mut h, _dir) = harness();
+        let (mut h, dir) = harness();
         run_until(&mut h, |app| {
             app.files.len() == 3 && app.files.iter().all(|f| app.adjust_base(&f.path).is_some())
         });
         let paths: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
-        h.state_mut().adjust_folder_auto(true);
+        // Par le menu : clic droit sur le dossier, « Réglages », « Exposition auto ».
+        // Le dossier ouvert dans le panneau des dossiers.
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        h.run_steps(2);
+        h.query_all_by_label("photos")
+            .min_by(|a, b| a.rect().left().total_cmp(&b.rect().left()))
+            .unwrap()
+            .click_secondary();
+        h.run_steps(3);
+        h.get_by_label("Réglages").hover();
+        h.run_steps(3);
+        // Celle du menu (l'icône du panneau de droite porte le même nom).
+        h.query_all_by_label("Exposition auto")
+            .min_by(|a, b| a.rect().left().total_cmp(&b.rect().left()))
+            .unwrap()
+            .click();
+        h.run_steps(2);
+        // Le menu se ferme tout de suite, sous-menu compris (retour du 10/11/2026 : la
+        // grille ne changeait qu'en sortant du menu).
+        assert!(h.query_by_label("Réglages").is_none(), "menu closed");
         let evs: Vec<f32> = paths
             .iter()
             .map(|p| {
