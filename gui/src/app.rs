@@ -28951,9 +28951,10 @@ mod tests {
                 h.run_steps(1);
             }
         };
-        let button = h.get_by_label("Pipette").rect().center();
-        // Depuis la grille : le bouton ouvre le plein écran.
-        mouse_click(&mut h, button);
+        // Depuis la grille : le bouton ouvre le plein écran. Cliqué par son libellé : un
+        // vrai clic sur le bouton du panneau n'était parfois pas vu (CI macOS du
+        // 10/11/2026) ; les vrais clics servent à la pipette sur l'image, plus bas.
+        h.get_by_label("Pipette").click();
         h.run_steps(3);
         assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().adjust_eyedropper, "armed");
@@ -28967,8 +28968,7 @@ mod tests {
         h.state_mut()
             .save_adjustments(vec![(path.clone(), Some(cold))]);
         h.run_steps(2);
-        let button = h.get_by_label("Pipette").rect().center();
-        mouse_click(&mut h, button);
+        h.get_by_label("Pipette").click();
         h.run_steps(2);
         assert!(h.state().adjust_eyedropper, "armed again");
         let (from, to) = (egui::pos2(300.0, 650.0), egui::pos2(420.0, 760.0));
