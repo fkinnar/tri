@@ -45,6 +45,7 @@ mod grid_render;
 mod histogram;
 mod i18n;
 mod loader;
+mod log_view;
 mod markdown;
 mod marks;
 mod meta;
@@ -85,13 +86,19 @@ fn main() -> eframe::Result {
     if let Some(warning) = &loaded.warning {
         eprintln!("{}", tri::t!("warning-prefix", message = warning));
     }
+    let loaded_warning = loaded.warning.clone();
     let mut settings = loaded.settings;
     // Journal des plantages, dans le dossier de données (voir `crash.rs`).
     // Repli de la mémoire des notes pour les dossiers en lecture seule (issue n° 368).
     tri::reconcile::set_data_dir(settings.engine().data_dir());
     tri::xmp::set_rules(settings.engine().xmp.rules());
+    // Journal de l'application (issue n° 398), avec les plantages (voir `crash.rs`).
     if let Some(data) = settings.engine().data_dir() {
-        crash::install(data);
+        tri::log::init(data, settings.engine().log.clone());
+    }
+    crash::install();
+    if let Some(warning) = &loaded_warning {
+        tri::log::warning("settings", warning, "");
     }
     if cache.is_some() {
         settings.cache.dir = cache;
@@ -122,10 +129,9 @@ fn main() -> eframe::Result {
             // Une erreur de la carte graphique (mémoire pleine, 07/11/2026) : consignée et
             // dite, sans arrêter le programme comme le gestionnaire de wgpu par défaut.
             if let Some(render) = &cc.wgpu_render_state {
-                let data = settings.engine().data_dir();
                 render.device.on_uncaptured_error(std::sync::Arc::new(
                     move |e: eframe::wgpu::Error| {
-                        crash::gpu_error(data.as_deref(), &e.to_string());
+                        crash::gpu_error(&e.to_string());
                     },
                 ));
             }

@@ -58,9 +58,17 @@ body:
     validations:
       required: true
   - type: textarea
+    id: logs
+    attributes:
+      label: Log / Journal
+      description: |
+        Latest lines of tri's log (filled in by "Report a problem", which lets you edit them first). The whole log: `tri.log` in the data folder, or the "Log" button of the help (F1).
+        Dernières lignes du journal de tri (remplies par « Signaler un problème », qui permet de les modifier avant). Le journal entier : `tri.log` du dossier de données, ou le bouton « Journal » de l'aide (F1).
+      render: text
+  - type: textarea
     id: extra
     attributes:
       label: Screenshot, message, anything else / Capture, message, autre
       description: |
-        Drag images or a video here. After a crash, attach `crash.log` from tri's data folder: `~/Library/Application Support/tri` (macOS), `~/.local/share/tri` (Linux), `%APPDATA%\tri` (Windows).
-        Glissez ici des images ou une vidéo. Après un plantage, joignez `crash.log` du dossier de données de tri : `~/Library/Application Support/tri` (macOS), `~/.local/share/tri` (Linux), `%APPDATA%\tri` (Windows).
+        Drag images or a video here. After a crash, attach `tri.log` from tri's data folder: `~/Library/Application Support/tri` (macOS), `~/.local/share/tri` (Linux), `%APPDATA%\tri` (Windows).
+        Glissez ici des images ou une vidéo. Après un plantage, joignez `tri.log` du dossier de données de tri : `~/Library/Application Support/tri` (macOS), `~/.local/share/tri` (Linux), `%APPDATA%\tri` (Windows).

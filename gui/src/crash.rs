@@ -1,44 +1,24 @@
-//! Journal des plantages (19/10/2026) : un plantage sur macOS n'avait laissé qu'un rapport
-//! du système sans le message d'erreur (une erreur Rust pendant le dessin de la fenêtre,
+//! Plantages (19/10/2026) : un plantage sur macOS n'avait laissé qu'un rapport du
+//! système sans le message d'erreur (une erreur Rust pendant le dessin de la fenêtre,
 //! appelé depuis AppKit, arrête le programme net, et le message du terminal s'était
 //! perdu). À toute erreur Rust (`panic`), le message, l'endroit (fichier, ligne), le fil
-//! et la pile d'appels sont ajoutés à `crash.log` dans le dossier de données, avant le
-//! comportement habituel (message sur la sortie d'erreur, arrêt).
+//! et la pile d'appels vont au journal de l'application (`tri.log`, [`tri::log`] ; un
+//! `crash.log` à part avant le 10/11/2026), avant le comportement habituel (message sur
+//! la sortie d'erreur, arrêt).
 
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use tri::log::Level;
 
-/// Nom du journal, dans le dossier de données.
-pub const FILE: &str = "crash.log";
-
-/// Un rapport : date (secondes depuis 1970, sans dépendance de date), version, fil,
-/// endroit, message et pile.
-pub fn report(thread: &str, location: &str, message: &str, backtrace: &str) -> String {
-    let when = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or_default();
+/// Le détail d'un plantage : fil, endroit, pile.
+pub fn detail(thread: &str, location: &str, backtrace: &str) -> String {
     format!(
-        "=== plantage (horodatage {when}, tri {}, {}) ===\nfil : {thread}\nendroit : {location}\nmessage : {message}\npile :\n{backtrace}\n\n",
+        "tri {}, {}\nthread: {thread}\nlocation: {location}\nbacktrace:\n{backtrace}",
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
     )
 }
 
-/// Ajoute `text` au journal de `dir` (créé au besoin).
-pub fn append(dir: &Path, text: &str) -> std::io::Result<PathBuf> {
-    std::fs::create_dir_all(dir)?;
-    let path = dir.join(FILE);
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)?;
-    file.write_all(text.as_bytes())?;
-    Ok(path)
-}
-
-/// Installe le crochet : journal dans `dir`, puis le comportement habituel.
-pub fn install(dir: PathBuf) {
+/// Installe le crochet : journal, puis le comportement habituel.
+pub fn install() {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let message = info
@@ -56,7 +36,10 @@ pub fn install(dir: PathBuf) {
             .unwrap_or("(sans nom)")
             .to_string();
         let backtrace = std::backtrace::Backtrace::force_capture().to_string();
-        if let Ok(path) = append(&dir, &report(&thread, &location, &message, &backtrace)) {
+        let detail = detail(&thread, &location, &backtrace);
+        if tri::log::write(Level::Crash, "panic", &message, &detail).is_some()
+            && let Some(path) = tri::log::path()
+        {
             eprintln!("tri : plantage consigné dans {}", path.display());
         }
         previous(info);
@@ -81,25 +64,24 @@ const GPU_BURST: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Une erreur de la carte graphique (mémoire pleine…), qui plantait `tri` avant le
 /// 07/11/2026 (le gestionnaire de wgpu par défaut arrête le programme) : consignée dans le
-/// journal de `dir` s'il y en a un, puis gardée pour la barre d'état. L'image en cause
-/// n'est pas dessinée, le reste continue.
-pub fn gpu_error(dir: Option<&Path>, message: &str) {
+/// journal, puis gardée pour la barre d'état. L'image en cause n'est pas dessinée, le
+/// reste continue.
+pub fn gpu_error(message: &str) {
     let now = std::time::Instant::now();
     let (last, told) = GPU_LOGGED.with(|l| l.get());
     let burst = last.is_some_and(|t| now.duration_since(t) < GPU_BURST);
     GPU_LOGGED.with(|l| l.set((Some(now), told)));
-    if !burst && let Some(dir) = dir {
-        let text = report("(carte graphique, sans plantage)", "wgpu", message, "");
-        if let Ok(path) = append(dir, &text)
-            && !told
-        {
-            // Une ligne par session dans le terminal ; le détail est au journal.
-            eprintln!(
-                "tri : erreur de la carte graphique, détails dans {}",
-                path.display()
-            );
-            GPU_LOGGED.with(|l| l.set((Some(now), true)));
-        }
+    if !burst
+        && tri::log::write(Level::Crash, "gpu", message, "(no crash)").is_some()
+        && !told
+        && let Some(path) = tri::log::path()
+    {
+        // Une ligne par session dans le terminal ; le détail est au journal.
+        eprintln!(
+            "tri : erreur de la carte graphique, détails dans {}",
+            path.display()
+        );
+        GPU_LOGGED.with(|l| l.set((Some(now), true)));
     }
     GPU_ERROR.with(|last| *last.borrow_mut() = Some(message.to_string()));
 }
@@ -116,37 +98,24 @@ mod tests {
     #[test]
     fn a_graphics_error_is_logged_and_shown_once() {
         let dir = tempfile::tempdir().unwrap();
-        gpu_error(Some(dir.path()), "Out of Memory");
+        tri::log::set_thread_dir(Some(dir.path().to_path_buf()));
+        gpu_error("Out of Memory");
         // La rafale qui suit (chaque image échoue sur la texture ratée) : pas au journal.
-        gpu_error(Some(dir.path()), "Validation Error");
-        let log = std::fs::read_to_string(dir.path().join(FILE)).unwrap();
-        assert!(log.contains("Out of Memory") && log.contains("sans plantage"));
-        assert!(
-            !log.contains("Validation Error"),
-            "une seule entrée par rafale"
-        );
+        gpu_error("Validation Error");
+        tri::log::set_thread_dir(None);
+        let entries = tri::log::read(dir.path());
+        assert_eq!(entries.len(), 1, "une seule entrée par rafale");
+        assert_eq!(entries[0].level, Level::Crash);
+        assert_eq!(entries[0].message, "Out of Memory");
         assert_eq!(take_gpu_error().as_deref(), Some("Validation Error"));
         assert_eq!(take_gpu_error(), None, "une fois");
     }
 
     #[test]
-    fn reports_are_appended_with_their_location_and_message() {
-        let dir = tempfile::tempdir().unwrap();
-        let data = dir.path().join("données");
-        append(
-            &data,
-            &report("main", "app.rs:12:5", "index hors limites", "pile"),
-        )
-        .unwrap();
-        append(&data, &report("tri-watch", "watch.rs:3:1", "autre", "pile")).unwrap();
-        let log = std::fs::read_to_string(data.join(FILE)).unwrap();
-        assert_eq!(
-            log.matches("=== plantage").count(),
-            2,
-            "ajoutés, pas remplacés"
-        );
-        assert!(log.contains("endroit : app.rs:12:5"));
-        assert!(log.contains("message : index hors limites"));
-        assert!(log.contains("fil : tri-watch"));
+    fn a_crash_detail_has_its_thread_location_and_stack() {
+        let detail = detail("tri-watch", "app.rs:12:5", "pile");
+        assert!(detail.contains("thread: tri-watch"));
+        assert!(detail.contains("location: app.rs:12:5"));
+        assert!(detail.ends_with("backtrace:\npile"));
     }
 }

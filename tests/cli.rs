@@ -168,6 +168,20 @@ fn a_folder_is_listed_by_kind_and_depth() {
 }
 
 #[test]
+fn a_failed_preview_is_written_to_the_log_with_its_image() {
+    // #398 : le journal de l'application, dans le dossier de données de la configuration.
+    let env = Env::new();
+    let dir = env.photos();
+    env.image(&dir, "good.jpg");
+    fs::write(dir.join("broken.jpg"), b"not a jpeg").unwrap();
+    env.run([arg(&dir), "--previews".as_ref()]);
+    let log = fs::read_to_string(env.path("data").join("tri.log")).unwrap();
+    assert!(log.contains("WARN [preview]"), "{log}");
+    assert!(log.contains("broken.jpg"), "{log}");
+    assert!(!log.contains("good.jpg"), "{log}");
+}
+
+#[test]
 fn previews_fill_the_cache_and_a_folder_is_cleared_alone() {
     let env = Env::new();
     let (one, two) = (env.photos().join("one"), env.photos().join("two"));

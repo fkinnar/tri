@@ -1502,17 +1502,27 @@ during a window's opening fade showed it half transparent.
   `search:vim`). An unknown
   step is reported and ignored.
   Example: `core.view.open,core.view.zoom,wait:1500,core.nav.next,wait:30,shot`.
-- **Crash log** (`gui/src/crash.rs`, 2026-10-19): any Rust error is recorded (message,
-  file and line, thread, backtrace) in `crash.log` in the data folder, before stopping; a
-  crash while drawing the window (called from AppKit on macOS) otherwise left only a
-  system report, without the message.
+- **Crashes** (`gui/src/crash.rs`, 2026-10-19): any Rust error is recorded (message, file
+  and line, thread, backtrace) in the application log, `tri.log` in the data folder
+  (level `CRASH`; a separate `crash.log` until 2026-11-10, taken into the log at the next
+  launch), before stopping; a crash while drawing the window (called from AppKit on
+  macOS) otherwise left only a system report, without the message.
+- **Application log** (issue #398, see [log.md](log.md)): every error shown in the status
+  bar is written to it once (`TriApp::log_errors`), after the detail the engine just put
+  there; a click on the error opens the log window (`gui/src/log_view.rs`) on those
+  entries, highlighted and unfolded, and clears the message. The window also opens from
+  the palette (`core.app.log`) and the help's "Log" button: newest first, levels shown
+  (errors; warnings and errors, by default; all), fuzzy search, detail on click, copy one
+  entry or everything, show the file in the file manager. "Report a problem" first offers
+  the latest entries (`[gui] report_log_entries`, 20), to read and edit (paths contain
+  personal names), attached to the GitHub form (`logs` field), or "Without the log".
 - **Graphics memory** (2026-11-07, crash "wgpu error: Out of Memory": 21 images compared
   at 1:1 on an integrated graphics card, ~100 MB per 26 Mpx 1:1): the large textures
   have a budget, `[gui.view] textures_mb` (1500 MB). When an image arrives
   (`TriApp::make_room`), the least recent ones not shown are dropped; if that is not
   enough, it keeps its preview (`over_budget`, not asked again while it stays shown) and
   the status bar says so. Safety net: a graphics card error no longer stops the program
-  (wgpu's default handler did); it is recorded in `crash.log` ("sans plantage") and shown
+  (wgpu's default handler did); it is recorded in the log (`CRASH`, "(no crash)") and shown
   in the status bar (`crash::gpu_error`, hooked to `Device::on_uncaptured_error` in
   `main.rs`). The texture in cause leaves the cache (named in the message,
   `egui_texid_Managed(n)`; otherwise the last one loaded) and its image keeps its
@@ -1524,7 +1534,7 @@ during a window's opening fade showed it half transparent.
   tomorrow). In a zoomed comparison, an image without its full
   definition shows its preview at the 1:1 scale (size known or estimated,
   `last_zoom_size`), with a warning at the top right explained on hover. The terminal
-  gets one line per session ("détails dans …/crash.log"); a burst of errors (5 s) leaves
+  gets one line per session ("détails dans …/tri.log"); a burst of errors (5 s) leaves
   only the first one in the log.
 - `TRI_GUI_TRACE=1`: timed trace of the startup steps (configuration read, window opened,
   folder read, tree, first image, engine; added on 2026-10-19 for a startup slowness seen

@@ -131,6 +131,8 @@ pub struct EngineSettings {
     pub neighbourhood: crate::neighbourhood::NeighbourhoodSettings,
     /// Dossier des données.
     pub data: DataSection,
+    /// Journal de l'application (`tri.log`).
+    pub log: crate::log::LogSettings,
 }
 
 /// Section `[xmp]` : notes (étoiles, couleurs, accepté / rejeté) dans les sidecars XMP. Voir

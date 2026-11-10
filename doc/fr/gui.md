@@ -1585,10 +1585,23 @@ moitié transparente.
   section : `settings:keys`), `search:<texte>` (tapé dans la recherche de la fenêtre de
   réglages, de l'aide ou de l'aide `?` ouverte : `search:vim`). Une étape inconnue est signalée et ignorée.
   Exemple : `core.view.open,core.view.zoom,wait:1500,core.nav.next,wait:30,shot`.
-- **Journal des plantages** (`gui/src/crash.rs`, 19/10/2026) : toute erreur Rust est
-  consignée (message, fichier et ligne, fil, pile d'appels) dans `crash.log` du dossier de
-  données, avant l'arrêt ; un plantage pendant le dessin de la fenêtre (appelé depuis
-  AppKit sur macOS) ne laissait sinon qu'un rapport du système, sans le message.
+- **Plantages** (`gui/src/crash.rs`, 19/10/2026) : toute erreur Rust est consignée
+  (message, fichier et ligne, fil, pile d'appels) au journal de l'application, `tri.log`
+  du dossier de données (niveau `CRASH` ; un `crash.log` à part jusqu'au 10/11/2026,
+  repris dans le journal au lancement suivant), avant l'arrêt ; un plantage pendant le
+  dessin de la fenêtre (appelé depuis AppKit sur macOS) ne laissait sinon qu'un rapport
+  du système, sans le message.
+- **Journal de l'application** (issue n° 398, voir [log.md](log.md)) : toute erreur
+  montrée dans la barre d'état y est écrite une fois (`TriApp::log_errors`), après le
+  détail que le moteur vient d'y mettre ; un clic sur l'erreur ouvre la fenêtre du
+  journal (`gui/src/log_view.rs`) sur ces entrées, mises en avant et dépliées, et efface
+  le message. La fenêtre s'ouvre aussi depuis la palette (`core.app.log`) et le bouton
+  « Journal » de l'aide : les plus récentes d'abord, gravités montrées (erreurs ;
+  avertissements et erreurs, par défaut ; tout), recherche floue, détail au clic, copier
+  une entrée ou tout, afficher le fichier dans le gestionnaire de fichiers. « Signaler un
+  problème » propose d'abord les dernières entrées (`[gui] report_log_entries`, 20), à
+  relire et modifier (les chemins contiennent des noms personnels), jointes au formulaire
+  de GitHub (champ `logs`), ou « Sans le journal ».
 - **Mémoire graphique** (07/11/2026, plantage « wgpu error: Out of Memory » : 21 images
   comparées à 1:1 sur une carte graphique intégrée, ~100 Mo par 1:1 de 26 Mpx) : les
   grandes textures ont un budget, `[gui.view] textures_mb` (1500 Mo). À l'arrivée d'une
@@ -1596,7 +1609,7 @@ moitié transparente.
   pas, elle garde son aperçu (`over_budget`, pas redemandée tant qu'elle reste affichée)
   et la barre d'état le dit. Filet de sécurité : une erreur de la carte graphique n'arrête
   plus le programme (le gestionnaire de wgpu par défaut le faisait) ; elle est consignée
-  dans `crash.log` (« sans plantage ») et dite dans la barre d'état
+  au journal (`CRASH`, « (no crash) ») et dite dans la barre d'état
   (`crash::gpu_error`, branché sur `Device::on_uncaptured_error` dans `main.rs`). La
   texture en cause sort du cache (nommée dans le message, `egui_texid_Managed(n)` ;
   sinon la dernière chargée) et son image garde son aperçu : sans cela, chaque image
@@ -1608,7 +1621,7 @@ moitié transparente.
   comparaison zoomée, une image sans sa pleine définition montre son aperçu à l'échelle
   du 1:1 (taille connue ou estimée, `last_zoom_size`), avec un avertissement en haut à
   droite expliqué au survol. Le terminal n'a qu'une ligne par session (« détails dans
-  …/crash.log ») ; une rafale d'erreurs (5 s) ne laisse que la première au journal.
+  …/tri.log ») ; une rafale d'erreurs (5 s) ne laisse que la première au journal.
 - `TRI_GUI_TRACE=1` : trace minutée des étapes du démarrage (configuration lue, fenêtre
   ouverte, dossier lu, arborescence, première image, moteur ; ajoutées le 19/10/2026
   pour une lenteur de démarrage vue sur macOS) et de chaque étape du chargement des images (demande au

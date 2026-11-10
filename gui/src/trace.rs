@@ -1,6 +1,7 @@
 //! Trace minutée pour le diagnostic (`TRI_GUI_TRACE=1`) : chaque étape du chargement des
 //! images (demande au moteur, image prête, décodage, affichage) sur la sortie d'erreur, avec
-//! le temps écoulé depuis le démarrage. Sans la variable, ne coûte qu'un test.
+//! le temps écoulé depuis le démarrage. Sans la variable, ne coûte qu'un test. Aussi au
+//! journal de l'application quand `[log] trace` est actif.
 
 use std::sync::OnceLock;
 use std::time::Instant;
@@ -10,10 +11,21 @@ fn start() -> Option<Instant> {
     *START.get_or_init(|| std::env::var_os("TRI_GUI_TRACE").map(|_| Instant::now()))
 }
 
-/// Écrit `message()` si la trace est active (le message n'est construit que dans ce cas).
+/// Écrit `message()` si la trace est active (le message n'est construit que dans ce cas) :
+/// sur la sortie d'erreur avec `TRI_GUI_TRACE`, au journal avec `[log] trace` (issue
+/// n° 398 : pour un utilisateur à qui l'on demande de reproduire un problème).
 pub fn trace(message: impl FnOnce() -> String) {
-    if let Some(start) = start() {
-        eprintln!("[{:8.3} s] {}", start.elapsed().as_secs_f64(), message());
+    let start = start();
+    let log = tri::log::tracing();
+    if start.is_none() && !log {
+        return;
+    }
+    let message = message();
+    if let Some(start) = start {
+        eprintln!("[{:8.3} s] {message}", start.elapsed().as_secs_f64());
+    }
+    if log {
+        tri::log::trace("gui", || message);
     }
 }
 
@@ -30,7 +42,7 @@ impl Steps {
     /// Début de l'image.
     pub fn start() -> Steps {
         Steps {
-            last: start().map(|_| Instant::now()),
+            last: (start().is_some() || tri::log::tracing()).then(Instant::now),
             parts: Vec::new(),
         }
     }

@@ -75,6 +75,8 @@ loupe = "m"
 # "q q": "q" alone quit too quickly (issue #244).
 "core.app.quit" = ["q q"]
 "core.app.check_update" = []
+# Application log (tri.log): from the palette, the help, or a click on an error.
+"core.app.log" = []
 "core.app.settings" = ["Ctrl+,"]
 # Zoom steps, like Lightroom: characters, for the top row as well as the numeric
 # keypad, whatever the keyboard layout.

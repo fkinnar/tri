@@ -278,8 +278,13 @@ fn parse() -> AnyResult<Args> {
 /// Réglages du fichier, corrigés par les options de la ligne de commande.
 fn settings(args: &Args) -> EngineSettings {
     let loaded = settings::load::<EngineSettings>(args.config.as_deref());
+    // Journal de l'application (issue n° 398), partagé avec l'interface.
+    if let Some(data) = loaded.settings.data_dir() {
+        tri::log::init(data, loaded.settings.log.clone());
+    }
     if let Some(warning) = &loaded.warning {
         eprintln!("{}", t!("warning-prefix", message = warning));
+        tri::log::warning("settings", warning, "");
     }
     let mut s = loaded.settings;
     if let Some(side) = args.side {

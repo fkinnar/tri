@@ -45,6 +45,7 @@ cannot change without updating its documentation.
 | `[sharpness]` | Sharpness map: threshold, thickening, isolated points (`sharpness.md`) | engine |
 | `[files]` | File actions: allowed or not, pairs that follow, trash or permanent deletion, external editor (`files.md`) | engine |
 | `[data]` | Data folder (offload history, last opened folder) | engine |
+| `[log]` | Application log: size, older files kept, detailed trace ([log.md](log.md)) | engine |
 | `[gui]` | Theme, shortcut profiles, key sequence delay (`gg`), window, RAW render policy, loading budget, focus mode for an image argument (`image_focus`) | interface |
 | `[gui.grid]` | Grid dimensions (including `info_min_cell`, below which the info hides), thumbnails in memory, size of the ratings, empty marks drawn (`empty_marks`), opacity of a rejected photo, hover frame | interface |
 | `[gui.view]` | Wait before a RAW 100 %, large textures in memory, keyboard pan step, size of the ratings | interface |

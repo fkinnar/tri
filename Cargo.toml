@@ -11,6 +11,8 @@ repository = "https://github.com/fkinnar/tri"
 
 [dependencies]
 blake3 = "1"
+# Date locale des entrées du journal (`log`), déjà utilisé par l'interface.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 kamadak-exif = "0.6"
 # Voisinage réseau (Bonjour / mDNS), sans runtime asynchrone.
 mdns-sd = { version = "0.21", default-features = false }

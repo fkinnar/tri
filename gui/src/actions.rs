@@ -516,6 +516,8 @@ pub enum Action {
     CheckUpdate,
     /// Signaler un problème : formulaire de GitHub prérempli (issue n° 7), leader puis `b`.
     ReportIssue,
+    /// Journal de l'application (`tri.log`, issue n° 398) : erreurs avec leur détail.
+    Log,
     /// Noter : 0 à 5 étoiles.
     Stars(u8),
     /// Ajouter ou retirer une couleur.
@@ -528,7 +530,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 231] = [
+    pub const ALL: [Action; 232] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -753,6 +755,7 @@ impl Action {
         Action::Settings,
         Action::CheckUpdate,
         Action::ReportIssue,
+        Action::Log,
         Action::Quit,
         Action::Stars(0),
         Action::Stars(1),
@@ -921,7 +924,9 @@ impl Action {
                 Group::Panels
             }
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
-            Help | HelpHere | Palette | Settings | CheckUpdate | ReportIssue | Quit => Group::App,
+            Help | HelpHere | Palette | Settings | CheckUpdate | ReportIssue | Log | Quit => {
+                Group::App
+            }
         }
     }
 
@@ -1195,6 +1200,7 @@ impl Action {
             Action::Settings => "core.app.settings",
             Action::CheckUpdate => "core.app.check_update",
             Action::ReportIssue => "core.app.report_issue",
+            Action::Log => "core.app.log",
             Action::Quit => "core.app.quit",
             Action::Stars(0) => "core.rate.star.0",
             Action::Stars(1) => "core.rate.star.1",

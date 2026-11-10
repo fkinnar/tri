@@ -52,6 +52,8 @@ pub struct AppSettings {
     pub offload: tri::offload::OffloadSettings,
     /// `[data]` (moteur).
     pub data: tri::settings::DataSection,
+    /// `[log]` (moteur) : journal de l'application.
+    pub log: tri::log::LogSettings,
     /// `[files]` (moteur).
     pub files: tri::files::FileSettings,
     /// `[sharpness]` (moteur).
@@ -92,6 +94,7 @@ impl AppSettings {
             exposure: self.exposure,
             offload: self.offload.clone(),
             data: self.data.clone(),
+            log: self.log.clone(),
             files: self.files.clone(),
             sharpness: self.sharpness,
             similarity: self.similarity,
@@ -202,6 +205,8 @@ pub struct GuiSettings {
     /// Trace (`TRI_GUI_TRACE`) : une image de l'interface plus lente que ce délai (ms)
     /// est tracée avec la durée de ses étapes.
     pub trace_slow_ms: u64,
+    /// Signaler un problème : dernières entrées du journal proposées (0 : aucune).
+    pub report_log_entries: usize,
     /// Flèches des noms de touches (←, →…) : vide, une police du système qui les a ;
     /// un chemin, cette police ; `"none"`, en toutes lettres.
     pub arrow_font: String,
@@ -314,6 +319,7 @@ impl Default for GuiSettings {
             key_menu: true,
             key_menu_delay_ms: 400,
             trace_slow_ms: 100,
+            report_log_entries: 20,
             arrow_font: String::new(),
             arrow_font_scale: 1.0,
             window: [1400.0, 900.0],

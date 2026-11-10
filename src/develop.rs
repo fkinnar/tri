@@ -1251,6 +1251,64 @@ impl std::fmt::Display for DevelopError {
 
 impl std::error::Error for DevelopError {}
 
+/// La ligne de commande de `command`, pour le journal (programme et arguments entre
+/// guillemets s'ils contiennent une espace).
+pub(crate) fn command_line(command: &Command) -> String {
+    std::iter::once(command.get_program())
+        .chain(command.get_args())
+        .map(|a| {
+            let a = a.to_string_lossy();
+            if a.contains(' ') || a.is_empty() {
+                format!("\"{a}\"")
+            } else {
+                a.into_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Un logiciel de développement a échoué (issue n° 398) : tout le détail au journal
+/// (image, commande, code de sortie, messages complets) ; l'erreur ne garde que la
+/// dernière ligne des messages, sinon `fallback` (le nom de l'outil).
+pub(crate) fn tool_failed(
+    engine: Engine,
+    image: Option<&Path>,
+    command: &Command,
+    status: Option<std::process::ExitStatus>,
+    output: &str,
+    fallback: &str,
+) -> DevelopError {
+    let last = output
+        .lines()
+        .rev()
+        .find(|l| !l.trim().is_empty())
+        .unwrap_or(fallback)
+        .trim()
+        .to_string();
+    let mut detail = String::new();
+    if let Some(image) = image {
+        detail.push_str(&format!("image: {}\n", image.display()));
+    }
+    detail.push_str(&format!("command: {}\n", command_line(command)));
+    match status {
+        Some(status) => detail.push_str(&format!("exit: {status}\n")),
+        None => detail.push_str("exit: (did not start)\n"),
+    }
+    if output.trim().is_empty() {
+        detail.push_str("output: (empty)");
+    } else {
+        detail.push_str("output:\n");
+        detail.push_str(output.trim_end());
+    }
+    crate::log::error(
+        "develop",
+        &format!("{} failed: {last}", engine.name()),
+        &detail,
+    );
+    DevelopError::Failed(engine, last)
+}
+
 /// darktable, prêt à développer.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Darktable {
@@ -1310,9 +1368,8 @@ fn render_darktable(
         .map_err(|e| DevelopError::Failed(Engine::Darktable, e.to_string()))?;
     let _ = std::fs::remove_file(out);
     let side = side.to_string();
-    let mut child = dt
-        .cli
-        .command()
+    let mut command = dt.cli.command();
+    command
         // Clone darktable : l'image d'origine, avec le sidecar du clone.
         .arg(crate::media::source(image).as_ref())
         .arg(sidecar)
@@ -1327,9 +1384,17 @@ fn render_darktable(
         .args(["--conf", "write_sidecar_files=never"])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| DevelopError::Failed(Engine::Darktable, e.to_string()))?;
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().map_err(|e| {
+        tool_failed(
+            Engine::Darktable,
+            Some(image),
+            &command,
+            None,
+            &e.to_string(),
+            "darktable-cli",
+        )
+    })?;
     loop {
         if cancel.load(Ordering::Relaxed) {
             let _ = child.kill();
@@ -1346,10 +1411,16 @@ fn render_darktable(
                     use std::io::Read;
                     let _ = err.read_to_string(&mut message);
                 }
-                let last = message.lines().rev().find(|l| !l.trim().is_empty());
-                return Err(DevelopError::Failed(
+                if status.success() {
+                    message.push_str("\n(no output file written)");
+                }
+                return Err(tool_failed(
                     Engine::Darktable,
-                    last.unwrap_or("darktable-cli").trim().to_string(),
+                    Some(image),
+                    &command,
+                    Some(status),
+                    &message,
+                    "darktable-cli",
                 ));
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(50)),
@@ -1412,15 +1483,23 @@ impl Developer for RapidRaw {
         if let Some(file) = &adjustments {
             command.arg("--adjustments").arg(file);
         }
-        let child = command
+        command
             .arg("--output")
             .arg(&export)
             .args(["--format", "jpeg", "--quality", "95"])
             .stdin(Stdio::null())
             .stdout(messages.try_clone().map_err(|e| failed(&e))?)
-            .stderr(messages)
-            .spawn()
-            .map_err(|e| failed(&e))?;
+            .stderr(messages);
+        let child = command.spawn().map_err(|e| {
+            tool_failed(
+                Engine::RapidRaw,
+                Some(image),
+                &command,
+                None,
+                &e.to_string(),
+                "rapidraw export",
+            )
+        })?;
         let status = wait(child, Engine::RapidRaw, cancel);
         let text = std::fs::read_to_string(&log).unwrap_or_default();
         let _ = std::fs::remove_file(&log);
@@ -1431,13 +1510,14 @@ impl Developer for RapidRaw {
             Ok(_) if text.contains("already running") => {
                 Err(failed(&crate::t!("develop-rapidraw-open")))
             }
-            Ok(_) => {
-                let last = text.lines().rev().find(|l| !l.trim().is_empty());
-                Err(DevelopError::Failed(
-                    Engine::RapidRaw,
-                    last.unwrap_or("rapidraw export").trim().to_string(),
-                ))
-            }
+            Ok(status) => Err(tool_failed(
+                Engine::RapidRaw,
+                Some(image),
+                &command,
+                Some(status),
+                &text,
+                "rapidraw export",
+            )),
             Err(e) => Err(e),
         };
         let _ = std::fs::remove_file(&export);
@@ -1515,7 +1595,7 @@ impl ProfileTool {
         } else {
             self.cli.command()
         };
-        let child = command
+        command
             .arg("-o")
             .arg(export_dir)
             .arg("-p")
@@ -1525,9 +1605,11 @@ impl ProfileTool {
             .arg(&photo)
             .stdin(Stdio::null())
             .stdout(messages.try_clone().map_err(|e| failed(&e))?)
-            .stderr(messages)
+            .stderr(messages);
+        let tool = profile_cli_names(engine).0;
+        let child = command
             .spawn()
-            .map_err(|e| failed(&e))?;
+            .map_err(|e| tool_failed(engine, Some(image), &command, None, &e.to_string(), tool))?;
         let status = wait(child, engine, cancel);
         let text = std::fs::read_to_string(&log).unwrap_or_default();
         let _ = std::fs::remove_file(&log);
@@ -1543,13 +1625,18 @@ impl ProfileTool {
             });
         match (status, produced) {
             (Ok(status), Some(file)) if status.success() => Ok(file),
-            (Ok(_), _) => {
-                let last = text.lines().rev().find(|l| !l.trim().is_empty());
-                Err(DevelopError::Failed(
+            (Ok(status), produced) => {
+                let mut text = text;
+                if status.success() && produced.is_none() {
+                    text.push_str("\n(no output file written)");
+                }
+                Err(tool_failed(
                     engine,
-                    last.unwrap_or(profile_cli_names(engine).0)
-                        .trim()
-                        .to_string(),
+                    Some(image),
+                    &command,
+                    Some(status),
+                    &text,
+                    tool,
                 ))
             }
             (Err(e), _) => Err(e),
