@@ -223,7 +223,7 @@ fn sum(cache: &Cache, levels: &[Level]) -> Usage {
 
 /// « 820 Mo », « 1,4 Go », « 3,2 Mo », « 48 Ko » (une décimale sous 10 Mo et en Go ; en
 /// Ko sous 1 Mo, plutôt qu'un « 0,0 Mo » qui ferait croire à un niveau vide).
-fn size_text(bytes: u64) -> String {
+pub fn size_text(bytes: u64) -> String {
     const MB: f64 = 1024.0 * 1024.0;
     let mb = bytes as f64 / MB;
     if mb >= 1024.0 {

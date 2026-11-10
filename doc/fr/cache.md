@@ -57,6 +57,9 @@ mémoire par dossier, oublié à chaque changement).
   (cache central, ou `.tri-cache` plus haut) : rien n'est recalculé ;
 - `release_disk(racine)` : l'inverse, les entrées vont où leurs photos les attendent
   désormais (`.tri-cache` plus haut, sinon chez l'utilisateur) ;
+- `disk_usage(racine)` / `clear_disk(racine)` (10/11/2026) : place de tout ce que garde
+  `.tri-cache`, et son vidage (entrées de photos disparues comprises) ; `.tri-cache`
+  demeure, le cache reste gardé là ;
 - `relocate(de, vers)` : après le déplacement ou le renommage d'un dossier, ses entrées
   le suivent (un `.tri-cache` dans le dossier même est parti avec lui) ;
 - `apply(location, dossier, amovibles)` : le réglage `[cache] location` (`user`, `disk`,

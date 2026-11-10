@@ -4,6 +4,9 @@
 
 ## Non publié
 
+- **Vider le cache gardé avec les photos** (#409) : sur un dossier ou un disque qui garde
+  son cache (`.tri-cache`), clic droit, Préférences, « Vider le cache ici… », confirmé dans
+  le menu avec sa taille ; le cache reste gardé là.
 - **Vider le cache depuis l'interface** (#408) : en tête de la section « Cache » de la
   fenêtre de réglages, la place des vignettes, aperçus boîtier, aperçus RAW, 1:1,
   développés et analyses, et le total ; « Vider » par ligne et « Tout vider », confirmés,
