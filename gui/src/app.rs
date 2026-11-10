@@ -19147,9 +19147,15 @@ impl Dialog {
             .unwrap_or_default();
         let pos_id = self.id.with("position");
         let size_id = self.id.with("size");
-        let start = match ctx.data(|data| data.get_temp::<(egui::Vec2, u32)>(size_id)) {
+        // Taille mesurée, images de centrage déjà faites, dernière passe affichée : une
+        // boîte rouverte (même identifiant, `CENTRED`) repart de zéro.
+        let pass = ctx.cumulative_pass_nr();
+        let centring = ctx
+            .data(|data| data.get_temp::<(egui::Vec2, u32, u64)>(size_id))
+            .filter(|&(_, _, last)| last + 1 >= pass);
+        let start = match centring {
             _ if !self.centred => self.start,
-            Some((size, _)) => ctx.content_rect().center() - size / 2.0,
+            Some((size, _, _)) => ctx.content_rect().center() - size / 2.0,
             // Première image, taille encore inconnue : à peu près au centre.
             None => ctx.content_rect().center() - vec2(d.min_width / 2.0, 80.0),
         };
@@ -19279,14 +19285,18 @@ impl Dialog {
         // la fait pas glisser sous le pointeur (CI Ubuntu du 10/11/2026 : un clic manquait
         // « Décharger », la boîte venait de bouger).
         if self.centred {
-            let measured = response.response.rect.size();
-            let frames = ctx
-                .data(|data| data.get_temp::<(egui::Vec2, u32)>(size_id))
-                .map_or(0, |(_, n)| n);
-            if frames < d.centring_frames {
-                ctx.data_mut(|data| data.insert_temp(size_id, (measured, frames + 1)));
-                ctx.request_repaint();
-            }
+            let (size, frames) = match centring {
+                Some((size, n, _)) if n >= d.centring_frames => (size, n),
+                Some((_, n, _)) => {
+                    ctx.request_repaint();
+                    (response.response.rect.size(), n + 1)
+                }
+                None => {
+                    ctx.request_repaint();
+                    (response.response.rect.size(), 1)
+                }
+            };
+            ctx.data_mut(|data| data.insert_temp(size_id, (size, frames, pass)));
         }
         DialogResponse {
             modal: response,
@@ -28518,6 +28528,7 @@ mod tests {
         h.state_mut().set_volumes(&ctx, vec![]);
         h.state_mut().set_volumes(&ctx, vec![card.clone()]);
         wait_for(&mut h, "0 à copier");
+        settle_dialog(&mut h);
         h.get_by_label("Annuler").click();
         h.run_steps(2);
         assert!(h.state().offload.is_none());
