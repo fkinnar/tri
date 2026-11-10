@@ -452,6 +452,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   fenêtre de réglages, `folder` des préréglages d'export compris) a un bouton qui ouvre
   la fenêtre de choix de dossier du système (`rfd`), au chemin tapé ou à son plus proche
   parent existant, sinon au dossier personnel ; la complétion par Tab reste.
+- **Place du cache et vidage** (10/11/2026, issue n° 128, `gui/src/cache_panel.rs`) : en
+  tête de la section « Cache » de la fenêtre de réglages, la place de chaque famille de
+  niveaux (vignettes, aperçus boîtier, aperçus RAW, 1:1, développés, analyses) et le
+  total, mesurés en fond à l'ouverture ; « Vider » par ligne et « Tout vider », confirmés
+  sur place (le bouton devient « Vider » / « Annuler »), en fond, l'espace libéré annoncé
+  dessous. Le cache général seulement : celui gardé avec les photos (`.tri-cache`) suit
+  son dossier. Rien n'est à relancer : ce qui manque se recalcule à la demande.
 - **Fenêtre de réglages** (`Ctrl+,`, 18/10/2026 ; `gui/src/settings_window.rs`, moteur :
   `tri::config_edit`, voir `config_edit.md`) : sections à gauche (flèches haut / bas
   depuis la recherche), réglages et leurs commentaires à droite, recherche floue comme

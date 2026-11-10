@@ -433,6 +433,13 @@ system one ("cold" measurements, experiments).
   export, offload, copy from a server, folders of the settings window, `folder` of export
   presets included) has a button opening the system's folder chooser (`rfd`), at the typed
   path or its nearest existing parent, otherwise at the home folder; Tab completion stays.
+- **Cache size and clearing** (2026-11-10, issue #128, `gui/src/cache_panel.rs`): at the
+  top of the "Cache" section of the settings window, the size of each family of levels
+  (thumbnails, camera previews, RAW previews, 1:1, developed, analyses) and the total,
+  measured in the background on opening; "Clear" per row and "Clear all", confirmed in
+  place (the button becomes "Clear" / "Cancel"), in the background, the freed space
+  announced below. The general cache only: the one kept with the photos (`.tri-cache`)
+  follows its folder. Nothing to restart: what is missing is recomputed on demand.
 - **Settings window** (`Ctrl+,`, 2026-10-18; `gui/src/settings_window.rs`, engine:
   `tri::config_edit`, see `config_edit.md`): sections on the left (up / down arrows from
   the search), settings and their comments on the right, fuzzy search like the help

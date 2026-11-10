@@ -569,6 +569,8 @@ pub struct SettingsWindow {
     /// Nom d'un profil ou préréglage en cours de saisie (« Nouveau… » ou « Renommer… »).
     naming: Option<Naming>,
     naming_focus: bool,
+    /// Place du cache et vidage, en tête de la section « Cache » (issue n° 128).
+    cache: Option<crate::cache_panel::CachePanel>,
 }
 
 /// Nom en cours de saisie dans l'en-tête d'une famille.
@@ -676,7 +678,15 @@ impl SettingsWindow {
             errors: HashMap::new(),
             dirty: false,
             save_error: None,
+            cache: None,
         })
+    }
+
+    /// Le cache de l'application : sa place et de quoi le vider, en tête de la section
+    /// « Cache ».
+    pub fn with_cache(mut self, cache: tri::cache::Cache) -> SettingsWindow {
+        self.cache = Some(crate::cache_panel::CachePanel::new(cache));
+        self
     }
 
     /// Recherche `text` (script de capture : `search:vim`).
@@ -1291,6 +1301,11 @@ impl SettingsWindow {
             ui.add_space(6.0);
             if section.name == "keys" {
                 return self.keys_entries(ui, None);
+            }
+            if section.name == "cache"
+                && let Some(panel) = &mut self.cache
+            {
+                panel.ui(ui);
             }
             // Aucun logiciel trouvé : dit, avec ce que `tri` sait utiliser.
             if section.name == "develop" && self.found.is_empty() {

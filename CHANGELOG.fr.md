@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Vider le cache depuis l'interface** (#408) : en tête de la section « Cache » de la
+  fenêtre de réglages, la place des vignettes, aperçus boîtier, aperçus RAW, 1:1,
+  développés et analyses, et le total ; « Vider » par ligne et « Tout vider », confirmés,
+  en fond, l'espace libéré annoncé. Par exemple, vider les 1:1 sans perdre les vignettes,
+  ou les développés après une mise à jour de darktable.
 - **Menu du clic droit sur un dossier rangé** (#407) : en groupes, Accès (afficher dans
   le gestionnaire de fichiers, nommé : Finder, Explorateur, Nemo, Dolphin… ; ouvrir dans
   darktable, favori), Dossier, Notes, Développement et

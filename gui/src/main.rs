@@ -33,6 +33,7 @@ macro_rules! t {
 mod actions;
 mod adjust_view;
 mod app;
+mod cache_panel;
 mod cheatsheet;
 mod compare;
 mod crash;

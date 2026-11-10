@@ -16600,6 +16600,11 @@ impl TriApp {
                         .with_default_apps(self.default_apps())
                         .with_colors(self.gui.colors.clone()),
                 );
+                if let Some(engine) = &self.engine
+                    && let Some(window) = self.settings_window.take()
+                {
+                    self.settings_window = Some(window.with_cache(engine.cache.clone()));
+                }
             }
             Err(e) => self.file_error = Some(e),
         }
@@ -27831,6 +27836,53 @@ mod tests {
             h.output().platform_output.cursor_icon,
             egui::CursorIcon::Grab
         );
+    }
+
+    #[test]
+    fn the_cache_section_shows_its_size_and_clears_it_after_confirmation() {
+        // Issue n° 128 : en tête de la section « Cache », la place par niveau, « Tout
+        // vider » confirmé, en fond (cache du harnais : un dossier temporaire).
+        let (mut h, dir) = harness();
+        let cache = h.state().engine.as_ref().unwrap().cache.clone();
+        let thumbnails = |c: &tri::cache::Cache| {
+            c.usage(tri::cache::Level::Thumbnail)
+                .map_or(0, |u| u.entries)
+        };
+        run_until(&mut h, |_| thumbnails(&cache) > 0);
+        h.state_mut().config_path = Some(dir.path().join("config.toml"));
+        press(&mut h, Key::Comma, Modifiers::CTRL);
+        h.state_mut()
+            .settings_window
+            .as_mut()
+            .unwrap()
+            .show_section("cache");
+        h.run_steps(3);
+        assert!(h.query_by_label(&t!("cache-row-full")).is_some());
+        h.get_by_label(&t!("cache-clear-all")).click();
+        h.run_steps(2);
+        // À sa place : « Vider » (confirmer) et « Annuler ».
+        assert!(h.query_by_label(&t!("cache-clear-all")).is_none());
+        h.get_by_label(&t!("cache-clear-cancel")).click();
+        h.run_steps(2);
+        h.get_by_label(&t!("cache-clear-all")).click();
+        h.run_steps(2);
+        // Le bouton de confirmation : le dernier « Vider » (sur la ligne du total).
+        h.query_all_by_label(&t!("cache-clear-confirm"))
+            .max_by(|a, b| a.rect().top().total_cmp(&b.rect().top()))
+            .unwrap()
+            .click();
+        let tail = t!("cache-freed", size = "§");
+        let tail = tail.split('§').next_back().unwrap().to_string();
+        let freed = |h: &Harness<'_, TriApp>| h.query_by_label_contains(&tail).is_some();
+        for _ in 0..400 {
+            h.run_steps(1);
+            if freed(&h) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(freed(&h), "freed space announced");
+        assert_eq!(thumbnails(&cache), 0);
     }
 
     #[test]
