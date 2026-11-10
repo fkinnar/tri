@@ -1591,6 +1591,10 @@ moitié transparente.
   repris dans le journal au lancement suivant), avant l'arrêt ; un plantage pendant le
   dessin de la fenêtre (appelé depuis AppKit sur macOS) ne laissait sinon qu'un rapport
   du système, sans le message.
+- **Réglages de visualisation** (issue n° 137, voir [adjust.md](adjust.md)) : section
+  « Réglages » en bas du panneau de droite (`gui/src/app/adjust.rs`), réglages appliqués
+  aux pixels avant la texture (`gui/src/adjust_view.rs`, carte partagée avec le fil de
+  chargement ; textures de l'image refaites à chaque changement), pipette en plein écran.
 - **Journal de l'application** (issue n° 398, voir [log.md](log.md)) : toute erreur
   montrée dans la barre d'état y est écrite une fois (`TriApp::log_errors`), après le
   détail que le moteur vient d'y mettre ; un clic sur l'erreur ouvre la fenêtre du

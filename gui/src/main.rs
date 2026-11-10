@@ -31,6 +31,7 @@ macro_rules! t {
 }
 
 mod actions;
+mod adjust_view;
 mod app;
 mod cheatsheet;
 mod compare;

@@ -4,14 +4,19 @@
 
 ## Non publié
 
-- **Réglages de visualisation, moteur et ligne de commande** (#404) : exposition,
-  balance des blancs et noir et blanc (mélangeur de canaux, préréglages façon filtres
-  colorés), pour comparer et trier une série. `tri --adjust <référence> <images>… --to
+- **Réglages de visualisation** (#404) : exposition, balance des blancs et noir et blanc
+  (mélangeur de canaux, préréglages façon filtres colorés), pour comparer et trier une
+  série. Une nouvelle section « Réglages » du panneau de droite les règle pour l'image
+  courante : correction, décalage créatif, noir et blanc, « Neutraliser la balance »,
+  pipette en plein écran, valeurs à reporter dans un logiciel de développement, « Avant »
+  pour comparer, et « Appliquer à la sélection » (exposition et balance harmonisées sur
+  l'image courante, un seul pas à annuler). Enregistrés dans le sidecar sous `tri:` ;
+  montrés sur les vignettes et les grandes images. `tri --adjust <référence> <images>… --to
   <dossier>` règle la référence et applique ses réglages aux autres : exposition et
   balance harmonisées sur la référence (une photo à -1 IL reçoit environ +1 IL), décalage
   créatif et noir et blanc copiés. Écrit les JPEG réglés et affiche les valeurs à reporter
   dans un logiciel de développement. Sur un RAW, l'exposition est appliquée aux données du
-  capteur. L'interface suit (#137).
+  capteur (#137).
 - **Journal de l'application** (#403) : une erreur garde un message court dans la barre
   d'état, et tout son détail va dans `tri.log`, au dossier de données : pour un logiciel
   de développement en échec, l'image, la commande, le code de sortie et tous ses

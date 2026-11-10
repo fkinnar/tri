@@ -1507,6 +1507,10 @@ during a window's opening fade showed it half transparent.
   (level `CRASH`; a separate `crash.log` until 2026-11-10, taken into the log at the next
   launch), before stopping; a crash while drawing the window (called from AppKit on
   macOS) otherwise left only a system report, without the message.
+- **Viewing adjustments** (issue #137, see [adjust.md](adjust.md)): "Adjustments"
+  section at the bottom of the right panel (`gui/src/app/adjust.rs`), adjustments applied
+  to the pixels before the texture (`gui/src/adjust_view.rs`, map shared with the loading
+  thread; the image's textures are redone on every change), eyedropper in full screen.
 - **Application log** (issue #398, see [log.md](log.md)): every error shown in the status
   bar is written to it once (`TriApp::log_errors`), after the detail the engine just put
   there; a click on the error opens the log window (`gui/src/log_view.rs`) on those

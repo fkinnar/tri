@@ -5,9 +5,9 @@ series**, not to develop: exposure, white balance, black and white with a channe
 The key: **apply one image's adjustments to the others**, matching what must be matched
 (a photo at -1 EV and a well-exposed one end up alike).
 
-First stage (this module): the engine and the command line. Then: the interface (sliders,
-eyedropper, before / after, "Apply to selection", thumbnails), the report of each image's
-adjustments, then writing them for other software (RawTherapee / ART first). The
+Done: the engine, the command line, the interface ("Adjustments" section), the report of
+the values. Next: writing them for other software (RawTherapee / ART first), real LibRaw
+thumbnails as an option, exporting adjusted images. The
 adjustments apply **before** any development by another program: an image developed in
 darktable is not affected.
 
@@ -88,6 +88,36 @@ images) and accounts for black and white.
 `report`: total exposure to copy (correction + creative, also separate), warmth, tint,
 gains, mixer in percent. First stage before writing into development software formats:
 these values are copied by hand.
+
+## In the interface
+
+**"Adjustments"** section of the right panel (at the bottom, after EXIF; grid and full
+screen), for the current image (`gui/src/app/adjust.rs`):
+
+- **Correction**: exposure, warmth, tint; "Neutralise the balance" (grey world, on the
+  thumbnail); in full screen, **"Eyedropper"** then a click on a zone that should be grey
+  (`[gui] adjust_eyedropper_size`, 4 % of the image).
+- **Creative offset**: exposure, warmth, tint.
+- **Black and white**: checkbox, presets (neutral, red, orange, yellow, green, blue
+  filters), red / green / blue in %.
+- The **report** under the sliders (total exposure, correction, creative; balance; mix),
+  and **"Copy the values"**.
+- **"Apply to selection"**: the current image's adjustments to the other selected images,
+  in the default modes (corrections matched, measured on the thumbnails); one history
+  step.
+- **"Before"**: every image without its adjustments (toggle), sidecars untouched.
+- **"Reset"**. Double-click a slider: default value.
+
+Sliders show the change at once (thumbnail and large image); the sidecar is written on
+release, one history step per gesture (`u` / Ctrl+Z undoes it). Adjustments are read in
+the background from the sidecars (never waiting on a slow disk) and applied to the pixels
+just before the texture (`gui/src/adjust_view.rs`, shared with the loading thread). **On
+screen, everything is done on the image** (approximation on JPEGs, exact mixer); exposure
+on the sensor data stays for the command line and the export to come. A development
+(darktable…) is never adjusted.
+
+Actions without a default shortcut, in the palette: `core.adjust.before_after`,
+`core.adjust.apply`.
 
 ## Command line
 

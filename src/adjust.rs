@@ -20,11 +20,17 @@
 //! Le moteur ne fait que calculer ; l'enregistrement (sidecar XMP, espace `tri:`) et
 //! l'interface viennent ensuite. Voir `doc/en/adjust.md`.
 
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
 use crate::bitmap::Bitmap;
+use crate::xmp::{self, Convention};
 
 /// Gains rouge et bleu de la balance des blancs, relatifs à la balance de base de l'image
 /// (celle de la prise de vue) : `1.0` partout, rien. Le vert sert de référence.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Gains {
     /// Gain du rouge.
     pub red: f32,
@@ -93,7 +99,8 @@ impl Gains {
 }
 
 /// Une couche d'exposition et de balance.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Adjust {
     /// Correction d'exposition (IL).
     pub exposure: f32,
@@ -118,7 +125,8 @@ impl Adjust {
 
 /// Mélange des canaux pour le noir et blanc : part du rouge, du vert et du bleu (1.0 =
 /// 100 %). La somme n'est pas imposée (au-dessus de 1, l'image s'éclaircit).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Mixer {
     /// Part du rouge.
     pub red: f32,
@@ -155,8 +163,11 @@ impl Mixer {
     }
 }
 
-/// Les réglages d'une image.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+/// Les réglages d'une image. Enregistrés dans son sidecar XMP, en JSON dans
+/// `tri:Adjust` ([`read`], [`write`]) ; illisibles par les autres logiciels (assumé :
+/// leurs réglages sont internes et propres à chacun).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Layers {
     /// Correction : base commune (exposition harmonisée, balance neutre), propre à
     /// l'image.
@@ -164,6 +175,7 @@ pub struct Layers {
     /// Décalage créatif, le même pour la série.
     pub creative: Adjust,
     /// Noir et blanc, s'il y en a un.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mono: Option<Mixer>,
 }
 
@@ -176,6 +188,59 @@ impl Layers {
     /// Vrai si l'image n'a aucun réglage.
     pub fn is_none(&self) -> bool {
         self.total().is_none() && self.mono.is_none()
+    }
+
+    /// Éléments de `tri:Adjust` : un seul, en JSON ; aucun sans réglage.
+    pub fn items(layers: Option<&Layers>) -> Vec<String> {
+        layers
+            .filter(|l| !l.is_none())
+            .map(|l| serde_json::to_string(l).expect("réglages sérialisables"))
+            .into_iter()
+            .collect()
+    }
+
+    /// Depuis les éléments de `tri:Adjust` (le premier lisible).
+    pub fn from_items(items: &[String]) -> Option<Layers> {
+        items
+            .iter()
+            .find_map(|i| serde_json::from_str::<Layers>(i).ok())
+            .filter(|l| !l.is_none())
+    }
+}
+
+/// Réglages de `image`, lus dans son sidecar (aucun sans sidecar).
+pub fn read(image: &Path) -> Result<Option<Layers>, xmp::XmpError> {
+    Ok(Layers::from_items(&xmp::read_list_of(image, xmp::ADJUST)?))
+}
+
+/// Écrit les réglages de `image` dans son sidecar (créé selon `default` s'il le faut ;
+/// aucun réglage : la liste est retirée). Seul `tri:Adjust` change. Renvoie les éléments
+/// d'avant et d'après, pour l'historique ([`crate::history::Step::Adjust`]).
+pub fn write(
+    image: &Path,
+    layers: Option<&Layers>,
+    default: Convention,
+) -> Result<crate::history::AdjustChange, xmp::XmpError> {
+    let before = xmp::read_list_of(image, xmp::ADJUST)?;
+    let after = Layers::items(layers);
+    if before != after {
+        xmp::write_list(image, xmp::ADJUST, &after, default)?;
+    }
+    Ok(crate::history::AdjustChange {
+        image: PathBuf::from(image),
+        before,
+        after,
+    })
+}
+
+/// Courbe d'une image 8 bits selon sa source : un rendu LibRaw (aperçu standard ou 1:1 d'un
+/// RAW) est en BT.709, tout le reste (JPEG boîtier, vignette, image plate) en sRGB.
+pub fn transfer_of(raw: bool, level: crate::cache::Level) -> Transfer {
+    use crate::cache::Level;
+    if raw && matches!(level, Level::Standard | Level::Full) {
+        Transfer::Bt709
+    } else {
+        Transfer::Srgb
     }
 }
 
@@ -747,6 +812,34 @@ mod tests {
         assert_eq!(apply(Mode::Absolute).correction.exposure, 0.5);
         assert_eq!(apply(Mode::Offset).correction.exposure, 0.75);
         assert_eq!(apply(Mode::Keep).correction.exposure, 0.25);
+    }
+
+    #[test]
+    fn adjustments_are_kept_in_the_sidecar_and_undone() {
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("DSCF0001.RAF");
+        std::fs::write(&image, b"raw").unwrap();
+        let conv = Convention::Darktable;
+        assert_eq!(read(&image).unwrap(), None);
+        let layers = Layers {
+            correction: Adjust {
+                exposure: 0.7,
+                gains: Gains::from_warmth_tint(0.2, 0.0),
+            },
+            mono: Mixer::preset("orange"),
+            ..Layers::default()
+        };
+        let change = write(&image, Some(&layers), conv).unwrap();
+        assert_eq!(read(&image).unwrap(), Some(layers));
+        let mut history = crate::history::History::new(10);
+        history.push(crate::history::Step::Adjust(vec![change]));
+        history.undo(conv).unwrap();
+        assert_eq!(read(&image).unwrap(), None, "undone");
+        history.redo(conv).unwrap();
+        assert_eq!(read(&image).unwrap(), Some(layers), "redone");
+        // Aucun réglage : la liste est retirée.
+        write(&image, None, conv).unwrap();
+        assert_eq!(read(&image).unwrap(), None);
     }
 
     #[test]

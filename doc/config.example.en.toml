@@ -586,6 +586,9 @@ trace_slow_ms = 100
 # Report a problem: latest log entries offered in the form, editable before sending (0:
 # none).
 report_log_entries = 20
+# Viewing adjustments: side of the zone the eyedropper measures (fraction of the image,
+# 0.04 = 4 %).
+adjust_eyedropper_size = 0.04
 # Arrows and Enter in the help, the menus and the palette: as symbols, taken from
 # a system font that has them (Apple Symbols, DejaVu Sans, Segoe UI Symbol; the
 # interface's has none). Empty: the first found; a path: that font; "none": spelled out

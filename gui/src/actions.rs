@@ -447,6 +447,12 @@ pub enum Action {
     RefreshFolders,
     /// Plein écran : afficher / masquer l'histogramme.
     ToggleHistogram,
+    /// Réglages de visualisation (#137) : avant / après (toutes les images sans leurs
+    /// réglages, ou avec).
+    AdjustBeforeAfter,
+    /// Réglages de visualisation : ceux de l'image courante vers la sélection
+    /// (corrections harmonisées).
+    AdjustApply,
     /// Histogramme : basculer entre IL et linéaire.
     HistogramScale,
     /// Grand histogramme, en boîte au milieu de l'écran.
@@ -530,7 +536,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 232] = [
+    pub const ALL: [Action; 234] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -722,6 +728,8 @@ impl Action {
         Action::ToggleFolderPanel,
         Action::RefreshFolders,
         Action::ToggleHistogram,
+        Action::AdjustBeforeAfter,
+        Action::AdjustApply,
         Action::HistogramScale,
         Action::HistogramLarge,
         Action::HistogramChannel,
@@ -890,12 +898,12 @@ impl Action {
             | Open | Back | Search => Group::Navigation,
             ToggleZoom | Loupe | LoupeZoomIn | LoupeZoomOut | LoupeScaleEntry | ZoomScaleEntry
             | ReviewDevelopments | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource
-            | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram | HistogramScale
-            | HistogramLarge | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue
-            | HistogramAll | HistogramLuminance | HistogramPhoto | HistogramCamera
-            | ToggleClipping | TogglePeaking | PeakingColor | SharpnessLenient
-            | SharpnessStrict | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode
-            | Develop | DevelopWith(_) | DevelopFolder => Group::View,
+            | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram | AdjustBeforeAfter
+            | AdjustApply | HistogramScale | HistogramLarge | HistogramChannel | HistogramRed
+            | HistogramGreen | HistogramBlue | HistogramAll | HistogramLuminance
+            | HistogramPhoto | HistogramCamera | ToggleClipping | TogglePeaking | PeakingColor
+            | SharpnessLenient | SharpnessStrict | ToggleFocusPoint | OverlayNext
+            | OverlayOrient | FocusMode | Develop | DevelopWith(_) | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
             | CropPreset | CropPresetPrev | VersionNext | VersionPrev | VersionRatioNext
             | VersionRatioPrev | VersionRatioCustom | VersionExportNext | VersionExportPrev
@@ -1167,6 +1175,8 @@ impl Action {
             Action::DevelopFolder => "core.develop.folder",
             Action::RefreshFolders => "core.view.refresh_folders",
             Action::ToggleHistogram => "core.view.histogram",
+            Action::AdjustBeforeAfter => "core.adjust.before_after",
+            Action::AdjustApply => "core.adjust.apply",
             Action::HistogramScale => "core.view.histogram_scale",
             Action::HistogramLarge => "core.view.histogram_large",
             Action::HistogramChannel => "core.view.histogram_channel",

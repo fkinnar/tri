@@ -55,6 +55,11 @@ impl<K: Eq + Hash + Clone, V> Lru<K, V> {
     }
 
     /// Les entrées, dans un ordre quelconque.
+    pub fn keys(&self) -> impl Iterator<Item = &K> {
+        self.entries.keys()
+    }
+
+    /// Valeurs, dans un ordre quelconque.
     pub fn values(&self) -> impl Iterator<Item = &V> {
         self.entries.values().map(|(v, _)| v)
     }

@@ -589,6 +589,9 @@ trace_slow_ms = 100
 # Signaler un problème : dernières entrées du journal proposées dans le formulaire,
 # modifiables avant l'envoi (0 : aucune).
 report_log_entries = 20
+# Réglages de visualisation : côté de la zone mesurée par la pipette (fraction de l'image,
+# 0.04 = 4 %).
+adjust_eyedropper_size = 0.04
 # Flèches et Entrée dans l'aide, les menus et la palette : en symboles, pris dans
 # une police du système qui les a (Apple Symbols, DejaVu Sans, Segoe UI Symbol ; celle de
 # l'interface n'en a pas). Vide : la première trouvée ; un chemin : cette police ;

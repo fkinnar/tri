@@ -77,6 +77,10 @@ loupe = "m"
 "core.app.check_update" = []
 # Application log (tri.log): from the palette, the help, or a click on an error.
 "core.app.log" = []
+# Viewing adjustments (#137): from the palette or the Adjustments section, no default key
+# yet.
+"core.adjust.before_after" = []
+"core.adjust.apply" = []
 "core.app.settings" = ["Ctrl+,"]
 # Zoom steps, like Lightroom: characters, for the top row as well as the numeric
 # keypad, whatever the keyboard layout.

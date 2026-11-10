@@ -207,6 +207,8 @@ pub struct GuiSettings {
     pub trace_slow_ms: u64,
     /// Signaler un problème : dernières entrées du journal proposées (0 : aucune).
     pub report_log_entries: usize,
+    /// Réglages : côté de la zone mesurée par la pipette, en fraction de l'image.
+    pub adjust_eyedropper_size: f32,
     /// Flèches des noms de touches (←, →…) : vide, une police du système qui les a ;
     /// un chemin, cette police ; `"none"`, en toutes lettres.
     pub arrow_font: String,
@@ -320,6 +322,7 @@ impl Default for GuiSettings {
             key_menu_delay_ms: 400,
             trace_slow_ms: 100,
             report_log_entries: 20,
+            adjust_eyedropper_size: 0.04,
             arrow_font: String::new(),
             arrow_font_scale: 1.0,
             window: [1400.0, 900.0],

@@ -37,6 +37,7 @@ use crate::textures::Lru;
 use crate::trace::trace;
 use crate::view::{self, Source};
 
+mod adjust;
 mod controls;
 use controls::{Control, Host};
 
@@ -541,6 +542,22 @@ pub struct TriApp {
     export_notice: Option<String>,
     /// Échec de la dernière action sur un fichier (barre d'état).
     file_error: Option<String>,
+    /// Réglages de visualisation des images (issue n° 137), partagés avec le chargeur.
+    adjust_map: crate::adjust_view::AdjustMap,
+    /// Images dont les réglages ont été lus (ou posés) dans ce dossier.
+    adjust_known: HashSet<PathBuf>,
+    /// Lectures en cours.
+    adjust_pending: HashSet<PathBuf>,
+    /// Lectures en fond.
+    adjust_read: (
+        mpsc::Sender<adjust::AdjustRead>,
+        Receiver<adjust::AdjustRead>,
+    ),
+    /// Image dont les réglages ont changé à l'écran, à enregistrer au relâchement.
+    adjust_dirty: Option<PathBuf>,
+    /// Pipette armée (plein écran) : le prochain clic sur l'image neutralise la balance
+    /// sur la zone cliquée.
+    adjust_eyedropper: bool,
     /// Fenêtre du journal de l'application (issue n° 398).
     log_view: Option<crate::log_view::LogView>,
     /// Image (passe d'egui) où elle s'est ouverte (même raison que `export_report_since`).
@@ -1352,6 +1369,12 @@ impl TriApp {
             export_report_since: 0,
             export_notice: None,
             file_error: None,
+            adjust_map: Default::default(),
+            adjust_known: HashSet::new(),
+            adjust_pending: HashSet::new(),
+            adjust_read: mpsc::channel(),
+            adjust_dirty: None,
+            adjust_eyedropper: false,
             log_view: None,
             log_view_since: 0,
             logged_errors: Vec::new(),
@@ -2076,6 +2099,7 @@ impl TriApp {
                 self.error = Some(format!("{} : {e}", dir.display()));
             }
         }
+        self.adjust_forget();
         self.files.clear(); // la sélection ne survit pas au changement de dossier
         self.leave_stack_only();
         self.expanded.clear();
@@ -2168,6 +2192,17 @@ impl TriApp {
         } else {
             // Rien à copier ni à pointer sous une section repliée.
             self.meta_rows.clear();
+        }
+        // Réglages de visualisation (#137) : ceux de l'image courante, en bas pour ne rien
+        // décaler au-dessus (les EXIF restent à leur place).
+        if matches!(self.mode, Mode::Grid | Mode::View)
+            && self.crop.is_none()
+            && !self.files.is_empty()
+        {
+            ui.separator();
+            if self.panel_section(ui, "adjust", t!("panel-section-adjust")) {
+                self.adjust_section(ui);
+            }
         }
         // Éléments disparus (section repliée, autre mode) : le curseur reste dedans.
         if let Some(i) = self.side_cursor
@@ -6182,7 +6217,13 @@ impl TriApp {
         self.visible_sent = None;
         scheduler.set_focus(self.selected);
         let max_texture = ctx.input(|i| i.max_texture_side);
-        let loader = Loader::new(cache.clone(), preview, max_texture, ctx.clone());
+        let loader = Loader::new(
+            cache.clone(),
+            preview,
+            max_texture,
+            ctx.clone(),
+            self.adjust_map.clone(),
+        );
         self.engine = Some(Engine {
             scheduler,
             events: rx,
@@ -6800,6 +6841,11 @@ impl TriApp {
             Action::Settings => self.open_settings(),
             Action::CheckUpdate => self.check_update(ctx),
             Action::ReportIssue => self.prepare_report(ctx),
+            Action::AdjustBeforeAfter => self.toggle_before_after(),
+            Action::AdjustApply => {
+                self.adjust_commit(ctx);
+                self.adjust_apply_to_selection();
+            }
             Action::Log => {
                 if self.log_view.take().is_none() {
                     self.open_log(ctx, Vec::new());
@@ -11124,6 +11170,20 @@ impl TriApp {
         };
         let peaking = self.peaking_overlay(&painter, &file, shown, image_rect, peaking_uv);
 
+        // Pipette des réglages (#137) : un clic sur une zone qui devrait être grise.
+        if self.adjust_eyedropper && shown_crop.is_none() {
+            if response.hovered() {
+                ctx.set_cursor_icon(egui::CursorIcon::Crosshair);
+            }
+            if response.clicked()
+                && let (Some(rect), Some(pos)) = (image_rect, response.interact_pointer_pos())
+            {
+                let rel = view::relative(rect, pos);
+                let point = uv.min + vec2(rel.x * uv.width(), rel.y * uv.height());
+                self.adjust_eyedropper = false;
+                self.adjust_pick(&file.path, point);
+            }
+        }
         self.open_rating_dialog(&response, index);
         // Double-clic : 100 % centré sur le point cliqué, ou retour à l'ajusté.
         if response.double_clicked() {
@@ -11450,6 +11510,8 @@ impl TriApp {
         deadline: Instant,
     ) -> Option<TextureHandle> {
         let path = self.files[index].path.clone();
+        // Réglages (#137) : lus en fond la première fois, la vignette suit.
+        self.adjust_layers(&path);
         let want = self.grid_level(index);
         let have = self.textures.get(&path).cloned();
         let have_level = self.texture_levels.get(&path).copied();
@@ -11554,7 +11616,7 @@ impl TriApp {
         let engine = self.engine.as_ref()?;
         let file = &self.files[index];
         let key = preview::key(file, level, &engine.preview).ok()?;
-        let bitmap = if level == Level::Thumbnail {
+        let mut bitmap = if level == Level::Thumbnail {
             engine.cache.get(&key)?
         } else {
             let side = engine.preview.sizes.thumbnail;
@@ -11562,6 +11624,7 @@ impl TriApp {
                 .ok()?
                 .fit(side)
         };
+        crate::adjust_view::apply(&self.adjust_map, &file.path, file.kind, level, &mut bitmap);
         let image = ColorImage::from_rgb(
             [bitmap.width as usize, bitmap.height as usize],
             &bitmap.data,
@@ -15825,6 +15888,9 @@ impl TriApp {
         applied: Vec<tri::history::Applied>,
         error: Option<tri::history::HistoryError>,
     ) {
+        // Réglages des images touchées : relus.
+        let touched: Vec<PathBuf> = applied.iter().flat_map(|a| a.images.clone()).collect();
+        self.adjust_reread(&touched);
         // Versions peut-être changées : relues.
         self.versions.clear();
         self.forget_grid_versions();
@@ -17559,6 +17625,10 @@ impl eframe::App for TriApp {
         self.history_dialog(&ctx);
         self.export_report_dialog(&ctx);
         self.log_errors();
+        self.adjust_commit(&ctx);
+        if let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) {
+            self.adjust_layers(&path);
+        }
         self.log_dialog(&ctx);
         self.report_dialog(&ctx);
         self.group_window(&ctx);
@@ -20529,6 +20599,8 @@ mod tests {
     #[test]
     fn thumbnail_info_and_size_from_the_keyboard_and_the_bottom_bar() {
         let (mut h, _dir) = harness();
+        // Les curseurs des réglages (#137) repliés : seul compte celui de la grille.
+        h.state_mut().panel_folded.insert("adjust".into());
         h.run_steps(3);
         // Fenêtre étroite (1000 points) et panneaux ouverts : les contrôles de la grille
         // passent à la ligne au lieu de recouvrir les notes du bandeau (issue n° 71).
@@ -23976,7 +24048,9 @@ mod tests {
             .filter(|&i| h.state().side_items[i])
             .collect();
         assert!(titles.len() >= 3, "{titles:?}");
-        let filters = titles[titles.len() - 3];
+        // Filtres, grille, EXIF, réglages (#137) : les filtres sont le 4e titre en partant
+        // de la fin.
+        let filters = titles[titles.len() - 4];
         while h.state().side_cursor != Some(filters) {
             press(&mut h, Key::Tab, Modifiers::NONE);
         }
@@ -28186,6 +28260,48 @@ mod tests {
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert_eq!(h.state().grid_render, GridRender::Cover);
         assert_eq!(h.state().source, Source::Developed);
+    }
+
+    #[test]
+    fn adjustments_are_saved_applied_to_the_selection_and_undone_in_one_step() {
+        // #137 : réglages de l'image courante enregistrés dans son sidecar, puis appliqués
+        // aux autres images sélectionnées (noir et blanc copié, exposition harmonisée), un
+        // seul pas de l'historique pour toutes.
+        let (mut h, _dir) = harness();
+        run_until(&mut h, |app| {
+            app.files.len() == 3 && app.files.iter().all(|f| app.adjust_base(&f.path).is_some())
+        });
+        let paths: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        let mut layers = tri::adjust::Layers::default();
+        layers.correction.exposure = 0.5;
+        layers.mono = tri::adjust::Mixer::preset("orange");
+        h.state_mut()
+            .save_adjustments(vec![(paths[0].clone(), Some(layers))]);
+        assert_eq!(tri::adjust::read(&paths[0]).unwrap(), Some(layers));
+        h.run_steps(2);
+        h.get_by_label("Noir et blanc");
+        let files = h.state().files.clone();
+        h.state_mut().selection.select_all(&files);
+        h.state_mut().selected = 0;
+        h.state_mut().adjust_apply_to_selection();
+        for path in &paths[1..] {
+            let got = tri::adjust::read(path).unwrap().expect("applied");
+            assert_eq!(got.mono, layers.mono, "black and white copied");
+        }
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::Undo);
+        for path in &paths[1..] {
+            assert_eq!(tri::adjust::read(path).unwrap(), None, "one step for all");
+        }
+        assert_eq!(
+            tri::adjust::read(&paths[0]).unwrap(),
+            Some(layers),
+            "the reference keeps its own"
+        );
+        // Avant / après : montré sans réglages, le sidecar ne change pas.
+        h.state_mut().perform(&ctx, Action::AdjustBeforeAfter);
+        assert!(h.state().showing_original());
+        assert_eq!(tri::adjust::read(&paths[0]).unwrap(), Some(layers));
     }
 
     #[test]

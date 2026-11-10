@@ -5,10 +5,9 @@ une série**, pas pour développer : exposition, balance des blancs, noir et bla
 mélange des canaux. La clé : **appliquer les réglages d'une image aux autres**, en
 harmonisant ce qui doit l'être (une photo à -1 IL et une bien exposée finissent pareilles).
 
-Première étape (ce module) : le moteur et la ligne de commande. Ensuite : l'interface
-(curseurs, pipette, avant / après, « Appliquer à la sélection », vignettes), le rapport
-des réglages par image, puis l'écriture pour d'autres logiciels (RawTherapee / ART
-d'abord). Les réglages s'appliquent **avant** tout développement par un autre logiciel :
+Faits : le moteur, la ligne de commande, l'interface (section « Réglages »), le rapport
+des valeurs. Ensuite : l'écriture pour d'autres logiciels (RawTherapee / ART d'abord),
+les vraies vignettes LibRaw en option, l'export des images réglées. Les réglages s'appliquent **avant** tout développement par un autre logiciel :
 une image développée dans darktable n'est pas concernée.
 
 ## Couches
@@ -89,6 +88,37 @@ images plates) et tient compte du noir et blanc.
 `report` : exposition totale à reporter (correction + créatif, aussi séparées), chaleur,
 teinte, gains, mélange en pour cent. Première étape avant d'écrire dans les formats des
 logiciels de développement : on reporte ces valeurs à la main.
+
+## Dans l'interface
+
+Section **« Réglages »** du panneau de droite (en bas, après les EXIF ; grille et plein
+écran), pour l'image courante (`gui/src/app/adjust.rs`) :
+
+- **Correction** : exposition, chaleur, teinte ; « Neutraliser la balance » (monde gris,
+  sur la vignette) ; en plein écran, **« Pipette »** puis un clic sur une zone qui devrait
+  être grise (`[gui] adjust_eyedropper_size`, 4 % de l'image).
+- **Décalage créatif** : exposition, chaleur, teinte.
+- **Noir et blanc** : case, préréglages (neutre, filtres rouge, orange, jaune, vert, bleu),
+  rouge / vert / bleu en %.
+- Le **rapport** sous les curseurs (exposition totale, correction, créatif ; balance ;
+  mélange), et **« Copier les valeurs »**.
+- **« Appliquer à la sélection »** : les réglages de l'image courante vers les autres
+  images sélectionnées, en modes par défaut (corrections harmonisées, mesurées sur les
+  vignettes) ; un seul pas de l'historique.
+- **« Avant »** : toutes les images sans leurs réglages (bascule), sans toucher aux
+  sidecars.
+- **« Réinitialiser »**. Double-clic sur un curseur : valeur par défaut.
+
+Les curseurs montrent le changement tout de suite (vignette et grande image) ; le sidecar
+est écrit quand on lâche, un pas de l'historique par geste (`u` / Ctrl+Z l'annule). Les
+réglages sont lus en fond dans les sidecars (jamais d'attente sur un disque lent) et
+appliqués aux pixels juste avant la texture (`gui/src/adjust_view.rs`, partagé avec le fil
+de chargement). **À l'écran, tout est fait sur l'image** (approximation sur les JPEG,
+mélangeur exact) ; l'exposition sur les données du capteur reste pour la ligne de
+commande et l'export à venir. Un développement (darktable…) n'est jamais réglé.
+
+Actions sans raccourci par défaut, dans la palette : `core.adjust.before_after`,
+`core.adjust.apply`.
 
 ## Ligne de commande
 

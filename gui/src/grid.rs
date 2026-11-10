@@ -261,6 +261,8 @@ pub fn navigate(
         | Action::CheckUpdate
         | Action::ReportIssue
         | Action::Log
+        | Action::AdjustBeforeAfter
+        | Action::AdjustApply
         | Action::Quit
         | Action::Stars(_)
         | Action::Color(_)
