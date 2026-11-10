@@ -27731,6 +27731,13 @@ mod tests {
         assert!(h.query_by_label(&count).is_some(), "3/3, pas 3/4");
     }
 
+    /// Laisse une boîte ouverte au centre se poser (`[gui.dialogs] centring_frames`) avant
+    /// d'y cliquer : un humain ne clique pas dans ses toutes premières images, et sous
+    /// Linux (autres polices) son recentrage déplaçait le bouton sous le clic simulé.
+    fn settle_dialog(h: &mut Harness<'_, TriApp>) {
+        h.run_steps(GuiSettings::default().dialogs.centring_frames as usize + 2);
+    }
+
     fn run_until(h: &mut Harness<'_, TriApp>, done: impl Fn(&TriApp) -> bool) {
         // Large : les machines d'intégration continue sont plus lentes (20 s ne suffisaient
         // pas au zoom sur une image de 4000 × 3000) ; rapide quand tout va bien.
@@ -28193,6 +28200,7 @@ mod tests {
         wait_for(&mut h, "Décharger");
         assert!(h.query_by_label_contains("2 à copier").is_some());
         // « Ouvrir le dossier à la fin » est coché par défaut ; « RAW seulement » non.
+        settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
         while h
             .query_by_label_contains("2 fichiers copiés et vérifiés")
@@ -28439,6 +28447,7 @@ mod tests {
             }
         };
         wait_for(&mut h, "1 à copier");
+        settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
         wait_for(&mut h, "1 fichiers copiés et vérifiés");
         let session = h.state().offload.as_ref().unwrap().destination().unwrap();
@@ -28447,6 +28456,7 @@ mod tests {
         h.state_mut().set_volumes(&ctx, vec![first, second.clone()]);
         assert_eq!(h.state().offload.as_ref().unwrap().source(), second.path);
         wait_for(&mut h, "1 à copier");
+        settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
         wait_for(&mut h, "1 fichiers copiés et vérifiés");
         assert!(session.join("A.jpg").is_file() && session.join("B.jpg").is_file());
@@ -28481,6 +28491,7 @@ mod tests {
             }
         };
         wait_for(&mut h, "1 à copier");
+        settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
         wait_for(&mut h, "1 fichiers copiés et vérifiés");
         let session = h.state().offload.as_ref().unwrap().destination().unwrap();
@@ -28497,6 +28508,7 @@ mod tests {
         h.state_mut().set_volumes(&ctx, vec![card.clone()]);
         assert_eq!(h.state().offload.as_ref().unwrap().source(), path);
         wait_for(&mut h, "1 à copier");
+        settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
         wait_for(&mut h, "1 fichiers copiés et vérifiés");
         assert!(session.join("A.jpg").is_file() && session.join("B.jpg").is_file());
@@ -28543,6 +28555,7 @@ mod tests {
             h.get_by_label("Décharger la carte…").click();
             if round == 0 {
                 wait_for(&mut h, "2 à copier");
+                settle_dialog(&mut h);
                 h.get_by_label("Décharger").click();
                 wait_for(&mut h, "2 fichiers copiés et vérifiés");
                 h.get_by_label("Fermer").click();
@@ -28632,6 +28645,7 @@ mod tests {
             h.run_steps(1);
             std::thread::sleep(Duration::from_millis(10));
         }
+        settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
         h.run_steps(1); // le clic démarre la copie
         assert!(h.state().offload.as_ref().unwrap().is_running());
