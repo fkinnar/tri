@@ -360,13 +360,9 @@ pub struct TriApp {
     /// Déplacements du cache en cours (garder le cache sur un disque, dans un dossier, ou
     /// le faire suivre un dossier déplacé), chacun dans un fil ; message à la fin.
     cache_jobs: Vec<std::thread::JoinHandle<Option<(String, bool)>>>,
-    /// « Vider le cache ici » demandé au clic droit sur un dossier qui garde son cache :
-    /// le dossier, et sa place (mesurée en fond) pour la confirmation dans le menu.
-    disk_clear: Option<(
-        PathBuf,
-        Option<tri::cache::Usage>,
-        Receiver<tri::cache::Usage>,
-    )>,
+    /// « Vider le cache de ce dossier / disque » (`core.folders.cache_clear`) : boîte de
+    /// confirmation, avec la place mesurée en fond.
+    disk_clear: Option<DiskClear>,
     /// Message pour la barre d'état (texte, vrai si c'est une erreur).
     notice: Option<(String, bool)>,
     /// Réglages du moteur (fichier de configuration).
@@ -3257,13 +3253,6 @@ impl TriApp {
         let mut menu: Option<(PathBuf, Action)> = None;
         // Clic droit : garder le cache dans ce dossier / sur ce disque, ou plus ici.
         let mut cache_menu: Option<(PathBuf, bool)> = None;
-        // Vider le cache gardé dans un dossier : demander (mesurer), confirmer, annuler.
-        let mut disk_clear_menu: Option<DiskClear> = None;
-        if let Some((_, size @ None, rx)) = &mut self.disk_clear
-            && let Ok(usage) = rx.try_recv()
-        {
-            *size = Some(usage);
-        }
         let mut embed_menu: Option<(PathBuf, Option<bool>)> = None;
         // Réglages automatiques de tout le dossier ouvert.
         let mut adjust_menu: Option<adjust::FolderAuto> = None;
@@ -3514,10 +3503,6 @@ impl TriApp {
                     // Clics à l'intérieur sans fermer : un groupe passé au premier niveau
                     // ou replié garde le menu ouvert (issue n° 406) ; chaque entrée ferme
                     // tout le menu elle-même.
-                    // Menu rouvert : une demande de vidage restée en suspens est oubliée.
-                    if label.secondary_clicked() {
-                        disk_clear_menu = Some(DiskClear::Cancel);
-                    }
                     egui::Popup::context_menu(&label)
                         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
                         .show(|ui| {
@@ -3746,56 +3731,15 @@ impl TriApp {
                                             cache_menu = Some((row.path.clone(), !here));
                                             egui::Popup::close_all(ui.ctx());
                                         }
-                                        // Vider le cache gardé ici (10/11/2026), confirmé
-                                        // sur place avec sa taille : le menu reste ouvert.
-                                        if !here {
-                                            return;
-                                        }
-                                        match &self.disk_clear {
-                                            Some((root, size, _)) if *root == row.path => {
-                                                ui.label(match size {
-                                                    Some(u) => t!(
-                                                        "folder-menu-cache-clear-ask",
-                                                        size =
-                                                            crate::cache_panel::size_text(u.bytes)
-                                                    ),
-                                                    None => t!("folder-menu-cache-measuring"),
-                                                });
-                                                ui.horizontal(|ui| {
-                                                    if ui
-                                                        .add_enabled(
-                                                            size.is_some(),
-                                                            egui::Button::new(t!(
-                                                                "cache-clear-confirm"
-                                                            )),
-                                                        )
-                                                        .clicked()
-                                                    {
-                                                        disk_clear_menu = Some(DiskClear::Confirm);
-                                                        egui::Popup::close_all(ui.ctx());
-                                                    }
-                                                    if ui.button(t!("cache-clear-cancel")).clicked()
-                                                    {
-                                                        disk_clear_menu = Some(DiskClear::Cancel);
-                                                    }
-                                                });
-                                            }
-                                            _ => {
-                                                if ui
-                                                    .button(if removable {
-                                                        t!("folder-menu-cache-clear-disk")
-                                                    } else {
-                                                        t!("folder-menu-cache-clear-folder")
-                                                    })
-                                                    .on_hover_text(t!(
-                                                        "folder-menu-cache-clear-tip"
-                                                    ))
-                                                    .clicked()
-                                                {
-                                                    disk_clear_menu =
-                                                        Some(DiskClear::Ask(row.path.clone()));
-                                                }
-                                            }
+                                        // Vider le cache gardé là (10/11/2026) : une
+                                        // action (raccourci possible), une boîte confirme.
+                                        if here {
+                                            let text = if removable {
+                                                t!("folder-menu-cache-clear-disk")
+                                            } else {
+                                                t!("folder-menu-cache-clear-folder")
+                                            };
+                                            entry(ui, Action::FolderCacheClear, text);
                                         }
                                     },
                                 );
@@ -3934,42 +3878,6 @@ impl TriApp {
         if let Some((path, on)) = cache_menu {
             self.keep_cache_in(path, on);
         }
-        match disk_clear_menu {
-            Some(DiskClear::Ask(root)) => {
-                if let Some(engine) = &self.engine {
-                    let (tx, rx) = mpsc::channel();
-                    let (cache, at, ctx) = (engine.cache.clone(), root.clone(), ui.ctx().clone());
-                    std::thread::spawn(move || {
-                        let _ = tx.send(cache.disk_usage(&at).unwrap_or_default());
-                        ctx.request_repaint();
-                    });
-                    self.disk_clear = Some((root, None, rx));
-                }
-            }
-            Some(DiskClear::Confirm) => {
-                if let Some((root, _, _)) = self.disk_clear.take() {
-                    let ctx = ui.ctx().clone();
-                    self.cache_job(move |cache| {
-                        let place = crate::files::tilde(&root);
-                        let result = match cache.clear_disk(&root) {
-                            Ok(freed) => (
-                                t!(
-                                    "cache-disk-cleared",
-                                    place = place,
-                                    size = crate::cache_panel::size_text(freed.bytes)
-                                ),
-                                false,
-                            ),
-                            Err(e) => (t!("cache-clear-failed", error = e.to_string()), true),
-                        };
-                        ctx.request_repaint();
-                        Some(result)
-                    });
-                }
-            }
-            Some(DiskClear::Cancel) => self.disk_clear = None,
-            None => {}
-        }
         if let Some(id) = group_menu {
             self.toggle_menu_group(id);
             ui.ctx().request_repaint();
@@ -4037,6 +3945,7 @@ impl TriApp {
                 Action::FolderFavorite => self.toggle_favorite(),
                 Action::FolderFavoriteName => self.name_favorite(&ctx),
                 Action::FolderForget => self.forget_server(&path),
+                Action::FolderCacheClear => self.ask_disk_clear(&ctx, path),
                 Action::FolderOpenIn(engine) => self.open_folder_in(engine, &path),
                 Action::FolderCopy | Action::FolderMove => {
                     self.transfer_folder(&ctx, path, action == Action::FolderCopy, None)
@@ -4282,6 +4191,105 @@ impl TriApp {
         }
         if close || modal.should_close() {
             self.update = None;
+        }
+    }
+
+    /// `core.folders.cache_clear` sur `root` : si son cache y est gardé, la boîte de
+    /// confirmation s'ouvre, sa place mesurée en fond ; sinon, dit pourquoi.
+    fn ask_disk_clear(&mut self, ctx: &egui::Context, root: PathBuf) {
+        let Some(engine) = &self.engine else { return };
+        if engine.cache.disk_of(&root).as_deref() != Some(root.as_path()) {
+            self.notice = Some((t!("cache-clear-not-kept", name = folder_name(&root)), true));
+            return;
+        }
+        let (tx, rx) = mpsc::channel();
+        let (cache, at_root, repaint) = (engine.cache.clone(), root.clone(), ctx.clone());
+        std::thread::spawn(move || {
+            let _ = tx.send(cache.disk_usage(&at_root).unwrap_or_default());
+            repaint.request_repaint();
+        });
+        let removable = self
+            .tree
+            .rows()
+            .iter()
+            .any(|r| r.path == root && r.kind == Some(PlaceKind::Volume) && r.ejectable);
+        let at = ctx
+            .pointer_latest_pos()
+            .unwrap_or_else(|| ctx.content_rect().center());
+        self.disk_clear = Some(DiskClear {
+            root,
+            removable,
+            size: None,
+            measuring: rx,
+            at,
+        });
+    }
+
+    fn disk_clear_dialog(&mut self, ctx: &egui::Context) {
+        let Some(dialog) = &mut self.disk_clear else {
+            return;
+        };
+        if dialog.size.is_none()
+            && let Ok(usage) = dialog.measuring.try_recv()
+        {
+            dialog.size = Some(usage);
+        }
+        let name = folder_name(&dialog.root);
+        let title = if dialog.removable {
+            t!("cache-clear-disk-question", name = &name)
+        } else {
+            t!("cache-clear-folder-question", name = &name)
+        };
+        let size = dialog.size;
+        let (mut confirm, mut cancel) = (false, false);
+        let modal = modal_at("disk_clear_dialog", dialog.at)
+            .title(title)
+            .show(ctx, |ui| {
+                match size {
+                    Some(u) => {
+                        ui.label(t!(
+                            "cache-clear-disk-size",
+                            size = crate::cache_panel::size_text(u.bytes)
+                        ));
+                    }
+                    None => {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label(t!("cache-measuring"));
+                        });
+                    }
+                }
+                ui.weak(t!("cache-clear-disk-note"));
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    confirm = ui
+                        .add_enabled(size.is_some(), egui::Button::new(t!("cache-clear-confirm")))
+                        .clicked();
+                    cancel = ui.button(t!("cancel")).clicked();
+                });
+            });
+        if confirm {
+            let root = dialog.root.clone();
+            self.disk_clear = None;
+            let repaint = ctx.clone();
+            self.cache_job(move |cache| {
+                let place = crate::files::tilde(&root);
+                let result = match cache.clear_disk(&root) {
+                    Ok(freed) => (
+                        t!(
+                            "cache-disk-cleared",
+                            place = place,
+                            size = crate::cache_panel::size_text(freed.bytes)
+                        ),
+                        false,
+                    ),
+                    Err(e) => (t!("cache-clear-failed", error = e.to_string()), true),
+                };
+                repaint.request_repaint();
+                Some(result)
+            });
+        } else if cancel || modal.should_close() {
+            self.disk_clear = None;
         }
     }
 
@@ -7253,6 +7261,11 @@ impl TriApp {
             Action::FolderForget => {
                 if let Some(path) = self.tree.cursor_path() {
                     self.forget_server(&path);
+                }
+            }
+            Action::FolderCacheClear => {
+                if let Some(path) = self.tree.cursor_path() {
+                    self.ask_disk_clear(ctx, path);
                 }
             }
             Action::FolderOpenIn(engine) => {
@@ -18038,6 +18051,7 @@ impl eframe::App for TriApp {
         self.file_dialog(&ctx);
         self.poll_export();
         self.eject_dialog(&ctx);
+        self.disk_clear_dialog(&ctx);
         self.remote_dialog(&ctx);
         self.login_dialog(&ctx);
         self.update_dialog(&ctx);
@@ -19872,14 +19886,16 @@ enum VersionAction {
     Delete(usize),
 }
 
-/// Vider le cache gardé dans un dossier, depuis son clic droit.
-enum DiskClear {
-    /// Demandé sur ce dossier : sa place se mesure, la confirmation s'affiche.
-    Ask(PathBuf),
-    /// Confirmé.
-    Confirm,
-    /// Annulé (ou menu rouvert).
-    Cancel,
+/// Boîte « Vider le cache de ce dossier / disque » (10/11/2026).
+struct DiskClear {
+    /// Dossier qui garde le cache.
+    root: PathBuf,
+    /// Racine d'un disque amovible (libellés « disque »).
+    removable: bool,
+    /// Place, une fois mesurée.
+    size: Option<tri::cache::Usage>,
+    measuring: Receiver<tri::cache::Usage>,
+    at: egui::Pos2,
 }
 
 #[cfg(test)]
@@ -26483,8 +26499,9 @@ mod tests {
 
     #[test]
     fn a_folder_clears_the_cache_it_keeps_from_the_right_click() {
-        // 10/11/2026 : « Vider le cache ici… » sur un dossier qui garde son cache, confirmé
-        // dans le menu avec sa taille ; le cache reste gardé là.
+        // 10/11/2026 : « Vider le cache de ce dossier… » sur un dossier qui garde son cache,
+        // une action (`core.folders.cache_clear`) confirmée par une boîte avec sa taille ;
+        // le cache reste gardé là.
         let (mut h, dir) = harness();
         h.run_steps(3);
         let seance = dir.path().join("séance");
@@ -26509,8 +26526,9 @@ mod tests {
         h.run_steps(3);
         h.get_by_label(&t!("folder-menu-cache-clear-folder"))
             .click();
+        // Une boîte confirme, avec la taille (mesurée en fond).
         let ask = t!(
-            "folder-menu-cache-clear-ask",
+            "cache-clear-disk-size",
             size = crate::cache_panel::size_text(4096)
         );
         for _ in 0..400 {
@@ -26524,6 +26542,8 @@ mod tests {
             h.query_by_label(&ask).is_some(),
             "size shown before clearing"
         );
+        let title = t!("cache-clear-folder-question", name = "séance");
+        assert!(h.query_by_label(&title).is_some());
         h.get_by_label(&t!("cache-clear-confirm")).click();
         h.run_steps(2);
         run_until(&mut h, |app| app.cache_jobs.is_empty());

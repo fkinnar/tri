@@ -672,10 +672,10 @@ system one ("cold" measurements, experiments).
   When a folder is opened, `location` (`disk`, `folder`) applies if its cache is still
   the user's. Moving a folder: "Bring the cache along" checkbox (ticked); renaming: the
   cache always follows. The work is done in the background (`TriApp::cache_job`), message
-  in the status bar. Where it is kept, "Clear the cache of this folder…" ("of this drive") (Preferences group,
-  2026-11-10): its size measured in the background, confirmed in the menu itself ("Clear
-  820 MB?", Clear / Cancel), then the freed space in the status bar; the cache stays kept
-  there. The general cache is cleared from the settings window (Cache section).
+  in the status bar. Where it is kept, "Clear the cache of this folder…" ("of this drive"; Preferences
+  group, 2026-11-10), an action (`core.folders.cache_clear`, no default key, on the
+  folder under the keyboard cursor): a dialog confirms, with the size measured in the
+  background, then the freed space shows in the status bar; the cache stays kept there. The general cache is cleared from the settings window (Cache section).
 - **Pointer in dialogs**: the hand on everything clickable (`interact_cursor` in the
   common `Dialog` frame); "grab" elsewhere, to move the dialog. **In the bars and
   panels too** (2026-11-09, #386: a hand on the bar icons, an arrow on the panels'

@@ -716,9 +716,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   est encore chez l'utilisateur. Déplacement d'un dossier : case « Emporter le cache »
   (cochée) ; renommage : le cache suit toujours. Le travail se fait en fond
   (`TriApp::cache_job`), message dans la barre d'état. Là où il est gardé, « Vider le
-  cache de ce dossier… » (« de ce disque ») (groupe Préférences, 10/11/2026) : sa taille mesurée en fond, confirmée
-  dans le menu même (« Vider 820 Mo ? », Vider / Annuler), puis l'espace libéré dans la
-  barre d'état ; le cache reste gardé là. Le cache général se vide depuis la fenêtre de
+  cache de ce dossier… » (« de ce disque » ; groupe Préférences, 10/11/2026), une action
+  (`core.folders.cache_clear`, sans raccourci par défaut, sur le dossier pointé au
+  clavier) : une boîte confirme, avec la taille mesurée en fond, puis l'espace libéré
+  s'affiche dans la barre d'état ; le cache reste gardé là. Le cache général se vide depuis la fenêtre de
   réglages (section Cache).
 - **Pointeur dans les boîtes** : la main sur tout ce qui se clique (`interact_cursor` dans
   le cadre commun `Dialog`) ; « saisir » ailleurs, pour déplacer la boîte. **Dans les

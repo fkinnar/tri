@@ -5,8 +5,9 @@
 ## Unreleased
 
 - **Clear the cache kept with the photos** (#409): on a folder or drive that keeps its
-  cache (`.tri-cache`), right click, Preferences, "Clear the cache of this folder…" (or "of this drive"), confirmed in the
-  menu with its size; the cache stays kept there.
+  cache (`.tri-cache`), right click, Preferences, "Clear the cache of this folder…" (or
+  "of this drive"), confirmed by a dialog with its size; the cache stays kept there. An
+  action, which can be given a shortcut (`core.folders.cache_clear`).
 - **Clear the cache from the interface** (#408): at the top of the "Cache" section of the
   settings window, the size of the thumbnails, camera previews, RAW previews, 1:1,
   developed renders and analyses, and the total; "Clear" per row and "Clear all",

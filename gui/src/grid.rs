@@ -202,6 +202,7 @@ pub fn navigate(
         | Action::FolderFavoriteName
         | Action::FolderConnect
         | Action::FolderForget
+        | Action::FolderCacheClear
         | Action::FolderOpenIn(_)
         | Action::FolderCopy
         | Action::FolderMove

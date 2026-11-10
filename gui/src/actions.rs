@@ -336,6 +336,9 @@ pub enum Action {
     FolderConnect,
     /// Panneau des dossiers : oublier le partage réseau mémorisé pointé.
     FolderForget,
+    /// Panneau des dossiers : vider le cache gardé dans le dossier ou le disque pointé
+    /// (`.tri-cache`, une boîte confirme ; 10/11/2026).
+    FolderCacheClear,
     /// Panneau des dossiers : ouvrir le dossier pointé dans un logiciel de
     /// développement (darktable, 28/10/2026).
     FolderOpenIn(tri::develop::Engine),
@@ -541,7 +544,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 236] = [
+    pub const ALL: [Action; 237] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -703,6 +706,7 @@ impl Action {
         Action::FolderFavoriteName,
         Action::FolderConnect,
         Action::FolderForget,
+        Action::FolderCacheClear,
         Action::FolderOpenIn(tri::develop::Engine::Darktable),
         Action::FolderOpenIn(tri::develop::Engine::RawTherapee),
         Action::FolderOpenIn(tri::develop::Engine::Art),
@@ -933,12 +937,11 @@ impl Action {
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
             | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
             | FolderEject | FolderCreate | FolderRename | FolderDelete | FolderFavorite
-            | FolderFavoriteName | FolderConnect | FolderForget | FolderOpenIn(_) | FolderCopy
-            | FolderMove | MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp
-            | MetaSelectDown | MetaCopyAll | PanelSectionNext | PanelSectionPrev
-            | PanelActivate | PanelLeft | PanelRight | FolderSectionNext | FolderSectionPrev => {
-                Group::Panels
-            }
+            | FolderFavoriteName | FolderConnect | FolderForget | FolderCacheClear
+            | FolderOpenIn(_) | FolderCopy | FolderMove | MetaUp | MetaDown | MetaCopy
+            | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll | PanelSectionNext
+            | PanelSectionPrev | PanelActivate | PanelLeft | PanelRight | FolderSectionNext
+            | FolderSectionPrev => Group::Panels,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | HelpHere | Palette | Settings | CheckUpdate | ReportIssue | Log | Quit => {
                 Group::App
@@ -1140,6 +1143,7 @@ impl Action {
             Action::FolderFavoriteName => "core.folders.favorite_name",
             Action::FolderConnect => "core.folders.connect",
             Action::FolderForget => "core.folders.forget",
+            Action::FolderCacheClear => "core.folders.cache_clear",
             Action::FolderOpenIn(tri::develop::Engine::Darktable) => "plugin.darktable.open_folder",
             Action::FolderOpenIn(tri::develop::Engine::RapidRaw) => "plugin.rapidraw.open_folder",
             Action::FolderOpenIn(tri::develop::Engine::RawTherapee) => {
@@ -1301,9 +1305,8 @@ impl Action {
             FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
             | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
             | FolderDelete | FolderFavorite | FolderFavoriteName | FolderConnect | FolderForget
-            | FolderOpenIn(_) | FolderCopy | FolderMove | FolderSectionNext | FolderSectionPrev => {
-                Some(Scope::Folders)
-            }
+            | FolderCacheClear | FolderOpenIn(_) | FolderCopy | FolderMove | FolderSectionNext
+            | FolderSectionPrev => Some(Scope::Folders),
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft
             | PanelRight => Some(Scope::Metadata),

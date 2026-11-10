@@ -280,6 +280,8 @@ loupe = "m"
 # Connect to a network share: "c" (connect); forget it: Shift+C.
 "core.folders.connect" = ["c"]
 "core.folders.forget" = ["Shift+c"]
+# Clear the cache kept in the folder or drive under the cursor (a dialog confirms).
+"core.folders.cache_clear" = []
 # Removable drive under the cursor: offload, eject (a dialog confirms).
 "core.folders.offload" = ["o"]
 "core.folders.eject" = ["e"]
