@@ -562,9 +562,6 @@ pub struct TriApp {
     /// Couleur de l'éclairage de la prise de vue de chaque image (kelvins des réglages),
     /// lue avec ses réglages.
     adjust_shot: HashMap<PathBuf, [f32; 3]>,
-    /// Décalage créatif et noir et blanc décochés dans la session : retrouvés en recochant.
-    adjust_creative_memory: HashMap<PathBuf, tri::adjust::Adjust>,
-    adjust_mono_memory: HashMap<PathBuf, tri::adjust::Mixer>,
     /// Onglet ouvert de la section (retenu dans la session).
     adjust_tab: adjust::AdjustTab,
     /// « Synchroniser N images » : les réglages vont à toute la sélection (cochée par
@@ -1393,8 +1390,6 @@ impl TriApp {
             adjust_dirty: None,
             adjust_eyedropper: false,
             adjust_shot: HashMap::new(),
-            adjust_creative_memory: HashMap::new(),
-            adjust_mono_memory: HashMap::new(),
             adjust_tab: Default::default(),
             adjust_sync: true,
             adjust_gesture: None,
@@ -28445,53 +28440,43 @@ mod tests {
     }
 
     #[test]
-    fn the_adjustments_are_in_tabs_with_checkboxes_for_style_and_black_and_white() {
-        // Retours du 10/11/2026 : onglets Base, Style, N&B, Valeurs ; décalage créatif et
-        // noir et blanc sous une case (décochée puis recochée : ses valeurs reviennent) ;
-        // mélange normalisé par défaut.
+    fn the_adjustments_are_in_tabs_without_checkboxes() {
+        // Retours du 10/11/2026 : onglets Base, Style, N&B, Valeurs, sans case : le style
+        // existe dès qu'une valeur n'est pas nulle, le noir et blanc dès qu'un filtre est
+        // choisi (« Aucun (couleur) » sinon) ; mélange normalisé par défaut.
         let (mut h, _dir) = harness();
         // Section en bas du panneau de droite : tout visible, sans défiler.
         h.set_size(vec2(1000.0, 2400.0));
         run_until(&mut h, |app| app.files.len() == 3);
-        let path = h.state().files[0].path.clone();
         h.state_mut().selected = 0;
-        let layers = tri::adjust::Layers {
-            creative: Some(tri::adjust::Adjust {
-                exposure: 0.4,
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-        h.state_mut()
-            .save_adjustments(vec![(path.clone(), Some(layers))]);
         h.run_steps(2);
         h.get_by_label("Style").click();
         h.run_steps(2);
-        h.get_by_label("Décalage créatif").click();
-        h.run_steps(3);
-        assert_eq!(
-            tri::adjust::read(&path).unwrap(),
-            None,
-            "unchecked: no offset"
+        assert!(
+            h.query_by_label("Décalage créatif").is_none(),
+            "no checkbox"
         );
-        h.get_by_label("Décalage créatif").click();
-        h.run_steps(3);
-        let back = tri::adjust::read(&path).unwrap().expect("checked again");
-        assert_eq!(back.creative.map(|c| c.exposure), Some(0.4), "values back");
+        // Le libellé nomme aussi son curseur et son champ.
+        assert!(h.query_all_by_label("Chaleur").count() >= 2);
         h.get_by_label("N&B").click();
         h.run_steps(2);
-        h.get_by_label("Noir et blanc").click();
-        h.run_steps(3);
-        let mono = tri::adjust::read(&path)
-            .unwrap()
-            .and_then(|l| l.mono)
-            .unwrap();
-        assert!(mono.normalise, "normalised by default");
-        h.get_by_label("Normalisé");
+        assert!(h.query_by_label("Noir et blanc").is_none(), "no checkbox");
         h.get_by_label("Filtre");
+        assert!(
+            h.query_all_by_role(egui::accesskit::Role::ComboBox)
+                .any(|n| n.value().as_deref() == Some("Aucun (couleur)")),
+            "colour: no filter"
+        );
+        h.get_by_label("Normalisé");
         h.get_by_label("Valeurs").click();
         h.run_steps(2);
         h.get_by_label("Tout copier");
+        let path = h.state().files[0].path.clone();
+        assert_eq!(
+            tri::adjust::read(&path).unwrap(),
+            None,
+            "looking writes nothing"
+        );
     }
 
     #[test]

@@ -140,10 +140,12 @@ essai (retours du 10/11/2026) :
     **« Pipette »** (en plein écran, un clic sur une zone qui devrait être grise, `[gui]
     adjust_eyedropper_size` ; ou un **cadre tracé** pour une balance auto sur cette
     partie ; depuis la grille, le bouton ouvre le plein écran) ; teinte.
-  - **Style** : case « Décalage créatif », puis exposition, chaleur, teinte.
-  - **N&B** : case « Noir et blanc », le **filtre** (liste de préréglages : neutre,
-    rouge, orange, jaune, vert, bleu ; « Personnalisé » dès qu'on touche au mélange),
-    rouge / vert / bleu en %, **« Normalisé »** (coché par défaut) et le total.
+  - **Style** : exposition, chaleur, teinte. Pas de case (l'onglet suffit) : le
+    décalage créatif existe dès qu'une valeur n'est pas nulle.
+  - **N&B** : le **filtre** (liste : « Aucun (couleur) », puis neutre, rouge, orange,
+    jaune, vert, bleu ; « Personnalisé » dès qu'on touche au mélange), rouge / vert /
+    bleu en %, **« Normalisé »** (coché par défaut) et le total. Pas de case : choisir un
+    filtre ou toucher un canal passe en noir et blanc, « Aucun » revient à la couleur.
   - **Valeurs** : le tableau à reporter dans un logiciel de développement (exposition
     totale, base, style ; balance et prise de vue en kelvins ; balance du style ;
     mélange), clic droit sur une ligne pour la copier, « Tout copier ».
@@ -152,8 +154,6 @@ essai (retours du 10/11/2026) :
   kelvins à l'unité). Le curseur commun de l'interface : glisser par grands crans, Maj +
   glisser pour le réglage fin ; double-clic : valeur par défaut (température et teinte :
   la balance de la prise de vue).
-- Décochés puis recochés dans la session, décalage créatif et noir et blanc retrouvent
-  leurs valeurs.
 - **Normalisé** : le total reste à 100 %. Déplacer un canal déplace les deux autres en
   sens inverse, au prorata de leurs parts (moitié chacun s'ils sont nuls ou de signes
   opposés) ; aux bornes (-100 % à 200 %), le canal tiré s'arrête là où les autres ne
@@ -178,7 +178,7 @@ décale, un bouton calcule** (`tri::adjust::propagate`).
 | Teinte, style (curseurs) | même écart |
 | Auto, préréglages, telle que prise | recalculés sur chaque image (une image à -1 IL revient à 0, celle à 0 ne bouge pas) |
 | Pipette | l'image courante neutralisée sur la zone, les autres harmonisées sur elle |
-| Noir et blanc, cases | copiés |
+| Noir et blanc | copié |
 
 L'exposition est additive et non proportionnelle : l'IL est déjà une échelle relative
 (+0,2 IL = la lumière × 1,15 sur chaque image) ; une règle de 3 sur les IL éclaircirait

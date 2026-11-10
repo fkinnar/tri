@@ -87,8 +87,6 @@ impl TriApp {
         self.adjust_read = mpsc::channel();
         self.adjust_dirty = None;
         self.adjust_shot.clear();
-        self.adjust_creative_memory.clear();
-        self.adjust_mono_memory.clear();
         self.adjust_map
             .write()
             .unwrap_or_else(|e| e.into_inner())
@@ -565,42 +563,8 @@ impl TriApp {
                     &mut pending,
                 );
             }
-            AdjustTab::Style => {
-                let mut on = layers.creative.is_some();
-                if ui
-                    .checkbox(&mut on, t!("adjust-creative"))
-                    .on_hover_text(t!("adjust-creative-tip"))
-                    .changed()
-                {
-                    if on {
-                        layers.creative = Some(
-                            self.adjust_creative_memory
-                                .remove(&file.path)
-                                .unwrap_or_default(),
-                        );
-                    } else if let Some(c) = layers.creative.take() {
-                        self.adjust_creative_memory.insert(file.path.clone(), c);
-                    }
-                }
-                ui.add_space(6.0);
-                style_tab(ui, &mut layers);
-            }
-            AdjustTab::Mono => {
-                let mut on = layers.mono.is_some();
-                if ui.checkbox(&mut on, t!("adjust-mono")).changed() {
-                    if on {
-                        layers.mono = Some(
-                            self.adjust_mono_memory
-                                .remove(&file.path)
-                                .unwrap_or_default(),
-                        );
-                    } else if let Some(m) = layers.mono.take() {
-                        self.adjust_mono_memory.insert(file.path.clone(), m);
-                    }
-                }
-                ui.add_space(6.0);
-                mono_tab(ui, &mut layers);
-            }
+            AdjustTab::Style => style_tab(ui, &mut layers),
+            AdjustTab::Mono => mono_tab(ui, &mut layers),
             AdjustTab::Values => values_tab(ui, &layers, shot),
         }
         ui.add_space(6.0);
@@ -895,9 +859,10 @@ fn base_tab(
 
 /// Onglet « Style » : le décalage créatif, s'il est activé.
 fn style_tab(ui: &mut Ui, layers: &mut Layers) {
-    let Some(mut creative) = layers.creative else {
-        return;
-    };
+    // Pas de case (retour du 10/11/2026 : l'onglet suffit) : le décalage existe dès qu'une
+    // valeur n'est pas nulle.
+    let mut creative = layers.creative.unwrap_or_default();
+    let before = creative;
     let ev = t!("adjust-ev-suffix");
     let name = title_row(ui, t!("adjust-exposure"), |_| {});
     if setting_slider(
@@ -940,22 +905,35 @@ fn style_tab(ui: &mut Ui, layers: &mut Layers) {
     {
         creative.gains = gains;
     }
-    layers.creative = Some(creative);
+    if creative != before {
+        layers.creative = (!creative.is_none()).then_some(creative);
+    }
 }
 
 /// Onglet « N&B » : le filtre (préréglage), le mélange, « Normalisé ».
 fn mono_tab(ui: &mut Ui, layers: &mut Layers) {
-    let Some(mut mixer) = layers.mono else {
-        return;
-    };
+    // Pas de case (retour du 10/11/2026) : « Aucun (couleur) » dans la liste ; choisir un
+    // filtre ou toucher un canal passe en noir et blanc.
+    let on = layers.mono.is_some();
+    let mut mixer = layers.mono.unwrap_or_default();
+    let before = mixer;
+    let mut off = false;
     let current = mixer.preset_name();
+    let shown = if !on {
+        t!("adjust-mono-none")
+    } else {
+        current.map_or_else(|| t!("adjust-mono-custom"), mixer_name)
+    };
     title_row(ui, t!("adjust-filter"), |ui| {
         egui::ComboBox::from_id_salt("adjust_mono_preset")
-            .selected_text(current.map_or_else(|| t!("adjust-mono-custom"), mixer_name))
+            .selected_text(shown)
             .show_ui(ui, |ui| {
+                if ui.selectable_label(!on, t!("adjust-mono-none")).clicked() {
+                    off = true;
+                }
                 for p in Mixer::PRESETS {
                     if ui
-                        .selectable_label(current == Some(p), mixer_name(p))
+                        .selectable_label(on && current == Some(p), mixer_name(p))
                         .clicked()
                         && let Some(m) = Mixer::preset(p)
                     {
@@ -1004,20 +982,26 @@ fn mono_tab(ui: &mut Ui, layers: &mut Layers) {
         }
     }
     ui.horizontal_wrapped(|ui| {
-        if ui
-            .checkbox(&mut mixer.normalise, t!("adjust-mono-normalise"))
-            .on_hover_text(t!("adjust-mono-normalise-tip"))
-            .changed()
-            && mixer.normalise
-        {
-            mixer = mixer.rescaled();
-        }
+        ui.add_enabled_ui(on, |ui| {
+            if ui
+                .checkbox(&mut mixer.normalise, t!("adjust-mono-normalise"))
+                .on_hover_text(t!("adjust-mono-normalise-tip"))
+                .changed()
+                && mixer.normalise
+            {
+                mixer = mixer.rescaled();
+            }
+        });
         ui.weak(t!(
             "adjust-mono-total",
             total = format!("{:.0}", mixer.sum() * 100.0)
         ));
     });
-    layers.mono = Some(mixer);
+    if off {
+        layers.mono = None;
+    } else if mixer != before || (on && layers.mono != Some(mixer)) {
+        layers.mono = Some(mixer);
+    }
 }
 
 /// Onglet « Valeurs » : un tableau à reporter dans un logiciel de développement, comme

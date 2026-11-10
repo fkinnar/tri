@@ -135,10 +135,12 @@ try (feedback of 2026-11-10):
     (in full screen, a click on a zone that should be grey, `[gui]
     adjust_eyedropper_size`; or a **frame drawn** for an auto balance on that part; from
     the grid, the button opens the full screen); tint.
-  - **Style**: "Creative offset" checkbox, then exposure, warmth, tint.
-  - **B&W**: "Black and white" checkbox, the **filter** (preset list: neutral, red,
-    orange, yellow, green, blue; "Custom" as soon as the mix is touched), red / green /
-    blue in %, **"Normalised"** (checked by default) and the total.
+  - **Style**: exposure, warmth, tint. No checkbox (the tab is enough): the creative
+    offset exists as soon as a value isn't zero.
+  - **B&W**: the **filter** (list: "None (colour)", then neutral, red, orange, yellow,
+    green, blue; "Custom" as soon as the mix is touched), red / green / blue in %,
+    **"Normalised"** (checked by default) and the total. No checkbox: choosing a filter
+    or touching a channel switches to black and white, "None" goes back to colour.
   - **Values**: the table to copy into a development program (total exposure, base,
     style; balance and as shot in kelvins; style balance; mix), right-click a row to copy
     it, "Copy all".
@@ -147,8 +149,6 @@ try (feedback of 2026-11-10):
   of an EV, kelvins to the unit). The interface's common slider: drag by large steps,
   Shift + drag for fine adjustment; double-click: default value (temperature and tint:
   the as-shot balance).
-- Unchecked then checked again in the session, creative offset and black and white get
-  their values back.
 - **Normalised**: the total stays at 100 %. Moving a channel moves the other two the
   opposite way, in proportion to their shares (half each if they are zero or of opposite
   signs); at the bounds (-100 % to 200 %), the dragged channel stops where the others
@@ -172,7 +172,7 @@ computes** (`tri::adjust::propagate`).
 | Tint, style (sliders) | same difference |
 | Auto, presets, as shot | computed for each image (an image at -1 EV comes back to 0, the one at 0 doesn't move) |
 | Eyedropper | the current image neutralised on the zone, the others matched to it |
-| Black and white, checkboxes | copied |
+| Black and white | copied |
 
 Exposure is additive, not proportional: EV is already a relative scale (+0.2 EV = light
 × 1.15 on every image); a rule of three on EV would brighten the images already corrected
