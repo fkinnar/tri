@@ -4213,9 +4213,9 @@ impl TriApp {
             .rows()
             .iter()
             .any(|r| r.path == root && r.kind == Some(PlaceKind::Volume) && r.ejectable);
-        let at = ctx
-            .pointer_latest_pos()
-            .unwrap_or_else(|| ctx.content_rect().center());
+        // Au centre, comme les autres confirmations du panneau (retour du 10/11/2026 : près
+        // du pointeur, la boîte débordait en bas).
+        let at = ctx.content_rect().center() - vec2(160.0, 80.0);
         self.disk_clear = Some(DiskClear {
             root,
             removable,
