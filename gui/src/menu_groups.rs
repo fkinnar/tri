@@ -107,7 +107,10 @@ fn header(ui: &mut Ui, title: &str, icon: Option<(bool, &str)>, line: bool) -> b
         .layout_no_wrap(title.to_uppercase(), font, color);
     let gap = ui.spacing().item_spacing.x;
     let height = galley.size().y.max(ICON) + 2.0;
-    let wanted = galley.size().x + gap * 3.0 + if icon.is_some() { ICON } else { 0.0 };
+    // Décalé comme le texte des boutons du menu (retour du 10/11/2026 : aligné sur les
+    // entrées).
+    let indent = ui.spacing().button_padding.x;
+    let wanted = indent + galley.size().x + gap * 3.0 + if icon.is_some() { ICON } else { 0.0 };
     // Passe de mesure : juste le titre ; ensuite toute la largeur du menu (comme un trait).
     let width = if ui.is_sizing_pass() {
         wanted
@@ -116,8 +119,8 @@ fn header(ui: &mut Ui, title: &str, icon: Option<(bool, &str)>, line: bool) -> b
     };
     let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
     let y = rect.center().y;
-    let text_pos = egui::pos2(rect.left(), y - galley.size().y / 2.0);
-    let text_right = rect.left() + galley.size().x;
+    let text_pos = egui::pos2(rect.left() + indent, y - galley.size().y / 2.0);
+    let text_right = text_pos.x + galley.size().x;
     let stroke = ui.visuals().widgets.noninteractive.bg_stroke;
     let mut clicked = false;
     let line_end = if let Some((pin, tip)) = icon {
