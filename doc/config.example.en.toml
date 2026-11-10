@@ -555,6 +555,9 @@ trace = false
 # Automatic exposure: target median luminance, in linear light (0.18: the mid grey of
 # light meters; higher, brighter images).
 auto_exposure_target = 0.18
+# Automatic exposure compensation (EV): raises the median target and the highlight level
+# together (the latter never beyond 0.95, nothing burns). Negative: darker.
+auto_exposure_bias = 0.5
 # Highlight priority: when brightening, stop when this percentile of the luminance (0.99:
 # the brightest 1 %) reaches auto_exposure_highlight_target; when darkening, when it comes
 # down to it (a low-key portrait doesn't burn, a snow scene doesn't turn grey).

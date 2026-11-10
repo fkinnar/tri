@@ -36,6 +36,10 @@ pub struct AdjustSettings {
     /// Exposition automatique : luminance médiane visée, en lumière linéaire (0,18 : le
     /// gris moyen des posemètres).
     pub auto_exposure_target: f32,
+    /// Exposition automatique : compensation (IL), qui relève ensemble la médiane visée et
+    /// le niveau des hautes lumières (celui-ci jamais au-delà de 0,95) ; retour du
+    /// 10/11/2026 : « généralement un peu sombre ».
+    pub auto_exposure_bias: f32,
     /// Exposition automatique : centile des hautes lumières (0,99 : le 1 % le plus clair).
     pub auto_exposure_highlights: f32,
     /// Exposition automatique : niveau (lumière linéaire) que ces hautes lumières ne
@@ -65,6 +69,7 @@ impl Default for AdjustSettings {
     fn default() -> Self {
         AdjustSettings {
             auto_exposure_target: 0.18,
+            auto_exposure_bias: 0.5,
             auto_exposure_highlights: 0.99,
             auto_exposure_highlight_target: 0.6,
             auto_balance_chroma: 0.2,
@@ -857,7 +862,8 @@ pub fn propagate(
     out
 }
 
-/// Exposition automatique, **à priorité aux hautes lumières** (retour du 10/11/2026 : sur
+/// Exposition automatique, **à priorité aux hautes lumières**, compensée de
+/// `auto_exposure_bias` (les deux niveaux visés relevés d'autant) (retour du 10/11/2026 : sur
 /// un portrait en low-key, pull et fond sombres, viser la médiane donnait +3,3 IL et un
 /// visage brûlé) :
 ///
@@ -884,14 +890,20 @@ pub fn auto_exposure(base: &Base, gains: Gains, settings: &AdjustSettings) -> f3
         &histogram,
         settings.auto_exposure_highlights.clamp(0.5, 1.0),
     );
-    let wanted = (settings.auto_exposure_target.max(1e-4) / median).log2();
-    let room = (settings.auto_exposure_highlight_target.clamp(1e-3, 1.0) / high).log2();
+    let bias = settings.auto_exposure_bias.clamp(-3.0, 3.0).exp2();
+    let wanted = (settings.auto_exposure_target.max(1e-4) * bias / median).log2();
+    let ceiling = (settings.auto_exposure_highlight_target * bias).clamp(1e-3, HIGHLIGHT_MAX);
+    let room = (ceiling / high).log2();
     if wanted > 0.0 {
         wanted.min(room.max(0.0))
     } else {
         wanted.max(room.min(0.0))
     }
 }
+
+/// Niveau des hautes lumières au plus après la compensation de l'exposition automatique
+/// (sous le blanc : rien ne brûle).
+const HIGHLIGHT_MAX: f32 = 0.95;
 
 /// Histogramme de la luminance linéaire (Rec. 709) de `bitmap`, en 4096 cases.
 fn luminance_histogram(bitmap: &Bitmap, transfer: Transfer) -> Vec<u32> {
@@ -1340,8 +1352,13 @@ mod tests {
 
     #[test]
     fn auto_exposure_brings_the_median_to_mid_grey() {
+        // Sans compensation : la médiane au gris moyen.
+        let settings = AdjustSettings {
+            auto_exposure_bias: 0.0,
+            ..AdjustSettings::default()
+        };
         let dark = flat(4, 4, [40, 40, 40]);
-        let ev = auto_exposure(&base(&dark), Gains::NONE, &AdjustSettings::default());
+        let ev = auto_exposure(&base(&dark), Gains::NONE, &settings);
         let mut fixed = dark.clone();
         apply_bitmap(
             &mut fixed,
@@ -1354,6 +1371,9 @@ mod tests {
         );
         let y = measure(&fixed, SRGB, None).luminance;
         assert!(ev > 0.0 && close(y, 0.18, 0.01), "{ev} {y}");
+        // Compensée : d'autant plus claire.
+        let biased = auto_exposure(&base(&dark), Gains::NONE, &AdjustSettings::default());
+        assert!(close(biased - ev, 0.5, 0.05), "{ev} {biased}");
     }
 
     #[test]
@@ -1365,24 +1385,26 @@ mod tests {
             *px = [185, 185, 185];
         }
         let settings = AdjustSettings::default();
+        let ceiling = (settings.auto_exposure_highlight_target
+            * settings.auto_exposure_bias.exp2())
+        .min(HIGHLIGHT_MAX);
         let ev = auto_exposure(&base(&image), Gains::NONE, &settings);
         let face = SRGB.decode(185.0 / 255.0);
-        assert!((0.0..0.5).contains(&ev), "{ev}");
-        assert!(close(
-            face * ev.exp2(),
-            settings.auto_exposure_highlight_target,
-            0.02
-        ));
+        assert!((0.0..1.0).contains(&ev), "{ev}");
+        assert!(close(face * ev.exp2(), ceiling, 0.02), "{ev}");
         // Neige : très claire partout, assombrie jusqu'aux hautes lumières à la cible.
-        let snow = flat(4, 4, [235, 235, 235]);
+        let snow = flat(4, 4, [250, 250, 250]);
         let ev = auto_exposure(&base(&snow), Gains::NONE, &settings);
-        let white = SRGB.decode(235.0 / 255.0);
+        let white = SRGB.decode(250.0 / 255.0);
+        assert!(ev < 0.0 && close(white * ev.exp2(), ceiling, 0.02), "{ev}");
+        // Sans compensation : les niveaux de la configuration tels quels.
+        let plain = AdjustSettings {
+            auto_exposure_bias: 0.0,
+            ..settings
+        };
+        let ev = auto_exposure(&base(&image), Gains::NONE, &plain);
         assert!(
-            close(
-                white * ev.exp2(),
-                settings.auto_exposure_highlight_target,
-                0.02
-            ),
+            close(face * ev.exp2(), plain.auto_exposure_highlight_target, 0.02),
             "{ev}"
         );
     }

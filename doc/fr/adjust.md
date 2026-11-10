@@ -90,6 +90,13 @@ quand le centile `auto_exposure_highlights` (0,99) atteint
 la médiane seule donnait +3,3 IL et un visage brûlé ; la priorité aux hautes lumières
 donne +0,3 IL. Une scène de neige, elle, n'est pas ramenée au gris.
 
+**Compensation** `auto_exposure_bias` (+0,5 IL ; retour du même jour : « généralement un
+peu sombre ») : relève ensemble la médiane visée et le plafond des hautes lumières
+(celui-ci jamais au-delà de 0,95). Pas le +0,7 IL de darktable, qui compense la marge que
+le boîtier garde sur les données RAW : on mesure ici le JPEG du boîtier, où elle est déjà
+absorbée ; ce sont les deux cibles, prudentes, qui assombrissaient. Sur le portrait
+ci-dessus : +0,82 IL.
+
 ## Où ils s'appliquent
 
 | | RAW rendu par LibRaw | JPEG boîtier, images plates |

@@ -85,6 +85,12 @@ Feedback of 2026-11-10: on a low-key portrait (dark sweater and background, spot
 on the face), the median alone gave +3.3 EV and a burnt face; highlight priority gives
 +0.3 EV. A snow scene isn't brought down to grey either.
 
+**Compensation** `auto_exposure_bias` (+0.5 EV; feedback of the same day: "generally a
+bit dark"): raises the median target and the highlight ceiling together (the latter
+never beyond 0.95). Not darktable's +0.7 EV, which compensates the headroom the camera
+keeps on the RAW data: here the camera JPEG is measured, where it is already absorbed;
+the two cautious targets were what made it dark. On the portrait above: +0.82 EV.
+
 ## Where they apply
 
 | | RAW rendered by LibRaw | Camera JPEG, flat images |
