@@ -3620,13 +3620,22 @@ impl TriApp {
                                         let current = self.folder.notes.folder_embed(&row.path);
                                         let global = embed_level_name(self.settings.xmp.embed);
                                         menu_groups::subtitle(ui, &t!("folder-menu-embed"));
-                                        for (value, label) in [
-                                            (None, t!("folder-embed-default", level = global)),
-                                            (Some(true), t!("folder-embed-always")),
-                                            (Some(false), t!("folder-embed-never")),
+                                        // Le réglage général en gris à côté (retour du
+                                        // 10/11/2026), pas entre parenthèses.
+                                        for (value, label, detail) in [
+                                            (None, t!("folder-embed-default"), Some(global)),
+                                            (Some(true), t!("folder-embed-always"), None),
+                                            (Some(false), t!("folder-embed-never"), None),
                                         ] {
-                                            if ui
-                                                .radio(current == value, label)
+                                            let checked = current == value;
+                                            let radio = match detail {
+                                                Some(detail) => ui.radio(
+                                                    checked,
+                                                    (label, egui::RichText::new(detail).weak()),
+                                                ),
+                                                None => ui.radio(checked, label),
+                                            };
+                                            if radio
                                                 .on_hover_text(t!("folder-menu-embed-tip"))
                                                 .clicked()
                                             {
@@ -26370,14 +26379,14 @@ mod tests {
         assert!(h.query_by_label_contains("Dossier vide").is_some());
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert!(!base.exists());
-        // À la souris : clic droit sur un dossier, « Nouveau dossier… ».
+        // À la souris : clic droit sur un dossier, « Dossier », « Nouveau… ».
         let other = dir.path().join("autre");
         std::fs::create_dir(&other).unwrap();
         h.state_mut().tree.reload();
         h.run_steps(2);
         h.get_by_label("autre").click_secondary();
         h.run_steps(2);
-        h.get_by_label("Nouveau dossier…").click();
+        h.get_by_label("Nouveau…").click();
         h.run_steps(2);
         assert!(
             matches!(

@@ -165,8 +165,8 @@ placed on the whole sensor, are hidden on a developed image (cropped). Without d
 the source is not offered and `Shift+B` says so.
 
 **A whole folder in the background** (2026-10-25, issue #69): `Ctrl+Shift+B` (the open
-folder) or the right click on a folder of the panel, "Develop the whole folder
-(darktable)". Each image with a darktable sidecar that has a history is rendered one
+folder) or the right click on a folder of the panel, "Development", "Develop
+all…". Each image with a darktable sidecar that has a history is rendered one
 after the other (`gui/src/develop_batch.rs`), by the same producer as `Shift+B`
 (`CachedPreviews`, `Developed` level): another rendering program plugged in there will
 serve the same way. Already in the cache: skipped. One batch at a time; its progress is a
@@ -190,7 +190,7 @@ image is developed there** (`is_developed_in`, the "developed" filter's rule; de
 2026-10-31: darktable would render by default, but without a development there is
 nothing to see), or the RAW render (LibRaw), always there. The chosen software takes over
 the development's one for that image, for the
-session (`develop_choice`). Right click on a folder, "Develop the whole folder…" opens a
+session (`develop_choice`). Right click on a folder, "Development", "Develop all…" opens a
 dialog: each image in the software of its development (otherwise it keeps the RAW
 render), or all in one software (the images it developed). `Ctrl+Shift+B`: each image in
 its own, without dialog.
