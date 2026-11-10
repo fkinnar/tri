@@ -644,8 +644,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   niveau, afficher dans le Finder, ouvrir dans darktable, favori, décharger ; puis
   **Dossier** (nouveau, renommer, déplacer, copier, supprimer), **Notes** (sidecars,
   notes dans les images), **Développement** (développer tout le dossier, réglages auto)
-  et **Préférences** (cache). Un groupe est un sous-menu ; le petit bouton en haut à
-  droite du sous-menu l'installe **au premier niveau**, entre deux traits, son titre en
+  et **Préférences** (cache). Un groupe est un sous-menu, son titre en tête (petites
+  capitales grises) ; le petit bouton à sa droite l'installe **au premier niveau**, entre deux traits, son titre en
   petites capitales sur le trait du haut, avec l'icône qui le replie. Choix retenu pour
   tous les dossiers (`[gui.folders] menu_inline`, « Dossier » déplié par défaut) ; le
   menu reste ouvert pendant qu'on le compose (chaque entrée le ferme elle-même).

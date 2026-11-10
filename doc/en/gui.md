@@ -601,7 +601,8 @@ system one ("cold" measurements, experiments).
   level, show in the Finder, open in darktable, favourite, offload; then **Folder** (new,
   rename, move, copy, delete), **Ratings** (sidecars, ratings in the images),
   **Development** (develop the whole folder, auto adjustments) and **Preferences**
-  (cache). A group is a submenu; the small button at the top right of the submenu puts it
+  (cache). A group is a submenu, its title at the top (small grey capitals); the small
+  button on its right puts it
   **at the top level**, between two lines, its title in small capitals on the top line,
   with the icon that folds it back. The choice holds for every folder
   (`[gui.folders] menu_inline`, "Folder" unfolded by default); the menu stays open while

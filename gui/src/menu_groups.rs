@@ -45,7 +45,7 @@ impl<'a> MenuGroups<'a> {
     pub fn group(&mut self, ui: &mut Ui, id: &'static str, title: &str, add: impl FnOnce(&mut Ui)) {
         if self.inline.iter().any(|g| g == id) {
             // Le titre sur un trait sert de séparateur au-dessus.
-            if header(ui, title, Some((false, &self.tips.1))) {
+            if header(ui, title, Some((false, &self.tips.1)), true) {
                 self.toggled = Some(id);
             }
             add(ui);
@@ -57,7 +57,9 @@ impl<'a> MenuGroups<'a> {
             let tip = self.tips.0.clone();
             let mut toggled = false;
             ui.menu_button(title, |ui| {
-                toggled = pin_row(ui, &tip);
+                // Le titre du groupe en tête, à gauche de l'icône (retour du 10/11/2026 : plutôt
+                // qu'une ligne vide).
+                toggled = header(ui, title, Some((true, &tip)), false);
                 add(ui);
             });
             if toggled {
@@ -92,12 +94,12 @@ pub fn toggle(inline: &[String], id: &str) -> Vec<String> {
 /// Sous-titre à l'intérieur d'un groupe (« Réglages auto »…) : petites capitales grises
 /// sur un trait, comme le titre d'un groupe déplié, sans icône.
 pub fn subtitle(ui: &mut Ui, title: &str) {
-    header(ui, title, None);
+    header(ui, title, None, true);
 }
 
-/// Titre sur un trait, avec l'icône de bascule à droite (`Some((déplier, bulle))`) ;
-/// vrai si l'icône est cliquée.
-fn header(ui: &mut Ui, title: &str, icon: Option<(bool, &str)>) -> bool {
+/// Titre en petites capitales grises, sur un trait si `line`, avec l'icône de bascule à
+/// droite (`Some((déplier, bulle))`) ; vrai si l'icône est cliquée.
+fn header(ui: &mut Ui, title: &str, icon: Option<(bool, &str)>, line: bool) -> bool {
     let color = ui.visuals().weak_text_color();
     let font = egui::FontId::proportional(ui.style().text_styles[&egui::TextStyle::Small].size);
     let galley = ui
@@ -131,7 +133,7 @@ fn header(ui: &mut Ui, title: &str, icon: Option<(bool, &str)>) -> bool {
     };
     if ui.is_rect_visible(rect) {
         ui.painter().galley(text_pos, galley, color);
-        if line_end > text_right + gap {
+        if line && line_end > text_right + gap {
             ui.painter().hline(
                 (text_right + gap)..=line_end,
                 y,
@@ -140,25 +142,6 @@ fn header(ui: &mut Ui, title: &str, icon: Option<(bool, &str)>) -> bool {
         }
     }
     clicked
-}
-
-/// Ligne du haut d'un sous-menu : l'icône « au premier niveau », à droite ; vrai si
-/// cliquée.
-fn pin_row(ui: &mut Ui, tip: &str) -> bool {
-    let width = if ui.is_sizing_pass() {
-        ICON
-    } else {
-        ui.available_size_before_wrap().x.max(ICON)
-    };
-    let (rect, _) = ui.allocate_exact_size(vec2(width, ICON), Sense::hover());
-    let icon_rect = Rect::from_min_size(
-        egui::pos2(rect.right() - ICON, rect.top()),
-        vec2(ICON, ICON),
-    );
-    let response = icon_response(ui, icon_rect, tip);
-    let hot = response.hovered();
-    paint_icon(ui, icon_rect, true, hot);
-    response.clicked()
 }
 
 fn icon_response(ui: &mut Ui, rect: Rect, tip: &str) -> egui::Response {
