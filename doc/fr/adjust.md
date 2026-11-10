@@ -68,6 +68,17 @@ Préréglages (`[adjust]`, teinte nulle) : lumière du jour 5 500 K, nuageux 6 5
 7 500, tungstène 2 850, fluorescent 3 800, flash 5 500 ; plus « telle que prise » (aucun
 gain) et « auto » (monde gris).
 
+## Balance automatique
+
+`auto_balance`, sur les **pixels presque neutres** : ne comptent que les pixels peu
+saturés (écart entre canaux sous `[adjust] auto_balance_chroma`, 20 % du plus fort), ni
+bouchés ni presque brûlés ; on les neutralise, puis on recommence
+(`auto_balance_passes`, 4), ce qui est neutre changeant avec la correction. Moins de 1 %
+de pixels neutres : le « monde gris » (moyenne de toute l'image), faute de mieux. Retour
+du 10/11/2026 : sur un portrait au visage et au pull chauds, le monde gris donnait
+4 343 K (bien trop froid), les pixels neutres 5 119 K, à côté de la balance du boîtier
+(5 167 K). La pipette, elle, prend la moyenne de sa zone.
+
 ## Exposition automatique
 
 `auto_exposure` : la correction qui amène la luminance médiane de l'image (sa balance

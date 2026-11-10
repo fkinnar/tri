@@ -564,6 +564,12 @@ auto_exposure_target = 0.18
 # neige ne devient pas grise).
 auto_exposure_highlights = 0.99
 auto_exposure_highlight_target = 0.6
+# Balance auto, sur les pixels presque neutres (le « monde gris », la moyenne de toute
+# l'image, refroidit un portrait au visage chaud) : un pixel compte si l'écart entre ses
+# canaux reste sous cette part du plus fort (0.2 : 20 %) ; passes de la recherche (ce qui
+# est neutre change avec la correction). Moins de 1 % de pixels neutres : le monde gris.
+auto_balance_chroma = 0.2
+auto_balance_passes = 4
 # Préréglages de balance des blancs, en kelvins (teinte nulle). Les kelvins de tri sont
 # proches de ceux des logiciels de développement, pas identiques (chacun a son modèle du
 # boîtier).

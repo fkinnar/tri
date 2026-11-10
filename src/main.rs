@@ -1379,10 +1379,18 @@ fn adjust(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
         mono: a.mono,
     };
     let shot = |file: &tri::media::MediaFile| tri::adjust::shot_white(&file.path, file.kind);
-    if let Some(zone) = a.neutral {
-        reference.correction.gains = tri::adjust::neutral(
-            tri::adjust::measure(&reference_base.bitmap, reference_base.transfer, zone).cast,
-        );
+    match a.neutral {
+        // `auto` : sur les pixels presque neutres ; une zone : sa moyenne.
+        Some(None) => {
+            reference.correction.gains =
+                tri::adjust::auto_balance(&reference_base, &settings.adjust);
+        }
+        Some(zone) => {
+            reference.correction.gains = tri::adjust::neutral(
+                tri::adjust::measure(&reference_base.bitmap, reference_base.transfer, zone).cast,
+            );
+        }
+        None => {}
     }
     if let Some(spec) = &a.kelvin {
         let (kelvin, tint) = parse_kelvin(spec, &settings.adjust)?;

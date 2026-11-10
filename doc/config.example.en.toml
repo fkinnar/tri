@@ -560,6 +560,12 @@ auto_exposure_target = 0.18
 # down to it (a low-key portrait doesn't burn, a snow scene doesn't turn grey).
 auto_exposure_highlights = 0.99
 auto_exposure_highlight_target = 0.6
+# Auto white balance, on the nearly neutral pixels (the "grey world", the average of the
+# whole image, cools a portrait with a warm face): a pixel counts if the gap between its
+# channels stays under this share of the strongest (0.2: 20 %); passes of the search
+# (what is neutral changes with the correction). Under 1 % of neutral pixels: grey world.
+auto_balance_chroma = 0.2
+auto_balance_passes = 4
 # White balance presets, in kelvins (zero tint). tri's kelvins are close to those of
 # development software, not identical (each has its own model of the camera).
 daylight = 5500

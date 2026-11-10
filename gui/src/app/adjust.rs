@@ -408,8 +408,7 @@ impl TriApp {
     /// Balance auto de `layers` : monde gris sur la vignette de `path`.
     fn auto_balance_of(&self, path: &Path, mut layers: Layers) -> Option<Layers> {
         let base = self.adjust_base(path)?;
-        let cast = tri::adjust::measure(&base.bitmap, base.transfer, None).cast;
-        layers.correction.gains = tri::adjust::neutral(cast);
+        layers.correction.gains = tri::adjust::auto_balance(&base, &self.settings.adjust);
         Some(layers)
     }
 

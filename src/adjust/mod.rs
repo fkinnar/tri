@@ -42,6 +42,11 @@ pub struct AdjustSettings {
     /// dépassent pas en éclaircissant, et sous lequel elles ne descendent pas en
     /// assombrissant.
     pub auto_exposure_highlight_target: f32,
+    /// Balance auto : un pixel compte comme « presque neutre » si l'écart entre ses
+    /// canaux reste sous cette part du plus fort (0,2 : 20 %).
+    pub auto_balance_chroma: f32,
+    /// Balance auto : passes (ce qui est neutre change avec la correction).
+    pub auto_balance_passes: usize,
     /// Préréglages de balance des blancs, en kelvins (teinte nulle).
     pub daylight: f32,
     /// Voir `daylight`.
@@ -62,6 +67,8 @@ impl Default for AdjustSettings {
             auto_exposure_target: 0.18,
             auto_exposure_highlights: 0.99,
             auto_exposure_highlight_target: 0.6,
+            auto_balance_chroma: 0.2,
+            auto_balance_passes: 4,
             daylight: 5500.0,
             cloudy: 6500.0,
             shade: 7500.0,
@@ -673,6 +680,58 @@ pub fn neutral(cast: [f32; 2]) -> Gains {
         red: 1.0 / cast[0].max(1e-3),
         blue: 1.0 / cast[1].max(1e-3),
     }
+}
+
+/// Balance auto sur les **pixels presque neutres** (retour du 10/11/2026 : le « monde
+/// gris », la moyenne de toute l'image, refroidissait un portrait au visage et au pull
+/// chauds, R/V = 1,33). Ne comptent que les pixels peu saturés (`auto_balance_chroma`),
+/// ni bouchés ni presque brûlés ; on les neutralise, puis on recommence
+/// (`auto_balance_passes`), ce qui est neutre changeant avec la correction. Moins de 1 %
+/// de pixels neutres : le monde gris, faute de mieux.
+pub fn auto_balance(base: &Base, settings: &AdjustSettings) -> Gains {
+    let lin = base.transfer.to_linear();
+    let pixels = base.bitmap.data.as_chunks::<3>().0;
+    let usable = pixels
+        .iter()
+        .filter(|px| {
+            let (lo, hi) = (
+                px.iter().min().copied().unwrap_or(0),
+                px.iter().max().copied().unwrap_or(0),
+            );
+            lo >= CAST_RANGE.0 && hi <= CAST_RANGE.1
+        })
+        .count();
+    let grey_world = || neutral(measure(&base.bitmap, base.transfer, None).cast);
+    let chroma = settings.auto_balance_chroma.clamp(0.01, 1.0);
+    let mut gains = Gains::NONE;
+    for pass in 0..settings.auto_balance_passes.max(1) {
+        let (mut sr, mut sg, mut sb, mut n) = (0.0f64, 0.0f64, 0.0f64, 0usize);
+        for px in pixels {
+            let (lo, hi) = (
+                px.iter().min().copied().unwrap_or(0),
+                px.iter().max().copied().unwrap_or(0),
+            );
+            if lo < CAST_RANGE.0 || hi > CAST_RANGE.1 {
+                continue;
+            }
+            let r = lin[px[0] as usize] * gains.red;
+            let g = lin[px[1] as usize];
+            let b = lin[px[2] as usize] * gains.blue;
+            let (mx, mn) = (r.max(g).max(b), r.min(g).min(b));
+            if mx <= 0.0 || (mx - mn) / mx > chroma {
+                continue;
+            }
+            sr += f64::from(r);
+            sg += f64::from(g);
+            sb += f64::from(b);
+            n += 1;
+        }
+        if n * 100 < usable.max(1) || sg <= 0.0 {
+            return if pass == 0 { grey_world() } else { gains };
+        }
+        gains = gains.then(neutral([(sr / sg) as f32, (sb / sg) as f32]));
+    }
+    gains
 }
 
 /// Mesure d'une image avec des réglages.
@@ -1326,6 +1385,38 @@ mod tests {
             ),
             "{ev}"
         );
+    }
+
+    #[test]
+    fn auto_balance_neutralises_the_greys_not_the_skin() {
+        // Retour du 10/11/2026 : un mur gris un peu bleuté (70 %) et un visage chaud
+        // (30 %) ; le monde gris aurait refroidi l'image, la balance auto rend le mur gris.
+        let mut image = flat(10, 10, [118, 120, 128]);
+        for px in image.data.as_chunks_mut::<3>().0.iter_mut().take(30) {
+            *px = [210, 150, 120];
+        }
+        let gains = auto_balance(&base(&image), &AdjustSettings::default());
+        let mut fixed = image.clone();
+        apply_bitmap(
+            &mut fixed,
+            SRGB,
+            Adjust {
+                exposure: 0.0,
+                gains,
+            },
+            None,
+        );
+        let wall = &fixed.data[fixed.data.len() - 3..];
+        assert!(
+            wall[0].abs_diff(wall[1]) <= 1 && wall[2].abs_diff(wall[1]) <= 1,
+            "{wall:?}"
+        );
+        let world = neutral(measure(&image, SRGB, None).cast);
+        assert!(world.warmth() < gains.warmth() - 0.1, "grey world: colder");
+        // Rien de neutre : le monde gris.
+        let red = flat(4, 4, [200, 60, 60]);
+        let g = auto_balance(&base(&red), &AdjustSettings::default());
+        assert_eq!(g, neutral(measure(&red, SRGB, None).cast));
     }
 
     #[test]

@@ -63,6 +63,17 @@ tint, consistent with the camera's own temperature table).
 Presets (`[adjust]`, zero tint): daylight 5,500 K, cloudy 6,500, shade 7,500, tungsten
 2,850, fluorescent 3,800, flash 5,500; plus "as shot" (no gains) and "auto" (grey world).
 
+## Automatic white balance
+
+`auto_balance`, on the **nearly neutral pixels**: only pixels with little saturation
+count (gap between channels under `[adjust] auto_balance_chroma`, 20 % of the strongest),
+neither blocked nor nearly clipped; they are neutralised, then again
+(`auto_balance_passes`, 4), what is neutral changing with the correction. Under 1 % of
+neutral pixels: the "grey world" (average of the whole image), for want of better.
+Feedback of 2026-11-10: on a portrait with a warm face and sweater, the grey world gave
+4,343 K (far too cold), the neutral pixels 5,119 K, next to the camera's balance
+(5,167 K). The eyedropper takes the average of its zone.
+
 ## Automatic exposure
 
 `auto_exposure`: the correction that brings the image's median luminance (its balance
