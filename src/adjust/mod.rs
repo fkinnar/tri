@@ -170,7 +170,8 @@ impl Gains {
     }
 }
 
-/// Une couche d'exposition et de balance.
+/// Une couche d'exposition et de balance (et, pour le style, de contraste et de
+/// saturation).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Adjust {
@@ -178,20 +179,43 @@ pub struct Adjust {
     pub exposure: f32,
     /// Balance des blancs.
     pub gains: Gains,
+    /// Contraste, de -1 à 1 (retour du 10/11/2026, dans le style) : une courbe en lumière
+    /// linéaire pivotée sur le gris moyen, appliquée à la luminance (teinte gardée).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub contrast: f32,
+    /// Saturation, de -1 (gris) à 1, autour de la luminance.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub saturation: f32,
 }
 
+fn is_zero(v: &f32) -> bool {
+    v.abs() < 1e-6
+}
+
+/// Pivot du contraste : le gris moyen, qui ne bouge pas.
+const CONTRAST_PIVOT: f32 = 0.18;
+/// Force du contraste : à 1, les écarts au gris moyen (en IL) sont multipliés par
+/// 1 + cette valeur ; à -1, par 1 - cette valeur.
+const CONTRAST_STRENGTH: f32 = 0.6;
+
 impl Adjust {
-    /// Les deux couches l'une après l'autre (expositions ajoutées, gains multipliés).
+    /// Les deux couches l'une après l'autre (expositions, contrastes et saturations
+    /// ajoutés, gains multipliés).
     pub fn then(self, other: Adjust) -> Adjust {
         Adjust {
             exposure: self.exposure + other.exposure,
             gains: self.gains.then(other.gains),
+            contrast: self.contrast + other.contrast,
+            saturation: self.saturation + other.saturation,
         }
     }
 
     /// Vrai si la couche ne change rien.
     pub fn is_none(self) -> bool {
-        self.exposure.abs() < 1e-3 && self.gains.is_none()
+        self.exposure.abs() < 1e-3
+            && self.gains.is_none()
+            && self.contrast.abs() < 1e-3
+            && self.saturation.abs() < 1e-3
     }
 }
 
@@ -576,20 +600,70 @@ pub fn apply_bitmap(bitmap: &mut Bitmap, transfer: Transfer, adjust: Adjust, mon
     let k = adjust.exposure.exp2();
     let (kr, kg, kb) = (k * adjust.gains.red, k, k * adjust.gains.blue);
     let mono = mono.map(Mixer::weights);
+    let saturation = 1.0 + adjust.saturation.clamp(-1.0, 1.0);
+    let colour = (saturation - 1.0).abs() > 1e-3;
+    let contrast = Contrast::new(adjust.contrast);
     for px in bitmap.data.as_chunks_mut::<3>().0 {
-        let r = lin[px[0] as usize] * kr;
-        let g = lin[px[1] as usize] * kg;
-        let b = lin[px[2] as usize] * kb;
+        let mut r = lin[px[0] as usize] * kr;
+        let mut g = lin[px[1] as usize] * kg;
+        let mut b = lin[px[2] as usize] * kb;
         match mono {
             Some([mr, mg, mb]) => {
-                let y = encode(&out, mr * r + mg * g + mb * b);
+                let y = mr * r + mg * g + mb * b;
+                let y = encode(&out, y * contrast.factor(y));
                 *px = [y, y, y];
             }
             None => {
-                px[0] = encode(&out, r);
-                px[1] = encode(&out, g);
-                px[2] = encode(&out, b);
+                let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                if colour {
+                    r = (y + (r - y) * saturation).max(0.0);
+                    g = (y + (g - y) * saturation).max(0.0);
+                    b = (y + (b - y) * saturation).max(0.0);
+                }
+                let f = contrast.factor(y);
+                px[0] = encode(&out, r * f);
+                px[1] = encode(&out, g * f);
+                px[2] = encode(&out, b * f);
             }
+        }
+    }
+}
+
+/// Le contraste d'une couche : le facteur à appliquer à un pixel de luminance `y`
+/// (lumière linéaire), tiré d'une table (une puissance par pixel coûterait trop sur les
+/// grandes images).
+struct Contrast {
+    exponent: f32,
+    table: Option<Vec<f32>>,
+}
+
+impl Contrast {
+    /// Cases de la table, sur la luminance 0..1.
+    const STEPS: usize = 4096;
+
+    fn new(contrast: f32) -> Contrast {
+        let exponent = 1.0 + CONTRAST_STRENGTH * contrast.clamp(-1.0, 1.0);
+        let table = ((exponent - 1.0).abs() > 1e-3).then(|| {
+            (0..Self::STEPS)
+                .map(|i| Self::exact(exponent, (i as f32 + 0.5) / Self::STEPS as f32))
+                .collect()
+        });
+        Contrast { exponent, table }
+    }
+
+    /// `y' / y` pour la courbe `y' = pivot × (y / pivot)^exposant`.
+    fn exact(exponent: f32, y: f32) -> f32 {
+        if y <= 1e-6 {
+            return if exponent > 1.0 { 0.0 } else { 1.0 };
+        }
+        CONTRAST_PIVOT * (y / CONTRAST_PIVOT).powf(exponent) / y
+    }
+
+    fn factor(&self, y: f32) -> f32 {
+        match &self.table {
+            None => 1.0,
+            Some(_) if y >= 1.0 => Self::exact(self.exponent, y),
+            Some(table) => table[((y.max(0.0) * Self::STEPS as f32) as usize).min(Self::STEPS - 1)],
         }
     }
 }
@@ -786,6 +860,7 @@ pub fn apply_to(
                 Adjust {
                     exposure: 0.0,
                     gains: reference.correction.gains,
+                    ..Adjust::default()
                 },
                 None,
             )
@@ -807,6 +882,7 @@ pub fn apply_to(
                 correction: Adjust {
                     exposure: 0.0,
                     gains: out.correction.gains,
+                    ..Adjust::default()
                 },
                 ..out
             };
@@ -853,6 +929,8 @@ pub fn propagate(
             Adjust {
                 exposure: mine.exposure + a.exposure - b.exposure,
                 gains: mine.gains.then(b.gains.inverse()).then(a.gains),
+                contrast: (mine.contrast + a.contrast - b.contrast).clamp(-1.0, 1.0),
+                saturation: (mine.saturation + a.saturation - b.saturation).clamp(-1.0, 1.0),
             }
         });
     }
@@ -881,6 +959,7 @@ pub fn auto_exposure(base: &Base, gains: Gains, settings: &AdjustSettings) -> f3
         Adjust {
             exposure: 0.0,
             gains,
+            ..Adjust::default()
         },
         None,
     );
@@ -955,6 +1034,10 @@ pub struct Report {
     pub gains: Gains,
     /// Mélange du noir et blanc appliqué, en pour cent (rouge, vert, bleu).
     pub mixer: Option<[f32; 3]>,
+    /// Contraste et saturation du style, en pour cent.
+    pub contrast: f32,
+    /// Voir `contrast`.
+    pub saturation: f32,
 }
 
 /// Le rapport de `layers`, pour une image prise sous un éclairage de couleur `shot`
@@ -971,6 +1054,8 @@ pub fn report(layers: &Layers, shot: [f32; 3]) -> Report {
         tint: total.gains.tint(),
         gains: total.gains,
         mixer: layers.mono.map(|m| m.weights().map(|v| v * 100.0)),
+        contrast: total.contrast * 100.0,
+        saturation: total.saturation * 100.0,
     }
 }
 
@@ -1091,6 +1176,7 @@ mod tests {
             Adjust {
                 exposure: 0.0,
                 gains,
+                ..Adjust::default()
             },
             None,
         );
@@ -1221,6 +1307,7 @@ mod tests {
             correction: Adjust {
                 exposure: 0.7,
                 gains: Gains::from_warmth_tint(0.2, 0.0),
+                ..Adjust::default()
             },
             mono: Mixer::preset("orange"),
             ..Layers::default()
@@ -1244,10 +1331,12 @@ mod tests {
             correction: Adjust {
                 exposure: 1.0,
                 gains: Gains::from_warmth_tint(-0.2, 0.0),
+                ..Adjust::default()
             },
             creative: Some(Adjust {
                 exposure: 0.3,
                 gains: Gains::from_warmth_tint(0.1, 0.0),
+                ..Adjust::default()
             }),
             mono: None,
         };
@@ -1410,6 +1499,48 @@ mod tests {
     }
 
     #[test]
+    fn contrast_keeps_mid_grey_and_saturation_keeps_greys() {
+        let style = |contrast: f32, saturation: f32| Adjust {
+            contrast,
+            saturation,
+            ..Adjust::default()
+        };
+        // Le gris moyen ne bouge pas ; plus de contraste : les ombres plus sombres, les
+        // clairs plus clairs.
+        let grey = SRGB.encode(CONTRAST_PIVOT);
+        let pivot = (grey * 255.0).round() as u8;
+        let mut image = Bitmap {
+            width: 3,
+            height: 1,
+            data: vec![40, 40, 40, pivot, pivot, pivot, 200, 200, 200],
+        };
+        apply_bitmap(&mut image, SRGB, style(0.5, 0.0), None);
+        assert!(
+            image.data[0] < 40 && image.data[6] > 200,
+            "{:?}",
+            image.data
+        );
+        assert!(image.data[3].abs_diff(pivot) <= 1, "{:?}", image.data);
+        // Saturation : un gris reste gris, une couleur s'éloigne ou s'approche du gris.
+        let mut grey = flat(1, 1, [120, 120, 120]);
+        apply_bitmap(&mut grey, SRGB, style(0.0, 1.0), None);
+        assert_eq!(grey.data, vec![120, 120, 120]);
+        let spread = |b: &Bitmap| b.data.iter().max().unwrap() - b.data.iter().min().unwrap();
+        let red = flat(1, 1, [180, 90, 80]);
+        let mut more = red.clone();
+        apply_bitmap(&mut more, SRGB, style(0.0, 0.5), None);
+        let mut none = red.clone();
+        apply_bitmap(&mut none, SRGB, style(0.0, -1.0), None);
+        assert!(
+            spread(&more) > spread(&red) && spread(&none) <= 1,
+            "{more:?} {none:?}"
+        );
+        // Ancien sidecar : sans les champs, zéro ; zéro, pas écrit.
+        let json = serde_json::to_string(&Adjust::default()).unwrap();
+        assert!(!json.contains("contrast"), "{json}");
+    }
+
+    #[test]
     fn auto_balance_neutralises_the_greys_not_the_skin() {
         // Retour du 10/11/2026 : un mur gris un peu bleuté (70 %) et un visage chaud
         // (30 %) ; le monde gris aurait refroidi l'image, la balance auto rend le mur gris.
@@ -1425,6 +1556,7 @@ mod tests {
             Adjust {
                 exposure: 0.0,
                 gains,
+                ..Adjust::default()
             },
             None,
         );

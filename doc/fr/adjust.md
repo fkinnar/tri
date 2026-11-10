@@ -163,7 +163,10 @@ essai (retours du 10/11/2026) :
     **« Pipette »** (en plein écran, un clic sur une zone qui devrait être grise, `[gui]
     adjust_eyedropper_size` ; ou un **cadre tracé** pour une balance auto sur cette
     partie ; depuis la grille, le bouton ouvre le plein écran) ; teinte.
-  - **Style** : exposition, chaleur, teinte. Pas de case (l'onglet suffit) : le
+  - **Style** : exposition, chaleur, teinte, **contraste** et **saturation** (de -100 à
+    +100 % ; contraste : courbe en lumière linéaire pivotée sur le gris moyen, appliquée
+    à la luminance, teinte gardée, aussi au noir et blanc après le mélange ; saturation
+    autour de la luminance, -100 % : gris). Pas de case (l'onglet suffit) : le
     décalage créatif existe dès qu'une valeur n'est pas nulle.
   - **N&B** : le **filtre** (liste : « Aucun (couleur) », puis rouge, orange, jaune,
     vert, bleu ; pas de neutre, la luminance seule n'apportant rien face aux filtres ; « Personnalisé » dès qu'on touche au mélange), rouge / vert /
@@ -242,6 +245,7 @@ Actions sans raccourci par défaut, dans la palette : `core.adjust.before_after`
 ```
 tri --adjust <référence> <image>... --to <dossier> [--ev IL|auto] [--neutral auto|x,y,l,h]
     [--kelvin K[,teinte]|<préréglage>] [--creative-ev IL] [--warmth IL] [--tint IL]
+    [--contrast %] [--saturation %]
     [--mono <préréglage>|r,v,b] [--embedded]
 ```
 

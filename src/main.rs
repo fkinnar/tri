@@ -168,6 +168,9 @@ struct AdjustArgs {
     creative_ev: f32,
     warmth: f32,
     tint: f32,
+    /// `--contrast`, `--saturation` : style, en pour cent.
+    contrast: f32,
+    saturation: f32,
     /// `--mono <préréglage|r,v,b>`.
     mono: Option<tri::adjust::Mixer>,
 }
@@ -325,6 +328,8 @@ fn parse() -> AnyResult<Args> {
             "--creative-ev" => args.adjust.creative_ev = value()?.parse()?,
             "--warmth" => args.adjust.warmth = value()?.parse()?,
             "--tint" => args.adjust.tint = value()?.parse()?,
+            "--contrast" => args.adjust.contrast = value()?.parse::<f32>()? / 100.0,
+            "--saturation" => args.adjust.saturation = value()?.parse::<f32>()? / 100.0,
             "--mono" => args.adjust.mono = Some(parse_mixer(&value()?)?),
             "--permanent" => args.permanent = true,
             "--exposure" => args.exposure = true,
@@ -1370,10 +1375,13 @@ fn adjust(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
         correction: Adjust {
             exposure: a.ev,
             gains: Gains::NONE,
+            ..Adjust::default()
         },
         creative: Some(Adjust {
             exposure: a.creative_ev,
             gains: Gains::from_warmth_tint(a.warmth, a.tint),
+            contrast: a.contrast,
+            saturation: a.saturation,
         })
         .filter(|c| !c.is_none()),
         mono: a.mono,

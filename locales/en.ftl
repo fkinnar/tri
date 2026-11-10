@@ -194,7 +194,7 @@ cli-usage =
       tri --reveal <image>
       tri --edit <image>...
       tri --export <preset> <image>... [--to <folder>] [--libraw|--embedded] [--passthrough] [--dry-run]
-      tri --adjust <reference> <image>... --to <folder> [--ev EV|auto] [--neutral auto|x,y,w,h] [--kelvin K[,tint]|daylight|cloudy|shade|tungsten|fluorescent|flash] [--creative-ev EV] [--warmth EV] [--tint EV] [--mono neutral|red|orange|yellow|green|blue|r,g,b] [--embedded] [--side N]
+      tri --adjust <reference> <image>... --to <folder> [--ev EV|auto] [--neutral auto|x,y,w,h] [--kelvin K[,tint]|daylight|cloudy|shade|tungsten|fluorescent|flash] [--creative-ev EV] [--warmth EV] [--tint EV] [--contrast %] [--saturation %] [--mono neutral|red|orange|yellow|green|blue|r,g,b] [--embedded] [--side N]
     common option: --config FILE (settings; default: the system location)
 cli-unknown-convention = unknown convention: { $value } (darktable or adobe)
 cli-adjust-not-an-image = not an image: { $path }

@@ -157,7 +157,10 @@ try (feedback of 2026-11-10):
     (in full screen, a click on a zone that should be grey, `[gui]
     adjust_eyedropper_size`; or a **frame drawn** for an auto balance on that part; from
     the grid, the button opens the full screen); tint.
-  - **Style**: exposure, warmth, tint. No checkbox (the tab is enough): the creative
+  - **Style**: exposure, warmth, tint, **contrast** and **saturation** (-100 to +100 %;
+    contrast: a curve in linear light pivoting on mid grey, applied to the luminance, hue
+    kept, also to black and white after the mix; saturation around the luminance,
+    -100 %: grey). No checkbox (the tab is enough): the creative
     offset exists as soon as a value isn't zero.
   - **B&W**: the **filter** (list: "None (colour)", then red, orange, yellow, green,
     blue; no neutral, luminance alone bringing nothing next to the filters; "Custom" as soon as the mix is touched), red / green / blue in %,
@@ -234,6 +237,7 @@ Actions without a default shortcut, in the palette: `core.adjust.before_after`,
 ```
 tri --adjust <reference> <image>... --to <folder> [--ev EV|auto] [--neutral auto|x,y,w,h]
     [--kelvin K[,tint]|<preset>] [--creative-ev EV] [--warmth EV] [--tint EV]
+    [--contrast %] [--saturation %]
     [--mono <preset>|r,g,b] [--embedded]
 ```
 

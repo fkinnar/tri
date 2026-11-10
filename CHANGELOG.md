@@ -8,7 +8,8 @@
   mixer), to compare and cull a series. A new "Adjustments" section in the right panel,
   in tabs: Base (exposure with "Auto", highlight priority; balance in kelvins and tint, as shot, auto on the nearly neutral pixels,
   daylight, cloudy, shade, tungsten, fluorescent and flash presets; eyedropper: click a
-  grey zone or draw a frame for an auto balance on that part), Style (creative offset),
+  grey zone or draw a frame for an auto balance on that part), Style (creative offset: exposure, warmth, tint, contrast,
+  saturation),
   B&W (filter presets, mix kept at 100 % when normalised) and Values (the table to copy
   into a development software). With several images selected, "Sync N images" applies
   every change to all of them (a slider shifts each image by as much, temperature by the

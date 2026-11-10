@@ -22,6 +22,7 @@ const KELVIN_TINT_RANGE: std::ops::RangeInclusive<f32> = -150.0..=150.0;
 const WARMTH_RANGE: std::ops::RangeInclusive<f32> = -1.5..=1.5;
 const TINT_RANGE: std::ops::RangeInclusive<f32> = -0.5..=0.5;
 const MIXER_RANGE: std::ops::RangeInclusive<f32> = -100.0..=200.0;
+const PERCENT_RANGE: std::ops::RangeInclusive<f32> = -100.0..=100.0;
 
 /// Choix de la liste des balances.
 #[derive(Clone, Copy, PartialEq)]
@@ -1076,6 +1077,29 @@ fn style_tab(ui: &mut Ui, layers: &mut Layers) {
     {
         creative.gains = gains;
     }
+    // Contraste et saturation (retour du 10/11/2026 : « juste des curseurs »), en %.
+    for (key, value) in [
+        ("adjust-contrast", &mut creative.contrast),
+        ("adjust-saturation", &mut creative.saturation),
+    ] {
+        let mut percent = *value * 100.0;
+        let name = title_row(ui, t!(key), |_| {});
+        let r = setting_slider(
+            ui,
+            name,
+            &mut percent,
+            PERCENT_RANGE,
+            (5.0, 1.0),
+            0,
+            " %",
+            false,
+        );
+        if r.double_clicked_slider(ui) {
+            *value = 0.0;
+        } else if r.changed() {
+            *value = percent / 100.0;
+        }
+    }
     if creative != before {
         layers.creative = (!creative.is_none()).then_some(creative);
     }
@@ -1252,6 +1276,14 @@ pub(super) fn adjust_rows(layers: &Layers, shot: [f32; 3]) -> Vec<(String, Strin
                 warmth = signed(c.gains.warmth()),
                 tint = signed(c.gains.tint())
             ),
+        ));
+    }
+    if let Some(c) = layers.creative
+        && (c.contrast != 0.0 || c.saturation != 0.0)
+    {
+        rows.push((
+            t!("adjust-value-contrast-saturation"),
+            format!("{:+.0} % / {:+.0} %", r.contrast, r.saturation),
         ));
     }
     if let Some([red, green, blue]) = r.mixer {

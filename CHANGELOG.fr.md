@@ -9,7 +9,8 @@
   « Réglages » du panneau de droite, en onglets : Base (exposition avec « Auto », à priorité aux hautes lumières ; balance
   en kelvins et teinte, préréglages telle que prise, auto sur les pixels presque neutres, lumière du jour, nuageux,
   ombre, tungstène, fluorescent et flash ; pipette : clic sur une zone grise ou cadre
-  tracé pour une balance auto sur cette partie), Style (décalage créatif), N&B (filtres en
+  tracé pour une balance auto sur cette partie), Style (décalage créatif : exposition, chaleur,
+  teinte, contraste, saturation), N&B (filtres en
   préréglages, mélange gardé à 100 % quand il est normalisé) et Valeurs (le tableau à
   reporter dans un logiciel de développement). Plusieurs images sélectionnées :
   « Synchroniser N images » applique chaque changement à toutes (un curseur décale chaque

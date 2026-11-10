@@ -28685,6 +28685,8 @@ mod tests {
         );
         // Le libellé nomme aussi son curseur et son champ.
         assert!(h.query_all_by_label("Chaleur").count() >= 2);
+        assert!(h.query_all_by_label("Contraste").count() >= 2);
+        assert!(h.query_all_by_label("Saturation").count() >= 2);
         h.get_by_label("N&B").click();
         h.run_steps(2);
         assert!(h.query_by_label("Noir et blanc").is_none(), "no checkbox");
