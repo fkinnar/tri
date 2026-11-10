@@ -3502,6 +3502,10 @@ impl TriApp {
                     egui::Popup::context_menu(&label)
                         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
                         .show(|ui| {
+                            // Une ligne par entrée : le menu s'élargit plutôt que de couper
+                            // un libellé, même quand un groupe vient d'être déplié (sa
+                            // largeur a été mesurée sans lui ; retour du 10/11/2026).
+                            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                             let allowed = self.settings.files.allow_actions;
                             let mut entry = |ui: &mut Ui, action: Action, text: String| {
                                 // Interdite : grisée, la bulle dit pourquoi (30/10/2026).
@@ -26318,6 +26322,36 @@ mod tests {
         // De nouveau un sous-menu (sous le pointeur : il peut s'ouvrir au survol).
         assert!(h.query_by_label(&t!("folder-group-notes")).is_some());
         assert_eq!(h.query_all_by_label(&t!("menu-group-fold")).count(), 2);
+    }
+
+    #[test]
+    fn a_group_unfolded_in_an_open_menu_keeps_its_labels_on_one_line() {
+        // Retour du 10/11/2026 : « Accès » déplié dans le menu ouvert, « Afficher dans le
+        // gestionnaire de fichiers » coupé sur deux lignes (largeur mesurée sans lui).
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        h.state_mut().config_path = Some(dir.path().join("config.toml"));
+        h.state_mut().gui.folders.menu_inline = vec!["files".into()];
+        std::fs::create_dir(dir.path().join("séance")).unwrap();
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        h.run_steps(2);
+        h.get_by_label("séance").click_secondary();
+        h.run_steps(2);
+        // Le groupe aux libellés les plus longs (le Finder est court sous macOS).
+        h.get_by_label(&t!("folder-group-notes")).hover();
+        h.run_steps(3);
+        let label = t!("folder-embed-never");
+        let one_line = h.get_by_label(&label).rect().height();
+        h.get_by_label(&t!("menu-group-inline")).click();
+        h.run_steps(3);
+        let long = h.get_by_label_contains(&t!("folder-embed-default")).rect();
+        assert!(long.height() <= one_line + 0.5, "{long:?} vs {one_line}");
     }
 
     #[test]

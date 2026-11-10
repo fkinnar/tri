@@ -5,7 +5,8 @@
 ## Non publié
 
 - **Menu du clic droit sur un dossier rangé** (#407) : en groupes, Accès (afficher dans
-  le Finder, ouvrir dans darktable, favori), Dossier, Notes, Développement et
+  le gestionnaire de fichiers, nommé : Finder, Explorateur, Nemo, Dolphin… ; ouvrir dans
+  darktable, favori), Dossier, Notes, Développement et
   Préférences ; décharger reste en bas. Chaque groupe est un sous-menu
   que le petit bouton en haut à droite installe au premier niveau, entre deux traits (et
   l'icône sur son titre le replie) : chacun compose son menu, retenu pour tous les

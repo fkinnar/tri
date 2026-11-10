@@ -193,7 +193,10 @@ impl LogView {
                     }
                     if let Some(path) = self.dir.as_ref().map(|d| d.join(tri::log::FILE))
                         && ui
-                            .add_enabled(path.exists(), egui::Button::new(t!("log-reveal")))
+                            .add_enabled(
+                                path.exists(),
+                                egui::Button::new(crate::actions::Action::FileReveal.label()),
+                            )
                             .on_hover_text(crate::files::tilde(&path))
                             .clicked()
                     {

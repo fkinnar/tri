@@ -112,6 +112,11 @@ action-core-file-delete = Move to trash…
 action-core-file-reveal = { $os ->
     [macos] Show in Finder
     [windows] Show in Explorer
+    [nemo] Show in Nemo
+    [nautilus] Show in Files
+    [dolphin] Show in Dolphin
+    [thunar] Show in Thunar
+    [caja] Show in Caja
    *[other] Show in the file manager
 }
 action-core-file-edit = Open in the external editor
@@ -519,7 +524,6 @@ log-copy = Copy
 log-copy-tip = Copy this entry and its detail
 log-copy-all = Copy all
 log-copy-all-tip = Copy the entries shown, with their detail
-log-reveal = Show in file manager
 report-title = Report a problem
 report-log-intro = The latest log entries will help understand the problem. They will be attached to the GitHub form.
 report-log-privacy = Read them before sending: paths contain the names of your folders. Edit or delete anything you like.
@@ -843,7 +847,6 @@ export-report-errors = { $n ->
     [one] 1 failure
    *[other] { $n } failures
 }
-export-report-reveal = Show in the file manager
 export-report-clear = Clear the list
 export-report-open = Export report
 rename-failed = cannot rename: { $error }

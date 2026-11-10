@@ -763,7 +763,7 @@ fn report_entry(
         let first = files[0].clone();
         let link = ui
             .link(crate::files::tilde(&dir))
-            .on_hover_text(t!("export-report-reveal"));
+            .on_hover_text(crate::actions::Action::FileReveal.label());
         if link.clicked() {
             action = Some(ReportAction::Reveal(first));
         }
@@ -776,7 +776,7 @@ fn report_entry(
                         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                     if ui
                         .link(name)
-                        .on_hover_text(t!("export-report-reveal"))
+                        .on_hover_text(crate::actions::Action::FileReveal.label())
                         .clicked()
                     {
                         action = Some(ReportAction::Reveal(file.clone()));

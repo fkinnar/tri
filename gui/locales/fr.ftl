@@ -111,6 +111,12 @@ action-core-file-rename = Renommer…
 action-core-file-delete = Mettre à la corbeille…
 action-core-file-reveal = { $os ->
     [macos] Afficher dans le Finder
+    [windows] Afficher dans l'Explorateur
+    [nemo] Afficher dans Nemo
+    [nautilus] Afficher dans Fichiers
+    [dolphin] Afficher dans Dolphin
+    [thunar] Afficher dans Thunar
+    [caja] Afficher dans Caja
    *[other] Afficher dans le gestionnaire de fichiers
 }
 action-core-file-edit = Ouvrir dans l'éditeur externe
@@ -518,7 +524,6 @@ log-copy = Copier
 log-copy-tip = Copier cette entrée et son détail
 log-copy-all = Tout copier
 log-copy-all-tip = Copier les entrées montrées, avec leur détail
-log-reveal = Afficher dans le gestionnaire de fichiers
 report-title = Signaler un problème
 report-log-intro = Les dernières entrées du journal aideront à comprendre le problème. Elles seront jointes au formulaire de GitHub.
 report-log-privacy = Relisez-les avant d'envoyer : les chemins contiennent les noms de vos dossiers. Modifiez ou effacez ce que vous voulez.
@@ -842,7 +847,6 @@ export-report-errors = { $n ->
     [one] 1 échec
    *[other] { $n } échecs
 }
-export-report-reveal = Afficher dans le gestionnaire de fichiers
 export-report-clear = Effacer la liste
 export-report-open = Rapport d'export
 rename-failed = renommage impossible : { $error }

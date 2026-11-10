@@ -4,8 +4,8 @@
 
 ## Unreleased
 
-- **Tidier right-click menu on a folder** (#407): in groups, Access (show in the Finder,
-  open in darktable, favourite), Folder, Ratings, Development and Preferences; offload
+- **Tidier right-click menu on a folder** (#407): in groups, Access (show in the file
+  manager, named: Finder, Explorer, Nemo, Dolphin…; open in darktable, favourite), Folder, Ratings, Development and Preferences; offload
   stays at the bottom. Each group is a submenu that the small button at
   its top right puts at the top level, between two lines (and the icon on its title folds
   it back): everyone arranges their own menu, kept for every folder
