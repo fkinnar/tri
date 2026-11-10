@@ -50,7 +50,7 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[gui]` | Thème, profils de raccourcis, délai des séquences de touches (`gg`), fenêtre, politique des rendus RAW, budget de chargement, mode concentration pour une image en argument (`image_focus`) | interface |
 | `[gui.grid]` | Dimensions de la grille (dont `info_min_cell`, sous lequel les infos se masquent), vignettes en mémoire, taille des notes, marques vides dessinées (`empty_marks`), opacité d'une photo rejetée, cadre du survol | interface |
 | `[gui.view]` | Attente avant un 100 % RAW, grandes textures en mémoire, pas du déplacement clavier, taille des notes | interface |
-| `[gui.folders]` | Panneau des dossiers : affiché, largeur, retrait, dossiers cachés | interface |
+| `[gui.folders]` | Panneau des dossiers : affiché, largeur, retrait, dossiers cachés, groupes du clic droit au premier niveau | interface |
 | `[gui.histogram]` | Histogramme (affiché, échelle IL / linéaire, taille du grand histogramme, IL montrés), zones (affichées, opacité), seuils des badges | interface |
 | `[gui.metadata]` | Panneau des métadonnées : affiché, largeur, histogramme en grille et sa hauteur, pas des curseurs au clavier, air sous chaque groupe de réglages (`group_gap`) | interface |
 | `[gui.sharpness]` | Carte de netteté affichée au démarrage, couleurs de la rotation, opacité | interface |

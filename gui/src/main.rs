@@ -50,6 +50,7 @@ mod loader;
 mod log_view;
 mod markdown;
 mod marks;
+mod menu_groups;
 mod meta;
 mod offload;
 mod palette;

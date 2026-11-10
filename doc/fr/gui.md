@@ -640,6 +640,15 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   **clic droit** sur un dossier, menu des mêmes actions (nouveau dossier, renommer,
   supprimer, favori ; décharger une carte ici, ou sur un support amovible : décharger,
   éjecter ; afficher dans le Finder / l'Explorateur, 08/11/2026), raccourci au survol.
+  Rangé en groupes (10/11/2026, issue n° 406, `gui/src/menu_groups.rs`) : au premier
+  niveau, afficher dans le Finder, ouvrir dans darktable, favori, décharger ; puis
+  **Dossier** (nouveau, renommer, déplacer, copier, supprimer), **Notes** (sidecars,
+  notes dans les images), **Développement** (développer tout le dossier, réglages auto)
+  et **Préférences** (cache). Un groupe est un sous-menu ; le petit bouton en haut à
+  droite du sous-menu l'installe **au premier niveau**, entre deux traits, son titre en
+  petites capitales sur le trait du haut, avec l'icône qui le replie. Choix retenu pour
+  tous les dossiers (`[gui.folders] menu_inline`, « Dossier » déplié par défaut) ; le
+  menu reste ouvert pendant qu'on le compose (chaque entrée le ferme elle-même).
   **Panneau de droite** (27/10/2026, `TriApp::side_begin` / `side_end`) : ↑ ↓ / `j` `k`
   parcourent aussi les **réglages** au-dessus des EXIF (titres de section compris), un à
   la fois ; **Espace** / Entrée actionnent le réglage pointé (cocher, choisir, replier

@@ -31,6 +31,7 @@ use crate::grid::{self, Layout};
 use crate::histogram;
 use crate::loader::Loader;
 use crate::marks;
+use crate::menu_groups::{self, MenuGroups};
 use crate::meta::MetaLoader;
 use crate::offload::{OffloadDialog, Request as OffloadRequest};
 use crate::settings::{AppSettings, GuiSettings, HistogramScale};
@@ -3239,7 +3240,7 @@ impl TriApp {
         if self.focus == crate::actions::Scope::Folders {
             panel_focus_fill(ui, &self.gui.dialogs);
         }
-        let f = self.gui.folders;
+        let f = self.gui.folders.clone();
         let mut toggle: Option<usize> = None;
         let mut pointed: Option<usize> = None;
         let mut open = None;
@@ -3251,6 +3252,8 @@ impl TriApp {
         let mut embed_menu: Option<(PathBuf, Option<bool>)> = None;
         // Réglages automatiques de tout le dossier ouvert.
         let mut adjust_menu: Option<adjust::FolderAuto> = None;
+        // Groupe du menu passé au premier niveau ou replié (issue n° 406).
+        let mut group_menu: Option<&'static str> = None;
         let location = self.settings.cache.location;
         let cache = self.engine.as_ref().map(|e| e.cache.clone());
         let mut dropped: Option<(Dragged, PathBuf)> = None;
@@ -3493,183 +3496,229 @@ impl TriApp {
                     // survol.
                     let removable = row.kind == Some(PlaceKind::Volume) && row.ejectable;
                     let mut open_in = None;
-                    label.context_menu(|ui| {
-                        let allowed = self.settings.files.allow_actions;
-                        let mut entry = |ui: &mut Ui, action: Action, text: String| {
-                            // Interdite : grisée, la bulle dit pourquoi (30/10/2026).
-                            let enabled = !action.changes_files() || allowed;
-                            if ui
-                                .add_enabled(enabled, egui::Button::new(text))
-                                .on_hover_text(self.action_tip(action))
-                                .on_disabled_hover_text(t!("files-actions-off"))
-                                .clicked()
-                            {
-                                menu = Some((row.path.clone(), action));
-                                ui.close();
-                            }
-                        };
-                        if device {
-                            entry(ui, Action::FolderOpen, t!("folder-menu-mount"));
-                            entry(ui, Action::FolderEject, t!("folder-menu-eject"));
-                            return;
-                        }
-                        let remembered = row.depth == 0
-                            && tri::servers::of_place(
-                                self.tree.servers(),
-                                &row.path,
-                                std::env::consts::OS,
-                            )
-                            .is_some();
-                        if server {
-                            entry(ui, Action::FolderOpen, t!("folder-menu-connect"));
-                            entry(ui, Action::FolderForget, t!("folder-menu-forget"));
-                            return;
-                        }
-                        if remembered {
-                            entry(ui, Action::FolderForget, t!("folder-menu-forget"));
-                            ui.separator();
-                        }
-                        entry(ui, Action::FolderCreate, t!("folder-menu-new"));
-                        if row.depth > 0 {
-                            entry(ui, Action::FolderRename, t!("folder-menu-rename"));
-                            entry(ui, Action::FolderMove, t!("folder-menu-move"));
-                            entry(ui, Action::FolderCopy, t!("folder-menu-copy"));
-                            entry(ui, Action::FolderDelete, t!("folder-menu-delete"));
-                        }
-                        let favorite = if row.favorite {
-                            t!("folder-menu-favorite-remove")
-                        } else {
-                            t!("folder-menu-favorite-add")
-                        };
-                        entry(ui, Action::FolderFavorite, favorite);
-                        if row.favorite {
-                            entry(
-                                ui,
-                                Action::FolderFavoriteName,
-                                t!("folder-menu-favorite-name"),
-                            );
-                        }
-                        // Cache (issue n° 55) : pas proposé là où le réglage par défaut le
-                        // met déjà.
-                        if let Some(cache) = &cache {
-                            use tri::cache::Location;
-                            let here = cache.disk_of(&row.path).as_deref() == Some(&row.path);
-                            let offer = if removable {
-                                (location != Location::Disk).then(|| t!("folder-menu-cache-disk"))
-                            } else {
-                                (location != Location::Folder)
-                                    .then(|| t!("folder-menu-cache-folder"))
-                            };
-                            let text = if here {
-                                Some(t!("folder-menu-cache-release"))
-                            } else {
-                                offer
-                            };
-                            if let Some(text) = text
-                                && ui
-                                    .button(text)
-                                    .on_hover_text(t!("folder-menu-cache-tip"))
+                    // Clics à l'intérieur sans fermer : un groupe passé au premier niveau
+                    // ou replié garde le menu ouvert (issue n° 406) ; chaque entrée ferme
+                    // tout le menu elle-même.
+                    egui::Popup::context_menu(&label)
+                        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                        .show(|ui| {
+                            let allowed = self.settings.files.allow_actions;
+                            let mut entry = |ui: &mut Ui, action: Action, text: String| {
+                                // Interdite : grisée, la bulle dit pourquoi (30/10/2026).
+                                let enabled = !action.changes_files() || allowed;
+                                if ui
+                                    .add_enabled(enabled, egui::Button::new(text))
+                                    .on_hover_text(self.action_tip(action))
+                                    .on_disabled_hover_text(t!("files-actions-off"))
                                     .clicked()
-                            {
-                                cache_menu = Some((row.path.clone(), !here));
-                                ui.close();
-                            }
-                        }
-                        // Rendus développés de tout le dossier, en fond (issue n° 69).
-                        if !self.developers.is_empty() {
-                            entry(ui, Action::DevelopFolder, t!("folder-menu-develop"));
-                        }
-                        // Sidecars de notes manquants (31/10/2026) : du dossier ouvert, dont
-                        // les notes sont connues.
-                        if row.path == self.folder.dir {
-                            entry(ui, Action::Sidecars, t!("folder-menu-sidecars"));
-                            entry(ui, Action::EmbedNotes, t!("folder-menu-embed-notes"));
-                            entry(ui, Action::ImportNotes, t!("folder-menu-import-notes"));
-                            // Réglages auto de toutes ses images (retour du 10/11/2026) :
-                            // chacune d'après la sienne, mesurée sur sa vignette.
-                            ui.menu_button(t!("folder-menu-adjust"), |ui| {
-                                for (what, text) in [
-                                    (adjust::FolderAuto::Both, t!("folder-menu-adjust-auto")),
-                                    (
-                                        adjust::FolderAuto::Exposure,
-                                        t!("folder-menu-adjust-exposure"),
-                                    ),
-                                    (
-                                        adjust::FolderAuto::Balance,
-                                        t!("folder-menu-adjust-balance"),
-                                    ),
-                                ] {
-                                    if ui.button(text).clicked() {
-                                        adjust_menu = Some(what);
-                                        // Tout le menu, pas seulement le sous-menu (retour
-                                        // du 10/11/2026 : resté ouvert, on aurait dit que
-                                        // rien ne se passait).
-                                        egui::Popup::close_all(ui.ctx());
-                                    }
+                                {
+                                    menu = Some((row.path.clone(), action));
+                                    egui::Popup::close_all(ui.ctx());
                                 }
-                            })
-                            .response
-                            .on_hover_text(t!("folder-menu-adjust-tip"));
-                        }
-                        // Notes dans les images, propre à ce dossier (issue n° 368 :
-                        // « ce support amovible-là, oui ») ; pas ses sous-dossiers.
-                        if row.depth > 0 {
-                            let current = self.folder.notes.folder_embed(&row.path);
-                            let global = embed_level_name(self.settings.xmp.embed);
-                            ui.menu_button(t!("folder-menu-embed"), |ui| {
-                                for (value, label) in [
-                                    (None, t!("folder-embed-default", level = global)),
-                                    (Some(true), t!("folder-embed-always")),
-                                    (Some(false), t!("folder-embed-never")),
-                                ] {
-                                    if ui.radio(current == value, label).clicked() {
-                                        embed_menu = Some((row.path.clone(), value));
-                                        egui::Popup::close_all(ui.ctx());
-                                    }
-                                }
-                            })
-                            .response
-                            .on_hover_text(t!("folder-menu-embed-tip"));
-                        }
-                        // Afficher le dossier dans le Finder / l'Explorateur (demandé le
-                        // 08/11/2026), comme pour une image.
-                        entry(ui, Action::FileReveal, Action::FileReveal.label());
-                        // Ouvrir le dossier dans un logiciel installé qui le sait
-                        // (darktable ; demandé le 28/10/2026).
-                        // Grisé s'il ne peut pas le recevoir : darktable déjà ouvert sous
-                        // Windows (une seconde instance plantait sous macOS avant `open -a`,
-                        // retour du 28/10/2026).
-                        for engine in self.developers.folder_openers() {
-                            let action = Action::FolderOpenIn(engine);
-                            let open = self.engine_blocked(engine);
-                            let tip = if open {
-                                t!("folder-open-in-running", name = engine.name())
-                            } else {
-                                self.action_tip(action)
                             };
-                            let button = ui
-                                .add_enabled(
-                                    !open,
-                                    egui::Button::new(t!(
-                                        "folder-menu-open-in",
-                                        name = engine.name()
-                                    )),
-                                )
-                                .on_hover_text(&tip)
-                                .on_disabled_hover_text(&tip);
-                            if button.clicked() {
-                                open_in = Some((row.path.clone(), action));
-                                ui.close();
+                            if device {
+                                entry(ui, Action::FolderOpen, t!("folder-menu-mount"));
+                                entry(ui, Action::FolderEject, t!("folder-menu-eject"));
+                                return;
                             }
-                        }
-                        ui.separator();
-                        if removable {
-                            entry(ui, Action::FolderOffload, t!("folder-menu-offload"));
-                            entry(ui, Action::FolderEject, t!("folder-menu-eject"));
-                        } else {
-                            entry(ui, Action::FolderOffload, t!("folder-menu-offload-here"));
-                        }
-                    });
+                            let remembered = row.depth == 0
+                                && tri::servers::of_place(
+                                    self.tree.servers(),
+                                    &row.path,
+                                    std::env::consts::OS,
+                                )
+                                .is_some();
+                            if server {
+                                entry(ui, Action::FolderOpen, t!("folder-menu-connect"));
+                                entry(ui, Action::FolderForget, t!("folder-menu-forget"));
+                                return;
+                            }
+                            if remembered {
+                                entry(ui, Action::FolderForget, t!("folder-menu-forget"));
+                                ui.separator();
+                            }
+                            // Premier niveau : ce qu'on fait souvent et sans risque (issue n° 406,
+                            // menu devenu touffu) ; le reste en groupes.
+                            // Afficher le dossier dans le Finder / l'Explorateur (demandé le
+                            // 08/11/2026), comme pour une image.
+                            entry(ui, Action::FileReveal, Action::FileReveal.label());
+                            // Ouvrir le dossier dans un logiciel installé qui le sait
+                            // (darktable ; demandé le 28/10/2026).
+                            // Grisé s'il ne peut pas le recevoir : darktable déjà ouvert sous
+                            // Windows (une seconde instance plantait sous macOS avant `open -a`,
+                            // retour du 28/10/2026).
+                            for engine in self.developers.folder_openers() {
+                                let action = Action::FolderOpenIn(engine);
+                                let open = self.engine_blocked(engine);
+                                let tip = if open {
+                                    t!("folder-open-in-running", name = engine.name())
+                                } else {
+                                    self.action_tip(action)
+                                };
+                                let button = ui
+                                    .add_enabled(
+                                        !open,
+                                        egui::Button::new(t!(
+                                            "folder-menu-open-in",
+                                            name = engine.name()
+                                        )),
+                                    )
+                                    .on_hover_text(&tip)
+                                    .on_disabled_hover_text(&tip);
+                                if button.clicked() {
+                                    open_in = Some((row.path.clone(), action));
+                                    egui::Popup::close_all(ui.ctx());
+                                }
+                            }
+                            let favorite = if row.favorite {
+                                t!("folder-menu-favorite-remove")
+                            } else {
+                                t!("folder-menu-favorite-add")
+                            };
+                            entry(ui, Action::FolderFavorite, favorite);
+                            if row.favorite {
+                                entry(
+                                    ui,
+                                    Action::FolderFavoriteName,
+                                    t!("folder-menu-favorite-name"),
+                                );
+                            }
+                            let mut groups = MenuGroups::new(
+                                &f.menu_inline,
+                                (t!("menu-group-inline"), t!("menu-group-fold")),
+                            );
+                            groups.group(ui, "files", &t!("folder-group-files"), |ui| {
+                                entry(ui, Action::FolderCreate, t!("folder-menu-new"));
+                                if row.depth > 0 {
+                                    entry(ui, Action::FolderRename, t!("folder-menu-rename"));
+                                    entry(ui, Action::FolderMove, t!("folder-menu-move"));
+                                    entry(ui, Action::FolderCopy, t!("folder-menu-copy"));
+                                    entry(ui, Action::FolderDelete, t!("folder-menu-delete"));
+                                }
+                            });
+                            let opened = row.path == self.folder.dir;
+                            if opened || row.depth > 0 {
+                                groups.group(ui, "notes", &t!("folder-group-notes"), |ui| {
+                                    // Sidecars de notes manquants (31/10/2026) : du dossier
+                                    // ouvert, dont les notes sont connues.
+                                    if opened {
+                                        entry(ui, Action::Sidecars, t!("folder-menu-sidecars"));
+                                        entry(
+                                            ui,
+                                            Action::EmbedNotes,
+                                            t!("folder-menu-embed-notes"),
+                                        );
+                                        entry(
+                                            ui,
+                                            Action::ImportNotes,
+                                            t!("folder-menu-import-notes"),
+                                        );
+                                    }
+                                    // Notes dans les images, propre à ce dossier (issue n° 368 :
+                                    // « ce support amovible-là, oui ») ; pas ses sous-dossiers.
+                                    if row.depth > 0 {
+                                        let current = self.folder.notes.folder_embed(&row.path);
+                                        let global = embed_level_name(self.settings.xmp.embed);
+                                        menu_groups::subtitle(ui, &t!("folder-menu-embed"));
+                                        for (value, label) in [
+                                            (None, t!("folder-embed-default", level = global)),
+                                            (Some(true), t!("folder-embed-always")),
+                                            (Some(false), t!("folder-embed-never")),
+                                        ] {
+                                            if ui
+                                                .radio(current == value, label)
+                                                .on_hover_text(t!("folder-menu-embed-tip"))
+                                                .clicked()
+                                            {
+                                                embed_menu = Some((row.path.clone(), value));
+                                                egui::Popup::close_all(ui.ctx());
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                            if opened || !self.developers.is_empty() {
+                                groups.group(ui, "develop", &t!("folder-group-develop"), |ui| {
+                                    // Rendus développés de tout le dossier, en fond (issue n° 69).
+                                    if !self.developers.is_empty() {
+                                        entry(ui, Action::DevelopFolder, t!("folder-menu-develop"));
+                                    }
+                                    // Réglages auto de toutes ses images (retour du 10/11/2026) :
+                                    // chacune d'après la sienne, mesurée sur sa vignette.
+                                    if opened {
+                                        menu_groups::subtitle(ui, &t!("folder-menu-adjust"));
+                                        for (what, text) in [
+                                            (
+                                                adjust::FolderAuto::Both,
+                                                t!("folder-menu-adjust-auto"),
+                                            ),
+                                            (
+                                                adjust::FolderAuto::Exposure,
+                                                t!("folder-menu-adjust-exposure"),
+                                            ),
+                                            (
+                                                adjust::FolderAuto::Balance,
+                                                t!("folder-menu-adjust-balance"),
+                                            ),
+                                        ] {
+                                            if ui
+                                                .button(text)
+                                                .on_hover_text(t!("folder-menu-adjust-tip"))
+                                                .clicked()
+                                            {
+                                                adjust_menu = Some(what);
+                                                // Tout le menu, pas seulement le sous-menu
+                                                // (retour du 10/11/2026 : resté ouvert, on
+                                                // aurait dit que rien ne se passait).
+                                                egui::Popup::close_all(ui.ctx());
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                            // Cache (issue n° 55) : pas proposé là où le réglage par défaut le
+                            // met déjà.
+                            let cache_text = cache.as_ref().and_then(|cache| {
+                                use tri::cache::Location;
+                                let here = cache.disk_of(&row.path).as_deref() == Some(&row.path);
+                                let text = if here {
+                                    Some(t!("folder-menu-cache-release"))
+                                } else if removable {
+                                    (location != Location::Disk)
+                                        .then(|| t!("folder-menu-cache-disk"))
+                                } else {
+                                    (location != Location::Folder)
+                                        .then(|| t!("folder-menu-cache-folder"))
+                                };
+                                text.map(|text| (text, here))
+                            });
+                            if let Some((text, here)) = cache_text {
+                                groups.group(
+                                    ui,
+                                    "preferences",
+                                    &t!("folder-group-preferences"),
+                                    |ui| {
+                                        if ui
+                                            .button(text)
+                                            .on_hover_text(t!("folder-menu-cache-tip"))
+                                            .clicked()
+                                        {
+                                            cache_menu = Some((row.path.clone(), !here));
+                                            egui::Popup::close_all(ui.ctx());
+                                        }
+                                    },
+                                );
+                            }
+                            if let Some(id) = groups.finish(ui) {
+                                group_menu = Some(id);
+                            }
+                            if removable {
+                                entry(ui, Action::FolderOffload, t!("folder-menu-offload"));
+                                entry(ui, Action::FolderEject, t!("folder-menu-eject"));
+                            } else {
+                                entry(ui, Action::FolderOffload, t!("folder-menu-offload-here"));
+                            }
+                        });
                     if open_in.is_some() {
                         menu = open_in;
                     }
@@ -3793,6 +3842,10 @@ impl TriApp {
         // action qu'au clavier.
         if let Some((path, on)) = cache_menu {
             self.keep_cache_in(path, on);
+        }
+        if let Some(id) = group_menu {
+            self.toggle_menu_group(id);
+            ui.ctx().request_repaint();
         }
         if let Some(what) = adjust_menu {
             let ctx = ui.ctx().clone();
@@ -8806,7 +8859,7 @@ impl TriApp {
             .or_else(|| home.clone())
             .unwrap_or_else(|| PathBuf::from("/"));
         let query = tri::places::parse_dir_query(&self.folder_query, &current, home.as_deref());
-        let f = self.gui.folders;
+        let f = self.gui.folders.clone();
         let repaint = ctx.clone();
         self.folder_search = Some(tri::places::DirSearch::start(
             query,
@@ -15559,6 +15612,34 @@ impl TriApp {
                 self.notice = Some((t!("textures-kept", mb = cap), false));
             }
             Err(e) => self.notice = Some((e, true)),
+        }
+    }
+
+    /// Passe le groupe `id` du clic droit sur un dossier au premier niveau du menu, ou le
+    /// replie en sous-menu (issue n° 406) ; écrit dans la configuration, le même menu pour
+    /// tous les dossiers.
+    fn toggle_menu_group(&mut self, id: &str) {
+        let inline = menu_groups::toggle(&self.gui.folders.menu_inline, id);
+        self.gui.folders.menu_inline = inline.clone();
+        let Some(path) = self
+            .config_path
+            .clone()
+            .or_else(tri::settings::default_path)
+        else {
+            self.notice = Some((t!("settings-no-path"), true));
+            return;
+        };
+        let result = tri::config_edit::ConfigFile::open(&path).and_then(|mut file| {
+            file.set(
+                "gui.folders",
+                "menu_inline",
+                &tri::config_edit::Value::Strings(inline),
+            )?;
+            tri::settings::parse::<AppSettings>(&file.text())?;
+            file.save().map_err(|e| format!("{} : {e}", path.display()))
+        });
+        if let Err(e) = result {
+            self.notice = Some((e, true));
         }
     }
 
@@ -26164,11 +26245,65 @@ mod tests {
         ] {
             h.get_by_label("séance").click_secondary();
             h.run_steps(2);
+            // Dans le groupe « Préférences » (issue n° 406), en sous-menu par défaut.
+            h.get_by_label(&t!("folder-group-preferences")).hover();
+            h.run_steps(3);
             h.get_by_label(&label).click();
             h.run_steps(2);
             run_until(&mut h, |app| app.cache_jobs.is_empty());
             assert_eq!(marker.is_dir(), kept);
         }
+    }
+
+    #[test]
+    fn a_folder_menu_group_moves_to_the_top_level_and_back() {
+        // Issue n° 406 : un groupe en sous-menu passe au premier niveau par le bouton en
+        // haut à droite du sous-menu, et revient par celui de son titre ; retenu dans la
+        // configuration (la même pour tous les dossiers).
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let config = dir.path().join("config.toml");
+        h.state_mut().config_path = Some(config.clone());
+        std::fs::create_dir(dir.path().join("séance")).unwrap();
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        h.run_steps(2);
+        // Par défaut : « Dossier » déplié, « Notes » en sous-menu.
+        assert_eq!(h.state().gui.folders.menu_inline, ["files"]);
+        h.get_by_label("séance").click_secondary();
+        h.run_steps(2);
+        assert!(h.query_by_label(&t!("folder-menu-rename")).is_some());
+        assert!(h.query_by_label(&t!("folder-embed-always")).is_none());
+        h.get_by_label(&t!("folder-group-notes")).hover();
+        h.run_steps(3);
+        assert!(h.query_by_label(&t!("folder-embed-always")).is_some());
+        h.get_by_label(&t!("menu-group-inline")).click();
+        h.run_steps(3);
+        assert_eq!(h.state().gui.folders.menu_inline, ["files", "notes"]);
+        let text = std::fs::read_to_string(&config).unwrap();
+        assert!(text.contains("menu_inline"), "{text}");
+        // Le menu reste ouvert, le groupe à son premier niveau, sans sous-menu.
+        assert!(
+            h.query_by_label(&t!("folder-menu-rename")).is_some(),
+            "menu open"
+        );
+        assert!(h.query_by_label(&t!("folder-embed-always")).is_some());
+        assert!(h.query_by_label(&t!("folder-group-notes")).is_none());
+        // Repliés tous les deux : deux boutons « replier » ; celui des notes, le plus bas.
+        h.query_all_by_label(&t!("menu-group-fold"))
+            .max_by(|a, b| a.rect().top().total_cmp(&b.rect().top()))
+            .unwrap()
+            .click();
+        h.run_steps(3);
+        assert_eq!(h.state().gui.folders.menu_inline, ["files"]);
+        // De nouveau un sous-menu (sous le pointeur : il peut s'ouvrir au survol).
+        assert!(h.query_by_label(&t!("folder-group-notes")).is_some());
+        assert_eq!(h.query_all_by_label(&t!("menu-group-fold")).count(), 1);
     }
 
     #[test]
@@ -28618,14 +28753,14 @@ mod tests {
 
     #[test]
     fn the_folder_menu_sets_auto_adjustments_on_every_image_in_one_step() {
-        // Retour du 10/11/2026 : clic droit sur le dossier, « Réglages », exposition auto
+        // Retour du 10/11/2026 : clic droit sur le dossier, « Développement », réglages auto
         // de toutes ses images (chacune d'après la sienne).
         let (mut h, dir) = harness();
         run_until(&mut h, |app| {
             app.files.len() == 3 && app.files.iter().all(|f| app.adjust_base(&f.path).is_some())
         });
         let paths: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
-        // Par le menu : clic droit sur le dossier, « Réglages », « Exposition auto ».
+        // Par le menu : clic droit sur le dossier, « Développement », « Auto ».
         // Le dossier ouvert dans le panneau des dossiers.
         let place = tri::places::Place {
             name: "Test".into(),
@@ -28640,7 +28775,7 @@ mod tests {
             .unwrap()
             .click_secondary();
         h.run_steps(3);
-        h.get_by_label("Réglages").hover();
+        h.get_by_label("Développement").hover();
         h.run_steps(3);
         // « Auto » : balance puis exposition (celle du menu, à gauche).
         h.query_all_by_label("Auto")
@@ -28650,7 +28785,7 @@ mod tests {
         h.run_steps(2);
         // Le menu se ferme tout de suite, sous-menu compris (retour du 10/11/2026 : la
         // grille ne changeait qu'en sortant du menu) ; le calcul se fait en fond.
-        assert!(h.query_by_label("Réglages").is_none(), "menu closed");
+        assert!(h.query_by_label("Développement").is_none(), "menu closed");
         run_until(&mut h, |app| app.adjust_folder_job.is_none());
         let evs: Vec<f32> = paths
             .iter()

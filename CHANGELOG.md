@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- **Tidier right-click menu on a folder** (#407): what is done often at the top level
+  (show in the Finder, open in darktable, favourite, offload); the rest in groups, Folder,
+  Ratings, Development and Preferences. Each group is a submenu that the small button at
+  its top right puts at the top level, between two lines (and the icon on its title folds
+  it back): everyone arranges their own menu, kept for every folder
+  (`[gui.folders] menu_inline`).
 - **Viewing adjustments** (#404): exposure, white balance and black and white (channel
   mixer), to compare and cull a series. A new "Adjustments" section in the right panel,
   in tabs: Base (exposure with "Auto", highlight priority; balance in kelvins and tint, as shot, auto on the nearly neutral pixels,
