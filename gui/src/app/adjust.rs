@@ -432,26 +432,70 @@ impl TriApp {
     }
 
     /// Clic droit sur le dossier ouvert, « Réglages » : exposition (`exposure`) ou balance
-    /// automatique de toutes ses images, chacune d'après la sienne (retour du 10/11/2026) ;
-    /// un seul pas de l'historique. Une image sans vignette prête est laissée de côté.
-    pub(super) fn adjust_folder_auto(&mut self, exposure: bool) {
+    /// automatique de toutes ses images, chacune d'après la sienne (retour du 10/11/2026).
+    /// Calculé **en tâche de fond** (lire et mesurer des centaines de vignettes figeait
+    /// l'interface, et le menu restait affiché jusqu'au mouvement suivant de la souris) ;
+    /// le résultat arrive dans [`TriApp::adjust_folder_poll`], un seul pas de l'historique.
+    /// Une image sans vignette prête est laissée de côté.
+    pub(super) fn adjust_folder_auto(&mut self, ctx: &egui::Context, exposure: bool) {
+        let Some(engine) = self.engine.as_ref() else {
+            return;
+        };
         self.adjust_dirty = None;
         self.adjust_gesture = None;
-        let images: Vec<PathBuf> = self.folder.files.iter().map(|f| f.path.clone()).collect();
-        let mut changes = Vec::new();
-        let mut missing = 0;
-        for image in images {
-            let layers = self.adjust_layers_now(&image);
-            let new = if exposure {
-                self.auto_exposure_of(&image, layers)
-            } else {
-                self.auto_balance_of(&image, layers)
-            };
-            match new {
-                Some(l) => changes.push((image, Some(l))),
-                None => missing += 1,
+        let items: Vec<(tri::media::MediaFile, Layers)> = self
+            .folder
+            .files
+            .iter()
+            .map(|f| (f.clone(), self.adjust_layers_now(&f.path)))
+            .collect();
+        let (cache, preview, settings) =
+            (engine.cache.clone(), engine.preview, self.settings.adjust);
+        let (tx, rx) = mpsc::channel();
+        let waker = ctx.clone();
+        std::thread::spawn(move || {
+            let mut changes = Vec::new();
+            let mut missing = 0;
+            for (file, mut layers) in items {
+                let base = preview::key(&file, Level::Thumbnail, &preview)
+                    .ok()
+                    .and_then(|key| cache.get(&key))
+                    .map(|bitmap| tri::adjust::Base {
+                        bitmap,
+                        transfer: tri::adjust::Transfer::Srgb,
+                    });
+                let Some(base) = base else {
+                    missing += 1;
+                    continue;
+                };
+                if exposure {
+                    let ev = tri::adjust::auto_exposure(&base, layers.correction.gains, &settings);
+                    layers.correction.exposure =
+                        ev.clamp(*EXPOSURE_RANGE.start(), *EXPOSURE_RANGE.end());
+                } else {
+                    layers.correction.gains = tri::adjust::auto_balance(&base, &settings);
+                }
+                changes.push((file.path, Some(layers)));
             }
-        }
+            let _ = tx.send((changes, missing));
+            // Réveille l'interface (le chemin des vignettes arrivées en fond).
+            waker.request_repaint();
+        });
+        self.adjust_folder_job = Some(rx);
+        self.notice = Some((t!("adjust-folder-running"), false));
+        ctx.request_repaint();
+    }
+
+    /// Résultat des réglages automatiques d'un dossier, s'il est arrivé : enregistré en un
+    /// pas, bilan dans la barre d'état.
+    pub(super) fn adjust_folder_poll(&mut self) {
+        let Some(rx) = &self.adjust_folder_job else {
+            return;
+        };
+        let Ok((changes, missing)) = rx.try_recv() else {
+            return;
+        };
+        self.adjust_folder_job = None;
         let n = changes.len();
         self.save_adjustments(changes);
         self.notice = Some((
@@ -827,6 +871,10 @@ impl TriApp {
         }
     }
 }
+
+/// Résultat des réglages automatiques d'un dossier : les réglages calculés, et le nombre
+/// d'images laissées de côté (vignette pas prête).
+pub(super) type FolderResult = (Vec<(PathBuf, Option<Layers>)>, usize);
 
 /// Un geste en cours sur l'image courante : ses réglages d'avant et la couleur de sa
 /// prise de vue, et pour chaque image synchronisée, les siens et la sienne.

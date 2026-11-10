@@ -585,6 +585,9 @@ pub struct TriApp {
     adjust_bases: HashMap<(PathBuf, Level), tri::bitmap::Bitmap>,
     /// Réglages copiés (« Copier »), à coller.
     adjust_clipboard: Option<adjust::AdjustClip>,
+    /// Réglages automatiques d'un dossier en cours (tâche de fond) : les réglages calculés
+    /// et le nombre d'images sans vignette prête.
+    adjust_folder_job: Option<Receiver<adjust::FolderResult>>,
     /// Fenêtre du journal de l'application (issue n° 398).
     log_view: Option<crate::log_view::LogView>,
     /// Image (passe d'egui) où elle s'est ouverte (même raison que `export_report_since`).
@@ -1413,6 +1416,7 @@ impl TriApp {
             adjust_epoch: 0,
             adjust_bases: HashMap::new(),
             adjust_clipboard: None,
+            adjust_folder_job: None,
             log_view: None,
             log_view_since: 0,
             logged_errors: Vec::new(),
@@ -3785,10 +3789,8 @@ impl TriApp {
             self.keep_cache_in(path, on);
         }
         if let Some(exposure) = adjust_menu {
-            self.adjust_folder_auto(exposure);
-            // Le menu fermé et la grille réglée se voient tout de suite (sans image de plus,
-            // le menu restait affiché jusqu'au prochain mouvement de la souris).
-            ui.ctx().request_repaint();
+            let ctx = ui.ctx().clone();
+            self.adjust_folder_auto(&ctx, exposure);
         }
         if let Some((path, value)) = embed_menu {
             // Le menu fermé se voit tout de suite.
@@ -17801,6 +17803,7 @@ impl eframe::App for TriApp {
         self.export_report_dialog(&ctx);
         self.log_errors();
         self.adjust_commit(&ctx);
+        self.adjust_folder_poll();
         self.adjust_refresh_thumbnails(&ctx);
         if let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) {
             self.adjust_layers(&path);
@@ -28640,8 +28643,9 @@ mod tests {
             .click();
         h.run_steps(2);
         // Le menu se ferme tout de suite, sous-menu compris (retour du 10/11/2026 : la
-        // grille ne changeait qu'en sortant du menu).
+        // grille ne changeait qu'en sortant du menu) ; le calcul se fait en fond.
         assert!(h.query_by_label("Réglages").is_none(), "menu closed");
+        run_until(&mut h, |app| app.adjust_folder_job.is_none());
         let evs: Vec<f32> = paths
             .iter()
             .map(|p| {
