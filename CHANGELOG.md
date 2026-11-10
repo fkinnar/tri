@@ -4,7 +4,7 @@
 
 ## Unreleased
 
-- **Application log** (#PRNUM): errors keep a short message in the status bar, and their
+- **Application log** (#403): errors keep a short message in the status bar, and their
   full detail goes to `tri.log` in the data folder: for a development software that
   fails, the image, the command, the exit code and all its messages; also failed
   exports, thumbnails and previews, an invalid configuration, crashes (`crash.log` is

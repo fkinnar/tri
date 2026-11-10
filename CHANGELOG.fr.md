@@ -4,7 +4,7 @@
 
 ## Non publié
 
-- **Journal de l'application** (#PRNUM) : une erreur garde un message court dans la barre
+- **Journal de l'application** (#403) : une erreur garde un message court dans la barre
   d'état, et tout son détail va dans `tri.log`, au dossier de données : pour un logiciel
   de développement en échec, l'image, la commande, le code de sortie et tous ses
   messages ; aussi les exports, vignettes et aperçus ratés, une configuration invalide,
