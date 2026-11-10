@@ -809,8 +809,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     et Échap agissent. Elle reste ouverte pour poser plusieurs notes, et se ferme par
     Échap, « Fermer » ou un clic à côté. Ouverte d'abord au point du clic (17/10/2026),
     elle s'ouvre **au centre** depuis le 10/11/2026, comme toutes les boîtes : `modal_at`
-    avec `CENTRED`, placée d'après sa taille réelle (mesurée à l'image précédente ; sa
-    largeur suit, son haut reste où sa première taille l'a mis) ;
+    avec `CENTRED`, placée d'après sa taille réelle, mesurée pendant ses premières images
+    (`[gui.dialogs] centring_frames`, 3), puis immobile : un contenu arrivé ensuite ne la
+    fait pas glisser sous le pointeur ;
   - **réaction au survol** (même retour) : sur les étoiles, pastilles et drapeaux
     cliquables (bandeau, boîte, barre de filtres), pointeur en main et fond surligné
     (`marks::clickable`) ;

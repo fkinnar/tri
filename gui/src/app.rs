@@ -19064,9 +19064,8 @@ pub(crate) struct Dialog {
     free_width: bool,
     /// Croix de fermeture à droite du titre (issue n° 39 : la même dans toutes les boîtes).
     closable: bool,
-    /// Au centre de la fenêtre ([`CENTRED`]) d'après sa taille réelle (mesurée à l'image
-    /// précédente), tant qu'on ne la déplace pas ; sa largeur suit, son haut reste où sa
-    /// première taille l'a mis (un contenu qui grandit ne la fait pas sauter).
+    /// Au centre de la fenêtre ([`CENTRED`]) d'après sa taille réelle, mesurée pendant ses
+    /// premières images ; ensuite elle ne bouge plus (sauf si on la déplace).
     centred: bool,
 }
 
@@ -19148,9 +19147,9 @@ impl Dialog {
             .unwrap_or_default();
         let pos_id = self.id.with("position");
         let size_id = self.id.with("size");
-        let start = match ctx.data(|data| data.get_temp::<egui::Vec2>(size_id)) {
+        let start = match ctx.data(|data| data.get_temp::<(egui::Vec2, u32)>(size_id)) {
             _ if !self.centred => self.start,
-            Some(size) => ctx.content_rect().center() - size / 2.0,
+            Some((size, _)) => ctx.content_rect().center() - size / 2.0,
             // Première image, taille encore inconnue : à peu près au centre.
             None => ctx.content_rect().center() - vec2(d.min_width / 2.0, 80.0),
         };
@@ -19275,13 +19274,17 @@ impl Dialog {
             ctx.data_mut(|data| data.insert_temp(pos_id, pos + moved));
             ctx.request_repaint();
         }
+        // Centrée pendant ses premières images (passe de mesure d'egui comprise), puis
+        // immobile : un contenu qui arrive ensuite (inventaire, taille mesurée en fond) ne
+        // la fait pas glisser sous le pointeur (CI Ubuntu du 10/11/2026 : un clic manquait
+        // « Décharger », la boîte venait de bouger).
         if self.centred {
             let measured = response.response.rect.size();
-            let known = ctx.data(|data| data.get_temp::<egui::Vec2>(size_id));
-            // La hauteur de la première mesure seulement.
-            let size = vec2(measured.x, known.map_or(measured.y, |k| k.y));
-            if known != Some(size) {
-                ctx.data_mut(|data| data.insert_temp(size_id, size));
+            let frames = ctx
+                .data(|data| data.get_temp::<(egui::Vec2, u32)>(size_id))
+                .map_or(0, |(_, n)| n);
+            if frames < d.centring_frames {
+                ctx.data_mut(|data| data.insert_temp(size_id, (measured, frames + 1)));
                 ctx.request_repaint();
             }
         }

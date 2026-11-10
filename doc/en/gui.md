@@ -755,8 +755,9 @@ system one ("cold" measurements, experiments).
     only the rating keys (for this image) and Esc act. It stays open to set several
     ratings, and closes with Esc, "Close" or a click outside. First opened at the
     click point (2026-10-17), it opens **in the centre** since 2026-11-10, like every
-    dialog: `modal_at` with `CENTRED`, placed from its real size (measured on the previous
-    frame; its width follows, its top stays where its first size put it);
+    dialog: `modal_at` with `CENTRED`, placed from its real size, measured during its first
+    frames (`[gui.dialogs] centring_frames`, 3), then still: content arriving later does
+    not slide it under the pointer;
   - **reaction on hover** (same feedback): on the clickable stars, dots and flags (bar,
     dialog, filter bar), hand pointer and highlighted background (`marks::clickable`);
   - each click triggers the same action as the keyboard. **Flag**: clicking it again does

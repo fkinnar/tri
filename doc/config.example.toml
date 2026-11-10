@@ -929,6 +929,9 @@ palette_settings_prefix = "?"
 # Pendant une attente (copie, recherche sur le réseau, touche de séquence…), intervalle
 # entre deux images pour voir où elle en est, en millisecondes.
 poll_ms = 100
+# Boîte ouverte au centre : nombre d'images pendant lesquelles elle se recentre d'après sa
+# taille mesurée, avant de ne plus bouger (un contenu arrivé ensuite ne la déplace pas).
+centring_frames = 3
 # Fichiers en erreur listés à la fin d'un déchargement ; dossiers proposés sous un champ de
 # chemin, après Tab.
 max_errors = 5
