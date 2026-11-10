@@ -33,6 +33,10 @@ pub struct RenderOptions {
     /// par défaut : elle « corrige » une sous-exposition et masque donc l'erreur de prise de
     /// vue qu'on cherche justement à voir en triant.
     pub auto_bright: bool,
+    /// Correction d'exposition (IL), sur les données du capteur avant dématriçage
+    /// (réglages de visualisation, issue n° 137) ; LibRaw la borne à [-2 ; +3] IL,
+    /// [`RenderOptions::exposure_rest`] donne ce qui reste à appliquer sur l'image.
+    pub exposure: f32,
 }
 
 impl Default for RenderOptions {
@@ -42,7 +46,25 @@ impl Default for RenderOptions {
             half_size: false,
             bright: 1.0,
             auto_bright: false,
+            exposure: 0.0,
         }
+    }
+}
+
+impl RenderOptions {
+    /// Bornes de la correction d'exposition faite par LibRaw (IL) : `exp_shift` va de
+    /// 0,25 à 8.
+    pub const EXPOSURE_RANGE: (f32, f32) = (-2.0, 3.0);
+
+    /// La part de [`RenderOptions::exposure`] que LibRaw fait.
+    pub fn exposure_in_libraw(&self) -> f32 {
+        self.exposure
+            .clamp(Self::EXPOSURE_RANGE.0, Self::EXPOSURE_RANGE.1)
+    }
+
+    /// Ce qui reste à appliquer sur l'image rendue (au-delà des bornes de LibRaw).
+    pub fn exposure_rest(&self) -> f32 {
+        self.exposure - self.exposure_in_libraw()
     }
 }
 
@@ -481,6 +503,7 @@ impl RawFile {
             ffi::tri_libraw_set_half_size(self.ptr, options.half_size.into());
             ffi::libraw_set_bright(self.ptr, options.bright);
             ffi::libraw_set_no_auto_bright(self.ptr, c_int::from(!options.auto_bright));
+            ffi::tri_libraw_set_exposure(self.ptr, options.exposure_in_libraw().exp2());
         }
         check(unsafe { ffi::libraw_unpack(self.ptr) })?;
         check(unsafe { ffi::libraw_dcraw_process(self.ptr) })?;

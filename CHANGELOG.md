@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- **Viewing adjustments, engine and command line** (#PRNUM): exposure, white balance and
+  black and white (channel mixer, colour-filter presets), to compare and cull a series.
+  `tri --adjust <reference> <images>… --to <folder>` sets the reference and applies its
+  adjustments to the others: exposure and balance matched to the reference (a photo at
+  -1 EV gets about +1 EV), creative offset and black and white copied. It writes the
+  adjusted JPEGs and prints the values to copy into a development software. On a RAW,
+  exposure is applied to the sensor data. The interface comes next (#137).
 - **Application log** (#403): errors keep a short message in the status bar, and their
   full detail goes to `tri.log` in the data folder: for a development software that
   fails, the image, the command, the exit code and all its messages; also failed

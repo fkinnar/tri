@@ -94,6 +94,7 @@ enum FileAction {
     Copy,
     Move,
     Export,
+    Adjust,
 }
 
 #[derive(Default)]
@@ -149,6 +150,63 @@ struct Args {
     delete_left: bool,
     /// `--cache-here` (vrai) / `--cache-user` (faux) : cache gardé dans le dossier.
     keep_cache: Option<bool>,
+    /// `--adjust` : réglages de la référence (première image).
+    adjust: AdjustArgs,
+}
+
+/// Réglages de `--adjust` (issue n° 137), pour la référence.
+#[derive(Default)]
+struct AdjustArgs {
+    /// `--ev` : correction d'exposition.
+    ev: f32,
+    /// `--neutral auto|x,y,w,h` : balance neutralisée (monde gris, ou zone en fractions).
+    neutral: Option<Option<tri::adjust::Zone>>,
+    /// `--creative-ev`, `--warmth`, `--tint` : décalage créatif.
+    creative_ev: f32,
+    warmth: f32,
+    tint: f32,
+    /// `--mono <préréglage|r,v,b>`.
+    mono: Option<tri::adjust::Mixer>,
+}
+
+/// `--mono` : un préréglage (`neutral`, `red`, `orange`, `yellow`, `green`, `blue`) ou trois
+/// pourcentages `r,v,b`.
+fn parse_mixer(text: &str) -> AnyResult<tri::adjust::Mixer> {
+    if let Some(mixer) = tri::adjust::Mixer::preset(text) {
+        return Ok(mixer);
+    }
+    let parts: Vec<f32> = text
+        .split(',')
+        .map(|p| p.trim().parse::<f32>())
+        .collect::<Result<_, _>>()?;
+    match parts.as_slice() {
+        [red, green, blue] => Ok(tri::adjust::Mixer {
+            red: red / 100.0,
+            green: green / 100.0,
+            blue: blue / 100.0,
+        }),
+        _ => Err(usage().into()),
+    }
+}
+
+/// `--neutral` : `auto` (toute l'image) ou une zone `x,y,w,h` en fractions de l'image.
+fn parse_zone(text: &str) -> AnyResult<Option<tri::adjust::Zone>> {
+    if text == "auto" {
+        return Ok(None);
+    }
+    let parts: Vec<f32> = text
+        .split(',')
+        .map(|p| p.trim().parse::<f32>())
+        .collect::<Result<_, _>>()?;
+    match parts.as_slice() {
+        [x, y, w, h] => Ok(Some(tri::adjust::Zone {
+            x: *x,
+            y: *y,
+            w: *w,
+            h: *h,
+        })),
+        _ => Err(usage().into()),
+    }
 }
 
 fn parse_level(name: &str) -> Option<Level> {
@@ -233,6 +291,13 @@ fn parse() -> AnyResult<Args> {
                 args.file_action = Some(FileAction::Export);
                 args.export_profile = Some(value()?);
             }
+            "--adjust" => args.file_action = Some(FileAction::Adjust),
+            "--ev" => args.adjust.ev = value()?.parse()?,
+            "--neutral" => args.adjust.neutral = Some(parse_zone(&value()?)?),
+            "--creative-ev" => args.adjust.creative_ev = value()?.parse()?,
+            "--warmth" => args.adjust.warmth = value()?.parse()?,
+            "--tint" => args.adjust.tint = value()?.parse()?,
+            "--mono" => args.adjust.mono = Some(parse_mixer(&value()?)?),
             "--permanent" => args.permanent = true,
             "--exposure" => args.exposure = true,
             "--metadata" => args.metadata = true,
@@ -1208,6 +1273,12 @@ fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> An
                 .collect();
             export(settings, args, &images)?;
         }
+        FileAction::Adjust => {
+            let images: Vec<PathBuf> = std::iter::once(first)
+                .chain(args.rest.iter().map(PathBuf::from))
+                .collect();
+            adjust(settings, args, &images)?;
+        }
         FileAction::Reveal => tri::files::reveal(&first)?,
         FileAction::Edit => {
             let images: Vec<PathBuf> = std::iter::once(first)
@@ -1218,6 +1289,122 @@ fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> An
     }
     if args.dry_run {
         println!("{}", t!("cli-dry-run"));
+    }
+    Ok(())
+}
+
+/// Côté long des images de mesure de `--adjust` : une petite image suffit.
+const ADJUST_MEASURE_SIDE: u32 = 800;
+
+/// `--adjust` (issue n° 137) : la première image est la référence, réglée par les
+/// options ; les suivantes reçoivent ses réglages (corrections harmonisées, décalage
+/// créatif et noir et blanc copiés). Écrit `<nom>-adjusted.jpg` dans `--to` et affiche le
+/// rapport de chaque image. RAW : rendu LibRaw (exposition sur les données du capteur),
+/// ou JPEG boîtier avec `--embedded` (approximation).
+fn adjust(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResult<()> {
+    use tri::adjust::{Adjust, Gains, Layers, Modes};
+    let to = args.to.as_ref().ok_or_else(usage)?;
+    let preview = settings.preview(None);
+    let level = if args.embedded {
+        Level::Embedded
+    } else {
+        Level::Standard
+    };
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    let files: Vec<tri::media::MediaFile> = images
+        .iter()
+        .map(|path| {
+            tri::media::kind_of(path)
+                .map(|kind| tri::media::MediaFile {
+                    path: path.clone(),
+                    kind,
+                })
+                .ok_or_else(|| t!("cli-adjust-not-an-image", path = path.display().to_string()))
+        })
+        .collect::<Result<_, _>>()?;
+    // Courbe de l'image : BT.709 pour un rendu LibRaw, sRGB pour un JPEG.
+    let transfer = |file: &tri::media::MediaFile| {
+        if file.kind == tri::media::MediaKind::Raw && level == Level::Standard {
+            tri::adjust::Transfer::Bt709
+        } else {
+            tri::adjust::Transfer::Srgb
+        }
+    };
+    let base = |file: &tri::media::MediaFile| -> AnyResult<tri::adjust::Base> {
+        Ok(tri::adjust::Base {
+            bitmap: tri::preview::compute(file, level, &preview, &cancel)?.fit(ADJUST_MEASURE_SIDE),
+            transfer: transfer(file),
+        })
+    };
+    let a = &args.adjust;
+    let reference_base = base(&files[0])?;
+    let mut reference = Layers {
+        correction: Adjust {
+            exposure: a.ev,
+            gains: Gains::NONE,
+        },
+        creative: Adjust {
+            exposure: a.creative_ev,
+            gains: Gains::from_warmth_tint(a.warmth, a.tint),
+        },
+        mono: a.mono,
+    };
+    if let Some(zone) = a.neutral {
+        reference.correction.gains = tri::adjust::neutral(
+            tri::adjust::measure(&reference_base.bitmap, reference_base.transfer, zone).cast,
+        );
+    }
+    std::fs::create_dir_all(to)?;
+    for (i, file) in files.iter().enumerate() {
+        let layers = if i == 0 {
+            reference
+        } else {
+            tri::adjust::apply_to(
+                &reference,
+                &reference_base,
+                &Layers::default(),
+                &base(file)?,
+                Modes::default(),
+            )
+        };
+        // Un RAW rendu par LibRaw : l'exposition sur les données du capteur, le reste sur
+        // l'image ; sinon tout sur l'image.
+        let total = layers.total();
+        let in_libraw = transfer(file) == tri::adjust::Transfer::Bt709;
+        let mut render = preview;
+        let mut rest = total;
+        if in_libraw {
+            render.render.exposure = total.exposure;
+            rest.exposure = render.render.exposure_rest();
+        }
+        let mut bitmap = tri::preview::compute(file, level, &render, &cancel)?;
+        tri::adjust::apply_bitmap(&mut bitmap, transfer(file), rest, layers.mono);
+        let stem = file
+            .path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let out = to.join(format!("{stem}-adjusted.jpg"));
+        let jpeg = tri::jpeg::encode(&bitmap, 92, tri::jpeg::Chroma::Full)?;
+        std::fs::write(&out, jpeg)?;
+        let r = tri::adjust::report(&layers);
+        println!(
+            "{}",
+            t!(
+                "cli-adjust-report",
+                image = file.path.display().to_string(),
+                exposure = format!("{:+.2}", r.exposure),
+                correction = format!("{:+.2}", r.correction_exposure),
+                creative = format!("{:+.2}", r.creative_exposure),
+                warmth = format!("{:+.2}", r.warmth),
+                tint = format!("{:+.2}", r.tint),
+                mixer = r.mixer.map_or_else(
+                    || "-".to_string(),
+                    |m| format!("{:.0}/{:.0}/{:.0}", m[0], m[1], m[2])
+                ),
+                out = out.display().to_string()
+            )
+        );
     }
     Ok(())
 }

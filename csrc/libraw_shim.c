@@ -11,6 +11,15 @@ void tri_libraw_set_half_size(libraw_data_t *lr, int value) {
     lr->params.half_size = value;
 }
 
+/* Correction d'exposition (réglages de visualisation, issue n° 137) : `shift`
+ * multiplicateur linéaire (1 : rien), sur les données du capteur avant dématriçage ;
+ * LibRaw le borne à [0,25 ; 8]. Hautes lumières préservées quand on éclaircit. */
+void tri_libraw_set_exposure(libraw_data_t *lr, float shift) {
+    lr->params.exp_correc = shift != 1.0f;
+    lr->params.exp_shift = shift;
+    lr->params.exp_preser = shift > 1.0f ? 1.0f : 0.0f;
+}
+
 /* Orientation demandée par le boîtier (0, 3 = 180°, 5 = 90° anti-horaire, 6 = 90° horaire). */
 int tri_libraw_get_flip(libraw_data_t *lr) {
     return lr->sizes.flip;

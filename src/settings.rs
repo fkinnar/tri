@@ -224,6 +224,7 @@ impl RenderSection {
             half_size: false,
             bright: self.bright,
             auto_bright: self.auto_bright,
+            ..RenderOptions::default()
         }
     }
 }

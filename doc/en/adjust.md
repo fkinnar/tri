@@ -1,0 +1,119 @@
+# Viewing adjustments (`tri::adjust`)
+
+Issue #137, decisions of 2026-11-10. A few basic adjustments **to compare and cull a
+series**, not to develop: exposure, white balance, black and white with a channel mixer.
+The key: **apply one image's adjustments to the others**, matching what must be matched
+(a photo at -1 EV and a well-exposed one end up alike).
+
+First stage (this module): the engine and the command line. Then: the interface (sliders,
+eyedropper, before / after, "Apply to selection", thumbnails), the report of each image's
+adjustments, then writing them for other software (RawTherapee / ART first). The
+adjustments apply **before** any development by another program: an image developed in
+darktable is not affected.
+
+## Layers
+
+An image's adjustments (`Layers`) are layers that can be redone separately:
+
+| Layer | Role | Goes to other images as (default mode) |
+|---|---|---|
+| `correction` (exposure, balance) | bring the image to a common base | **harmonised**: computed for each image |
+| `creative` (exposure, balance) | the intent, the same for the series | **copied** (the same offset) |
+| `mono` (mixer) | black and white | **copied** |
+
+Modes (`Mode`) can be forced layer by layer (`Modes`):
+
+- **absolute**: the value as is;
+- **offset**: the same difference added to what the image already has;
+- **harmonise**: the difference computed so that the image matches the reference;
+- and **keep**: the image keeps its own.
+
+## Values
+
+- **Exposure** in EV.
+- **White balance** as red and blue gains (`Gains`), relative to the image's base
+  balance, green being the reference. For sliders and the report: **warmth** (log₂ red /
+  blue, positive = warmer) and **tint** (positive = magenta). No Kelvin: each program
+  computes it with its own camera model; a difference from the as-shot balance carries
+  over better.
+- **Mixer**: share of red, green, blue (1.0 = 100 %), free sum. Colour-filter presets:
+  `neutral` (Rec. 709 luminance), `red`, `orange`, `yellow`, `green`, `blue`.
+
+## Where they apply
+
+| | RAW rendered by LibRaw | Camera JPEG, flat images |
+|---|---|---|
+| Exposure | on the sensor data, before demosaicing (`RenderOptions::exposure`, LibRaw's `exp_shift`; bounds -2 to +3 EV, the rest on the image): highlights recoverable | on the image, in linear light: clipped highlights don't come back |
+| Balance | on the rendered image, in linear light | same |
+| Mixer | exact | exact |
+
+A RAW's balance is done **on the rendered image, not on the sensor multipliers** (a
+deliberate departure from the initial decision): harmonisation measures the cast on the
+image, in the output space; moving it to the sensor would need a conversion through the
+camera's colour matrix, exact for a single colour only. To revisit if the difference
+shows in use.
+
+Each 8-bit image is brought back to linear light with **its own** curve (`Transfer`):
+BT.709 for a LibRaw render (the previews' curve, `OutputSpace::PREVIEW`), sRGB for a JPEG.
+Decoding a LibRaw render as sRGB skewed the measure in the shadows (try of 2026-11-10 on a
+dark photo: +1.18 EV instead of +1).
+
+## Measures and harmonisation
+
+`measure` gives, on the image as shown (adjustments included):
+
+- the **median luminance** (Rec. 709, linear): little sensitive to a clipped sky;
+- the **cast**: linear red / green and blue / green means, without blocked or nearly
+  clipped pixels (a clipped channel skews the ratio); on a zone (`Zone`) for the
+  **eyedropper**, on the whole image for "grey world".
+
+`apply_to(reference, reference base, target adjustments, target base, modes)`:
+
+1. creative offset and black and white first (they count in the measure);
+2. harmonised balance: the target takes the cast of the **corrected** reference;
+3. harmonised exposure: the target's median luminance, with all its new adjustments,
+   equals the reference's with its own. Exposure is a plain factor in linear light: one
+   computation is enough, clipped pixels aside.
+
+A small image is enough for the measures (800 px on the command line). On a black and
+white image, harmonisation works on the black and white (decided: the difference is
+measured after the adjustments already set).
+
+The initial decision planned to measure on the RAW histograms of the analysis cache;
+measuring on the image shown works the same for every source (RAW, camera JPEG, flat
+images) and accounts for black and white.
+
+## Report
+
+`report`: total exposure to copy (correction + creative, also separate), warmth, tint,
+gains, mixer in percent. First stage before writing into development software formats:
+these values are copied by hand.
+
+## Command line
+
+```
+tri --adjust <reference> <image>... --to <folder> [--ev EV] [--neutral auto|x,y,w,h]
+    [--creative-ev EV] [--warmth EV] [--tint EV] [--mono <preset>|r,g,b] [--embedded]
+```
+
+The first image is the reference, set by the options (`--ev` and `--neutral`: its
+correction; `--creative-ev`, `--warmth`, `--tint`: the creative offset; `--mono`: a
+preset or three percentages). The following ones get its adjustments in the default
+mode. Each image is written as `<name>-adjusted.jpg` in `--to` (never next to the
+photos), at the preview size (`--side`), and its report is printed. A RAW is rendered by
+LibRaw; `--embedded` takes its camera JPEG (approximation).
+
+Example: match a series to its first image, neutralise the balance on a grey zone and
+switch to orange-filter black and white:
+
+```
+tri --adjust DSCF0101.RAF DSCF0102.RAF DSCF0103.RAF --to /tmp/try \
+    --neutral 0.40,0.55,0.10,0.10 --mono orange
+```
+
+## Tests
+
+`src/adjust.rs`: one EV doubles the light (sRGB and BT.709), reversible curves, mixer,
+warmth / tint, eyedropper on a grey zone, harmonising an image at -1 EV, balance aligned
+on the corrected reference, black and white series measured after the mix, forced modes,
+report. `tests/cli.rs`: a copy at -1 EV gets about +1 EV.

@@ -27,6 +27,7 @@ exists.
 | [i18n.md](i18n.md) | Module `tri::i18n`: languages (Fluent), `.ftl` catalogs, plurals, `t!` |
 | [similarity.md](similarity.md) | Module `tri::similarity`: fingerprints, distances, grouping into stacks (bursts, series) |
 | [sort.md](sort.md) | Module `tri::sort`: order of the images (name, shooting date, modification date) |
+| [adjust.md](adjust.md) | Module `tri::adjust`: viewing adjustments (exposure, balance, black and white), matching a series, `tri --adjust` |
 | [log.md](log.md) | Module `tri::log`: application log (`tri.log`), error details, crashes, log window |
 | [history.md](history.md) | Module `tri::history`: undo, redo, history list (session) |
 | [files.md](files.md) | Module `tri::files`: rename, trash, reveal, external editor (pairs and sidecars follow) |

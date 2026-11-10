@@ -192,8 +192,11 @@ cli-usage =
       tri --reveal <image>
       tri --edit <image>...
       tri --export <preset> <image>... [--to <folder>] [--libraw|--embedded] [--passthrough] [--dry-run]
+      tri --adjust <reference> <image>... --to <folder> [--ev EV] [--neutral auto|x,y,w,h] [--creative-ev EV] [--warmth EV] [--tint EV] [--mono neutral|red|orange|yellow|green|blue|r,g,b] [--embedded] [--side N]
     common option: --config FILE (settings; default: the system location)
 cli-unknown-convention = unknown convention: { $value } (darktable or adobe)
+cli-adjust-not-an-image = not an image: { $path }
+cli-adjust-report = { $image }: exposure { $exposure } EV (correction { $correction }, creative { $creative }), warmth { $warmth } EV, tint { $tint } EV, B&W { $mixer } → { $out }
 cli-unknown-option = unknown option: { $option }
 cli-extra-argument = extra argument: { $argument }
 cli-cache = cache: { $path }
