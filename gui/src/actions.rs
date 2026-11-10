@@ -450,9 +450,14 @@ pub enum Action {
     /// Réglages de visualisation (#137) : avant / après (toutes les images sans leurs
     /// réglages, ou avec).
     AdjustBeforeAfter,
-    /// Réglages de visualisation : ceux de l'image courante vers la sélection
-    /// (corrections harmonisées).
+    /// Réglages de visualisation : la base (exposition, balance) de la sélection
+    /// harmonisée sur l'image courante.
     AdjustApply,
+    /// Réglages de visualisation : copier ceux de l'image courante.
+    AdjustCopy,
+    /// Réglages de visualisation : coller ceux copiés (base harmonisée, style et noir et
+    /// blanc copiés) sur l'image courante, ou la sélection synchronisée.
+    AdjustPaste,
     /// Histogramme : basculer entre IL et linéaire.
     HistogramScale,
     /// Grand histogramme, en boîte au milieu de l'écran.
@@ -536,7 +541,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 234] = [
+    pub const ALL: [Action; 236] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -730,6 +735,8 @@ impl Action {
         Action::ToggleHistogram,
         Action::AdjustBeforeAfter,
         Action::AdjustApply,
+        Action::AdjustCopy,
+        Action::AdjustPaste,
         Action::HistogramScale,
         Action::HistogramLarge,
         Action::HistogramChannel,
@@ -899,11 +906,12 @@ impl Action {
             ToggleZoom | Loupe | LoupeZoomIn | LoupeZoomOut | LoupeScaleEntry | ZoomScaleEntry
             | ReviewDevelopments | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource
             | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram | AdjustBeforeAfter
-            | AdjustApply | HistogramScale | HistogramLarge | HistogramChannel | HistogramRed
-            | HistogramGreen | HistogramBlue | HistogramAll | HistogramLuminance
-            | HistogramPhoto | HistogramCamera | ToggleClipping | TogglePeaking | PeakingColor
-            | SharpnessLenient | SharpnessStrict | ToggleFocusPoint | OverlayNext
-            | OverlayOrient | FocusMode | Develop | DevelopWith(_) | DevelopFolder => Group::View,
+            | AdjustApply | AdjustCopy | AdjustPaste | HistogramScale | HistogramLarge
+            | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
+            | HistogramLuminance | HistogramPhoto | HistogramCamera | ToggleClipping
+            | TogglePeaking | PeakingColor | SharpnessLenient | SharpnessStrict
+            | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode | Develop
+            | DevelopWith(_) | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
             | CropPreset | CropPresetPrev | VersionNext | VersionPrev | VersionRatioNext
             | VersionRatioPrev | VersionRatioCustom | VersionExportNext | VersionExportPrev
@@ -1177,6 +1185,8 @@ impl Action {
             Action::ToggleHistogram => "core.view.histogram",
             Action::AdjustBeforeAfter => "core.adjust.before_after",
             Action::AdjustApply => "core.adjust.apply",
+            Action::AdjustCopy => "core.adjust.copy",
+            Action::AdjustPaste => "core.adjust.paste",
             Action::HistogramScale => "core.view.histogram_scale",
             Action::HistogramLarge => "core.view.histogram_large",
             Action::HistogramChannel => "core.view.histogram_channel",

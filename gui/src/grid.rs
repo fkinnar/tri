@@ -263,6 +263,8 @@ pub fn navigate(
         | Action::Log
         | Action::AdjustBeforeAfter
         | Action::AdjustApply
+        | Action::AdjustCopy
+        | Action::AdjustPaste
         | Action::Quit
         | Action::Stars(_)
         | Action::Color(_)

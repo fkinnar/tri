@@ -1668,6 +1668,13 @@ photos nettes.
 - **Double-clic sur un curseur : valeur par défaut**, partout (comme Lightroom) : flou et
   piles au centre, écart de temps des piles à `[similarity] max_gap_s`. Toute nouvelle
   glissière doit faire de même.
+- **Un seul curseur dans toute l'interface** (`gui/src/fine_slider.rs`, retours du
+  10/11/2026) : **glisser** avance par grands crans (0,1 IL, 50 K…) ; **Maj + glisser**
+  règle finement, relatif et démultiplié (`[gui] slider_fine_speed`, 1/10), par petits
+  crans ; un clic sur le rail, loin de la poignée, y place la valeur. Maj prise ou lâchée
+  en cours de geste repart de la valeur atteinte (la poignée ne saute pas). Ctrl+clic
+  écarté : c'est le clic droit sur macOS. Sur le curseur de similarité, Maj déplie aussi
+  les piles pendant le réglage, comme avant.
 - **Curseur du flou** : à fond à gauche, aucune photo floue (toutes visibles, même au
   plus souple il en manquait) ; en plein écran, il ne refiltre plus la grille (l'image
   regardée sortait du filtre et l'image changeait) : refiltrage au retour à la grille.

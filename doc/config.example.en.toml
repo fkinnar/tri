@@ -603,6 +603,9 @@ report_log_entries = 20
 # Viewing adjustments: side of the zone the eyedropper measures (fraction of the image,
 # 0.04 = 4 %).
 adjust_eyedropper_size = 0.04
+# Sliders: dragging moves by large steps; Shift + drag adjusts finely, the value moving
+# by this fraction of the mouse movement (0.1: ten times slower).
+slider_fine_speed = 0.1
 # Arrows and Enter in the help, the menus and the palette: as symbols, taken from
 # a system font that has them (Apple Symbols, DejaVu Sans, Segoe UI Symbol; the
 # interface's has none). Empty: the first found; a path: that font; "none": spelled out

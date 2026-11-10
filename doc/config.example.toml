@@ -607,6 +607,9 @@ report_log_entries = 20
 # Réglages de visualisation : côté de la zone mesurée par la pipette (fraction de l'image,
 # 0.04 = 4 %).
 adjust_eyedropper_size = 0.04
+# Curseurs : glisser avance par grands crans ; Maj + glisser règle finement, la valeur
+# bougeant de cette fraction du déplacement de la souris (0.1 : dix fois plus lentement).
+slider_fine_speed = 0.1
 # Flèches et Entrée dans l'aide, les menus et la palette : en symboles, pris dans
 # une police du système qui les a (Apple Symbols, DejaVu Sans, Segoe UI Symbol ; celle de
 # l'interface n'en a pas). Vide : la première trouvée ; un chemin : cette police ;

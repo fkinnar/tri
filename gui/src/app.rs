@@ -1,6 +1,7 @@
 //! L'application egui : grille de vignettes et plein écran, alimentés par le scheduler du
 //! moteur.
 
+use crate::fine_slider::FineSlider;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -564,6 +565,16 @@ pub struct TriApp {
     /// Décalage créatif et noir et blanc décochés dans la session : retrouvés en recochant.
     adjust_creative_memory: HashMap<PathBuf, tri::adjust::Adjust>,
     adjust_mono_memory: HashMap<PathBuf, tri::adjust::Mixer>,
+    /// Onglet ouvert de la section (retenu dans la session).
+    adjust_tab: adjust::AdjustTab,
+    /// « Synchroniser N images » : les réglages vont à toute la sélection (cochée par
+    /// défaut).
+    adjust_sync: bool,
+    /// Geste en cours sur l'image courante : ses réglages d'avant, pour reporter l'écart
+    /// sur la sélection au relâchement.
+    adjust_gesture: Option<(PathBuf, tri::adjust::Layers)>,
+    /// Réglages copiés (« Copier »), à coller.
+    adjust_clipboard: Option<adjust::AdjustClip>,
     /// Fenêtre du journal de l'application (issue n° 398).
     log_view: Option<crate::log_view::LogView>,
     /// Image (passe d'egui) où elle s'est ouverte (même raison que `export_report_since`).
@@ -1384,6 +1395,10 @@ impl TriApp {
             adjust_shot: HashMap::new(),
             adjust_creative_memory: HashMap::new(),
             adjust_mono_memory: HashMap::new(),
+            adjust_tab: Default::default(),
+            adjust_sync: true,
+            adjust_gesture: None,
+            adjust_clipboard: None,
             log_view: None,
             log_view_since: 0,
             logged_errors: Vec::new(),
@@ -5323,9 +5338,10 @@ impl TriApp {
             .join(" ; ");
         let slider = ui
             .add(
-                egui::Slider::new(&mut cell, g.cell_min..=g.cell_max.max(g.cell_min))
+                FineSlider::new(&mut cell, g.cell_min..=g.cell_max.max(g.cell_min))
                     .logarithmic(true)
-                    .show_value(false),
+                    .steps(10.0, 1.0)
+                    .width(width),
             )
             .on_hover_text(format!("{} ({keys})", t!("grid-size")));
         if slider.double_clicked_slider(ui) {
@@ -6854,6 +6870,14 @@ impl TriApp {
             Action::AdjustApply => {
                 self.adjust_commit(ctx);
                 self.adjust_apply_to_selection();
+            }
+            Action::AdjustCopy => {
+                self.adjust_commit(ctx);
+                self.adjust_copy();
+            }
+            Action::AdjustPaste => {
+                self.adjust_commit(ctx);
+                self.adjust_paste();
             }
             Action::Log => {
                 if self.log_view.take().is_none() {
@@ -16269,9 +16293,9 @@ impl TriApp {
                 // 21/10/2026, comme Lightroom).
                 if ui
                     .add(
-                        egui::Slider::new(&mut strictness, -1.0..=1.0)
-                            .step_by(0.05)
-                            .show_value(false),
+                        FineSlider::new(&mut strictness, -1.0..=1.0)
+                            .steps(0.05, 0.005)
+                            .center_mark(true),
                     )
                     .double_clicked_slider(ui)
                 {
@@ -16281,15 +16305,19 @@ impl TriApp {
                 ui.weak(t!("groups-threshold-tip"));
                 ui.add_space(4.0);
                 ui.label(t!("groups-curve"));
-                if ui
-                    .add(
-                        // Sans pas : un pas compté depuis 1 / max décalait la valeur
-                        // retenue à la seule ouverture de la fenêtre.
-                        egui::Slider::new(&mut curve, 1.0 / max_curve..=max_curve)
-                            .fixed_decimals(1),
-                    )
-                    .double_clicked_slider(ui)
-                {
+                let response = ui
+                    .horizontal(|ui| {
+                        // Crans comptés depuis 0 : une valeur retenue entre deux crans ne
+                        // bouge pas tant qu'on ne touche pas au curseur.
+                        let r = ui.add(
+                            FineSlider::new(&mut curve, 1.0 / max_curve..=max_curve)
+                                .steps(0.1, 0.01),
+                        );
+                        ui.label(tri::i18n::decimal(f64::from(curve), 2));
+                        r
+                    })
+                    .inner;
+                if response.double_clicked_slider(ui) {
                     curve = default_curve;
                 }
                 ui.weak(t!("groups-curve-tip"));
@@ -16299,9 +16327,9 @@ impl TriApp {
                     ui.weak(t!("groups-pauses-less"));
                     if ui
                         .add(
-                            egui::Slider::new(&mut pauses, -1.0..=1.0)
-                                .step_by(0.05)
-                                .show_value(false),
+                            FineSlider::new(&mut pauses, -1.0..=1.0)
+                                .steps(0.05, 0.005)
+                                .center_mark(true),
                         )
                         .double_clicked_slider(ui)
                     {
@@ -16312,14 +16340,14 @@ impl TriApp {
                 ui.weak(t!("groups-pauses-tip"));
                 ui.add_space(4.0);
                 ui.label(t!("groups-gap"));
-                if ui
-                    .add(
-                        egui::Slider::new(&mut gap, 0.0..=600.0)
-                            .step_by(5.0)
-                            .suffix(" s"),
-                    )
-                    .double_clicked_slider(ui)
-                {
+                let response = ui
+                    .horizontal(|ui| {
+                        let r = ui.add(FineSlider::new(&mut gap, 0.0..=600.0).steps(5.0, 1.0));
+                        ui.label(format!("{gap:.0} s"));
+                        r
+                    })
+                    .inner;
+                if response.double_clicked_slider(ui) {
                     gap = default_gap;
                 }
                 ui.weak(t!("groups-gap-tip"));
@@ -17322,6 +17350,7 @@ impl eframe::App for TriApp {
             self.stop_background();
         }
         ctx.data_mut(|d| d.insert_temp(dialog_settings_id(), self.gui.dialogs()));
+        ctx.data_mut(|d| d.insert_temp(crate::fine_slider::speed_id(), self.gui.slider_fine_speed));
         // Recadrage : Tab change de préréglage ; panneaux : de section en section (egui,
         // lui, déplacerait le focus vers un champ ou un bouton ; rendu en fin d'image, sauf
         // depuis un champ).
@@ -18450,17 +18479,13 @@ fn strictness_slider(
         None => value,
     };
     let slider = ui
-        .add(egui::Slider::new(&mut t, -1.0..=1.0).show_value(false))
+        .add(
+            FineSlider::new(&mut t, -1.0..=1.0)
+                .steps(step, step / 10.0)
+                .width(width)
+                .center_mark(true),
+        )
         .on_hover_text(tip);
-    let rail = slider.rect.shrink2(vec2(slider.rect.height() / 2.0, 0.0));
-    let x = rail.center().x;
-    ui.painter().line_segment(
-        [
-            egui::pos2(x, rail.top() + 1.0),
-            egui::pos2(x, rail.top() + rail.height() * 0.25),
-        ],
-        egui::Stroke::new(1.0, ui.visuals().weak_text_color()),
-    );
     if slider.double_clicked_slider(ui) {
         t = 0.0;
     }
@@ -28323,10 +28348,10 @@ mod tests {
     }
 
     #[test]
-    fn adjustments_are_saved_applied_to_the_selection_and_undone_in_one_step() {
-        // #137 : réglages de l'image courante enregistrés dans son sidecar, puis appliqués
-        // aux autres images sélectionnées (noir et blanc copié, exposition harmonisée), un
-        // seul pas de l'historique pour toutes.
+    fn harmonising_the_selection_aligns_the_base_only_in_one_step() {
+        // #137 : « Harmoniser la sélection » aligne exposition et balance des autres
+        // images sur l'image courante, sans toucher au style ni au noir et blanc ; un seul
+        // pas de l'historique pour toutes.
         let (mut h, _dir) = harness();
         run_until(&mut h, |app| {
             app.files.len() == 3 && app.files.iter().all(|f| app.adjust_base(&f.path).is_some())
@@ -28339,14 +28364,14 @@ mod tests {
             .save_adjustments(vec![(paths[0].clone(), Some(layers))]);
         assert_eq!(tri::adjust::read(&paths[0]).unwrap(), Some(layers));
         h.run_steps(2);
-        h.get_by_label("Noir et blanc");
         let files = h.state().files.clone();
         h.state_mut().selection.select_all(&files);
         h.state_mut().selected = 0;
         h.state_mut().adjust_apply_to_selection();
         for path in &paths[1..] {
-            let got = tri::adjust::read(path).unwrap().expect("applied");
-            assert_eq!(got.mono, layers.mono, "black and white copied");
+            let got = tri::adjust::read(path).unwrap().expect("harmonised");
+            assert_eq!(got.mono, None, "black and white untouched");
+            assert!(got.correction.exposure != 0.0, "{got:?}");
         }
         let ctx = h.ctx.clone();
         h.state_mut().perform(&ctx, Action::Undo);
@@ -28365,10 +28390,65 @@ mod tests {
     }
 
     #[test]
-    fn the_creative_offset_and_black_and_white_are_checkboxes_with_visible_filters() {
-        // Retours du 10/11/2026 : décalage créatif sous une case, comme le noir et blanc
-        // (décochée puis recochée : ses valeurs reviennent) ; filtres en boutons ; mélange
-        // normalisé.
+    fn a_gesture_on_a_synced_selection_moves_each_image_by_as_much() {
+        // Retours du 10/11/2026 : « Synchroniser N images », cochée par défaut ; un curseur
+        // décale chaque image d'autant (A 0,3 → 0,5 : B 1,0 → 1,2), au relâchement, en un
+        // pas ; copier / coller harmonise sur l'image copiée.
+        let (mut h, _dir) = harness();
+        run_until(&mut h, |app| {
+            app.files.len() == 3 && app.files.iter().all(|f| app.adjust_base(&f.path).is_some())
+        });
+        let paths: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        let with_ev = |ev: f32| {
+            let mut l = tri::adjust::Layers::default();
+            l.correction.exposure = ev;
+            l
+        };
+        h.state_mut().save_adjustments(vec![
+            (paths[0].clone(), Some(with_ev(0.3))),
+            (paths[1].clone(), Some(with_ev(1.0))),
+        ]);
+        let files = h.state().files.clone();
+        h.state_mut().selection.select_all(&files);
+        h.state_mut().selected = 0;
+        h.run_steps(2);
+        h.get_by_label("Synchroniser 3 images");
+        assert!(h.state().adjust_sync, "checked by default");
+        h.state_mut().adjust_live(&paths[0], with_ev(0.5));
+        let ctx = h.ctx.clone();
+        h.state_mut().adjust_commit(&ctx);
+        let ev = |p: &PathBuf| {
+            tri::adjust::read(p)
+                .unwrap()
+                .map_or(0.0, |l| l.correction.exposure)
+        };
+        assert!((ev(&paths[1]) - 1.2).abs() < 1e-5, "{}", ev(&paths[1]));
+        assert!((ev(&paths[2]) - 0.2).abs() < 1e-5, "{}", ev(&paths[2]));
+        h.state_mut().perform(&ctx, Action::Undo);
+        assert!((ev(&paths[1]) - 1.0).abs() < 1e-5, "one step");
+        // Sans synchronisation : l'image courante seule.
+        h.state_mut().adjust_sync = false;
+        h.state_mut().adjust_live(&paths[0], with_ev(0.8));
+        h.state_mut().adjust_commit(&ctx);
+        assert!((ev(&paths[1]) - 1.0).abs() < 1e-5);
+        // Copier / coller : le noir et blanc part, l'exposition est harmonisée.
+        let mut mono = with_ev(0.8);
+        mono.mono = tri::adjust::Mixer::preset("red");
+        h.state_mut()
+            .save_adjustments(vec![(paths[0].clone(), Some(mono))]);
+        h.state_mut().perform(&ctx, Action::AdjustCopy);
+        h.state_mut().selection.clear();
+        h.state_mut().selected = 2;
+        h.state_mut().perform(&ctx, Action::AdjustPaste);
+        let pasted = tri::adjust::read(&paths[2]).unwrap().expect("pasted");
+        assert_eq!(pasted.mono, mono.mono);
+    }
+
+    #[test]
+    fn the_adjustments_are_in_tabs_with_checkboxes_for_style_and_black_and_white() {
+        // Retours du 10/11/2026 : onglets Base, Style, N&B, Valeurs ; décalage créatif et
+        // noir et blanc sous une case (décochée puis recochée : ses valeurs reviennent) ;
+        // mélange normalisé par défaut.
         let (mut h, _dir) = harness();
         // Section en bas du panneau de droite : tout visible, sans défiler.
         h.set_size(vec2(1000.0, 2400.0));
@@ -28385,6 +28465,9 @@ mod tests {
         h.state_mut()
             .save_adjustments(vec![(path.clone(), Some(layers))]);
         h.run_steps(2);
+        // Le point signale l'onglet actif.
+        h.get_by_label("Style •").click();
+        h.run_steps(2);
         h.get_by_label("Décalage créatif").click();
         h.run_steps(3);
         assert_eq!(
@@ -28396,17 +28479,20 @@ mod tests {
         h.run_steps(3);
         let back = tri::adjust::read(&path).unwrap().expect("checked again");
         assert_eq!(back.creative.map(|c| c.exposure), Some(0.4), "values back");
+        h.get_by_label("N&B").click();
+        h.run_steps(2);
         h.get_by_label("Noir et blanc").click();
-        h.run_steps(3);
-        h.get_by_label("Filtre rouge").click();
         h.run_steps(3);
         let mono = tri::adjust::read(&path)
             .unwrap()
             .and_then(|l| l.mono)
             .unwrap();
-        assert_eq!(mono.preset_name(), Some("red"));
         assert!(mono.normalise, "normalised by default");
         h.get_by_label("Normalisé");
+        h.get_by_label("Filtre");
+        h.get_by_label("Valeurs").click();
+        h.run_steps(2);
+        h.get_by_label("Tout copier");
     }
 
     #[test]

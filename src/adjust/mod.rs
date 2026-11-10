@@ -255,6 +255,85 @@ impl Mixer {
         close(self.red, other.red) && close(self.green, other.green) && close(self.blue, other.blue)
     }
 
+    /// Bornes de chaque part (-100 % à 200 %).
+    pub const RANGE: (f32, f32) = (-1.0, 2.0);
+
+    /// Les parts (rouge, vert, bleu).
+    pub fn parts(self) -> [f32; 3] {
+        [self.red, self.green, self.blue]
+    }
+
+    /// Avec ces parts.
+    pub fn with_parts(self, [red, green, blue]: [f32; 3]) -> Mixer {
+        Mixer {
+            red,
+            green,
+            blue,
+            ..self
+        }
+    }
+
+    /// Ramené à 100 % (cocher « normalisé » sur un mélange qui n'y est pas), proportions
+    /// gardées ; une somme presque nulle reste telle quelle.
+    pub fn rescaled(self) -> Mixer {
+        let sum = self.sum();
+        if sum.abs() < 1e-3 {
+            return self;
+        }
+        self.with_parts(self.parts().map(|p| p / sum))
+    }
+
+    /// La part `channel` (0 rouge, 1 vert, 2 bleu) mise à `value` **sans changer le
+    /// total** (mode normalisé, retour du 10/11/2026) : l'écart est pris sur les deux autres
+    /// au prorata de leurs parts (moitié chacune si elles sont nulles ou de signes
+    /// opposés). Aux bornes ([`Mixer::RANGE`]), la part demandée s'arrête là où les autres
+    /// ne peuvent plus suivre.
+    pub fn set_locked(self, channel: usize, value: f32) -> Mixer {
+        let parts = self.parts();
+        let (lo, hi) = Self::RANGE;
+        let (i, j) = match channel {
+            0 => (1, 2),
+            1 => (0, 2),
+            _ => (0, 1),
+        };
+        let total = self.sum();
+        let place = |v: f32| -> Option<[f32; 3]> {
+            let (oi, oj) = (parts[i], parts[j]);
+            let rest = total - v;
+            let s = oi + oj;
+            let (ni, nj) = if oi * oj >= 0.0 && s.abs() > 1e-4 {
+                (oi / s * rest, oj / s * rest)
+            } else {
+                let d = (rest - s) / 2.0;
+                (oi + d, oj + d)
+            };
+            let ok = |x: f32| (lo - 1e-4..=hi + 1e-4).contains(&x);
+            let mut out = parts;
+            out[channel] = v;
+            out[i] = ni;
+            out[j] = nj;
+            (ok(ni) && ok(nj)).then_some(out)
+        };
+        let value = value.clamp(lo, hi);
+        if let Some(out) = place(value) {
+            return self.with_parts(out);
+        }
+        // Le plus loin possible vers `value`.
+        let (mut good, mut bad) = (parts[channel], value);
+        if place(good).is_none() {
+            return self;
+        }
+        for _ in 0..40 {
+            let mid = (good + bad) / 2.0;
+            if place(mid).is_some() {
+                good = mid;
+            } else {
+                bad = mid;
+            }
+        }
+        place(good).map_or(self, |out| self.with_parts(out))
+    }
+
     /// Le préréglage qui a ce mélange, s'il y en a un.
     pub fn preset_name(self) -> Option<&'static str> {
         Self::PRESETS
@@ -666,6 +745,51 @@ pub fn apply_to(
     out
 }
 
+/// Un geste fait sur l'image de référence (réglages `before` → `after`, prise de vue
+/// `reference_shot`) reporté sur une autre image de la sélection (`target`, prise de vue
+/// `target_shot`), retours du 10/11/2026 : **seul ce qui a changé** part, et
+/// **relativement** à ce que l'image a déjà :
+///
+/// - exposition (correction et style) : le même écart en IL ;
+/// - température de la correction : le même rapport en kelvins (règle de 3, chacune dans
+///   ses kelvins), teinte : le même écart ;
+/// - balance du style : le même écart (gains) ;
+/// - décalage créatif activé ou coupé, noir et blanc : copiés.
+pub fn propagate(
+    before: &Layers,
+    after: &Layers,
+    reference_shot: [f32; 3],
+    target: &Layers,
+    target_shot: [f32; 3],
+) -> Layers {
+    let mut out = *target;
+    let (b, a) = (before.correction, after.correction);
+    if (a.exposure - b.exposure).abs() > 1e-6 {
+        out.correction.exposure = target.correction.exposure + a.exposure - b.exposure;
+    }
+    if a.gains != b.gains {
+        let (kb, tb) = kelvin::of_gains(reference_shot, b.gains);
+        let (ka, ta) = kelvin::of_gains(reference_shot, a.gains);
+        let (k, t) = kelvin::of_gains(target_shot, target.correction.gains);
+        let k = (k * ka / kb.max(1.0)).clamp(kelvin::KELVIN_MIN, kelvin::KELVIN_MAX);
+        out.correction.gains = kelvin::gains(target_shot, k, t + ta - tb);
+    }
+    if before.creative != after.creative {
+        out.creative = after.creative.map(|a| {
+            let b = before.creative.unwrap_or_default();
+            let mine = target.creative.unwrap_or_default();
+            Adjust {
+                exposure: mine.exposure + a.exposure - b.exposure,
+                gains: mine.gains.then(b.gains.inverse()).then(a.gains),
+            }
+        });
+    }
+    if before.mono != after.mono {
+        out.mono = after.mono;
+    }
+    out
+}
+
 /// Exposition automatique : la correction d'exposition qui amène la luminance médiane de
 /// l'image (sans réglage, sa balance corrigée) à `target` (lumière linéaire, 0,18 : le gris
 /// moyen des posemètres).
@@ -1031,6 +1155,71 @@ mod tests {
         let json = serde_json::to_string(&on).unwrap();
         assert!(!json.contains("normalise"), "{json}");
         assert_eq!(serde_json::from_str::<Mixer>(&json).unwrap(), on);
+    }
+
+    #[test]
+    fn a_locked_mix_keeps_its_total_and_the_ratio_of_the_others() {
+        let orange = Mixer::preset("orange").unwrap(); // 60 / 40 / 0
+        let m = orange.set_locked(0, 0.7);
+        assert!(close(m.red, 0.7, 1e-5) && close(m.green, 0.3, 1e-5) && close(m.blue, 0.0, 1e-5));
+        let yellow = Mixer::preset("yellow").unwrap(); // 45 / 50 / 5
+        let m = yellow.set_locked(0, 0.55);
+        assert!(close(m.sum(), 1.0, 1e-5));
+        assert!(close(m.green / m.blue, 10.0, 1e-3), "{m:?}");
+        // Signes opposés (filtre rouge : -10 % de bleu) : moitié chacun.
+        let red = Mixer::preset("red").unwrap(); // 90 / 20 / -10
+        let m = red.set_locked(1, 0.4);
+        assert!(
+            close(m.red, 0.8, 1e-5) && close(m.blue, -0.2, 1e-5),
+            "{m:?}"
+        );
+        // Aux bornes : s'arrête là où les autres ne suivent plus.
+        let m = Mixer::default().set_locked(0, 2.0);
+        assert!(close(m.sum(), 1.0, 1e-4), "{m:?}");
+        assert!(
+            m.green >= Mixer::RANGE.0 - 1e-3 && m.blue >= Mixer::RANGE.0 - 1e-3,
+            "{m:?}"
+        );
+        let free = Mixer {
+            normalise: false,
+            ..Mixer::preset("orange").unwrap()
+        }
+        .with_parts([1.0, 1.0, 0.0]);
+        assert!(close(free.rescaled().sum(), 1.0, 1e-6));
+    }
+
+    #[test]
+    fn a_gesture_moves_the_other_images_relatively() {
+        let shot = kelvin::D65;
+        let mut a = Layers::default();
+        a.correction.exposure = 0.3;
+        a.correction.gains = kelvin::gains(shot, 5000.0, 0.0);
+        let mut b = Layers::default();
+        b.correction.exposure = 1.0;
+        b.correction.gains = kelvin::gains(shot, 6000.0, 10.0);
+        // Exposition : le même écart.
+        let mut after = a;
+        after.correction.exposure = 0.5;
+        let out = propagate(&a, &after, shot, &b, shot);
+        assert!(close(out.correction.exposure, 1.2, 1e-5), "{out:?}");
+        assert_eq!(
+            out.correction.gains, b.correction.gains,
+            "balance untouched"
+        );
+        // Température : règle de 3 ; teinte : même écart.
+        let mut after = a;
+        after.correction.gains = kelvin::gains(shot, 5500.0, 4.0);
+        let out = propagate(&a, &after, shot, &b, shot);
+        let (k, t) = kelvin::of_gains(shot, out.correction.gains);
+        assert!(
+            (k - 6600.0).abs() < 40.0 && (t - 14.0).abs() < 1.0,
+            "{k} {t}"
+        );
+        assert_eq!(out.correction.exposure, 1.0, "exposure untouched");
+        // Noir et blanc : copié.
+        let mut after = a;
+        after.mono = Mixer::preset("green");
+        assert_eq!(propagate(&a, &after, shot, &b, shot).mono, after.mono);
     }
 
     #[test]

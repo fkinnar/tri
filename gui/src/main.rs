@@ -40,6 +40,7 @@ mod crop;
 mod develop_batch;
 mod export;
 mod files;
+mod fine_slider;
 mod fonts;
 mod grid;
 mod grid_render;

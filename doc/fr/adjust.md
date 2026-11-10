@@ -120,34 +120,81 @@ images plates) et tient compte du noir et blanc.
 
 ## Rapport
 
-`report` : exposition totale à reporter (correction + créatif, aussi séparées), chaleur,
-teinte, gains, mélange en pour cent. Première étape avant d'écrire dans les formats des
-logiciels de développement : on reporte ces valeurs à la main.
+`report` : exposition totale à reporter (correction + créatif, aussi séparées), balance
+en kelvins (et celle de la prise de vue), chaleur, teinte, gains, mélange appliqué en pour
+cent. Première étape avant d'écrire dans les formats des logiciels de développement : on
+reporte ces valeurs à la main (onglet « Valeurs »).
 
 ## Dans l'interface
 
 Section **« Réglages »** du panneau de droite (en bas, après les EXIF ; grille et plein
-écran), pour l'image courante (`gui/src/app/adjust.rs`) :
+écran), pour l'image courante (`gui/src/app/adjust.rs`), réorganisée après le premier
+essai (retours du 10/11/2026) :
 
-- **Correction** : exposition et **« Auto »** ; température (K) et teinte ; la liste des
-  balances (telle que prise, auto sur toute l'image, préréglages avec leurs kelvins) ;
-  **« Pipette »** : en plein écran, un clic sur une zone qui devrait être grise (`[gui]
-  adjust_eyedropper_size`, 4 % de l'image) ou un **cadre tracé** pour une balance auto
-  sur cette partie de l'image ; depuis la grille, le bouton ouvre le plein écran. Toutes
-  les valeurs se **tapent** : clic sur le champ à côté du curseur (exposition au centième
-  d'IL, kelvins à l'unité).
-- **Décalage créatif** : case, puis exposition, chaleur, teinte. Décochée puis recochée
-  dans la session : ses valeurs reviennent.
-- **Noir et blanc** : case, filtres en boutons (neutre, rouge, orange, jaune, vert, bleu),
-  rouge / vert / bleu en %, **« Normalisé »** et le total du mélange.
-- Le **rapport** sous les curseurs (exposition totale, correction, créatif ; balance ;
-  mélange), et **« Copier les valeurs »**.
-- **« Appliquer à la sélection »** : les réglages de l'image courante vers les autres
-  images sélectionnées, en modes par défaut (corrections harmonisées, mesurées sur les
-  vignettes) ; un seul pas de l'historique.
-- **« Avant »** : toutes les images sans leurs réglages (bascule), sans toucher aux
-  sidecars.
-- **« Réinitialiser »**. Double-clic sur un curseur : valeur par défaut.
+- **« Synchroniser N images »**, en tête : grisée avec une seule image, cochée par défaut
+  dès qu'il y en a plusieurs. Voir plus bas.
+- **Quatre onglets**, retenus dans la session, un point « • » sur ceux qui changent
+  l'image (un réglage caché se voit) :
+  - **Base** : exposition et **« Auto »** ; température (K), avec la liste des balances
+    (telle que prise, auto sur toute l'image, préréglages avec leurs kelvins) et la
+    **« Pipette »** (en plein écran, un clic sur une zone qui devrait être grise, `[gui]
+    adjust_eyedropper_size` ; ou un **cadre tracé** pour une balance auto sur cette
+    partie ; depuis la grille, le bouton ouvre le plein écran) ; teinte.
+  - **Style** : case « Décalage créatif », puis exposition, chaleur, teinte.
+  - **N&B** : case « Noir et blanc », le **filtre** (liste de préréglages : neutre,
+    rouge, orange, jaune, vert, bleu ; « Personnalisé » dès qu'on touche au mélange),
+    rouge / vert / bleu en %, **« Normalisé »** (coché par défaut) et le total.
+  - **Valeurs** : le tableau à reporter dans un logiciel de développement (exposition
+    totale, base, style ; balance et prise de vue en kelvins ; balance du style ;
+    mélange), clic droit sur une ligne pour la copier, « Tout copier ».
+- Chaque réglage : son **titre** (avec Auto, la liste ou la pipette à droite), puis le
+  **curseur sur toute la largeur** et sa valeur à taper (exposition au centième d'IL,
+  kelvins à l'unité). Le curseur commun de l'interface : glisser par grands crans, Maj +
+  glisser pour le réglage fin ; double-clic : valeur par défaut (température et teinte :
+  la balance de la prise de vue).
+- Décochés puis recochés dans la session, décalage créatif et noir et blanc retrouvent
+  leurs valeurs.
+- **Normalisé** : le total reste à 100 %. Déplacer un canal déplace les deux autres en
+  sens inverse, au prorata de leurs parts (moitié chacun s'ils sont nuls ou de signes
+  opposés) ; aux bornes (-100 % à 200 %), le canal tiré s'arrête là où les autres ne
+  suivent plus. Cocher la case sur un mélange qui n'est pas à 100 % le remet à l'échelle
+  (`Mixer::set_locked`, `Mixer::rescaled`).
+- Boutons communs : **« Copier les réglages »** / **« Coller les réglages »** (voir plus
+  bas), **« Harmoniser la sélection »** (exposition et balance des images sélectionnées
+  alignées sur l'image courante, sans toucher au style ni au noir et blanc ; un pas),
+  **« Avant »** (toutes les images sans leurs réglages, bascule, sidecars intacts),
+  **« Réinitialiser »**.
+
+### Synchroniser une sélection
+
+Plusieurs images sélectionnées et la case cochée : ce qu'on fait sur l'image courante
+part vers toute la sélection, en **un seul pas** de l'historique. Règle : **un curseur
+décale, un bouton calcule** (`tri::adjust::propagate`).
+
+| Réglage | Sur les autres images |
+|---|---|
+| Exposition (curseur) | même écart en IL (A 0,3 → 0,5 : B 1,0 → 1,2) |
+| Température (curseur) | même rapport en kelvins (règle de 3, chacune dans ses kelvins) |
+| Teinte, style (curseurs) | même écart |
+| Auto, préréglages, telle que prise | recalculés sur chaque image (une image à -1 IL revient à 0, celle à 0 ne bouge pas) |
+| Pipette | l'image courante neutralisée sur la zone, les autres harmonisées sur elle |
+| Noir et blanc, cases | copiés |
+
+L'exposition est additive et non proportionnelle : l'IL est déjà une échelle relative
+(+0,2 IL = la lumière × 1,15 sur chaque image) ; une règle de 3 sur les IL éclaircirait
+plus les images déjà corrigées et ne marcherait pas depuis 0. Les kelvins, toujours
+positifs, suivent bien une règle de 3 ; la teinte, autour de 0, un écart. Seule la
+**couche touchée** part : changer le noir et blanc ne réharmonise pas l'exposition.
+Pendant le glissement, seule l'image courante bouge à l'écran ; la sélection suit au
+relâchement.
+
+### Copier / coller
+
+**« Copier les réglages »** retient ceux de l'image courante **et sa vignette** ;
+**« Coller les réglages »** les pose sur l'image courante (et la sélection synchronisée),
+même dans un autre dossier : exposition et balance **harmonisées** sur l'image copiée,
+style et noir et blanc copiés (modes par défaut de `apply_to`). Pas de raccourci par
+défaut : Ctrl+Maj+C et Ctrl+Maj+V sont déjà pris (copier une pile, version précédente).
 
 Les curseurs montrent le changement tout de suite (vignette et grande image) ; le sidecar
 est écrit quand on lâche, un pas de l'historique par geste (`u` / Ctrl+Z l'annule). Les
@@ -158,7 +205,7 @@ mélangeur exact) ; l'exposition sur les données du capteur reste pour la ligne
 commande et l'export à venir. Un développement (darktable…) n'est jamais réglé.
 
 Actions sans raccourci par défaut, dans la palette : `core.adjust.before_after`,
-`core.adjust.apply`.
+`core.adjust.apply` (harmoniser la sélection), `core.adjust.copy`, `core.adjust.paste`.
 
 ## Ligne de commande
 

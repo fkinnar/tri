@@ -115,33 +115,79 @@ images) and accounts for black and white.
 
 ## Report
 
-`report`: total exposure to copy (correction + creative, also separate), warmth, tint,
-gains, mixer in percent. First stage before writing into development software formats:
-these values are copied by hand.
+`report`: total exposure to copy (correction + creative, also separate), balance in
+kelvins (and the as-shot one), warmth, tint, gains, applied mix in percent. First stage
+before writing into development software formats: these values are copied by hand
+("Values" tab).
 
 ## In the interface
 
 **"Adjustments"** section of the right panel (at the bottom, after EXIF; grid and full
-screen), for the current image (`gui/src/app/adjust.rs`):
+screen), for the current image (`gui/src/app/adjust.rs`), reorganised after the first
+try (feedback of 2026-11-10):
 
-- **Correction**: exposure and **"Auto"**; temperature (K) and tint; the white balance
-  list (as shot, auto on the whole image, presets with their kelvins); **"Eyedropper"**:
-  in full screen, a click on a zone that should be grey (`[gui]
-  adjust_eyedropper_size`, 4 % of the image) or a **frame drawn** for an auto balance on
-  that part of the image; from the grid, the button opens the full screen. Every value
-  can be **typed**: click the field next to the slider (exposure to the hundredth of an
-  EV, kelvins to the unit).
-- **Creative offset**: checkbox, then exposure, warmth, tint. Unchecked then checked
-  again in the session: its values come back.
-- **Black and white**: checkbox, filter buttons (neutral, red, orange, yellow, green,
-  blue), red / green / blue in %, **"Normalised"** and the total of the mix.
-- The **report** under the sliders (total exposure, correction, creative; balance; mix),
-  and **"Copy the values"**.
-- **"Apply to selection"**: the current image's adjustments to the other selected images,
-  in the default modes (corrections matched, measured on the thumbnails); one history
-  step.
-- **"Before"**: every image without its adjustments (toggle), sidecars untouched.
-- **"Reset"**. Double-click a slider: default value.
+- **"Sync N images"**, at the top: greyed with a single image, checked by default as
+  soon as there are several. See below.
+- **Four tabs**, kept for the session, a dot "•" on those that change the image (a
+  hidden adjustment shows):
+  - **Base**: exposure and **"Auto"**; temperature (K), with the white balance list (as
+    shot, auto on the whole image, presets with their kelvins) and the **"Eyedropper"**
+    (in full screen, a click on a zone that should be grey, `[gui]
+    adjust_eyedropper_size`; or a **frame drawn** for an auto balance on that part; from
+    the grid, the button opens the full screen); tint.
+  - **Style**: "Creative offset" checkbox, then exposure, warmth, tint.
+  - **B&W**: "Black and white" checkbox, the **filter** (preset list: neutral, red,
+    orange, yellow, green, blue; "Custom" as soon as the mix is touched), red / green /
+    blue in %, **"Normalised"** (checked by default) and the total.
+  - **Values**: the table to copy into a development program (total exposure, base,
+    style; balance and as shot in kelvins; style balance; mix), right-click a row to copy
+    it, "Copy all".
+- Each setting: its **title** (with Auto, the list or the eyedropper on the right), then
+  the **slider across the whole width** and its value to type (exposure to the hundredth
+  of an EV, kelvins to the unit). The interface's common slider: drag by large steps,
+  Shift + drag for fine adjustment; double-click: default value (temperature and tint:
+  the as-shot balance).
+- Unchecked then checked again in the session, creative offset and black and white get
+  their values back.
+- **Normalised**: the total stays at 100 %. Moving a channel moves the other two the
+  opposite way, in proportion to their shares (half each if they are zero or of opposite
+  signs); at the bounds (-100 % to 200 %), the dragged channel stops where the others
+  can't follow. Checking the box on a mix not at 100 % rescales it (`Mixer::set_locked`,
+  `Mixer::rescaled`).
+- Common buttons: **"Copy adjustments"** / **"Paste adjustments"** (see below),
+  **"Harmonise the selection"** (exposure and balance of the selected images matched to
+  the current image, style and black and white untouched; one step), **"Before"** (every
+  image without its adjustments, toggle, sidecars untouched), **"Reset"**.
+
+### Syncing a selection
+
+Several images selected and the box checked: what is done on the current image goes to
+the whole selection, in **one** history step. Rule: **a slider shifts, a button
+computes** (`tri::adjust::propagate`).
+
+| Setting | On the other images |
+|---|---|
+| Exposure (slider) | same difference in EV (A 0.3 → 0.5: B 1.0 → 1.2) |
+| Temperature (slider) | same ratio in kelvins (rule of three, each in its own kelvins) |
+| Tint, style (sliders) | same difference |
+| Auto, presets, as shot | computed for each image (an image at -1 EV comes back to 0, the one at 0 doesn't move) |
+| Eyedropper | the current image neutralised on the zone, the others matched to it |
+| Black and white, checkboxes | copied |
+
+Exposure is additive, not proportional: EV is already a relative scale (+0.2 EV = light
+× 1.15 on every image); a rule of three on EV would brighten the images already corrected
+more, and wouldn't work from 0. Kelvins, always positive, do follow a rule of three;
+tint, around 0, a difference. Only the **layer touched** goes: changing the black and
+white doesn't re-match the exposure. While dragging, only the current image moves on
+screen; the selection follows on release.
+
+### Copy / paste
+
+**"Copy adjustments"** keeps the current image's **and its thumbnail**; **"Paste
+adjustments"** puts them on the current image (and the synced selection), even in
+another folder: exposure and balance **matched** to the copied image, style and black
+and white copied (`apply_to` default modes). No default shortcut: Ctrl+Shift+C and
+Ctrl+Shift+V are taken (copy a stack, previous version).
 
 Sliders show the change at once (thumbnail and large image); the sidecar is written on
 release, one history step per gesture (`u` / Ctrl+Z undoes it). Adjustments are read in
@@ -152,7 +198,7 @@ on the sensor data stays for the command line and the export to come. A developm
 (darktable…) is never adjusted.
 
 Actions without a default shortcut, in the palette: `core.adjust.before_after`,
-`core.adjust.apply`.
+`core.adjust.apply` (harmonise the selection), `core.adjust.copy`, `core.adjust.paste`.
 
 ## Command line
 

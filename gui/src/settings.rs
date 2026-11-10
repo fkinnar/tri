@@ -212,6 +212,9 @@ pub struct GuiSettings {
     pub report_log_entries: usize,
     /// Réglages : côté de la zone mesurée par la pipette, en fraction de l'image.
     pub adjust_eyedropper_size: f32,
+    /// Curseurs : vitesse du réglage fin (Maj + glisser), en fraction du déplacement de
+    /// la souris.
+    pub slider_fine_speed: f32,
     /// Flèches des noms de touches (←, →…) : vide, une police du système qui les a ;
     /// un chemin, cette police ; `"none"`, en toutes lettres.
     pub arrow_font: String,
@@ -326,6 +329,7 @@ impl Default for GuiSettings {
             trace_slow_ms: 100,
             report_log_entries: 20,
             adjust_eyedropper_size: 0.04,
+            slider_fine_speed: 0.1,
             arrow_font: String::new(),
             arrow_font_scale: 1.0,
             window: [1400.0, 900.0],
