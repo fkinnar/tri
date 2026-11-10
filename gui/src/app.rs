@@ -3245,6 +3245,9 @@ impl TriApp {
         // Clic droit : garder le cache dans ce dossier / sur ce disque, ou plus ici.
         let mut cache_menu: Option<(PathBuf, bool)> = None;
         let mut embed_menu: Option<(PathBuf, Option<bool>)> = None;
+        // Réglages automatiques de tout le dossier ouvert (vrai : exposition ; faux :
+        // balance).
+        let mut adjust_menu: Option<bool> = None;
         let location = self.settings.cache.location;
         let cache = self.engine.as_ref().map(|e| e.cache.clone());
         let mut dropped: Option<(Dragged, PathBuf)> = None;
@@ -3579,6 +3582,21 @@ impl TriApp {
                             entry(ui, Action::Sidecars, t!("folder-menu-sidecars"));
                             entry(ui, Action::EmbedNotes, t!("folder-menu-embed-notes"));
                             entry(ui, Action::ImportNotes, t!("folder-menu-import-notes"));
+                            // Réglages auto de toutes ses images (retour du 10/11/2026) :
+                            // chacune d'après la sienne, mesurée sur sa vignette.
+                            ui.menu_button(t!("folder-menu-adjust"), |ui| {
+                                for (exposure, text) in [
+                                    (true, t!("folder-menu-adjust-exposure")),
+                                    (false, t!("folder-menu-adjust-balance")),
+                                ] {
+                                    if ui.button(text).clicked() {
+                                        adjust_menu = Some(exposure);
+                                        ui.close();
+                                    }
+                                }
+                            })
+                            .response
+                            .on_hover_text(t!("folder-menu-adjust-tip"));
                         }
                         // Notes dans les images, propre à ce dossier (issue n° 368 :
                         // « ce support amovible-là, oui ») ; pas ses sous-dossiers.
@@ -3762,6 +3780,9 @@ impl TriApp {
         // action qu'au clavier.
         if let Some((path, on)) = cache_menu {
             self.keep_cache_in(path, on);
+        }
+        if let Some(exposure) = adjust_menu {
+            self.adjust_folder_auto(exposure);
         }
         if let Some((path, value)) = embed_menu {
             match self.folder.notes.set_folder_embed(&path, value) {
@@ -28576,6 +28597,35 @@ mod tests {
         let left = tri::adjust::read(&path).unwrap().expect("base kept");
         assert_eq!(left.creative, None, "style reset");
         assert_eq!(left.correction.exposure, 0.5, "base kept");
+    }
+
+    #[test]
+    fn the_folder_menu_sets_auto_exposure_on_every_image_in_one_step() {
+        // Retour du 10/11/2026 : clic droit sur le dossier, « Réglages », exposition auto
+        // de toutes ses images (chacune d'après la sienne).
+        let (mut h, _dir) = harness();
+        run_until(&mut h, |app| {
+            app.files.len() == 3 && app.files.iter().all(|f| app.adjust_base(&f.path).is_some())
+        });
+        let paths: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        h.state_mut().adjust_folder_auto(true);
+        let evs: Vec<f32> = paths
+            .iter()
+            .map(|p| {
+                tri::adjust::read(p)
+                    .unwrap()
+                    .expect("set")
+                    .correction
+                    .exposure
+            })
+            .collect();
+        assert!(evs.iter().all(|&e| e != 0.0), "{evs:?}");
+        assert!(evs[0] != evs[1], "each from its own: {evs:?}");
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::Undo);
+        for p in &paths {
+            assert_eq!(tri::adjust::read(p).unwrap(), None, "one step");
+        }
     }
 
     #[test]

@@ -317,10 +317,15 @@ impl TriApp {
             .original
     }
 
-    /// La vignette de `path` sans réglage, base des mesures (JPEG : sRGB).
+    /// La vignette de `path` sans réglage, base des mesures (JPEG : sRGB). Une image du
+    /// dossier ouvert, même masquée par un filtre.
     pub(super) fn adjust_base(&self, path: &Path) -> Option<tri::adjust::Base> {
         let engine = self.engine.as_ref()?;
-        let file = self.files.iter().find(|f| f.path == path)?;
+        let file = self
+            .files
+            .iter()
+            .chain(self.folder.files.iter())
+            .find(|f| f.path == path)?;
         let key = preview::key(file, Level::Thumbnail, &engine.preview).ok()?;
         Some(tri::adjust::Base {
             bitmap: engine.cache.get(&key)?,
@@ -424,6 +429,39 @@ impl TriApp {
         let base = self.adjust_base(path)?;
         layers.correction.gains = tri::adjust::auto_balance(&base, &self.settings.adjust);
         Some(layers)
+    }
+
+    /// Clic droit sur le dossier ouvert, « Réglages » : exposition (`exposure`) ou balance
+    /// automatique de toutes ses images, chacune d'après la sienne (retour du 10/11/2026) ;
+    /// un seul pas de l'historique. Une image sans vignette prête est laissée de côté.
+    pub(super) fn adjust_folder_auto(&mut self, exposure: bool) {
+        self.adjust_dirty = None;
+        self.adjust_gesture = None;
+        let images: Vec<PathBuf> = self.folder.files.iter().map(|f| f.path.clone()).collect();
+        let mut changes = Vec::new();
+        let mut missing = 0;
+        for image in images {
+            let layers = self.adjust_layers_now(&image);
+            let new = if exposure {
+                self.auto_exposure_of(&image, layers)
+            } else {
+                self.auto_balance_of(&image, layers)
+            };
+            match new {
+                Some(l) => changes.push((image, Some(l))),
+                None => missing += 1,
+            }
+        }
+        let n = changes.len();
+        self.save_adjustments(changes);
+        self.notice = Some((
+            if missing > 0 {
+                t!("adjust-applied-missing", n = n, missing = missing)
+            } else {
+                t!("adjust-applied", n = n)
+            },
+            false,
+        ));
     }
 
     /// Zone de la pipette autour de `point` (en fractions de l'image) : un carré de

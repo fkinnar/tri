@@ -194,6 +194,14 @@ essai (retours du 10/11/2026) :
   **« Avant »** (toutes les images sans leurs réglages, bascule, sidecars intacts),
   **« Réinitialiser »**.
 
+### Tout un dossier
+
+Clic droit sur le **dossier ouvert**, **« Réglages »** : exposition auto ou balance auto
+de toutes ses images (même masquées par un filtre), chacune d'après la sienne, mesurée sur
+sa vignette ; un seul pas de l'historique, les images sans vignette prête laissées de côté
+(bilan dans la barre d'état). Seulement le dossier ouvert, comme les entrées des notes :
+ses vignettes sont là.
+
 ### Synchroniser une sélection
 
 Plusieurs images sélectionnées et la case cochée : ce qu'on fait sur l'image courante

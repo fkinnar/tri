@@ -186,6 +186,13 @@ try (feedback of 2026-11-10):
   the current image, style and black and white untouched; one step), **"Before"** (every
   image without its adjustments, toggle, sidecars untouched), **"Reset"**.
 
+### A whole folder
+
+Right-click the **open folder**, **"Adjustments"**: auto exposure or auto white balance
+of every image (even hidden by a filter), each from its own, measured on its thumbnail;
+one history step, images without a thumbnail ready left out (summary in the status bar).
+Only the open folder, like the notes entries: its thumbnails are there.
+
 ### Syncing a selection
 
 Several images selected and the box checked: what is done on the current image goes to
