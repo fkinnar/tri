@@ -559,6 +559,8 @@ pub struct TriApp {
     /// Pipette armée (plein écran) : le prochain clic sur l'image neutralise la balance
     /// sur la zone cliquée.
     adjust_eyedropper: bool,
+    /// Cadre de la pipette en cours de tracé (écran) : départ, dernier point.
+    adjust_frame: Option<(egui::Pos2, egui::Pos2)>,
     /// Couleur de l'éclairage de la prise de vue de chaque image (kelvins des réglages),
     /// lue avec ses réglages.
     adjust_shot: HashMap<PathBuf, [f32; 3]>,
@@ -1393,6 +1395,7 @@ impl TriApp {
             adjust_read: mpsc::channel(),
             adjust_dirty: None,
             adjust_eyedropper: false,
+            adjust_frame: None,
             adjust_shot: HashMap::new(),
             adjust_tab: Default::default(),
             adjust_sync: true,
@@ -11218,9 +11221,23 @@ impl TriApp {
                     pos2(p.x.clamp(0.0, 1.0), p.y.clamp(0.0, 1.0))
                 })
             };
-            let origin = ctx.input(|i| i.pointer.press_origin());
+            // Le cadre tracé : départ et dernier point retenus pendant le geste (au
+            // relâchement, egui n'a plus le point de départ ; retour du 10/11/2026 : il fallait
+            // cliquer une fois de plus).
+            if response.drag_started() {
+                self.adjust_frame = ctx
+                    .input(|i| i.pointer.press_origin())
+                    .or(response.interact_pointer_pos())
+                    .map(|a| (a, a));
+            }
             if response.dragged()
-                && let (Some(a), Some(b)) = (origin, response.interact_pointer_pos())
+                && let (Some((a, _)), Some(b)) =
+                    (self.adjust_frame, response.interact_pointer_pos())
+            {
+                self.adjust_frame = Some((a, b));
+            }
+            if response.dragged()
+                && let Some((a, b)) = self.adjust_frame
             {
                 let frame = Rect::from_two_pos(a, b);
                 painter.rect_stroke(
@@ -11237,10 +11254,12 @@ impl TriApp {
                 );
             }
             let zone = if response.drag_stopped() {
-                match (
-                    origin.and_then(to_image),
-                    response.interact_pointer_pos().and_then(to_image),
-                ) {
+                let (a, b) = self.adjust_frame.take().unzip();
+                let b = response
+                    .interact_pointer_pos()
+                    .or(ctx.input(|i| i.pointer.latest_pos()))
+                    .or(b);
+                match (a.and_then(to_image), b.and_then(to_image)) {
                     (Some(a), Some(b)) => {
                         let r = Rect::from_two_pos(a, b);
                         Some(if r.width() < 0.005 || r.height() < 0.005 {
@@ -28406,6 +28425,44 @@ mod tests {
         assert!(!h.state().adjust_eyedropper, "used once");
         let notice = h.state().notice.clone().unwrap().0;
         assert!(notice.starts_with("Pipette"), "{notice}");
+        // Un cadre tracé (retour du 10/11/2026 : il fallait cliquer une fois de plus après
+        // l'avoir lâché).
+        h.state_mut()
+            .save_adjustments(vec![(path.clone(), Some(cold))]);
+        h.run_steps(2);
+        let button = h.get_by_label("Pipette").rect().center();
+        mouse_click(&mut h, button);
+        h.run_steps(2);
+        assert!(h.state().adjust_eyedropper, "armed again");
+        let (from, to) = (egui::pos2(300.0, 650.0), egui::pos2(420.0, 760.0));
+        h.event(UiEvent::PointerMoved(from));
+        h.run_steps(1);
+        h.event(UiEvent::PointerButton {
+            pos: from,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(1);
+        for step in 1..=6 {
+            h.event(UiEvent::PointerMoved(
+                from + (to - from) * step as f32 / 6.0,
+            ));
+            h.run_steps(1);
+        }
+        h.event(UiEvent::PointerButton {
+            pos: to,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(2);
+        assert!(!h.state().adjust_eyedropper, "the frame is enough");
+        let framed = tri::adjust::read(&path).unwrap().expect("balance set");
+        assert_ne!(
+            framed.correction.gains, cold.correction.gains,
+            "frame measured"
+        );
         let layers = tri::adjust::read(&path).unwrap().expect("balance set");
         assert!(layers.correction.gains.red > 1.05, "{layers:?}");
         assert_ne!(
