@@ -111,6 +111,12 @@ action-core-file-rename = Renommer…
 action-core-file-delete = Mettre à la corbeille…
 action-core-file-reveal = { $os ->
     [macos] Afficher dans le Finder
+    [windows] Afficher dans l'Explorateur
+    [nemo] Afficher dans Nemo
+    [nautilus] Afficher dans Fichiers
+    [dolphin] Afficher dans Dolphin
+    [thunar] Afficher dans Thunar
+    [caja] Afficher dans Caja
    *[other] Afficher dans le gestionnaire de fichiers
 }
 action-core-file-edit = Ouvrir dans l'éditeur externe
@@ -518,7 +524,6 @@ log-copy = Copier
 log-copy-tip = Copier cette entrée et son détail
 log-copy-all = Tout copier
 log-copy-all-tip = Copier les entrées montrées, avec leur détail
-log-reveal = Afficher dans le gestionnaire de fichiers
 report-title = Signaler un problème
 report-log-intro = Les dernières entrées du journal aideront à comprendre le problème. Elles seront jointes au formulaire de GitHub.
 report-log-privacy = Relisez-les avant d'envoyer : les chemins contiennent les noms de vos dossiers. Modifiez ou effacez ce que vous voulez.
@@ -842,7 +847,6 @@ export-report-errors = { $n ->
     [one] 1 échec
    *[other] { $n } échecs
 }
-export-report-reveal = Afficher dans le gestionnaire de fichiers
 export-report-clear = Effacer la liste
 export-report-open = Rapport d'export
 rename-failed = renommage impossible : { $error }
@@ -1100,7 +1104,7 @@ folder-contents = { $files ->
 }, tout compris.
 folder-failed = { $error }
 folders-place-root = « { $name } » est un emplacement : il ne se renomme, ne se déplace ni ne se supprime
-folder-menu-new = Nouveau dossier…
+folder-menu-new = Nouveau…
 folder-menu-rename = Renommer…
 folder-menu-move = Déplacer vers…
 folder-menu-copy = Copier vers…
@@ -1160,7 +1164,7 @@ action-plugin-art-develop = Développer dans ART (l'image affichée)
 action-plugin-rawtherapee-open_folder = Dossiers : ouvrir le dossier pointé dans RawTherapee
 action-plugin-art-open_folder = Dossiers : ouvrir le dossier pointé dans ART
 action-core-develop-folder = Développer tout le dossier en fond (chaque image dans le logiciel de son développement)
-folder-menu-develop = Développer tout le dossier…
+folder-menu-develop = Tout développer…
 action-core-file-embed_notes = Inscrire les notes dans les images (JPEG, PNG, WebP, TIFF, HEIC)
 kw-core-file-embed-notes = inscrire écrire notes étoiles images fichiers jpeg en-tête embarqué explorateur windows spotlight
 folder-menu-embed-notes = Inscrire les notes dans les images
@@ -1172,7 +1176,14 @@ embed-failed = { $n } images n'ont pas reçu leurs notes : { $first }
 action-core-file-import_notes = Relire les notes depuis les images (changées dans un autre logiciel)
 kw-core-file-import-notes = relire importer lire notes étoiles images fichiers jpeg en-tête embarqué xnview explorateur
 folder-menu-import-notes = Relire les notes depuis les images
-folder-menu-adjust = Réglages
+folder-menu-adjust = Réglages auto
+folder-group-open = Accès
+folder-group-files = Dossier
+folder-group-notes = Notes
+folder-group-develop = Développement
+folder-group-preferences = Préférences
+menu-group-inline = Mettre ce groupe au premier niveau du menu
+menu-group-fold = Replier ce groupe en sous-menu
 folder-menu-adjust-auto = Auto
 folder-menu-adjust-exposure = Exposition
 folder-menu-adjust-balance = Balance des blancs
@@ -1213,7 +1224,7 @@ conflict-flag-accepted = acceptée
 conflict-flag-rejected = rejetée
 folder-menu-embed = Notes dans les images
 folder-menu-embed-tip = Inscrire d'office les notes dans les images de ce dossier (pas ses sous-dossiers), quel que soit le réglage général
-folder-embed-default = Selon les réglages ({ $level })
+folder-embed-default = Selon les réglages
 folder-embed-always = Toujours
 folder-embed-never = Jamais
 folder-embed-set-default = { $name } : notes dans les images selon les réglages

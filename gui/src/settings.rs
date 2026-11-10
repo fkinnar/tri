@@ -1278,7 +1278,7 @@ impl ViewSettings {
 }
 
 /// Section `[gui.folders]` : panneau des dossiers, à gauche de la grille.
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct FolderSettings {
     /// Panneau affiché au démarrage (Maj+D l'affiche ou le masque).
@@ -1313,6 +1313,10 @@ pub struct FolderSettings {
     /// Lecture d'un dossier : une demande du type d'une entrée plus lente que ce délai
     /// (ms ; partage monté par GVFS sous Linux) fait se fier aux noms pour la suite.
     pub type_check_ms: u64,
+    /// Clic droit sur un dossier : groupes montrés au premier niveau du menu plutôt qu'en
+    /// sous-menu (`open`, `files`, `notes`, `develop`, `preferences` ; issue n° 406). Le bouton en
+    /// haut à droite d'un sous-menu, ou sur le titre d'un groupe, l'écrit ici.
+    pub menu_inline: Vec<String>,
 }
 
 impl Default for FolderSettings {
@@ -1331,6 +1335,7 @@ impl Default for FolderSettings {
             running_check_ms: 1000,
             open_wait_ms: 150,
             type_check_ms: 20,
+            menu_inline: vec!["open".into(), "files".into()],
         }
     }
 }

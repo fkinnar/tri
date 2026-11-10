@@ -169,7 +169,7 @@ capteur entier, sont masqués sur un développé (recadré). Sans darktable, la 
 pas proposée et `Maj+B` le dit.
 
 **Tout un dossier en fond** (25/10/2026, issue n° 69) : `Ctrl+Maj+B` (le dossier ouvert)
-ou le clic droit sur un dossier du panneau, « Développer tout le dossier (darktable) ».
+ou le clic droit sur un dossier du panneau, « Développement », « Tout développer… ».
 Chaque image qui a un sidecar darktable à historique est rendue l'une après l'autre
 (`gui/src/develop_batch.rs`), par le même producteur que `Maj+B` (`CachedPreviews`,
 niveau `Developed`) : un autre logiciel de rendu branché là servira de même. Déjà en
@@ -196,7 +196,7 @@ même règle que le filtre « développées » ; décidé le 31/10/2026 : darkta
 par défaut, mais sans développement il n'y a rien à voir), ou le rendu RAW (LibRaw),
 toujours là. Le logiciel choisi passe devant celui du
 développement pour cette image, le temps de la session (`develop_choice`). Au clic
-droit sur un dossier, « Développer tout le dossier… » ouvre une boîte : chaque image
+droit sur un dossier, « Développement », « Tout développer… » ouvre une boîte : chaque image
 dans le logiciel de son développement (sinon elle garde le rendu RAW), ou tout dans un
 logiciel (les images qu'il a développées). `Ctrl+Maj+B` : chaque image dans le sien,
 sans boîte.

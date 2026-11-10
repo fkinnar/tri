@@ -50,7 +50,7 @@ cannot change without updating its documentation.
 | `[gui]` | Theme, shortcut profiles, key sequence delay (`gg`), window, RAW render policy, loading budget, focus mode for an image argument (`image_focus`) | interface |
 | `[gui.grid]` | Grid dimensions (including `info_min_cell`, below which the info hides), thumbnails in memory, size of the ratings, empty marks drawn (`empty_marks`), opacity of a rejected photo, hover frame | interface |
 | `[gui.view]` | Wait before a RAW 100 %, large textures in memory, keyboard pan step, size of the ratings | interface |
-| `[gui.folders]` | Folders panel: shown, width, indentation, hidden folders | interface |
+| `[gui.folders]` | Folders panel: shown, width, indentation, hidden folders, right-click groups at the top level | interface |
 | `[gui.histogram]` | Histogram (shown, EV / linear scale, size of the large histogram, EV shown), zones (shown, opacity), badge thresholds | interface |
 | `[gui.metadata]` | Metadata panel: shown, width, histogram in the grid and its height, keyboard slider step, air below each group of settings (`group_gap`) | interface |
 | `[gui.sharpness]` | Sharpness map shown at startup, rotation colors, opacity | interface |
