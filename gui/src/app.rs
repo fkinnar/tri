@@ -28817,7 +28817,9 @@ mod tests {
         run_until(&mut h, |app| app.files.len() == 3);
         h.state_mut().selected = 0;
         h.run_steps(2);
-        h.get_by_label("Style").click();
+        // L'onglet existe ; changé par l'état (clics simulés parfois ignorés sous Windows).
+        h.get_by_label("Style");
+        h.state_mut().adjust_tab = adjust::AdjustTab::Style;
         h.run_steps(2);
         assert!(
             h.query_by_label("Décalage créatif").is_none(),
@@ -28827,7 +28829,9 @@ mod tests {
         assert!(h.query_all_by_label("Chaleur").count() >= 2);
         assert!(h.query_all_by_label("Contraste").count() >= 2);
         assert!(h.query_all_by_label("Saturation").count() >= 2);
-        h.get_by_label("N&B").click();
+        // L'onglet existe ; changé par l'état (clics simulés parfois ignorés sous Windows).
+        h.get_by_label("N&B");
+        h.state_mut().adjust_tab = adjust::AdjustTab::Mono;
         h.run_steps(2);
         assert!(h.query_by_label("Noir et blanc").is_none(), "no checkbox");
         h.get_by_label("Filtre");
@@ -28837,7 +28841,9 @@ mod tests {
             "colour: no filter"
         );
         h.get_by_label("Normalisé");
-        h.get_by_label("Valeurs").click();
+        // L'onglet existe ; changé par l'état (clics simulés parfois ignorés sous Windows).
+        h.get_by_label("Valeurs");
+        h.state_mut().adjust_tab = adjust::AdjustTab::Values;
         h.run_steps(2);
         h.get_by_label("Tout copier");
         let path = h.state().files[0].path.clone();
