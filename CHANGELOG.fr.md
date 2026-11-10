@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Vider le cache depuis l'interface** (#408) : en tête de la section « Cache » de la
+  fenêtre de réglages, la place des vignettes, aperçus boîtier, aperçus RAW, 1:1,
+  développés et analyses, et le total ; « Vider » par ligne et « Tout vider », confirmés,
+  en fond, l'espace libéré annoncé. Par exemple, vider les 1:1 sans perdre les vignettes,
+  ou les développés après une mise à jour de darktable.
 - **Réglages de visualisation** (#404) : exposition, balance des blancs et noir et blanc
   (mélangeur de canaux), pour comparer et trier une série. Une nouvelle section
   « Réglages » du panneau de droite, en onglets : Base (exposition avec « Auto », à priorité aux hautes lumières ; balance

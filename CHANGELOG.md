@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Clear the cache from the interface** (#408): at the top of the "Cache" section of the
+  settings window, the size of the thumbnails, camera previews, RAW previews, 1:1,
+  developed renders and analyses, and the total; "Clear" per row and "Clear all",
+  confirmed, in the background, the freed space announced. For example, clear the 1:1
+  without losing the thumbnails, or the developed renders after a darktable update.
 - **Viewing adjustments** (#404): exposure, white balance and black and white (channel
   mixer), to compare and cull a series. A new "Adjustments" section in the right panel,
   in tabs: Base (exposure with "Auto", highlight priority; balance in kelvins and tint, as shot, auto on the nearly neutral pixels,
