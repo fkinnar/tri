@@ -27690,6 +27690,9 @@ mod tests {
         run_until(&mut h, |app| app.meta_rows.len() >= 3);
         h.state_mut().select_all_metadata();
         h.run_steps(2);
+        // Ce que Ctrl+A a pris : des lignes peuvent encore arriver ensuite (CI Windows du
+        // 10/11/2026 : 4 lignes à la fin pour 3 sélectionnées).
+        let all = h.state().meta_selection().len();
         let label = h.state().meta_rows[0].label.clone();
         let deadline = Instant::now() + Duration::from_secs(60);
         while h.state().meta_anchor.is_some() {
@@ -27709,7 +27712,7 @@ mod tests {
         }
         let picked = h.state().meta_selection();
         assert!(!picked.contains(&0), "Nom retiré : {picked:?}");
-        assert_eq!(picked.len(), h.state().meta_rows.len() - 1);
+        assert_eq!(picked.len(), all - 1);
         assert!(
             !h.state().meta_cursor_shown,
             "plus de bande du curseur sur Nom"
