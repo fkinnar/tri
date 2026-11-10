@@ -11267,6 +11267,7 @@ impl TriApp {
             if let Some(zone) = zone {
                 self.adjust_eyedropper = false;
                 self.adjust_pick(&file.path, zone);
+                ctx.request_repaint();
             }
         }
         self.open_rating_dialog(&response, index);
@@ -28372,30 +28373,45 @@ mod tests {
         let path = h.state().files[0].path.clone();
         // Section en bas du panneau de droite : visible sans défiler.
         h.set_size(vec2(1000.0, 1400.0));
-        press(&mut h, Key::Enter, Modifiers::NONE);
+        // Une balance réglée à la main d'abord, très froide (retour du 10/11/2026 : la
+        // pipette ne faisait alors rien).
+        let mut cold = tri::adjust::Layers::default();
+        cold.correction.gains = tri::adjust::kelvin::gains(tri::adjust::kelvin::D65, 2000.0, 0.0);
+        h.state_mut()
+            .save_adjustments(vec![(path.clone(), Some(cold))]);
+        h.run_steps(3);
+        // De vrais clics de souris (pas l'action d'accessibilité, qui ne passe pas par ce
+        // qu'il y a sous le pointeur).
+        let mouse_click = |h: &mut Harness<'_, TriApp>, pos: egui::Pos2| {
+            h.event(UiEvent::PointerMoved(pos));
+            h.run_steps(1);
+            for pressed in [true, false] {
+                h.event(UiEvent::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                });
+                h.run_steps(1);
+            }
+        };
+        let button = h.get_by_label("Pipette").rect().center();
+        // Depuis la grille : le bouton ouvre le plein écran.
+        mouse_click(&mut h, button);
         h.run_steps(3);
         assert_eq!(h.state().mode, Mode::View);
-        h.get_by_label("Pipette").click();
-        h.run_steps(3);
         assert!(h.state().adjust_eyedropper, "armed");
-        let pos = egui::pos2(360.0, 700.0);
-        h.event(UiEvent::PointerMoved(pos));
-        h.run_steps(1);
-        for pressed in [true, false] {
-            h.event(UiEvent::PointerButton {
-                pos,
-                button: egui::PointerButton::Primary,
-                pressed,
-                modifiers: Modifiers::NONE,
-            });
-            h.run_steps(1);
-        }
+        mouse_click(&mut h, egui::pos2(360.0, 700.0));
         h.run_steps(3);
         assert!(!h.state().adjust_eyedropper, "used once");
         let notice = h.state().notice.clone().unwrap().0;
         assert!(notice.starts_with("Pipette"), "{notice}");
         let layers = tri::adjust::read(&path).unwrap().expect("balance set");
         assert!(layers.correction.gains.red > 1.05, "{layers:?}");
+        assert_ne!(
+            layers.correction.gains, cold.correction.gains,
+            "the cold balance replaced"
+        );
     }
 
     #[test]

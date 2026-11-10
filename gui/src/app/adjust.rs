@@ -103,6 +103,11 @@ impl TriApp {
         // affichée ([`TriApp::adjust_refresh_thumbnails`]) : jetée, elle revenait au
         // compte-gouttes du chargement de la grille.
         self.adjust_stale.insert(path.to_path_buf());
+        // Une image de plus tout de suite, même sans geste en cours (retour du 10/11/2026 :
+        // après la pipette, l'image ne changeait qu'au clic suivant).
+        if let Some(ctx) = &self.repaint {
+            ctx.request_repaint();
+        }
         let keys: Vec<(PathBuf, Level)> = self
             .big
             .keys()
