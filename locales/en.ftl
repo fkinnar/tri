@@ -71,6 +71,8 @@ history-modified = { $name } was modified elsewhere since (nothing was changed)
 history-nothing = nothing to undo
 history-trash-one = { $name } moved to the trash
 history-create-dir = folder { $name } created
+history-adjust = adjustments: { $name }
+history-adjust-many = adjustments of { $n } images
 history-version-created = version “{ $version }” created: { $name }
 history-version-changed = version “{ $version }” changed: { $name }
 history-version-deleted = version “{ $version }” deleted: { $name }
@@ -192,8 +194,11 @@ cli-usage =
       tri --reveal <image>
       tri --edit <image>...
       tri --export <preset> <image>... [--to <folder>] [--libraw|--embedded] [--passthrough] [--dry-run]
+      tri --adjust <reference> <image>... --to <folder> [--ev EV|auto] [--neutral auto|x,y,w,h] [--kelvin K[,tint]|daylight|cloudy|shade|tungsten|fluorescent|flash] [--creative-ev EV] [--warmth EV] [--tint EV] [--contrast %] [--saturation %] [--mono neutral|red|orange|yellow|green|blue|r,g,b] [--embedded] [--side N]
     common option: --config FILE (settings; default: the system location)
 cli-unknown-convention = unknown convention: { $value } (darktable or adobe)
+cli-adjust-not-an-image = not an image: { $path }
+cli-adjust-report = { $image }: exposure { $exposure } EV (correction { $correction }, creative { $creative }), balance { $kelvin } K, tint { $tint }, B&W { $mixer } → { $out }
 cli-unknown-option = unknown option: { $option }
 cli-extra-argument = extra argument: { $argument }
 cli-cache = cache: { $path }

@@ -104,6 +104,7 @@ unsafe extern "C" {
     // Shim C : champs de `params` sans setter dans l'API C.
     pub fn tri_libraw_set_use_camera_wb(lr: *mut LibRawData, value: c_int);
     pub fn tri_libraw_set_half_size(lr: *mut LibRawData, value: c_int);
+    pub fn tri_libraw_set_exposure(lr: *mut LibRawData, shift: c_float);
     pub fn tri_libraw_get_flip(lr: *mut LibRawData) -> c_int;
     pub fn tri_libraw_get_size(lr: *mut LibRawData, width: *mut c_int, height: *mut c_int);
     pub fn tri_libraw_raw_info(lr: *mut LibRawData, out: *mut RawInfo);

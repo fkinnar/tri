@@ -167,6 +167,52 @@ fn a_folder_is_listed_by_kind_and_depth() {
     assert!(out.contains("a.jpg") && !out.contains("b.RAF"), "{out}");
 }
 
+/// Exposition de `--adjust` lue dans son rapport (« exposure +1.02 EV »), pour `name`.
+fn adjusted_exposure(out: &str, name: &str) -> f32 {
+    let line = out
+        .lines()
+        .find(|l| l.contains(name))
+        .unwrap_or_else(|| panic!("{name} in {out}"));
+    let after = line.split("exposure ").nth(1).expect("exposure");
+    after.split(' ').next().unwrap().parse().unwrap()
+}
+
+#[test]
+fn adjust_harmonises_an_underexposed_copy_with_the_reference() {
+    // #137 : une copie à -1 IL de la référence reçoit environ +1 IL.
+    let env = Env::new();
+    let reference = env.image(&env.photos(), "ref.jpg");
+    let dark = env.path("dark");
+    let out = stdout(&ok(env.run([
+        "--adjust".as_ref(),
+        arg(&reference),
+        "--to".as_ref(),
+        arg(&dark),
+        "--ev".as_ref(),
+        "-1".as_ref(),
+    ])));
+    assert!(
+        (adjusted_exposure(&out, "ref.jpg") + 1.0).abs() < 1e-3,
+        "{out}"
+    );
+    let under = env.photos().join("under.jpg");
+    fs::copy(dark.join("ref-adjusted.jpg"), &under).unwrap();
+    let to = env.path("out");
+    let out = stdout(&ok(env.run([
+        "--adjust".as_ref(),
+        arg(&reference),
+        arg(&under),
+        "--to".as_ref(),
+        arg(&to),
+        "--mono".as_ref(),
+        "orange".as_ref(),
+    ])));
+    let ev = adjusted_exposure(&out, "under.jpg");
+    assert!((ev - 1.0).abs() < 0.2, "{out}");
+    assert!(out.contains("60/40/0"), "B&W copied: {out}");
+    assert!(to.join("under-adjusted.jpg").is_file());
+}
+
 #[test]
 fn a_failed_preview_is_written_to_the_log_with_its_image() {
     // #398 : le journal de l'application, dans le dossier de données de la configuration.

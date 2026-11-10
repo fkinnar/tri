@@ -1846,6 +1846,13 @@ pub const VERSIONS: ListField = ListField {
     prefix: "tri",
 };
 
+/// Réglages de visualisation d'une photo (`tri::adjust`) : `tri:Adjust`, un élément JSON.
+pub const ADJUST: ListField = ListField {
+    uri: ns::TRI,
+    local: "Adjust",
+    prefix: "tri",
+};
+
 /// Éléments de la liste `field` dans un paquet XMP (vide si absente).
 pub fn read_list(xml: &str, field: ListField) -> Result<Vec<String>> {
     let mut reader = new_reader(xml);

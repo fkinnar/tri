@@ -67,7 +67,14 @@ pub struct Loader {
 
 impl Loader {
     /// Démarre le thread. `max_side` : plus grand côté accepté par le GPU pour une texture.
-    pub fn new(cache: Cache, settings: Settings, max_side: usize, ctx: egui::Context) -> Loader {
+    /// `adjust` : réglages de visualisation des images, appliqués avant la texture.
+    pub fn new(
+        cache: Cache,
+        settings: Settings,
+        max_side: usize,
+        ctx: egui::Context,
+        adjust: crate::adjust_view::AdjustMap,
+    ) -> Loader {
         let shared = Arc::new(Shared {
             state: Mutex::default(),
             wake: Condvar::new(),
@@ -76,7 +83,7 @@ impl Loader {
         let worker = shared.clone();
         let thread = std::thread::Builder::new()
             .name("tri-chargement".into())
-            .spawn(move || run(&worker, &cache, &settings, max_side, &tx, &ctx))
+            .spawn(move || run(&worker, &cache, &settings, max_side, &tx, &ctx, &adjust))
             .expect("création du thread de chargement");
         Loader {
             shared,
@@ -142,6 +149,7 @@ fn run(
     max_side: usize,
     tx: &Sender<Loaded>,
     ctx: &egui::Context,
+    adjust: &crate::adjust_view::AdjustMap,
 ) {
     loop {
         let job = {
@@ -182,7 +190,8 @@ fn run(
         let image = bitmap.map(|b| {
             // Au-delà de la taille de texture maximale du GPU, on réduit (l'affichage
             // l'étire à sa taille d'origine).
-            let b = b.fit(max_side as u32);
+            let mut b = b.fit(max_side as u32);
+            crate::adjust_view::apply(adjust, &file.path, file.kind, level, &mut b);
             ColorImage::from_rgb([b.width as usize, b.height as usize], &b.data)
         });
         crate::trace::trace(|| {

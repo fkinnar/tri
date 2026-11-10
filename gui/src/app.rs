@@ -1,6 +1,7 @@
 //! L'application egui : grille de vignettes et plein écran, alimentés par le scheduler du
 //! moteur.
 
+use crate::fine_slider::FineSlider;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -37,6 +38,7 @@ use crate::textures::Lru;
 use crate::trace::trace;
 use crate::view::{self, Source};
 
+mod adjust;
 mod controls;
 use controls::{Control, Host};
 
@@ -541,6 +543,51 @@ pub struct TriApp {
     export_notice: Option<String>,
     /// Échec de la dernière action sur un fichier (barre d'état).
     file_error: Option<String>,
+    /// Réglages de visualisation des images (issue n° 137), partagés avec le chargeur.
+    adjust_map: crate::adjust_view::AdjustMap,
+    /// Images dont les réglages ont été lus (ou posés) dans ce dossier.
+    adjust_known: HashSet<PathBuf>,
+    /// Lectures en cours.
+    adjust_pending: HashSet<PathBuf>,
+    /// Lectures en fond.
+    adjust_read: (
+        mpsc::Sender<adjust::AdjustRead>,
+        Receiver<adjust::AdjustRead>,
+    ),
+    /// Image dont les réglages ont changé à l'écran, à enregistrer au relâchement.
+    adjust_dirty: Option<PathBuf>,
+    /// Pipette armée (plein écran) : le prochain clic sur l'image neutralise la balance
+    /// sur la zone cliquée.
+    adjust_eyedropper: bool,
+    /// Cadre de la pipette en cours de tracé (écran) : départ, dernier point.
+    adjust_frame: Option<(egui::Pos2, egui::Pos2)>,
+    /// Couleur de l'éclairage de la prise de vue de chaque image (kelvins des réglages),
+    /// lue avec ses réglages.
+    adjust_shot: HashMap<PathBuf, [f32; 3]>,
+    /// Onglet ouvert de la section (retenu dans la session).
+    adjust_tab: adjust::AdjustTab,
+    /// « Synchroniser N images » : les réglages vont à toute la sélection (cochée par
+    /// défaut).
+    adjust_sync: bool,
+    /// Geste en cours sur l'image courante : ses réglages d'avant, pour reporter l'écart
+    /// sur la sélection au relâchement.
+    adjust_gesture: Option<adjust::Gesture>,
+    /// Vignettes à redessiner avec leurs nouveaux réglages, toutes à la fois.
+    adjust_stale: HashSet<PathBuf>,
+    /// Grandes images affichées dont les réglages ont changé : gardées à l'écran,
+    /// redemandées au chargeur ; numéro du changement.
+    big_stale: HashMap<(PathBuf, Level), u64>,
+    /// Numéro du dernier changement connu quand chacune a été redemandée.
+    big_sent: HashMap<(PathBuf, Level), u64>,
+    /// Compteur des changements de réglages.
+    adjust_epoch: u64,
+    /// Vignettes sans réglage (image et niveau) gardées le temps d'un geste.
+    adjust_bases: HashMap<(PathBuf, Level), tri::bitmap::Bitmap>,
+    /// Réglages copiés (« Copier »), à coller.
+    adjust_clipboard: Option<adjust::AdjustClip>,
+    /// Réglages automatiques d'un dossier en cours (tâche de fond) : les réglages calculés
+    /// et le nombre d'images sans vignette prête.
+    adjust_folder_job: Option<Receiver<adjust::FolderResult>>,
     /// Fenêtre du journal de l'application (issue n° 398).
     log_view: Option<crate::log_view::LogView>,
     /// Image (passe d'egui) où elle s'est ouverte (même raison que `export_report_since`).
@@ -1352,6 +1399,24 @@ impl TriApp {
             export_report_since: 0,
             export_notice: None,
             file_error: None,
+            adjust_map: Default::default(),
+            adjust_known: HashSet::new(),
+            adjust_pending: HashSet::new(),
+            adjust_read: mpsc::channel(),
+            adjust_dirty: None,
+            adjust_eyedropper: false,
+            adjust_frame: None,
+            adjust_shot: HashMap::new(),
+            adjust_tab: Default::default(),
+            adjust_sync: true,
+            adjust_gesture: None,
+            adjust_stale: HashSet::new(),
+            big_stale: HashMap::new(),
+            big_sent: HashMap::new(),
+            adjust_epoch: 0,
+            adjust_bases: HashMap::new(),
+            adjust_clipboard: None,
+            adjust_folder_job: None,
             log_view: None,
             log_view_since: 0,
             logged_errors: Vec::new(),
@@ -2076,6 +2141,7 @@ impl TriApp {
                 self.error = Some(format!("{} : {e}", dir.display()));
             }
         }
+        self.adjust_forget();
         self.files.clear(); // la sélection ne survit pas au changement de dossier
         self.leave_stack_only();
         self.expanded.clear();
@@ -2168,6 +2234,17 @@ impl TriApp {
         } else {
             // Rien à copier ni à pointer sous une section repliée.
             self.meta_rows.clear();
+        }
+        // Réglages de visualisation (#137) : ceux de l'image courante, en bas pour ne rien
+        // décaler au-dessus (les EXIF restent à leur place).
+        if matches!(self.mode, Mode::Grid | Mode::View)
+            && self.crop.is_none()
+            && !self.files.is_empty()
+        {
+            ui.separator();
+            if self.panel_section(ui, "adjust", t!("panel-section-adjust")) {
+                self.adjust_section(ui);
+            }
         }
         // Éléments disparus (section repliée, autre mode) : le curseur reste dedans.
         if let Some(i) = self.side_cursor
@@ -3172,6 +3249,8 @@ impl TriApp {
         // Clic droit : garder le cache dans ce dossier / sur ce disque, ou plus ici.
         let mut cache_menu: Option<(PathBuf, bool)> = None;
         let mut embed_menu: Option<(PathBuf, Option<bool>)> = None;
+        // Réglages automatiques de tout le dossier ouvert.
+        let mut adjust_menu: Option<adjust::FolderAuto> = None;
         let location = self.settings.cache.location;
         let cache = self.engine.as_ref().map(|e| e.cache.clone());
         let mut dropped: Option<(Dragged, PathBuf)> = None;
@@ -3506,6 +3585,31 @@ impl TriApp {
                             entry(ui, Action::Sidecars, t!("folder-menu-sidecars"));
                             entry(ui, Action::EmbedNotes, t!("folder-menu-embed-notes"));
                             entry(ui, Action::ImportNotes, t!("folder-menu-import-notes"));
+                            // Réglages auto de toutes ses images (retour du 10/11/2026) :
+                            // chacune d'après la sienne, mesurée sur sa vignette.
+                            ui.menu_button(t!("folder-menu-adjust"), |ui| {
+                                for (what, text) in [
+                                    (adjust::FolderAuto::Both, t!("folder-menu-adjust-auto")),
+                                    (
+                                        adjust::FolderAuto::Exposure,
+                                        t!("folder-menu-adjust-exposure"),
+                                    ),
+                                    (
+                                        adjust::FolderAuto::Balance,
+                                        t!("folder-menu-adjust-balance"),
+                                    ),
+                                ] {
+                                    if ui.button(text).clicked() {
+                                        adjust_menu = Some(what);
+                                        // Tout le menu, pas seulement le sous-menu (retour
+                                        // du 10/11/2026 : resté ouvert, on aurait dit que
+                                        // rien ne se passait).
+                                        egui::Popup::close_all(ui.ctx());
+                                    }
+                                }
+                            })
+                            .response
+                            .on_hover_text(t!("folder-menu-adjust-tip"));
                         }
                         // Notes dans les images, propre à ce dossier (issue n° 368 :
                         // « ce support amovible-là, oui ») ; pas ses sous-dossiers.
@@ -3520,7 +3624,7 @@ impl TriApp {
                                 ] {
                                     if ui.radio(current == value, label).clicked() {
                                         embed_menu = Some((row.path.clone(), value));
-                                        ui.close();
+                                        egui::Popup::close_all(ui.ctx());
                                     }
                                 }
                             })
@@ -3690,7 +3794,13 @@ impl TriApp {
         if let Some((path, on)) = cache_menu {
             self.keep_cache_in(path, on);
         }
+        if let Some(what) = adjust_menu {
+            let ctx = ui.ctx().clone();
+            self.adjust_folder_auto(&ctx, what);
+        }
         if let Some((path, value)) = embed_menu {
+            // Le menu fermé se voit tout de suite.
+            ui.ctx().request_repaint();
             match self.folder.notes.set_folder_embed(&path, value) {
                 Ok(()) => {
                     let name = folder_name(&path);
@@ -5279,9 +5389,10 @@ impl TriApp {
             .join(" ; ");
         let slider = ui
             .add(
-                egui::Slider::new(&mut cell, g.cell_min..=g.cell_max.max(g.cell_min))
+                FineSlider::new(&mut cell, g.cell_min..=g.cell_max.max(g.cell_min))
                     .logarithmic(true)
-                    .show_value(false),
+                    .steps(10.0, 1.0)
+                    .width(width),
             )
             .on_hover_text(format!("{} ({keys})", t!("grid-size")));
         if slider.double_clicked_slider(ui) {
@@ -6182,7 +6293,13 @@ impl TriApp {
         self.visible_sent = None;
         scheduler.set_focus(self.selected);
         let max_texture = ctx.input(|i| i.max_texture_side);
-        let loader = Loader::new(cache.clone(), preview, max_texture, ctx.clone());
+        let loader = Loader::new(
+            cache.clone(),
+            preview,
+            max_texture,
+            ctx.clone(),
+            self.adjust_map.clone(),
+        );
         self.engine = Some(Engine {
             scheduler,
             events: rx,
@@ -6800,6 +6917,19 @@ impl TriApp {
             Action::Settings => self.open_settings(),
             Action::CheckUpdate => self.check_update(ctx),
             Action::ReportIssue => self.prepare_report(ctx),
+            Action::AdjustBeforeAfter => self.toggle_before_after(),
+            Action::AdjustApply => {
+                self.adjust_commit(ctx);
+                self.adjust_apply_to_selection();
+            }
+            Action::AdjustCopy => {
+                self.adjust_commit(ctx);
+                self.adjust_copy();
+            }
+            Action::AdjustPaste => {
+                self.adjust_commit(ctx);
+                self.adjust_paste();
+            }
             Action::Log => {
                 if self.log_view.take().is_none() {
                     self.open_log(ctx, Vec::new());
@@ -8417,6 +8547,17 @@ impl TriApp {
                 continue;
             }
             self.wanted.retain(|w| *w != key);
+            // Recalculée après un changement de réglages : à jour si demandée après le
+            // dernier ; l'ancienne reste affichée jusqu'au remplacement, dans cette image.
+            if let Some(&marked) = self.big_stale.get(&key)
+                && self.big_sent.get(&key).is_some_and(|&sent| sent >= marked)
+            {
+                self.big_stale.remove(&key);
+                self.big_sent.remove(&key);
+            }
+            if loaded.image.is_some() {
+                self.big.remove(&key);
+            }
             match loaded.image {
                 Some(image) if !self.make_room(&key, &image) => {
                     self.over_budget.insert(key);
@@ -8500,7 +8641,7 @@ impl TriApp {
             let level = view::pick(kind, source, zoomed, developed, |l| self.ready(index, l));
             if let Some(level) = level.filter(|&l| l != Level::Thumbnail) {
                 let key = (self.files[index].path.clone(), level);
-                if !self.loaded(index, level)
+                if (!self.loaded(index, level) || self.big_stale.contains_key(&key))
                     && !self.missing.contains(&key)
                     && !self.over_budget.contains(&key)
                 {
@@ -8515,6 +8656,11 @@ impl TriApp {
             wanted.iter().map(|(f, l)| (f.path.clone(), *l)).collect();
         if keys != self.wanted {
             trace(|| format!("chargeur : {keys:?}"));
+            for key in &keys {
+                if self.big_stale.contains_key(key) {
+                    self.big_sent.insert(key.clone(), self.adjust_epoch);
+                }
+            }
             self.wanted = keys;
             engine.loader.want(wanted);
         }
@@ -11036,7 +11182,8 @@ impl TriApp {
                         }
                         None => center,
                     };
-                    if response.dragged() {
+                    // La pipette trace un cadre : pas de déplacement.
+                    if response.dragged() && !self.adjust_eyedropper {
                         let d = response.drag_delta();
                         center -= vec2(d.x / size.x, d.y / size.y);
                     }
@@ -11124,6 +11271,87 @@ impl TriApp {
         };
         let peaking = self.peaking_overlay(&painter, &file, shown, image_rect, peaking_uv);
 
+        // Pipette des réglages (#137) : un clic sur une zone qui devrait être grise, ou un
+        // cadre tracé (balance auto sur cette partie de l'image).
+        if self.adjust_eyedropper && shown_crop.is_none() {
+            if response.hovered() {
+                ctx.set_cursor_icon(egui::CursorIcon::Crosshair);
+            }
+            let to_image = |pos: egui::Pos2| {
+                image_rect.map(|rect| {
+                    let rel = view::relative(rect, pos);
+                    let p = uv.min + vec2(rel.x * uv.width(), rel.y * uv.height());
+                    pos2(p.x.clamp(0.0, 1.0), p.y.clamp(0.0, 1.0))
+                })
+            };
+            // Le cadre tracé : départ et dernier point retenus pendant le geste (au
+            // relâchement, egui n'a plus le point de départ ; retour du 10/11/2026 : il fallait
+            // cliquer une fois de plus).
+            if response.drag_started() {
+                self.adjust_frame = ctx
+                    .input(|i| i.pointer.press_origin())
+                    .or(response.interact_pointer_pos())
+                    .map(|a| (a, a));
+            }
+            if response.dragged()
+                && let (Some((a, _)), Some(b)) =
+                    (self.adjust_frame, response.interact_pointer_pos())
+            {
+                self.adjust_frame = Some((a, b));
+            }
+            if response.dragged()
+                && let Some((a, b)) = self.adjust_frame
+            {
+                let frame = Rect::from_two_pos(a, b);
+                painter.rect_stroke(
+                    frame,
+                    0.0,
+                    egui::Stroke::new(1.5, Color32::WHITE),
+                    egui::StrokeKind::Middle,
+                );
+                painter.rect_stroke(
+                    frame.expand(1.5),
+                    0.0,
+                    egui::Stroke::new(1.0, Color32::BLACK),
+                    egui::StrokeKind::Middle,
+                );
+            }
+            let zone = if response.drag_stopped() {
+                let (a, b) = self.adjust_frame.take().unzip();
+                let b = response
+                    .interact_pointer_pos()
+                    .or(ctx.input(|i| i.pointer.latest_pos()))
+                    .or(b);
+                match (a.and_then(to_image), b.and_then(to_image)) {
+                    (Some(a), Some(b)) => {
+                        let r = Rect::from_two_pos(a, b);
+                        Some(if r.width() < 0.005 || r.height() < 0.005 {
+                            self.adjust_point_zone(r.center())
+                        } else {
+                            tri::adjust::Zone {
+                                x: r.min.x,
+                                y: r.min.y,
+                                w: r.width(),
+                                h: r.height(),
+                            }
+                        })
+                    }
+                    _ => None,
+                }
+            } else if response.clicked() {
+                response
+                    .interact_pointer_pos()
+                    .and_then(to_image)
+                    .map(|p| self.adjust_point_zone(p))
+            } else {
+                None
+            };
+            if let Some(zone) = zone {
+                self.adjust_eyedropper = false;
+                self.adjust_pick(&file.path, zone);
+                ctx.request_repaint();
+            }
+        }
         self.open_rating_dialog(&response, index);
         // Double-clic : 100 % centré sur le point cliqué, ou retour à l'ajusté.
         if response.double_clicked() {
@@ -11450,6 +11678,8 @@ impl TriApp {
         deadline: Instant,
     ) -> Option<TextureHandle> {
         let path = self.files[index].path.clone();
+        // Réglages (#137) : lus en fond la première fois, la vignette suit.
+        self.adjust_layers(&path);
         let want = self.grid_level(index);
         let have = self.textures.get(&path).cloned();
         let have_level = self.texture_levels.get(&path).copied();
@@ -11551,17 +11781,9 @@ impl TriApp {
         index: usize,
         level: Level,
     ) -> Option<TextureHandle> {
-        let engine = self.engine.as_ref()?;
+        let mut bitmap = self.grid_bitmap(index, level)?;
         let file = &self.files[index];
-        let key = preview::key(file, level, &engine.preview).ok()?;
-        let bitmap = if level == Level::Thumbnail {
-            engine.cache.get(&key)?
-        } else {
-            let side = engine.preview.sizes.thumbnail;
-            tri::jpeg::decode(&engine.cache.get_bytes(&key)?, side)
-                .ok()?
-                .fit(side)
-        };
+        crate::adjust_view::apply(&self.adjust_map, &file.path, file.kind, level, &mut bitmap);
         let image = ColorImage::from_rgb(
             [bitmap.width as usize, bitmap.height as usize],
             &bitmap.data,
@@ -11571,6 +11793,23 @@ impl TriApp {
         self.textures.insert(file.path.clone(), texture.clone());
         self.texture_levels.insert(file.path.clone(), level);
         Some(texture)
+    }
+
+    /// La vignette `index` au niveau `level`, sans réglage (tirée du cache).
+    fn grid_bitmap(&self, index: usize, level: Level) -> Option<tri::bitmap::Bitmap> {
+        let engine = self.engine.as_ref()?;
+        let file = &self.files[index];
+        let key = preview::key(file, level, &engine.preview).ok()?;
+        if level == Level::Thumbnail {
+            engine.cache.get(&key)
+        } else {
+            let side = engine.preview.sizes.thumbnail;
+            Some(
+                tri::jpeg::decode(&engine.cache.get_bytes(&key)?, side)
+                    .ok()?
+                    .fit(side),
+            )
+        }
     }
 
     /// Politique des rendus RAW de fond : tout le dossier quand la grille les montre.
@@ -15825,6 +16064,9 @@ impl TriApp {
         applied: Vec<tri::history::Applied>,
         error: Option<tri::history::HistoryError>,
     ) {
+        // Réglages des images touchées : relus.
+        let touched: Vec<PathBuf> = applied.iter().flat_map(|a| a.images.clone()).collect();
+        self.adjust_reread(&touched);
         // Versions peut-être changées : relues.
         self.versions.clear();
         self.forget_grid_versions();
@@ -16143,9 +16385,9 @@ impl TriApp {
                 // 21/10/2026, comme Lightroom).
                 if ui
                     .add(
-                        egui::Slider::new(&mut strictness, -1.0..=1.0)
-                            .step_by(0.05)
-                            .show_value(false),
+                        FineSlider::new(&mut strictness, -1.0..=1.0)
+                            .steps(0.05, 0.005)
+                            .center_mark(true),
                     )
                     .double_clicked_slider(ui)
                 {
@@ -16155,15 +16397,19 @@ impl TriApp {
                 ui.weak(t!("groups-threshold-tip"));
                 ui.add_space(4.0);
                 ui.label(t!("groups-curve"));
-                if ui
-                    .add(
-                        // Sans pas : un pas compté depuis 1 / max décalait la valeur
-                        // retenue à la seule ouverture de la fenêtre.
-                        egui::Slider::new(&mut curve, 1.0 / max_curve..=max_curve)
-                            .fixed_decimals(1),
-                    )
-                    .double_clicked_slider(ui)
-                {
+                let response = ui
+                    .horizontal(|ui| {
+                        // Crans comptés depuis 0 : une valeur retenue entre deux crans ne
+                        // bouge pas tant qu'on ne touche pas au curseur.
+                        let r = ui.add(
+                            FineSlider::new(&mut curve, 1.0 / max_curve..=max_curve)
+                                .steps(0.1, 0.01),
+                        );
+                        ui.label(tri::i18n::decimal(f64::from(curve), 2));
+                        r
+                    })
+                    .inner;
+                if response.double_clicked_slider(ui) {
                     curve = default_curve;
                 }
                 ui.weak(t!("groups-curve-tip"));
@@ -16173,9 +16419,9 @@ impl TriApp {
                     ui.weak(t!("groups-pauses-less"));
                     if ui
                         .add(
-                            egui::Slider::new(&mut pauses, -1.0..=1.0)
-                                .step_by(0.05)
-                                .show_value(false),
+                            FineSlider::new(&mut pauses, -1.0..=1.0)
+                                .steps(0.05, 0.005)
+                                .center_mark(true),
                         )
                         .double_clicked_slider(ui)
                     {
@@ -16186,14 +16432,14 @@ impl TriApp {
                 ui.weak(t!("groups-pauses-tip"));
                 ui.add_space(4.0);
                 ui.label(t!("groups-gap"));
-                if ui
-                    .add(
-                        egui::Slider::new(&mut gap, 0.0..=600.0)
-                            .step_by(5.0)
-                            .suffix(" s"),
-                    )
-                    .double_clicked_slider(ui)
-                {
+                let response = ui
+                    .horizontal(|ui| {
+                        let r = ui.add(FineSlider::new(&mut gap, 0.0..=600.0).steps(5.0, 1.0));
+                        ui.label(format!("{gap:.0} s"));
+                        r
+                    })
+                    .inner;
+                if response.double_clicked_slider(ui) {
                     gap = default_gap;
                 }
                 ui.weak(t!("groups-gap-tip"));
@@ -17196,6 +17442,7 @@ impl eframe::App for TriApp {
             self.stop_background();
         }
         ctx.data_mut(|d| d.insert_temp(dialog_settings_id(), self.gui.dialogs()));
+        ctx.data_mut(|d| d.insert_temp(crate::fine_slider::speed_id(), self.gui.slider_fine_speed));
         // Recadrage : Tab change de préréglage ; panneaux : de section en section (egui,
         // lui, déplacerait le focus vers un champ ou un bouton ; rendu en fin d'image, sauf
         // depuis un champ).
@@ -17351,6 +17598,7 @@ impl eframe::App for TriApp {
             let panel = egui::Panel::right("metadata")
                 .resizable(true)
                 .default_size(self.gui.metadata.width)
+                .min_size(self.gui.metadata.min_width)
                 .show(ui, |ui| {
                     if self.focus == crate::actions::Scope::Metadata {
                         panel_focus_fill(ui, &self.gui.dialogs);
@@ -17405,6 +17653,7 @@ impl eframe::App for TriApp {
             let panel = egui::Panel::left("folders")
                 .resizable(true)
                 .default_size(self.gui.folders.width)
+                .min_size(self.gui.folders.min_width)
                 .show(ui, |ui| {
                     self.folder_panel(ui);
                     hand_over_clickable(ui);
@@ -17559,6 +17808,12 @@ impl eframe::App for TriApp {
         self.history_dialog(&ctx);
         self.export_report_dialog(&ctx);
         self.log_errors();
+        self.adjust_commit(&ctx);
+        self.adjust_folder_poll();
+        self.adjust_refresh_thumbnails(&ctx);
+        if let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) {
+            self.adjust_layers(&path);
+        }
         self.log_dialog(&ctx);
         self.report_dialog(&ctx);
         self.group_window(&ctx);
@@ -18320,17 +18575,13 @@ fn strictness_slider(
         None => value,
     };
     let slider = ui
-        .add(egui::Slider::new(&mut t, -1.0..=1.0).show_value(false))
+        .add(
+            FineSlider::new(&mut t, -1.0..=1.0)
+                .steps(step, step / 10.0)
+                .width(width)
+                .center_mark(true),
+        )
         .on_hover_text(tip);
-    let rail = slider.rect.shrink2(vec2(slider.rect.height() / 2.0, 0.0));
-    let x = rail.center().x;
-    ui.painter().line_segment(
-        [
-            egui::pos2(x, rail.top() + 1.0),
-            egui::pos2(x, rail.top() + rail.height() * 0.25),
-        ],
-        egui::Stroke::new(1.0, ui.visuals().weak_text_color()),
-    );
     if slider.double_clicked_slider(ui) {
         t = 0.0;
     }
@@ -20529,6 +20780,8 @@ mod tests {
     #[test]
     fn thumbnail_info_and_size_from_the_keyboard_and_the_bottom_bar() {
         let (mut h, _dir) = harness();
+        // Les curseurs des réglages (#137) repliés : seul compte celui de la grille.
+        h.state_mut().panel_folded.insert("adjust".into());
         h.run_steps(3);
         // Fenêtre étroite (1000 points) et panneaux ouverts : les contrôles de la grille
         // passent à la ligne au lieu de recouvrir les notes du bandeau (issue n° 71).
@@ -23976,7 +24229,9 @@ mod tests {
             .filter(|&i| h.state().side_items[i])
             .collect();
         assert!(titles.len() >= 3, "{titles:?}");
-        let filters = titles[titles.len() - 3];
+        // Filtres, grille, EXIF, réglages (#137) : les filtres sont le 4e titre en partant
+        // de la fin.
+        let filters = titles[titles.len() - 4];
         while h.state().side_cursor != Some(filters) {
             press(&mut h, Key::Tab, Modifiers::NONE);
         }
@@ -28189,6 +28444,417 @@ mod tests {
     }
 
     #[test]
+    fn the_eyedropper_neutralises_the_clicked_zone_in_full_screen() {
+        // Retour du 10/11/2026 : « la pipette ne fonctionne pas ».
+        let (mut h, _dir) = harness_images(vec![(
+            "img0.jpg",
+            image::RgbImage::from_pixel(640, 480, image::Rgb([110, 120, 150])),
+        )]);
+        run_until(&mut h, |app| {
+            app.files.len() == 1 && app.adjust_base(&app.files[0].path).is_some()
+        });
+        let path = h.state().files[0].path.clone();
+        // Section en bas du panneau de droite : visible sans défiler.
+        h.set_size(vec2(1000.0, 1400.0));
+        // Une balance réglée à la main d'abord, très froide (retour du 10/11/2026 : la
+        // pipette ne faisait alors rien).
+        let mut cold = tri::adjust::Layers::default();
+        cold.correction.gains = tri::adjust::kelvin::gains(tri::adjust::kelvin::D65, 2000.0, 0.0);
+        h.state_mut()
+            .save_adjustments(vec![(path.clone(), Some(cold))]);
+        h.run_steps(3);
+        // De vrais clics de souris (pas l'action d'accessibilité, qui ne passe pas par ce
+        // qu'il y a sous le pointeur).
+        let mouse_click = |h: &mut Harness<'_, TriApp>, pos: egui::Pos2| {
+            h.event(UiEvent::PointerMoved(pos));
+            h.run_steps(1);
+            for pressed in [true, false] {
+                h.event(UiEvent::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                });
+                h.run_steps(1);
+            }
+        };
+        let button = h.get_by_label("Pipette").rect().center();
+        // Depuis la grille : le bouton ouvre le plein écran.
+        mouse_click(&mut h, button);
+        h.run_steps(3);
+        assert_eq!(h.state().mode, Mode::View);
+        assert!(h.state().adjust_eyedropper, "armed");
+        mouse_click(&mut h, egui::pos2(360.0, 700.0));
+        h.run_steps(3);
+        assert!(!h.state().adjust_eyedropper, "used once");
+        let notice = h.state().notice.clone().unwrap().0;
+        assert!(notice.starts_with("Pipette"), "{notice}");
+        // Un cadre tracé (retour du 10/11/2026 : il fallait cliquer une fois de plus après
+        // l'avoir lâché).
+        h.state_mut()
+            .save_adjustments(vec![(path.clone(), Some(cold))]);
+        h.run_steps(2);
+        let button = h.get_by_label("Pipette").rect().center();
+        mouse_click(&mut h, button);
+        h.run_steps(2);
+        assert!(h.state().adjust_eyedropper, "armed again");
+        let (from, to) = (egui::pos2(300.0, 650.0), egui::pos2(420.0, 760.0));
+        h.event(UiEvent::PointerMoved(from));
+        h.run_steps(1);
+        h.event(UiEvent::PointerButton {
+            pos: from,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(1);
+        for step in 1..=6 {
+            h.event(UiEvent::PointerMoved(
+                from + (to - from) * step as f32 / 6.0,
+            ));
+            h.run_steps(1);
+        }
+        h.event(UiEvent::PointerButton {
+            pos: to,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(2);
+        assert!(!h.state().adjust_eyedropper, "the frame is enough");
+        let framed = tri::adjust::read(&path).unwrap().expect("balance set");
+        assert_ne!(
+            framed.correction.gains, cold.correction.gains,
+            "frame measured"
+        );
+        let layers = tri::adjust::read(&path).unwrap().expect("balance set");
+        assert!(layers.correction.gains.red > 1.05, "{layers:?}");
+        assert_ne!(
+            layers.correction.gains, cold.correction.gains,
+            "the cold balance replaced"
+        );
+    }
+
+    #[test]
+    fn an_adjusted_large_image_stays_on_screen_until_its_new_version_arrives() {
+        // Retour du 10/11/2026 : à chaque mouvement de curseur, la grande image était jetée
+        // et la vue retombait sur la vignette le temps du rechargement (l'image « gigotait »,
+        // la barre d'état changeait).
+        let (mut h, _dir) = harness_with(640, 480);
+        run_until(&mut h, |app| app.files.len() == 3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            let path = &app.files[0].path;
+            app.big.keys().any(|(p, _)| p == path)
+        });
+        let path = h.state().files[0].path.clone();
+        let key = h
+            .state()
+            .big
+            .keys()
+            .find(|(p, _)| *p == path)
+            .cloned()
+            .unwrap();
+        let old = h.state_mut().big.get(&key).unwrap().texture.id();
+        let mut layers = tri::adjust::Layers::default();
+        layers.correction.exposure = 1.0;
+        h.state_mut().adjust_live(&path, layers);
+        assert!(h.state().big.contains(&key), "still shown");
+        assert!(h.state().big_stale.contains_key(&key));
+        h.run_steps(1);
+        assert_eq!(
+            h.state().last_shown.1,
+            Some(key.1),
+            "no fallback to the thumbnail"
+        );
+        run_until(&mut h, |app| app.big_stale.is_empty());
+        assert_ne!(
+            h.state_mut().big.get(&key).unwrap().texture.id(),
+            old,
+            "replaced"
+        );
+    }
+
+    #[test]
+    fn double_clicking_a_tab_resets_it() {
+        // Retour du 10/11/2026 : double-clic sur un onglet des réglages, remis à zéro (le
+        // style ici, la base gardée), comme un curseur.
+        let (mut h, _dir) = harness();
+        h.set_size(vec2(1000.0, 2400.0));
+        run_until(&mut h, |app| app.files.len() == 3);
+        let path = h.state().files[0].path.clone();
+        let mut both = tri::adjust::Layers::default();
+        both.correction.exposure = 0.5;
+        both.creative = Some(tri::adjust::Adjust {
+            exposure: 0.3,
+            ..Default::default()
+        });
+        h.state_mut()
+            .save_adjustments(vec![(path.clone(), Some(both))]);
+        h.state_mut().adjust_tab = adjust::AdjustTab::Mono;
+        h.run_steps(2);
+        // Le banc d'essai avance de 0,5 s par image : délai du double-clic élargi.
+        h.ctx
+            .options_mut(|o| o.input_options.max_double_click_delay = 5.0);
+        let tab = h.get_by_label("Style").rect().center();
+        h.input_mut().events.push(egui::Event::PointerMoved(tab));
+        h.run_steps(1);
+        for _ in 0..2 {
+            for pressed in [true, false] {
+                h.input_mut().events.push(egui::Event::PointerButton {
+                    pos: tab,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                });
+                h.run_steps(1);
+            }
+        }
+        h.run_steps(2);
+        let left = tri::adjust::read(&path).unwrap().expect("base kept");
+        assert_eq!(left.creative, None, "style reset");
+        assert_eq!(left.correction.exposure, 0.5, "base kept");
+    }
+
+    #[test]
+    fn the_folder_menu_sets_auto_adjustments_on_every_image_in_one_step() {
+        // Retour du 10/11/2026 : clic droit sur le dossier, « Réglages », exposition auto
+        // de toutes ses images (chacune d'après la sienne).
+        let (mut h, dir) = harness();
+        run_until(&mut h, |app| {
+            app.files.len() == 3 && app.files.iter().all(|f| app.adjust_base(&f.path).is_some())
+        });
+        let paths: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        // Par le menu : clic droit sur le dossier, « Réglages », « Exposition auto ».
+        // Le dossier ouvert dans le panneau des dossiers.
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        h.run_steps(2);
+        h.query_all_by_label("photos")
+            .min_by(|a, b| a.rect().left().total_cmp(&b.rect().left()))
+            .unwrap()
+            .click_secondary();
+        h.run_steps(3);
+        h.get_by_label("Réglages").hover();
+        h.run_steps(3);
+        // « Auto » : balance puis exposition (celle du menu, à gauche).
+        h.query_all_by_label("Auto")
+            .min_by(|a, b| a.rect().left().total_cmp(&b.rect().left()))
+            .unwrap()
+            .click();
+        h.run_steps(2);
+        // Le menu se ferme tout de suite, sous-menu compris (retour du 10/11/2026 : la
+        // grille ne changeait qu'en sortant du menu) ; le calcul se fait en fond.
+        assert!(h.query_by_label("Réglages").is_none(), "menu closed");
+        run_until(&mut h, |app| app.adjust_folder_job.is_none());
+        let evs: Vec<f32> = paths
+            .iter()
+            .map(|p| {
+                tri::adjust::read(p)
+                    .unwrap()
+                    .expect("set")
+                    .correction
+                    .exposure
+            })
+            .collect();
+        assert!(evs.iter().all(|&e| e != 0.0), "{evs:?}");
+        assert!(evs[0] != evs[1], "each from its own: {evs:?}");
+        // « Auto » : la balance aussi (pas sur la première, (0, 100, 160) : rien de
+        // mesurable, un canal à zéro).
+        for p in &paths[1..] {
+            let l = tri::adjust::read(p).unwrap().unwrap();
+            assert!(!l.correction.gains.is_none(), "balance set too: {l:?}");
+        }
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::Undo);
+        for p in &paths {
+            assert_eq!(tri::adjust::read(p).unwrap(), None, "one step");
+        }
+    }
+
+    #[test]
+    fn harmonising_the_selection_aligns_the_base_only_in_one_step() {
+        // #137 : « Harmoniser la sélection » aligne exposition et balance des autres
+        // images sur l'image courante, sans toucher au style ni au noir et blanc ; un seul
+        // pas de l'historique pour toutes.
+        let (mut h, _dir) = harness();
+        run_until(&mut h, |app| {
+            app.files.len() == 3 && app.files.iter().all(|f| app.adjust_base(&f.path).is_some())
+        });
+        let paths: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        let mut layers = tri::adjust::Layers::default();
+        layers.correction.exposure = 0.5;
+        layers.mono = tri::adjust::Mixer::preset("orange");
+        h.state_mut()
+            .save_adjustments(vec![(paths[0].clone(), Some(layers))]);
+        assert_eq!(tri::adjust::read(&paths[0]).unwrap(), Some(layers));
+        h.run_steps(2);
+        let files = h.state().files.clone();
+        h.state_mut().selection.select_all(&files);
+        h.state_mut().selected = 0;
+        h.state_mut().adjust_apply_to_selection();
+        for path in &paths[1..] {
+            let got = tri::adjust::read(path).unwrap().expect("harmonised");
+            assert_eq!(got.mono, None, "black and white untouched");
+            assert!(got.correction.exposure != 0.0, "{got:?}");
+        }
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::Undo);
+        for path in &paths[1..] {
+            assert_eq!(tri::adjust::read(path).unwrap(), None, "one step for all");
+        }
+        assert_eq!(
+            tri::adjust::read(&paths[0]).unwrap(),
+            Some(layers),
+            "the reference keeps its own"
+        );
+        // Avant / après : montré sans réglages, le sidecar ne change pas.
+        h.state_mut().perform(&ctx, Action::AdjustBeforeAfter);
+        assert!(h.state().showing_original());
+        assert_eq!(tri::adjust::read(&paths[0]).unwrap(), Some(layers));
+    }
+
+    #[test]
+    fn a_gesture_on_a_synced_selection_moves_each_image_by_as_much() {
+        // Retours du 10/11/2026 : « Synchroniser N images », cochée par défaut ; un curseur
+        // décale chaque image d'autant (A 0,3 → 0,5 : B 1,0 → 1,2), au relâchement, en un
+        // pas ; copier / coller harmonise sur l'image copiée.
+        let (mut h, _dir) = harness();
+        run_until(&mut h, |app| {
+            app.files.len() == 3 && app.files.iter().all(|f| app.adjust_base(&f.path).is_some())
+        });
+        let paths: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        let with_ev = |ev: f32| {
+            let mut l = tri::adjust::Layers::default();
+            l.correction.exposure = ev;
+            l
+        };
+        h.state_mut().save_adjustments(vec![
+            (paths[0].clone(), Some(with_ev(0.3))),
+            (paths[1].clone(), Some(with_ev(1.0))),
+        ]);
+        let files = h.state().files.clone();
+        h.state_mut().selection.select_all(&files);
+        h.state_mut().selected = 0;
+        h.run_steps(2);
+        h.get_by_label("Synchroniser 3 images");
+        assert!(h.state().adjust_sync, "checked by default");
+        h.state_mut().adjust_live(&paths[0], with_ev(0.5));
+        // Pendant le geste déjà, toute la sélection suit (toutes les vignettes ensemble).
+        let shown = |app: &TriApp, p: &PathBuf| {
+            app.adjust_map
+                .read()
+                .unwrap()
+                .layers
+                .get(p)
+                .map(|l| l.correction.exposure)
+        };
+        assert_eq!(
+            shown(h.state(), &paths[1]).map(|e| (e * 100.0).round()),
+            Some(120.0)
+        );
+        assert!(
+            h.state().adjust_stale.contains(&paths[2]),
+            "redrawn with the others"
+        );
+        let ctx = h.ctx.clone();
+        h.state_mut().adjust_commit(&ctx);
+        let ev = |p: &PathBuf| {
+            tri::adjust::read(p)
+                .unwrap()
+                .map_or(0.0, |l| l.correction.exposure)
+        };
+        assert!((ev(&paths[1]) - 1.2).abs() < 1e-5, "{}", ev(&paths[1]));
+        assert!((ev(&paths[2]) - 0.2).abs() < 1e-5, "{}", ev(&paths[2]));
+        h.state_mut().perform(&ctx, Action::Undo);
+        assert!((ev(&paths[1]) - 1.0).abs() < 1e-5, "one step");
+        // Sans synchronisation : l'image courante seule.
+        h.state_mut().adjust_sync = false;
+        h.state_mut().adjust_live(&paths[0], with_ev(0.8));
+        h.state_mut().adjust_commit(&ctx);
+        assert!((ev(&paths[1]) - 1.0).abs() < 1e-5);
+        // Copier / coller : le noir et blanc part, l'exposition est harmonisée.
+        let mut mono = with_ev(0.8);
+        mono.mono = tri::adjust::Mixer::preset("red");
+        h.state_mut()
+            .save_adjustments(vec![(paths[0].clone(), Some(mono))]);
+        h.state_mut().perform(&ctx, Action::AdjustCopy);
+        h.state_mut().selection.clear();
+        h.state_mut().selected = 2;
+        h.state_mut().perform(&ctx, Action::AdjustPaste);
+        let pasted = tri::adjust::read(&paths[2]).unwrap().expect("pasted");
+        assert_eq!(pasted.mono, mono.mono);
+        // Réinitialiser toute la sélection, même quand l'image courante n'a rien (retour du
+        // 10/11/2026 : le bouton restait grisé).
+        h.state_mut().adjust_sync = true;
+        h.state_mut()
+            .save_adjustments(vec![(paths[1].clone(), None)]);
+        let files = h.state().files.clone();
+        h.state_mut().selection.select_all(&files);
+        h.state_mut().selected = 1;
+        h.set_size(vec2(1000.0, 2400.0));
+        h.run_steps(3);
+        h.get_by_label("Réinitialiser").click();
+        h.run_steps(3);
+        for path in &paths {
+            assert_eq!(tri::adjust::read(path).unwrap(), None, "all reset");
+        }
+    }
+
+    #[test]
+    fn the_adjustments_are_in_tabs_without_checkboxes() {
+        // Retours du 10/11/2026 : onglets Base, Style, N&B, Valeurs, sans case : le style
+        // existe dès qu'une valeur n'est pas nulle, le noir et blanc dès qu'un filtre est
+        // choisi (« Aucun (couleur) » sinon) ; mélange normalisé par défaut.
+        let (mut h, _dir) = harness();
+        // Section en bas du panneau de droite : tout visible, sans défiler.
+        h.set_size(vec2(1000.0, 2400.0));
+        run_until(&mut h, |app| app.files.len() == 3);
+        h.state_mut().selected = 0;
+        h.run_steps(2);
+        // L'onglet existe ; changé par l'état (clics simulés parfois ignorés sous Windows).
+        h.get_by_label("Style");
+        h.state_mut().adjust_tab = adjust::AdjustTab::Style;
+        h.run_steps(2);
+        assert!(
+            h.query_by_label("Décalage créatif").is_none(),
+            "no checkbox"
+        );
+        // Le libellé nomme aussi son curseur et son champ.
+        assert!(h.query_all_by_label("Chaleur").count() >= 2);
+        assert!(h.query_all_by_label("Contraste").count() >= 2);
+        assert!(h.query_all_by_label("Saturation").count() >= 2);
+        // L'onglet existe ; changé par l'état (clics simulés parfois ignorés sous Windows).
+        h.get_by_label("N&B");
+        h.state_mut().adjust_tab = adjust::AdjustTab::Mono;
+        h.run_steps(2);
+        assert!(h.query_by_label("Noir et blanc").is_none(), "no checkbox");
+        h.get_by_label("Filtre");
+        assert!(
+            h.query_all_by_role(egui::accesskit::Role::ComboBox)
+                .any(|n| n.value().as_deref() == Some("Aucun (couleur)")),
+            "colour: no filter"
+        );
+        h.get_by_label("Normalisé");
+        // L'onglet existe ; changé par l'état (clics simulés parfois ignorés sous Windows).
+        h.get_by_label("Valeurs");
+        h.state_mut().adjust_tab = adjust::AdjustTab::Values;
+        h.run_steps(2);
+        h.get_by_label("Tout copier");
+        let path = h.state().files[0].path.clone();
+        assert_eq!(
+            tri::adjust::read(&path).unwrap(),
+            None,
+            "looking writes nothing"
+        );
+    }
+
+    #[test]
     fn an_error_shown_goes_to_the_log_and_a_click_opens_it_on_its_detail() {
         // #398 : la barre d'état garde un message court ; le moteur écrit le détail au
         // journal, l'erreur montrée y va aussi (une fois), et un clic ouvre le journal sur
@@ -28466,9 +29132,10 @@ mod tests {
         assert_eq!(h.state().version_shown, Some((image.clone(), 0)));
         h.run_steps(2);
         // La liste des versions, dans le bandeau du bas (le panneau de droite a aussi celle
-        // du tri).
+        // du tri, et celle de la balance des réglages) : celle qui montre une version.
         let versions_list = |h: &Harness<'_, TriApp>| {
             h.query_all_by_role(egui::accesskit::Role::ComboBox)
+                .filter(|n| n.value().is_some_and(|v| v.starts_with("Versions")))
                 .max_by(|a, b| a.rect().min.y.total_cmp(&b.rect().min.y))
                 .expect("liste des versions")
                 .click();

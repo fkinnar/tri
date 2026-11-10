@@ -133,6 +133,8 @@ pub struct EngineSettings {
     pub data: DataSection,
     /// Journal de l'application (`tri.log`).
     pub log: crate::log::LogSettings,
+    /// Réglages de visualisation.
+    pub adjust: crate::adjust::AdjustSettings,
 }
 
 /// Section `[xmp]` : notes (étoiles, couleurs, accepté / rejeté) dans les sidecars XMP. Voir
@@ -224,6 +226,7 @@ impl RenderSection {
             half_size: false,
             bright: self.bright,
             auto_bright: self.auto_bright,
+            ..RenderOptions::default()
         }
     }
 }

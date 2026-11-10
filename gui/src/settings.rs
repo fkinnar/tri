@@ -54,6 +54,8 @@ pub struct AppSettings {
     pub data: tri::settings::DataSection,
     /// `[log]` (moteur) : journal de l'application.
     pub log: tri::log::LogSettings,
+    /// `[adjust]` (moteur) : réglages de visualisation.
+    pub adjust: tri::adjust::AdjustSettings,
     /// `[files]` (moteur).
     pub files: tri::files::FileSettings,
     /// `[sharpness]` (moteur).
@@ -95,6 +97,7 @@ impl AppSettings {
             offload: self.offload.clone(),
             data: self.data.clone(),
             log: self.log.clone(),
+            adjust: self.adjust,
             files: self.files.clone(),
             sharpness: self.sharpness,
             similarity: self.similarity,
@@ -207,6 +210,11 @@ pub struct GuiSettings {
     pub trace_slow_ms: u64,
     /// Signaler un problème : dernières entrées du journal proposées (0 : aucune).
     pub report_log_entries: usize,
+    /// Réglages : côté de la zone mesurée par la pipette, en fraction de l'image.
+    pub adjust_eyedropper_size: f32,
+    /// Curseurs : vitesse du réglage fin (Maj + glisser), en fraction du déplacement de
+    /// la souris.
+    pub slider_fine_speed: f32,
     /// Flèches des noms de touches (←, →…) : vide, une police du système qui les a ;
     /// un chemin, cette police ; `"none"`, en toutes lettres.
     pub arrow_font: String,
@@ -320,6 +328,8 @@ impl Default for GuiSettings {
             key_menu_delay_ms: 400,
             trace_slow_ms: 100,
             report_log_entries: 20,
+            adjust_eyedropper_size: 0.04,
+            slider_fine_speed: 0.1,
             arrow_font: String::new(),
             arrow_font_scale: 1.0,
             window: [1400.0, 900.0],
@@ -1275,6 +1285,8 @@ pub struct FolderSettings {
     pub visible: bool,
     /// Largeur initiale (points) ; le bord se tire à la souris.
     pub width: f32,
+    /// Largeur minimale (points), la même que le panneau de droite par défaut.
+    pub min_width: f32,
     /// Retrait par niveau de l'arborescence (points).
     pub indent: f32,
     /// Montrer les dossiers cachés (`.xxx`).
@@ -1307,7 +1319,8 @@ impl Default for FolderSettings {
     fn default() -> Self {
         Self {
             visible: true,
-            width: 240.0,
+            width: 280.0,
+            min_width: 280.0,
             indent: 14.0,
             hidden: false,
             search_depth: 4,
@@ -1360,6 +1373,9 @@ pub struct MetadataSettings {
     pub visible: bool,
     /// Largeur initiale (points) ; le bord se tire à la souris.
     pub width: f32,
+    /// Largeur minimale (points) : le bord tiré ne descend pas plus bas (avant, le panneau
+    /// se rétrécissait puis reprenait la largeur de son contenu).
+    pub min_width: f32,
     /// Histogramme de l'image sélectionnée en haut du panneau, en grille comme en plein
     /// écran (panneau masqué : en surimpression sur l'image en plein écran).
     pub histogram: bool,
@@ -1378,6 +1394,7 @@ impl Default for MetadataSettings {
         Self {
             visible: true,
             width: 280.0,
+            min_width: 280.0,
             histogram: true,
             histogram_height: 120.0,
             slider_step: 0.1,

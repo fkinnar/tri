@@ -1591,6 +1591,10 @@ moitié transparente.
   repris dans le journal au lancement suivant), avant l'arrêt ; un plantage pendant le
   dessin de la fenêtre (appelé depuis AppKit sur macOS) ne laissait sinon qu'un rapport
   du système, sans le message.
+- **Réglages de visualisation** (issue n° 137, voir [adjust.md](adjust.md)) : section
+  « Réglages » en bas du panneau de droite (`gui/src/app/adjust.rs`), réglages appliqués
+  aux pixels avant la texture (`gui/src/adjust_view.rs`, carte partagée avec le fil de
+  chargement ; textures de l'image refaites à chaque changement), pipette en plein écran.
 - **Journal de l'application** (issue n° 398, voir [log.md](log.md)) : toute erreur
   montrée dans la barre d'état y est écrite une fois (`TriApp::log_errors`), après le
   détail que le moteur vient d'y mettre ; un clic sur l'erreur ouvre la fenêtre du
@@ -1664,6 +1668,17 @@ photos nettes.
 - **Double-clic sur un curseur : valeur par défaut**, partout (comme Lightroom) : flou et
   piles au centre, écart de temps des piles à `[similarity] max_gap_s`. Toute nouvelle
   glissière doit faire de même.
+- **Largeur minimale des panneaux** (`[gui.metadata] min_width`, `[gui.folders]
+  min_width`, 280 points, la même des deux côtés ; retour du 10/11/2026) : le bord tiré ne
+  descend pas plus bas (avant, le panneau se rétrécissait puis reprenait la largeur de son
+  contenu). Les listes des réglages se compriment pour tenir.
+- **Un seul curseur dans toute l'interface** (`gui/src/fine_slider.rs`, retours du
+  10/11/2026) : **glisser** avance par grands crans (0,1 IL, 50 K…) ; **Maj + glisser**
+  règle finement, relatif et démultiplié (`[gui] slider_fine_speed`, 1/10), par petits
+  crans ; un clic sur le rail, loin de la poignée, y place la valeur. Maj prise ou lâchée
+  en cours de geste repart de la valeur atteinte (la poignée ne saute pas). Ctrl+clic
+  écarté : c'est le clic droit sur macOS. Sur le curseur de similarité, Maj déplie aussi
+  les piles pendant le réglage, comme avant.
 - **Curseur du flou** : à fond à gauche, aucune photo floue (toutes visibles, même au
   plus souple il en manquait) ; en plein écran, il ne refiltre plus la grille (l'image
   regardée sortait du filtre et l'image changeait) : refiltrage au retour à la grille.

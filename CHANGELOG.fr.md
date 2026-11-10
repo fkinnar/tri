@@ -4,6 +4,31 @@
 
 ## Non publié
 
+- **Réglages de visualisation** (#404) : exposition, balance des blancs et noir et blanc
+  (mélangeur de canaux), pour comparer et trier une série. Une nouvelle section
+  « Réglages » du panneau de droite, en onglets : Base (exposition avec « Auto », à priorité aux hautes lumières ; balance
+  en kelvins et teinte, préréglages telle que prise, auto sur les pixels presque neutres, lumière du jour, nuageux,
+  ombre, tungstène, fluorescent et flash ; pipette : clic sur une zone grise ou cadre
+  tracé pour une balance auto sur cette partie), Style (décalage créatif : exposition, chaleur,
+  teinte, contraste, saturation), N&B (filtres en
+  préréglages, mélange gardé à 100 % quand il est normalisé) et Valeurs (le tableau à
+  reporter dans un logiciel de développement) ; un double-clic sur un onglet le remet à
+  zéro ; le clic droit sur le dossier ouvert règle l'exposition, la balance ou les deux
+  automatiquement sur toutes ses images, en tâche de fond. Plusieurs images sélectionnées :
+  « Synchroniser N images » applique chaque changement à toutes (un curseur décale chaque
+  image d'autant, la température du même rapport ; un bouton, auto ou préréglage,
+  recalcule chacune ; un seul pas à annuler). Aussi copier / coller les réglages
+  (exposition et balance harmonisées sur l'image copiée), « Harmoniser la sélection »,
+  « Avant » pour comparer. Enregistrés dans le sidecar sous `tri:` ; montrés sur les
+  vignettes et les grandes images. Tous les curseurs de l'interface avancent désormais
+  par grands crans, et finement avec Maj (`[gui] slider_fine_speed`) ; les deux panneaux
+  latéraux ont une largeur minimale (280 points) que le bord tiré respecte.
+  `tri --adjust <référence> <images>… --to <dossier>` règle la référence et applique ses
+  réglages aux autres : exposition et balance harmonisées sur la référence (une photo à
+  -1 IL reçoit environ +1 IL), décalage créatif et noir et blanc copiés. Écrit les JPEG
+  réglés et affiche les valeurs à reporter (`--ev auto`, `--kelvin`). Sur un RAW,
+  l'exposition est appliquée aux données du capteur. Nouvelle section `[adjust]` : cible
+  de l'exposition automatique, kelvins des préréglages (#137).
 - **Journal de l'application** (#403) : une erreur garde un message court dans la barre
   d'état, et tout son détail va dans `tri.log`, au dossier de données : pour un logiciel
   de développement en échec, l'image, la commande, le code de sortie et tous ses

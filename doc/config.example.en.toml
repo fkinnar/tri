@@ -550,6 +550,34 @@ keep = 3
 # problem on request. Large, switch it off afterwards.
 trace = false
 
+[adjust]
+# Viewing adjustments ("Adjustments" section of the right panel, tri --adjust).
+# Automatic exposure: target median luminance, in linear light (0.18: the mid grey of
+# light meters; higher, brighter images).
+auto_exposure_target = 0.18
+# Automatic exposure compensation (EV): raises the median target and the highlight level
+# together (the latter never beyond 0.95, nothing burns). Negative: darker.
+auto_exposure_bias = 0.5
+# Highlight priority: when brightening, stop when this percentile of the luminance (0.99:
+# the brightest 1 %) reaches auto_exposure_highlight_target; when darkening, when it comes
+# down to it (a low-key portrait doesn't burn, a snow scene doesn't turn grey).
+auto_exposure_highlights = 0.99
+auto_exposure_highlight_target = 0.6
+# Auto white balance, on the nearly neutral pixels (the "grey world", the average of the
+# whole image, cools a portrait with a warm face): a pixel counts if the gap between its
+# channels stays under this share of the strongest (0.2: 20 %); passes of the search
+# (what is neutral changes with the correction). Under 1 % of neutral pixels: grey world.
+auto_balance_chroma = 0.2
+auto_balance_passes = 4
+# White balance presets, in kelvins (zero tint). tri's kelvins are close to those of
+# development software, not identical (each has its own model of the camera).
+daylight = 5500
+cloudy = 6500
+shade = 7500
+tungsten = 2850
+fluorescent = 3800
+flash = 5500
+
 [gui]
 # "dark", "light", "system" or "neutral" (neutral grey, Lightroom-style: dark grey
 # panels, neutral grey central background, which doesn't skew the judgement of images;
@@ -586,6 +614,12 @@ trace_slow_ms = 100
 # Report a problem: latest log entries offered in the form, editable before sending (0:
 # none).
 report_log_entries = 20
+# Viewing adjustments: side of the zone the eyedropper measures (fraction of the image,
+# 0.04 = 4 %).
+adjust_eyedropper_size = 0.04
+# Sliders: dragging moves by large steps; Shift + drag adjusts finely, the value moving
+# by this fraction of the mouse movement (0.1: ten times slower).
+slider_fine_speed = 0.1
 # Arrows and Enter in the help, the menus and the palette: as symbols, taken from
 # a system font that has them (Apple Symbols, DejaVu Sans, Segoe UI Symbol; the
 # interface's has none). Empty: the first found; a path: that font; "none": spelled out
@@ -950,7 +984,9 @@ handle_grab = 10.0
 # hides it), initial width (points, the edge can be dragged with the mouse), indent per
 # level, hidden folders (.xxx) shown or not.
 visible = true
-width = 240.0
+width = 280.0
+# Minimum width (points): the edge dragged with the mouse doesn't go below it.
+min_width = 280.0
 indent = 14.0
 hidden = false
 # Folder search (<core.search> in the panel): maximum levels of subfolders
@@ -1056,6 +1092,8 @@ step = 0.1
 # and its height.
 visible = true
 width = 280.0
+# Minimum width (points): the edge dragged with the mouse doesn't go below it.
+min_width = 280.0
 histogram = true
 histogram_height = 120.0
 # Step of a strictness slider of the panel from the keyboard (<core.metadata.left> /

@@ -33,6 +33,10 @@ pub struct RenderOptions {
     /// par défaut : elle « corrige » une sous-exposition et masque donc l'erreur de prise de
     /// vue qu'on cherche justement à voir en triant.
     pub auto_bright: bool,
+    /// Correction d'exposition (IL), sur les données du capteur avant dématriçage
+    /// (réglages de visualisation, issue n° 137) ; LibRaw la borne à [-2 ; +3] IL,
+    /// [`RenderOptions::exposure_rest`] donne ce qui reste à appliquer sur l'image.
+    pub exposure: f32,
 }
 
 impl Default for RenderOptions {
@@ -42,7 +46,25 @@ impl Default for RenderOptions {
             half_size: false,
             bright: 1.0,
             auto_bright: false,
+            exposure: 0.0,
         }
+    }
+}
+
+impl RenderOptions {
+    /// Bornes de la correction d'exposition faite par LibRaw (IL) : `exp_shift` va de
+    /// 0,25 à 8.
+    pub const EXPOSURE_RANGE: (f32, f32) = (-2.0, 3.0);
+
+    /// La part de [`RenderOptions::exposure`] que LibRaw fait.
+    pub fn exposure_in_libraw(&self) -> f32 {
+        self.exposure
+            .clamp(Self::EXPOSURE_RANGE.0, Self::EXPOSURE_RANGE.1)
+    }
+
+    /// Ce qui reste à appliquer sur l'image rendue (au-delà des bornes de LibRaw).
+    pub fn exposure_rest(&self) -> f32 {
+        self.exposure - self.exposure_in_libraw()
     }
 }
 
@@ -346,6 +368,19 @@ impl RawFile {
         }
     }
 
+    /// Couleur de l'éclairage de la prise de vue en sRGB linéaire (vert = 1), dès
+    /// l'ouverture : la neutre du boîtier (`1 / cam_mul`), ramenée à la balance
+    /// « lumière du jour » de LibRaw (`pre_mul`, D65) puis passée par `rgb_cam`. Base des
+    /// kelvins des réglages ([`crate::adjust::kelvin`]). `None` sans balance connue.
+    pub fn as_shot_white(&self) -> Option<[f32; 3]> {
+        let mut info = std::mem::MaybeUninit::<ffi::RawInfo>::uninit();
+        let info = unsafe {
+            ffi::tri_libraw_raw_info(self.ptr, info.as_mut_ptr());
+            info.assume_init()
+        };
+        shot_white(&info.cam_mul, &info.pre_mul, &info.rgb_cam)
+    }
+
     /// Données brutes du capteur : décompresse le RAW (`libraw_unpack`, sans
     /// dématriçage) et donne accès aux valeurs de la mosaïque, à leur profondeur réelle
     /// (12, 14 ou 16 bits selon le boîtier), avec les niveaux de noir et de blanc. Base de
@@ -481,6 +516,7 @@ impl RawFile {
             ffi::tri_libraw_set_half_size(self.ptr, options.half_size.into());
             ffi::libraw_set_bright(self.ptr, options.bright);
             ffi::libraw_set_no_auto_bright(self.ptr, c_int::from(!options.auto_bright));
+            ffi::tri_libraw_set_exposure(self.ptr, options.exposure_in_libraw().exp2());
         }
         check(unsafe { ffi::libraw_unpack(self.ptr) })?;
         check(unsafe { ffi::libraw_dcraw_process(self.ptr) })?;
@@ -602,6 +638,18 @@ fn luma_weights(info: &ffi::RawInfo) -> [f32; 3] {
     let sum: f32 = mixed.iter().sum();
     let sum = if sum.abs() > 1e-6 { sum } else { 1.0 };
     std::array::from_fn(|c| wb[c] / wb[1] * mixed[c] / sum)
+}
+
+/// Voir [`RawFile::as_shot_white`].
+fn shot_white(cam_mul: &[f32; 4], pre_mul: &[f32; 4], rgb_cam: &[[f32; 4]; 3]) -> Option<[f32; 3]> {
+    let usable = |m: &[f32; 4]| (0..3).all(|c| m[c] > 0.0 && m[c].is_finite());
+    if !usable(cam_mul) || !usable(pre_mul) || rgb_cam.iter().flatten().all(|&v| v == 0.0) {
+        return None;
+    }
+    let neutral: [f32; 3] = std::array::from_fn(|c| pre_mul[c] / cam_mul[c]);
+    let rgb: [f32; 3] =
+        std::array::from_fn(|row| (0..3).map(|c| rgb_cam[row][c] * neutral[c]).sum());
+    (rgb.iter().all(|&v| v > 0.0 && v.is_finite())).then(|| rgb.map(|v| v / rgb[1]))
 }
 
 /// Plus petit côté de bloc (diviseur de la période) dont chaque bloc aligné contient les

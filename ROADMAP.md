@@ -41,6 +41,7 @@ README.
 | Focus point for other brands [#130](https://github.com/fkinnar/tri/issues/130) | Every RAW LibRaw reads is already supported (display, histogram, metadata); the focus point marker is Fujifilm only for now. To add: Canon, Nikon, Sony, OM, Panasonic, checked on samples from raw.pixls.us |
 | Ratings in other software [#131](https://github.com/fkinnar/tri/issues/131) | Check digiKam, RawTherapee, ART; Lightroom and Capture One (testers) |
 | Sharpness in comparison [#132](https://github.com/fkinnar/tri/issues/132) | Sharpness map in side-by-side comparison |
+| Viewing adjustments [#137](https://github.com/fkinnar/tri/issues/137) (beta 2) | Exposure, white balance, black and white (channel mixer) to compare and cull a series; applied to other photos with exposure and balance matched to a reference; a report of the values to copy into a development software, then written for it (RawTherapee / ART first) |
 
 ## After V1
 
@@ -50,7 +51,6 @@ README.
 | Folder merge [#134](https://github.com/fkinnar/tri/issues/134) | Move a folder into a folder of the same name |
 | Crop to development software [#135](https://github.com/fkinnar/tri/issues/135) | Write a version's crop into the sidecar, in the format of Lightroom (`crs:Crop…`), darktable, Capture One |
 | Offload [#136](https://github.com/fkinnar/tri/issues/136) | Folder and file name templates, multi-day cards |
-| Viewing adjustments [#137](https://github.com/fkinnar/tri/issues/137), [#247](https://github.com/fkinnar/tri/issues/247) | Exposure, white balance, black and white (colour filters), contrast, saturation, exposure matching across a series (non-destructive); named profiles, chained with a darktable preset, converted to a software's preset |
 | Complex filters [#138](https://github.com/fkinnar/tri/issues/138) | Dedicated window or panel |
 | EXIF filters [#4](https://github.com/fkinnar/tri/issues/4) | Camera, lens, focal length, aperture, shutter speed, ISO…: at least what the metadata panel shows (issue #4) |
 | Fuller vim [#139](https://github.com/fkinnar/tri/issues/139) | Counts before actions (`5j`, `3x`) |

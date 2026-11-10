@@ -31,6 +31,7 @@ macro_rules! t {
 }
 
 mod actions;
+mod adjust_view;
 mod app;
 mod cheatsheet;
 mod compare;
@@ -39,6 +40,7 @@ mod crop;
 mod develop_batch;
 mod export;
 mod files;
+mod fine_slider;
 mod fonts;
 mod grid;
 mod grid_render;

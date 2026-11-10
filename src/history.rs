@@ -96,6 +96,20 @@ pub enum Step {
         /// Ce qui a changé (pour la liste de l'historique).
         change: VersionChange,
     },
+    /// Réglages de visualisation (`tri::adjust`) d'une ou plusieurs images : élément de
+    /// `tri:Adjust` avant et après, par image (« Appliquer à la sélection » : un pas).
+    Adjust(Vec<AdjustChange>),
+}
+
+/// Réglages d'une image avant et après (éléments de `tri:Adjust`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdjustChange {
+    /// L'image.
+    pub image: PathBuf,
+    /// Éléments avant.
+    pub before: Vec<String>,
+    /// Éléments après.
+    pub after: Vec<String>,
 }
 
 /// Changement d'une version, pour l'historique.
@@ -302,6 +316,10 @@ impl Step {
             Step::RenameDir(from, to) => {
                 crate::t!("history-rename", from = name(from), to = name(to))
             }
+            Step::Adjust(changes) => match changes.as_slice() {
+                [one] => crate::t!("history-adjust", name = name(&one.image)),
+                _ => crate::t!("history-adjust-many", n = changes.len()),
+            },
             Step::Versions { image, change, .. } => {
                 let (id, version) = match change {
                     VersionChange::Created(v) => ("history-version-created", v),
@@ -346,6 +364,7 @@ impl Step {
             Step::CreateDir(_) | Step::TransferDir { .. } => Vec::new(),
             Step::RenameDir(from, to) => vec![if undone { from.clone() } else { to.clone() }],
             Step::Versions { image, .. } => vec![image.clone()],
+            Step::Adjust(changes) => changes.iter().map(|c| c.image.clone()).collect(),
         }
     }
 
@@ -359,6 +378,7 @@ impl Step {
                 after,
                 ..
             } => set_versions(image, after, before, convention),
+            Step::Adjust(changes) => set_adjust(changes, convention, true),
             Step::Rename(plan) => {
                 for (from, to) in &plan.moves {
                     if !to.exists() {
@@ -515,6 +535,7 @@ impl Step {
                 after,
                 ..
             } => set_versions(image, before, after, convention),
+            Step::Adjust(changes) => set_adjust(changes, convention, false),
             Step::Rename(plan) => {
                 for (from, _) in &plan.moves {
                     if !from.exists() {
@@ -654,6 +675,27 @@ fn set_versions(
     Ok(())
 }
 
+/// Remet les réglages de chaque image à leur état d'avant (`undo`) ou d'après. Tout est
+/// vérifié avant d'écrire : une image modifiée ailleurs depuis refuse le pas entier, rien
+/// n'est écrasé.
+fn set_adjust(changes: &[AdjustChange], convention: Convention, undo: bool) -> Result<()> {
+    let field = crate::xmp::ADJUST;
+    for c in changes {
+        let expected = if undo { &c.after } else { &c.before };
+        let current = crate::xmp::read_list_of(&c.image, field)
+            .map_err(|e| HistoryError::Notes(e.to_string()))?;
+        if current != *expected {
+            return Err(HistoryError::NotesChanged(c.image.clone()));
+        }
+    }
+    for c in changes {
+        let wanted = if undo { &c.before } else { &c.after };
+        crate::xmp::write_list(&c.image, field, wanted, convention)
+            .map_err(|e| HistoryError::Notes(e.to_string()))?;
+    }
+    Ok(())
+}
+
 /// Un pas, et s'il est en vigueur.
 #[derive(Clone, Debug)]
 pub struct Entry {
@@ -781,7 +823,10 @@ fn applied(entry: &Entry, undone: bool) -> Applied {
         label: entry.label.clone(),
         undone,
         images: entry.step.images(undone),
-        files_changed: !matches!(entry.step, Step::Notes(_) | Step::Versions { .. }),
+        files_changed: !matches!(
+            entry.step,
+            Step::Notes(_) | Step::Versions { .. } | Step::Adjust(_)
+        ),
     }
 }
 

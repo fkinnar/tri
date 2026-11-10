@@ -42,6 +42,7 @@ marche à suivre est dans le README.
 | Collimateur des autres marques [#130](https://github.com/fkinnar/tri/issues/130) | Tous les RAW que lit LibRaw sont déjà gérés (affichage, histogramme, métadonnées) ; seul le repère du collimateur est pour l'instant propre à Fujifilm. À ajouter : Canon, Nikon, Sony, OM, Panasonic, vérifiés sur des échantillons de raw.pixls.us |
 | Notes dans les autres logiciels [#131](https://github.com/fkinnar/tri/issues/131) | Vérifier digiKam, RawTherapee, ART ; Lightroom et Capture One (testeurs) |
 | Netteté dans la comparaison [#132](https://github.com/fkinnar/tri/issues/132) | Carte de netteté en mode comparaison côte à côte |
+| Réglages de visualisation [#137](https://github.com/fkinnar/tri/issues/137) (bêta 2) | Exposition, balance des blancs, noir et blanc (mélangeur de canaux) pour comparer et trier une série ; appliqués à d'autres photos, exposition et balance harmonisées sur une référence ; rapport des valeurs à reporter dans un logiciel de développement, puis écrites pour lui (RawTherapee / ART d'abord) |
 
 ## Après la V1
 
@@ -51,7 +52,6 @@ marche à suivre est dans le README.
 | Fusion de dossiers [#134](https://github.com/fkinnar/tri/issues/134) | Déplacer un dossier dans un dossier du même nom |
 | Recadrage vers les logiciels de développement [#135](https://github.com/fkinnar/tri/issues/135) | Écrire le cadre d'une version dans le sidecar, au format de Lightroom (`crs:Crop…`), darktable, Capture One |
 | Déchargement [#136](https://github.com/fkinnar/tri/issues/136) | Gabarits de noms de dossier et de fichiers, cartes de plusieurs jours |
-| Réglages de visualisation [#137](https://github.com/fkinnar/tri/issues/137), [#247](https://github.com/fkinnar/tri/issues/247) | Exposition, balance des blancs, noir et blanc (filtres colorés), contraste, saturation, uniformisation d'exposition sur une série (non destructifs) ; profils nommés, enchaînés avec un préréglage darktable, convertis en préréglage d'un logiciel |
 | Filtres complexes [#138](https://github.com/fkinnar/tri/issues/138) | Fenêtre ou panneau dédié |
 | Filtres sur les EXIF [#4](https://github.com/fkinnar/tri/issues/4) | Appareil, objectif, focale, ouverture, vitesse, ISO… : au moins ce que montre le panneau des métadonnées (issue n° 4) |
 | Vim plus complet [#139](https://github.com/fkinnar/tri/issues/139) | Nombres devant les actions (`5j`, `3x`) |

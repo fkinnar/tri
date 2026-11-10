@@ -4,6 +4,28 @@
 
 ## Unreleased
 
+- **Viewing adjustments** (#404): exposure, white balance and black and white (channel
+  mixer), to compare and cull a series. A new "Adjustments" section in the right panel,
+  in tabs: Base (exposure with "Auto", highlight priority; balance in kelvins and tint, as shot, auto on the nearly neutral pixels,
+  daylight, cloudy, shade, tungsten, fluorescent and flash presets; eyedropper: click a
+  grey zone or draw a frame for an auto balance on that part), Style (creative offset: exposure, warmth, tint, contrast,
+  saturation),
+  B&W (filter presets, mix kept at 100 % when normalised) and Values (the table to copy
+  into a development software); a double-click on a tab resets it; the open folder's right-click menu sets automatic
+  exposure, white balance or both on all its images, in the background. With several images selected, "Sync N images" applies
+  every change to all of them (a slider shifts each image by as much, temperature by the
+  same ratio; a button, auto or preset, computes each one; one undo step). Also copy /
+  paste adjustments (exposure and balance matched to the copied image), "Harmonise the
+  selection", "Before" to compare. Stored in the sidecar under `tri:`; shown on
+  thumbnails and large images. Every slider of the interface now moves by large steps,
+  and finely with Shift (`[gui] slider_fine_speed`); both side panels have a minimum
+  width (280 points) that the dragged edge respects.
+  `tri --adjust <reference> <images>… --to <folder>` sets the reference and applies its
+  adjustments to the others: exposure and balance matched to the reference (a photo at
+  -1 EV gets about +1 EV), creative offset and black and white copied. It writes the
+  adjusted JPEGs and prints the values to copy (`--ev auto`, `--kelvin`). On a RAW,
+  exposure is applied to the sensor data. New `[adjust]` section: automatic exposure
+  target, kelvins of the presets (#137).
 - **Application log** (#403): errors keep a short message in the status bar, and their
   full detail goes to `tri.log` in the data folder: for a development software that
   fails, the image, the command, the exit code and all its messages; also failed

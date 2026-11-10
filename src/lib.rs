@@ -1,6 +1,7 @@
 //! Moteur de `tri`, visionneuse RAW pour le tri de photos.
 //!
 //! - [`media`] : parcours de dossier, classification RAW / image plate ;
+//! - [`adjust`] : réglages de visualisation (exposition, balance, noir et blanc), harmonisation ;
 //! - [`bitmap`] : type d'image RGB8 commun ;
 //! - [`cache`] : cache persistant des vignettes et aperçus ;
 //! - [`flat`] : décodage des images plates (JPEG, PNG, TIFF, WebP, HEIF) ;
@@ -23,6 +24,7 @@
 
 #![warn(missing_docs)]
 
+pub mod adjust;
 pub mod bitmap;
 pub mod cache;
 pub mod config_edit;
