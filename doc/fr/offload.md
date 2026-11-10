@@ -146,7 +146,7 @@ analyses de la séance pendant la copie, puis attend la fin des calculs. Mesuré
 ## Interface
 
 Icône « décharger » à côté de l'icône d'éjection de chaque volume non fixé du panneau des
-dossiers : boîte (modale, près du clic) avec inventaire en fond, racine et nom modifiables
+dossiers : boîte (modale, au centre) avec inventaire en fond, racine et nom modifiables
 (destination complète affichée), cases à cocher ci-dessus, copie en fond avec barre de
 progression et « Interrompre », puis suites enchaînées et bilan (la séance s'ouvre dans
 la grille et ses calculs démarrent). Voir [gui.md](gui.md).

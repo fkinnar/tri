@@ -921,6 +921,9 @@ palette_settings_prefix = "?"
 # During a wait (copy, network lookup, key sequence…), interval between two frames to see
 # how far it has got, in milliseconds.
 poll_ms = 100
+# Dialog opened in the centre: number of frames during which it centres itself from its
+# measured size, before it stays put (content arriving later does not move it).
+centring_frames = 3
 # Files in error listed at the end of an offload; folders offered under a path field,
 # after Tab.
 max_errors = 5

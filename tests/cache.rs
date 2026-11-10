@@ -414,3 +414,43 @@ fn only_a_1_1_read_counts_as_a_use() {
     assert_eq!(dates[0], old, "aperçu standard : date inchangée");
     assert!(dates[1] > old, "1:1 : date de dernier usage");
 }
+
+#[test]
+fn a_disk_cache_is_measured_and_cleared_whole() {
+    // Vider le cache gardé sur un disque ou dans un dossier (10/11/2026) : toutes ses
+    // entrées, quel que soit le dossier des photos ; il reste gardé là, le cache central
+    // n'est pas touché.
+    let dir = tempfile::tempdir().unwrap();
+    let cache = Cache::open(dir.path().join("cache")).unwrap();
+    let disk = dir.path().join("disque");
+    let elsewhere = dir.path().join("ailleurs/DSCF0002.RAF");
+    fs::create_dir_all(elsewhere.parent().unwrap()).unwrap();
+    fs::write(&elsewhere, b"autre RAW").unwrap();
+    let central = Key::new(&elsewhere, Level::Thumbnail, "s=400").unwrap();
+    cache.put(&central, &gradient()).unwrap();
+    cache.use_disk(&disk).unwrap();
+    for (i, sub) in ["a", "b/c"].iter().enumerate() {
+        let photo = disk.join(sub).join(format!("DSCF000{i}.RAF"));
+        fs::create_dir_all(photo.parent().unwrap()).unwrap();
+        fs::write(&photo, b"RAW").unwrap();
+        cache
+            .put(
+                &Key::new(&photo, Level::Thumbnail, "s=400").unwrap(),
+                &gradient(),
+            )
+            .unwrap();
+        cache
+            .put_bytes(&Key::new(&photo, Level::Exposure, "v").unwrap(), b"h")
+            .unwrap();
+    }
+    let usage = cache.disk_usage(&disk).unwrap();
+    assert_eq!(usage.entries, 4);
+    assert!(usage.bytes > 0);
+    let freed = cache.clear_disk(&disk).unwrap();
+    assert_eq!(freed, usage);
+    assert_eq!(cache.disk_usage(&disk).unwrap(), Usage::default());
+    assert!(disk.join(tri::cache::DISK_DIR).is_dir(), "still kept there");
+    assert!(cache.contains(&central), "central cache untouched");
+    // Rien à vider ailleurs.
+    assert_eq!(cache.clear_disk(dir.path()).unwrap(), Usage::default());
+}

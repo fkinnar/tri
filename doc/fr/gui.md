@@ -711,11 +711,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   pas interrompre. L'aide, fenêtre d'egui, avait déjà la sienne.
 - **Cache gardé avec les photos** (24/10/2026, issue n° 55) : clic droit sur un dossier
   du panneau, « Garder le cache dans ce dossier » (sur un disque amovible : « sur ce
-  disque »), ou « Ne plus garder le cache ici » ; pas proposé là où `[cache] location`
+  disque »), ou « Ne plus garder le cache dans ce dossier » (« sur ce disque ») ; pas proposé là où `[cache] location`
   le met déjà. À l'ouverture d'un dossier, `location` (`disk`, `folder`) s'applique s'il
   est encore chez l'utilisateur. Déplacement d'un dossier : case « Emporter le cache »
   (cochée) ; renommage : le cache suit toujours. Le travail se fait en fond
-  (`TriApp::cache_job`), message dans la barre d'état.
+  (`TriApp::cache_job`), message dans la barre d'état. Là où il est gardé, « Vider le
+  cache de ce dossier… » (« de ce disque » ; groupe Préférences, 10/11/2026), une action
+  (`core.folders.cache_clear`, sans raccourci par défaut, sur le dossier pointé au
+  clavier) : une boîte confirme, avec la taille mesurée en fond, puis l'espace libéré
+  s'affiche dans la barre d'état ; le cache reste gardé là. Le cache général se vide depuis la fenêtre de
+  réglages (section Cache).
 - **Pointeur dans les boîtes** : la main sur tout ce qui se clique (`interact_cursor` dans
   le cadre commun `Dialog`) ; « saisir » ailleurs, pour déplacer la boîte. **Dans les
   barres et les panneaux aussi** (09/11/2026, #386 : la main sur les icônes des barres,
@@ -802,9 +807,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     vignettes, alors que la note allait à l'image cliquée. Derrière la boîte, rien ne
     bouge : ni survol, ni navigation ; seules les touches de notation (pour cette image)
     et Échap agissent. Elle reste ouverte pour poser plusieurs notes, et se ferme par
-    Échap, « Fermer » ou un clic à côté. Elle s'ouvre **au point du clic** (`modal_at`),
-    pas au centre : sur un grand écran, le trajet jusqu'au centre était long (retour du
-    17/10/2026, même chose pour la confirmation d'éjection, ouverte près de l'icône) ;
+    Échap, « Fermer » ou un clic à côté. Ouverte d'abord au point du clic (17/10/2026),
+    elle s'ouvre **au centre** depuis le 10/11/2026, comme toutes les boîtes : `modal_at`
+    avec `CENTRED`, placée d'après sa taille réelle, mesurée pendant ses premières images
+    (`[gui.dialogs] centring_frames`, 3), puis immobile : un contenu arrivé ensuite ne la
+    fait pas glisser sous le pointeur ;
   - **réaction au survol** (même retour) : sur les étoiles, pastilles et drapeaux
     cliquables (bandeau, boîte, barre de filtres), pointeur en main et fond surligné
     (`marks::clickable`) ;
@@ -818,7 +825,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   - contrôles nommés pour l'accessibilité (`WidgetInfo`), ce qui permet aussi aux tests
     d'interface de cliquer « 3 étoiles ».
 - **Déchargement d'une carte** (17/10/2026) : icône « décharger » sur chaque volume non
-  fixé du panneau des dossiers ; boîte près du clic : inventaire en fond, racine et
+  fixé du panneau des dossiers ; boîte au centre : inventaire en fond, racine et
   dossier de la séance (proposé `AAAA-MM-JJ_` ; racine mémorisée), cases à cocher (RAW seulement,
   ouvrir le dossier, éjecter la carte, supprimer de la carte les fichiers copiés et
   vérifiés), copie vérifiée en fond avec progression et « Interrompre », puis suites

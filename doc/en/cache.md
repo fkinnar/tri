@@ -57,6 +57,9 @@ folder, forgotten at every change).
   it (central cache, or a `.tri-cache` higher up): nothing is computed again;
 - `release_disk(root)`: the reverse, the entries go where their photos now expect them
   (a `.tri-cache` higher up, otherwise the user's);
+- `disk_usage(root)` / `clear_disk(root)` (2026-11-10): size of everything `.tri-cache`
+  keeps, and clearing it (entries of photos gone since included); `.tri-cache` remains,
+  the cache stays kept there;
 - `relocate(from, to)`: after a folder is moved or renamed, its entries follow it (a
   `.tri-cache` in the folder itself has left with it);
 - `apply(location, folder, removable)`: the `[cache] location` setting (`user`, `disk`,

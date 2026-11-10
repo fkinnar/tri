@@ -142,7 +142,7 @@ to copy".
 ## Interface
 
 "Offload" icon next to the eject icon of each non-fixed volume in the folders panel:
-dialog (modal, near the click) with inventory in the background, editable root and name
+dialog (modal, in the centre) with inventory in the background, editable root and name
 (full destination displayed), the checkboxes above, background copy with a progress bar
 and "Interrupt", then the chained follow-ups and summary (the session opens in the grid
 and its computations start). See [gui.md](gui.md).

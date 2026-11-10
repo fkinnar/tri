@@ -668,11 +668,14 @@ system one ("cold" measurements, experiments).
   an egui window, already had its own.
 - **Cache kept with the photos** (2026-10-24, issue #55): right click on a folder of
   the panel, "Keep the cache in this folder" (on a removable drive: "on this drive"), or
-  "No longer keep the cache here"; not offered where `[cache] location` already puts it.
+  "No longer keep the cache in this folder" ("on this drive"); not offered where `[cache] location` already puts it.
   When a folder is opened, `location` (`disk`, `folder`) applies if its cache is still
   the user's. Moving a folder: "Bring the cache along" checkbox (ticked); renaming: the
   cache always follows. The work is done in the background (`TriApp::cache_job`), message
-  in the status bar.
+  in the status bar. Where it is kept, "Clear the cache of this folder…" ("of this drive"; Preferences
+  group, 2026-11-10), an action (`core.folders.cache_clear`, no default key, on the
+  folder under the keyboard cursor): a dialog confirms, with the size measured in the
+  background, then the freed space shows in the status bar; the cache stays kept there. The general cache is cleared from the settings window (Cache section).
 - **Pointer in dialogs**: the hand on everything clickable (`interact_cursor` in the
   common `Dialog` frame); "grab" elsewhere, to move the dialog. **In the bars and
   panels too** (2026-11-09, #386: a hand on the bar icons, an arrow on the panels'
@@ -750,9 +753,11 @@ system one ("cold" measurements, experiments).
     2026-10-17): the mouse leaving the menu selected other thumbnails, while the rating
     went to the clicked image. Behind the dialog, nothing moves: no hover, no navigation;
     only the rating keys (for this image) and Esc act. It stays open to set several
-    ratings, and closes with Esc, "Close" or a click outside. It opens **at the click
-    point** (`modal_at`), not in the centre: on a large screen, the way to the centre was
-    long (feedback of 2026-10-17, same for the eject confirmation, opened near the icon);
+    ratings, and closes with Esc, "Close" or a click outside. First opened at the
+    click point (2026-10-17), it opens **in the centre** since 2026-11-10, like every
+    dialog: `modal_at` with `CENTRED`, placed from its real size, measured during its first
+    frames (`[gui.dialogs] centring_frames`, 3), then still: content arriving later does
+    not slide it under the pointer;
   - **reaction on hover** (same feedback): on the clickable stars, dots and flags (bar,
     dialog, filter bar), hand pointer and highlighted background (`marks::clickable`);
   - each click triggers the same action as the keyboard. **Flag**: clicking it again does
@@ -765,7 +770,7 @@ system one ("cold" measurements, experiments).
   - controls named for accessibility (`WidgetInfo`), which also lets the interface tests
     click "3 stars".
 - **Card offload** (2026-10-17): "offload" icon on each non-fixed volume of the folders
-  panel; dialog near the click: inventory in the background, root and session folder
+  panel; dialog in the centre: inventory in the background, root and session folder
   (suggested `YYYY-MM-DD_`; root remembered), checkboxes (RAW only, open the folder,
   eject the card, delete the copied and verified files from the card), verified copy in
   the background with progress and "Interrupt", then the ticked follow-ups chained

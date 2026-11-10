@@ -579,6 +579,36 @@ impl Cache {
         Ok(moved)
     }
 
+    /// Place du cache gardé dans `root` ([`Cache::use_disk`]), tous niveaux.
+    pub fn disk_usage(&self, root: &Path) -> io::Result<Usage> {
+        let root = std::path::absolute(root)?;
+        let mut total = Usage::default();
+        for level in Level::ALL {
+            total.add(dir_usage(&disk_level_dir(&root, level))?);
+        }
+        Ok(total)
+    }
+
+    /// Vide le cache gardé dans `root` : toutes ses entrées, celles de photos disparues
+    /// comprises ; le choix de l'y garder reste ([`DISK_DIR`] demeure). Renvoie l'espace
+    /// libéré.
+    pub fn clear_disk(&self, root: &Path) -> io::Result<Usage> {
+        let root = std::path::absolute(root)?;
+        if !root.join(DISK_DIR).is_dir() {
+            return Ok(Usage::default());
+        }
+        let mut freed = Usage::default();
+        for level in Level::ALL {
+            let dir = disk_level_dir(&root, level);
+            freed.add(dir_usage(&dir)?);
+            match fs::remove_dir_all(&dir) {
+                Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+                _ => {}
+            }
+        }
+        Ok(freed)
+    }
+
     /// Après le déplacement (ou le renommage) du dossier `from` en `to` : ses entrées et
     /// celles de ses sous-dossiers suivent (sinon, recalculées). Un cache gardé dans le
     /// dossier lui-même est déjà parti avec lui.
@@ -850,6 +880,32 @@ impl Usage {
         self.bytes += other.bytes;
         self.entries += other.entries;
     }
+}
+
+/// Place des entrées d'un dossier de niveau (ses dossiers d'entrées) ; rien s'il n'existe
+/// pas.
+fn dir_usage(level_dir: &Path) -> io::Result<Usage> {
+    let mut usage = Usage::default();
+    let shards = match fs::read_dir(level_dir) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(usage),
+        result => result?,
+    };
+    for shard in shards.flatten() {
+        if !shard.file_type()?.is_dir() {
+            continue;
+        }
+        for file in fs::read_dir(shard.path())?.flatten() {
+            if file
+                .path()
+                .extension()
+                .is_some_and(|e| e == "jpg" || e == "bin")
+            {
+                usage.bytes += file.metadata()?.len();
+                usage.entries += 1;
+            }
+        }
+    }
+    Ok(usage)
 }
 
 /// Dossier d'un niveau dans le cache du disque `root`.

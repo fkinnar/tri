@@ -775,6 +775,10 @@ pub struct DialogSettings {
     /// Pendant une attente (copie, recherche sur le réseau, touche de séquence…),
     /// intervalle entre deux images pour voir où elle en est (ms).
     pub poll_ms: u64,
+    /// Boîte ouverte au centre : images pendant lesquelles elle se recentre d'après sa
+    /// taille mesurée, avant de ne plus bouger (un contenu arrivé ensuite ne la déplace
+    /// pas sous le pointeur).
+    pub centring_frames: u32,
     /// Fichiers en erreur listés à la fin d'un déchargement.
     pub max_errors: usize,
     /// Dossiers proposés sous un champ de chemin, après Tab.
@@ -830,6 +834,7 @@ impl Default for DialogSettings {
             palette_actions_prefix: Some('>'),
             palette_settings_prefix: Some('?'),
             poll_ms: 100,
+            centring_frames: 3,
             max_errors: 5,
             completions: 12,
         }

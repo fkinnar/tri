@@ -360,6 +360,9 @@ pub struct TriApp {
     /// Déplacements du cache en cours (garder le cache sur un disque, dans un dossier, ou
     /// le faire suivre un dossier déplacé), chacun dans un fil ; message à la fin.
     cache_jobs: Vec<std::thread::JoinHandle<Option<(String, bool)>>>,
+    /// « Vider le cache de ce dossier / disque » (`core.folders.cache_clear`) : boîte de
+    /// confirmation, avec la place mesurée en fond.
+    disk_clear: Option<DiskClear>,
     /// Message pour la barre d'état (texte, vrai si c'est une erreur).
     notice: Option<(String, bool)>,
     /// Réglages du moteur (fichier de configuration).
@@ -1357,6 +1360,7 @@ impl TriApp {
             remote: None,
             remote_scanner: tri::remote::scan,
             cache_jobs: Vec::new(),
+            disk_clear: None,
             notice: None,
             settings: settings.engine(),
             warning,
@@ -3101,7 +3105,7 @@ impl TriApp {
                         && card.join("DCIM").is_dir()
                         && self.ejecting.is_none()
                     {
-                        let at = ctx.content_rect().center() - vec2(160.0, 120.0);
+                        let at = CENTRED;
                         let mut dialog = OffloadDialog::new(
                             card,
                             at,
@@ -3697,7 +3701,13 @@ impl TriApp {
                                 use tri::cache::Location;
                                 let here = cache.disk_of(&row.path).as_deref() == Some(&row.path);
                                 let text = if here {
-                                    Some(t!("folder-menu-cache-release"))
+                                    // Dossier ou disque, comme pour le garder (retour du
+                                    // 10/11/2026 : « ici » sonnait faux).
+                                    Some(if removable {
+                                        t!("folder-menu-cache-release-disk")
+                                    } else {
+                                        t!("folder-menu-cache-release-folder")
+                                    })
                                 } else if removable {
                                     (location != Location::Disk)
                                         .then(|| t!("folder-menu-cache-disk"))
@@ -3720,6 +3730,16 @@ impl TriApp {
                                         {
                                             cache_menu = Some((row.path.clone(), !here));
                                             egui::Popup::close_all(ui.ctx());
+                                        }
+                                        // Vider le cache gardé là (10/11/2026) : une
+                                        // action (raccourci possible), une boîte confirme.
+                                        if here {
+                                            let text = if removable {
+                                                t!("folder-menu-cache-clear-disk")
+                                            } else {
+                                                t!("folder-menu-cache-clear-folder")
+                                            };
+                                            entry(ui, Action::FolderCacheClear, text);
                                         }
                                     },
                                 );
@@ -3779,7 +3799,7 @@ impl TriApp {
                                 if response.clicked() {
                                     // Au centre, comme les autres boîtes (#252 ; près du
                                     // clic avant).
-                                    let at = ui.ctx().content_rect().center() - vec2(210.0, 160.0);
+                                    let at = CENTRED;
                                     offload = Some((row.path.clone(), at));
                                 }
                             }
@@ -3793,7 +3813,7 @@ impl TriApp {
                             if response.clicked() {
                                 // Au centre, comme les autres boîtes (#282 ; au coin de
                                 // l'icône avant).
-                                let at = ui.ctx().content_rect().center() - vec2(160.0, 120.0);
+                                let at = CENTRED;
                                 eject = Some((row.path.clone(), at));
                             }
                         }
@@ -3891,13 +3911,13 @@ impl TriApp {
                 // Clic droit : une boîte pour choisir le logiciel (26/10/2026).
                 Action::DevelopFolder => {
                     // Au centre, comme les autres boîtes (#282 ; sous le pointeur avant).
-                    let at = ctx.content_rect().center() - vec2(180.0, 120.0);
+                    let at = CENTRED;
                     self.develop_folder_dialog = Some((path, at, None));
                 }
                 Action::Sidecars => {
                     let images: Vec<PathBuf> =
                         self.folder.files.iter().map(|f| f.path.clone()).collect();
-                    let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                    let at = CENTRED;
                     let title = t!("sidecars-title-folder", folder = folder_name(&path));
                     self.open_sidecars_dialog(images, title, at);
                 }
@@ -3925,6 +3945,7 @@ impl TriApp {
                 Action::FolderFavorite => self.toggle_favorite(),
                 Action::FolderFavoriteName => self.name_favorite(&ctx),
                 Action::FolderForget => self.forget_server(&path),
+                Action::FolderCacheClear => self.ask_disk_clear(&ctx, path),
                 Action::FolderOpenIn(engine) => self.open_folder_in(engine, &path),
                 Action::FolderCopy | Action::FolderMove => {
                     self.transfer_folder(&ctx, path, action == Action::FolderCopy, None)
@@ -3949,7 +3970,7 @@ impl TriApp {
                     } else {
                         tri::files::TransferMode::Move
                     };
-                    let at = ctx.content_rect().center() - vec2(210.0, 160.0);
+                    let at = CENTRED;
                     self.file_dialog = Some(crate::files::FileDialog::transfer(
                         crate::files::Source::Images(paths),
                         mode,
@@ -4051,7 +4072,7 @@ impl TriApp {
             return;
         };
         let (mut go, mut cancel) = (false, false);
-        let at = ctx.content_rect().center() - vec2(180.0, 120.0);
+        let at = CENTRED;
         let title = t!("download-title", version = download.version.as_str());
         let modal = modal_at("download_dialog", at)
             .title(title)
@@ -4118,7 +4139,7 @@ impl TriApp {
         let current = self.build.version.as_str();
         let build = &self.build;
         let mut close = false;
-        let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+        let at = CENTRED;
         let modal = modal_at("update_dialog", at)
             .title(t!("update-title"))
             .show(ctx, |ui| {
@@ -4170,6 +4191,105 @@ impl TriApp {
         }
         if close || modal.should_close() {
             self.update = None;
+        }
+    }
+
+    /// `core.folders.cache_clear` sur `root` : si son cache y est gardé, la boîte de
+    /// confirmation s'ouvre, sa place mesurée en fond ; sinon, dit pourquoi.
+    fn ask_disk_clear(&mut self, ctx: &egui::Context, root: PathBuf) {
+        let Some(engine) = &self.engine else { return };
+        if engine.cache.disk_of(&root).as_deref() != Some(root.as_path()) {
+            self.notice = Some((t!("cache-clear-not-kept", name = folder_name(&root)), true));
+            return;
+        }
+        let (tx, rx) = mpsc::channel();
+        let (cache, at_root, repaint) = (engine.cache.clone(), root.clone(), ctx.clone());
+        std::thread::spawn(move || {
+            let _ = tx.send(cache.disk_usage(&at_root).unwrap_or_default());
+            repaint.request_repaint();
+        });
+        let removable = self
+            .tree
+            .rows()
+            .iter()
+            .any(|r| r.path == root && r.kind == Some(PlaceKind::Volume) && r.ejectable);
+        // Au centre (retour du 10/11/2026 : près du pointeur, la boîte débordait en bas) ;
+        // recentrée d'après sa vraie taille dès sa première image.
+        let at = CENTRED;
+        self.disk_clear = Some(DiskClear {
+            root,
+            removable,
+            size: None,
+            measuring: rx,
+            at,
+        });
+    }
+
+    fn disk_clear_dialog(&mut self, ctx: &egui::Context) {
+        let Some(dialog) = &mut self.disk_clear else {
+            return;
+        };
+        if dialog.size.is_none()
+            && let Ok(usage) = dialog.measuring.try_recv()
+        {
+            dialog.size = Some(usage);
+        }
+        let name = folder_name(&dialog.root);
+        let title = if dialog.removable {
+            t!("cache-clear-disk-question", name = &name)
+        } else {
+            t!("cache-clear-folder-question", name = &name)
+        };
+        let size = dialog.size;
+        let (mut confirm, mut cancel) = (false, false);
+        let modal = modal_at("disk_clear_dialog", dialog.at)
+            .title(title)
+            .show(ctx, |ui| {
+                match size {
+                    Some(u) => {
+                        ui.label(t!(
+                            "cache-clear-disk-size",
+                            size = crate::cache_panel::size_text(u.bytes)
+                        ));
+                    }
+                    None => {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label(t!("cache-measuring"));
+                        });
+                    }
+                }
+                ui.weak(t!("cache-clear-disk-note"));
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    confirm = ui
+                        .add_enabled(size.is_some(), egui::Button::new(t!("cache-clear-confirm")))
+                        .clicked();
+                    cancel = ui.button(t!("cancel")).clicked();
+                });
+            });
+        if confirm {
+            let root = dialog.root.clone();
+            self.disk_clear = None;
+            let repaint = ctx.clone();
+            self.cache_job(move |cache| {
+                let place = crate::files::tilde(&root);
+                let result = match cache.clear_disk(&root) {
+                    Ok(freed) => (
+                        t!(
+                            "cache-disk-cleared",
+                            place = place,
+                            size = crate::cache_panel::size_text(freed.bytes)
+                        ),
+                        false,
+                    ),
+                    Err(e) => (t!("cache-clear-failed", error = e.to_string()), true),
+                };
+                repaint.request_repaint();
+                Some(result)
+            });
+        } else if cancel || modal.should_close() {
+            self.disk_clear = None;
         }
     }
 
@@ -4893,7 +5013,7 @@ impl TriApp {
         let Some(remote) = self.remote.as_mut().filter(|r| r.shown) else {
             return;
         };
-        let at = ctx.content_rect().center() - vec2(200.0, 120.0);
+        let at = CENTRED;
         let title = t!("remote-title", name = remote.server.name());
         let (mut start, mut cancel, mut hide) = (false, false, false);
         let modal = modal_at("remote_dialog", at).title(title).show(ctx, |ui| {
@@ -5029,7 +5149,7 @@ impl TriApp {
             return;
         };
         let os = std::env::consts::OS;
-        let at = ctx.content_rect().center() - vec2(180.0, 120.0);
+        let at = CENTRED;
         let title = t!("login-title", name = login.server.name());
         let (mut connect, mut cancel) = (false, false);
         let modal = modal_at("login_dialog", at).title(title).show(ctx, |ui| {
@@ -7143,6 +7263,11 @@ impl TriApp {
                     self.forget_server(&path);
                 }
             }
+            Action::FolderCacheClear => {
+                if let Some(path) = self.tree.cursor_path() {
+                    self.ask_disk_clear(ctx, path);
+                }
+            }
             Action::FolderOpenIn(engine) => {
                 if let Some(i) = self.tree.cursor() {
                     let path = self.tree.rows()[i].path.clone();
@@ -7617,7 +7742,7 @@ impl TriApp {
                         } else {
                             Action::FileCopy
                         };
-                        let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                        let at = CENTRED;
                         self.file_action(file_action, paths, at);
                     }
                     None => {
@@ -7637,7 +7762,7 @@ impl TriApp {
                     .map(|p| tri::media::source(p).into_owned())
                     .filter(|p| seen.insert(p.clone()))
                     .collect();
-                let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                let at = CENTRED;
                 self.file_action(Action::FileDelete, paths, at);
             }
             Action::FileRename
@@ -7669,7 +7794,7 @@ impl TriApp {
                         .unwrap_or_default(),
                 };
                 // Au clavier : boîte vers le centre de la fenêtre.
-                let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                let at = CENTRED;
                 self.file_action(action, paths, at);
             }
             Action::SelectToggle => {
@@ -8066,11 +8191,7 @@ impl TriApp {
     fn rate_path(&mut self, path: PathBuf, action: Action) {
         // Sources en désaccord : d'abord trancher (noter écraserait l'une d'elles).
         if self.folder.notes.conflict(&path).is_some() {
-            let at = self
-                .repaint
-                .as_ref()
-                .map_or(pos2(200.0, 200.0), |c| c.content_rect().center())
-                - vec2(200.0, 120.0);
+            let at = CENTRED;
             self.conflict_dialog = Some(ConflictDialog::new(path, at));
             return;
         }
@@ -8409,11 +8530,11 @@ impl TriApp {
             | Action::FileEdit
             | Action::FileCopy
             | Action::FileMove => {
-                let at = pos2(200.0, 200.0);
+                let at = CENTRED;
                 self.file_action(action, vec![path], at);
             }
             Action::FileDeletePhoto => {
-                let at = pos2(200.0, 200.0);
+                let at = CENTRED;
                 let photo = tri::media::source(&path).into_owned();
                 self.file_action(Action::FileDelete, vec![photo], at);
             }
@@ -12433,10 +12554,9 @@ impl TriApp {
             && let Some(file) = self.files.get(index)
         {
             let path = file.path.clone();
-            // Près du clic : pas de long trajet jusqu'au centre d'un grand écran.
-            let at = response
-                .interact_pointer_pos()
-                .unwrap_or(response.rect.center());
+            // Au centre, comme toutes les boîtes (retour du 10/11/2026 : d'abord près du
+            // clic, la seule à part).
+            let at = CENTRED;
             self.select(index);
             self.rating_dialog = Some((path, at));
         }
@@ -15422,7 +15542,7 @@ impl TriApp {
                 }
                 Step::RatingDialog => {
                     if let Some(file) = self.files.get(self.selected) {
-                        let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                        let at = CENTRED;
                         self.rating_dialog = Some((file.path.clone(), at));
                     }
                 }
@@ -15706,11 +15826,7 @@ impl TriApp {
             .iter()
             .find(|p| self.folder.notes.conflict(p).is_some())
         {
-            let at = self
-                .repaint
-                .as_ref()
-                .map_or(pos2(200.0, 200.0), |c| c.content_rect().center())
-                - vec2(200.0, 120.0);
+            let at = CENTRED;
             self.conflict_dialog = Some(ConflictDialog::new(first.clone(), at));
         }
         let jobs: Vec<(PathBuf, tri::xmp::Notes)> = images
@@ -15773,11 +15889,7 @@ impl TriApp {
             self.history.push(step);
         }
         if let Some(first) = conflicted.first() {
-            let at = self
-                .repaint
-                .as_ref()
-                .map_or(pos2(200.0, 200.0), |c| c.content_rect().center())
-                - vec2(200.0, 120.0);
+            let at = CENTRED;
             self.conflict_dialog = Some(ConflictDialog::new(first.clone(), at));
         }
         let changed = report.iter().filter(|(_, r)| *r == Ok(true)).count();
@@ -15828,13 +15940,13 @@ impl TriApp {
     /// Créer, renommer, supprimer un dossier depuis le panneau des dossiers : la boîte
     /// (nom à saisir, ou confirmation avec ce que contient le dossier). Les emplacements
     /// (volume, dossier personnel, racine) ne se renomment ni ne se suppriment.
-    fn folder_edit_action(&mut self, ctx: &egui::Context, action: Action) {
+    fn folder_edit_action(&mut self, _ctx: &egui::Context, action: Action) {
         if self.refuses_file_action(action) {
             return;
         }
         let Some(i) = self.tree.cursor() else { return };
         let row = self.tree.rows()[i].clone();
-        let at = ctx.content_rect().center() - vec2(160.0, 120.0);
+        let at = CENTRED;
         if action != Action::FolderCreate && row.depth == 0 {
             self.notice = Some((t!("folders-place-root", name = row.name), true));
             return;
@@ -15866,7 +15978,7 @@ impl TriApp {
     /// pas.
     fn transfer_folder(
         &mut self,
-        ctx: &egui::Context,
+        _ctx: &egui::Context,
         path: PathBuf,
         copy: bool,
         dest: Option<&Path>,
@@ -15885,7 +15997,7 @@ impl TriApp {
         } else {
             tri::files::TransferMode::Move
         };
-        let at = ctx.content_rect().center() - vec2(210.0, 160.0);
+        let at = CENTRED;
         self.file_dialog = Some(crate::files::FileDialog::transfer(
             crate::files::Source::Folder(path),
             mode,
@@ -15898,7 +16010,7 @@ impl TriApp {
     /// Ajoute le dossier pointé dans le panneau des dossiers aux favoris, ou l'en retire.
     /// Boîte « Nom du favori » pour le dossier pointé (s'il est favori), nom actuel
     /// proposé.
-    fn name_favorite(&mut self, ctx: &egui::Context) {
+    fn name_favorite(&mut self, _ctx: &egui::Context) {
         let Some(i) = self.tree.cursor() else { return };
         let row = self.tree.rows()[i].clone();
         if !row.favorite {
@@ -15913,7 +16025,7 @@ impl TriApp {
         self.file_dialog = Some(crate::files::FileDialog::NameFavorite {
             path: row.path,
             name,
-            at: ctx.content_rect().center() - vec2(160.0, 120.0),
+            at: CENTRED,
             fresh: true,
         });
     }
@@ -16078,7 +16190,7 @@ impl TriApp {
         if row.kind == Some(PlaceKind::Device) {
             match action {
                 Action::FolderEject => {
-                    let at = ctx.content_rect().center() - vec2(160.0, 120.0);
+                    let at = CENTRED;
                     self.eject_dialog = Some((row.path, at));
                 }
                 _ => self.start_mount(ctx, row.path),
@@ -16099,7 +16211,7 @@ impl TriApp {
                 .filter(|r| r.kind == Some(PlaceKind::Volume) && r.ejectable)
                 .map(|r| (r.path, r.name))
                 .collect();
-            let at = ctx.content_rect().center() - vec2(160.0, 120.0);
+            let at = CENTRED;
             match OffloadDialog::here(
                 &row.path,
                 sources,
@@ -16120,7 +16232,7 @@ impl TriApp {
             self.notice = Some((t!("folders-not-removable", name = row.name), true));
             return;
         }
-        let at = ctx.content_rect().center() - vec2(160.0, 120.0);
+        let at = CENTRED;
         if action == Action::FolderEject {
             self.eject_dialog = Some((row.path, at));
         } else if self.offload.is_none() && self.ejecting.is_none() {
@@ -16210,7 +16322,7 @@ impl TriApp {
         }
         let mut target = None;
         let (mut undo, mut redo) = (false, false);
-        let at = ctx.content_rect().center() - vec2(220.0, 200.0);
+        let at = CENTRED;
         let position = self.history.position();
         let modal = modal_at("history_dialog", at)
             .title(t!("history-title"))
@@ -16441,7 +16553,7 @@ impl TriApp {
         if !self.group_dialog {
             return;
         }
-        let at = ctx.content_rect().center() - vec2(200.0, 160.0);
+        let at = CENTRED;
         let default_gap = self.settings.similarity.max_gap_s;
         let default_curve = self.settings.similarity.strictness_curve;
         let max_curve = self
@@ -17926,6 +18038,7 @@ impl eframe::App for TriApp {
         self.file_dialog(&ctx);
         self.poll_export();
         self.eject_dialog(&ctx);
+        self.disk_clear_dialog(&ctx);
         self.remote_dialog(&ctx);
         self.login_dialog(&ctx);
         self.update_dialog(&ctx);
@@ -18914,8 +19027,14 @@ pub(crate) fn modal_at(id: &str, at: egui::Pos2) -> Dialog {
         title: None,
         free_width: false,
         closable: true,
+        centred: at == CENTRED,
     }
 }
+
+/// Position « au centre de la fenêtre » à passer à [`modal_at`] : la boîte s'y place
+/// d'après sa taille réelle (retour du 10/11/2026 : un décalage fixe depuis le centre la
+/// plaçait de travers selon sa largeur).
+pub(crate) const CENTRED: egui::Pos2 = egui::pos2(-1.0e6, -1.0e6);
 
 /// Boîte « Générer les sidecars » (31/10/2026, suite de #253) : les sidecars de notes
 /// manquants d'une sélection ou d'un dossier, pour un logiciel ou tous, avec le compte de
@@ -18945,6 +19064,9 @@ pub(crate) struct Dialog {
     free_width: bool,
     /// Croix de fermeture à droite du titre (issue n° 39 : la même dans toutes les boîtes).
     closable: bool,
+    /// Au centre de la fenêtre ([`CENTRED`]) d'après sa taille réelle, mesurée pendant ses
+    /// premières images ; ensuite elle ne bouge plus (sauf si on la déplace).
+    centred: bool,
 }
 
 /// Réponse de [`Dialog::show`] : celle de la `Modal` d'egui, plus la croix.
@@ -19024,9 +19146,22 @@ impl Dialog {
             .data(|data| data.get_temp(dialog_settings_id()))
             .unwrap_or_default();
         let pos_id = self.id.with("position");
+        let size_id = self.id.with("size");
+        // Taille mesurée, images de centrage déjà faites, dernière passe affichée : une
+        // boîte rouverte (même identifiant, `CENTRED`) repart de zéro.
+        let pass = ctx.cumulative_pass_nr();
+        let centring = ctx
+            .data(|data| data.get_temp::<(egui::Vec2, u32, u64)>(size_id))
+            .filter(|&(_, _, last)| last + 1 >= pass);
+        let start = match centring {
+            _ if !self.centred => self.start,
+            Some((size, _, _)) => ctx.content_rect().center() - size / 2.0,
+            // Première image, taille encore inconnue : à peu près au centre.
+            None => ctx.content_rect().center() - vec2(d.min_width / 2.0, 80.0),
+        };
         let pos = ctx
             .data(|data| data.get_temp::<egui::Pos2>(pos_id))
-            .unwrap_or(self.start);
+            .unwrap_or(start);
         let area = egui::Area::new(self.id)
             .kind(egui::UiKind::Modal)
             .sense(Sense::hover())
@@ -19144,6 +19279,24 @@ impl Dialog {
         if moved != egui::Vec2::ZERO {
             ctx.data_mut(|data| data.insert_temp(pos_id, pos + moved));
             ctx.request_repaint();
+        }
+        // Centrée pendant ses premières images (passe de mesure d'egui comprise), puis
+        // immobile : un contenu qui arrive ensuite (inventaire, taille mesurée en fond) ne
+        // la fait pas glisser sous le pointeur (CI Ubuntu du 10/11/2026 : un clic manquait
+        // « Décharger », la boîte venait de bouger).
+        if self.centred {
+            let (size, frames) = match centring {
+                Some((size, n, _)) if n >= d.centring_frames => (size, n),
+                Some((_, n, _)) => {
+                    ctx.request_repaint();
+                    (response.response.rect.size(), n + 1)
+                }
+                None => {
+                    ctx.request_repaint();
+                    (response.response.rect.size(), 1)
+                }
+            };
+            ctx.data_mut(|data| data.insert_temp(size_id, (size, frames, pass)));
         }
         DialogResponse {
             modal: response,
@@ -19758,6 +19911,18 @@ enum VersionAction {
     Edit(usize),
     /// La supprimer.
     Delete(usize),
+}
+
+/// Boîte « Vider le cache de ce dossier / disque » (10/11/2026).
+struct DiskClear {
+    /// Dossier qui garde le cache.
+    root: PathBuf,
+    /// Racine d'un disque amovible (libellés « disque »).
+    removable: bool,
+    /// Place, une fois mesurée.
+    size: Option<tri::cache::Usage>,
+    measuring: Receiver<tri::cache::Usage>,
+    at: egui::Pos2,
 }
 
 #[cfg(test)]
@@ -24078,11 +24243,9 @@ mod tests {
         });
         h.run_steps(5);
         assert_eq!(h.state().selected, 2, "le clic droit sélectionne");
+        // Au centre, comme toutes les boîtes (retour du 10/11/2026).
         let at = h.state().rating_dialog.as_ref().unwrap().1;
-        assert!(
-            rect.contains(at),
-            "boîte ouverte au point du clic, pas au centre"
-        );
+        assert_eq!(at, CENTRED, "boîte ouverte au centre");
         assert!(
             h.query_by_label("Fermer").is_some(),
             "boîte de notation ouverte"
@@ -25028,7 +25191,8 @@ mod tests {
             download,
             chosen: 0,
         });
-        h.run_steps(2);
+        // La boîte se centre d'après sa taille, mesurée à la première image.
+        h.run_steps(4);
         assert!(h.query_by_label("AppImage").is_some());
         h.get_by_label("tar.gz").click();
         h.run_steps(2);
@@ -26261,7 +26425,7 @@ mod tests {
         let marker = seance.join(tri::cache::DISK_DIR);
         for (label, kept) in [
             (t!("folder-menu-cache-folder"), true),
-            (t!("folder-menu-cache-release"), false),
+            (t!("folder-menu-cache-release-folder"), false),
         ] {
             h.get_by_label("séance").click_secondary();
             h.run_steps(2);
@@ -26357,6 +26521,65 @@ mod tests {
         h.run_steps(3);
         let long = h.get_by_label_contains(&t!("folder-embed-default")).rect();
         assert!(long.height() <= one_line + 0.5, "{long:?} vs {one_line}");
+    }
+
+    #[test]
+    fn a_folder_clears_the_cache_it_keeps_from_the_right_click() {
+        // 10/11/2026 : « Vider le cache de ce dossier… » sur un dossier qui garde son cache,
+        // une action (`core.folders.cache_clear`) confirmée par une boîte avec sa taille ;
+        // le cache reste gardé là.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let seance = dir.path().join("séance");
+        std::fs::create_dir(&seance).unwrap();
+        let photo = seance.join("DSCF0001.RAF");
+        std::fs::write(&photo, b"RAW").unwrap();
+        let cache = h.state().engine.as_ref().unwrap().cache.clone();
+        cache.use_disk(&seance).unwrap();
+        let key = tri::cache::Key::new(&photo, tri::cache::Level::Exposure, "v").unwrap();
+        cache.put_bytes(&key, &[0; 4096]).unwrap();
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        h.run_steps(2);
+        h.get_by_label("séance").click_secondary();
+        h.run_steps(2);
+        h.get_by_label(&t!("folder-group-preferences")).hover();
+        h.run_steps(3);
+        h.get_by_label(&t!("folder-menu-cache-clear-folder"))
+            .click();
+        // Une boîte confirme, avec la taille (mesurée en fond).
+        let ask = t!(
+            "cache-clear-disk-size",
+            size = crate::cache_panel::size_text(4096)
+        );
+        for _ in 0..400 {
+            h.run_steps(1);
+            if h.query_by_label(&ask).is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(
+            h.query_by_label(&ask).is_some(),
+            "size shown before clearing"
+        );
+        let title = t!("cache-clear-folder-question", name = "séance");
+        assert!(h.query_by_label(&title).is_some());
+        // La taille arrivée, la boîte se recentre d'après sa nouvelle taille.
+        h.run_steps(3);
+        h.get_by_label(&t!("cache-clear-confirm")).click();
+        h.run_steps(2);
+        run_until(&mut h, |app| app.cache_jobs.is_empty());
+        assert_eq!(cache.disk_usage(&seance).unwrap().entries, 0);
+        assert!(
+            seance.join(tri::cache::DISK_DIR).is_dir(),
+            "still kept there"
+        );
     }
 
     #[test]
@@ -27467,6 +27690,9 @@ mod tests {
         run_until(&mut h, |app| app.meta_rows.len() >= 3);
         h.state_mut().select_all_metadata();
         h.run_steps(2);
+        // Ce que Ctrl+A a pris : des lignes peuvent encore arriver ensuite (CI Windows du
+        // 10/11/2026 : 4 lignes à la fin pour 3 sélectionnées).
+        let all = h.state().meta_selection().len();
         let label = h.state().meta_rows[0].label.clone();
         let deadline = Instant::now() + Duration::from_secs(60);
         while h.state().meta_anchor.is_some() {
@@ -27486,7 +27712,7 @@ mod tests {
         }
         let picked = h.state().meta_selection();
         assert!(!picked.contains(&0), "Nom retiré : {picked:?}");
-        assert_eq!(picked.len(), h.state().meta_rows.len() - 1);
+        assert_eq!(picked.len(), all - 1);
         assert!(
             !h.state().meta_cursor_shown,
             "plus de bande du curseur sur Nom"
@@ -27516,6 +27742,13 @@ mod tests {
         assert_eq!(h.state().files.len(), 3, "développement masqué");
         let count = t!("filter-bar-count", shown = 3, n = 3);
         assert!(h.query_by_label(&count).is_some(), "3/3, pas 3/4");
+    }
+
+    /// Laisse une boîte ouverte au centre se poser (`[gui.dialogs] centring_frames`) avant
+    /// d'y cliquer : un humain ne clique pas dans ses toutes premières images, et sous
+    /// Linux (autres polices) son recentrage déplaçait le bouton sous le clic simulé.
+    fn settle_dialog(h: &mut Harness<'_, TriApp>) {
+        h.run_steps(GuiSettings::default().dialogs.centring_frames as usize + 2);
     }
 
     fn run_until(h: &mut Harness<'_, TriApp>, done: impl Fn(&TriApp) -> bool) {
@@ -27980,6 +28213,7 @@ mod tests {
         wait_for(&mut h, "Décharger");
         assert!(h.query_by_label_contains("2 à copier").is_some());
         // « Ouvrir le dossier à la fin » est coché par défaut ; « RAW seulement » non.
+        settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
         while h
             .query_by_label_contains("2 fichiers copiés et vérifiés")
@@ -28226,6 +28460,7 @@ mod tests {
             }
         };
         wait_for(&mut h, "1 à copier");
+        settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
         wait_for(&mut h, "1 fichiers copiés et vérifiés");
         let session = h.state().offload.as_ref().unwrap().destination().unwrap();
@@ -28234,6 +28469,7 @@ mod tests {
         h.state_mut().set_volumes(&ctx, vec![first, second.clone()]);
         assert_eq!(h.state().offload.as_ref().unwrap().source(), second.path);
         wait_for(&mut h, "1 à copier");
+        settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
         wait_for(&mut h, "1 fichiers copiés et vérifiés");
         assert!(session.join("A.jpg").is_file() && session.join("B.jpg").is_file());
@@ -28268,6 +28504,7 @@ mod tests {
             }
         };
         wait_for(&mut h, "1 à copier");
+        settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
         wait_for(&mut h, "1 fichiers copiés et vérifiés");
         let session = h.state().offload.as_ref().unwrap().destination().unwrap();
@@ -28284,6 +28521,7 @@ mod tests {
         h.state_mut().set_volumes(&ctx, vec![card.clone()]);
         assert_eq!(h.state().offload.as_ref().unwrap().source(), path);
         wait_for(&mut h, "1 à copier");
+        settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
         wait_for(&mut h, "1 fichiers copiés et vérifiés");
         assert!(session.join("A.jpg").is_file() && session.join("B.jpg").is_file());
@@ -28293,6 +28531,7 @@ mod tests {
         h.state_mut().set_volumes(&ctx, vec![]);
         h.state_mut().set_volumes(&ctx, vec![card.clone()]);
         wait_for(&mut h, "0 à copier");
+        settle_dialog(&mut h);
         h.get_by_label("Annuler").click();
         h.run_steps(2);
         assert!(h.state().offload.is_none());
@@ -28330,6 +28569,7 @@ mod tests {
             h.get_by_label("Décharger la carte…").click();
             if round == 0 {
                 wait_for(&mut h, "2 à copier");
+                settle_dialog(&mut h);
                 h.get_by_label("Décharger").click();
                 wait_for(&mut h, "2 fichiers copiés et vérifiés");
                 h.get_by_label("Fermer").click();
@@ -28419,6 +28659,7 @@ mod tests {
             h.run_steps(1);
             std::thread::sleep(Duration::from_millis(10));
         }
+        settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
         h.run_steps(1); // le clic démarre la copie
         assert!(h.state().offload.as_ref().unwrap().is_running());
@@ -28713,9 +28954,10 @@ mod tests {
                 h.run_steps(1);
             }
         };
-        let button = h.get_by_label("Pipette").rect().center();
-        // Depuis la grille : le bouton ouvre le plein écran.
-        mouse_click(&mut h, button);
+        // Depuis la grille : le bouton ouvre le plein écran. Cliqué par son libellé : un
+        // vrai clic sur le bouton du panneau n'était parfois pas vu (CI macOS du
+        // 10/11/2026) ; les vrais clics servent à la pipette sur l'image, plus bas.
+        h.get_by_label("Pipette").click();
         h.run_steps(3);
         assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().adjust_eyedropper, "armed");
@@ -28729,8 +28971,7 @@ mod tests {
         h.state_mut()
             .save_adjustments(vec![(path.clone(), Some(cold))]);
         h.run_steps(2);
-        let button = h.get_by_label("Pipette").rect().center();
-        mouse_click(&mut h, button);
+        h.get_by_label("Pipette").click();
         h.run_steps(2);
         assert!(h.state().adjust_eyedropper, "armed again");
         let (from, to) = (egui::pos2(300.0, 650.0), egui::pos2(420.0, 760.0));
