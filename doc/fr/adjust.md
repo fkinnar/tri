@@ -142,8 +142,8 @@ essai (retours du 10/11/2026) :
     partie ; depuis la grille, le bouton ouvre le plein écran) ; teinte.
   - **Style** : exposition, chaleur, teinte. Pas de case (l'onglet suffit) : le
     décalage créatif existe dès qu'une valeur n'est pas nulle.
-  - **N&B** : le **filtre** (liste : « Aucun (couleur) », puis neutre, rouge, orange,
-    jaune, vert, bleu ; « Personnalisé » dès qu'on touche au mélange), rouge / vert /
+  - **N&B** : le **filtre** (liste : « Aucun (couleur) », puis rouge, orange, jaune,
+    vert, bleu ; pas de neutre, la luminance seule n'apportant rien face aux filtres ; « Personnalisé » dès qu'on touche au mélange), rouge / vert /
     bleu en %, **« Normalisé »** (coché par défaut) et le total. Pas de case : choisir un
     filtre ou toucher un canal passe en noir et blanc, « Aucun » revient à la couleur.
   - **Valeurs** : le tableau à reporter dans un logiciel de développement (exposition

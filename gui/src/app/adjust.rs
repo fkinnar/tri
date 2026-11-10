@@ -1066,7 +1066,9 @@ fn mono_tab(ui: &mut Ui, layers: &mut Layers) {
     let mut mixer = layers.mono.unwrap_or_default();
     let before = mixer;
     let mut off = false;
-    let current = mixer.preset_name();
+    // Pas de « neutre » dans la liste (retour du 10/11/2026 : la luminance seule n'apporte
+    // rien face aux filtres) ; il reste le point de départ d'un canal touché.
+    let current = mixer.preset_name().filter(|p| FILTERS.contains(p));
     let shown = if !on {
         t!("adjust-mono-none")
     } else {
@@ -1081,7 +1083,7 @@ fn mono_tab(ui: &mut Ui, layers: &mut Layers) {
                 if ui.selectable_label(!on, t!("adjust-mono-none")).clicked() {
                     off = true;
                 }
-                for p in Mixer::PRESETS {
+                for p in FILTERS {
                     if ui
                         .selectable_label(on && current == Some(p), mixer_name(p))
                         .clicked()
@@ -1273,7 +1275,10 @@ fn wb_name(choice: WhiteBalance) -> String {
     }
 }
 
-/// Nom affiché d'un préréglage de noir et blanc.
+/// Filtres de la liste du noir et blanc, dans l'ordre.
+const FILTERS: [&str; 5] = ["red", "orange", "yellow", "green", "blue"];
+
+/// Nom affiché d'un filtre de noir et blanc (sans « filtre » : le titre le dit).
 fn mixer_name(preset: &str) -> String {
     t!(match preset {
         "red" => "adjust-mono-red",
@@ -1281,6 +1286,6 @@ fn mixer_name(preset: &str) -> String {
         "yellow" => "adjust-mono-yellow",
         "green" => "adjust-mono-green",
         "blue" => "adjust-mono-blue",
-        _ => "adjust-mono-neutral",
+        _ => "adjust-mono-custom",
     })
 }

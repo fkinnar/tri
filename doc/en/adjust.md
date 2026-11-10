@@ -137,8 +137,8 @@ try (feedback of 2026-11-10):
     the grid, the button opens the full screen); tint.
   - **Style**: exposure, warmth, tint. No checkbox (the tab is enough): the creative
     offset exists as soon as a value isn't zero.
-  - **B&W**: the **filter** (list: "None (colour)", then neutral, red, orange, yellow,
-    green, blue; "Custom" as soon as the mix is touched), red / green / blue in %,
+  - **B&W**: the **filter** (list: "None (colour)", then red, orange, yellow, green,
+    blue; no neutral, luminance alone bringing nothing next to the filters; "Custom" as soon as the mix is touched), red / green / blue in %,
     **"Normalised"** (checked by default) and the total. No checkbox: choosing a filter
     or touching a channel switches to black and white, "None" goes back to colour.
   - **Values**: the table to copy into a development program (total exposure, base,
