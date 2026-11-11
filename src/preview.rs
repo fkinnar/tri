@@ -215,6 +215,18 @@ pub fn params(level: Level, settings: &Settings) -> String {
 
 /// Clé de cache de `file` au niveau `level`.
 pub fn key(file: &MediaFile, level: Level, settings: &Settings) -> io::Result<Key> {
+    key_with(file, level, settings, "")
+}
+
+/// Clé de la copie à `side` pixels (côté long) de l'entrée de `file` au niveau `level`,
+/// pour la grille (11/11/2026) : relire un aperçu de 2560 px pour une vignette prenait
+/// ~30 ms, la petite copie ~1 ms. Dérivée de la clé de l'entrée : l'entrée change, la
+/// copie aussi. Rangée avec elle (vidée et comptée avec son niveau).
+pub fn grid_key(file: &MediaFile, level: Level, settings: &Settings, side: u32) -> io::Result<Key> {
+    key_with(file, level, settings, &format!(";grid={side}"))
+}
+
+fn key_with(file: &MediaFile, level: Level, settings: &Settings, extra: &str) -> io::Result<Key> {
     let mut params = params(level, settings);
     // Développé : le développement du sidecar aussi (modifié dans le logiciel : le rendu
     // est refait ; une note posée par `tri` dans le même fichier ne compte pas).
@@ -224,6 +236,7 @@ pub fn key(file: &MediaFile, level: Level, settings: &Settings) -> io::Result<Ke
             .map_or_else(|| "aucun".to_string(), |s| crate::develop::render_stamp(&s));
         params.push_str(&format!(";xmp={stamp}"));
     }
+    params.push_str(extra);
     Key::new(&file.path, level, &params)
 }
 

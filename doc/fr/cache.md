@@ -140,6 +140,15 @@ garantit pas un résultat identique d'une version de Rust à l'autre, ce qui inv
 cache à chaque mise à jour du compilateur. Un test unitaire (`key_hash_is_stable`) fige une
 valeur de référence pour détecter tout changement accidentel.
 
+### Petites copies pour la grille (11/11/2026)
+
+Une vignette en rendu RAW (`Standard`) ou développé (`Developed`) relisait tout l'aperçu
+(2560 px) pour le réduire, ~30 ms chacune : au lancement, la grille se remplissait une à
+une. La première réduction est désormais gardée à côté de l'entrée (`preview::grid_key` :
+la clé de l'entrée avec `;grid=<côté>`, donc une entrée changée change sa copie aussi), au
+même niveau : vidée et comptée avec elle. Les lancements suivants lisent la petite copie
+(~1 ms).
+
 ## API de `Cache`
 
 | Méthode | Rôle |

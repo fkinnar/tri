@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Grille plus rapide au lancement** (#419) : les vignettes en rendu RAW ou développé
+  gardent une petite copie dans le cache la première fois qu'elles sont réduites ; les
+  lancements suivants la lisent au lieu de tout l'aperçu, et la grille ne se remplit plus
+  une à une.
 - **Les vignettes des développements ne changent plus d'image à l'ouverture** (#418) :
   une vignette dont on ne connaît pas encore le rendu développé (son sidecar en lecture)
   reste vide un instant (`[gui.grid] render_wait_ms`) au lieu de montrer le JPEG boîtier

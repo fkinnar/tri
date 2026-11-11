@@ -136,6 +136,14 @@ guarantee an identical result from one Rust version to the next, which would inv
 the cache with every compiler update. A unit test (`key_hash_is_stable`) pins a reference
 value to detect any accidental change.
 
+### Small copies for the grid (2026-11-11)
+
+A thumbnail in RAW render (`Standard`) or developed render (`Developed`) used to read the
+whole preview (2560 px) and reduce it, ~30 ms each: at launch the grid filled in one by
+one. The first reduction is now kept next to the entry (`preview::grid_key`: the entry's
+key with `;grid=<side>` added, so a changed entry changes its copy too), at the same
+level: cleared and counted with it. Later launches read the small copy (~1 ms).
+
 ## `Cache` API
 
 | Method | Role |

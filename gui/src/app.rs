@@ -12415,15 +12415,25 @@ impl TriApp {
         let file = &self.files[index];
         let key = preview::key(file, level, &engine.preview).ok()?;
         if level == Level::Thumbnail {
-            engine.cache.get(&key)
-        } else {
-            let side = engine.preview.sizes.thumbnail;
-            Some(
-                tri::jpeg::decode(&engine.cache.get_bytes(&key)?, side)
-                    .ok()?
-                    .fit(side),
-            )
+            return engine.cache.get(&key);
         }
+        // Rendu RAW ou développé : sa copie à la taille des vignettes, gardée dans le cache
+        // la première fois (11/11/2026 : au lancement, chaque vignette relisait un aperçu
+        // de 2560 px, et la grille se remplissait une à une).
+        let side = engine.preview.sizes.thumbnail;
+        let small = preview::grid_key(file, level, &engine.preview, side).ok();
+        if let Some(small) = &small
+            && let Some(bitmap) = engine.cache.get(small)
+        {
+            return Some(bitmap);
+        }
+        let bitmap = tri::jpeg::decode(&engine.cache.get_bytes(&key)?, side)
+            .ok()?
+            .fit(side);
+        if let Some(small) = &small {
+            let _ = engine.cache.put(small, &bitmap);
+        }
+        Some(bitmap)
     }
 
     /// Politique des rendus RAW de fond : tout le dossier quand la grille les montre.
@@ -25883,6 +25893,28 @@ mod tests {
         assert!(h.state().loading.is_none(), "notes déjà lues");
         assert!(!h.state().folder.notes.is_pending());
         assert!(!h.state().notes_pending(), "la grille n'attend rien");
+    }
+
+    #[test]
+    fn a_rendered_thumbnail_is_kept_small_in_the_cache() {
+        // 11/11/2026 : au lancement, chaque vignette en rendu RAW relisait un aperçu de
+        // 2560 px (la grille se remplissait une à une). Sa copie à la taille des vignettes
+        // est gardée la première fois, puis relue.
+        let (mut h, _dir) = harness_with(1200, 900);
+        run_until(&mut h, |app| {
+            !app.files.is_empty() && app.ready(0, Level::Standard)
+        });
+        let state = h.state();
+        let engine = state.engine.as_ref().unwrap();
+        let file = state.files[0].clone();
+        let side = engine.preview.sizes.thumbnail;
+        let small = preview::grid_key(&file, Level::Standard, &engine.preview, side).unwrap();
+        assert!(!engine.cache.contains(&small), "pas encore");
+        let first = state.grid_bitmap(0, Level::Standard).expect("réduite");
+        assert!(engine.cache.contains(&small), "gardée");
+        assert!(first.width.max(first.height) <= side);
+        let again = state.grid_bitmap(0, Level::Standard).expect("relue");
+        assert_eq!((again.width, again.height), (first.width, first.height));
     }
 
     #[test]
