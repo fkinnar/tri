@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Settings applied at once** (#429): `[adjust]` (automatic exposure and balance),
+  `[sidecars]` and `[watch]` changed in the settings window now apply immediately; they
+  used to wait for the next launch.
 - **Colour charts** (#425): `cargo run --release --example colour_charts -- <folder>`
   writes the same chart in every common colour space (sRGB, Adobe RGB, Display P3,
   ProPhoto, Rec.2020, linear ones), as JPEG, TIFF and PNG with their profile, and checks

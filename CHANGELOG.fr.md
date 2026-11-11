@@ -4,6 +4,9 @@
 
 ## Non publié
 
+- **Réglages appliqués tout de suite** (#429) : `[adjust]` (exposition et balance
+  automatiques), `[sidecars]` et `[watch]` changés dans la fenêtre de réglages
+  s'appliquent immédiatement ; ils attendaient le prochain lancement.
 - **Mires de couleur** (#425) : `cargo run --release --example colour_charts -- <dossier>`
   écrit la même mire dans tous les espaces courants (sRGB, Adobe RGB, Display P3,
   ProPhoto, Rec.2020, linéaires), en JPEG, TIFF et PNG avec leur profil, et vérifie que
