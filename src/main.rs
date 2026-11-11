@@ -1358,13 +1358,13 @@ fn adjust(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
                 .ok_or_else(|| t!("cli-adjust-not-an-image", path = path.display().to_string()))
         })
         .collect::<Result<_, _>>()?;
-    // Courbe de l'image : BT.709 pour un rendu LibRaw, sRGB pour un JPEG.
+    // Courbe de l'image : celle de l'espace de travail, pour toutes (`tri::colour`).
     let transfer = |file: &tri::media::MediaFile| {
-        if file.kind == tri::media::MediaKind::Raw && level == Level::Standard {
-            tri::adjust::Transfer::Bt709
-        } else {
-            tri::adjust::Transfer::Srgb
-        }
+        tri::adjust::transfer_of(file.kind == tri::media::MediaKind::Raw, level)
+    };
+    // Un rendu LibRaw : l'exposition peut s'y faire sur les données du capteur.
+    let rendered = |file: &tri::media::MediaFile| {
+        file.kind == tri::media::MediaKind::Raw && level == Level::Standard
     };
     let base = |file: &tri::media::MediaFile| -> AnyResult<tri::adjust::Base> {
         Ok(tri::adjust::Base {
@@ -1430,7 +1430,7 @@ fn adjust(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
         // Un RAW rendu par LibRaw : l'exposition sur les données du capteur, le reste sur
         // l'image ; sinon tout sur l'image.
         let total = layers.total();
-        let in_libraw = transfer(file) == tri::adjust::Transfer::Bt709;
+        let in_libraw = rendered(file);
         let mut render = preview;
         let mut rest = total;
         if in_libraw {
@@ -1446,6 +1446,8 @@ fn adjust(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
             .unwrap_or_default();
         let out = to.join(format!("{stem}-adjusted.jpg"));
         let jpeg = tri::jpeg::encode(&bitmap, 92, tri::jpeg::Chroma::Full)?;
+        // L'image est dans l'espace de travail : son profil l'accompagne (`tri::colour`).
+        let jpeg = tri::jpeg::with_icc(&jpeg, tri::colour::working_icc()).unwrap_or(jpeg);
         std::fs::write(&out, jpeg)?;
         let r = tri::adjust::report(&layers, shot(file));
         println!(

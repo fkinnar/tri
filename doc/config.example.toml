@@ -618,6 +618,11 @@ key_menu_delay_ms = 400
 # Diagnostic (TRI_GUI_TRACE=1) : une image de l'interface plus lente que ce délai (ms) est
 # tracée avec la durée de ses étapes. Avec [log] trace, aussi au journal.
 trace_slow_ms = 100
+# Profil ICC de l'écran (fichier .icc ou .icm, ~/… accepté), à la place de celui du
+# système. Linux et Windows seulement : macOS convertit lui-même vers le profil de
+# l'écran. Vide : celui du système (Linux : publié par colord pour l'écran principal ;
+# Windows : celui de l'écran où est la fenêtre), sinon sRGB.
+display_profile = ""
 # Signaler un problème : dernières entrées du journal proposées dans le formulaire,
 # modifiables avant l'envoi (0 : aucune).
 report_log_entries = 20

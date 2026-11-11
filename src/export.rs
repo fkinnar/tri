@@ -954,99 +954,16 @@ fn libraw_space(color: &str) -> Option<(crate::raw::OutputSpace, moxcms::ColorPr
     })
 }
 
-/// Espace couleur d'origine d'une image déjà développée (JPEG boîtier, image plate) :
-/// remarque de l'utilisateur (19/10/2026), un JPEG boîtier peut être en Adobe RGB (réglage
-/// du boîtier), il ne faut pas le supposer sRGB.
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum Origin {
-    Srgb,
-    AdobeRgb,
-    /// Profil ICC intégré (autre que sRGB ou Adobe RGB reconnus).
-    Icc(Vec<u8>),
-}
+use crate::colour::Origin;
 
-impl Origin {
-    /// D'un JPEG : son profil ICC intégré, sinon l'EXIF (Adobe RGB selon la norme DCF :
-    /// `InteroperabilityIndex` « R03 », ou `ColorSpace` 2 de certains boîtiers), sinon sRGB
-    /// (l'espace par défaut de l'EXIF).
-    fn of_jpeg(bytes: &[u8]) -> Origin {
-        if let Some(icc) = crate::jpeg::icc_profile(bytes) {
-            return Origin::of_icc(icc);
-        }
-        let exif = exif::Reader::new().read_from_container(&mut std::io::Cursor::new(bytes));
-        let adobe = exif.is_ok_and(|e| {
-            let interop = e
-                .get_field(exif::Tag::InteroperabilityIndex, exif::In::PRIMARY)
-                .is_some_and(|f| f.display_value().to_string().contains("R03"));
-            let space = e
-                .get_field(exif::Tag::ColorSpace, exif::In::PRIMARY)
-                .and_then(|f| f.value.get_uint(0));
-            interop || space == Some(2)
-        });
-        if adobe {
-            Origin::AdobeRgb
-        } else {
-            Origin::Srgb
-        }
-    }
-
-    /// D'un profil ICC : sRGB et Adobe RGB reconnus à leur description (ASCII ou UTF-16).
-    fn of_icc(icc: Vec<u8>) -> Origin {
-        let has = |text: &str| {
-            let ascii = text.as_bytes();
-            let wide: Vec<u8> = text.bytes().flat_map(|b| [0, b]).collect();
-            icc.windows(ascii.len()).any(|w| w == ascii)
-                || icc.windows(wide.len()).any(|w| w == wide.as_slice())
-        };
-        if has("sRGB") {
-            Origin::Srgb
-        } else if has("Adobe RGB") {
-            Origin::AdobeRgb
-        } else {
-            Origin::Icc(icc)
-        }
-    }
-
-    /// D'un fichier image (plate) : JPEG comme ci-dessus ; autre format : son profil ICC
-    /// intégré, sinon sRGB.
-    fn of_file(bytes: &[u8]) -> Origin {
-        if crate::jpeg::dimensions(bytes).is_some() {
-            return Origin::of_jpeg(bytes);
-        }
-        use image::ImageDecoder;
-        image::ImageReader::new(std::io::Cursor::new(bytes))
-            .with_guessed_format()
-            .ok()
-            .and_then(|r| r.into_decoder().ok())
-            .and_then(|mut d| d.icc_profile().ok().flatten())
-            .map_or(Origin::Srgb, Origin::of_icc)
-    }
-
-    /// Le profil d'export `color` est-il déjà cet espace (rien à convertir) ? `""` : oui
-    /// (l'espace d'origine est gardé).
-    fn is(&self, color: &str) -> bool {
-        match color.trim().to_lowercase().as_str() {
-            "" => true,
-            "srgb" => *self == Origin::Srgb,
-            "adobergb" => *self == Origin::AdobeRgb,
-            _ => false,
-        }
-    }
-
-    fn profile(&self) -> Option<moxcms::ColorProfile> {
-        match self {
-            Origin::Srgb => Some(moxcms::ColorProfile::new_srgb()),
-            Origin::AdobeRgb => Some(moxcms::ColorProfile::new_adobe_rgb()),
-            Origin::Icc(icc) => moxcms::ColorProfile::new_from_slice(icc).ok(),
-        }
-    }
-
-    /// Profil ICC à intégrer quand on garde cet espace.
-    fn icc(&self) -> Option<Vec<u8>> {
-        match self {
-            Origin::Icc(icc) => Some(icc.clone()),
-            other => other.profile()?.encode().ok(),
-        }
+/// Le profil d'export `color` est-il déjà l'espace `origin` (rien à convertir) ? `""` :
+/// oui (l'espace d'origine est gardé).
+fn origin_is(origin: &Origin, color: &str) -> bool {
+    match color.trim().to_lowercase().as_str() {
+        "" => true,
+        "srgb" => *origin == Origin::Srgb,
+        "adobergb" => *origin == Origin::AdobeRgb,
+        _ => false,
     }
 }
 
@@ -1796,7 +1713,7 @@ fn export_one(
             && profile.sharpen == Sharpen::None
             && profile.format == Format::Jpeg
             && fits
-            && developed.origin.is(&profile.color)
+            && origin_is(&developed.origin, &profile.color)
             && let Some(bytes) = &developed.jpeg
         {
             return write_bytes(image, req, bytes).map(|out| (out, true));
@@ -1817,7 +1734,7 @@ fn in_profile_space(
     let Developed {
         mut pixels, origin, ..
     } = developed;
-    if origin.is(&profile.color) {
+    if origin_is(&origin, &profile.color) {
         return Ok((pixels, origin.icc()));
     }
     let (w, h) = pixels.dimensions();

@@ -471,15 +471,11 @@ pub fn shot_white(image: &Path, kind: crate::media::MediaKind) -> [f32; 3] {
         .unwrap_or(kelvin::D65)
 }
 
-/// Courbe d'une image 8 bits selon sa source : un rendu LibRaw (aperçu standard ou 1:1 d'un
-/// RAW) est en BT.709, tout le reste (JPEG boîtier, vignette, image plate) en sRGB.
-pub fn transfer_of(raw: bool, level: crate::cache::Level) -> Transfer {
-    use crate::cache::Level;
-    if raw && matches!(level, Level::Standard | Level::Full) {
-        Transfer::Bt709
-    } else {
-        Transfer::Srgb
-    }
+/// Courbe d'une image 8 bits de l'affichage : depuis la gestion des couleurs
+/// (11/11/2026), tout est dans l'espace de travail ([`crate::colour`], courbe sRGB),
+/// rendus LibRaw compris (auparavant en BT.709).
+pub fn transfer_of(_raw: bool, _level: crate::cache::Level) -> Transfer {
+    Transfer::Srgb
 }
 
 /// Comment une couche part vers une autre image.
@@ -527,9 +523,10 @@ impl Default for Modes {
 /// ombres (essai du 10/11/2026 : +1,18 IL au lieu de +1 sur une photo sombre).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Transfer {
-    /// sRGB : JPEG du boîtier, images plates.
+    /// sRGB : toutes les images de l'affichage (espace de travail, [`crate::colour`]).
     Srgb,
-    /// BT.709 : rendus de LibRaw (`OutputSpace::PREVIEW`, gamma 0,45 et pente 4,5).
+    /// BT.709 (gamma 0,45 et pente 4,5) : les rendus de LibRaw avant la gestion des
+    /// couleurs ; gardée pour les images qui l'auraient.
     Bt709,
 }
 
@@ -604,9 +601,14 @@ pub fn apply_bitmap(bitmap: &mut Bitmap, transfer: Transfer, adjust: Adjust, mon
     let colour = (saturation - 1.0).abs() > 1e-3;
     let contrast = Contrast::new(adjust.contrast);
     for px in bitmap.data.as_chunks_mut::<3>().0 {
-        let mut r = lin[px[0] as usize] * kr;
-        let mut g = lin[px[1] as usize] * kg;
-        let mut b = lin[px[2] as usize] * kb;
+        // Espace de travail (primaires Rec.2020) vers primaires sRGB : les réglages y sont
+        // définis ([`crate::colour::working_to_srgb_linear`]).
+        let [r, g, b] = crate::colour::working_to_srgb_linear([
+            lin[px[0] as usize],
+            lin[px[1] as usize],
+            lin[px[2] as usize],
+        ]);
+        let (mut r, mut g, mut b) = (r * kr, g * kg, b * kb);
         match mono {
             Some([mr, mg, mb]) => {
                 let y = mr * r + mg * g + mb * b;
@@ -616,14 +618,15 @@ pub fn apply_bitmap(bitmap: &mut Bitmap, transfer: Transfer, adjust: Adjust, mon
             None => {
                 let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
                 if colour {
-                    r = (y + (r - y) * saturation).max(0.0);
-                    g = (y + (g - y) * saturation).max(0.0);
-                    b = (y + (b - y) * saturation).max(0.0);
+                    r = y + (r - y) * saturation;
+                    g = y + (g - y) * saturation;
+                    b = y + (b - y) * saturation;
                 }
                 let f = contrast.factor(y);
-                px[0] = encode(&out, r * f);
-                px[1] = encode(&out, g * f);
-                px[2] = encode(&out, b * f);
+                let [r, g, b] = crate::colour::srgb_linear_to_working([r * f, g * f, b * f]);
+                px[0] = encode(&out, r);
+                px[1] = encode(&out, g);
+                px[2] = encode(&out, b);
             }
         }
     }
@@ -712,11 +715,13 @@ pub fn measure(bitmap: &Bitmap, transfer: Transfer, zone: Option<Zone>) -> Measu
         None => (0, 0, w, h),
     };
     for (i, px) in bitmap.data.as_chunks::<3>().0.iter().enumerate() {
-        let (r, g, b) = (
+        // Primaires sRGB : la pipette donne une balance sur des canaux sRGB, comme les
+        // réglages ([`crate::colour::working_to_srgb_linear`]).
+        let [r, g, b] = crate::colour::working_to_srgb_linear([
             lin[px[0] as usize],
             lin[px[1] as usize],
             lin[px[2] as usize],
-        );
+        ]);
         let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
         histogram[((y * 4095.0).round() as usize).min(4095)] += 1;
         let (x, row) = (i % w, i / w);
@@ -984,14 +989,14 @@ pub fn auto_exposure(base: &Base, gains: Gains, settings: &AdjustSettings) -> f3
 /// (sous le blanc : rien ne brûle).
 const HIGHLIGHT_MAX: f32 = 0.95;
 
-/// Histogramme de la luminance linéaire (Rec. 709) de `bitmap`, en 4096 cases.
+/// Histogramme de la luminance linéaire de `bitmap` (espace de travail : poids de
+/// Rec.2020, [`crate::colour::LUMA`]), en 4096 cases.
 fn luminance_histogram(bitmap: &Bitmap, transfer: Transfer) -> Vec<u32> {
     let lin = transfer.to_linear();
+    let [wr, wg, wb] = crate::colour::LUMA;
     let mut histogram = vec![0u32; 4096];
     for px in bitmap.data.as_chunks::<3>().0 {
-        let y = 0.2126 * lin[px[0] as usize]
-            + 0.7152 * lin[px[1] as usize]
-            + 0.0722 * lin[px[2] as usize];
+        let y = wr * lin[px[0] as usize] + wg * lin[px[1] as usize] + wb * lin[px[2] as usize];
         histogram[((y * 4095.0).round() as usize).min(4095)] += 1;
     }
     histogram

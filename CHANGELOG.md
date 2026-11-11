@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- **Colour management** (#423): every image is shown with its real colour space instead
+  of being assumed sRGB: camera JPEGs (Adobe RGB too), flat images with their ICC profile
+  (16-bit TIFF / PNG converted at their depth), HEIC, and developments with the output
+  profile of their history (ProPhoto…; tri never forces one). They go through one wide
+  working space (Rec.2020 primaries, sRGB curve), converted once when cached. On Linux and
+  Windows, images are converted to the screen profile (`[gui] display_profile`, else
+  colord's or Windows's); macOS does it by itself. RAW renders are now read with their
+  real tone curve: a little brighter than before, mostly in the shadows. Thumbnails and
+  previews are recomputed once.
 - **Colours follow the screen profile on macOS** (#421): tri now declares its window in
   sRGB to the system, which converts to the screen profile (calibration included).
   Before, colours went to the screen unconverted: far too saturated on a wide-gamut

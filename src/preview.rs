@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::bitmap::Bitmap;
 use crate::cache::{Cache, Key, Level};
+use crate::colour::Origin;
 use crate::exposure::{Exposure, ExposureError, ExposureSettings};
 use crate::flat::{self, FlatError};
 use crate::jpeg;
@@ -158,25 +159,29 @@ const RULES_VERSION: u32 = 1;
 /// ne pas invalider toutes les vignettes à chaque réglage de rendu.
 pub fn params(level: Level, settings: &Settings) -> String {
     let (sizes, r) = (&settings.sizes, &settings.render);
+    // Images dans l'espace de travail de l'affichage (`colour`) : une règle de conversion
+    // changée, les images sont refaites. Pas les rendus des logiciels de développement,
+    // gardés tels quels et convertis à la lecture.
+    let cs = format!("cs={}", crate::colour::VERSION);
     let render = format!(
         "wb={};bright={};autobright={}",
         r.camera_wb, r.bright, r.auto_bright
     );
     match level {
-        Level::Thumbnail => format!("r{RULES_VERSION};side={}", sizes.thumbnail),
+        Level::Thumbnail => format!("r{RULES_VERSION};{cs};side={}", sizes.thumbnail),
         Level::Embedded => format!(
-            "r{RULES_VERSION};side={};src=embedded;min={}",
+            "r{RULES_VERSION};{cs};side={};src=embedded;min={}",
             sizes.standard, settings.embedded_min_ratio
         ),
         Level::Standard => format!(
-            "r{RULES_VERSION};side={};{render};half={}",
+            "r{RULES_VERSION};{cs};side={};{render};half={}",
             sizes.standard, settings.half_size_margin
         ),
         Level::EmbeddedFull => format!(
-            "r{RULES_VERSION};src=embedded;full;min={}",
+            "r{RULES_VERSION};{cs};src=embedded;full;min={}",
             settings.min_embedded_full
         ),
-        Level::Full => format!("r{RULES_VERSION};{render}"),
+        Level::Full => format!("r{RULES_VERSION};{cs};{render}"),
         // Le sidecar s'y ajoute dans `key` (propre à chaque image).
         Level::Developed(engine) => {
             format!("r{RULES_VERSION};{};side={}", engine.id(), sizes.standard)
@@ -223,7 +228,12 @@ pub fn key(file: &MediaFile, level: Level, settings: &Settings) -> io::Result<Ke
 /// ~30 ms, la petite copie ~1 ms. Dérivée de la clé de l'entrée : l'entrée change, la
 /// copie aussi. Rangée avec elle (vidée et comptée avec son niveau).
 pub fn grid_key(file: &MediaFile, level: Level, settings: &Settings, side: u32) -> io::Result<Key> {
-    key_with(file, level, settings, &format!(";grid={side}"))
+    key_with(
+        file,
+        level,
+        settings,
+        &format!(";grid={side};cs={}", crate::colour::VERSION),
+    )
 }
 
 fn key_with(file: &MediaFile, level: Level, settings: &Settings, extra: &str) -> io::Result<Key> {
@@ -286,13 +296,17 @@ pub fn compute(
             };
             Ok(RawFile::open(&file.path)?.render_cancellable(&options, cancel)?)
         }
-        (MediaKind::Flat, Level::Thumbnail) => Ok(flat::decode_fit(&file.path, sizes.thumbnail)?),
+        (MediaKind::Flat, Level::Thumbnail) => {
+            Ok(flat::decode_working(&file.path, sizes.thumbnail)?)
+        }
         // Une image plate n'a pas d'aperçu « boîtier » distinct : c'est son aperçu standard.
         (MediaKind::Flat, Level::Embedded | Level::Standard) => {
-            Ok(flat::decode_fit(&file.path, sizes.standard)?)
+            Ok(flat::decode_working(&file.path, sizes.standard)?)
         }
         // Pas de JPEG « embarqué » distinct pour une image plate : c'est l'image elle-même.
-        (MediaKind::Flat, Level::EmbeddedFull | Level::Full) => Ok(flat::decode(&file.path)?),
+        (MediaKind::Flat, Level::EmbeddedFull | Level::Full) => {
+            Ok(flat::decode_working(&file.path, 0)?)
+        }
         (_, Level::Exposure | Level::Sharpness | Level::Similarity) => {
             Err(PreviewError::NotAnImage)
         }
@@ -305,26 +319,40 @@ pub fn compute(
 }
 
 /// Aperçu embarqué d'un RAW déjà ouvert, décodé au moins à `min_side` si possible (non
-/// redressé). `None` s'il n'y en a pas ou s'il est illisible.
-fn embedded_bitmap(raw: &mut RawFile, min_side: u32) -> Option<Bitmap> {
+/// redressé), avec son espace couleur (ICC ou EXIF du JPEG : un boîtier réglé en Adobe RGB).
+/// `None` s'il n'y en a pas ou s'il est illisible.
+fn embedded_source(raw: &mut RawFile, min_side: u32) -> Option<(Bitmap, Origin)> {
     match raw.thumbnail() {
         // jpeg::decode n'applique pas la balise EXIF : c'est voulu, l'orientation du RAW
         // fait foi (voir RawFile::orientation). Décodage directement réduit (IDCT).
-        Ok(Thumbnail::Jpeg(bytes)) => jpeg::decode(&bytes, min_side).ok(),
-        Ok(Thumbnail::Bitmap(bmp)) => Some(bmp),
+        Ok(Thumbnail::Jpeg(bytes)) => Some((
+            jpeg::decode(&bytes, min_side).ok()?,
+            Origin::of_jpeg(&bytes),
+        )),
+        Ok(Thumbnail::Bitmap(bmp)) => Some((bmp, Origin::Srgb)),
         Err(_) => None,
     }
 }
 
-/// JPEG embarqué redressé, réduit à `side` (`0` : taille d'origine, pour le 1:1). Refusé
-/// s'il est trop petit pour servir (côté long inférieur à `min`).
-fn raw_embedded(file: &MediaFile, side: u32, min: u32) -> Result<Bitmap> {
+/// JPEG embarqué redressé, réduit à `side` (`0` : taille d'origine, pour le 1:1), dans
+/// l'espace de travail (`working`) ou dans son propre espace. Refusé s'il est trop petit
+/// pour servir (côté long inférieur à `min`).
+fn raw_embedded_in(file: &MediaFile, side: u32, min: u32, working: bool) -> Result<Bitmap> {
     let mut raw = RawFile::open(&file.path)?;
     let rotation = raw.orientation();
-    let bmp = embedded_bitmap(&mut raw, side)
-        .filter(|b| b.width.max(b.height) >= min)
+    let (bmp, origin) = embedded_source(&mut raw, side)
+        .filter(|(b, _)| b.width.max(b.height) >= min)
         .ok_or(PreviewError::NoEmbeddedPreview)?;
-    Ok(bmp.fit(side).rotate(rotation))
+    // Réduit avant de convertir : moins de pixels à convertir.
+    let mut bmp = bmp.fit(side);
+    if working {
+        crate::colour::bitmap_to_working(&mut bmp, &origin);
+    }
+    Ok(bmp.rotate(rotation))
+}
+
+fn raw_embedded(file: &MediaFile, side: u32, min: u32) -> Result<Bitmap> {
+    raw_embedded_in(file, side, min, true)
 }
 
 /// JPEG embarqué (« JPEG boîtier ») d'un RAW, à sa taille et redressé : export de ce
@@ -332,7 +360,8 @@ fn raw_embedded(file: &MediaFile, side: u32, min: u32) -> Result<Bitmap> {
 pub fn embedded_full(path: &std::path::Path) -> Result<Bitmap> {
     let mut raw = RawFile::open(path)?;
     let rotation = raw.orientation();
-    let bmp = embedded_bitmap(&mut raw, 0).ok_or(PreviewError::NoEmbeddedPreview)?;
+    // Dans son propre espace : l'export le lit à part (`colour::Origin`).
+    let (bmp, _) = embedded_source(&mut raw, 0).ok_or(PreviewError::NoEmbeddedPreview)?;
     Ok(bmp.rotate(rotation))
 }
 
@@ -342,8 +371,12 @@ fn raw_thumbnail(file: &MediaFile, settings: &Settings, cancel: &AtomicBool) -> 
     let sizes = &settings.sizes;
     let mut raw = RawFile::open(&file.path)?;
     let rotation = raw.orientation();
-    match embedded_bitmap(&mut raw, sizes.thumbnail) {
-        Some(bmp) => Ok(bmp.fit(sizes.thumbnail).rotate(rotation)),
+    match embedded_source(&mut raw, sizes.thumbnail) {
+        Some((bmp, origin)) => {
+            let mut bmp = bmp.fit(sizes.thumbnail);
+            crate::colour::bitmap_to_working(&mut bmp, &origin);
+            Ok(bmp.rotate(rotation))
+        }
         None => {
             let options = RenderOptions {
                 half_size: true,
@@ -429,7 +462,7 @@ pub fn compute_sharpness(
     let side = s.score_side.max(16);
     let image = match file.kind {
         // Un JPEG embarqué trop petit (vignette de 160 px) ne dit rien de la netteté.
-        MediaKind::Raw => raw_embedded(file, side, side / 2)?,
+        MediaKind::Raw => raw_embedded_in(file, side, side / 2, false)?,
         MediaKind::Flat => flat::decode_fit(&file.path, side)?,
     };
     Ok(crate::sharpness::score(&image, s))
@@ -451,7 +484,8 @@ pub fn compute_signature(
             let mut raw = RawFile::open(&file.path)?;
             let date = raw.shooting_info().date;
             let rotation = raw.orientation();
-            let image = match embedded_bitmap(&mut raw, side) {
+            // Analyse : sur les données du fichier, pas converties (clés inchangées).
+            let image = match embedded_source(&mut raw, side).map(|(b, _)| b) {
                 Some(b) => b.fit(side).rotate(rotation),
                 // Sans JPEG embarqué : un rendu réduit.
                 None => raw_thumbnail(file, settings, cancel)?.fit(side),
@@ -519,15 +553,17 @@ pub fn exposure(cache: &Cache, file: &MediaFile, settings: &Settings) -> Option<
 
 /// Exposition du **JPEG boîtier** d'un RAW (idée de l'utilisateur, 27/10/2026 : voir ce
 /// que le boîtier a fait des hautes lumières et des ombres, à côté des données du
-/// capteur), d'après son aperçu boîtier en cache ([`Level::Embedded`], déjà réduit) :
-/// `None` pour une image plate, ou tant que cet aperçu n'est pas calculé. Pas de cache
-/// propre : quelques dizaines de ms sur un aperçu de 2560 px, à garder en mémoire par
+/// capteur), d'après le JPEG embarqué **dans son propre espace** (l'aperçu en cache est
+/// converti vers l'espace de travail : les saturés du boîtier n'y seraient plus à 255) :
+/// `None` pour une image plate, ou tant que l'aperçu boîtier ([`Level::Embedded`]) n'est pas
+/// calculé. Pas de cache propre : quelques dizaines de ms, à garder en mémoire par
 /// l'appelant.
 pub fn camera_exposure(cache: &Cache, file: &MediaFile, settings: &Settings) -> Option<Exposure> {
-    if file.kind != MediaKind::Raw {
+    if file.kind != MediaKind::Raw || !cache.contains(&key(file, Level::Embedded, settings).ok()?) {
         return None;
     }
-    let bitmap = cache.get(&key(file, Level::Embedded, settings).ok()?)?;
+    let min = (settings.sizes.standard as f32 * settings.embedded_min_ratio) as u32;
+    let bitmap = raw_embedded_in(file, settings.sizes.standard, min, false).ok()?;
     Some(Exposure::from_bitmap(&bitmap, &settings.exposure))
 }
 
@@ -608,7 +644,7 @@ mod tests {
     }
 
     #[test]
-    fn the_camera_jpeg_histogram_comes_from_the_cached_embedded_preview() {
+    fn the_camera_jpeg_histogram_waits_for_the_embedded_preview_and_reads_the_raw() {
         let dir = tempfile::tempdir().unwrap();
         let cache = Cache::open(dir.path().join("cache")).unwrap();
         let settings = Settings::default();
@@ -621,7 +657,8 @@ mod tests {
             camera_exposure(&cache, &raw, &settings).is_none(),
             "pas encore d'aperçu boîtier"
         );
-        // Aperçu tout blanc : le JPEG boîtier est brûlé.
+        // L'aperçu en cache n'est qu'un signal : l'histogramme lit le JPEG embarqué dans
+        // son propre espace (l'aperçu est converti vers l'espace de travail), ici illisible.
         let white = Bitmap {
             width: 16,
             height: 16,
@@ -629,8 +666,10 @@ mod tests {
         };
         let key = key(&raw, Level::Embedded, &settings).unwrap();
         cache.put(&key, &white).unwrap();
-        let e = camera_exposure(&cache, &raw, &settings).expect("calculée");
-        assert!(e.over_fraction() > 0.9, "{}", e.over_fraction());
+        assert!(
+            camera_exposure(&cache, &raw, &settings).is_none(),
+            "RAW illisible"
+        );
         let flat = MediaFile {
             path: dir.path().join("b.jpg"),
             kind: MediaKind::Flat,

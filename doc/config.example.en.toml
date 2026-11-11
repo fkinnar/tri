@@ -612,6 +612,11 @@ key_menu_delay_ms = 400
 # Diagnostics (TRI_GUI_TRACE=1): a frame of the interface slower than this delay (ms) is
 # traced with the duration of its steps. With [log] trace, in the log too.
 trace_slow_ms = 100
+# ICC profile of the screen (.icc or .icm file, ~/… accepted), instead of the system's.
+# Linux and Windows only: macOS converts to the screen profile itself. Empty: the
+# system's (Linux: published by colord for the main screen; Windows: the one of the
+# screen the window is on), else sRGB.
+display_profile = ""
 # Report a problem: latest log entries offered in the form, editable before sending (0:
 # none).
 report_log_entries = 20
