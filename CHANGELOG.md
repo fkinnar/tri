@@ -9,7 +9,10 @@
   (`[gui.grid] render_wait_ms`) instead of showing the camera JPEG and then changing image;
   stack covers too. Same for a thumbnail whose viewing adjustments are still being read: it
   was shown without them, then every adjusted thumbnail was decoded again at once (half a
-  second of frozen interface when opening an adjusted folder).
+  second of frozen interface when opening an adjusted folder), and a thumbnail is no
+  longer redone when its adjustments are read back unchanged. Stacks opened folded (#417)
+  also keep their covers: shown first with their first image, they switched to the real
+  cover once ratings and sharpness scores were read; the covers are now remembered too.
 - **Stacked folders open already folded** (#417): the stacks of a folder are remembered in
   its cache after a complete grouping; reopened with nothing changed, it shows folded at
   once instead of folding on screen. Otherwise the grid waits for its stacks a moment

@@ -6217,10 +6217,16 @@ impl TriApp {
     }
 
     /// Retient les piles d'un regroupement complet, si elles ont changé.
-    fn remember_stacks(&mut self, key: String, ranges: &[std::ops::Range<usize>]) {
+    fn remember_stacks(
+        &mut self,
+        key: String,
+        ranges: &[std::ops::Range<usize>],
+        covers: Vec<String>,
+    ) {
         let memory = StacksMemory {
             key,
             lengths: ranges.iter().map(|r| r.len()).collect(),
+            covers,
         };
         if self.stacks_memory.as_ref() == Some(&memory) || self.folder.is_none() {
             return;
@@ -6280,7 +6286,25 @@ impl TriApp {
         // part, avec un seuil recalculé sur elles seules, elles se coupaient (#163 : 11
         // photos en 1 + 10) ; le seuil du dossier reste celui de tout le dossier.
         let complete = self.signatures_complete();
+        // Couvertures (notes, netteté) toutes connues : sinon, celles retenues.
+        // (Netteté sans rien d'annoncé, analyse coupée : rien à attendre.)
+        let settled = complete && self.loading.is_none() && {
+            let p = self.progress[4];
+            p.done >= p.total
+        };
         let key = self.stacks_key();
+        let remembered_covers: HashSet<PathBuf> = self
+            .stacks_memory
+            .as_ref()
+            .filter(|m| m.key == key && !settled)
+            .map(|m| {
+                m.covers
+                    .iter()
+                    .map(|c| crate::state::absolute(&self.folder.dir, c))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let mut to_remember = None;
         let remembered = self
             .stacks_memory
             .as_ref()
@@ -6305,8 +6329,8 @@ impl TriApp {
             let ranges = tri::similarity::group(&links, self.group_threshold(), self.group_gap);
             if complete {
                 self.stacks_wait = None;
-                if self.stacking {
-                    self.remember_stacks(key, &ranges);
+                if self.stacking && settled {
+                    to_remember = Some((key, ranges.clone()));
                 }
             }
             ranges
@@ -6326,6 +6350,14 @@ impl TriApp {
         let cover = |r: &std::ops::Range<usize>| {
             // La préférée choisie par l'utilisateur, sinon la meilleure.
             if let Some(i) = r.clone().find(|&i| chosen.contains(&files[i].path)) {
+                return i;
+            }
+            // Notes ou scores encore en lecture : la couverture retenue (#416, retour du
+            // 11/11/2026 : la première image, puis la vraie couverture sous les yeux).
+            if let Some(i) = r
+                .clone()
+                .find(|&i| remembered_covers.contains(&files[i].path))
+            {
                 return i;
             }
             r.clone()
@@ -6401,9 +6433,21 @@ impl TriApp {
         };
         let dev_unfolded_in =
             |r: &std::ops::Range<usize>| r.clone().any(|i| dev_unfolded.contains(&photo(i)));
+        let covers: Vec<String> = if to_remember.is_some() {
+            ranges
+                .iter()
+                .filter(|r| r.len() > 1)
+                .filter_map(|r| crate::state::relative(&self.folder.dir, &files[cover(r)].path))
+                .collect()
+        } else {
+            Vec::new()
+        };
         self.stacks =
             crate::stacks::Stacks::build(self.files.len(), ranges, self.stacking, cover, expanded)
                 .with_developments(same_photo, dev_cover, dev_unfolded_in);
+        if let Some((key, raw)) = to_remember {
+            self.remember_stacks(key, &raw, covers);
+        }
         // En mode pile (plein écran), on parcourt aussi les images cachées d'une pile ; en
         // comparaison aussi (07/11/2026 : une pile recalculée pendant la comparaison, à
         // l'arrivée d'une vignette, ramenait l'image active à la couverture).
@@ -20240,6 +20284,10 @@ struct StacksMemory {
     key: String,
     /// Longueurs des groupes, dans l'ordre de la grille.
     lengths: Vec<usize>,
+    /// Couvertures des piles (chemins relatifs au dossier), montrées tant que les notes et
+    /// les scores de netteté qui les choisissent sont en lecture.
+    #[serde(default)]
+    covers: Vec<String>,
 }
 
 impl StacksMemory {
@@ -25472,6 +25520,21 @@ mod tests {
         assert_eq!(h.state().stacks.count(), 1, "une rafale");
         let memory = h.state().stacks_memory.clone().expect("retenues");
         assert_eq!(memory.lengths, [3]);
+        assert_eq!(memory.covers.len(), 1, "sa couverture aussi");
+        // Une couverture retenue qui n'est pas la première image (comme une photo notée
+        // ou plus nette) : c'est elle qu'on doit voir tant que tout n'est pas relu.
+        let cover = files[1].path.clone();
+        h.state_mut().stacks_memory.as_mut().unwrap().covers =
+            vec![crate::state::relative(&photos, &cover).unwrap()];
+        let memory = h.state().stacks_memory.clone().unwrap();
+        let bytes = serde_json::to_vec(&memory).unwrap();
+        h.state()
+            .engine
+            .as_ref()
+            .unwrap()
+            .cache
+            .put_folder_bytes(&photos, Level::Similarity, STACKS, &bytes)
+            .unwrap();
         // Rouvert : plus d'empreintes, piles retenues appliquées d'emblée.
         h.state_mut().stacking = true;
         h.state_mut().open_folder(&photos);
@@ -25480,6 +25543,9 @@ mod tests {
         h.state_mut().stacks_dirty = true;
         h.run_steps(2);
         assert_eq!(h.state().stacks.count(), 1, "repliée tout de suite");
+        // Avec sa couverture retenue, pas la première image en attendant les notes.
+        let shown = h.state().stacks.shown.clone();
+        assert_eq!(h.state().files[shown[0]].path, cover);
         assert!(!h.state().stacks_pending(), "rien à attendre");
         // Un curseur changé : plus la même empreinte, la grille attend ses piles.
         h.state_mut().group_strictness = 0.5;

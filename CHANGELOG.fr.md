@@ -10,7 +10,10 @@
   puis de changer ; les couvertures des piles aussi. De même pour une vignette dont les
   réglages de visualisation sont encore en lecture : montrée sans eux, toutes les vignettes
   réglées étaient ensuite redécodées d'un coup (une demi-seconde d'interface figée en
-  ouvrant un dossier réglé).
+  ouvrant un dossier réglé), et une vignette n'est plus refaite quand ses réglages sont
+  relus identiques. Les piles ouvertes repliées (#417) gardent aussi leurs couvertures :
+  montrées d'abord avec leur première image, elles passaient à la vraie couverture une
+  fois notes et scores de netteté lus ; les couvertures sont désormais retenues aussi.
 - **Les dossiers en piles s'ouvrent déjà repliés** (#417) : les piles d'un dossier sont
   retenues dans son cache après un regroupement complet ; rouvert sans rien de changé, il
   s'affiche replié tout de suite au lieu de se replier sous les yeux. Sinon la grille

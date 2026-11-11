@@ -122,7 +122,7 @@ image's folder ([store.md](store.md)).
 
 A folder opened in stacks used to show unfolded, then fold on screen while the
 signatures arrived from the cache. Now, after a complete grouping (every signature
-there), the interface keeps the groups' lengths in the folder's cache
+there), the interface keeps the groups' lengths and their covers (shown while ratings and sharpness scores are still being read) in the folder's cache
 (`Cache::put_folder_bytes`, file `stacks.bin` next to the similarity entries: cleared
 with the cache, counted in its size), with `stacks_key`: a fingerprint of the images in
 grid order and of what decides the grouping besides the signatures (sliders, settings).

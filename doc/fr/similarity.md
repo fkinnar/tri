@@ -127,7 +127,7 @@ chaque image ([store.md](store.md)).
 
 Un dossier ouvert en piles s'affichait déplié, puis se repliait sous les yeux pendant que
 les empreintes arrivaient du cache. Désormais, après un regroupement complet (toutes les
-empreintes là), l'interface garde les longueurs des groupes dans le cache du dossier
+empreintes là), l'interface garde les longueurs des groupes et leurs couvertures (montrées tant que notes et scores de netteté sont en lecture) dans le cache du dossier
 (`Cache::put_folder_bytes`, fichier `stacks.bin` à côté des entrées de similarité : vidé
 avec le cache, compté dans sa place), avec `stacks_key` : une empreinte des images dans
 l'ordre de la grille et de ce qui décide du regroupement en dehors des empreintes
