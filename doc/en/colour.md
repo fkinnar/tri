@@ -60,8 +60,24 @@ twice.
   instance), so it is declared again at every frame. That costs two Objective-C messages
   when it is already set.
 - **Linux, Windows.** The system converts nothing for applications. Each image is converted
-  before it becomes a texture (`display::to_screen`, in the loading thread for large
-  images). For now the target is sRGB; the screen's own profile is the next step.
+  to the screen profile before it becomes a texture (`display::to_screen`, in the loading
+  thread for large images). The profile comes from three places, in this order:
+  1. `[gui] display_profile`, a `.icc` / `.icm` file (`~/…` accepted). It is a fallback
+     when detection fails, and useful for tests.
+  2. The system (`display::Screen::follow`):
+     - **Linux**: the X11 `_ICC_PROFILE` property of the root window, published by colord
+       (or `dispwin`) for the **main screen**. It is read with `x11rb` in pure Rust.
+       Under Wayland it works only when the compositor publishes it to XWayland.
+     - **Windows**: `GetICMProfileW` on the screen **the window is on**, the profile
+       associated in "Colour Management". It is followed when the window moves to another
+       screen (`MonitorFromWindow` at every frame, cheap).
+  3. Otherwise sRGB.
+
+  When the profile changes, every image texture is redone in place, like after an
+  adjustment, without falling back to the thumbnail. A profile that is unreadable or
+  unusable by `moxcms` is logged, and sRGB is used. The profile is read at start-up,
+  when the setting changes, and when the window changes screen (Windows): a profile
+  changed in colord while `tri` runs is seen at the next launch.
 
 The interface (egui's colours, in sRGB) is not converted. On macOS, its greys are
 unchanged, but its vivid colours (selection, colour labels) come out more saturated. The
@@ -122,6 +138,8 @@ Each conversion is built once per pair of spaces and kept (`colour::to_working`,
   - inverse matrices and Rec.2020 luminance;
   - 8-bit round trip;
   - 16-bit precision.
+- `gui/src/display.rs`: a profile file read and described, a bad one refused; a wide
+  screen gets less saturated values than an sRGB one.
 - `tests/colour.rs` (synthetic charts written with their ICC):
   - the same colour from JPEGs in sRGB (with and without profile), Adobe RGB, P3 and
     ProPhoto;
@@ -132,6 +150,7 @@ Each conversion is built once per pair of spaces and kept (`colour::to_working`,
 
 ## Still to do (#422)
 
-- **Linux / Windows**: read the screen's profile (colord or the X11 `_ICC_PROFILE` atom;
-  `GetICMProfile`). Also a `[gui.colors] display_profile` setting to force a file.
-- Check with exotic output profiles, and on Linux and Windows.
+- Check with exotic output profiles, and on Linux and Windows (Windows: compile-checked
+  only from macOS, untested by the developer).
+- Linux: per-screen profiles (`_ICC_PROFILE_n`), Wayland's colour-management protocol
+  once egui / wgpu expose it.

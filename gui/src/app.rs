@@ -837,6 +837,8 @@ pub struct TriApp {
     /// ([`TriApp::engine_blocked`]).
     engines_blocked:
         std::cell::RefCell<std::collections::HashMap<tri::develop::Engine, (Instant, bool)>>,
+    /// Profil de l'écran (Linux, Windows ; `display`).
+    screen: crate::display::Screen,
     /// Expositions du JPEG boîtier des RAW ([`TriApp::camera_exposure_of`]).
     camera_exposures: Lru<PathBuf, Arc<Exposure>>,
     /// Expositions du JPEG boîtier en calcul (en fond), et leur arrivée.
@@ -1616,6 +1618,7 @@ impl TriApp {
             clipping: gui.histogram.clipping,
             exposures: Lru::new(gui.view.textures),
             camera_exposures: Lru::new(gui.view.textures),
+            screen: crate::display::Screen::default(),
             camera_pending: HashSet::new(),
             camera_read: mpsc::channel(),
             mask_textures: Lru::new(gui.view.textures),
@@ -18110,6 +18113,11 @@ impl eframe::App for TriApp {
         // wgpu l'oublie à chaque reconfiguration, l'image d'après la corrige.
         if crate::display::declare_working(frame) {
             ui.ctx().request_repaint();
+        }
+        // Linux, Windows : le profil de l'écran (réglage, système) ; changé (autre écran,
+        // réglage modifié), les textures sont refaites.
+        if self.screen.follow(frame, &self.gui.display_profile) {
+            self.screen_changed();
         }
         // Une erreur de la carte graphique (sans plantage, voir `crash::gpu_error`).
         if let Some(e) = crate::crash::take_gpu_error() {

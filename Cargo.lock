@@ -3757,6 +3757,7 @@ dependencies = [
  "eframe",
  "egui_kittest",
  "image",
+ "moxcms",
  "objc2 0.6.5",
  "objc2-core-foundation",
  "objc2-core-graphics",
@@ -3767,6 +3768,8 @@ dependencies = [
  "tempfile",
  "toml",
  "tri",
+ "windows-sys 0.61.2",
+ "x11rb",
 ]
 
 [[package]]

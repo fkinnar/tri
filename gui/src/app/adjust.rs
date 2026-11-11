@@ -119,6 +119,19 @@ impl TriApp {
             .clear();
     }
 
+    /// Le profil de l'écran a changé (`display::Screen::follow`) : toutes les textures
+    /// d'images sont refaites, comme après un réglage (sur place, sans retomber sur la
+    /// vignette).
+    pub(super) fn screen_changed(&mut self) {
+        let mut paths: Vec<PathBuf> = self.textures.keys().cloned().collect();
+        paths.extend(self.big.keys().map(|(p, _)| p.clone()));
+        paths.sort();
+        paths.dedup();
+        for path in paths {
+            self.drop_adjusted_textures(&path);
+        }
+    }
+
     /// Les textures de `path` sont refaites (réglages changés) : vignette et grandes
     /// images.
     pub(super) fn drop_adjusted_textures(&mut self, path: &Path) {

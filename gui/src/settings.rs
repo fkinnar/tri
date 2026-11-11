@@ -208,6 +208,9 @@ pub struct GuiSettings {
     /// Trace (`TRI_GUI_TRACE`) : une image de l'interface plus lente que ce délai (ms)
     /// est tracée avec la durée de ses étapes.
     pub trace_slow_ms: u64,
+    /// Profil ICC de l'écran (`.icc`, `.icm`), à la place de celui du système (Linux,
+    /// Windows ; macOS gère l'écran lui-même) ; vide : celui du système, sinon sRGB.
+    pub display_profile: String,
     /// Signaler un problème : dernières entrées du journal proposées (0 : aucune).
     pub report_log_entries: usize,
     /// Réglages : côté de la zone mesurée par la pipette, en fraction de l'image.
@@ -327,6 +330,7 @@ impl Default for GuiSettings {
             key_menu: true,
             key_menu_delay_ms: 400,
             trace_slow_ms: 100,
+            display_profile: String::new(),
             report_log_entries: 20,
             adjust_eyedropper_size: 0.04,
             slider_fine_speed: 0.1,

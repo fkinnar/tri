@@ -62,9 +62,25 @@ rien n'est converti deux fois.
   redimensionnement, par exemple) : il est donc redéclaré à chaque image. Ça coûte deux
   messages Objective-C quand il est déjà en place.
 - **Linux, Windows.** Le système ne convertit rien pour les applications. Chaque image est
-  convertie avant de devenir une texture (`display::to_screen`, dans le fil de chargement
-  pour les grandes images). Pour l'instant la cible est le sRGB ; le vrai profil de
-  l'écran est l'étape suivante.
+  convertie vers le profil de l'écran avant de devenir une texture (`display::to_screen`,
+  dans le fil de chargement pour les grandes images). Le profil vient de trois endroits,
+  dans cet ordre :
+  1. `[gui] display_profile`, un fichier `.icc` ou `.icm` (`~/…` accepté). C'est un
+     secours quand la détection échoue, et c'est utile pour les tests.
+  2. Le système (`display::Screen::follow`) :
+     - **Linux** : la propriété X11 `_ICC_PROFILE` de la fenêtre racine, publiée par
+       colord (ou `dispwin`) pour l'**écran principal**. Elle est lue avec `x11rb`, en pur
+       Rust. Sous Wayland, ça ne marche que si le compositeur la publie pour XWayland.
+     - **Windows** : `GetICMProfileW` sur l'écran **où est la fenêtre**, le profil associé
+       dans « Gestion des couleurs ». Il est suivi quand la fenêtre change d'écran
+       (`MonitorFromWindow` à chaque image, sans coût notable).
+  3. Sinon, sRGB.
+
+  Quand le profil change, toutes les textures d'images sont refaites sur place, comme
+  après un réglage, sans retomber sur la vignette. Un profil illisible ou inutilisable par
+  `moxcms` est noté au journal, et le sRGB est utilisé. Le profil est lu au démarrage,
+  quand le réglage change, et quand la fenêtre change d'écran (Windows) : un profil changé
+  dans colord pendant que `tri` tourne est vu au lancement suivant.
 
 L'interface (couleurs d'egui, en sRGB) n'est pas convertie. Sur macOS, ses gris ne
 changent pas, mais ses couleurs vives (sélection, pastilles) sortent plus saturées.
@@ -127,6 +143,8 @@ Chaque conversion est construite une fois par couple d'espaces et gardée
   - matrices inverses et luminance Rec.2020 ;
   - aller-retour en 8 bits ;
   - précision du 16 bits.
+- `gui/src/display.rs` : un fichier de profil lu et décrit, un mauvais refusé ; un écran
+  large reçoit des valeurs moins saturées qu'un écran sRGB.
 - `tests/colour.rs` (mires synthétiques écrites avec leur ICC) :
   - même couleur depuis des JPEG en sRGB (avec et sans profil), Adobe RGB, P3 et
     ProPhoto ;
@@ -137,7 +155,7 @@ Chaque conversion est construite une fois par couple d'espaces et gardée
 
 ## Reste à faire (n° 422)
 
-- **Linux / Windows** : lire le profil de l'écran (colord ou la propriété X11
-  `_ICC_PROFILE` ; `GetICMProfile`), et un réglage `[gui.colors] display_profile` pour
-  forcer un fichier.
-- Vérifier avec des profils de sortie exotiques, et sous Linux et Windows.
+- Vérifier avec des profils de sortie exotiques, et sous Linux et Windows (Windows :
+  compilation vérifiée depuis macOS seulement, non essayé par le développeur).
+- Linux : un profil par écran (`_ICC_PROFILE_n`), et le protocole de gestion des couleurs
+  de Wayland quand egui et wgpu l'exposeront.
