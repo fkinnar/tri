@@ -184,6 +184,7 @@ impl TriApp {
             let mut bitmap = self.adjust_bases[&key].clone();
             let kind = self.files[index].kind;
             crate::adjust_view::apply(&self.adjust_map, &path, kind, level, &mut bitmap);
+            crate::display::to_screen(&mut bitmap);
             let image = ColorImage::from_rgb(
                 [bitmap.width as usize, bitmap.height as usize],
                 &bitmap.data,

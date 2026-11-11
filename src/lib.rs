@@ -4,6 +4,7 @@
 //! - [`adjust`] : réglages de visualisation (exposition, balance, noir et blanc), harmonisation ;
 //! - [`bitmap`] : type d'image RGB8 commun ;
 //! - [`cache`] : cache persistant des vignettes et aperçus ;
+//! - [`colour`] : gestion des couleurs (espace de travail, profils des sources) ;
 //! - [`flat`] : décodage des images plates (JPEG, PNG, TIFF, WebP, HEIF) ;
 //! - [`jpeg`] : décodage / encodage JPEG rapides (libjpeg-turbo, repli pur Rust) ;
 //! - [`exposure`] : histogrammes sur les vraies données, pixels saturés / bouchés, masque ;
@@ -27,6 +28,7 @@
 pub mod adjust;
 pub mod bitmap;
 pub mod cache;
+pub mod colour;
 pub mod config_edit;
 pub mod develop;
 pub mod developments;

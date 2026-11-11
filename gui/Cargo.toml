@@ -27,6 +27,7 @@ rfd = "0.17.2"
 # mêmes crates que wgpu (projet objc2, MIT / Apache-2.0 / Zlib), aucune nouvelle source.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { version = "0.6.5", default-features = false, features = ["std"] }
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFData"] }
 objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["std", "CGColorSpace"] }
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = ["std", "CALayer", "CAMetalLayer", "objc2-core-graphics"] }
 

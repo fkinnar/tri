@@ -79,10 +79,12 @@ pub struct OutputSpace {
 }
 
 impl OutputSpace {
-    /// Celui des aperçus : sRGB, courbe BT.709 (défaut de LibRaw).
-    pub const PREVIEW: OutputSpace = OutputSpace {
-        color: 1,
-        gamma: (0.45, 4.5),
+    /// Celui des aperçus : l'espace de travail de l'affichage ([`crate::colour`] :
+    /// primaires Rec.2020, courbe sRGB), produit directement par LibRaw. Avant le
+    /// 11/11/2026 : sRGB et courbe BT.709 (défaut de LibRaw), affichés comme du sRGB.
+    pub const WORKING: OutputSpace = OutputSpace {
+        color: 8,
+        gamma: (1.0 / 2.4, 12.92),
     };
 }
 
@@ -452,7 +454,8 @@ impl RawFile {
         })
     }
 
-    /// Développement complet des données RAW en RGB 8 bits (orientation appliquée).
+    /// Développement complet des données RAW en RGB 8 bits, dans l'espace de travail
+    /// ([`OutputSpace::WORKING`]), orientation appliquée.
     pub fn render(&mut self, options: &RenderOptions) -> Result<Bitmap> {
         self.render_cancellable(options, &AtomicBool::new(false))
     }
@@ -467,7 +470,7 @@ impl RawFile {
         options: &RenderOptions,
         cancel: &AtomicBool,
     ) -> Result<Bitmap> {
-        self.process(options, 8, OutputSpace::PREVIEW, cancel)?
+        self.process(options, 8, OutputSpace::WORKING, cancel)?
             .to_bitmap()
     }
 

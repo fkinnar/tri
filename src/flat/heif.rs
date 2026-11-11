@@ -2,10 +2,11 @@
 
 use std::path::Path;
 
-use libheif_rs::{ColorSpace, HeifContext, LibHeif, RgbChroma};
+use libheif_rs::{ColorPrimaries, ColorSpace, HeifContext, LibHeif, RgbChroma};
 
 use super::{FlatError, Result};
 use crate::bitmap::Bitmap;
+use crate::colour::Origin;
 
 impl From<libheif_rs::HeifError> for FlatError {
     fn from(e: libheif_rs::HeifError) -> Self {
@@ -14,10 +15,28 @@ impl From<libheif_rs::HeifError> for FlatError {
 }
 
 pub(super) fn decode(path: &Path) -> Result<Bitmap> {
+    decode_with_origin(path).map(|(b, _)| b)
+}
+
+/// Comme [`decode`], avec l'espace couleur de l'image : son profil ICC, sinon ses
+/// indications NCLX (Display P3 d'un iPhone), sinon sRGB.
+pub(super) fn decode_with_origin(path: &Path) -> Result<(Bitmap, Origin)> {
     // Lecture en mémoire : read_from_file n'accepte que des chemins UTF-8.
     let bytes = std::fs::read(path)?;
     let ctx = HeifContext::read_from_bytes(&bytes)?;
     let handle = ctx.primary_image_handle()?;
+    let origin = if let Some(icc) = handle.color_profile_raw() {
+        Origin::of_icc(icc.data)
+    } else if handle
+        .color_profile_nclx()
+        .is_some_and(|n| n.color_primaries() == ColorPrimaries::SMPTE_EG_432_1)
+    {
+        moxcms::ColorProfile::new_display_p3()
+            .encode()
+            .map_or(Origin::Srgb, Origin::Icc)
+    } else {
+        Origin::Srgb
+    };
     // Les transformations (rotation, miroir, recadrage) sont appliquées par défaut.
     let image = LibHeif::new().decode(&handle, ColorSpace::Rgb(RgbChroma::Rgb), None)?;
     let plane = image
@@ -27,11 +46,14 @@ pub(super) fn decode(path: &Path) -> Result<Bitmap> {
         .ok_or(FlatError::UnexpectedHeifLayout)?;
     let data = pack_rows(plane.data, plane.width, plane.height, plane.stride)
         .ok_or(FlatError::UnexpectedHeifLayout)?;
-    Ok(Bitmap {
-        width: plane.width,
-        height: plane.height,
-        data,
-    })
+    Ok((
+        Bitmap {
+            width: plane.width,
+            height: plane.height,
+            data,
+        },
+        origin,
+    ))
 }
 
 /// Retire le remplissage de fin de ligne (`stride` ≥ `width * 3`) d'un plan RGB8.

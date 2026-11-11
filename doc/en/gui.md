@@ -1556,15 +1556,14 @@ during a window's opening fade showed it half transparent.
   the latest entries (`[gui] report_log_entries`, 20), to read and edit (paths contain
   personal names), attached to the GitHub form (`logs` field), or "Without the log".
 - **Window colour space** (2026-11-11, on a calibrated wide-gamut screen the darktable
-  render came out far too saturated): egui draws in sRGB, but on macOS wgpu leaves the
-  Metal layer without a colour space (`CAMetalLayer.colorspace = nil`), and macOS then
-  converts nothing: sRGB values went to the screen as they were, stretched over its whole
-  gamut, and the screen profile was ignored. `display::declare_srgb` declares the layer in
-  sRGB on every frame (wgpu resets it on each surface reconfiguration, a resize for
-  instance; eframe and egui-wgpu offer no setting for it); macOS then converts to the
-  screen profile (ColorSync, calibration included) and follows the window from one screen
-  to another. Linux and Windows convert nothing for applications: nothing is declared
-  there.
+  render came out far too saturated): on macOS wgpu leaves the Metal layer without a
+  colour space for an sRGB surface (`CAMetalLayer.colorspace = nil`), and macOS then
+  converts nothing: values went to the screen as they were, and the screen profile was
+  ignored. `display::declare_working` declares the layer in tri's working space (Rec.2020
+  primaries, sRGB curve) on every frame (wgpu resets it on each surface reconfiguration;
+  eframe and egui-wgpu offer no setting for it); macOS then converts to the screen
+  profile (ColorSync, calibration included). On Linux and Windows, `display::to_screen`
+  converts each image before it becomes a texture. Details: [colour.md](colour.md).
 - **Graphics memory** (2026-11-07, crash "wgpu error: Out of Memory": 21 images compared
   at 1:1 on an integrated graphics card, ~100 MB per 26 Mpx 1:1): the large textures
   have a budget, `[gui.view] textures_mb` (1500 MB). When an image arrives

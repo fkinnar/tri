@@ -111,10 +111,16 @@ dominante sur l'image, dans l'espace de sortie ; la passer au capteur demanderai
 conversion par la matrice couleur du boîtier, exacte pour une seule couleur. À revoir si
 l'écart se voit à l'usage.
 
-Chaque image 8 bits est ramenée en lumière linéaire avec **sa** courbe (`Transfer`) :
-BT.709 pour un rendu LibRaw (la courbe des aperçus, `OutputSpace::PREVIEW`), sRGB pour un
-JPEG. Décoder un rendu LibRaw en sRGB faussait la mesure dans les ombres (essai du
-10/11/2026 sur une photo sombre : +1,18 IL au lieu de +1).
+Chaque image 8 bits est ramenée en lumière linéaire avec **sa** courbe (`Transfer`).
+Depuis la gestion des couleurs (11/11/2026, [colour.md](colour.md)), toute image affichée
+est dans l'espace de travail de `tri` (primaires Rec.2020, courbe sRGB), rendus LibRaw
+compris (`OutputSpace::WORKING`) : la courbe est sRGB pour toutes ; avant, les rendus
+LibRaw étaient en BT.709, et en décoder un comme du sRGB faussait la mesure dans les
+ombres (essai du 10/11/2026 sur une photo sombre : +1,18 IL au lieu de +1). Les réglages
+restent définis sur des **canaux sRGB** : chaque pixel passe de l'espace de travail à la
+lumière linéaire aux primaires sRGB (`colour::working_to_srgb_linear`, valeurs sous 0 ou
+au-dessus de 1 hors du gamut sRGB), y est réglé, puis revient ; une balance, un mélange
+ou une lecture de la pipette donnent le même résultat qu'avant la gestion des couleurs.
 
 ## Mesures et harmonisation
 

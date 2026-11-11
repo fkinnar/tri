@@ -15,6 +15,7 @@ use std::path::Path;
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, metadata::Orientation};
 
 use crate::bitmap::Bitmap;
+use crate::colour::Origin;
 use crate::jpeg::{self, JpegError};
 
 /// Extensions HEIF (HEIC iPhone, HEIF, HIF Fujifilm), en minuscules.
@@ -143,6 +144,51 @@ fn decode_heif(_path: &Path) -> Result<Bitmap> {
     Err(FlatError::HeifNotCompiled)
 }
 
+#[cfg(feature = "heif")]
+fn decode_heif_with_origin(path: &Path) -> Result<(Bitmap, Origin)> {
+    heif::decode_with_origin(path)
+}
+
+#[cfg(not(feature = "heif"))]
+fn decode_heif_with_origin(_path: &Path) -> Result<(Bitmap, Origin)> {
+    Err(FlatError::HeifNotCompiled)
+}
+
+/// Comme [`decode_fit`], mais ramené à l'espace de travail de l'affichage
+/// ([`crate::colour`]) depuis le profil du fichier (ICC intégré, EXIF d'un JPEG, sinon
+/// sRGB). Un fichier de plus de 8 bits par canal (TIFF, PNG 16 bits) est converti à sa
+/// profondeur, puis ramené à 8 bits : pas de cassures dans les dégradés d'un TIFF ProPhoto.
+pub fn decode_working(path: impl AsRef<Path>, max_side: u32) -> Result<Bitmap> {
+    let path = crate::media::source(path.as_ref());
+    let path = path.as_ref();
+    if is_heif(path) {
+        let (bmp, origin) = decode_heif_with_origin(path)?;
+        let mut bmp = bmp.fit(max_side);
+        crate::colour::bitmap_to_working(&mut bmp, &origin);
+        return Ok(bmp);
+    }
+    let bytes = std::fs::read(path)?;
+    let origin = Origin::of_file(&bytes);
+    let reader = ImageReader::new(Cursor::new(&bytes)).with_guessed_format()?;
+    if reader.format() != Some(ImageFormat::Jpeg) {
+        let decoder = reader.into_decoder()?;
+        let colour = decoder.color_type();
+        if colour.bits_per_pixel() / u16::from(colour.channel_count()) > 8 {
+            let mut decoder = decoder;
+            let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
+            let rgb = DynamicImage::from_decoder(decoder)?.into_rgb16();
+            let (w, h) = rgb.dimensions();
+            let bmp = crate::colour::deep_to_working(w, h, rgb.as_raw(), &origin).fit(max_side);
+            let mut img = DynamicImage::ImageRgb8(bmp.into());
+            img.apply_orientation(orientation);
+            return Ok(img.into_rgb8().into());
+        }
+    }
+    let mut bmp = decode_bytes(&bytes, max_side)?;
+    crate::colour::bitmap_to_working(&mut bmp, &origin);
+    Ok(bmp)
+}
+
 /// Vrai si l'extension désigne un fichier HEIF (insensible à la casse).
 pub fn is_heif(path: &Path) -> bool {
     path.extension()
@@ -192,7 +238,10 @@ pub fn decode_deep(path: impl AsRef<Path>) -> Result<Deep> {
 }
 
 fn decode_image(path: &Path, max_side: u32) -> Result<Bitmap> {
-    let bytes = std::fs::read(path)?;
+    decode_bytes(&std::fs::read(path)?, max_side)
+}
+
+fn decode_bytes(bytes: &[u8], max_side: u32) -> Result<Bitmap> {
     let reader = ImageReader::new(Cursor::new(&bytes)).with_guessed_format()?;
     let is_jpeg = reader.format() == Some(ImageFormat::Jpeg);
     // Le décodeur `image` ne lit ici que les en-têtes (format, balise EXIF).
@@ -202,7 +251,7 @@ fn decode_image(path: &Path, max_side: u32) -> Result<Bitmap> {
     let decoded = if is_jpeg {
         drop(decoder);
         // JPEG : libjpeg-turbo si disponible, réduit dès le décodage.
-        jpeg::decode(&bytes, max_side)?
+        jpeg::decode(bytes, max_side)?
     } else {
         Bitmap::from(DynamicImage::from_decoder(decoder)?.into_rgb8())
     };

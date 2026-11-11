@@ -20,6 +20,7 @@ existe.
 | [media.md](media.md) | Module `tri::media` : parcours de dossier, RAW / images plates |
 | [filter.md](filter.md) | Module `tri::filter` : trait `Filter`, groupes, `KindFilter` |
 | [cache.md](cache.md) | Module `tri::cache` : cache persistant des vignettes et aperçus |
+| [colour.md](colour.md) | Module `tri::colour` : gestion des couleurs (espace de travail, profils des sources, écran) |
 | [preview.md](preview.md) | Module `tri::preview` : calcul des vignettes et aperçus |
 | [scheduler.md](scheduler.md) | Module `tri::scheduler` : file de travail en fond |
 | [jpeg.md](jpeg.md) | Module `tri::jpeg` : JPEG rapide (libjpeg-turbo, repli pur Rust) |

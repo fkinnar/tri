@@ -20,6 +20,7 @@ exists.
 | [media.md](media.md) | Module `tri::media`: folder scanning, RAW / flat images |
 | [filter.md](filter.md) | Module `tri::filter`: `Filter` trait, groups, `KindFilter` |
 | [cache.md](cache.md) | Module `tri::cache`: persistent cache of thumbnails and previews |
+| [colour.md](colour.md) | Module `tri::colour`: colour management (working space, source profiles, screen) |
 | [preview.md](preview.md) | Module `tri::preview`: computing thumbnails and previews |
 | [scheduler.md](scheduler.md) | Module `tri::scheduler`: background work queue |
 | [jpeg.md](jpeg.md) | Module `tri::jpeg`: fast JPEG (libjpeg-turbo, pure Rust fallback) |

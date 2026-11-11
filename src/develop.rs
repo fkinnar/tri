@@ -1728,7 +1728,8 @@ pub(crate) fn wait(
     }
 }
 
-/// Le JPEG `from`, réduit au côté long `side`, écrit dans `to` (qualité du cache).
+/// Le JPEG `from`, réduit au côté long `side`, écrit dans `to` (qualité du cache), avec
+/// son profil ICC.
 /// Une image toute noire (aucun pixel au-dessus de 0) est refusée : c'est ce que rend
 /// RapidRAW quand son interface est ouverte, jamais une vraie photo (le bruit du capteur
 /// suffit à dépasser 0).
@@ -1746,6 +1747,12 @@ fn shrink(from: &Path, to: &Path, side: u32) -> Result<(), String> {
         crate::jpeg::Chroma::Half,
     )
     .map_err(|e| e.to_string())?;
+    // Son profil le suit (celui du profil de sortie du développement, jamais imposé par
+    // `tri`) : l'affichage le convertit à la lecture (`colour`).
+    let jpeg = match crate::jpeg::icc_profile(&bytes) {
+        Some(icc) => crate::jpeg::with_icc(&jpeg, &icc).unwrap_or(jpeg),
+        None => jpeg,
+    };
     std::fs::write(to, jpeg).map_err(|e| e.to_string())
 }
 

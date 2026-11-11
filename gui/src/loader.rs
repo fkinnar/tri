@@ -192,6 +192,7 @@ fn run(
             // l'étire à sa taille d'origine).
             let mut b = b.fit(max_side as u32);
             crate::adjust_view::apply(adjust, &file.path, file.kind, level, &mut b);
+            crate::display::to_screen(&mut b);
             ColorImage::from_rgb([b.width as usize, b.height as usize], &b.data)
         });
         crate::trace::trace(|| {

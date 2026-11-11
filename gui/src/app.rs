@@ -12402,6 +12402,7 @@ impl TriApp {
         let mut bitmap = self.grid_bitmap(index, level)?;
         let file = &self.files[index];
         crate::adjust_view::apply(&self.adjust_map, &file.path, file.kind, level, &mut bitmap);
+        crate::display::to_screen(&mut bitmap);
         let image = ColorImage::from_rgb(
             [bitmap.width as usize, bitmap.height as usize],
             &bitmap.data,
@@ -12436,9 +12437,8 @@ impl TriApp {
         {
             return Some(bitmap);
         }
-        let bitmap = tri::jpeg::decode(&engine.cache.get_bytes(&key)?, side)
-            .ok()?
-            .fit(side);
+        // Dans l'espace de travail (un rendu développé y est converti par le cache).
+        let bitmap = engine.cache.get_fit(&key, side)?.fit(side);
         // Écrite en fond : une écriture du cache attend le disque (`sync_all`), lent sous
         // Windows ; pas pendant l'image (CI Windows du 11/11/2026).
         if let Some(small) = small {
@@ -18106,9 +18106,9 @@ impl TriApp {
 
 impl eframe::App for TriApp {
     fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
-        // Couleurs : la fenêtre déclarée en sRGB au système (`display`) ; wgpu l'oublie à
-        // chaque reconfiguration, l'image d'après la corrige.
-        if crate::display::declare_srgb(frame) {
+        // Couleurs : la fenêtre déclarée au système dans l'espace de travail (`display`) ;
+        // wgpu l'oublie à chaque reconfiguration, l'image d'après la corrige.
+        if crate::display::declare_working(frame) {
             ui.ctx().request_repaint();
         }
         // Une erreur de la carte graphique (sans plantage, voir `crash::gpu_error`).

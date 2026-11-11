@@ -267,6 +267,43 @@ pub fn icc_profile(bytes: &[u8]) -> Option<Vec<u8>> {
     )
 }
 
+/// Le même JPEG avec le profil ICC `icc` intégré (segments APP2 `ICC_PROFILE`, après
+/// l'en-tête JFIF), **sans recompresser** ; un profil déjà présent est remplacé. `None` :
+/// JPEG illisible.
+pub fn with_icc(bytes: &[u8], icc: &[u8]) -> Option<Vec<u8>> {
+    // 65 535 octets par segment, moins la longueur (2), l'en-tête (12) et les numéros (2).
+    const CHUNK: usize = 65_519;
+    let segs = segments(bytes)?;
+    let after_jfif = segs
+        .first()
+        .filter(|&&(m, _, _)| m == 0xE0)
+        .map_or(2, |&(_, _, end)| end);
+    let chunks: Vec<&[u8]> = icc.chunks(CHUNK).collect();
+    let count = u8::try_from(chunks.len()).ok()?;
+    let mut out = bytes[..after_jfif].to_vec();
+    for (i, chunk) in chunks.iter().enumerate() {
+        let len = u16::try_from(chunk.len() + 16).ok()?;
+        out.extend_from_slice(&[0xFF, 0xE2]);
+        out.extend_from_slice(&len.to_be_bytes());
+        out.extend_from_slice(b"ICC_PROFILE\0");
+        out.extend_from_slice(&[i as u8 + 1, count]);
+        out.extend_from_slice(chunk);
+    }
+    // Le reste, sans les anciens segments ICC.
+    let mut at = after_jfif;
+    for &(m, start, end) in &segs {
+        if start < after_jfif {
+            continue;
+        }
+        if m == 0xE2 && bytes.get(start + 4..start + 16) == Some(b"ICC_PROFILE\0") {
+            out.extend_from_slice(&bytes[at..start]);
+            at = end;
+        }
+    }
+    out.extend_from_slice(&bytes[at..]);
+    Some(out)
+}
+
 /// Position, dans les données TIFF d'un EXIF, de la valeur de la balise d'orientation de
 /// l'IFD0 (type SHORT), s'il y en a une.
 fn orientation_offset(tiff: &[u8]) -> Option<usize> {

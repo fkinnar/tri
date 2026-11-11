@@ -105,10 +105,16 @@ image, in the output space; moving it to the sensor would need a conversion thro
 camera's colour matrix, exact for a single colour only. To revisit if the difference
 shows in use.
 
-Each 8-bit image is brought back to linear light with **its own** curve (`Transfer`):
-BT.709 for a LibRaw render (the previews' curve, `OutputSpace::PREVIEW`), sRGB for a JPEG.
-Decoding a LibRaw render as sRGB skewed the measure in the shadows (try of 2026-11-10 on a
-dark photo: +1.18 EV instead of +1).
+Each 8-bit image is brought back to linear light with **its own** curve (`Transfer`).
+Since colour management (2026-11-11, [colour.md](colour.md)), every image shown is in
+tri's working space (Rec.2020 primaries, sRGB curve), LibRaw renders included
+(`OutputSpace::WORKING`), so the curve is sRGB for all; before, LibRaw renders were in
+BT.709, and decoding one as sRGB skewed the measure in the shadows (try of 2026-11-10 on
+a dark photo: +1.18 EV instead of +1). The adjustments stay defined on **sRGB channels**:
+each pixel goes from the working space to linear light with sRGB primaries
+(`colour::working_to_srgb_linear`, values below 0 or above 1 outside the sRGB gamut),
+is adjusted there, then goes back; a balance, a mixer or an eyedropper reading gives the
+same result as before colour management.
 
 ## Measures and harmonisation
 

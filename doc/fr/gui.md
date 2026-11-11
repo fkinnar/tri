@@ -1643,15 +1643,15 @@ moitié transparente.
   relire et modifier (les chemins contiennent des noms personnels), jointes au formulaire
   de GitHub (champ `logs`), ou « Sans le journal ».
 - **Espace couleur de la fenêtre** (11/11/2026, sur un écran wide gamut calibré, le rendu
-  darktable sortait largement trop saturé) : egui dessine en sRGB, mais sur macOS wgpu
-  laisse la couche Metal sans espace couleur (`CAMetalLayer.colorspace = nil`), et macOS
-  ne convertit alors rien : les valeurs sRGB partaient telles quelles vers l'écran,
-  étirées sur tout son gamut, et le profil de l'écran était ignoré.
-  `display::declare_srgb` déclare la couche en sRGB à chaque image (wgpu la remet à zéro
-  à chaque reconfiguration de la surface, un redimensionnement par exemple ; ni eframe ni
-  egui-wgpu ne permettent de le choisir) ; macOS convertit ensuite vers le profil de
-  l'écran (ColorSync, calibration comprise) et suit la fenêtre d'un écran à l'autre.
-  Linux et Windows ne convertissent rien pour les applications : rien n'y est déclaré.
+  darktable sortait largement trop saturé) : sur macOS, wgpu laisse la couche Metal sans
+  espace couleur pour une surface sRGB (`CAMetalLayer.colorspace = nil`), et macOS ne
+  convertit alors rien : les valeurs partaient telles quelles vers l'écran, et le profil
+  de l'écran était ignoré. `display::declare_working` déclare la couche dans l'espace de
+  travail de `tri` (primaires Rec.2020, courbe sRGB) à chaque image (wgpu la remet à zéro
+  à chaque reconfiguration de la surface ; ni eframe ni egui-wgpu ne permettent de le
+  choisir) ; macOS convertit ensuite vers le profil de l'écran (ColorSync, calibration
+  comprise). Sous Linux et Windows, `display::to_screen` convertit chaque image avant
+  d'en faire une texture. Détails : [colour.md](colour.md).
 - **Mémoire graphique** (07/11/2026, plantage « wgpu error: Out of Memory » : 21 images
   comparées à 1:1 sur une carte graphique intégrée, ~100 Mo par 1:1 de 26 Mpx) : les
   grandes textures ont un budget, `[gui.view] textures_mb` (1500 Mo). À l'arrivée d'une

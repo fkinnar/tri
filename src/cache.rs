@@ -681,13 +681,26 @@ impl Cache {
     ///
     /// Pour un 1:1, une lecture réussie met à jour la date de modification du fichier, qui
     /// sert de date de dernier usage pour [`Cache::evict`].
+    ///
+    /// L'image est dans l'espace de travail de l'affichage ([`crate::colour`]) : un rendu
+    /// d'un logiciel de développement, rangé tel quel avec son profil, y est converti ici.
     pub fn get(&self, key: &Key) -> Option<Bitmap> {
+        self.get_fit(key, 0)
+    }
+
+    /// Comme [`Cache::get`], décodée directement réduite (IDCT) à au moins `min_side`
+    /// pixels de côté long (`0` : taille d'origine), sans la réduire davantage.
+    pub fn get_fit(&self, key: &Key, min_side: u32) -> Option<Bitmap> {
         let path = self.entry_path(key);
         let bytes = fs::read(&path).ok()?;
-        let Ok(bitmap) = jpeg::decode(&bytes, 0) else {
+        let Ok(mut bitmap) = jpeg::decode(&bytes, min_side) else {
             let _ = fs::remove_file(&path);
             return None;
         };
+        if matches!(key.level, Level::Developed(_)) {
+            let origin = crate::colour::Origin::of_jpeg(&bytes);
+            crate::colour::bitmap_to_working(&mut bitmap, &origin);
+        }
         touch(key.level, &path);
         Some(bitmap)
     }
@@ -701,7 +714,14 @@ impl Cache {
             Level::Full | Level::EmbeddedFull => Chroma::Full,
             _ => Chroma::Half,
         };
-        let bytes = jpeg::encode(bitmap, self.quality, chroma).map_err(io::Error::other)?;
+        let mut bytes = jpeg::encode(bitmap, self.quality, chroma).map_err(io::Error::other)?;
+        // Une image écrite par `tri` est dans l'espace de travail ; parmi les rendus des
+        // logiciels (leur profil à eux), elle le dit (les copies pour la grille).
+        if matches!(key.level, Level::Developed(_))
+            && let Some(tagged) = jpeg::with_icc(&bytes, crate::colour::working_icc())
+        {
+            bytes = tagged;
+        }
         self.write_entry(key, &bytes)
     }
 
