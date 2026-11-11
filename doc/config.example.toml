@@ -1106,7 +1106,8 @@ camera_width = 1.5
 # Histogramme, indicateurs et zones : sur les données réelles par défaut ; le bouton du
 # grand histogramme ou <core.histogram.after> montre l'image après les réglages de
 # visualisation (le pourcentage saturé du capteur reste affiché : ce qu'il a perdu est
-# perdu). true : une image réglée les montre après d'elle-même.
+# perdu). true : une image réglée les montre après d'elle-même (aussi la case
+# « Histogramme après réglages » de la section Réglages).
 after_auto = false
 # Badges saturé / bouché de la grille : sur les données réelles ; true : une image réglée
 # les montre après son exposition et sa balance réglées.

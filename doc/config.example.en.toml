@@ -1098,7 +1098,8 @@ camera_width = 1.5
 # Histogram, indicators and areas: on the real data by default; the large histogram's
 # button or <core.histogram.after> shows the image after the viewing adjustments (the
 # sensor's saturated percentage stays shown: what it lost is lost). true: an adjusted
-# image shows them after by itself.
+# image shows them after by itself (also the "Histogram after adjustments" checkbox of
+# the Adjustments section).
 after_auto = false
 # Saturated / blocked badges of the grid: on the real data; true: an adjusted image shows
 # them after its adjusted exposure and balance.

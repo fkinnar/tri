@@ -16323,6 +16323,32 @@ impl TriApp {
         }
     }
 
+    /// `[gui.histogram] after_auto` (case de la section Réglages, #420) : l'histogramme
+    /// d'une image réglée montré après ses réglages d'office ; écrit dans la configuration.
+    fn set_histogram_after_auto(&mut self, on: bool) {
+        self.gui.histogram.after_auto = on;
+        let Some(path) = self
+            .config_path
+            .clone()
+            .or_else(tri::settings::default_path)
+        else {
+            self.notice = Some((t!("settings-no-path"), true));
+            return;
+        };
+        let result = tri::config_edit::ConfigFile::open(&path).and_then(|mut file| {
+            file.set(
+                "gui.histogram",
+                "after_auto",
+                &tri::config_edit::Value::Bool(on),
+            )?;
+            tri::settings::parse::<AppSettings>(&file.text())?;
+            file.save().map_err(|e| format!("{} : {e}", path.display()))
+        });
+        if let Err(e) = result {
+            self.notice = Some((e, true));
+        }
+    }
+
     fn set_file_actions(&mut self, allowed: bool) {
         self.settings.files.allow_actions = allowed;
         let Some(path) = self
@@ -29872,6 +29898,25 @@ mod tests {
             follow_over > real_over,
             "+3 IL : badge saturé ({follow_over} / {real_over})"
         );
+    }
+
+    #[test]
+    fn the_adjustments_section_has_the_after_histogram_checkbox() {
+        // Retour du 11/11/2026 : la case « Histogramme après réglages » en tête de la
+        // section Réglages (plus clair que la boîte de l'histogramme), écrite dans la
+        // configuration ([gui.histogram] after_auto).
+        let (mut h, dir) = harness();
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "").unwrap();
+        h.state_mut().config_path = Some(config.clone());
+        h.run_steps(3);
+        h.get_by_label("Histogramme après réglages");
+        assert!(!h.state().gui.histogram.after_auto, "décochée par défaut");
+        h.state_mut().set_histogram_after_auto(true);
+        assert!(h.state().gui.histogram.after_auto);
+        let text = std::fs::read_to_string(&config).unwrap();
+        let written: AppSettings = tri::settings::parse(&text).unwrap();
+        assert!(written.gui.histogram.after_auto, "écrite : {text}");
     }
 
     #[test]

@@ -877,7 +877,10 @@ system one ("cold" measurements, experiments).
       (exposure, balance, contrast, saturation, B&W), for every source. "after
       adjustments" is written at the top, and the **sensor's** saturated percentage stays
       in the indicators: what the sensor lost is lost, whatever the adjustment.
-      `[gui.histogram] after_auto = true`: an adjusted image shows the "after" by itself.
+      `[gui.histogram] after_auto = true`: an adjusted image shows the "after" by itself,
+      from its first adjustment; also a checkbox "Histogram after adjustments" at the top
+      of the Adjustments section, written in the configuration (owner's request,
+      2026-11-11: clearer there than in the histogram box).
     - **How it is measured** (`app/after.rs`): the preview shown is adjusted as on screen
       and reduced to `[gui.histogram] after_side` (1280 px), then measured
       (`Exposure::from_bitmap`), in a background thread, never on the UI thread. In full

@@ -943,7 +943,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
       toutes les sources. « après réglages » est écrit en haut, et le pourcentage saturé
       du **capteur** reste dans les indicateurs : ce que le capteur a perdu est perdu,
       quel que soit le réglage. `[gui.histogram] after_auto = true` : une image réglée
-      montre l'« après » d'elle-même.
+      montre l'« après » d'elle-même, dès son premier réglage ; aussi une case
+      « Histogramme après réglages » en tête de la section Réglages, écrite dans la
+      configuration (demande de l'utilisateur, 11/11/2026 : plus clair là que dans la
+      boîte de l'histogramme).
     - **Comment c'est mesuré** (`app/after.rs`) : l'aperçu affiché est réglé comme à
       l'écran, réduit à `[gui.histogram] after_side` (1280 px), puis mesuré
       (`Exposure::from_bitmap`), dans un fil en arrière-plan, jamais sur celui de
