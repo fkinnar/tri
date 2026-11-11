@@ -148,6 +148,42 @@ Each conversion is built once per pair of spaces and kept (`colour::to_working`,
     twice;
   - `with_icc`.
 
+## Checking by hand: colour charts
+
+```
+cargo run --release --example colour_charts -- <output folder> [--side N] [--check-only]
+```
+
+It writes the **same** chart in sRGB, Adobe RGB, Display P3, ProPhoto, Rec.2020 and the
+**linear** ProPhoto / Rec.2020 of darktable, each with its ICC embedded: 8-bit JPEG,
+16-bit TIFF, 8- and 16-bit PNG, plus an sRGB JPEG without a profile.
+
+The chart, from top to bottom:
+1. sRGB primaries and secondaries;
+2. common colours (skin, sky, foliage, orange, purple) and an 18 % grey;
+3. a grey ramp;
+4. black-to-red, black-to-green and black-to-blue ramps;
+5. a full-saturation hue sweep;
+6. colours **outside sRGB**: Display P3 primaries and secondaries, next to the sRGB red.
+
+All files must look the same in `tri`, and the same as in Preview or darktable. The last
+row is the exception: it is clipped in the sRGB files (normal) and partly in Adobe RGB
+(the P3 red). It is vivid on a wide-gamut screen and nearly flat on an sRGB one.
+
+The tool then reads each file back as `tri` does (`flat::decode_working`) and prints the
+largest gap per row, in levels out of 255.
+
+Checked on 2026-11-11 against macOS's ColorSync (`sips -m` to sRGB): every file agrees,
+JPEG edges aside. Two things showed up along the way:
+- **`moxcms` 0.8's Display P3 profile carries a wrong CICP tag**: "SMPTE RP 431", cinema
+  P3 with the DCI white, instead of "EG 432". ColorSync follows that tag. The charts, and
+  the P3 profile `tri` builds for an iPhone HEIC, leave the tag out; `tri` itself reads the
+  primaries of the matrix and was not affected.
+- **ImageIO rejects these Display P3 and Rec.2020 profiles inside a PNG** (`sips -g
+  profile` says "nil") and reads the file as sRGB, while it accepts the same profile in a
+  TIFF or a JPEG. No PNG is written for these two spaces, so the comparison with Preview
+  cannot mislead.
+
 ## Still to do (#422)
 
 - Check with exotic output profiles, and on Linux and Windows (Windows: compile-checked

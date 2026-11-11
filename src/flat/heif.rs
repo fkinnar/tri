@@ -31,9 +31,11 @@ pub(super) fn decode_with_origin(path: &Path) -> Result<(Bitmap, Origin)> {
         .color_profile_nclx()
         .is_some_and(|n| n.color_primaries() == ColorPrimaries::SMPTE_EG_432_1)
     {
-        moxcms::ColorProfile::new_display_p3()
-            .encode()
-            .map_or(Origin::Srgb, Origin::Icc)
+        // Sans la balise CICP de `moxcms` 0.8, fausse pour Display P3 (« SMPTE RP 431 »,
+        // le P3 du cinéma, au lieu de « EG 432 ») : les primaires de la matrice suffisent.
+        let mut p3 = moxcms::ColorProfile::new_display_p3();
+        p3.cicp = None;
+        p3.encode().map_or(Origin::Srgb, Origin::Icc)
     } else {
         Origin::Srgb
     };
