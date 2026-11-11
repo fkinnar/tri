@@ -504,6 +504,22 @@ pub fn remember_curve(
     crate::store::set_value(data, dir, CURVES, curve)
 }
 
+/// Empreinte de ce qui détermine les piles d'une liste d'images en dehors de leurs
+/// empreintes de similarité : les images dans l'ordre, et `params` (curseurs, réglages).
+/// Stable d'un lancement à l'autre, pour la mémoire des piles d'un dossier (#416).
+pub fn stacks_key<'a>(
+    images: impl IntoIterator<Item = &'a std::path::Path>,
+    params: &str,
+) -> String {
+    let mut hasher = blake3::Hasher::new();
+    for image in images {
+        hasher.update(image.to_string_lossy().as_bytes());
+        hasher.update(b"\0");
+    }
+    hasher.update(params.as_bytes());
+    hasher.finalize().to_hex()[..32].to_string()
+}
+
 /// Clé de l'écart de temps maximal entre deux images d'une pile (secondes, #414).
 const GAP: &str = "group-gap";
 

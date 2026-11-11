@@ -719,16 +719,42 @@ impl Cache {
         self.write_entry(key, bytes)
     }
 
+    /// Fichier `name` propre au dossier `folder` (absolu) au niveau `level`, pas à une
+    /// image : la mémoire des piles du dossier (#416). Rangé avec les entrées du dossier,
+    /// donc vidé avec elles et compté dans leur place.
+    pub fn folder_bytes(&self, folder: &Path, level: Level, name: &str) -> Option<Vec<u8>> {
+        fs::read(self.shard(level, folder).0.join(format!("{name}.bin"))).ok()
+    }
+
+    /// Écrit le fichier `name` propre au dossier `folder` ([`Cache::folder_bytes`]).
+    pub fn put_folder_bytes(
+        &self,
+        folder: &Path,
+        level: Level,
+        name: &str,
+        bytes: &[u8],
+    ) -> io::Result<()> {
+        let path = self.shard(level, folder).0.join(format!("{name}.bin"));
+        self.write_at(&path, level, folder, bytes)
+    }
+
     /// Écriture atomique d'une entrée : fichier temporaire, puis renommage.
     fn write_entry(&self, key: &Key, bytes: &[u8]) -> io::Result<()> {
         let path = self.entry_path(key);
+        self.write_at(&path, key.level, &key.folder, bytes)
+    }
+
+    /// Écrit `bytes` dans `path`, fichier du dossier d'entrées de `folder` au niveau
+    /// `level` (créé, sa source notée).
+    fn write_at(&self, path: &Path, level: Level, folder: &Path, bytes: &[u8]) -> io::Result<()> {
+        let path = path.to_path_buf();
         let dir = path
             .parent()
             .expect("une entrée a toujours un dossier parent");
         fs::create_dir_all(dir)?;
         let source = dir.join(SOURCE);
         if !source.exists() {
-            fs::write(&source, self.shard(key.level, &key.folder).1)?;
+            fs::write(&source, self.shard(level, folder).1)?;
         }
         let tmp = temp_path(&path);
         let result = (|| {

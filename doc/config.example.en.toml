@@ -761,6 +761,13 @@ export_toast_ms = 5000
 # alone, <core.stack.mode> or the stack button shows them (instant: the fingerprints are
 # computed in the background, see [similarity] background).
 stacks = false
+# Opening a folder in stacks: the grid waits for its stacks at most this long (ms) before
+# showing unfolded (a folder never analysed can take minutes). The stacks of a folder seen
+# before, nothing changed since, show at once.
+stacks_wait_ms = 2000
+# During that wait, from this number of images: a "Grouping stacks…" box in the centre of
+# the grid.
+stacks_overlay_from = 200
 # Search by file name (<core.search> in the grid): width of the field (points).
 search_width = 200.0
 # Minimum width of this field when the bar lacks room (narrow window: the sort and the

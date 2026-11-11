@@ -771,6 +771,13 @@ export_toast_ms = 5000
 # seule, <core.stack.mode> ou le bouton pile les affichent (instantané : les empreintes se
 # calculent en fond, voir [similarity] background).
 stacks = false
+# Ouverture d'un dossier en piles : la grille attend ses piles au plus ce temps (ms) avant
+# de s'afficher dépliée (un dossier jamais analysé peut demander des minutes). Les piles
+# d'un dossier déjà vu, rien de changé depuis, s'affichent tout de suite.
+stacks_wait_ms = 2000
+# Pendant cette attente, à partir de ce nombre d'images : une boîte « Regroupement des
+# piles… » au centre de la grille.
+stacks_overlay_from = 200
 # Recherche par nom de fichier (<core.search> en grille) : largeur du champ (points).
 search_width = 200.0
 # Largeur minimale de ce champ quand la barre manque de place (fenêtre étroite : le tri et

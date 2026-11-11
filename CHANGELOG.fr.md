@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Les dossiers en piles s'ouvrent déjà repliés** (#417) : les piles d'un dossier sont
+  retenues dans son cache après un regroupement complet ; rouvert sans rien de changé, il
+  s'affiche replié tout de suite au lieu de se replier sous les yeux. Sinon la grille
+  attend ses piles un moment (`[gui.grid] stacks_wait_ms`), avec une boîte
+  « Regroupement des piles… » sur les grands dossiers (`[gui.grid] stacks_overlay_from`).
 - **Plus de choses retenues par dossier** (#415) : l'image où l'on en était (on y revient
   en rouvrant le dossier), les piles dépliées, la case « Sous-dossiers » (`[gui.folders]
   subfolders` pour un dossier jamais réglé ; plus commune à tous les dossiers), l'écart de

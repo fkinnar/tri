@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Stacked folders open already folded** (#417): the stacks of a folder are remembered in
+  its cache after a complete grouping; reopened with nothing changed, it shows folded at
+  once instead of folding on screen. Otherwise the grid waits for its stacks a moment
+  (`[gui.grid] stacks_wait_ms`), with a "Grouping stacks…" box on large folders
+  (`[gui.grid] stacks_overlay_from`).
 - **More kept per folder** (#415): the image where one was (back to it when reopening
   the folder), the unfolded stacks, the "Subfolders" checkbox (`[gui.folders] subfolders`
   for a folder never set; no longer common to all folders), the stack time gap, and the
