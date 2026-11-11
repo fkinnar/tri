@@ -4,6 +4,15 @@
 
 ## Non publié
 
+- **Réinitialiser un dossier** (#412) : clic droit sur un dossier, Préférences,
+  « Réinitialiser ce dossier… » (« ce disque… ») : une boîte avec une case par chose à
+  effacer, chacune avec ce qu'elle concerne, mesuré en fond : cache, données de tri
+  (filtres, curseurs, couvertures…), notes et versions. Les notes sont remises à zéro
+  dans les sidecars, jamais supprimés : seuls étoiles, couleurs et drapeaux changent,
+  les sidecars de darktable ou de Lightroom gardent le reste. Les notes demandent
+  « Actions sur les fichiers ». Notes et versions s'annulent, en un pas. « Vider le
+  cache… » ouvre la même boîte, le cache seul coché, désormais sur tout dossier. En ligne
+  de commande : `tri <dossier> --reset cache,data,notes,versions [--dry-run]`.
 - **Tout sur le disque** (#410) : « Garder les données de tri dans ce dossier / sur ce
   disque » (clic droit sur un dossier ou un disque) garde désormais, en plus du cache,
   tout ce que `tri` retient des dossiers en dessous : filtres et tri, valeurs des

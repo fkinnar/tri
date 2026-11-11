@@ -99,6 +99,16 @@ pub enum Step {
     /// Réglages de visualisation (`tri::adjust`) d'une ou plusieurs images : élément de
     /// `tri:Adjust` avant et après, par image (« Appliquer à la sélection » : un pas).
     Adjust(Vec<AdjustChange>),
+    /// Réinitialisation d'un dossier ([`crate::reset`], issue n° 411) : notes remises à
+    /// zéro et versions retirées, défaites ensemble.
+    Reset {
+        /// Le dossier réinitialisé.
+        folder: PathBuf,
+        /// Notes remises à zéro.
+        notes: Vec<NoteChange>,
+        /// Versions retirées : image et liste d'avant.
+        versions: Vec<(PathBuf, Vec<String>)>,
+    },
 }
 
 /// Réglages d'une image avant et après (éléments de `tri:Adjust`).
@@ -320,6 +330,7 @@ impl Step {
                 [one] => crate::t!("history-adjust", name = name(&one.image)),
                 _ => crate::t!("history-adjust-many", n = changes.len()),
             },
+            Step::Reset { folder, .. } => crate::t!("history-reset", name = name(folder)),
             Step::Versions { image, change, .. } => {
                 let (id, version) = match change {
                     VersionChange::Created(v) => ("history-version-created", v),
@@ -364,6 +375,13 @@ impl Step {
             Step::CreateDir(_) | Step::TransferDir { .. } => Vec::new(),
             Step::RenameDir(from, to) => vec![if undone { from.clone() } else { to.clone() }],
             Step::Versions { image, .. } => vec![image.clone()],
+            Step::Reset {
+                notes, versions, ..
+            } => notes
+                .iter()
+                .map(|c| c.image.clone())
+                .chain(versions.iter().map(|(i, _)| i.clone()))
+                .collect(),
             Step::Adjust(changes) => changes.iter().map(|c| c.image.clone()).collect(),
         }
     }
@@ -372,6 +390,14 @@ impl Step {
     fn undo(&mut self, convention: Convention) -> Result<()> {
         match self {
             Step::Notes(changes) => set_notes(changes, convention, true),
+            Step::Reset {
+                notes, versions, ..
+            } => {
+                for (image, before) in versions.iter() {
+                    set_versions(image, &[], before, convention)?;
+                }
+                set_notes(notes, convention, true)
+            }
             Step::Versions {
                 image,
                 before,
@@ -529,6 +555,15 @@ impl Step {
     fn redo(&mut self, convention: Convention) -> Result<()> {
         match self {
             Step::Notes(changes) => set_notes(changes, convention, false),
+            Step::Reset {
+                notes, versions, ..
+            } => {
+                set_notes(notes, convention, false)?;
+                for (image, before) in versions.iter() {
+                    set_versions(image, before, &[], convention)?;
+                }
+                Ok(())
+            }
             Step::Versions {
                 image,
                 before,
@@ -825,7 +860,7 @@ fn applied(entry: &Entry, undone: bool) -> Applied {
         images: entry.step.images(undone),
         files_changed: !matches!(
             entry.step,
-            Step::Notes(_) | Step::Versions { .. } | Step::Adjust(_)
+            Step::Notes(_) | Step::Versions { .. } | Step::Adjust(_) | Step::Reset { .. }
         ),
     }
 }

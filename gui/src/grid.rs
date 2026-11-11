@@ -203,6 +203,7 @@ pub fn navigate(
         | Action::FolderConnect
         | Action::FolderForget
         | Action::FolderCacheClear
+        | Action::FolderReset
         | Action::FolderOpenIn(_)
         | Action::FolderCopy
         | Action::FolderMove
