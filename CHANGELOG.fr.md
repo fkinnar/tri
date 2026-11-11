@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Mires de couleur** (#425) : `cargo run --release --example colour_charts -- <dossier>`
+  écrit la même mire dans tous les espaces courants (sRGB, Adobe RGB, Display P3,
+  ProPhoto, Rec.2020, linéaires), en JPEG, TIFF et PNG avec leur profil, et vérifie que
+  tri les lit toutes pareil. Le profil Display P3 donné aux HEIC d'iPhone ne porte plus
+  une étiquette fausse (le P3 du cinéma).
 - **Gestion des couleurs** (#423) : chaque image est affichée avec son vrai espace
   couleur au lieu d'être supposée en sRGB : JPEG boîtier (Adobe RGB aussi), images plates
   avec leur profil ICC (TIFF et PNG 16 bits convertis à leur profondeur), HEIC, et
