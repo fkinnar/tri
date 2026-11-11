@@ -484,6 +484,9 @@ pub enum Action {
     HistogramPhoto,
     /// Grand histogramme : courbe du JPEG boîtier d'un RAW, montrée / masquée (28/10/2026).
     HistogramCamera,
+    /// Histogramme, indicateurs et zones : données réelles ou image après les réglages de
+    /// visualisation (issue n° 420).
+    HistogramAfter,
     /// Plein écran : afficher / masquer les zones saturées / bouchées.
     ToggleClipping,
     /// Afficher / masquer le panneau des métadonnées.
@@ -547,7 +550,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 238] = [
+    pub const ALL: [Action; 239] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -755,6 +758,7 @@ impl Action {
         Action::HistogramLuminance,
         Action::HistogramPhoto,
         Action::HistogramCamera,
+        Action::HistogramAfter,
         Action::ToggleClipping,
         Action::ToggleMetadata,
         Action::Open,
@@ -916,10 +920,10 @@ impl Action {
             | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram | AdjustBeforeAfter
             | AdjustApply | AdjustCopy | AdjustPaste | HistogramScale | HistogramLarge
             | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
-            | HistogramLuminance | HistogramPhoto | HistogramCamera | ToggleClipping
-            | TogglePeaking | PeakingColor | SharpnessLenient | SharpnessStrict
-            | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode | Develop
-            | DevelopWith(_) | DevelopFolder => Group::View,
+            | HistogramLuminance | HistogramPhoto | HistogramCamera | HistogramAfter
+            | ToggleClipping | TogglePeaking | PeakingColor | SharpnessLenient
+            | SharpnessStrict | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode
+            | Develop | DevelopWith(_) | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
             | CropPreset | CropPresetPrev | VersionNext | VersionPrev | VersionRatioNext
             | VersionRatioPrev | VersionRatioCustom | VersionExportNext | VersionExportPrev
@@ -1206,6 +1210,7 @@ impl Action {
             Action::HistogramLuminance => "core.histogram.luminance",
             Action::HistogramPhoto => "core.histogram.photo",
             Action::HistogramCamera => "core.histogram.camera",
+            Action::HistogramAfter => "core.histogram.after",
             Action::ToggleClipping => "core.view.clipping",
             Action::ToggleMetadata => "core.view.metadata",
             Action::Open => "core.view.open",
@@ -1322,9 +1327,8 @@ impl Action {
             // Échelle et canal suivant : `s` et `c` dans le grand histogramme (retour du
             // 06/11/2026), ailleurs `<leader> i s` / `<leader> i c`.
             HistogramRed | HistogramGreen | HistogramBlue | HistogramAll | HistogramLuminance
-            | HistogramPhoto | HistogramCamera | HistogramScale | HistogramChannel => {
-                Some(Scope::Histogram)
-            }
+            | HistogramPhoto | HistogramCamera | HistogramAfter | HistogramScale
+            | HistogramChannel => Some(Scope::Histogram),
             _ => None,
         }
     }

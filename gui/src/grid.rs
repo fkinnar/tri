@@ -239,6 +239,7 @@ pub fn navigate(
         | Action::HistogramLuminance
         | Action::HistogramPhoto
         | Action::HistogramCamera
+        | Action::HistogramAfter
         | Action::ToggleClipping
         | Action::ToggleMetadata
         | Action::Open

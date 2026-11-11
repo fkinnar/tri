@@ -40,6 +40,7 @@ use crate::trace::trace;
 use crate::view::{self, Source};
 
 mod adjust;
+mod after;
 mod controls;
 use controls::{Control, Host};
 
@@ -844,6 +845,22 @@ pub struct TriApp {
     /// Expositions du JPEG boîtier en calcul (en fond), et leur arrivée.
     camera_pending: HashSet<PathBuf>,
     camera_read: (mpsc::Sender<CameraRead>, Receiver<CameraRead>),
+    /// Histogramme, indicateurs et zones après les réglages (issue n° 420) : demandé
+    /// (bouton, `e`) ; la session seulement, réel à l'ouverture.
+    histogram_after: bool,
+    /// Expositions après réglages mesurées ([`after::After`]).
+    afters: std::collections::HashMap<PathBuf, after::After>,
+    /// Mesures de l'« après » finies, envoyées par leurs fils.
+    after_read: (mpsc::Sender<after::AfterDone>, Receiver<after::AfterDone>),
+    /// Images dont l'« après » est en mesure.
+    after_pending: HashSet<PathBuf>,
+    /// Images dont l'aperçu manquait à la dernière mesure, et quand (nouvel essai après
+    /// `[gui.grid] render_poll_ms`).
+    after_failed: std::collections::HashMap<PathBuf, Instant>,
+    /// Masques des zones après réglages, en textures.
+    after_masks: Lru<PathBuf, TextureHandle>,
+    /// Badges après réglages (`badges_follow_adjustments`) : réglages et parts.
+    clip_after: std::collections::HashMap<PathBuf, (tri::adjust::Layers, (f64, f64))>,
     /// Masques des zones, en textures.
     mask_textures: Lru<PathBuf, TextureHandle>,
     /// Parts de pixels saturés / bouchés par image, pour les badges de la grille.
@@ -909,6 +926,12 @@ pub struct TriApp {
     /// changé par l'interrupteur à côté.
     /// Sections repliées du panneau de droite (« filters », « grid »…), retenues.
     panel_folded: HashSet<String>,
+    /// Dernière section dépliée du panneau de droite, et du panneau des dossiers : celle
+    /// qui reste ouverte quand `[gui] one_section_open` s'allume.
+    last_side_section: Option<String>,
+    last_folder_section: Option<tri::places::Section>,
+    /// `[gui] one_section_open` à l'image précédente (allumé : les sections se replient).
+    one_section_was: bool,
     /// Case « sous-dossiers » du panneau des dossiers : les images des sous-dossiers
     /// s'affichent aussi (`[gui.folders] subfolders_depth` niveaux), choix gardé.
     subfolders: bool,
@@ -1628,6 +1651,13 @@ impl TriApp {
             screen: crate::display::Screen::default(),
             camera_pending: HashSet::new(),
             camera_read: mpsc::channel(),
+            histogram_after: false,
+            afters: std::collections::HashMap::new(),
+            after_read: mpsc::channel(),
+            after_pending: HashSet::new(),
+            after_failed: std::collections::HashMap::new(),
+            after_masks: Lru::new(gui.view.textures),
+            clip_after: std::collections::HashMap::new(),
             mask_textures: Lru::new(gui.view.textures),
             clip_summary: std::collections::HashMap::new(),
             selected,
@@ -1660,6 +1690,9 @@ impl TriApp {
             blur_strictness: 0.0,
             clip_strictness: (0.0, 0.0),
             panel_folded: HashSet::new(),
+            last_side_section: None,
+            last_folder_section: None,
+            one_section_was: false,
             subfolders,
             group_gap: settings.similarity.max_gap_s,
             group_dialog: false,
@@ -2333,21 +2366,7 @@ impl TriApp {
         // filtres et les lignes des EXIF (retour du 09/11/2026, #386) ; on copie une ligne
         // par son raccourci.
         ui.style_mut().interaction.selectable_labels = false;
-        self.meta_has_histogram = false;
         self.side_items.clear();
-        // Pas pendant l'édition d'une version : il vaut pour l'image entière, pas pour le
-        // cadre (retour du 07/11/2026 ; le suivre demanderait un histogramme RAW recalculé
-        // sur la zone).
-        if self.gui.metadata.histogram
-            && self.histogram
-            && !self.files.is_empty()
-            && self.crop.is_none()
-        {
-            if self.panel_section(ui, "histogram", t!("panel-section-histogram")) {
-                self.histogram_section(ui);
-            }
-            ui.separator();
-        }
         // Filtres en plein écran aussi (retour du 30/10/2026 : tout le panneau) ; la
         // grille y laisse place à la vue (#239).
         if matches!(self.mode, Mode::Grid | Mode::View) {
@@ -2395,6 +2414,24 @@ impl TriApp {
             self.side_cursor = Some(self.side_items.len().saturating_sub(1));
         }
         self.side_key = None;
+    }
+
+    /// Haut du panneau de droite, hors de la zone qui défile (retour du 11/11/2026 : le
+    /// panneau est long, il fallait replier des sections pour garder l'histogramme sous les
+    /// yeux) : l'histogramme, toujours visible et pas repliable. Pas pendant l'édition
+    /// d'une version : il vaut pour l'image entière, pas pour le cadre (retour du
+    /// 07/11/2026 ; le suivre demanderait un histogramme RAW recalculé sur la zone).
+    fn side_panel_pinned(&mut self, ui: &mut Ui) {
+        self.meta_has_histogram = false;
+        if self.gui.metadata.histogram
+            && self.histogram
+            && !self.files.is_empty()
+            && self.crop.is_none()
+        {
+            section_heading(ui, &t!("panel-section-histogram"), &self.gui.folders);
+            self.histogram_section(ui);
+            ui.separator();
+        }
     }
 
     /// Ajoute un élément pointable au panneau de droite (`title` : un titre de section) :
@@ -2554,11 +2591,89 @@ impl TriApp {
             if open {
                 self.panel_folded.insert(id.to_string());
             } else {
-                self.panel_folded.remove(id);
+                self.unfold_side_section(id);
             }
         }
         self.section_body_top = ui.cursor().top();
         open != clicked
+    }
+
+    /// Déplie la section `id` du panneau de droite ; avec `[gui] one_section_open`, les
+    /// autres se replient.
+    fn unfold_side_section(&mut self, id: &str) {
+        self.panel_folded.remove(id);
+        self.last_side_section = Some(id.to_string());
+        if self.gui.one_section_open {
+            for other in SIDE_SECTIONS.iter().filter(|&&s| s != id) {
+                self.panel_folded.insert((*other).to_string());
+            }
+        }
+    }
+
+    /// Plie ou déplie la section `s` du panneau des dossiers ; dépliée avec
+    /// `[gui] one_section_open`, les autres se replient.
+    fn fold_folder_section(&mut self, s: tri::places::Section, folded: bool) {
+        if !folded {
+            self.last_folder_section = Some(s);
+        }
+        let mut changes = vec![(s, folded)];
+        if !folded && self.gui.one_section_open {
+            changes.extend(
+                self.tree
+                    .sections()
+                    .into_iter()
+                    .filter(|&o| o != s)
+                    .map(|o| (o, true)),
+            );
+        }
+        for (s, folded) in changes {
+            self.tree.set_folded(s, folded);
+            let key = format!("folders-{}", s.key());
+            if folded {
+                self.panel_folded.insert(key);
+            } else {
+                self.panel_folded.remove(&key);
+            }
+        }
+    }
+
+    /// `[gui] one_section_open` vient de s'allumer (fenêtre de réglages, configuration) :
+    /// dans chaque panneau, une seule section reste dépliée, la dernière dépliée si elle
+    /// l'est encore, sinon la plus haute (retour du 11/11/2026).
+    fn apply_one_section_open(&mut self) {
+        // Panneau de droite : les sections de ce mode, dans l'ordre affiché.
+        let shown: Vec<&str> = SIDE_SECTIONS
+            .iter()
+            .copied()
+            .filter(|&s| match s {
+                "grid" => self.mode != Mode::View,
+                "view" => self.mode == Mode::View,
+                _ => true,
+            })
+            .collect();
+        let open = |s: &str| !self.panel_folded.contains(s);
+        let keep = self
+            .last_side_section
+            .clone()
+            .filter(|s| shown.contains(&s.as_str()) && open(s))
+            .or_else(|| shown.iter().find(|&&s| open(s)).map(|s| s.to_string()));
+        for s in SIDE_SECTIONS {
+            if keep.as_deref() != Some(s) {
+                self.panel_folded.insert(s.to_string());
+            }
+        }
+        // Panneau des dossiers.
+        let sections = self.tree.sections();
+        let keep = self
+            .last_folder_section
+            .filter(|s| sections.contains(s) && !self.tree.is_folded(*s))
+            .or_else(|| sections.iter().copied().find(|&s| !self.tree.is_folded(s)));
+        for s in sections {
+            if Some(s) != keep {
+                self.tree.set_folded(s, true);
+                self.panel_folded.insert(format!("folders-{}", s.key()));
+            }
+        }
     }
 
     /// Action sans objet ici, grisée dans l'interface : après les autres dans la palette,
@@ -2789,8 +2904,8 @@ impl TriApp {
     /// l'image. Un clic l'ouvre en grand.
     fn histogram_section(&mut self, ui: &mut Ui) {
         let settings = self.gui.metadata;
-        match self.exposure_of(self.selected) {
-            Some(e) => {
+        match self.shown_exposure(self.selected) {
+            Some((e, real)) => {
                 self.meta_has_histogram = true;
                 let (rect, response) = ui.allocate_exact_size(
                     vec2(ui.available_width(), settings.histogram_height),
@@ -2816,6 +2931,7 @@ impl TriApp {
                     ui.painter(),
                     rect,
                     &e,
+                    real.as_deref(),
                     camera.as_deref(),
                     look,
                     &self.gui.histogram,
@@ -3988,13 +4104,7 @@ impl TriApp {
         });
         if let Some(s) = fold {
             let folded = !self.tree.is_folded(s);
-            self.tree.set_folded(s, folded);
-            let key = format!("folders-{}", s.key());
-            if folded {
-                self.panel_folded.insert(key);
-            } else {
-                self.panel_folded.remove(&key);
-            }
+            self.fold_folder_section(s, folded);
         }
         // Par la ligne cliquée, pas par son dossier : un favori et le même dossier dans
         // l'arborescence se déplient chacun de leur côté.
@@ -7374,7 +7484,8 @@ impl TriApp {
                     | Action::HistogramAll
                     | Action::HistogramLuminance
                     | Action::HistogramPhoto
-                    | Action::HistogramCamera => self.perform(ctx, action),
+                    | Action::HistogramCamera
+                    | Action::HistogramAfter => self.perform(ctx, action),
                     // Se déplacer d'image en image sous la boîte (retour du 19/10/2026) :
                     // l'histogramme suit l'image courante.
                     Action::NavPrev
@@ -8402,6 +8513,7 @@ impl TriApp {
             Action::HistogramLuminance => self.histogram_channel = Some(tri::exposure::LUMINANCE),
             Action::HistogramPhoto => self.histogram_photo = !self.histogram_photo,
             Action::HistogramCamera => self.histogram_camera = !self.histogram_camera,
+            Action::HistogramAfter => self.histogram_after = !self.histogram_after,
             Action::HistogramChannel => {
                 self.histogram_channel = match self.histogram_channel {
                     None => Some(0),
@@ -12235,10 +12347,19 @@ impl TriApp {
     /// Masque des zones de l'image `index`, en texture (créée à la première demande).
     fn mask_texture(&mut self, ctx: &egui::Context, index: usize) -> Option<TextureHandle> {
         let path = self.files.get(index)?.path.clone();
-        if let Some(t) = self.mask_textures.get(&path) {
+        // Après réglages (#420) : les zones de l'image réglée, quand elles sont mesurées.
+        let (e, after) = match self.shown_exposure(index)? {
+            (e, Some(_)) => (e, true),
+            (e, None) => (e, false),
+        };
+        let cached = if after {
+            self.after_masks.get(&path)
+        } else {
+            self.mask_textures.get(&path)
+        };
+        if let Some(t) = cached {
             return Some(t.clone());
         }
-        let e = self.exposure_of(index)?;
         let c = self.gui.colors.clone();
         let zones = histogram::ZoneColors {
             channels: [c.clip_red.into(), c.clip_green.into(), c.clip_blue.into()],
@@ -12249,17 +12370,29 @@ impl TriApp {
         let image = histogram::mask_image(&e.mask, &zones);
         // Au plus proche : des cases nettes, pas un dégradé flou.
         let texture = ctx.load_texture(
-            format!("{}#zones", path.display()),
+            format!(
+                "{}#zones{}",
+                path.display(),
+                if after { "-after" } else { "" }
+            ),
             image,
             TextureOptions::NEAREST,
         );
-        self.mask_textures.insert(path, texture.clone());
+        if after {
+            self.after_masks.insert(path, texture.clone());
+        } else {
+            self.mask_textures.insert(path, texture.clone());
+        }
         Some(texture)
     }
 
     /// Parts de pixels saturés / bouchés de l'image `index` (badges de la grille), lues
     /// dans le cache si l'analyse est prête et que le budget de l'image le permet.
     fn clip_fractions(&mut self, index: usize, deadline: Instant) -> Option<(f64, f64)> {
+        // Image réglée, badges qui suivent les réglages (#420) : l'analyse décalée.
+        if let Some(fractions) = self.adjusted_clip_fractions(index) {
+            return Some(fractions);
+        }
         let path = &self.files.get(index)?.path;
         if let Some(&fractions) = self.clip_summary.get(path) {
             return Some(fractions);
@@ -13445,7 +13578,11 @@ impl TriApp {
         if !self.histogram_large {
             return;
         }
-        let exposure = self.exposure_of(self.selected);
+        let shown = self.shown_exposure(self.selected);
+        let (exposure, real) = match shown {
+            Some((e, real)) => (Some(e), real),
+            None => (None, None),
+        };
         let camera = self.camera_exposure_of(self.selected);
         let is_raw = self
             .files
@@ -13465,7 +13602,7 @@ impl TriApp {
         // centre et à sa propre largeur.
         let at = ctx.content_rect().center() - size / 2.0 - vec2(20.0, 40.0);
         let dialog = modal_at("histogram_dialog", at).title(name).free_width();
-        let (mut toggle_photo, mut toggle_camera) = (false, false);
+        let (mut toggle_photo, mut toggle_camera, mut toggle_after) = (false, false, false);
         let modal = dialog.show(ctx, |ui| {
             // Photo d'analyse à droite de l'histogramme, à sa hauteur (retour du
             // 19/10/2026 : boîte plus compacte) ; sans elle, l'histogramme prend toute la
@@ -13489,6 +13626,7 @@ impl TriApp {
                             ui.painter(),
                             rect,
                             e,
+                            real.as_deref(),
                             camera.as_deref(),
                             look,
                             &self.gui.histogram,
@@ -13584,6 +13722,26 @@ impl TriApp {
                                 toggle_camera = true;
                             }
                         }
+                        // Réel / après réglages (#420) : à gauche des autres boutons, en
+                        // couleur d'accent quand l'après est montré.
+                        let button =
+                            histogram::after_button(rect, self.gui.histogram.channel_dot, is_raw);
+                        let key = self.keys_text(Action::HistogramAfter);
+                        let response = ui
+                            .interact(button, egui::Id::unique("histogram_after"), Sense::click())
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .on_hover_text(t!("histogram-after-button-tip", keys = key));
+                        let color = if real.is_some() {
+                            crate::marks::accent_bright(ui.visuals())
+                        } else if response.hovered() {
+                            ui.visuals().strong_text_color()
+                        } else {
+                            ui.visuals().text_color()
+                        };
+                        histogram::after_icon(ui.painter(), button, color);
+                        if response.clicked() {
+                            toggle_after = true;
+                        }
                         for (i, (dot, name)) in dots.into_iter().zip(names).enumerate() {
                             let tip = t!(
                                 "histogram-channel-tip",
@@ -13652,6 +13810,9 @@ impl TriApp {
         }
         if toggle_camera {
             self.histogram_camera = !self.histogram_camera;
+        }
+        if toggle_after {
+            self.histogram_after = !self.histogram_after;
         }
         if modal.should_close() {
             self.histogram_large = false;
@@ -16254,6 +16415,32 @@ impl TriApp {
         }
     }
 
+    /// `[gui.histogram] after_auto` (case de la section Réglages, #420) : l'histogramme
+    /// d'une image réglée montré après ses réglages d'office ; écrit dans la configuration.
+    fn set_histogram_after_auto(&mut self, on: bool) {
+        self.gui.histogram.after_auto = on;
+        let Some(path) = self
+            .config_path
+            .clone()
+            .or_else(tri::settings::default_path)
+        else {
+            self.notice = Some((t!("settings-no-path"), true));
+            return;
+        };
+        let result = tri::config_edit::ConfigFile::open(&path).and_then(|mut file| {
+            file.set(
+                "gui.histogram",
+                "after_auto",
+                &tri::config_edit::Value::Bool(on),
+            )?;
+            tri::settings::parse::<AppSettings>(&file.text())?;
+            file.save().map_err(|e| format!("{} : {e}", path.display()))
+        });
+        if let Err(e) = result {
+            self.notice = Some((e, true));
+        }
+    }
+
     fn set_file_actions(&mut self, allowed: bool) {
         self.settings.files.allow_actions = allowed;
         let Some(path) = self
@@ -18121,6 +18308,11 @@ impl eframe::App for TriApp {
         if crate::display::declare_working(frame) {
             ui.ctx().request_repaint();
         }
+        // Une section par panneau (`[gui] one_section_open`), dès que l'option s'allume.
+        if self.gui.one_section_open && !self.one_section_was {
+            self.apply_one_section_open();
+        }
+        self.one_section_was = self.gui.one_section_open;
         // Linux, Windows : le profil de l'écran (réglage, système) ; changé (autre écran,
         // réglage modifié), les textures sont refaites.
         if self.screen.follow(frame, &self.gui.display_profile) {
@@ -18337,6 +18529,8 @@ impl eframe::App for TriApp {
                             self.task_click = click;
                         }
                     }
+                    // L'histogramme en haut, fixe ; le reste défile dessous.
+                    self.side_panel_pinned(ui);
                     ScrollArea::vertical()
                         .auto_shrink(false)
                         .show(ui, |ui| self.side_panel(ui));
@@ -19232,6 +19426,29 @@ fn section_title(
         triangle.clicked() || label.clicked()
     })
     .inner
+}
+
+/// Sections repliables du panneau de droite (identifiants de [`TriApp::panel_section`]) :
+/// celles que `[gui] one_section_open` replie quand une autre se déplie.
+const SIDE_SECTIONS: [&str; 5] = ["filters", "view", "grid", "exif", "adjust"];
+
+/// Titre d'une section qui ne se replie pas (l'histogramme du panneau de droite) : comme
+/// [`section_title`], aligné sur les autres, sans triangle ni clic.
+fn section_heading(ui: &mut Ui, title: &str, f: &crate::settings::FolderSettings) {
+    ui.add_space(f.section_gap);
+    let size = egui::TextStyle::Body.resolve(ui.style()).size * f.section_scale;
+    let color = marks::accent_mark(ui.ctx());
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        let side = ui.text_style_height(&egui::TextStyle::Body);
+        ui.add_space(side);
+        ui.label(
+            egui::RichText::new(title.to_uppercase())
+                .size(size)
+                .strong()
+                .color(color),
+        );
+    });
 }
 
 /// Sous un curseur de sévérité de largeur `width` : « plus souple » à gauche, « plus
@@ -29755,6 +29972,144 @@ mod tests {
                 !crate::settings_window::needs_restart(section, ""),
                 "{section} : appliquée tout de suite"
             );
+        }
+    }
+
+    #[test]
+    fn the_histogram_shows_the_image_after_its_adjustments() {
+        // #420 (11/11/2026) : réel par défaut, « après réglages » au bouton ou à `e` ;
+        // pendant le glissement, la dernière mesure décalée tout de suite ; d'office avec
+        // `after_auto` ; badges qui suivent avec `badges_follow_adjustments`.
+        let (mut h, _dir) = harness();
+        let path = h.state().files[0].path.clone();
+        run_until(&mut h, |app| app.exposures.contains(&path));
+        let real = h.state_mut().shown_exposure(0).unwrap();
+        assert!(real.1.is_none(), "réel par défaut");
+        let set_exposure = |h: &mut Harness<'_, TriApp>, ev: f32| {
+            let mut layers = tri::adjust::Layers::default();
+            layers.correction.exposure = ev;
+            h.state()
+                .adjust_map
+                .write()
+                .unwrap()
+                .layers
+                .insert(path.clone(), layers);
+        };
+        set_exposure(&mut h, 2.0);
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::HistogramAfter);
+        assert!(h.state().histogram_after);
+        // La mesure arrive en fond, réglages compris.
+        let measured = |app: &TriApp| {
+            app.afters
+                .get(&path)
+                .is_some_and(|a| a.layers.is_some_and(|l| l.correction.exposure == 2.0))
+        };
+        run_until(&mut h, |app| app.after_pending.is_empty() && measured(app));
+        let (after, sensor) = h.state_mut().shown_exposure(0).unwrap();
+        let sensor = sensor.expect("avec les données réelles à côté");
+        assert!(
+            after.over_fraction() > sensor.over_fraction(),
+            "+2 IL : plus de saturés ({} / {})",
+            after.over_fraction(),
+            sensor.over_fraction()
+        );
+        // Glissement : la mesure n'est pas refaite, la dernière est décalée tout de suite.
+        set_exposure(&mut h, -2.0);
+        let (live, _) = h.state_mut().shown_exposure(0).unwrap();
+        assert!(measured(h.state()), "dernière mesure encore à +2 IL");
+        assert!(
+            live.over_fraction() < after.over_fraction(),
+            "décalée vers le sombre : {} / {}",
+            live.over_fraction(),
+            after.over_fraction()
+        );
+        run_until(&mut h, |app| app.after_pending.is_empty() && !measured(app));
+        // `e` dans le grand histogramme rebascule sur le réel.
+        press(&mut h, Key::I, Modifiers::SHIFT);
+        press(&mut h, Key::E, Modifiers::NONE);
+        assert!(!h.state().histogram_after, "e : retour au réel");
+        assert!(h.state_mut().shown_exposure(0).unwrap().1.is_none());
+        // D'office pour une image réglée.
+        h.state_mut().gui.histogram.after_auto = true;
+        assert!(h.state_mut().shown_exposure(0).unwrap().1.is_some());
+        h.state_mut().gui.histogram.after_auto = false;
+        // Badges : sur le réel, sauf s'ils suivent les réglages.
+        set_exposure(&mut h, 3.0);
+        let far = Instant::now() + Duration::from_secs(5);
+        let (real_over, _) = h.state_mut().clip_fractions(0, far).unwrap();
+        h.state_mut().gui.histogram.badges_follow_adjustments = true;
+        let (follow_over, _) = h.state_mut().clip_fractions(0, far).unwrap();
+        assert!(
+            follow_over > real_over,
+            "+3 IL : badge saturé ({follow_over} / {real_over})"
+        );
+    }
+
+    #[test]
+    fn the_adjustments_section_has_the_after_histogram_checkbox() {
+        // Retour du 11/11/2026 : la case « Histogramme après réglages » en tête de la
+        // section Réglages (plus clair que la boîte de l'histogramme), écrite dans la
+        // configuration ([gui.histogram] after_auto).
+        let (mut h, dir) = harness();
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "").unwrap();
+        h.state_mut().config_path = Some(config.clone());
+        h.run_steps(3);
+        h.get_by_label("Histogramme après réglages");
+        assert!(!h.state().gui.histogram.after_auto, "décochée par défaut");
+        h.state_mut().set_histogram_after_auto(true);
+        assert!(h.state().gui.histogram.after_auto);
+        let text = std::fs::read_to_string(&config).unwrap();
+        let written: AppSettings = tri::settings::parse(&text).unwrap();
+        assert!(written.gui.histogram.after_auto, "écrite : {text}");
+    }
+
+    #[test]
+    fn one_section_open_folds_the_others() {
+        // Retour du 11/11/2026 : `[gui] one_section_open` (désactivé par défaut) : déplier
+        // une section replie les autres du même panneau ; l'histogramme, lui, est en haut
+        // du panneau de droite, toujours visible.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.get_by_label("HISTOGRAMME");
+        assert!(
+            h.query_all_by_label("Replier").count() > 0,
+            "des sections repliables"
+        );
+        // Par défaut : plusieurs sections dépliées.
+        h.state_mut().unfold_side_section("exif");
+        assert!(!h.state().panel_folded.contains("filters"));
+        // L'option allumée : chaque panneau garde une section, ici la dernière dépliée.
+        h.state_mut().gui.one_section_open = true;
+        h.run_steps(1);
+        for other in SIDE_SECTIONS.iter().filter(|&&s| s != "exif") {
+            assert!(
+                h.state().panel_folded.contains(*other),
+                "{other} repliée d'emblée"
+            );
+        }
+        let open_folders = |app: &TriApp| {
+            app.tree
+                .sections()
+                .into_iter()
+                .filter(|&s| !app.tree.is_folded(s))
+                .count()
+        };
+        assert!(open_folders(h.state()) <= 1, "une section de dossiers");
+        h.state_mut().unfold_side_section("filters");
+        h.state_mut().unfold_side_section("exif");
+        for other in SIDE_SECTIONS.iter().filter(|&&s| s != "exif") {
+            assert!(h.state().panel_folded.contains(*other), "{other} repliée");
+        }
+        assert!(!h.state().panel_folded.contains("exif"));
+        // Panneau des dossiers : pareil.
+        let sections = h.state().tree.sections();
+        if let [first, second, ..] = sections.as_slice() {
+            h.state_mut().fold_folder_section(*second, false);
+            h.state_mut().fold_folder_section(*first, false);
+            assert!(h.state().tree.is_folded(*second));
+            assert!(!h.state().tree.is_folded(*first));
         }
     }
 

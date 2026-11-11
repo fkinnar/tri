@@ -685,6 +685,10 @@ remember_display = true
 # developed) and sort order from one launch to the next, in the data folder. false: every
 # folder opens without filters, in the order kept for all.
 remember_folder_view = true
+# Side panels (folders, right): only one section unfolded at a time; unfolding one folds
+# the others of the same panel; turned on, each panel keeps just one (the last one
+# unfolded, otherwise the top one).
+one_section_open = false
 # Window moved or resized: remembered once still for this delay (ms), and always when
 # closed.
 window_save_ms = 1000
@@ -1095,6 +1099,18 @@ analysis_lighten = 0.06
 # or hides it, and that is remembered.
 camera_jpeg = true
 camera_width = 1.5
+# Histogram, indicators and areas: on the real data by default; the large histogram's
+# button or <core.histogram.after> shows the image after the viewing adjustments (the
+# sensor's saturated percentage stays shown: what it lost is lost). true: an adjusted
+# image shows them after by itself (also the "Histogram after adjustments" checkbox of
+# the Adjustments section).
+after_auto = false
+# Saturated / blocked badges of the grid: on the real data; true: an adjusted image shows
+# them after its adjusted exposure and balance.
+badges_follow_adjustments = false
+# After adjustments: long side of the measured image (pixels), reduced from the preview
+# shown.
+after_side = 1280
 
 [gui.sharpness]
 # Sharpness map (focus peaking), in the fitted view as at 1:1: shown at startup

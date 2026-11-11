@@ -285,6 +285,18 @@ impl Transfer {
             .unwrap_or(range)
     }
 
+    /// Valeur (0 à `range`, non arrondie) d'une part de la lumière du blanc (0 à 1) :
+    /// l'inverse de [`Transfer::light`].
+    fn code(self, light: f64, range: u32) -> f64 {
+        let l = light.clamp(0.0, 1.0);
+        let x = match self {
+            Transfer::Linear => l,
+            Transfer::Srgb if l <= 0.003_130_8 => l * 12.92,
+            Transfer::Srgb => 1.055 * l.powf(1.0 / 2.4) - 0.055,
+        };
+        x * range as f64
+    }
+
     /// Plus grande valeur dont la lumière ne dépasse pas `2^stops` du blanc (seuil des
     /// ombres bouchées).
     fn level_at_most(self, range: u32, stops: f32) -> u32 {
@@ -665,6 +677,106 @@ impl Exposure {
 }
 
 /// Plus grande part parmi les trois canaux (pas la luminance : badges et alertes).
+impl Exposure {
+    /// L'exposition de la même image dont chaque série serait multipliée par `2^ev[c]`
+    /// (rouge, vert, bleu, luminance) : l'histogramme **après** un réglage d'exposition ou
+    /// de balance, tout de suite, sans repasser sur les pixels (issue n° 420 : pendant le
+    /// glissement d'un curseur ; l'histogramme complet de l'image réglée suit).
+    ///
+    /// Exact sur le décalage, approché dans une case (les valeurs y sont supposées
+    /// réparties également) : précision de la case en IL (1/8 d'IL par défaut). Les pixels
+    /// au blanc (`over`) sont un point au blanc : ils restent saturés si l'on éclaircit,
+    /// descendent avec le reste si l'on assombrit (ce qu'ils deviennent à l'image ; le
+    /// capteur, lui, les a perdus). Le noir pur reste noir. Le masque des zones n'est pas
+    /// décalé (il arrive avec l'image réglée).
+    pub fn shifted(&self, ev: [f32; SERIES], settings: &ExposureSettings) -> Exposure {
+        if ev.iter().all(|s| s.abs() < 1e-4) {
+            return self.clone();
+        }
+        let transfer = match self.source {
+            Source::Raw { .. } => Transfer::Linear,
+            Source::Flat { .. } => Transfer::Srgb,
+        };
+        let range = self.range;
+        let mut out = self.clone();
+        for (c, &s) in ev.iter().enumerate() {
+            let k = 2f64.powf(f64::from(s));
+            // Histogramme en IL.
+            let bins = self.ev[c].len().max(1);
+            let per_stop = bins as f32 / self.ev_range;
+            let width = 1.0 / per_stop;
+            let mut hist = vec![0f64; bins];
+            let (mut over, mut under) = (0f64, 0f64);
+            // Une position en IL (sous le blanc) dans l'histogramme, partagée entre les deux
+            // cases voisines (courbe lisse pendant le glissement).
+            let place = |hist: &mut [f64], at: f32, n: f64| {
+                let p = (at.min(-1e-4) + self.ev_range) * per_stop - 0.5;
+                if p <= 0.0 {
+                    hist[0] += n;
+                    return;
+                }
+                let i = (p.floor() as usize).min(bins - 1);
+                let f = f64::from(p - p.floor());
+                hist[i] += n * (1.0 - f);
+                hist[(i + 1).min(bins - 1)] += n * f;
+            };
+            let pinned = (self.over[c] as f64).min(f64::from(self.ev[c][bins - 1]));
+            for (i, &n) in self.ev[c].iter().enumerate() {
+                let mut n = f64::from(n);
+                if i == 0 {
+                    // Noir pur et plus sombre que la plage : y restent.
+                    hist[0] += n;
+                    under += n;
+                    continue;
+                }
+                if i == bins - 1 {
+                    n -= pinned;
+                }
+                if n <= 0.0 {
+                    continue;
+                }
+                let lo = i as f32 * width - self.ev_range + s;
+                let hi = lo + width;
+                over += n * f64::from(((hi - settings.over_ev) / width).clamp(0.0, 1.0));
+                under += n * f64::from(((settings.under_ev - lo) / width).clamp(0.0, 1.0));
+                place(&mut hist, (lo + width / 2.0).min(0.0), n);
+            }
+            if pinned > 0.0 {
+                if s >= settings.over_ev {
+                    over += pinned;
+                } else if s <= settings.under_ev {
+                    under += pinned;
+                }
+                place(&mut hist, s.min(0.0), pinned);
+            }
+            out.ev[c] = hist.iter().map(|&n| n.round() as u32).collect();
+            out.over[c] = (over.round() as u64).min(self.total[c]);
+            out.under[c] = (under.round() as u64).min(self.total[c]);
+            // Histogramme linéaire : chaque case suit la lumière de sa valeur centrale.
+            let lin = self.linear[c].len().max(1);
+            let mut linear = vec![0u32; lin];
+            for (i, &n) in self.linear[c].iter().enumerate() {
+                if n == 0 {
+                    continue;
+                }
+                if i == 0 {
+                    linear[0] += n;
+                    continue;
+                }
+                let v = (i as f64 + 0.5) * (f64::from(range) + 1.0) / lin as f64;
+                let to = transfer.code(transfer.light(v as u32, range) * k, range);
+                let j = ((to * lin as f64 / (f64::from(range) + 1.0)) as usize).min(lin - 1);
+                linear[j] += n;
+            }
+            out.linear[c] = linear;
+            out.high[c] = transfer
+                .code(transfer.light(self.high[c], range) * k, range)
+                .round() as u32;
+        }
+        out
+    }
+}
+
 fn fraction(counts: &[u64; SERIES], total: &[u64; SERIES]) -> f64 {
     (0..CHANNELS)
         .filter(|&c| total[c] > 0)
@@ -890,6 +1002,97 @@ pub fn remember_strictness(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Un dégradé gris 8 bits : chaque valeur une fois par ligne.
+    fn ramp() -> Bitmap {
+        Bitmap {
+            width: 256,
+            height: 8,
+            data: (0..8u32)
+                .flat_map(|_| (0..256u32).flat_map(|v| [v as u8; 3]))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn a_shift_of_zero_changes_nothing() {
+        let s = ExposureSettings::default();
+        let e = Exposure::from_bitmap(&ramp(), &s);
+        assert_eq!(e.shifted([0.0; SERIES], &s), e);
+    }
+
+    #[test]
+    fn brightening_pushes_the_histogram_right_and_clips() {
+        let s = ExposureSettings::default();
+        let e = Exposure::from_bitmap(&ramp(), &s);
+        let up = e.shifted([1.0; SERIES], &s);
+        // Un IL de plus : la moitié haute de la lumière (au-dessus de -1 IL) part au blanc.
+        let mid = Exposure::from_bitmap(
+            &Bitmap {
+                width: 1,
+                height: 1,
+                data: vec![188; 3],
+            },
+            &s,
+        );
+        assert!(
+            mid.headroom_ev() > -1.05 && mid.headroom_ev() < -0.95,
+            "188 ≈ -1 IL"
+        );
+        let above_half = (188..256).count() as f64 / 256.0;
+        assert!(
+            (up.over_fraction() - above_half).abs() < 0.04,
+            "{} vs {above_half}",
+            up.over_fraction()
+        );
+        assert!(up.headroom_ev() > e.headroom_ev() - 1e-3);
+        // Les totaux ne bougent pas.
+        for c in 0..SERIES {
+            let n: u64 = up.ev[c].iter().map(|&n| n as u64).sum();
+            assert!((n as i64 - e.total[c] as i64).abs() <= 4, "{c}: {n}");
+        }
+    }
+
+    #[test]
+    fn darkening_brings_clipped_pixels_down_and_matches_a_real_measure() {
+        let s = ExposureSettings::default();
+        // Une image à moitié brûlée.
+        let half = Bitmap {
+            width: 2,
+            height: 1,
+            data: vec![255, 255, 255, 120, 120, 120],
+        };
+        let e = Exposure::from_bitmap(&half, &s);
+        assert!(e.over_fraction() > 0.4);
+        let down = e.shifted([-1.0; SERIES], &s);
+        assert_eq!(down.over_fraction(), 0.0, "plus rien au blanc");
+        // Comparé à la vraie image assombrie d'un IL (lumière divisée par deux).
+        let dark = |v: u8| {
+            let l = Transfer::Srgb.light(u32::from(v), 255) / 2.0;
+            Transfer::Srgb.code(l, 255).round() as u8
+        };
+        let real = Exposure::from_bitmap(
+            &Bitmap {
+                width: 2,
+                height: 1,
+                data: vec![dark(255); 3]
+                    .into_iter()
+                    .chain(vec![dark(120); 3])
+                    .collect(),
+            },
+            &s,
+        );
+        let peak = |e: &Exposure| {
+            let ev = &e.ev[0];
+            ev.iter().rposition(|&n| n > 0).unwrap()
+        };
+        assert!(
+            peak(&down).abs_diff(peak(&real)) <= 1,
+            "{} {}",
+            peak(&down),
+            peak(&real)
+        );
+    }
 
     #[test]
     fn the_clip_filter_keeps_well_exposed_and_unknown_images() {

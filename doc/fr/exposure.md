@@ -141,3 +141,15 @@ au plus 1 ; à -1, 1 (ce côté n'exclut plus rien : fonds noirs, issue n° 48).
 `folder_strictness` / `remember_strictness` : sévérité retenue par dossier et par côté
 (clés `clip-over-strictness`, `clip-under-strictness` du `tuning.json` du dossier, voir
 [store.md](store.md)).
+
+## Exposition décalée (`Exposure::shifted`, 11/11/2026, n° 420)
+
+L'exposition de la même image dont chaque série serait multipliée par `2^ev` :
+l'histogramme **après** un réglage d'exposition ou de balance, tout de suite, sans
+repasser sur les pixels (pendant le glissement d'un curseur, et pour les badges de la
+grille qui suivent les réglages). Exacte sur le décalage, approchée dans une case (valeurs
+supposées réparties également) : 1/8 d'IL par défaut. Les pixels au blanc sont un point
+au blanc : ils restent saturés si l'on éclaircit, et descendent avec le reste si l'on
+assombrit (ce qu'ils deviennent à l'image ; le capteur, lui, les a perdus). Le noir pur
+reste noir. Le masque des zones n'est pas décalé : il arrive avec la mesure de l'image
+réglée.
