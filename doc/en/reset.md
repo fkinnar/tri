@@ -8,7 +8,7 @@ clear, among four.
 | Cache | The images' entries (`Cache::clear_folder`), kept with the photos (`.tri/cache`) or in the central cache: works on every folder | no (recomputed) |
 | tri's data | The folder's data files ([store.md](store.md): filters and sort, sliders, covers, preferred developments, ratings memory); the "keep tri's data here" switch stays | no |
 | Ratings | Stars, colours, flags **reset inside the sidecars, never deleted** (owner's idea): only the fields tri writes change, the rest (darktable history, Lightroom keywords…) is rewritten identically, so it also works on sidecars touched by other software. Every existing source of the photo (XMP, `.rrdata`, `.pp3`, `.arp`, and the image itself when it receives ratings automatically); no sidecar is created (`NoteBook::clear`). A photo in conflict is skipped and reported | yes |
-| Versions | The `tri:Versions` list (crops) emptied | yes |
+| Versions | The `tri:Versions` list emptied | yes |
 
 Ratings and versions are undone together, in one step (`history::Step::Reset`).
 

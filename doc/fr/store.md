@@ -11,8 +11,8 @@ avec les photos.
 | Fichier | Contenu | Écrit par |
 |---|---|---|
 | `notes.json` | Mémoire des notes : ce qui a été lu de chaque source, le réglage « notes dans les images » du dossier | `reconcile::Memory` ([reconcile.md](reconcile.md)) |
-| `view.json` | Filtres, tri, rendu des vignettes, « Empiler automatiquement » | l'interface (`gui/src/state.rs`, `FolderView`) |
-| `tuning.json` | Valeurs des curseurs : sévérité des piles, pauses, progression (`group-*`), sévérité du flou (`blur-strictness`), de l'exposition (`clip-over-strictness`, `clip-under-strictness`) | `store::value` / `store::set_value` |
+| `view.json` | Filtres, tri, rendu des vignettes, « Empiler automatiquement », logiciels du filtre « développées », « Sous-dossiers », image courante et piles dépliées (écrites en quittant le dossier) | l'interface (`gui/src/state.rs`, `FolderView`) |
+| `tuning.json` | Valeurs des curseurs : sévérité des piles, pauses, progression (`group-*`, écart de temps `group-gap` depuis #414), sévérité du flou (`blur-strictness`), de l'exposition (`clip-over-strictness`, `clip-under-strictness`) | `store::value` / `store::set_value` |
 | `choices.json` | Couvertures de piles (`covers`) et développements préférés (`developments`), par **nom de fichier** | `store::chosen` / `store::choose` |
 
 Un fichier par sorte : quand deux ordinateurs modifient le même dossier synchronisé, un

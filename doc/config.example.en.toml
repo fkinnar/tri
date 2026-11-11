@@ -997,9 +997,11 @@ hidden = false
 # searched, and maximum number of results.
 search_depth = 4
 search_results = 200
-# "Subfolders" checkbox of the panel (kept from one session to the next): the images of the
-# subfolders of the open folder are shown too, down to this number of levels at most.
+# "Subfolders" checkbox of the panel (kept per folder): the images of the subfolders of
+# the open folder are shown too, down to this number of levels at most.
 subfolders_depth = 3
+# "Subfolders" checkbox of a folder never set.
+subfolders = false
 # Section titles ("Removable drives", "Favourites"… and those of the right panel): size
 # relative to the folder text.
 section_scale = 1.25

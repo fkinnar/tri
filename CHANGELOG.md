@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **More kept per folder** (#415): the image where one was (back to it when reopening
+  the folder), the unfolded stacks, the "Subfolders" checkbox (`[gui.folders] subfolders`
+  for a folder never set; no longer common to all folders), the stack time gap, and the
+  software ticked in the "developed" filter. A folder coming from another computer keeps
+  the render and the software chosen there, even when they are missing here.
 - **"Stack automatically" kept per folder** (#413): like the filters, the sort and the
   thumbnail render; a folder never set takes the configuration's value.
 - **Reset a folder** (#412): right click on a folder, Preferences, "Reset this folder…"

@@ -8,7 +8,7 @@ effacer, parmi quatre.
 | Cache | Les entrées des images (`Cache::clear_folder`), gardées avec les photos (`.tri/cache`) ou dans le cache central : marche sur tout dossier | non (recalculé) |
 | Données de tri | Les fichiers de données du dossier ([store.md](store.md) : filtres et tri, curseurs, couvertures, développements préférés, mémoire des notes) ; l'interrupteur « garder les données de tri ici » reste | non |
 | Notes | Étoiles, couleurs, drapeaux **remis à zéro dans les sidecars, jamais supprimés** (idée de l'utilisateur) : seuls les champs qu'écrit `tri` changent, le reste (historique darktable, mots-clés de Lightroom…) est réécrit à l'identique, donc aussi sur des sidecars touchés par d'autres logiciels. Toutes les sources existantes de la photo (XMP, `.rrdata`, `.pp3`, `.arp`, et l'image elle-même quand elle reçoit les notes d'office) ; aucun sidecar n'est créé (`NoteBook::clear`). Une photo en conflit est sautée et signalée | oui |
-| Versions | La liste `tri:Versions` (recadrages) vidée | oui |
+| Versions | La liste `tri:Versions` vidée | oui |
 
 Notes et versions se défont ensemble, en un pas (`history::Step::Reset`).
 

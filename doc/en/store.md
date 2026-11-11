@@ -10,8 +10,8 @@ folder (Syncthing, a cloud): everything `tri` needs must travel with the photos.
 | File | Content | Written by |
 |---|---|---|
 | `notes.json` | Ratings memory: what was last read from each source, the folder's "ratings in the images" setting | `reconcile::Memory` ([reconcile.md](reconcile.md)) |
-| `view.json` | Filters, sort, thumbnail render, "Stack automatically" | the interface (`gui/src/state.rs`, `FolderView`) |
-| `tuning.json` | Slider values: stack strictness, pauses, curve (`group-*`), blur severity (`blur-strictness`), exposure strictness (`clip-over-strictness`, `clip-under-strictness`) | `store::value` / `store::set_value` |
+| `view.json` | Filters, sort, thumbnail render, "Stack automatically", developed-filter engines, "Subfolders", current image and unfolded stacks (written when leaving the folder) | the interface (`gui/src/state.rs`, `FolderView`) |
+| `tuning.json` | Slider values: stack strictness, pauses, curve (`group-*`, time gap `group-gap` since #414), blur severity (`blur-strictness`), exposure strictness (`clip-over-strictness`, `clip-under-strictness`) | `store::value` / `store::set_value` |
 | `choices.json` | Stack covers (`covers`) and preferred developments (`developments`), by **file name** | `store::chosen` / `store::choose` |
 
 One file per kind: when two computers change the same synced folder, a sync conflict
