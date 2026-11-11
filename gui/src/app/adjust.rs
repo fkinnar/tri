@@ -61,6 +61,18 @@ impl TriApp {
             .copied()
     }
 
+    /// Réglages de `path` en vigueur (connus ou non) : ceux avec lesquels une vignette faite
+    /// maintenant le serait.
+    pub(super) fn adjust_now(&self, path: &Path) -> Option<Layers> {
+        self.adjust_map
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .layers
+            .get(path)
+            .copied()
+            .filter(|l| !l.is_none())
+    }
+
     /// Réglages arrivés de la lecture en fond : retenus, et les images concernées
     /// rechargées.
     pub(super) fn adjust_poll(&mut self) {
@@ -70,13 +82,21 @@ impl TriApp {
             if !self.adjust_known.insert(path.clone()) {
                 continue; // déjà connus (posés dans la session entre-temps)
             }
+            let layers = layers.filter(|l| !l.is_none());
             if let Some(layers) = layers {
                 self.adjust_map
                     .write()
                     .unwrap_or_else(|e| e.into_inner())
                     .layers
                     .insert(path.clone(), layers);
-                self.drop_adjusted_textures(&path);
+            }
+            // Une vignette déjà faite avec ces réglages-là (dossier déjà vu dans la
+            // session) n'est pas refaite ; sinon, ou s'ils ont changé ailleurs : refaite.
+            match self.texture_adjust.get(&path) {
+                Some(done) if *done == layers => {}
+                Some(_) => self.drop_adjusted_textures(&path),
+                None if layers.is_some() => self.drop_adjusted_textures(&path),
+                None => {}
             }
         }
     }
@@ -170,6 +190,8 @@ impl TriApp {
             );
             let mut texture = texture;
             texture.set(image, TextureOptions::LINEAR);
+            let layers = self.adjust_now(&path);
+            self.texture_adjust.insert(path.clone(), layers);
         }
         ctx.request_repaint();
     }

@@ -585,6 +585,9 @@ pub struct TriApp {
     adjust_gesture: Option<adjust::Gesture>,
     /// Vignettes à redessiner avec leurs nouveaux réglages, toutes à la fois.
     adjust_stale: HashSet<PathBuf>,
+    /// Réglages avec lesquels chaque vignette chargée a été faite : relus identiques (retour
+    /// dans un dossier déjà vu), rien à refaire (trace du 11/11/2026 : 523 ms figées).
+    texture_adjust: HashMap<PathBuf, Option<tri::adjust::Layers>>,
     /// Grandes images affichées dont les réglages ont changé : gardées à l'écran,
     /// redemandées au chargeur ; numéro du changement.
     big_stale: HashMap<(PathBuf, Level), u64>,
@@ -1434,6 +1437,7 @@ impl TriApp {
             adjust_sync: true,
             adjust_gesture: None,
             adjust_stale: HashSet::new(),
+            texture_adjust: HashMap::new(),
             big_stale: HashMap::new(),
             big_sent: HashMap::new(),
             adjust_epoch: 0,
@@ -12277,6 +12281,8 @@ impl TriApp {
         let path = file.path.clone();
         // Chargée avec ses réglages du moment : rien à redessiner pour eux.
         self.adjust_stale.remove(&path);
+        let layers = self.adjust_now(&path);
+        self.texture_adjust.insert(path.clone(), layers);
         self.textures.insert(path.clone(), texture.clone());
         self.texture_levels.insert(path, level);
         Some(texture)
@@ -25662,6 +25668,25 @@ mod tests {
         assert!(shown.is_some(), "chargée une fois ses réglages lus");
         assert!(h.state().adjust_known.contains(&path));
         assert!(h.state().adjust_stale.is_empty(), "rien à redécoder");
+        // Retour dans le dossier (trace du 11/11/2026, 523 ms) : la vignette déjà faite
+        // reste, ses réglages relus identiques ne la font pas refaire.
+        h.state_mut().adjust_forget();
+        for _ in 0..400 {
+            let _deferred = DeferStamps::start();
+            h.state_mut().adjust_layers(&path);
+            if h.state().adjust_known.contains(&path) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(h.state().adjust_known.contains(&path), "relus");
+        assert!(h.state().adjust_stale.is_empty(), "pas refaite pour rien");
+        // Changés ailleurs : refaite.
+        let mut cold = warm;
+        cold.correction.exposure = -1.0;
+        h.state_mut()
+            .save_adjustments(vec![(path.clone(), Some(cold))]);
+        assert!(h.state().adjust_stale.contains(&path), "refaite");
     }
 
     #[test]
