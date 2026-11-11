@@ -153,6 +153,45 @@ Chaque conversion est construite une fois par couple d'espaces et gardée
     convertie deux fois ;
   - `with_icc`.
 
+## Vérifier à la main : les mires
+
+```
+cargo run --release --example colour_charts -- <dossier de sortie> [--side N] [--check-only]
+```
+
+L'outil écrit la **même** mire en sRGB, Adobe RGB, Display P3, ProPhoto, Rec.2020, et dans
+les ProPhoto / Rec.2020 **linéaires** de darktable, chacune avec son ICC intégré : JPEG
+8 bits, TIFF 16 bits, PNG 8 et 16 bits, plus un JPEG sRGB sans profil.
+
+La mire, de haut en bas :
+1. primaires et secondaires sRGB ;
+2. couleurs courantes (peau, ciel, feuillage, orange, violet) et un gris à 18 % ;
+3. un dégradé gris ;
+4. des dégradés du noir au rouge, au vert et au bleu ;
+5. un tour des teintes à pleine saturation ;
+6. des couleurs **hors du sRGB** : primaires et secondaires Display P3, à côté du rouge
+   sRGB.
+
+Tous les fichiers doivent paraître identiques dans `tri`, et identiques dans Aperçu ou
+darktable. La dernière rangée fait exception : elle est écrêtée dans les fichiers sRGB
+(c'est normal) et en partie en Adobe RGB (le rouge P3). Elle est vive sur un écran large,
+presque plate sur un écran sRGB.
+
+L'outil relit ensuite chaque fichier comme `tri` (`flat::decode_working`) et affiche le
+plus grand écart par rangée, en niveaux sur 255.
+
+Vérifié le 11/11/2026 contre ColorSync, le moteur couleur de macOS (`sips -m` vers le
+sRGB) : tous les fichiers concordent, aux bords des cases des JPEG près. Deux choses sont
+apparues en route :
+- **Le profil Display P3 de `moxcms` 0.8 porte une balise CICP fausse** : « SMPTE RP 431 »,
+  le P3 du cinéma avec le blanc DCI, au lieu de « EG 432 ». ColorSync suit cette balise.
+  Les mires, et le profil P3 que `tri` fabrique pour un HEIC d'iPhone, s'en passent ;
+  `tri` lui-même lit les primaires de la matrice et n'était pas touché.
+- **ImageIO rejette ces profils Display P3 et Rec.2020 dans un PNG** (`sips -g profile` dit
+  « nil ») et lit le fichier comme du sRGB, alors qu'il accepte le même profil dans un TIFF
+  ou un JPEG. Aucun PNG n'est donc écrit pour ces deux espaces, pour que la comparaison
+  avec Aperçu ne trompe pas.
+
 ## Reste à faire (n° 422)
 
 - Vérifier avec des profils de sortie exotiques, et sous Linux et Windows (Windows :

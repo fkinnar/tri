@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Colour charts** (#425): `cargo run --release --example colour_charts -- <folder>`
+  writes the same chart in every common colour space (sRGB, Adobe RGB, Display P3,
+  ProPhoto, Rec.2020, linear ones), as JPEG, TIFF and PNG with their profile, and checks
+  that tri reads them all alike. The Display P3 profile given to iPhone HEIC files no longer
+  carries a wrong cinema-P3 tag.
 - **Colour management** (#423): every image is shown with its real colour space instead
   of being assumed sRGB: camera JPEGs (Adobe RGB too), flat images with their ICC profile
   (16-bit TIFF / PNG converted at their depth), HEIC, and developments with the output
