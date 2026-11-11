@@ -926,6 +926,12 @@ pub struct TriApp {
     /// changé par l'interrupteur à côté.
     /// Sections repliées du panneau de droite (« filters », « grid »…), retenues.
     panel_folded: HashSet<String>,
+    /// Dernière section dépliée du panneau de droite, et du panneau des dossiers : celle
+    /// qui reste ouverte quand `[gui] one_section_open` s'allume.
+    last_side_section: Option<String>,
+    last_folder_section: Option<tri::places::Section>,
+    /// `[gui] one_section_open` à l'image précédente (allumé : les sections se replient).
+    one_section_was: bool,
     /// Case « sous-dossiers » du panneau des dossiers : les images des sous-dossiers
     /// s'affichent aussi (`[gui.folders] subfolders_depth` niveaux), choix gardé.
     subfolders: bool,
@@ -1677,6 +1683,9 @@ impl TriApp {
             blur_strictness: 0.0,
             clip_strictness: (0.0, 0.0),
             panel_folded: HashSet::new(),
+            last_side_section: None,
+            last_folder_section: None,
+            one_section_was: false,
             subfolders,
             group_gap: settings.similarity.max_gap_s,
             group_dialog: false,
@@ -2586,6 +2595,7 @@ impl TriApp {
     /// autres se replient.
     fn unfold_side_section(&mut self, id: &str) {
         self.panel_folded.remove(id);
+        self.last_side_section = Some(id.to_string());
         if self.gui.one_section_open {
             for other in SIDE_SECTIONS.iter().filter(|&&s| s != id) {
                 self.panel_folded.insert((*other).to_string());
@@ -2596,6 +2606,9 @@ impl TriApp {
     /// Plie ou déplie la section `s` du panneau des dossiers ; dépliée avec
     /// `[gui] one_section_open`, les autres se replient.
     fn fold_folder_section(&mut self, s: tri::places::Section, folded: bool) {
+        if !folded {
+            self.last_folder_section = Some(s);
+        }
         let mut changes = vec![(s, folded)];
         if !folded && self.gui.one_section_open {
             changes.extend(
@@ -2613,6 +2626,45 @@ impl TriApp {
                 self.panel_folded.insert(key);
             } else {
                 self.panel_folded.remove(&key);
+            }
+        }
+    }
+
+    /// `[gui] one_section_open` vient de s'allumer (fenêtre de réglages, configuration) :
+    /// dans chaque panneau, une seule section reste dépliée, la dernière dépliée si elle
+    /// l'est encore, sinon la plus haute (retour du 11/11/2026).
+    fn apply_one_section_open(&mut self) {
+        // Panneau de droite : les sections de ce mode, dans l'ordre affiché.
+        let shown: Vec<&str> = SIDE_SECTIONS
+            .iter()
+            .copied()
+            .filter(|&s| match s {
+                "grid" => self.mode != Mode::View,
+                "view" => self.mode == Mode::View,
+                _ => true,
+            })
+            .collect();
+        let open = |s: &str| !self.panel_folded.contains(s);
+        let keep = self
+            .last_side_section
+            .clone()
+            .filter(|s| shown.contains(&s.as_str()) && open(s))
+            .or_else(|| shown.iter().find(|&&s| open(s)).map(|s| s.to_string()));
+        for s in SIDE_SECTIONS {
+            if keep.as_deref() != Some(s) {
+                self.panel_folded.insert(s.to_string());
+            }
+        }
+        // Panneau des dossiers.
+        let sections = self.tree.sections();
+        let keep = self
+            .last_folder_section
+            .filter(|s| sections.contains(s) && !self.tree.is_folded(*s))
+            .or_else(|| sections.iter().copied().find(|&s| !self.tree.is_folded(s)));
+        for s in sections {
+            if Some(s) != keep {
+                self.tree.set_folded(s, true);
+                self.panel_folded.insert(format!("folders-{}", s.key()));
             }
         }
     }
@@ -18249,6 +18301,11 @@ impl eframe::App for TriApp {
         if crate::display::declare_working(frame) {
             ui.ctx().request_repaint();
         }
+        // Une section par panneau (`[gui] one_section_open`), dès que l'option s'allume.
+        if self.gui.one_section_open && !self.one_section_was {
+            self.apply_one_section_open();
+        }
+        self.one_section_was = self.gui.one_section_open;
         // Linux, Windows : le profil de l'écran (réglage, système) ; changé (autre écran,
         // réglage modifié), les textures sont refaites.
         if self.screen.follow(frame, &self.gui.display_profile) {
@@ -29992,7 +30049,24 @@ mod tests {
         // Par défaut : plusieurs sections dépliées.
         h.state_mut().unfold_side_section("exif");
         assert!(!h.state().panel_folded.contains("filters"));
+        // L'option allumée : chaque panneau garde une section, ici la dernière dépliée.
         h.state_mut().gui.one_section_open = true;
+        h.run_steps(1);
+        for other in SIDE_SECTIONS.iter().filter(|&&s| s != "exif") {
+            assert!(
+                h.state().panel_folded.contains(*other),
+                "{other} repliée d'emblée"
+            );
+        }
+        let open_folders = |app: &TriApp| {
+            app.tree
+                .sections()
+                .into_iter()
+                .filter(|&s| !app.tree.is_folded(s))
+                .count()
+        };
+        assert!(open_folders(h.state()) <= 1, "une section de dossiers");
+        h.state_mut().unfold_side_section("filters");
         h.state_mut().unfold_side_section("exif");
         for other in SIDE_SECTIONS.iter().filter(|&&s| s != "exif") {
             assert!(h.state().panel_folded.contains(*other), "{other} repliée");

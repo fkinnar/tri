@@ -808,7 +808,10 @@ system one ("cold" measurements, experiments).
   right panel, above the scrolling area, and no longer folds
   (`TriApp::side_panel_pinned`, `section_heading`: a title without triangle, aligned with
   the others). `[gui] one_section_open = true` (off by default): unfolding a section folds
-  the others of the same panel (`unfold_side_section`, `fold_folder_section`).
+  the others of the same panel (`unfold_side_section`, `fold_folder_section`); as soon as
+  the option turns on (settings window, configuration), each panel keeps a single section
+  unfolded, the last one unfolded if it still is, otherwise the top one
+  (`apply_one_section_open`).
   - *Filters*: first the files shown, RAW and JPEG (two check boxes without a title, one
     stays checked; in the filter bar until 2026-10-27, then a day in the Grid section;
     feedback of 2026-10-28), then each adjustable filter with a check box (like its bar icon), its settings

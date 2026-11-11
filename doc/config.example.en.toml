@@ -686,7 +686,8 @@ remember_display = true
 # folder opens without filters, in the order kept for all.
 remember_folder_view = true
 # Side panels (folders, right): only one section unfolded at a time; unfolding one folds
-# the others of the same panel.
+# the others of the same panel; turned on, each panel keeps just one (the last one
+# unfolded, otherwise the top one).
 one_section_open = false
 # Window moved or resized: remembered once still for this delay (ms), and always when
 # closed.

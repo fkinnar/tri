@@ -868,7 +868,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   défile, et ne se replie plus (`TriApp::side_panel_pinned`, `section_heading` : un titre
   sans triangle, aligné sur les autres). `[gui] one_section_open = true` (désactivé par
   défaut) : déplier une section replie les autres du même panneau
-  (`unfold_side_section`, `fold_folder_section`).
+  (`unfold_side_section`, `fold_folder_section`) ; dès que l'option s'allume (fenêtre de
+  réglages, configuration), chaque panneau ne garde qu'une section dépliée, la dernière
+  dépliée si elle l'est encore, sinon la plus haute (`apply_one_section_open`).
   - *Filtres* : d'abord les fichiers montrés, RAW et JPEG (deux cases sans titre, l'une
     reste cochée ; dans la barre des filtres jusqu'au 27/10/2026, puis une journée dans
     la section Grille ; retour du 28/10/2026), puis chaque filtre réglable avec une case (comme son icône de la barre), ses
