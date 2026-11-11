@@ -803,7 +803,15 @@ system one ("cold" measurements, experiments).
   the same way (feedback of 2026-10-27, `Tree::set_folded`: a folded section keeps its
   title, its rows leave `Tree::rows`, so the keyboard cursor too). Folded sections of both
   panels are remembered across sessions (`gui-state.toml`, `panel_folded`: `grid`, `exif`,
-  `folders-personal`…).
+  `folders-personal`…). Since 2026-11-11 (feedback: the panel is long, sections had to be
+  folded to keep the histogram in view) the **histogram is pinned** at the top of the
+  right panel, above the scrolling area, and no longer folds
+  (`TriApp::side_panel_pinned`, `section_heading`: a title without triangle, aligned with
+  the others). `[gui] one_section_open = true` (off by default): unfolding a section folds
+  the others of the same panel (`unfold_side_section`, `fold_folder_section`); as soon as
+  the option turns on (settings window, configuration), each panel keeps a single section
+  unfolded, the last one unfolded if it still is, otherwise the top one
+  (`apply_one_section_open`).
   - *Filters*: first the files shown, RAW and JPEG (two check boxes without a title, one
     stays checked; in the filter bar until 2026-10-27, then a day in the Grid section;
     feedback of 2026-10-28), then each adjustable filter with a check box (like its bar icon), its settings
@@ -870,6 +878,29 @@ system one ("cold" measurements, experiments).
     histogram show or hide it, remembered between sessions; `[gui.histogram]
     camera_jpeg` (value at the first launch), `camera_width`, colour `[gui.colors]
     hist_camera`;
+  - **after the viewing adjustments** (2026-11-11, issue #420, decided with the user):
+    - **Real data by default.** A button (two sliders, left of the other buttons) and `e`
+      in the large histogram (`<leader> i e` elsewhere) switch the histogram, the
+      percentages and the zones to the **image as shown**, adjustments included
+      (exposure, balance, contrast, saturation, B&W), for every source. "after
+      adjustments" is written at the top, and the **sensor's** saturated percentage stays
+      in the indicators: what the sensor lost is lost, whatever the adjustment.
+      `[gui.histogram] after_auto = true`: an adjusted image shows the "after" by itself,
+      from its first adjustment; also a checkbox "Histogram after adjustments" at the top
+      of the Adjustments section, written in the configuration (owner's request,
+      2026-11-11: clearer there than in the histogram box).
+    - **How it is measured** (`app/after.rs`): the preview shown is adjusted as on screen
+      and reduced to `[gui.histogram] after_side` (1280 px), then measured
+      (`Exposure::from_bitmap`), in a background thread, never on the UI thread. In full
+      screen it is the preview on screen; in the grid, the thumbnail's. When that preview
+      is not computed yet, the thumbnail is used meanwhile.
+    - **During a slider drag**, the last measurement is shifted at once by the change of
+      exposure and balance (`Exposure::shifted`: EV histograms moved along their axis,
+      exact on the shift, 1/8 EV within a bin). The full measurement follows; contrast and
+      B&W appear with it.
+    - **Grid badges** stay on the real data. `[gui.histogram] badges_follow_adjustments
+      = true`: an adjusted image's badges follow its exposure and balance, from the real
+      analysis shifted the same way, without going over the pixels again;
   - **zones** overlaid on the image (`w`, "warnings"; `o` until 2026-10-19): engine mask as
     a texture (nearest-neighbour sampling), stretched over the image (also at 100 %).
     Saturated **per channel** (requested on 2026-10-17, like FastRawViewer): a single

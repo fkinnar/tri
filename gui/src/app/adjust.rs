@@ -719,6 +719,16 @@ impl TriApp {
         let mut layers = before;
         let shot = self.adjust_shot_shown(&file.path);
         let mut pending = Pending::default();
+        // Histogramme après réglages d'office (#420, retour du 11/11/2026 : plus clair ici
+        // que dans la boîte de l'histogramme), écrit dans la configuration.
+        let mut after = self.gui.histogram.after_auto;
+        if ui
+            .checkbox(&mut after, t!("adjust-histogram-after"))
+            .on_hover_text(t!("adjust-histogram-after-tip"))
+            .changed()
+        {
+            self.set_histogram_after_auto(after);
+        }
         // Synchroniser : grisée avec une seule image, cochée par défaut sinon.
         let n = self.selection.visible(&self.files);
         ui.add_enabled_ui(n > 1, |ui| {

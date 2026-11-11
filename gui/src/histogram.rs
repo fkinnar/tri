@@ -130,6 +130,28 @@ pub fn camera_button(rect: Rect, dot: f32) -> Rect {
     photo.translate(vec2(-(photo.width() + dot * 0.6), 0.0))
 }
 
+/// Bouton réel / après réglages : à gauche du bouton du JPEG boîtier (RAW), sinon de
+/// celui de la photo d'analyse ; même taille.
+pub fn after_button(rect: Rect, dot: f32, raw: bool) -> Rect {
+    let left = if raw {
+        camera_button(rect, dot)
+    } else {
+        photo_button(rect, dot)
+    };
+    left.translate(vec2(-(left.width() + dot * 0.6), 0.0))
+}
+
+/// Icône des réglages (deux curseurs) dans `rect`.
+pub fn after_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let r = rect.shrink(rect.width() * 0.15);
+    let stroke = Stroke::new(1.4, color);
+    for (k, at) in [(0.3, 0.35), (0.7, 0.65)] {
+        let y = r.min.y + k * r.height();
+        painter.line_segment([pos2(r.min.x, y), pos2(r.max.x, y)], stroke);
+        painter.circle_filled(pos2(r.min.x + at * r.width(), y), r.width() * 0.14, color);
+    }
+}
+
 /// Icône d'un appareil photo (boîtier, viseur, objectif) dans `rect`.
 pub fn camera_icon(painter: &Painter, rect: Rect, color: Color32) {
     let r = rect.shrink(rect.width() * 0.12);
@@ -203,14 +225,20 @@ fn clipped(e: &Exposure, channel: Option<usize>, counts: &[u64; SERIES]) -> f64 
 /// Histogramme dans `rect` : fond, canaux superposés (ou un seul), graduations,
 /// indicateurs.
 ///
+/// `real` : `e` est l'image **après** les réglages de visualisation (#420), et voici les
+/// données réelles : « après réglages » écrit en haut, et le pourcentage saturé du
+/// capteur dans les indicateurs (ce qu'il a perdu est perdu).
+///
 /// `camera` : exposition du JPEG boîtier d'un RAW, dessinée en trait fin par-dessus
 /// (`[gui.histogram] camera_jpeg`), chaque courbe à sa propre hauteur : seule la forme
 /// compte. En IL, chacune est mesurée sous son propre blanc (saturation du capteur, 255
 /// du JPEG).
+#[allow(clippy::too_many_arguments)]
 pub fn draw(
     painter: &Painter,
     rect: Rect,
     e: &Exposure,
+    real: Option<&Exposure>,
     camera: Option<&Exposure>,
     look: Look,
     settings: &HistogramSettings,
@@ -228,13 +256,20 @@ pub fn draw(
         Source::Raw { bits, .. } => format!("RAW {bits} bits"),
         Source::Flat { bits } => format!("{bits} bits"),
     };
-    let text = t!(
+    let mut text = t!(
         "histogram-indicators",
         source = source,
         headroom = decimal(e.headroom_ev() as f64, 2)
     );
+    if let Some(r) = real {
+        let percent = format!("{} %", decimal(clipped(r, channel, &r.over) * 100.0, 2));
+        text = format!(
+            "{text} · {}",
+            t!("histogram-after-sensor", percent = percent)
+        );
+    }
     // Place des pastilles et des boutons, à droite de la ligne des indicateurs.
-    let dots = rect.max.x - camera_button(rect, settings.channel_dot).min.x + 6.0;
+    let dots = rect.max.x - after_button(rect, settings.channel_dot, true).min.x + 6.0;
     let galley = painter.layout(
         text,
         FontId::proportional(11.0),
@@ -405,6 +440,16 @@ pub fn draw(
     }
     if clipped(e, channel, &e.under) >= settings.indicator_min {
         painter.circle_filled(graph.left_top() + vec2(4.0, 4.0), 4.0, colors.clip_under);
+    }
+    // Après réglages : dit en haut à gauche, sous la pastille des bouchés.
+    if real.is_some() {
+        painter.text(
+            graph.left_top() + vec2(12.0, 1.0),
+            Align2::LEFT_TOP,
+            t!("histogram-after-label"),
+            FontId::proportional(10.0),
+            Color32::from_gray(200),
+        );
     }
     // Pastilles de canal : la choisie entourée, les autres atténuées.
     if details {
