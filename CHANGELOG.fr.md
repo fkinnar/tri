@@ -4,6 +4,20 @@
 
 ## Non publié
 
+- **Les vignettes des développements ne changent plus d'image à l'ouverture** (#418) :
+  une vignette dont on ne connaît pas encore le rendu développé (son sidecar en lecture)
+  reste vide un instant (`[gui.grid] render_wait_ms`) au lieu de montrer le JPEG boîtier
+  puis de changer ; les couvertures des piles aussi. De même pour une vignette dont les
+  réglages de visualisation sont encore en lecture : montrée sans eux, toutes les vignettes
+  réglées étaient ensuite redécodées d'un coup (une demi-seconde d'interface figée en
+  ouvrant un dossier réglé), et une vignette n'est plus refaite quand ses réglages sont
+  relus identiques. Les piles ouvertes repliées (#417) gardent aussi leurs couvertures :
+  montrées d'abord avec leur première image, elles passaient à la vraie couverture une
+  fois notes et scores de netteté lus ; les couvertures sont désormais retenues aussi.
+  Et la grille attend les notes du dossier : triée par couleur, sa première image montrait
+  l'ordre des noms sans marques, puis se réordonnait. Les notes sont lues avec la liste
+  du dossier, dans le délai d'attente de l'ouverture (`[gui.folders] open_wait_ms`) :
+  l'ancien dossier reste affiché jusqu'à ce que le nouveau arrive complet.
 - **Les dossiers en piles s'ouvrent déjà repliés** (#417) : les piles d'un dossier sont
   retenues dans son cache après un regroupement complet ; rouvert sans rien de changé, il
   s'affiche replié tout de suite au lieu de se replier sous les yeux. Sinon la grille

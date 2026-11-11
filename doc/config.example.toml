@@ -778,6 +778,10 @@ stacks_wait_ms = 2000
 # Pendant cette attente, à partir de ce nombre d'images : une boîte « Regroupement des
 # piles… » au centre de la grille.
 stacks_overlay_from = 200
+# Ouverture d'un dossier : la grille attend ses notes, et une vignette dont on ne sait pas
+# encore quoi montrer (sidecar d'un développement, réglages de visualisation en lecture)
+# reste vide, au plus ce temps (ms), plutôt que de changer d'image un instant après.
+render_wait_ms = 2000
 # Recherche par nom de fichier (<core.search> en grille) : largeur du champ (points).
 search_width = 200.0
 # Largeur minimale de ce champ quand la barre manque de place (fenêtre étroite : le tri et

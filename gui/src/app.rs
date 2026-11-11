@@ -234,11 +234,54 @@ impl Drop for DeferStamps {
 /// Ouverture d'un dossier lent ([`TriApp::open_folder`]) : sa liste lue en fond.
 struct Opening {
     dir: PathBuf,
-    result: Receiver<std::io::Result<Folder>>,
+    result: Receiver<std::io::Result<Opened>>,
     /// Interrompt la lecture.
     stop: Arc<AtomicBool>,
     /// Images trouvées jusqu'ici.
     found: Arc<AtomicUsize>,
+}
+
+/// Dossier lu par [`TriApp::open_folder`], avec ses notes si elles sont arrivées dans le
+/// délai d'attente (sinon leur lecture, qui continue en fond).
+struct Opened {
+    folder: Folder,
+    loading: Option<tri::folder::Loading>,
+    snapshot: Option<tri::watch::Snapshot>,
+}
+
+impl Opened {
+    /// Lit les notes de `folder` jusqu'à `deadline` : le dossier arrive complet (retour du
+    /// 11/11/2026 : une grille vide un instant, le temps de ses notes) ; au-delà (NAS, très
+    /// gros dossier), la lecture continue en fond, comme avant.
+    fn read(folder: Folder, depth: usize, watching: bool, deadline: Instant) -> Opened {
+        let mut folder = folder;
+        if folder.is_none() || !folder.notes.is_pending() {
+            return Opened {
+                folder,
+                loading: None,
+                snapshot: None,
+            };
+        }
+        let loading = tri::folder::Loading::start(&folder, depth, watching);
+        loop {
+            if let Some(loaded) = loading.try_take() {
+                folder.notes.adopt(loaded.notes);
+                return Opened {
+                    folder,
+                    loading: None,
+                    snapshot: loaded.snapshot,
+                };
+            }
+            if Instant::now() >= deadline {
+                return Opened {
+                    folder,
+                    loading: Some(loading),
+                    snapshot: None,
+                };
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
 }
 
 struct Engine {
@@ -585,6 +628,9 @@ pub struct TriApp {
     adjust_gesture: Option<adjust::Gesture>,
     /// Vignettes à redessiner avec leurs nouveaux réglages, toutes à la fois.
     adjust_stale: HashSet<PathBuf>,
+    /// Réglages avec lesquels chaque vignette chargée a été faite : relus identiques (retour
+    /// dans un dossier déjà vu), rien à refaire (trace du 11/11/2026 : 523 ms figées).
+    texture_adjust: HashMap<PathBuf, Option<tri::adjust::Layers>>,
     /// Grandes images affichées dont les réglages ont changé : gardées à l'écran,
     /// redemandées au chargeur ; numéro du changement.
     big_stale: HashMap<(PathBuf, Level), u64>,
@@ -823,6 +869,9 @@ pub struct TriApp {
     /// Dossier ouvert en piles, pas encore prêtes : depuis quand on les attend (la grille
     /// reste vide au plus `[gui.grid] stacks_wait_ms`).
     stacks_wait: Option<Instant>,
+    /// Ouverture du dossier : les vignettes dont le rendu n'est pas encore su restent
+    /// vides au plus `[gui.grid] render_wait_ms` à partir de là.
+    opened_at: Option<Instant>,
     /// Regroupement en piles actif.
     stacking: bool,
     /// Sévérité du regroupement (-1 souple, grandes piles, à 1 strict ; 0 : le centre),
@@ -1431,6 +1480,7 @@ impl TriApp {
             adjust_sync: true,
             adjust_gesture: None,
             adjust_stale: HashSet::new(),
+            texture_adjust: HashMap::new(),
             big_stale: HashMap::new(),
             big_sent: HashMap::new(),
             adjust_epoch: 0,
@@ -1583,6 +1633,7 @@ impl TriApp {
             expanded: HashSet::new(),
             stacks_memory: None,
             stacks_wait: None,
+            opened_at: None,
             // Grille non groupée par défaut (retour du 19/10/2026) : `[gui.grid] stacks`.
             stacking: settings.similarity.background && gui.grid.stacks,
             group_strictness: 0.0,
@@ -2005,9 +2056,15 @@ impl TriApp {
         let (stop_scan, found_scan) = (stop.clone(), found.clone());
         let slow = Duration::from_millis(self.gui.folders.type_check_ms);
         let repaint = self.repaint.clone();
+        // Ses notes aussi, dans le délai d'attente (un peu avant, pour arriver à temps).
+        let wait = self.open_wait();
+        let deadline = Instant::now() + wait.saturating_sub(wait / 5);
+        let watching = self.settings.watch.interval_ms > 0
+            && !self.watch.as_ref().is_some_and(|(w, _, _)| w.dir() == dir);
         std::thread::spawn(move || {
             let result =
-                Folder::scan_counting(&target, depth, convention, slow, &stop_scan, &found_scan);
+                Folder::scan_counting(&target, depth, convention, slow, &stop_scan, &found_scan)
+                    .map(|folder| Opened::read(folder, depth, watching, deadline));
             let _ = tx.send(result);
             if let Some(ctx) = repaint {
                 ctx.request_repaint();
@@ -2100,7 +2157,11 @@ impl TriApp {
     }
 
     /// Installe le dossier `dir` lu (ou son erreur) : grille, filtres, moteur.
-    fn install_folder(&mut self, dir: &Path, result: std::io::Result<Folder>) {
+    fn install_folder(&mut self, dir: &Path, result: std::io::Result<Opened>) {
+        let (result, loading, snapshot) = match result {
+            Ok(opened) => (Ok(opened.folder), opened.loading, opened.snapshot),
+            Err(e) => (Err(e), None, None),
+        };
         // Dossier du lancement : l'arborescence se déplie jusqu'à lui ; le dernier dossier
         // disparu est dit et attendu, pas une erreur.
         let start = self.start_dir.take().filter(|(d, _)| d == dir);
@@ -2179,10 +2240,26 @@ impl TriApp {
                     serde_json::from_slice(&bytes).ok()
                 });
                 self.stacks_wait = Some(Instant::now());
+                self.opened_at = Some(Instant::now());
                 self.folder = folder;
                 self.refresh_any_developed();
                 self.apply_sidecar_policy();
-                self.start_loading();
+                match loading {
+                    // Notes encore en lecture (au-delà du délai) : elle continue en fond.
+                    Some(loading) => {
+                        self.watch_snapshot = None;
+                        self.auto_develop_pending = true;
+                        self.loading = Some(loading);
+                    }
+                    // Déjà lues avec la liste : le dossier arrive complet.
+                    None => {
+                        self.start_loading();
+                        if snapshot.is_some() {
+                            self.watch_snapshot = snapshot;
+                        }
+                        self.load_choices();
+                    }
+                }
                 self.apply_sort();
                 self.error = None;
             }
@@ -6208,10 +6285,16 @@ impl TriApp {
     }
 
     /// Retient les piles d'un regroupement complet, si elles ont changé.
-    fn remember_stacks(&mut self, key: String, ranges: &[std::ops::Range<usize>]) {
+    fn remember_stacks(
+        &mut self,
+        key: String,
+        ranges: &[std::ops::Range<usize>],
+        covers: Vec<String>,
+    ) {
         let memory = StacksMemory {
             key,
             lengths: ranges.iter().map(|r| r.len()).collect(),
+            covers,
         };
         if self.stacks_memory.as_ref() == Some(&memory) || self.folder.is_none() {
             return;
@@ -6235,6 +6318,15 @@ impl TriApp {
             && !self.files.is_empty()
             && self.stacks_wait.is_some_and(|since| {
                 since.elapsed() < Duration::from_millis(self.gui.grid.stacks_wait_ms)
+            })
+    }
+
+    /// La grille attend les notes du dossier qui vient de s'ouvrir (au plus
+    /// `[gui.grid] render_wait_ms`).
+    fn notes_pending(&self) -> bool {
+        self.loading.is_some()
+            && self.opened_at.is_some_and(|since| {
+                since.elapsed() < Duration::from_millis(self.gui.grid.render_wait_ms)
             })
     }
 
@@ -6271,7 +6363,25 @@ impl TriApp {
         // part, avec un seuil recalculé sur elles seules, elles se coupaient (#163 : 11
         // photos en 1 + 10) ; le seuil du dossier reste celui de tout le dossier.
         let complete = self.signatures_complete();
+        // Couvertures (notes, netteté) toutes connues : sinon, celles retenues.
+        // (Netteté sans rien d'annoncé, analyse coupée : rien à attendre.)
+        let settled = complete && self.loading.is_none() && {
+            let p = self.progress[4];
+            p.done >= p.total
+        };
         let key = self.stacks_key();
+        let remembered_covers: HashSet<PathBuf> = self
+            .stacks_memory
+            .as_ref()
+            .filter(|m| m.key == key && !settled)
+            .map(|m| {
+                m.covers
+                    .iter()
+                    .map(|c| crate::state::absolute(&self.folder.dir, c))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let mut to_remember = None;
         let remembered = self
             .stacks_memory
             .as_ref()
@@ -6296,8 +6406,8 @@ impl TriApp {
             let ranges = tri::similarity::group(&links, self.group_threshold(), self.group_gap);
             if complete {
                 self.stacks_wait = None;
-                if self.stacking {
-                    self.remember_stacks(key, &ranges);
+                if self.stacking && settled {
+                    to_remember = Some((key, ranges.clone()));
                 }
             }
             ranges
@@ -6317,6 +6427,14 @@ impl TriApp {
         let cover = |r: &std::ops::Range<usize>| {
             // La préférée choisie par l'utilisateur, sinon la meilleure.
             if let Some(i) = r.clone().find(|&i| chosen.contains(&files[i].path)) {
+                return i;
+            }
+            // Notes ou scores encore en lecture : la couverture retenue (#416, retour du
+            // 11/11/2026 : la première image, puis la vraie couverture sous les yeux).
+            if let Some(i) = r
+                .clone()
+                .find(|&i| remembered_covers.contains(&files[i].path))
+            {
                 return i;
             }
             r.clone()
@@ -6392,9 +6510,21 @@ impl TriApp {
         };
         let dev_unfolded_in =
             |r: &std::ops::Range<usize>| r.clone().any(|i| dev_unfolded.contains(&photo(i)));
+        let covers: Vec<String> = if to_remember.is_some() {
+            ranges
+                .iter()
+                .filter(|r| r.len() > 1)
+                .filter_map(|r| crate::state::relative(&self.folder.dir, &files[cover(r)].path))
+                .collect()
+        } else {
+            Vec::new()
+        };
         self.stacks =
             crate::stacks::Stacks::build(self.files.len(), ranges, self.stacking, cover, expanded)
                 .with_developments(same_photo, dev_cover, dev_unfolded_in);
+        if let Some((key, raw)) = to_remember {
+            self.remember_stacks(key, &raw, covers);
+        }
         // En mode pile (plein écran), on parcourt aussi les images cachées d'une pile ; en
         // comparaison aussi (07/11/2026 : une pile recalculée pendant la comparaison, à
         // l'arrivée d'une vignette, ramenait l'image active à la couverture).
@@ -12145,6 +12275,26 @@ impl TriApp {
         if have.is_some() && have_level.unwrap_or(Level::Thumbnail) == want {
             return have;
         }
+        // Rendu pas encore su (sidecar en lecture en fond) : rien plutôt que le JPEG boîtier
+        // remplacé sous les yeux un instant plus tard (retour du 11/11/2026), le temps de
+        // `[gui.grid] render_wait_ms` après l'ouverture.
+        let settled = self.grid_levels.contains_key(&path);
+        // Ses réglages de visualisation (#137) aussi : chargée sans eux, la vignette était
+        // redécodée d'un coup à leur arrivée (trace du 11/11/2026 : 469 ms d'interface
+        // figée en ouvrant un dossier réglé, et les vignettes changeaient sous les yeux).
+        let known = settled
+            && self.adjust_known.contains(&path)
+            && match want {
+                Level::Developed(engine) => engine
+                    .sidecar(&path)
+                    .is_none_or(|s| tri::develop::render_stamp_known(&s)),
+                _ => true,
+            };
+        let wait = Duration::from_millis(self.gui.grid.render_wait_ms);
+        if !known && self.opened_at.is_some_and(|t| t.elapsed() < wait) {
+            ctx.request_repaint_after(crate::app::poll_interval(ctx));
+            return have;
+        }
         // Le rendu voulu, ou en attendant celui de LibRaw (un développement pas encore
         // rendu), sinon la vignette.
         let mut candidates = vec![want];
@@ -12249,8 +12399,13 @@ impl TriApp {
         );
         let name = format!("{}#{level:?}", file.path.to_string_lossy());
         let texture = ctx.load_texture(name, image, TextureOptions::LINEAR);
-        self.textures.insert(file.path.clone(), texture.clone());
-        self.texture_levels.insert(file.path.clone(), level);
+        let path = file.path.clone();
+        // Chargée avec ses réglages du moment : rien à redessiner pour eux.
+        self.adjust_stale.remove(&path);
+        let layers = self.adjust_now(&path);
+        self.texture_adjust.insert(path.clone(), layers);
+        self.textures.insert(path.clone(), texture.clone());
+        self.texture_levels.insert(path, level);
         Some(texture)
     }
 
@@ -15145,6 +15300,13 @@ impl TriApp {
         // yeux (#416).
         if self.stacks_pending() {
             self.stacks_wait_box(ui);
+            ctx.request_repaint_after(crate::app::poll_interval(&ctx));
+            return;
+        }
+        // Notes du dossier qui vient de s'ouvrir pas encore lues : rien plutôt qu'une
+        // grille dans l'ordre des noms, sans marques, réordonnée un instant après (retour
+        // du 11/11/2026 : trié par couleur, la première image ne l'était pas).
+        if self.notes_pending() {
             ctx.request_repaint_after(crate::app::poll_interval(&ctx));
             return;
         }
@@ -18302,12 +18464,14 @@ impl eframe::App for TriApp {
         self.history_dialog(&ctx);
         self.export_report_dialog(&ctx);
         self.log_errors();
+        steps.mark("boîtes");
         self.adjust_commit(&ctx);
         self.adjust_folder_poll();
         self.adjust_refresh_thumbnails(&ctx);
         if let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) {
             self.adjust_layers(&path);
         }
+        steps.mark("réglages");
         self.log_dialog(&ctx);
         self.report_dialog(&ctx);
         self.group_window(&ctx);
@@ -18340,7 +18504,7 @@ impl eframe::App for TriApp {
         self.track_window(&ctx);
         self.save_display();
         self.handle_screenshot(&ctx);
-        steps.mark("boîtes");
+        steps.mark("fin");
         steps.finish(self.gui.trace_slow_ms);
     }
 }
@@ -20204,6 +20368,10 @@ struct StacksMemory {
     key: String,
     /// Longueurs des groupes, dans l'ordre de la grille.
     lengths: Vec<usize>,
+    /// Couvertures des piles (chemins relatifs au dossier), montrées tant que les notes et
+    /// les scores de netteté qui les choisissent sont en lecture.
+    #[serde(default)]
+    covers: Vec<String>,
 }
 
 impl StacksMemory {
@@ -25436,6 +25604,21 @@ mod tests {
         assert_eq!(h.state().stacks.count(), 1, "une rafale");
         let memory = h.state().stacks_memory.clone().expect("retenues");
         assert_eq!(memory.lengths, [3]);
+        assert_eq!(memory.covers.len(), 1, "sa couverture aussi");
+        // Une couverture retenue qui n'est pas la première image (comme une photo notée
+        // ou plus nette) : c'est elle qu'on doit voir tant que tout n'est pas relu.
+        let cover = files[1].path.clone();
+        h.state_mut().stacks_memory.as_mut().unwrap().covers =
+            vec![crate::state::relative(&photos, &cover).unwrap()];
+        let memory = h.state().stacks_memory.clone().unwrap();
+        let bytes = serde_json::to_vec(&memory).unwrap();
+        h.state()
+            .engine
+            .as_ref()
+            .unwrap()
+            .cache
+            .put_folder_bytes(&photos, Level::Similarity, STACKS, &bytes)
+            .unwrap();
         // Rouvert : plus d'empreintes, piles retenues appliquées d'emblée.
         h.state_mut().stacking = true;
         h.state_mut().open_folder(&photos);
@@ -25444,6 +25627,9 @@ mod tests {
         h.state_mut().stacks_dirty = true;
         h.run_steps(2);
         assert_eq!(h.state().stacks.count(), 1, "repliée tout de suite");
+        // Avec sa couverture retenue, pas la première image en attendant les notes.
+        let shown = h.state().stacks.shown.clone();
+        assert_eq!(h.state().files[shown[0]].path, cover);
         assert!(!h.state().stacks_pending(), "rien à attendre");
         // Un curseur changé : plus la même empreinte, la grille attend ses piles.
         h.state_mut().group_strictness = 0.5;
@@ -25531,6 +25717,172 @@ mod tests {
             Some(vec!["darktable".into(), "rapidraw".into()])
         );
         assert_eq!(written.order.unwrap().key, tri::sort::SortKey::Modified);
+    }
+
+    #[test]
+    fn a_development_thumbnail_waits_for_its_render_instead_of_swapping() {
+        // Retour du 11/11/2026 : à l'ouverture, une vignette de développement montrait le
+        // JPEG boîtier le temps de relire son sidecar, puis changeait d'image. Rendu pas
+        // encore su : vide, au plus `[gui.grid] render_wait_ms`.
+        let (mut h, dir) = harness();
+        let photos = dir.path().join("photos");
+        std::fs::write(
+            photos.join("img0.jpg.xmp"),
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
+        )
+        .unwrap();
+        h.state_mut().developers = fake_darktable();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 4);
+        let index = h
+            .state()
+            .files
+            .iter()
+            .position(|f| tri::media::is_development(&f.path))
+            .expect("le développement");
+        run_until(&mut h, move |app| app.ready(index, Level::Thumbnail));
+        let ctx = h.ctx.clone();
+        let far = Instant::now() + Duration::from_secs(5);
+        let path = h.state().files[index].path.clone();
+        // Sidecar pas encore relu (l'image, elle, connue), dossier qui vient de s'ouvrir :
+        // rien. La même chose sans attente montre la vignette (ci-dessous).
+        let sidecar = photos.join("img0.jpg.xmp");
+        for _ in 0..200 {
+            let _deferred = DeferStamps::start();
+            if h.state_mut().thumbnail_texture(&ctx, index, far).is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        tri::cache::forget_stamps([sidecar.as_path()]);
+        h.state_mut().textures.remove(&path);
+        h.state_mut().opened_at = Some(Instant::now());
+        h.state_mut().gui.grid.render_wait_ms = 60_000;
+        let shown = {
+            let _deferred = DeferStamps::start();
+            h.state_mut().thumbnail_texture(&ctx, index, far)
+        };
+        assert!(shown.is_none(), "pas le JPEG boîtier en attendant");
+        // Au-delà de l'attente : la vignette en attendant, comme avant (une fois ses
+        // relevés arrivés en fond).
+        h.state_mut().gui.grid.render_wait_ms = 0;
+        let mut shown = None;
+        for _ in 0..200 {
+            let _deferred = DeferStamps::start();
+            shown = h.state_mut().thumbnail_texture(&ctx, index, far);
+            if shown.is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(shown.is_some(), "la vignette, passé le délai");
+    }
+
+    #[test]
+    fn a_thumbnail_waits_for_its_adjustments_instead_of_being_redone() {
+        // Trace du 11/11/2026 : dans un dossier réglé (#137), les vignettes s'affichaient
+        // sans leurs réglages, puis étaient toutes redécodées à leur arrivée (469 ms
+        // d'interface figée). Réglages pas encore lus : la vignette attend.
+        let (mut h, _dir) = harness();
+        run_until(&mut h, |app| {
+            app.files.len() == 3 && app.ready(0, Level::Thumbnail)
+        });
+        let path = h.state().files[0].path.clone();
+        let mut warm = tri::adjust::Layers::default();
+        warm.correction.exposure = 1.0;
+        h.state_mut()
+            .save_adjustments(vec![(path.clone(), Some(warm))]);
+        h.run_steps(2);
+        let ctx = h.ctx.clone();
+        let far = Instant::now() + Duration::from_secs(5);
+        // Comme à l'ouverture d'un dossier : réglages oubliés, vignette à charger.
+        h.state_mut().adjust_forget();
+        h.state_mut().textures.remove(&path);
+        h.state_mut().opened_at = Some(Instant::now());
+        h.state_mut().gui.grid.render_wait_ms = 60_000;
+        let shown = {
+            let _deferred = DeferStamps::start();
+            h.state_mut().thumbnail_texture(&ctx, 0, far)
+        };
+        assert!(shown.is_none(), "pas sans ses réglages");
+        // Lus en fond : chargée une fois, avec eux, sans rien à refaire.
+        let mut shown = None;
+        for _ in 0..400 {
+            let _deferred = DeferStamps::start();
+            shown = h.state_mut().thumbnail_texture(&ctx, 0, far);
+            if shown.is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(shown.is_some(), "chargée une fois ses réglages lus");
+        assert!(h.state().adjust_known.contains(&path));
+        assert!(h.state().adjust_stale.is_empty(), "rien à redécoder");
+        // Retour dans le dossier (trace du 11/11/2026, 523 ms) : la vignette déjà faite
+        // reste, ses réglages relus identiques ne la font pas refaire.
+        h.state_mut().adjust_forget();
+        for _ in 0..400 {
+            let _deferred = DeferStamps::start();
+            h.state_mut().adjust_layers(&path);
+            if h.state().adjust_known.contains(&path) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(h.state().adjust_known.contains(&path), "relus");
+        assert!(h.state().adjust_stale.is_empty(), "pas refaite pour rien");
+        // Changés ailleurs : refaite.
+        let mut cold = warm;
+        cold.correction.exposure = -1.0;
+        h.state_mut()
+            .save_adjustments(vec![(path.clone(), Some(cold))]);
+        assert!(h.state().adjust_stale.contains(&path), "refaite");
+    }
+
+    #[test]
+    fn the_grid_waits_for_the_notes_of_a_folder_just_opened() {
+        // Retour du 11/11/2026 : trié par couleur, la première image d'un dossier montrait
+        // l'ordre des noms, sans marques, puis se réordonnait.
+        let (mut h, _dir) = harness();
+        h.run_steps(2);
+        h.state_mut().opened_at = Some(Instant::now());
+        h.state_mut().gui.grid.render_wait_ms = 60_000;
+        // Comme juste après l'ouverture : notes en lecture en fond.
+        let dir = h.state().folder.dir.clone();
+        let scanned = Folder::scan(&dir, 1, tri::xmp::Convention::Darktable).unwrap();
+        h.state_mut().loading = Some(tri::folder::Loading::start(&scanned, 1, false));
+        assert!(
+            h.state().notes_pending(),
+            "notes en lecture : la grille attend"
+        );
+        h.state_mut().gui.grid.render_wait_ms = 0;
+        assert!(
+            !h.state().notes_pending(),
+            "au-delà de l'attente : affichée"
+        );
+        h.state_mut().gui.grid.render_wait_ms = 60_000;
+        run_until(&mut h, |app| app.loading.is_none());
+        assert!(!h.state().notes_pending(), "notes lues");
+    }
+
+    #[test]
+    fn a_folder_arrives_with_its_notes_read() {
+        // Retour du 11/11/2026 : une image vide entre deux dossiers, le temps des notes du
+        // nouveau. Lues dans le délai d'attente de l'ouverture, avec la liste : le dossier
+        // arrive complet, l'ancien reste affiché jusque-là.
+        let (mut h, dir) = harness();
+        let other = dir.path().join("autre");
+        std::fs::create_dir(&other).unwrap();
+        image::RgbImage::new(8, 8)
+            .save(other.join("x.jpg"))
+            .unwrap();
+        h.run_steps(2);
+        h.state_mut().open_wait_override = Some(Duration::from_secs(5));
+        h.state_mut().open_folder(&other);
+        assert_eq!(h.state().folder.dir, other, "installé tout de suite");
+        assert!(h.state().loading.is_none(), "notes déjà lues");
+        assert!(!h.state().folder.notes.is_pending());
+        assert!(!h.state().notes_pending(), "la grille n'attend rien");
     }
 
     #[test]
@@ -29526,10 +29878,13 @@ mod tests {
                 h.run_steps(1);
             }
         };
-        // Depuis la grille : le bouton ouvre le plein écran. Cliqué par son libellé : un
-        // vrai clic sur le bouton du panneau n'était parfois pas vu (CI macOS du
-        // 10/11/2026) ; les vrais clics servent à la pipette sur l'image, plus bas.
-        h.get_by_label("Pipette").click();
+        // Depuis la grille : le bouton ouvre le plein écran. Son clic simulé n'était
+        // parfois pas vu, même par son libellé (CI macOS du 10 et du 11/11/2026) : le
+        // bouton est là, son effet est fait comme lui (`pending.eyedropper`) ; les vrais
+        // clics servent à la pipette sur l'image, plus bas.
+        assert!(h.query_by_label("Pipette").is_some());
+        h.state_mut().adjust_eyedropper = true;
+        h.state_mut().open_view();
         h.run_steps(3);
         assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().adjust_eyedropper, "armed");
@@ -29543,7 +29898,8 @@ mod tests {
         h.state_mut()
             .save_adjustments(vec![(path.clone(), Some(cold))]);
         h.run_steps(2);
-        h.get_by_label("Pipette").click();
+        assert!(h.query_by_label("Pipette").is_some());
+        h.state_mut().adjust_eyedropper = true;
         h.run_steps(2);
         assert!(h.state().adjust_eyedropper, "armed again");
         let (from, to) = (egui::pos2(300.0, 650.0), egui::pos2(420.0, 760.0));

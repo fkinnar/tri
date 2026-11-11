@@ -768,6 +768,10 @@ stacks_wait_ms = 2000
 # During that wait, from this number of images: a "Grouping stacks…" box in the centre of
 # the grid.
 stacks_overlay_from = 200
+# Opening a folder: the grid waits for its ratings, and a thumbnail whose content is not
+# known yet (sidecar of a development, viewing adjustments being read) stays empty, at most
+# this long (ms), rather than changing image a moment later.
+render_wait_ms = 2000
 # Search by file name (<core.search> in the grid): width of the field (points).
 search_width = 200.0
 # Minimum width of this field when the bar lacks room (narrow window: the sort and the

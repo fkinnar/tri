@@ -127,7 +127,7 @@ chaque image ([store.md](store.md)).
 
 Un dossier ouvert en piles s'affichait déplié, puis se repliait sous les yeux pendant que
 les empreintes arrivaient du cache. Désormais, après un regroupement complet (toutes les
-empreintes là), l'interface garde les longueurs des groupes dans le cache du dossier
+empreintes là), l'interface garde les longueurs des groupes et leurs couvertures (montrées tant que notes et scores de netteté sont en lecture) dans le cache du dossier
 (`Cache::put_folder_bytes`, fichier `stacks.bin` à côté des entrées de similarité : vidé
 avec le cache, compté dans sa place), avec `stacks_key` : une empreinte des images dans
 l'ordre de la grille et de ce qui décide du regroupement en dehors des empreintes
@@ -135,4 +135,7 @@ l'ordre de la grille et de ce qui décide du regroupement en dehors des empreint
 première image ; sinon la grille attend ses piles au plus `[gui.grid] stacks_wait_ms` (un
 dossier jamais analysé peut demander des minutes : au-delà, elle s'affiche dépliée et se
 replie comme avant), avec une boîte « Regroupement des piles… » à partir de
-`[gui.grid] stacks_overlay_from` images.
+`[gui.grid] stacks_overlay_from` images. Même idée pour les vignettes des
+développements (et les couvertures) : tant que le rendu développé n'est pas encore su
+(sidecar en lecture en fond), la vignette reste vide au plus `[gui.grid] render_wait_ms`
+plutôt que de montrer le JPEG boîtier puis de changer.

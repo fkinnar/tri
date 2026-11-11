@@ -122,11 +122,14 @@ image's folder ([store.md](store.md)).
 
 A folder opened in stacks used to show unfolded, then fold on screen while the
 signatures arrived from the cache. Now, after a complete grouping (every signature
-there), the interface keeps the groups' lengths in the folder's cache
+there), the interface keeps the groups' lengths and their covers (shown while ratings and sharpness scores are still being read) in the folder's cache
 (`Cache::put_folder_bytes`, file `stacks.bin` next to the similarity entries: cleared
 with the cache, counted in its size), with `stacks_key`: a fingerprint of the images in
 grid order and of what decides the grouping besides the signatures (sliders, settings).
 Reopened with the same fingerprint, the stacks apply from the first frame; otherwise the
 grid waits for its stacks at most `[gui.grid] stacks_wait_ms` (a folder never analysed
 can take minutes: beyond, it shows unfolded and folds as before), with a "Grouping
-stacks…" box from `[gui.grid] stacks_overlay_from` images.
+stacks…" box from `[gui.grid] stacks_overlay_from` images. Same idea for the
+thumbnails of developments (and covers): while the developed render is not known yet
+(sidecar being read in the background), the thumbnail stays empty at most
+`[gui.grid] render_wait_ms` rather than showing the camera JPEG and then swapping.
