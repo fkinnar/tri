@@ -12154,7 +12154,11 @@ impl TriApp {
         // remplacé sous les yeux un instant plus tard (retour du 11/11/2026), le temps de
         // `[gui.grid] render_wait_ms` après l'ouverture.
         let settled = self.grid_levels.contains_key(&path);
+        // Ses réglages de visualisation (#137) aussi : chargée sans eux, la vignette était
+        // redécodée d'un coup à leur arrivée (trace du 11/11/2026 : 469 ms d'interface
+        // figée en ouvrant un dossier réglé, et les vignettes changeaient sous les yeux).
         let known = settled
+            && self.adjust_known.contains(&path)
             && match want {
                 Level::Developed(engine) => engine
                     .sidecar(&path)
@@ -12270,8 +12274,11 @@ impl TriApp {
         );
         let name = format!("{}#{level:?}", file.path.to_string_lossy());
         let texture = ctx.load_texture(name, image, TextureOptions::LINEAR);
-        self.textures.insert(file.path.clone(), texture.clone());
-        self.texture_levels.insert(file.path.clone(), level);
+        let path = file.path.clone();
+        // Chargée avec ses réglages du moment : rien à redessiner pour eux.
+        self.adjust_stale.remove(&path);
+        self.textures.insert(path.clone(), texture.clone());
+        self.texture_levels.insert(path, level);
         Some(texture)
     }
 
@@ -18323,12 +18330,14 @@ impl eframe::App for TriApp {
         self.history_dialog(&ctx);
         self.export_report_dialog(&ctx);
         self.log_errors();
+        steps.mark("boîtes");
         self.adjust_commit(&ctx);
         self.adjust_folder_poll();
         self.adjust_refresh_thumbnails(&ctx);
         if let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) {
             self.adjust_layers(&path);
         }
+        steps.mark("réglages");
         self.log_dialog(&ctx);
         self.report_dialog(&ctx);
         self.group_window(&ctx);
@@ -18361,7 +18370,7 @@ impl eframe::App for TriApp {
         self.track_window(&ctx);
         self.save_display();
         self.handle_screenshot(&ctx);
-        steps.mark("boîtes");
+        steps.mark("fin");
         steps.finish(self.gui.trace_slow_ms);
     }
 }
@@ -25611,6 +25620,48 @@ mod tests {
             std::thread::sleep(Duration::from_millis(5));
         }
         assert!(shown.is_some(), "la vignette, passé le délai");
+    }
+
+    #[test]
+    fn a_thumbnail_waits_for_its_adjustments_instead_of_being_redone() {
+        // Trace du 11/11/2026 : dans un dossier réglé (#137), les vignettes s'affichaient
+        // sans leurs réglages, puis étaient toutes redécodées à leur arrivée (469 ms
+        // d'interface figée). Réglages pas encore lus : la vignette attend.
+        let (mut h, _dir) = harness();
+        run_until(&mut h, |app| {
+            app.files.len() == 3 && app.ready(0, Level::Thumbnail)
+        });
+        let path = h.state().files[0].path.clone();
+        let mut warm = tri::adjust::Layers::default();
+        warm.correction.exposure = 1.0;
+        h.state_mut()
+            .save_adjustments(vec![(path.clone(), Some(warm))]);
+        h.run_steps(2);
+        let ctx = h.ctx.clone();
+        let far = Instant::now() + Duration::from_secs(5);
+        // Comme à l'ouverture d'un dossier : réglages oubliés, vignette à charger.
+        h.state_mut().adjust_forget();
+        h.state_mut().textures.remove(&path);
+        h.state_mut().opened_at = Some(Instant::now());
+        h.state_mut().gui.grid.render_wait_ms = 60_000;
+        let shown = {
+            let _deferred = DeferStamps::start();
+            h.state_mut().thumbnail_texture(&ctx, 0, far)
+        };
+        assert!(shown.is_none(), "pas sans ses réglages");
+        // Lus en fond : chargée une fois, avec eux, sans rien à refaire.
+        let mut shown = None;
+        for _ in 0..400 {
+            let _deferred = DeferStamps::start();
+            shown = h.state_mut().thumbnail_texture(&ctx, 0, far);
+            if shown.is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(shown.is_some(), "chargée une fois ses réglages lus");
+        assert!(h.state().adjust_known.contains(&path));
+        assert!(h.state().adjust_stale.is_empty(), "rien à redécoder");
     }
 
     #[test]

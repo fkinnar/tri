@@ -7,7 +7,9 @@
 - **Development thumbnails no longer swap on opening** (#418): a thumbnail whose
   developed render is not known yet (its sidecar being read) stays empty a moment
   (`[gui.grid] render_wait_ms`) instead of showing the camera JPEG and then changing image;
-  stack covers too.
+  stack covers too. Same for a thumbnail whose viewing adjustments are still being read: it
+  was shown without them, then every adjusted thumbnail was decoded again at once (half a
+  second of frozen interface when opening an adjusted folder).
 - **Stacked folders open already folded** (#417): the stacks of a folder are remembered in
   its cache after a complete grouping; reopened with nothing changed, it shows folded at
   once instead of folding on screen. Otherwise the grid waits for its stacks a moment
