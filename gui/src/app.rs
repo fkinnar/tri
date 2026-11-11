@@ -6271,7 +6271,12 @@ impl TriApp {
     /// Toutes les empreintes de similarité de la liste sont là (lues ou calculées).
     fn signatures_complete(&self) -> bool {
         let p = self.progress[5];
-        p.total > 0 && p.done >= p.total
+        // Annoncées toutes par le moteur, ou déjà toutes là (un développement n'en a pas).
+        (p.total > 0 && p.done >= p.total)
+            || (!self.files.is_empty()
+                && self.files.iter().all(|f| {
+                    tri::media::is_development(&f.path) || self.signatures.contains_key(&f.path)
+                }))
     }
 
     /// Empreinte de ce qui détermine les piles, en dehors des empreintes des images : la
@@ -28104,6 +28109,9 @@ mod tests {
         let (mut h, _dir) = harness_images(images);
         h.state_mut().stacking = true;
         h.state_mut().settings.similarity.background = true;
+        // Toutes les empreintes là : les piles sont prêtes, la grille n'attend pas (CI du
+        // 11/11/2026 : elle restait vide les 2 s de `stacks_wait_ms` sur une machine lente).
+        h.state_mut().gui.grid.stacks_wait_ms = 60_000;
         // Empreintes calculées directement (le moteur du banc de test ne les fait pas).
         let files = h.state().files.clone();
         let preview = tri::preview::Settings::default();
