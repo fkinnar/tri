@@ -12434,8 +12434,13 @@ impl TriApp {
         let bitmap = tri::jpeg::decode(&engine.cache.get_bytes(&key)?, side)
             .ok()?
             .fit(side);
-        if let Some(small) = &small {
-            let _ = engine.cache.put(small, &bitmap);
+        // Écrite en fond : une écriture du cache attend le disque (`sync_all`), lent sous
+        // Windows ; pas pendant l'image (CI Windows du 11/11/2026).
+        if let Some(small) = small {
+            let (cache, copy) = (engine.cache.clone(), bitmap.clone());
+            std::thread::spawn(move || {
+                let _ = cache.put(&small, &copy);
+            });
         }
         Some(bitmap)
     }
@@ -25915,6 +25920,13 @@ mod tests {
         let small = preview::grid_key(&file, Level::Standard, &engine.preview, side).unwrap();
         assert!(!engine.cache.contains(&small), "pas encore");
         let first = state.grid_bitmap(0, Level::Standard).expect("réduite");
+        // Écrite en fond.
+        for _ in 0..400 {
+            if engine.cache.contains(&small) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
         assert!(engine.cache.contains(&small), "gardée");
         assert!(first.width.max(first.height) <= side);
         let again = state.grid_bitmap(0, Level::Standard).expect("relue");
