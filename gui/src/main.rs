@@ -39,6 +39,7 @@ mod compare;
 mod crash;
 mod crop;
 mod develop_batch;
+mod display;
 mod export;
 mod files;
 mod fine_slider;

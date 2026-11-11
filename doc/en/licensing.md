@@ -51,8 +51,9 @@ Apache-2.0, `turbojpeg` and `turbojpeg-sys` under Unlicense OR MIT, `cmake` — 
 file — under MIT OR Apache-2.0, like their dependencies `toml_parser`,
 `toml_datetime`, `serde_spanned`, except `winnow`, under MIT; `objc2-foundation` — macOS, location of a file moved to the trash for
 undo, already present through `trash` — under MIT; `objc2` and `objc2-app-kit` — macOS,
-sending by AirDrop (share sheet, `tri::send`), same project (madsmtm/objc2, active),
-already present through winit — under Zlib OR Apache-2.0 OR MIT; `windows-sys` — Windows,
+sending by AirDrop (share sheet, `tri::send`), and `objc2-quartz-core` and
+`objc2-core-graphics` — macOS, colour space of the window (`display`) —, same project (madsmtm/objc2, active),
+already present through winit and wgpu — under Zlib OR Apache-2.0 OR MIT; `windows-sys` — Windows,
 ejecting a volume (`places::eject`), Microsoft (microsoft/windows-rs, very active),
 already present through winit and others — under MIT OR Apache-2.0; `toml_edit` — settings
 window: edit the file without losing comments or layout, same

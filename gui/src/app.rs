@@ -18105,7 +18105,12 @@ impl TriApp {
 }
 
 impl eframe::App for TriApp {
-    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
+        // Couleurs : la fenêtre déclarée en sRGB au système (`display`) ; wgpu l'oublie à
+        // chaque reconfiguration, l'image d'après la corrige.
+        if crate::display::declare_srgb(frame) {
+            ui.ctx().request_repaint();
+        }
         // Une erreur de la carte graphique (sans plantage, voir `crash::gpu_error`).
         if let Some(e) = crate::crash::take_gpu_error() {
             self.gpu_failed(&e);
