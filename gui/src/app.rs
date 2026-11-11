@@ -6253,6 +6253,15 @@ impl TriApp {
             })
     }
 
+    /// La grille attend les notes du dossier qui vient de s'ouvrir (au plus
+    /// `[gui.grid] render_wait_ms`).
+    fn notes_pending(&self) -> bool {
+        self.loading.is_some()
+            && self.opened_at.is_some_and(|since| {
+                since.elapsed() < Duration::from_millis(self.gui.grid.render_wait_ms)
+            })
+    }
+
     /// Pendant l'attente des piles d'un grand dossier : « Regroupement des piles… ».
     fn stacks_wait_box(&self, ui: &mut Ui) {
         if self.files.len() < self.gui.grid.stacks_overlay_from {
@@ -15223,6 +15232,13 @@ impl TriApp {
         // yeux (#416).
         if self.stacks_pending() {
             self.stacks_wait_box(ui);
+            ctx.request_repaint_after(crate::app::poll_interval(&ctx));
+            return;
+        }
+        // Notes du dossier qui vient de s'ouvrir pas encore lues : rien plutôt qu'une
+        // grille dans l'ordre des noms, sans marques, réordonnée un instant après (retour
+        // du 11/11/2026 : trié par couleur, la première image ne l'était pas).
+        if self.notes_pending() {
             ctx.request_repaint_after(crate::app::poll_interval(&ctx));
             return;
         }
@@ -25753,6 +25769,32 @@ mod tests {
         h.state_mut()
             .save_adjustments(vec![(path.clone(), Some(cold))]);
         assert!(h.state().adjust_stale.contains(&path), "refaite");
+    }
+
+    #[test]
+    fn the_grid_waits_for_the_notes_of_a_folder_just_opened() {
+        // Retour du 11/11/2026 : trié par couleur, la première image d'un dossier montrait
+        // l'ordre des noms, sans marques, puis se réordonnait.
+        let (mut h, _dir) = harness();
+        h.run_steps(2);
+        h.state_mut().opened_at = Some(Instant::now());
+        h.state_mut().gui.grid.render_wait_ms = 60_000;
+        // Comme juste après l'ouverture : notes en lecture en fond.
+        let dir = h.state().folder.dir.clone();
+        let scanned = Folder::scan(&dir, 1, tri::xmp::Convention::Darktable).unwrap();
+        h.state_mut().loading = Some(tri::folder::Loading::start(&scanned, 1, false));
+        assert!(
+            h.state().notes_pending(),
+            "notes en lecture : la grille attend"
+        );
+        h.state_mut().gui.grid.render_wait_ms = 0;
+        assert!(
+            !h.state().notes_pending(),
+            "au-delà de l'attente : affichée"
+        );
+        h.state_mut().gui.grid.render_wait_ms = 60_000;
+        run_until(&mut h, |app| app.loading.is_none());
+        assert!(!h.state().notes_pending(), "notes lues");
     }
 
     #[test]

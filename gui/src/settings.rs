@@ -662,9 +662,10 @@ pub struct GridSettings {
     /// avant de s'afficher dépliée (#416 : sinon elle se repliait sous les yeux ; un
     /// dossier jamais analysé peut demander des minutes).
     pub stacks_wait_ms: u64,
-    /// Ouverture d'un dossier : une vignette dont on ne sait pas encore quel rendu montrer
-    /// (sidecar du développement en lecture) reste vide au plus ce temps (ms), plutôt que
-    /// de montrer le JPEG boîtier puis de changer sous les yeux (11/11/2026).
+    /// Ouverture d'un dossier : la grille attend ses notes, et une vignette dont on ne sait
+    /// pas encore quoi montrer (sidecar du développement, réglages de visualisation en
+    /// lecture) reste vide, au plus ce temps (ms), plutôt que de changer sous les yeux un
+    /// instant plus tard (11/11/2026).
     pub render_wait_ms: u64,
     /// Pendant cette attente, à partir de ce nombre d'images : une boîte « Regroupement
     /// des piles… » au centre de la grille (sinon la grille reste vide un instant).

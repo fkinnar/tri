@@ -13,6 +13,8 @@
   longer redone when its adjustments are read back unchanged. Stacks opened folded (#417)
   also keep their covers: shown first with their first image, they switched to the real
   cover once ratings and sharpness scores were read; the covers are now remembered too.
+  And the grid waits for the folder's ratings: sorted by colour, its first frame showed the
+  name order without marks, then reordered.
 - **Stacked folders open already folded** (#417): the stacks of a folder are remembered in
   its cache after a complete grouping; reopened with nothing changed, it shows folded at
   once instead of folding on screen. Otherwise the grid waits for its stacks a moment

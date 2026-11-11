@@ -14,6 +14,8 @@
   relus identiques. Les piles ouvertes repliées (#417) gardent aussi leurs couvertures :
   montrées d'abord avec leur première image, elles passaient à la vraie couverture une
   fois notes et scores de netteté lus ; les couvertures sont désormais retenues aussi.
+  Et la grille attend les notes du dossier : triée par couleur, sa première image montrait
+  l'ordre des noms sans marques, puis se réordonnait.
 - **Les dossiers en piles s'ouvrent déjà repliés** (#417) : les piles d'un dossier sont
   retenues dans son cache après un regroupement complet ; rouvert sans rien de changé, il
   s'affiche replié tout de suite au lieu de se replier sous les yeux. Sinon la grille
