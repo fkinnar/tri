@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Les couleurs suivent le profil de l'écran sur macOS** (#421) : tri déclare
+  maintenant sa fenêtre en sRGB au système, qui convertit vers le profil de l'écran
+  (calibration comprise). Avant, les couleurs partaient sans conversion : largement trop
+  saturées sur un écran wide gamut.
 - **Grille plus rapide au lancement** (#419) : les vignettes en rendu RAW ou développé
   gardent une petite copie dans le cache la première fois qu'elles sont réduites ; les
   lancements suivants la lisent au lieu de tout l'aperçu, et la grille ne se remplit plus

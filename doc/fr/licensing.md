@@ -51,8 +51,9 @@ Apache-2.0, `turbojpeg` et `turbojpeg-sys` sous Unlicense OR MIT, `cmake` — ou
 de configuration — sous MIT OR Apache-2.0, comme leurs dépendances `toml_parser`,
 `toml_datetime`, `serde_spanned`, sauf `winnow`, sous MIT ; `objc2-foundation` — macOS, emplacement d'un fichier mis à la corbeille pour
 l'annulation, déjà présent par `trash` — sous MIT ; `objc2` et `objc2-app-kit` — macOS,
-envoi par AirDrop (feuille de partage, `tri::send`), même projet (madsmtm/objc2, actif),
-déjà présents par winit — sous Zlib OR Apache-2.0 OR MIT ; `windows-sys` — Windows,
+envoi par AirDrop (feuille de partage, `tri::send`), et `objc2-quartz-core` et
+`objc2-core-graphics` — macOS, espace couleur de la fenêtre (`display`) —, même projet (madsmtm/objc2, actif),
+déjà présents par winit et wgpu — sous Zlib OR Apache-2.0 OR MIT ; `windows-sys` — Windows,
 éjection d'un volume (`places::eject`), Microsoft (microsoft/windows-rs, très actif),
 déjà présent par winit et d'autres — sous MIT OR Apache-2.0 ; `toml_edit` — fenêtre de
 réglages : modifier le fichier sans perdre commentaires ni mise en page, mêmes

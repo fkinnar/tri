@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Colours follow the screen profile on macOS** (#421): tri now declares its window in
+  sRGB to the system, which converts to the screen profile (calibration included).
+  Before, colours went to the screen unconverted: far too saturated on a wide-gamut
+  screen.
 - **Faster first grid at launch** (#419): thumbnails in RAW or developed render keep a
   small copy in the cache the first time they are reduced; later launches read it instead
   of the whole preview, and the grid no longer fills in one by one.
