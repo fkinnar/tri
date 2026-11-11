@@ -133,7 +133,10 @@ fn fallback_dir(data: &Path, folder: &Path) -> PathBuf {
 }
 
 fn hash(folder: &Path) -> String {
-    let hash = blake3::hash(folder.to_string_lossy().as_bytes()).to_hex();
+    // Composant par composant : sous Windows, `…\disque/séance` et `…\disque\séance` sont
+    // le même dossier (un « / » venu d'un chemin tapé ou d'un `join("a/b")`).
+    let normal: PathBuf = folder.components().collect();
+    let hash = blake3::hash(normal.to_string_lossy().as_bytes()).to_hex();
     hash[..32].to_string()
 }
 
@@ -698,7 +701,7 @@ mod tests {
     /// Un dossier de photos et un dossier de données, à part.
     fn setup() -> (tempfile::TempDir, PathBuf, PathBuf) {
         let dir = tempfile::tempdir().unwrap();
-        let photos = dir.path().join("disque/séance");
+        let photos = dir.path().join("disque").join("séance");
         let data = dir.path().join("data");
         std::fs::create_dir_all(&photos).unwrap();
         (dir, photos, data)
@@ -766,7 +769,7 @@ mod tests {
     fn choices_are_kept_by_name_in_each_image_s_folder() {
         let (dir, photos, data) = setup();
         let data = Some(data.as_path());
-        let sub = dir.path().join("disque/séance/b");
+        let sub = dir.path().join("disque").join("séance").join("b");
         let (a1, a2, b1) = (
             photos.join("a1.RAF"),
             photos.join("a2.RAF"),
@@ -851,7 +854,7 @@ mod tests {
         let (dir, photos, data) = setup();
         let data = data.as_path();
         set_value(Some(data), &photos, "group-curve", Some(2.0)).unwrap();
-        let moved = dir.path().join("disque/renommée");
+        let moved = dir.path().join("disque").join("renommée");
         std::fs::rename(&photos, &moved).unwrap();
         relocate(data, &photos, &moved);
         assert_eq!(value(Some(data), &moved, "group-curve"), Some(2.0));
