@@ -117,3 +117,16 @@ did not separate the poses better. On the other hand, pose changes fell on **pau
 `chosen_covers` / `choose_cover`: the favourite of each stack, chosen by the user (one per
 stack), separate from the ratings; remembered by name in the `choices.json` of each
 image's folder ([store.md](store.md)).
+
+## Stacks remembered per folder (2026-11-11, issue #416)
+
+A folder opened in stacks used to show unfolded, then fold on screen while the
+signatures arrived from the cache. Now, after a complete grouping (every signature
+there), the interface keeps the groups' lengths in the folder's cache
+(`Cache::put_folder_bytes`, file `stacks.bin` next to the similarity entries: cleared
+with the cache, counted in its size), with `stacks_key`: a fingerprint of the images in
+grid order and of what decides the grouping besides the signatures (sliders, settings).
+Reopened with the same fingerprint, the stacks apply from the first frame; otherwise the
+grid waits for its stacks at most `[gui.grid] stacks_wait_ms` (a folder never analysed
+can take minutes: beyond, it shows unfolded and folds as before), with a "Grouping
+stacks…" box from `[gui.grid] stacks_overlay_from` images.

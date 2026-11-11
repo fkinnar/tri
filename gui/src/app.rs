@@ -812,6 +812,12 @@ pub struct TriApp {
     stacks_dirty: bool,
     /// Images des piles dépliées.
     expanded: HashSet<PathBuf>,
+    /// Piles du dossier retenues au dernier regroupement complet (#416) : empreinte de ce
+    /// qui les détermine, et longueurs des groupes dans l'ordre de la grille.
+    stacks_memory: Option<StacksMemory>,
+    /// Dossier ouvert en piles, pas encore prêtes : depuis quand on les attend (la grille
+    /// reste vide au plus `[gui.grid] stacks_wait_ms`).
+    stacks_wait: Option<Instant>,
     /// Regroupement en piles actif.
     stacking: bool,
     /// Sévérité du regroupement (-1 souple, grandes piles, à 1 strict ; 0 : le centre),
@@ -1567,6 +1573,8 @@ impl TriApp {
             stacks: crate::stacks::Stacks::default(),
             stacks_dirty: true,
             expanded: HashSet::new(),
+            stacks_memory: None,
+            stacks_wait: None,
             // Grille non groupée par défaut (retour du 19/10/2026) : `[gui.grid] stacks`.
             stacking: settings.similarity.background && gui.grid.stacks,
             group_strictness: 0.0,
@@ -2155,6 +2163,14 @@ impl TriApp {
                 }
                 self.apply_cache_location(&folder.dir);
                 self.restore_folder_view(&folder.dir);
+                // Piles retenues pour ce dossier, et la grille qui les attend (#416).
+                self.stacks_memory = self.engine.as_ref().and_then(|e| {
+                    let bytes = e
+                        .cache
+                        .folder_bytes(&folder.dir, Level::Similarity, STACKS)?;
+                    serde_json::from_slice(&bytes).ok()
+                });
+                self.stacks_wait = Some(Instant::now());
                 self.folder = folder;
                 self.refresh_any_developed();
                 self.apply_sidecar_policy();
@@ -6029,6 +6045,79 @@ impl TriApp {
     /// Recalcule les piles (regroupement du moteur sur les empreintes connues), et ce que
     /// la grille en montre ; l'image sélectionnée, si elle est cachée dans une pile
     /// repliée, laisse la place à la couverture.
+    /// Toutes les empreintes de similarité de la liste sont là (lues ou calculées).
+    fn signatures_complete(&self) -> bool {
+        let p = self.progress[5];
+        p.total > 0 && p.done >= p.total
+    }
+
+    /// Empreinte de ce qui détermine les piles, en dehors des empreintes des images : la
+    /// liste dans l'ordre de la grille, les curseurs et les réglages de similarité.
+    fn stacks_key(&self) -> String {
+        let params = format!(
+            "{:?}|{}|{}|{}|{}",
+            self.settings.similarity,
+            self.group_strictness,
+            self.group_pauses,
+            self.group_curve,
+            self.group_gap
+        );
+        tri::similarity::stacks_key(self.files.iter().map(|f| f.path.as_path()), &params)
+    }
+
+    /// Retient les piles d'un regroupement complet, si elles ont changé.
+    fn remember_stacks(&mut self, key: String, ranges: &[std::ops::Range<usize>]) {
+        let memory = StacksMemory {
+            key,
+            lengths: ranges.iter().map(|r| r.len()).collect(),
+        };
+        if self.stacks_memory.as_ref() == Some(&memory) || self.folder.is_none() {
+            return;
+        }
+        if let Some(engine) = &self.engine
+            && let Ok(bytes) = serde_json::to_vec(&memory)
+        {
+            let _ =
+                engine
+                    .cache
+                    .put_folder_bytes(&self.folder.dir, Level::Similarity, STACKS, &bytes);
+        }
+        self.stacks_memory = Some(memory);
+    }
+
+    /// La grille attend ses piles (dossier ouvert en piles, ni retenues ni calculées, pas
+    /// plus de `[gui.grid] stacks_wait_ms`).
+    fn stacks_pending(&self) -> bool {
+        self.stacking
+            && self.stack_only.is_none()
+            && !self.files.is_empty()
+            && self.stacks_wait.is_some_and(|since| {
+                since.elapsed() < Duration::from_millis(self.gui.grid.stacks_wait_ms)
+            })
+    }
+
+    /// Pendant l'attente des piles d'un grand dossier : « Regroupement des piles… ».
+    fn stacks_wait_box(&self, ui: &mut Ui) {
+        if self.files.len() < self.gui.grid.stacks_overlay_from {
+            return;
+        }
+        let p = self.progress[5];
+        egui::Area::new(egui::Id::unique("stacks_wait_box"))
+            .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
+            .order(egui::Order::Foreground)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.strong(t!("stacks-waiting"));
+                    });
+                    if p.total > 0 {
+                        ui.label(t!("stacks-waiting-count", done = p.done, total = p.total));
+                    }
+                });
+            });
+    }
+
     fn regroup(&mut self) {
         let s = &self.settings.similarity;
         let signatures: Vec<Option<&tri::similarity::Signature>> = self
@@ -6039,8 +6128,22 @@ impl TriApp {
         // Filtre « pile courante » (`f c`) : ses photos sont une seule pile. Regroupées à
         // part, avec un seuil recalculé sur elles seules, elles se coupaient (#163 : 11
         // photos en 1 + 10) ; le seuil du dossier reste celui de tout le dossier.
+        let complete = self.signatures_complete();
+        let key = self.stacks_key();
+        let remembered = self
+            .stacks_memory
+            .as_ref()
+            .filter(|m| m.key == key && m.lengths.iter().sum::<usize>() == self.files.len())
+            .map(|m| m.ranges());
         let ranges = if self.stack_only.is_some() {
             std::iter::once(0..self.files.len()).collect()
+        } else if !complete
+            && self.stacking
+            && let Some(ranges) = remembered
+        {
+            // Rien de changé depuis le dernier regroupement : ses piles, tout de suite.
+            self.stacks_wait = None;
+            ranges
         } else {
             let links = tri::similarity::distances(&signatures, s.shape_weight);
             // Centre calculé sur le contenu seul ; les pauses ne font que couper
@@ -6048,7 +6151,14 @@ impl TriApp {
             self.group_centre = tri::similarity::suggested_threshold(&links, s);
             let links = tri::similarity::with_pauses(&links, self.group_pause_weight());
             self.group_distances = tri::similarity::distances_by_rank(&links, self.group_gap);
-            tri::similarity::group(&links, self.group_threshold(), self.group_gap)
+            let ranges = tri::similarity::group(&links, self.group_threshold(), self.group_gap);
+            if complete {
+                self.stacks_wait = None;
+                if self.stacking {
+                    self.remember_stacks(key, &ranges);
+                }
+            }
+            ranges
         };
         let files = &self.files;
         let photo = |i: usize| tri::media::source(&files[i].path).into_owned();
@@ -14890,6 +15000,13 @@ impl TriApp {
         if self.stacks_dirty || self.stacks.shown.iter().any(|&i| i >= self.files.len()) {
             self.regroup();
         }
+        // Les piles pas encore prêtes : rien plutôt qu'une grille qui se replie sous les
+        // yeux (#416).
+        if self.stacks_pending() {
+            self.stacks_wait_box(ui);
+            ctx.request_repaint_after(crate::app::poll_interval(&ctx));
+            return;
+        }
         // Vue de la grille : couvertures des piles repliées, contenu des piles dépliées.
         let shown: Vec<usize> = if self.stacks.shown.is_empty() {
             (0..self.files.len()).collect()
@@ -19933,6 +20050,32 @@ enum VersionAction {
     Edit(usize),
     /// La supprimer.
     Delete(usize),
+}
+
+/// Nom du fichier de la mémoire des piles, dans le cache du dossier (#416).
+const STACKS: &str = "stacks";
+
+/// Piles d'un dossier au dernier regroupement complet (#416).
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+struct StacksMemory {
+    /// Empreinte de ce qui les détermine (`TriApp::stacks_key`).
+    key: String,
+    /// Longueurs des groupes, dans l'ordre de la grille.
+    lengths: Vec<usize>,
+}
+
+impl StacksMemory {
+    fn ranges(&self) -> Vec<std::ops::Range<usize>> {
+        let mut at = 0;
+        self.lengths
+            .iter()
+            .map(|&n| {
+                let r = at..at + n;
+                at += n;
+                r
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -25115,6 +25258,62 @@ mod tests {
         open(&mut h, &other);
         open(&mut h, &photos);
         assert_eq!(h.state().notes_rule, now);
+    }
+
+    #[test]
+    fn a_stacked_folder_opens_already_folded() {
+        // #416 (11/11/2026) : les piles d'un regroupement complet sont retenues dans le
+        // cache du dossier ; rouvert sans rien de changé, il s'affiche replié tout de
+        // suite, avant toute empreinte ; sinon la grille attend ses piles un moment.
+        let ramp = |tint: u8| {
+            image::RgbImage::from_fn(64, 48, |x, _| {
+                let v = (x * 255 / 63) as u8;
+                image::Rgb([v.saturating_sub(tint), v, v])
+            })
+        };
+        let images = vec![
+            ("a1.jpg", ramp(0)),
+            ("a2.jpg", ramp(3)),
+            ("a3.jpg", ramp(6)),
+        ];
+        let (mut h, dir) = harness_images(images);
+        let photos = dir.path().join("photos");
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 3);
+        h.state_mut().settings.similarity.background = true;
+        h.state_mut().stacking = true;
+        let files = h.state().files.clone();
+        let preview = tri::preview::Settings::default();
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        for f in &files {
+            let sig = tri::preview::compute_signature(f, &preview, &cancel).unwrap();
+            h.state_mut().signatures.insert(f.path.clone(), sig);
+        }
+        h.state_mut().progress[5] = Progress { done: 3, total: 3 };
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(3);
+        assert_eq!(h.state().stacks.count(), 1, "une rafale");
+        let memory = h.state().stacks_memory.clone().expect("retenues");
+        assert_eq!(memory.lengths, [3]);
+        // Rouvert : plus d'empreintes, piles retenues appliquées d'emblée.
+        h.state_mut().stacking = true;
+        h.state_mut().open_folder(&photos);
+        run_until(&mut h, |app| app.opening.is_none());
+        assert!(h.state().signatures.is_empty());
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.count(), 1, "repliée tout de suite");
+        assert!(!h.state().stacks_pending(), "rien à attendre");
+        // Un curseur changé : plus la même empreinte, la grille attend ses piles.
+        h.state_mut().group_strictness = 0.5;
+        h.state_mut().stacks_wait = Some(Instant::now());
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(1);
+        assert!(h.state().stacks_pending(), "piles attendues");
+        h.state_mut().gui.grid.stacks_wait_ms = 0;
+        assert!(
+            !h.state().stacks_pending(),
+            "au-delà de l'attente : affichée"
+        );
     }
 
     #[test]

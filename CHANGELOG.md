@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Stacked folders open already folded** (#417): the stacks of a folder are remembered in
+  its cache after a complete grouping; reopened with nothing changed, it shows folded at
+  once instead of folding on screen. Otherwise the grid waits for its stacks a moment
+  (`[gui.grid] stacks_wait_ms`), with a "Grouping stacks…" box on large folders
+  (`[gui.grid] stacks_overlay_from`).
 - **"Stack automatically" kept per folder** (#413): like the filters, the sort and the
   thumbnail render; a folder never set takes the configuration's value.
 - **Reset a folder** (#412): right click on a folder, Preferences, "Reset this folder…"

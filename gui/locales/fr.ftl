@@ -549,6 +549,8 @@ folder-opening-found = { $count ->
    *[other] { $count } images trouvées
 }
 folder-opening-why = Dossier lent (réseau, disque) : sa liste se lit en fond.
+stacks-waiting = Regroupement des piles…
+stacks-waiting-count = { $done } / { $total }
 folder-open-cancelled = Ouverture de « { $name } » annulée.
 login-title = Se connecter à « { $name } »
 login-why = Le serveur { $address } demande un compte.

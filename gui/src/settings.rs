@@ -658,6 +658,13 @@ pub struct GridSettings {
     /// empreintes se calculent en fond quand même (`[similarity] background`) : la
     /// bascule est instantanée.
     pub stacks: bool,
+    /// Ouverture d'un dossier en piles : la grille attend ses piles au plus ce temps (ms)
+    /// avant de s'afficher dépliée (#416 : sinon elle se repliait sous les yeux ; un
+    /// dossier jamais analysé peut demander des minutes).
+    pub stacks_wait_ms: u64,
+    /// Pendant cette attente, à partir de ce nombre d'images : une boîte « Regroupement
+    /// des piles… » au centre de la grille (sinon la grille reste vide un instant).
+    pub stacks_overlay_from: usize,
     /// Champ de recherche par nom de la barre des filtres (`/`, Ctrl+F) : largeur (points).
     pub search_width: f32,
     /// Largeur minimale de ce champ quand la barre manque de place (le tri et le nombre
@@ -701,6 +708,8 @@ impl Default for GridSettings {
             develop_toast_ms: 6000,
             export_toast_ms: 5000,
             stacks: false,
+            stacks_wait_ms: 2000,
+            stacks_overlay_from: 200,
             search_width: 200.0,
             search_min_width: 80.0,
             render: crate::grid_render::GridRender::Embedded,

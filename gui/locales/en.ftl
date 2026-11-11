@@ -549,6 +549,8 @@ folder-opening-found = { $count ->
    *[other] { $count } images found
 }
 folder-opening-why = Slow folder (network, disk): its list is read in the background.
+stacks-waiting = Grouping stacks…
+stacks-waiting-count = { $done } / { $total }
 folder-open-cancelled = Opening "{ $name }" cancelled.
 login-title = Connect to "{ $name }"
 login-why = The server { $address } asks for an account.
