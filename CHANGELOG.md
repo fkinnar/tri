@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Stack covers right from the opening** (#426): while ratings are still being read, a
+  stack shows its usual cover even when the list changed a little since last time
+  (sorting or filtering by ratings, a moved slider); it used to show its first image.
 - **Colour charts** (#425): `cargo run --release --example colour_charts -- <folder>`
   writes the same chart in every common colour space (sRGB, Adobe RGB, Display P3,
   ProPhoto, Rec.2020, linear ones), as JPEG, TIFF and PNG with their profile, and checks

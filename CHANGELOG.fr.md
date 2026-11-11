@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Couvertures des piles justes dès l'ouverture** (#426) : tant que les notes sont en
+  lecture, une pile montre sa couverture habituelle même si la liste a un peu changé
+  depuis la dernière fois (tri ou filtre par notes, curseur bougé) ; elle montrait sa
+  première image.
 - **Mires de couleur** (#425) : `cargo run --release --example colour_charts -- <dossier>`
   écrit la même mire dans tous les espaces courants (sRGB, Adobe RGB, Display P3,
   ProPhoto, Rec.2020, linéaires), en JPEG, TIFF et PNG avec leur profil, et vérifie que
