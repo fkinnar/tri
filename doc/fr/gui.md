@@ -725,8 +725,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`TriApp::cache_job`), message dans la barre d'état. Là où il est gardé, « Vider le
   cache de ce dossier… » (« de ce disque » ; groupe Préférences, 10/11/2026), une action
   (`core.folders.cache_clear`, sans raccourci par défaut, sur le dossier pointé au
-  clavier) : une boîte confirme, avec la taille mesurée en fond, puis l'espace libéré
-  s'affiche dans la barre d'état ; le cache reste gardé là. Le cache général se vide depuis la fenêtre de
+  clavier) : depuis le 11/11/2026 (#411), elle ouvre la boîte « Réinitialiser », le cache
+  seul coché ; le cache reste gardé là. Sur tout dossier, « Réinitialiser ce dossier… »
+  (« ce disque… », `core.folders.reset`) : cache, données de tri, notes (remises à zéro
+  dans les sidecars, seulement avec « Actions sur les fichiers ») et versions, au choix
+  ([reset.md](reset.md)). Le cache général se vide depuis la fenêtre de
   réglages (section Cache).
 - **Pointeur dans les boîtes** : la main sur tout ce qui se clique (`interact_cursor` dans
   le cadre commun `Dialog`) ; « saisir » ailleurs, pour déplacer la boîte. **Dans les

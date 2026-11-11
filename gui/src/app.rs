@@ -360,9 +360,11 @@ pub struct TriApp {
     /// Déplacements du cache en cours (garder le cache sur un disque, dans un dossier, ou
     /// le faire suivre un dossier déplacé), chacun dans un fil ; message à la fin.
     cache_jobs: Vec<std::thread::JoinHandle<Option<(String, bool)>>>,
-    /// « Vider le cache de ce dossier / disque » (`core.folders.cache_clear`) : boîte de
-    /// confirmation, avec la place mesurée en fond.
-    disk_clear: Option<DiskClear>,
+    /// « Réinitialiser ce dossier… » (`core.folders.reset`, et `core.folders.cache_clear`
+    /// avec le cache seul ; issue n° 411) : la boîte.
+    reset: Option<crate::reset_dialog::ResetDialog>,
+    /// Réinitialisation en cours : le dossier, et ce qu'elle a fait, à la fin.
+    reset_job: Option<(PathBuf, Receiver<tri::reset::Outcome>)>,
     /// Message pour la barre d'état (texte, vrai si c'est une erreur).
     notice: Option<(String, bool)>,
     /// Réglages du moteur (fichier de configuration).
@@ -1360,7 +1362,8 @@ impl TriApp {
             remote: None,
             remote_scanner: tri::remote::scan,
             cache_jobs: Vec::new(),
-            disk_clear: None,
+            reset: None,
+            reset_job: None,
             notice: None,
             settings: settings.engine(),
             warning,
@@ -3735,12 +3738,12 @@ impl TriApp {
                                 };
                                 text.map(|text| (text, here))
                             });
-                            if let Some((text, here)) = cache_text {
-                                groups.group(
-                                    ui,
-                                    "preferences",
-                                    &t!("folder-group-preferences"),
-                                    |ui| {
+                            groups.group(
+                                ui,
+                                "preferences",
+                                &t!("folder-group-preferences"),
+                                |ui| {
+                                    if let Some((text, here)) = cache_text {
                                         if ui
                                             .button(text)
                                             .on_hover_text(t!("folder-menu-cache-tip"))
@@ -3759,9 +3762,15 @@ impl TriApp {
                                             };
                                             entry(ui, Action::FolderCacheClear, text);
                                         }
-                                    },
-                                );
-                            }
+                                    }
+                                    // Cache, données, notes, versions au choix (#411).
+                                    entry(
+                                        ui,
+                                        Action::FolderReset,
+                                        crate::reset_dialog::ResetDialog::menu_label(removable),
+                                    );
+                                },
+                            );
                             if let Some(id) = groups.finish(ui) {
                                 group_menu = Some(id);
                             }
@@ -3963,7 +3972,8 @@ impl TriApp {
                 Action::FolderFavorite => self.toggle_favorite(),
                 Action::FolderFavoriteName => self.name_favorite(&ctx),
                 Action::FolderForget => self.forget_server(&path),
-                Action::FolderCacheClear => self.ask_disk_clear(&ctx, path),
+                Action::FolderCacheClear => self.ask_reset(path, true),
+                Action::FolderReset => self.ask_reset(path, false),
                 Action::FolderOpenIn(engine) => self.open_folder_in(engine, &path),
                 Action::FolderCopy | Action::FolderMove => {
                     self.transfer_folder(&ctx, path, action == Action::FolderCopy, None)
@@ -4212,102 +4222,78 @@ impl TriApp {
         }
     }
 
-    /// `core.folders.cache_clear` sur `root` : si son cache y est gardé, la boîte de
-    /// confirmation s'ouvre, sa place mesurée en fond ; sinon, dit pourquoi.
-    fn ask_disk_clear(&mut self, ctx: &egui::Context, root: PathBuf) {
-        let Some(engine) = &self.engine else { return };
-        if engine.cache.disk_of(&root).as_deref() != Some(root.as_path()) {
-            self.notice = Some((t!("cache-clear-not-kept", name = folder_name(&root)), true));
-            return;
-        }
-        let (tx, rx) = mpsc::channel();
-        let (cache, at_root, repaint) = (engine.cache.clone(), root.clone(), ctx.clone());
-        std::thread::spawn(move || {
-            let _ = tx.send(cache.disk_usage(&at_root).unwrap_or_default());
-            repaint.request_repaint();
-        });
-        let removable = self
+    /// Ouvre la boîte « Réinitialiser » sur `root` (issue n° 411) ; `only_cache` : seule
+    /// la case du cache cochée (`core.folders.cache_clear`).
+    fn ask_reset(&mut self, root: PathBuf, only_cache: bool) {
+        let disk = self
             .tree
             .rows()
             .iter()
-            .any(|r| r.path == root && r.kind == Some(PlaceKind::Volume) && r.ejectable);
-        // Au centre (retour du 10/11/2026 : près du pointeur, la boîte débordait en bas) ;
-        // recentrée d'après sa vraie taille dès sa première image.
-        let at = CENTRED;
-        self.disk_clear = Some(DiskClear {
+            .any(|r| r.path == root && r.kind == Some(PlaceKind::Volume));
+        self.reset = Some(crate::reset_dialog::ResetDialog::new(
             root,
-            removable,
-            size: None,
-            measuring: rx,
-            at,
-        });
+            disk,
+            only_cache,
+            self.settings.files.allow_actions,
+            self.engine.as_ref().map(|e| e.cache.clone()),
+            self.settings.data_dir(),
+            self.settings.xmp.sidecar,
+        ));
     }
 
-    fn disk_clear_dialog(&mut self, ctx: &egui::Context) {
-        let Some(dialog) = &mut self.disk_clear else {
+    /// La boîte « Réinitialiser », puis le travail en fond, et son bilan.
+    fn reset_dialog(&mut self, ctx: &egui::Context) {
+        if let Some(dialog) = &mut self.reset {
+            match dialog.show(ctx) {
+                Some(crate::reset_dialog::Request::Run {
+                    folder,
+                    folders,
+                    parts,
+                }) => {
+                    self.reset = None;
+                    let (tx, rx) = mpsc::channel();
+                    let cache = self.engine.as_ref().map(|e| e.cache.clone());
+                    let (data, convention) = (self.settings.data_dir(), self.settings.xmp.sidecar);
+                    let repaint = ctx.clone();
+                    std::thread::spawn(move || {
+                        let outcome = tri::reset::run(
+                            cache.as_ref(),
+                            data.as_deref(),
+                            &folders,
+                            parts,
+                            convention,
+                        );
+                        let _ = tx.send(outcome);
+                        repaint.request_repaint();
+                    });
+                    self.notice = Some((t!("reset-running", name = folder_name(&folder)), false));
+                    self.reset_job = Some((folder, rx));
+                }
+                Some(crate::reset_dialog::Request::Close) => self.reset = None,
+                None => {}
+            }
+        }
+        let Some((folder, rx)) = &self.reset_job else {
             return;
         };
-        if dialog.size.is_none()
-            && let Ok(usage) = dialog.measuring.try_recv()
-        {
-            dialog.size = Some(usage);
-        }
-        let name = folder_name(&dialog.root);
-        let title = if dialog.removable {
-            t!("cache-clear-disk-question", name = &name)
-        } else {
-            t!("cache-clear-folder-question", name = &name)
+        let Ok(outcome) = rx.try_recv() else {
+            return;
         };
-        let size = dialog.size;
-        let (mut confirm, mut cancel) = (false, false);
-        let modal = modal_at("disk_clear_dialog", dialog.at)
-            .title(title)
-            .show(ctx, |ui| {
-                match size {
-                    Some(u) => {
-                        ui.label(t!(
-                            "cache-clear-disk-size",
-                            size = crate::cache_panel::size_text(u.bytes)
-                        ));
-                    }
-                    None => {
-                        ui.horizontal(|ui| {
-                            ui.spinner();
-                            ui.label(t!("cache-measuring"));
-                        });
-                    }
-                }
-                ui.weak(t!("cache-clear-disk-note"));
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    confirm = ui
-                        .add_enabled(size.is_some(), egui::Button::new(t!("cache-clear-confirm")))
-                        .clicked();
-                    cancel = ui.button(t!("cancel")).clicked();
-                });
-            });
-        if confirm {
-            let root = dialog.root.clone();
-            self.disk_clear = None;
-            let repaint = ctx.clone();
-            self.cache_job(move |cache| {
-                let place = crate::files::tilde(&root);
-                let result = match cache.clear_disk(&root) {
-                    Ok(freed) => (
-                        t!(
-                            "cache-disk-cleared",
-                            place = place,
-                            size = crate::cache_panel::size_text(freed.bytes)
-                        ),
-                        false,
-                    ),
-                    Err(e) => (t!("cache-clear-failed", error = e.to_string()), true),
-                };
-                repaint.request_repaint();
-                Some(result)
-            });
-        } else if cancel || modal.should_close() {
-            self.disk_clear = None;
+        let folder = folder.clone();
+        self.reset_job = None;
+        if let Some(step) = outcome.step(&folder) {
+            self.history.push(step);
+        }
+        self.notice = Some(if outcome.skipped.is_empty() {
+            (t!("reset-done", name = folder_name(&folder)), false)
+        } else {
+            (t!("reset-skipped", n = outcome.skipped.len()), true)
+        });
+        // Le dossier ouvert est dedans : relu (notes, filtres, curseurs, couvertures,
+        // vignettes à recalculer).
+        if !self.folder.is_none() && self.folder.dir.starts_with(&folder) {
+            let dir = self.folder.dir.clone();
+            self.open_folder(&dir);
         }
     }
 
@@ -7294,9 +7280,9 @@ impl TriApp {
                     self.forget_server(&path);
                 }
             }
-            Action::FolderCacheClear => {
+            Action::FolderCacheClear | Action::FolderReset => {
                 if let Some(path) = self.tree.cursor_path() {
-                    self.ask_disk_clear(ctx, path);
+                    self.ask_reset(path, action == Action::FolderCacheClear);
                 }
             }
             Action::FolderOpenIn(engine) => {
@@ -18074,7 +18060,7 @@ impl eframe::App for TriApp {
         self.file_dialog(&ctx);
         self.poll_export();
         self.eject_dialog(&ctx);
-        self.disk_clear_dialog(&ctx);
+        self.reset_dialog(&ctx);
         self.remote_dialog(&ctx);
         self.login_dialog(&ctx);
         self.update_dialog(&ctx);
@@ -18391,7 +18377,7 @@ fn size_label(bytes: u64) -> String {
     t!(unit, value = value)
 }
 
-fn folder_name(path: &Path) -> String {
+pub(crate) fn folder_name(path: &Path) -> String {
     file_name(path)
 }
 
@@ -19947,18 +19933,6 @@ enum VersionAction {
     Edit(usize),
     /// La supprimer.
     Delete(usize),
-}
-
-/// Boîte « Vider le cache de ce dossier / disque » (10/11/2026).
-struct DiskClear {
-    /// Dossier qui garde le cache.
-    root: PathBuf,
-    /// Racine d'un disque amovible (libellés « disque »).
-    removable: bool,
-    /// Place, une fois mesurée.
-    size: Option<tri::cache::Usage>,
-    measuring: Receiver<tri::cache::Usage>,
-    at: egui::Pos2,
 }
 
 #[cfg(test)]
@@ -26571,8 +26545,9 @@ mod tests {
     #[test]
     fn a_folder_clears_the_cache_it_keeps_from_the_right_click() {
         // 10/11/2026 : « Vider le cache de ce dossier… » sur un dossier qui garde son cache,
-        // une action (`core.folders.cache_clear`) confirmée par une boîte avec sa taille ;
-        // le cache reste gardé là.
+        // une action (`core.folders.cache_clear`) ; depuis le 11/11/2026 (#411), la boîte
+        // « Réinitialiser » avec le cache seul coché, sa taille mesurée en fond. Le cache
+        // reste gardé là, les données de tri aussi.
         let (mut h, dir) = harness();
         h.run_steps(3);
         let seance = dir.path().join("séance");
@@ -26583,6 +26558,7 @@ mod tests {
         cache.use_disk(&seance).unwrap();
         let key = tri::cache::Key::new(&photo, tri::cache::Level::Exposure, "v").unwrap();
         cache.put_bytes(&key, &[0; 4096]).unwrap();
+        tri::store::set_value(None, &seance, "group-strictness", Some(0.3)).unwrap();
         let place = tri::places::Place {
             name: "Test".into(),
             path: dir.path().to_path_buf(),
@@ -26595,33 +26571,112 @@ mod tests {
         h.run_steps(2);
         h.get_by_label(&t!("folder-group-preferences")).hover();
         h.run_steps(3);
+        assert!(
+            h.query_by_label(&t!("folder-menu-reset-folder")).is_some(),
+            "« Réinitialiser ce dossier… » à côté"
+        );
         h.get_by_label(&t!("folder-menu-cache-clear-folder"))
             .click();
-        // Une boîte confirme, avec la taille (mesurée en fond).
-        let ask = t!(
-            "cache-clear-disk-size",
+        h.run_steps(2);
+        {
+            let dialog = h.state().reset.as_ref().expect("boîte ouverte");
+            assert_eq!(dialog.folder(), seance);
+            assert!(dialog.parts.cache && !dialog.parts.data, "le cache seul");
+            assert!(!dialog.subfolders, "un dossier : sans ses sous-dossiers");
+        }
+        // La taille, mesurée en fond.
+        let size = t!(
+            "reset-cache-detail",
             size = crate::cache_panel::size_text(4096)
         );
         for _ in 0..400 {
             h.run_steps(1);
-            if h.query_by_label(&ask).is_some() {
+            if h.query_by_label(&size).is_some() {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
         assert!(
-            h.query_by_label(&ask).is_some(),
+            h.query_by_label(&size).is_some(),
             "size shown before clearing"
         );
-        let title = t!("cache-clear-folder-question", name = "séance");
-        assert!(h.query_by_label(&title).is_some());
-        // La taille arrivée, la boîte se recentre d'après sa nouvelle taille.
-        h.run_steps(3);
-        h.get_by_label(&t!("cache-clear-confirm")).click();
+        assert!(
+            h.query_by_label(&t!("reset-title", name = "séance"))
+                .is_some()
+        );
+        settle_dialog(&mut h);
+        // Le bouton de la boîte (un autre « Réinitialiser » existe ailleurs), dessinée après.
+        h.get_all_by_label(&t!("reset-confirm"))
+            .last()
+            .unwrap()
+            .click();
         h.run_steps(2);
-        run_until(&mut h, |app| app.cache_jobs.is_empty());
+        run_until(&mut h, |app| app.reset_job.is_none() && app.reset.is_none());
         assert_eq!(cache.disk_usage(&seance).unwrap().entries, 0);
-        assert!(tri::cache::disk_dir(&seance).is_dir(), "still kept there");
+        assert!(tri::store::kept(&seance), "still kept there");
+        assert_eq!(
+            tri::store::value(None, &seance, "group-strictness"),
+            Some(0.3),
+            "les données de tri restent"
+        );
+    }
+
+    #[test]
+    fn ratings_can_be_reset_only_with_file_actions_allowed() {
+        use egui_kittest::kittest::NodeT;
+        // 11/11/2026 (#411) : remettre les notes à zéro est une action sur les fichiers.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        let folder = h.state().folder.dir.clone();
+        h.state_mut().settings.files.allow_actions = false;
+        h.state_mut().ask_reset(folder.clone(), false);
+        h.run_steps(2);
+        let label = t!("reset-notes");
+        let notes = h.get_by_label(&label);
+        assert!(notes.accesskit_node().is_disabled(), "grisée");
+        h.state_mut().reset = None;
+        h.state_mut().settings.files.allow_actions = true;
+        // Une image notée : la case se coche, la note revient à zéro, un pas d'annulation.
+        let image = h.state().files[0].path.clone();
+        h.state_mut()
+            .folder
+            .notes
+            .edit(&image, |n| n.set_stars(3))
+            .unwrap();
+        h.state_mut().ask_reset(folder.clone(), false);
+        let mut ready = false;
+        for _ in 0..400 {
+            h.run_steps(1);
+            if h.query_by_label(&t!("reset-notes-detail", n = 1)).is_some() {
+                ready = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(ready, "une photo notée comptée");
+        assert!(
+            !h.get_by_label(&t!("reset-notes"))
+                .accesskit_node()
+                .is_disabled()
+        );
+        {
+            let dialog = h.state_mut().reset.as_mut().unwrap();
+            dialog.parts = tri::reset::Parts {
+                notes: true,
+                ..Default::default()
+            };
+        }
+        settle_dialog(&mut h);
+        // Le bouton de la boîte (un autre « Réinitialiser » existe ailleurs), dessinée après.
+        h.get_all_by_label(&t!("reset-confirm"))
+            .last()
+            .unwrap()
+            .click();
+        h.run_steps(2);
+        run_until(&mut h, |app| app.reset_job.is_none() && app.reset.is_none());
+        let book = tri::notes::NoteBook::load([image.as_path()], tri::xmp::Convention::Darktable);
+        assert_eq!(book.notes(&image).stars, 0);
+        assert!(h.state().history.can_undo(), "un pas d'annulation");
     }
 
     #[test]

@@ -680,8 +680,11 @@ system one ("cold" measurements, experiments).
   cache always follows. The work is done in the background (`TriApp::cache_job`), message
   in the status bar. Where it is kept, "Clear the cache of this folder…" ("of this drive"; Preferences
   group, 2026-11-10), an action (`core.folders.cache_clear`, no default key, on the
-  folder under the keyboard cursor): a dialog confirms, with the size measured in the
-  background, then the freed space shows in the status bar; the cache stays kept there. The general cache is cleared from the settings window (Cache section).
+  folder under the keyboard cursor): since 2026-11-11 (#411) it opens the "Reset" dialog
+  with only "Cache" ticked; the cache stays kept there. On every folder, "Reset this
+  folder…" ("this drive…", `core.folders.reset`): cache, tri's data, ratings (reset in
+  the sidecars, only with "File actions" allowed) and versions, as ticked
+  ([reset.md](reset.md)). The general cache is cleared from the settings window (Cache section).
 - **Pointer in dialogs**: the hand on everything clickable (`interact_cursor` in the
   common `Dialog` frame); "grab" elsewhere, to move the dialog. **In the bars and
   panels too** (2026-11-09, #386: a hand on the bar icons, an arrow on the panels'

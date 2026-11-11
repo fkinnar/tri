@@ -93,6 +93,7 @@ history-purple = purple
 history-notes-one = { $what }: { $name }
 history-notes-many = { $what }: { $n } images
 history-rename = { $from } renamed to { $to }
+history-reset = Reset of “{ $name }”
 history-copy-dir = folder { $name } copied to { $dest }
 history-move-dir = folder { $name } moved to { $dest }
 history-copy = { $n ->
@@ -177,6 +178,7 @@ cli-usage =
       tri [<folder>] --clear-cache [<level>] [--depth N] [--cache FOLDER]
       tri --cache-usage [--cache FOLDER]
       tri <folder> --cache-here|--cache-user [--cache FOLDER]
+      tri <folder> --reset cache,data,notes,versions [--depth N] [--dry-run] [--cache FOLDER]
       tri --check-update
       tri <folder> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
       tri <folder> --sidecars rapidraw|xmp|all [--rewrite] [--dry-run] [--raw|--flat] [--depth N]
@@ -306,6 +308,11 @@ cli-cache-cleared = cache cleared ({ $level })
 cli-cache-here = cache and tri's data kept in { $place }
 cli-cache-released = cache and tri's data removed from { $place }
 cli-cache-moved = { $n } entries moved
+cli-reset-cache = cache: { $n } entries
+cli-reset-data = tri's data: { $n } files
+cli-reset-notes = ratings reset: { $n } images
+cli-reset-versions = versions removed: { $n }
+cli-reset-conflicts = { $n } images with conflicting ratings, left alone
 cli-cache-move-failed = cannot move the cache: { $error }
 cli-cache-all = all
 cli-cache-folder-cleared = cache of { $folder } cleared ({ $level }): { $entries } entries, { $mib } MiB freed

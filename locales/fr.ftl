@@ -94,6 +94,7 @@ history-purple = violet
 history-notes-one = { $what } : { $name }
 history-notes-many = { $what } : { $n } images
 history-rename = { $from } renommé en { $to }
+history-reset = Réinitialisation de « { $name } »
 history-copy-dir = dossier { $name } copié vers { $dest }
 history-move-dir = dossier { $name } déplacé vers { $dest }
 history-copy = { $n ->
@@ -178,6 +179,7 @@ cli-usage =
       tri [<dossier>] --clear-cache [<niveau>] [--depth N] [--cache DOSSIER]
       tri --cache-usage [--cache DOSSIER]
       tri <dossier> --cache-here|--cache-user [--cache DOSSIER]
+      tri <dossier> --reset cache,data,notes,versions [--depth N] [--dry-run] [--cache DOSSIER]
       tri --check-update
       tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
       tri <dossier> --sidecars rapidraw|xmp|all [--rewrite] [--dry-run] [--raw|--flat] [--depth N]
@@ -307,6 +309,11 @@ cli-cache-cleared = cache vidé ({ $level })
 cli-cache-here = cache et données de tri gardés dans { $place }
 cli-cache-released = cache et données de tri retirés de { $place }
 cli-cache-moved = { $n } entrées déplacées
+cli-reset-cache = cache : { $n } entrées
+cli-reset-data = données de tri : { $n } fichiers
+cli-reset-notes = notes remises à zéro : { $n } images
+cli-reset-versions = versions retirées : { $n }
+cli-reset-conflicts = { $n } images en conflit de notes, laissées
 cli-cache-move-failed = déplacement du cache impossible : { $error }
 cli-cache-all = tout
 cli-cache-folder-cleared = cache de { $folder } vidé ({ $level }) : { $entries } entrées, { $mib } Mio libérés

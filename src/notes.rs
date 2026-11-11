@@ -858,6 +858,24 @@ impl NoteBook {
     /// Écrit `notes` pour `image` seule, sans toucher à sa paire (annulation : chaque
     /// image de la paire retrouve ses propres notes d'avant). Relit ensuite le dossier.
     pub fn write_only(&mut self, image: &Path, notes: &Notes) -> Result<(), XmpError> {
+        self.write_only_with(image, notes, true)
+    }
+
+    /// Remet à zéro les notes de `image` seule (étoiles, couleurs, drapeau) dans ses
+    /// sources existantes : ses sidecars (seuls nos champs changent, le reste est réécrit
+    /// à l'identique), et l'image si elle reçoit les notes d'office ; aucun sidecar n'est
+    /// créé. Refusé sur une image en conflit, comme une note (issue n° 411).
+    pub fn clear(&mut self, image: &Path) -> Result<(), XmpError> {
+        self.write_only_with(image, &Notes::EMPTY, false)
+    }
+
+    /// [`NoteBook::write_only`] ; `create` faux : sans sidecar, rien n'est créé.
+    fn write_only_with(
+        &mut self,
+        image: &Path,
+        notes: &Notes,
+        create: bool,
+    ) -> Result<(), XmpError> {
         if !self.entries.contains_key(image) {
             self.add(image);
         }
@@ -877,10 +895,12 @@ impl NoteBook {
         }
         if entry.notes != *notes {
             // Les sidecars existants seulement : rien n'est créé en annulant.
-            let targets = if entry.sidecars.is_empty() {
+            let targets = if !entry.sidecars.is_empty() {
+                entry.sidecars.clone()
+            } else if create {
                 vec![entry.primary(image, self.convention)]
             } else {
-                entry.sidecars.clone()
+                Vec::new()
             };
             for sidecar in &targets {
                 write_sidecar(sidecar, notes).map_err(|message| XmpError::Image {

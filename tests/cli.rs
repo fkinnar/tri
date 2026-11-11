@@ -528,3 +528,31 @@ fn a_folder_keeps_its_cache_and_gives_it_back() {
     assert!(!tri::cache::disk_dir(&seance).exists());
     assert_eq!(cache_entries(&env), computed);
 }
+
+#[test]
+fn a_folder_is_reset_from_the_command_line() {
+    // Issue n° 411 : `--reset` efface ce qu'on demande, `--dry-run` le compte seulement.
+    let env = Env::new();
+    let seance = env.photos().join("séance");
+    env.image(&seance, "a.jpg");
+    ok(env.run([arg(&seance), "--previews".as_ref()]));
+    let computed = cache_entries(&env);
+    assert!(computed > 0);
+    let reset = ["--reset".as_ref(), "cache,notes".as_ref()];
+    let out = stdout(&ok(env.run([
+        arg(&seance),
+        reset[0],
+        reset[1],
+        "--dry-run".as_ref(),
+    ])));
+    assert!(out.contains(&format!(": {computed} ")), "{out}");
+    assert_eq!(cache_entries(&env), computed, "rien effacé à blanc");
+    ok(env.run([arg(&seance), reset[0], reset[1]]));
+    assert_eq!(cache_entries(&env), 0);
+    // Une partie inconnue : refusé.
+    assert!(
+        !env.run([arg(&seance), "--reset".as_ref(), "tout".as_ref()])
+            .status
+            .success()
+    );
+}
