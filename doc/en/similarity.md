@@ -133,3 +133,7 @@ stacks…" box from `[gui.grid] stacks_overlay_from` images. Same idea for the
 thumbnails of developments (and covers): while the developed render is not known yet
 (sidecar being read in the background), the thumbnail stays empty at most
 `[gui.grid] render_wait_ms` rather than showing the camera JPEG and then swapping.
+The remembered covers are used **even when the fingerprint changed** (list sorted or
+filtered by ratings still being read, slider moved…): each is one precise photo, the
+best of its stack last time; requiring the same fingerprint showed the first image of
+every stack (owner's screenshot, 2026-11-11).
