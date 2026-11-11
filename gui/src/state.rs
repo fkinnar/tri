@@ -135,6 +135,8 @@ pub struct FolderView {
     pub order: Option<tri::sort::Order>,
     /// Rendu des vignettes (`f d`, 31/10/2026) ; `None` : celui de la configuration.
     pub render: Option<crate::grid_render::GridRender>,
+    /// « Empiler automatiquement » (11/11/2026) ; `None` : celui de la configuration.
+    pub stacking: Option<bool>,
 }
 
 /// Filtres et tri retenus pour `dir`, s'il y en a ; `data` : dossier de données, pour le

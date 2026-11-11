@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **"Stack automatically" kept per folder** (#413): like the filters, the sort and the
+  thumbnail render; a folder never set takes the configuration's value.
 - **Reset a folder** (#412): right click on a folder, Preferences, "Reset this folder…"
   ("this drive…"): one dialog with a checkbox per thing to clear, each with what it
   concerns, measured in the background: cache, tri's data (filters, sliders, covers…),

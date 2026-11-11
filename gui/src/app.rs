@@ -5819,6 +5819,7 @@ impl TriApp {
             inverted: self.filter_inverted,
             order: Some(self.order),
             render: Some(self.grid_render),
+            stacking: Some(self.stacking),
         }
     }
 
@@ -5860,6 +5861,14 @@ impl TriApp {
                 engine.scheduler.set_raw_previews(self.raw_policy());
             }
             self.auto_develop_pending = true;
+            self.stacks_dirty = true;
+        }
+        // « Empiler automatiquement » du dossier (11/11/2026) ; sans rien de retenu, celui
+        // de la configuration, comme le rendu.
+        let stacking =
+            self.settings.similarity.background && view.stacking.unwrap_or(self.gui.grid.stacks);
+        if stacking != self.stacking {
+            self.stacking = stacking;
             self.stacks_dirty = true;
         }
         // Le plein écran suit (un seul rendu affiché).
@@ -25089,6 +25098,15 @@ mod tests {
         assert_eq!(h.state().grid_render, GridRender::Embedded, "configuration");
         open(&mut h, &photos);
         assert_eq!(h.state().grid_render, GridRender::LibRaw, "repris");
+        // « Empiler automatiquement » aussi (11/11/2026).
+        h.state_mut().settings.similarity.background = true;
+        let default = h.state().gui.grid.stacks;
+        h.state_mut().stacking = !default;
+        h.run_steps(2);
+        open(&mut h, &other);
+        assert_eq!(h.state().stacking, default, "configuration");
+        open(&mut h, &photos);
+        assert_eq!(h.state().stacking, !default, "repris");
         // Réglage coupé : rien de repris, les filtres restent ceux du moment.
         h.state_mut().gui.remember_folder_view = false;
         press(&mut h, Key::F, Modifiers::NONE);

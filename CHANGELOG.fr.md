@@ -4,6 +4,8 @@
 
 ## Non publié
 
+- **« Empiler automatiquement » retenu par dossier** (#413) : comme les filtres, le tri
+  et le rendu des vignettes ; un dossier jamais réglé prend la valeur de la configuration.
 - **Réinitialiser un dossier** (#412) : clic droit sur un dossier, Préférences,
   « Réinitialiser ce dossier… » (« ce disque… ») : une boîte avec une case par chose à
   effacer, chacune avec ce qu'elle concerne, mesuré en fond : cache, données de tri
