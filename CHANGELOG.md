@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Settings applied at once** (#429): `[adjust]` (automatic exposure and balance),
+  `[sidecars]` and `[watch]` changed in the settings window now apply immediately; they
+  used to wait for the next launch.
 - **Stack covers right from the opening** (#426): while ratings are still being read, a
   stack shows its usual cover even when the list changed a little since last time
   (sorting or filtering by ratings, a moved slider); it used to show its first image.

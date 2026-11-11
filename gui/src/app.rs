@@ -1270,6 +1270,13 @@ impl TriApp {
             }
         }
         self.settings.offload = new.offload;
+        // Relus à chaque usage, donc à chaud aussi (retour du 11/11/2026 : changer
+        // `[adjust] auto_exposure_bias` n'avait d'effet qu'au prochain lancement, alors que
+        // la fenêtre de réglages le dit appliqué tout de suite) : réglages auto, sidecars
+        // des logiciels, surveillance du dossier.
+        self.settings.adjust = new.adjust;
+        self.settings.sidecars = new.sidecars;
+        self.settings.watch = new.watch;
         // Profils d'export, préréglages de recadrage, darktable : aussi à chaud.
         self.settings.export = new.export;
         self.settings.versions = new.versions;
@@ -29978,6 +29985,30 @@ mod tests {
             &[(Key::I, Modifiers::NONE), (Key::A, Modifiers::NONE)],
         );
         assert_eq!(h.state().small_histogram_look().channel, None);
+    }
+
+    #[test]
+    fn adjustments_sidecars_and_watch_settings_apply_at_once() {
+        // Retour du 11/11/2026 : `[adjust] auto_exposure_bias` changé dans la fenêtre de
+        // réglages n'avait d'effet qu'au prochain lancement (la section n'était pas
+        // recopiée), alors qu'elle n'est pas marquée « au prochain lancement ».
+        let (mut h, _dir) = harness();
+        let mut new = AppSettings {
+            gui: h.state().gui.clone(),
+            ..AppSettings::default()
+        };
+        new.adjust.auto_exposure_bias = -1.0;
+        new.watch.interval_ms = 1234;
+        let ctx = h.ctx.clone();
+        h.state_mut().apply_settings(&ctx, new);
+        assert_eq!(h.state().settings.adjust.auto_exposure_bias, -1.0);
+        assert_eq!(h.state().settings.watch.interval_ms, 1234);
+        for section in ["adjust", "sidecars", "watch"] {
+            assert!(
+                !crate::settings_window::needs_restart(section, ""),
+                "{section} : appliquée tout de suite"
+            );
+        }
     }
 
     #[test]

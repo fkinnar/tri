@@ -4,6 +4,9 @@
 
 ## Non publié
 
+- **Réglages appliqués tout de suite** (#429) : `[adjust]` (exposition et balance
+  automatiques), `[sidecars]` et `[watch]` changés dans la fenêtre de réglages
+  s'appliquent immédiatement ; ils attendaient le prochain lancement.
 - **Couvertures des piles justes dès l'ouverture** (#426) : tant que les notes sont en
   lecture, une pile montre sa couverture habituelle même si la liste a un peu changé
   depuis la dernière fois (tri ou filtre par notes, curseur bougé) ; elle montrait sa
