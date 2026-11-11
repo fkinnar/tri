@@ -6492,10 +6492,14 @@ impl TriApp {
             p.done >= p.total
         };
         let key = self.stacks_key();
+        // Les couvertures retenues valent même si l'empreinte des piles a changé (liste
+        // triée ou filtrée d'après des notes encore en lecture, curseur bougé…) : chacune
+        // est une photo précise, la meilleure de sa pile la dernière fois ; exiger la même
+        // empreinte montrait la première image de chaque pile (capture du 11/11/2026).
         let remembered_covers: HashSet<PathBuf> = self
             .stacks_memory
             .as_ref()
-            .filter(|m| m.key == key && !settled)
+            .filter(|_| !settled)
             .map(|m| {
                 m.covers
                     .iter()
@@ -25885,6 +25889,38 @@ mod tests {
         let shown = h.state().stacks.shown.clone();
         assert_eq!(h.state().files[shown[0]].path, cover);
         assert!(!h.state().stacks_pending(), "rien à attendre");
+        // Empreinte changée (ici : le curseur de l'écart de temps), les piles recalculées
+        // sur les empreintes, notes et netteté pas encore toutes là : la couverture retenue
+        // reste montrée (retour du 11/11/2026 : la première image de chaque pile).
+        for f in &files {
+            let sig = tri::preview::compute_signature(f, &preview, &cancel).unwrap();
+            h.state_mut().signatures.insert(f.path.clone(), sig);
+        }
+        h.state_mut().progress[5] = Progress { done: 3, total: 3 };
+        h.state_mut().progress[4] = Progress { done: 0, total: 3 };
+        h.state_mut().group_gap += 1.0;
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.count(), 1);
+        let shown = h.state().stacks.shown.clone();
+        assert_eq!(
+            h.state().files[shown[0]].path,
+            cover,
+            "couverture retenue, empreinte changée"
+        );
+        // Tout relu : la couverture se calcule, et c'est elle qui est retenue.
+        h.state_mut().progress[4] = Progress { done: 3, total: 3 };
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(2);
+        let shown = h.state().stacks.shown.clone();
+        let computed = h.state().files[shown[0]].path.clone();
+        assert_eq!(
+            h.state().stacks_memory.as_ref().unwrap().covers,
+            vec![crate::state::relative(&photos, &computed).unwrap()],
+            "retenue après calcul"
+        );
+        h.state_mut().signatures.clear();
+        h.state_mut().progress[5] = Progress::default();
         // Un curseur changé : plus la même empreinte, la grille attend ses piles.
         h.state_mut().group_strictness = 0.5;
         h.state_mut().stacks_wait = Some(Instant::now());

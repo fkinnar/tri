@@ -138,4 +138,8 @@ replie comme avant), avec une boîte « Regroupement des piles… » à partir d
 `[gui.grid] stacks_overlay_from` images. Même idée pour les vignettes des
 développements (et les couvertures) : tant que le rendu développé n'est pas encore su
 (sidecar en lecture en fond), la vignette reste vide au plus `[gui.grid] render_wait_ms`
-plutôt que de montrer le JPEG boîtier puis de changer.
+plutôt que de montrer le JPEG boîtier puis de changer. Les couvertures retenues servent
+**même si l'empreinte a changé** (liste triée ou filtrée d'après des notes encore en
+lecture, curseur bougé…) : chacune est une photo précise, la meilleure de sa pile la
+dernière fois ; exiger la même empreinte montrait la première image de chaque pile
+(capture de l'utilisateur, 11/11/2026).

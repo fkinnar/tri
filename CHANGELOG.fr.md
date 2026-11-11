@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Couvertures des piles justes dès l'ouverture** (#426) : tant que les notes sont en
+  lecture, une pile montre sa couverture habituelle même si la liste a un peu changé
+  depuis la dernière fois (tri ou filtre par notes, curseur bougé) ; elle montrait sa
+  première image.
 - **Histogramme après réglages** (#427) : un bouton du grand histogramme (ou `e`) montre
   l'histogramme, les pourcentages d'écrêtage et les zones de l'image telle qu'on la voit,
   réglages de visualisation compris ; la part saturée du capteur reste affichée. Pendant
