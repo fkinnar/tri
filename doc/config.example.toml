@@ -1005,9 +1005,11 @@ hidden = false
 # parcourus au plus, et nombre de résultats au plus.
 search_depth = 4
 search_results = 200
-# Case « Sous-dossiers » du panneau (gardée d'une session à l'autre) : les images des
-# sous-dossiers du dossier ouvert s'affichent aussi, sur ce nombre de niveaux au plus.
+# Case « Sous-dossiers » du panneau (gardée par dossier) : les images des sous-dossiers
+# du dossier ouvert s'affichent aussi, sur ce nombre de niveaux au plus.
 subfolders_depth = 3
+# Case « Sous-dossiers » d'un dossier jamais réglé.
+subfolders = false
 # Titres des sections (« Disques amovibles », « Favoris »… et celles du panneau de
 # droite) : taille par rapport au texte des dossiers.
 section_scale = 1.25

@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Plus de choses retenues par dossier** (#415) : l'image où l'on en était (on y revient
+  en rouvrant le dossier), les piles dépliées, la case « Sous-dossiers » (`[gui.folders]
+  subfolders` pour un dossier jamais réglé ; plus commune à tous les dossiers), l'écart de
+  temps des piles, et les logiciels cochés du filtre « développées ». Un dossier venu d'un
+  autre ordinateur garde le rendu et les logiciels choisis là-bas, même absents ici.
 - **« Empiler automatiquement » retenu par dossier** (#413) : comme les filtres, le tri
   et le rendu des vignettes ; un dossier jamais réglé prend la valeur de la configuration.
 - **Réinitialiser un dossier** (#412) : clic droit sur un dossier, Préférences,

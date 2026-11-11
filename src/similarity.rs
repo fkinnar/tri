@@ -504,6 +504,23 @@ pub fn remember_curve(
     crate::store::set_value(data, dir, CURVES, curve)
 }
 
+/// Clé de l'écart de temps maximal entre deux images d'une pile (secondes, #414).
+const GAP: &str = "group-gap";
+
+/// Écart de temps retenu pour le dossier `dir` (fenêtre de regroupement), s'il y en a un.
+pub fn folder_gap(data: Option<&std::path::Path>, dir: &std::path::Path) -> Option<f32> {
+    crate::store::value(data, dir, GAP)
+}
+
+/// Retient l'écart de temps `gap` pour le dossier `dir` ; `None` : l'oublie (réglage).
+pub fn remember_gap(
+    data: Option<&std::path::Path>,
+    dir: &std::path::Path,
+    gap: Option<f32>,
+) -> std::io::Result<()> {
+    crate::store::set_value(data, dir, GAP, gap)
+}
+
 /// Couvertures choisies par l'utilisateur (la préférée de chaque pile) dans les dossiers
 /// `folders` ; séparées des notes, qui restent dans les sidecars.
 pub fn chosen_covers<'a>(

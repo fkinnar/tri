@@ -56,8 +56,6 @@ pub struct DisplayState {
     pub grid_cell: Option<f32>,
     /// Rendu des vignettes (barre des filtres, `f d`, #114).
     pub grid_render: Option<crate::grid_render::GridRender>,
-    /// Logiciels cochés du filtre « développées » (identifiants), 27/10/2026.
-    pub developed_engines: Option<Vec<String>>,
     /// Sections repliées du panneau de droite (« filters », « grid »…), 27/10/2026.
     pub panel_folded: Option<Vec<String>>,
     /// Fenêtre à la fermeture (issue n° 58), reprise au lancement suivant.
@@ -137,6 +135,51 @@ pub struct FolderView {
     pub render: Option<crate::grid_render::GridRender>,
     /// « Empiler automatiquement » (11/11/2026) ; `None` : celui de la configuration.
     pub stacking: Option<bool>,
+    /// Logiciels cochés du filtre « développées » (identifiants, #414) ; `None` : tous les
+    /// installés. Ceux qu'on n'a pas ici restent écrits pour l'ordinateur qui les a.
+    pub developed_engines: Option<Vec<String>>,
+    /// Case « Sous-dossiers » (#414) ; `None` : `[gui.folders] subfolders`.
+    pub subfolders: Option<bool>,
+    /// Image où l'on en était (#414), chemin relatif au dossier avec des « / » ; écrite en
+    /// quittant le dossier, pas à chaque image.
+    pub current: Option<String>,
+    /// Images des piles dépliées (#414), chemins relatifs.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub expanded: Vec<String>,
+    /// Photos dont la pile de développements est dépliée (#414), chemins relatifs.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub dev_unfolded: Vec<String>,
+}
+
+impl FolderView {
+    /// Sans ce qui bouge en parcourant (image courante, piles dépliées) : ce qu'on compare
+    /// à chaque image pour savoir s'il faut écrire.
+    pub fn settled(&self) -> FolderView {
+        FolderView {
+            current: None,
+            expanded: Vec::new(),
+            dev_unfolded: Vec::new(),
+            ..self.clone()
+        }
+    }
+}
+
+/// `path` relatif à `dir`, avec des « / » (le même sur tous les systèmes).
+pub fn relative(dir: &Path, path: &Path) -> Option<String> {
+    let rest = path.strip_prefix(dir).ok()?;
+    let parts: Vec<String> = rest
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    (!parts.is_empty()).then(|| parts.join("/"))
+}
+
+/// Chemin écrit par [`relative`], recollé sous `dir`.
+pub fn absolute(dir: &Path, relative: &str) -> std::path::PathBuf {
+    relative
+        .split('/')
+        .filter(|c| !c.is_empty())
+        .fold(dir.to_path_buf(), |p, c| p.join(c))
 }
 
 /// Filtres et tri retenus pour `dir`, s'il y en a ; `data` : dossier de données, pour le

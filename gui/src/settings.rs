@@ -1303,6 +1303,9 @@ pub struct FolderSettings {
     /// Case « sous-dossiers » du panneau : niveaux de sous-dossiers dont les images
     /// s'affichent aussi dans la grille, au plus (en plus du dossier ouvert).
     pub subfolders_depth: usize,
+    /// Case « sous-dossiers » d'un dossier jamais réglé (chaque dossier garde la sienne
+    /// depuis le 11/11/2026, #414).
+    pub subfolders: bool,
     /// Titres des sections (« Disques amovibles », « Favoris »… et celles du panneau de
     /// droite) : taille par rapport au texte des dossiers.
     pub section_scale: f32,
@@ -1335,6 +1338,7 @@ impl Default for FolderSettings {
             search_depth: 4,
             search_results: 200,
             subfolders_depth: 3,
+            subfolders: false,
             section_scale: 1.25,
             section_gap: 6.0,
             running_check_ms: 1000,
