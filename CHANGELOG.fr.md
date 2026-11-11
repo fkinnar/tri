@@ -4,6 +4,16 @@
 
 ## Non publié
 
+- **Gestion des couleurs** (#423) : chaque image est affichée avec son vrai espace
+  couleur au lieu d'être supposée en sRGB : JPEG boîtier (Adobe RGB aussi), images plates
+  avec leur profil ICC (TIFF et PNG 16 bits convertis à leur profondeur), HEIC, et
+  développements avec le profil de sortie de leur historique (ProPhoto… ; tri n'en impose
+  jamais). Elles passent par un espace de travail large (primaires Rec.2020, courbe sRGB),
+  converties une seule fois, à la mise en cache. Sous Linux et Windows, les images sont
+  converties vers le profil de l'écran (`[gui] display_profile`, sinon celui de colord ou
+  de Windows) ; macOS s'en charge lui-même. Les rendus RAW sont maintenant lus avec leur
+  vraie courbe : un peu plus clairs qu'avant, surtout dans les ombres. Vignettes et aperçus
+  sont recalculés une fois.
 - **Les couleurs suivent le profil de l'écran sur macOS** (#421) : tri déclare
   maintenant sa fenêtre en sRGB au système, qui convertit vers le profil de l'écran
   (calibration comprise). Avant, les couleurs partaient sans conversion : largement trop
