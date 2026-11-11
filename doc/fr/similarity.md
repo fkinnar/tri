@@ -135,4 +135,7 @@ l'ordre de la grille et de ce qui décide du regroupement en dehors des empreint
 première image ; sinon la grille attend ses piles au plus `[gui.grid] stacks_wait_ms` (un
 dossier jamais analysé peut demander des minutes : au-delà, elle s'affiche dépliée et se
 replie comme avant), avec une boîte « Regroupement des piles… » à partir de
-`[gui.grid] stacks_overlay_from` images.
+`[gui.grid] stacks_overlay_from` images. Même idée pour les vignettes des
+développements (et les couvertures) : tant que le rendu développé n'est pas encore su
+(sidecar en lecture en fond), la vignette reste vide au plus `[gui.grid] render_wait_ms`
+plutôt que de montrer le JPEG boîtier puis de changer.

@@ -823,6 +823,9 @@ pub struct TriApp {
     /// Dossier ouvert en piles, pas encore prêtes : depuis quand on les attend (la grille
     /// reste vide au plus `[gui.grid] stacks_wait_ms`).
     stacks_wait: Option<Instant>,
+    /// Ouverture du dossier : les vignettes dont le rendu n'est pas encore su restent
+    /// vides au plus `[gui.grid] render_wait_ms` à partir de là.
+    opened_at: Option<Instant>,
     /// Regroupement en piles actif.
     stacking: bool,
     /// Sévérité du regroupement (-1 souple, grandes piles, à 1 strict ; 0 : le centre),
@@ -1583,6 +1586,7 @@ impl TriApp {
             expanded: HashSet::new(),
             stacks_memory: None,
             stacks_wait: None,
+            opened_at: None,
             // Grille non groupée par défaut (retour du 19/10/2026) : `[gui.grid] stacks`.
             stacking: settings.similarity.background && gui.grid.stacks,
             group_strictness: 0.0,
@@ -2179,6 +2183,7 @@ impl TriApp {
                     serde_json::from_slice(&bytes).ok()
                 });
                 self.stacks_wait = Some(Instant::now());
+                self.opened_at = Some(Instant::now());
                 self.folder = folder;
                 self.refresh_any_developed();
                 self.apply_sidecar_policy();
@@ -12143,6 +12148,22 @@ impl TriApp {
         let have = self.textures.get(&path).cloned();
         let have_level = self.texture_levels.get(&path).copied();
         if have.is_some() && have_level.unwrap_or(Level::Thumbnail) == want {
+            return have;
+        }
+        // Rendu pas encore su (sidecar en lecture en fond) : rien plutôt que le JPEG boîtier
+        // remplacé sous les yeux un instant plus tard (retour du 11/11/2026), le temps de
+        // `[gui.grid] render_wait_ms` après l'ouverture.
+        let settled = self.grid_levels.contains_key(&path);
+        let known = settled
+            && match want {
+                Level::Developed(engine) => engine
+                    .sidecar(&path)
+                    .is_none_or(|s| tri::develop::render_stamp_known(&s)),
+                _ => true,
+            };
+        let wait = Duration::from_millis(self.gui.grid.render_wait_ms);
+        if !known && self.opened_at.is_some_and(|t| t.elapsed() < wait) {
+            ctx.request_repaint_after(crate::app::poll_interval(ctx));
             return have;
         }
         // Le rendu voulu, ou en attendant celui de LibRaw (un développement pas encore
@@ -25531,6 +25552,65 @@ mod tests {
             Some(vec!["darktable".into(), "rapidraw".into()])
         );
         assert_eq!(written.order.unwrap().key, tri::sort::SortKey::Modified);
+    }
+
+    #[test]
+    fn a_development_thumbnail_waits_for_its_render_instead_of_swapping() {
+        // Retour du 11/11/2026 : à l'ouverture, une vignette de développement montrait le
+        // JPEG boîtier le temps de relire son sidecar, puis changeait d'image. Rendu pas
+        // encore su : vide, au plus `[gui.grid] render_wait_ms`.
+        let (mut h, dir) = harness();
+        let photos = dir.path().join("photos");
+        std::fs::write(
+            photos.join("img0.jpg.xmp"),
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
+        )
+        .unwrap();
+        h.state_mut().developers = fake_darktable();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 4);
+        let index = h
+            .state()
+            .files
+            .iter()
+            .position(|f| tri::media::is_development(&f.path))
+            .expect("le développement");
+        run_until(&mut h, move |app| app.ready(index, Level::Thumbnail));
+        let ctx = h.ctx.clone();
+        let far = Instant::now() + Duration::from_secs(5);
+        let path = h.state().files[index].path.clone();
+        // Sidecar pas encore relu (l'image, elle, connue), dossier qui vient de s'ouvrir :
+        // rien. La même chose sans attente montre la vignette (ci-dessous).
+        let sidecar = photos.join("img0.jpg.xmp");
+        for _ in 0..200 {
+            let _deferred = DeferStamps::start();
+            if h.state_mut().thumbnail_texture(&ctx, index, far).is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        tri::cache::forget_stamps([sidecar.as_path()]);
+        h.state_mut().textures.remove(&path);
+        h.state_mut().opened_at = Some(Instant::now());
+        h.state_mut().gui.grid.render_wait_ms = 60_000;
+        let shown = {
+            let _deferred = DeferStamps::start();
+            h.state_mut().thumbnail_texture(&ctx, index, far)
+        };
+        assert!(shown.is_none(), "pas le JPEG boîtier en attendant");
+        // Au-delà de l'attente : la vignette en attendant, comme avant (une fois ses
+        // relevés arrivés en fond).
+        h.state_mut().gui.grid.render_wait_ms = 0;
+        let mut shown = None;
+        for _ in 0..200 {
+            let _deferred = DeferStamps::start();
+            shown = h.state_mut().thumbnail_texture(&ctx, index, far);
+            if shown.is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(shown.is_some(), "la vignette, passé le délai");
     }
 
     #[test]

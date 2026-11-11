@@ -662,6 +662,10 @@ pub struct GridSettings {
     /// avant de s'afficher dépliée (#416 : sinon elle se repliait sous les yeux ; un
     /// dossier jamais analysé peut demander des minutes).
     pub stacks_wait_ms: u64,
+    /// Ouverture d'un dossier : une vignette dont on ne sait pas encore quel rendu montrer
+    /// (sidecar du développement en lecture) reste vide au plus ce temps (ms), plutôt que
+    /// de montrer le JPEG boîtier puis de changer sous les yeux (11/11/2026).
+    pub render_wait_ms: u64,
     /// Pendant cette attente, à partir de ce nombre d'images : une boîte « Regroupement
     /// des piles… » au centre de la grille (sinon la grille reste vide un instant).
     pub stacks_overlay_from: usize,
@@ -710,6 +714,7 @@ impl Default for GridSettings {
             stacks: false,
             stacks_wait_ms: 2000,
             stacks_overlay_from: 200,
+            render_wait_ms: 2000,
             search_width: 200.0,
             search_min_width: 80.0,
             render: crate::grid_render::GridRender::Embedded,

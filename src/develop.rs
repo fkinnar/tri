@@ -1094,6 +1094,13 @@ pub fn stamp(sidecar: &Path) -> String {
 /// Empreinte d'un sidecar pas encore relevé ([`stamp`]).
 const PENDING: &str = "pending";
 
+/// Vrai si l'empreinte du développement décrit par `sidecar` ([`render_stamp`]) est
+/// connue : sinon, son relevé est en cours en fond, et la clé de cache de son rendu n'est
+/// pas encore la bonne.
+pub fn render_stamp_known(sidecar: &Path) -> bool {
+    render_stamp(sidecar) != PENDING
+}
+
 /// Empreinte du **développement** décrit par un sidecar, pour la clé de cache du rendu
 /// développé : sous `xmp`, seulement les champs de darktable (`darktable:…`), sans
 /// `darktable:colorlabels` ; autre format (`.rrdata`), tout le contenu. Avant (revue du

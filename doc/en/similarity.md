@@ -129,4 +129,7 @@ grid order and of what decides the grouping besides the signatures (sliders, set
 Reopened with the same fingerprint, the stacks apply from the first frame; otherwise the
 grid waits for its stacks at most `[gui.grid] stacks_wait_ms` (a folder never analysed
 can take minutes: beyond, it shows unfolded and folds as before), with a "Grouping
-stacks…" box from `[gui.grid] stacks_overlay_from` images.
+stacks…" box from `[gui.grid] stacks_overlay_from` images. Same idea for the
+thumbnails of developments (and covers): while the developed render is not known yet
+(sidecar being read in the background), the thumbnail stays empty at most
+`[gui.grid] render_wait_ms` rather than showing the camera JPEG and then swapping.
