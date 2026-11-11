@@ -862,7 +862,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   27/10/2026, `Tree::set_folded` : une section repliée garde son titre, ses lignes
   quittent `Tree::rows`, donc aussi le curseur clavier). Sections repliées des deux
   panneaux retenues d'une session à l'autre (`gui-state.toml`, `panel_folded` :
-  `grid`, `exif`, `folders-personal`…).
+  `grid`, `exif`, `folders-personal`…). Depuis le 11/11/2026 (retour : le panneau est
+  long, il fallait replier des sections pour garder l'histogramme sous les yeux),
+  l'**histogramme est fixé** en haut du panneau de droite, au-dessus de la zone qui
+  défile, et ne se replie plus (`TriApp::side_panel_pinned`, `section_heading` : un titre
+  sans triangle, aligné sur les autres). `[gui] one_section_open = true` (désactivé par
+  défaut) : déplier une section replie les autres du même panneau
+  (`unfold_side_section`, `fold_folder_section`).
   - *Filtres* : d'abord les fichiers montrés, RAW et JPEG (deux cases sans titre, l'une
     reste cochée ; dans la barre des filtres jusqu'au 27/10/2026, puis une journée dans
     la section Grille ; retour du 28/10/2026), puis chaque filtre réglable avec une case (comme son icône de la barre), ses

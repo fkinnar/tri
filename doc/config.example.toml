@@ -692,6 +692,9 @@ remember_display = true
 # développées) et le tri de chaque dossier d'un lancement à l'autre, dans le dossier de
 # données. false : chaque dossier s'ouvre sans filtre, dans l'ordre retenu pour tous.
 remember_folder_view = true
+# Panneaux latéraux (dossiers, droite) : une seule section dépliée à la fois ; en déplier
+# une replie les autres du même panneau.
+one_section_open = false
 # Fenêtre déplacée ou redimensionnée : retenue une fois immobile depuis ce délai (ms), et
 # toujours à la fermeture.
 window_save_ms = 1000

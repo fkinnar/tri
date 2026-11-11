@@ -685,6 +685,9 @@ remember_display = true
 # developed) and sort order from one launch to the next, in the data folder. false: every
 # folder opens without filters, in the order kept for all.
 remember_folder_view = true
+# Side panels (folders, right): only one section unfolded at a time; unfolding one folds
+# the others of the same panel.
+one_section_open = false
 # Window moved or resized: remembered once still for this delay (ms), and always when
 # closed.
 window_save_ms = 1000

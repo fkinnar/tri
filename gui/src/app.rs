@@ -2350,21 +2350,7 @@ impl TriApp {
         // filtres et les lignes des EXIF (retour du 09/11/2026, #386) ; on copie une ligne
         // par son raccourci.
         ui.style_mut().interaction.selectable_labels = false;
-        self.meta_has_histogram = false;
         self.side_items.clear();
-        // Pas pendant l'édition d'une version : il vaut pour l'image entière, pas pour le
-        // cadre (retour du 07/11/2026 ; le suivre demanderait un histogramme RAW recalculé
-        // sur la zone).
-        if self.gui.metadata.histogram
-            && self.histogram
-            && !self.files.is_empty()
-            && self.crop.is_none()
-        {
-            if self.panel_section(ui, "histogram", t!("panel-section-histogram")) {
-                self.histogram_section(ui);
-            }
-            ui.separator();
-        }
         // Filtres en plein écran aussi (retour du 30/10/2026 : tout le panneau) ; la
         // grille y laisse place à la vue (#239).
         if matches!(self.mode, Mode::Grid | Mode::View) {
@@ -2412,6 +2398,24 @@ impl TriApp {
             self.side_cursor = Some(self.side_items.len().saturating_sub(1));
         }
         self.side_key = None;
+    }
+
+    /// Haut du panneau de droite, hors de la zone qui défile (retour du 11/11/2026 : le
+    /// panneau est long, il fallait replier des sections pour garder l'histogramme sous les
+    /// yeux) : l'histogramme, toujours visible et pas repliable. Pas pendant l'édition
+    /// d'une version : il vaut pour l'image entière, pas pour le cadre (retour du
+    /// 07/11/2026 ; le suivre demanderait un histogramme RAW recalculé sur la zone).
+    fn side_panel_pinned(&mut self, ui: &mut Ui) {
+        self.meta_has_histogram = false;
+        if self.gui.metadata.histogram
+            && self.histogram
+            && !self.files.is_empty()
+            && self.crop.is_none()
+        {
+            section_heading(ui, &t!("panel-section-histogram"), &self.gui.folders);
+            self.histogram_section(ui);
+            ui.separator();
+        }
     }
 
     /// Ajoute un élément pointable au panneau de droite (`title` : un titre de section) :
@@ -2571,11 +2575,46 @@ impl TriApp {
             if open {
                 self.panel_folded.insert(id.to_string());
             } else {
-                self.panel_folded.remove(id);
+                self.unfold_side_section(id);
             }
         }
         self.section_body_top = ui.cursor().top();
         open != clicked
+    }
+
+    /// Déplie la section `id` du panneau de droite ; avec `[gui] one_section_open`, les
+    /// autres se replient.
+    fn unfold_side_section(&mut self, id: &str) {
+        self.panel_folded.remove(id);
+        if self.gui.one_section_open {
+            for other in SIDE_SECTIONS.iter().filter(|&&s| s != id) {
+                self.panel_folded.insert((*other).to_string());
+            }
+        }
+    }
+
+    /// Plie ou déplie la section `s` du panneau des dossiers ; dépliée avec
+    /// `[gui] one_section_open`, les autres se replient.
+    fn fold_folder_section(&mut self, s: tri::places::Section, folded: bool) {
+        let mut changes = vec![(s, folded)];
+        if !folded && self.gui.one_section_open {
+            changes.extend(
+                self.tree
+                    .sections()
+                    .into_iter()
+                    .filter(|&o| o != s)
+                    .map(|o| (o, true)),
+            );
+        }
+        for (s, folded) in changes {
+            self.tree.set_folded(s, folded);
+            let key = format!("folders-{}", s.key());
+            if folded {
+                self.panel_folded.insert(key);
+            } else {
+                self.panel_folded.remove(&key);
+            }
+        }
     }
 
     /// Action sans objet ici, grisée dans l'interface : après les autres dans la palette,
@@ -4006,13 +4045,7 @@ impl TriApp {
         });
         if let Some(s) = fold {
             let folded = !self.tree.is_folded(s);
-            self.tree.set_folded(s, folded);
-            let key = format!("folders-{}", s.key());
-            if folded {
-                self.panel_folded.insert(key);
-            } else {
-                self.panel_folded.remove(&key);
-            }
+            self.fold_folder_section(s, folded);
         }
         // Par la ligne cliquée, pas par son dossier : un favori et le même dossier dans
         // l'arborescence se déplient chacun de leur côté.
@@ -18432,6 +18465,8 @@ impl eframe::App for TriApp {
                             self.task_click = click;
                         }
                     }
+                    // L'histogramme en haut, fixe ; le reste défile dessous.
+                    self.side_panel_pinned(ui);
                     ScrollArea::vertical()
                         .auto_shrink(false)
                         .show(ui, |ui| self.side_panel(ui));
@@ -19327,6 +19362,29 @@ fn section_title(
         triangle.clicked() || label.clicked()
     })
     .inner
+}
+
+/// Sections repliables du panneau de droite (identifiants de [`TriApp::panel_section`]) :
+/// celles que `[gui] one_section_open` replie quand une autre se déplie.
+const SIDE_SECTIONS: [&str; 5] = ["filters", "view", "grid", "exif", "adjust"];
+
+/// Titre d'une section qui ne se replie pas (l'histogramme du panneau de droite) : comme
+/// [`section_title`], aligné sur les autres, sans triangle ni clic.
+fn section_heading(ui: &mut Ui, title: &str, f: &crate::settings::FolderSettings) {
+    ui.add_space(f.section_gap);
+    let size = egui::TextStyle::Body.resolve(ui.style()).size * f.section_scale;
+    let color = marks::accent_mark(ui.ctx());
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        let side = ui.text_style_height(&egui::TextStyle::Body);
+        ui.add_space(side);
+        ui.label(
+            egui::RichText::new(title.to_uppercase())
+                .size(size)
+                .strong()
+                .color(color),
+        );
+    });
 }
 
 /// Sous un curseur de sévérité de largeur `width` : « plus souple » à gauche, « plus
@@ -29917,6 +29975,37 @@ mod tests {
         let text = std::fs::read_to_string(&config).unwrap();
         let written: AppSettings = tri::settings::parse(&text).unwrap();
         assert!(written.gui.histogram.after_auto, "écrite : {text}");
+    }
+
+    #[test]
+    fn one_section_open_folds_the_others() {
+        // Retour du 11/11/2026 : `[gui] one_section_open` (désactivé par défaut) : déplier
+        // une section replie les autres du même panneau ; l'histogramme, lui, est en haut
+        // du panneau de droite, toujours visible.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.get_by_label("HISTOGRAMME");
+        assert!(
+            h.query_all_by_label("Replier").count() > 0,
+            "des sections repliables"
+        );
+        // Par défaut : plusieurs sections dépliées.
+        h.state_mut().unfold_side_section("exif");
+        assert!(!h.state().panel_folded.contains("filters"));
+        h.state_mut().gui.one_section_open = true;
+        h.state_mut().unfold_side_section("exif");
+        for other in SIDE_SECTIONS.iter().filter(|&&s| s != "exif") {
+            assert!(h.state().panel_folded.contains(*other), "{other} repliée");
+        }
+        assert!(!h.state().panel_folded.contains("exif"));
+        // Panneau des dossiers : pareil.
+        let sections = h.state().tree.sections();
+        if let [first, second, ..] = sections.as_slice() {
+            h.state_mut().fold_folder_section(*second, false);
+            h.state_mut().fold_folder_section(*first, false);
+            assert!(h.state().tree.is_folded(*second));
+            assert!(!h.state().tree.is_folded(*first));
+        }
     }
 
     #[test]

@@ -271,6 +271,9 @@ pub struct GuiSettings {
     /// 30/10/2026) ; `false` : chaque dossier s'ouvre sans filtre, dans l'ordre retenu
     /// pour tous.
     pub remember_folder_view: bool,
+    /// Panneaux latéraux : une seule section dépliée à la fois (en déplier une replie les
+    /// autres du même panneau ; retour du 11/11/2026 : panneau de droite long).
+    pub one_section_open: bool,
     /// Fenêtre déplacée ou redimensionnée : retenue une fois immobile depuis ce délai (ms),
     /// pas à chaque image du mouvement (et toujours à la fermeture).
     pub window_save_ms: u64,
@@ -353,6 +356,7 @@ impl Default for GuiSettings {
             sort_descending: false,
             remember_display: true,
             remember_folder_view: true,
+            one_section_open: false,
             window_save_ms: 1000,
             rating_bar: true,
             title_bar: true,

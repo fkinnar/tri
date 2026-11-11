@@ -7,8 +7,11 @@
 - **Histogramme après réglages** (#427) : un bouton du grand histogramme (ou `e`) montre
   l'histogramme, les pourcentages d'écrêtage et les zones de l'image telle qu'on la voit,
   réglages de visualisation compris ; la part saturée du capteur reste affichée. Pendant
-  le glissement d'un curseur, l'histogramme suit tout de suite. Des réglages permettent
-  d'y passer d'office pour les images réglées, et de faire suivre les badges de la grille.
+  le glissement d'un curseur, l'histogramme suit tout de suite. Une case en tête de la
+  section Réglages y passe d'office pour les images réglées ; un réglage fait suivre les
+  badges de la grille. L'histogramme est désormais fixé en haut du panneau de droite et
+  ne se replie plus ; `[gui] one_section_open` ne laisse qu'une section dépliée par
+  panneau.
 - **Mires de couleur** (#425) : `cargo run --release --example colour_charts -- <dossier>`
   écrit la même mire dans tous les espaces courants (sRGB, Adobe RGB, Display P3,
   ProPhoto, Rec.2020, linéaires), en JPEG, TIFF et PNG avec leur profil, et vérifie que

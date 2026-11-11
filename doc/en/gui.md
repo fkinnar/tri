@@ -803,7 +803,12 @@ system one ("cold" measurements, experiments).
   the same way (feedback of 2026-10-27, `Tree::set_folded`: a folded section keeps its
   title, its rows leave `Tree::rows`, so the keyboard cursor too). Folded sections of both
   panels are remembered across sessions (`gui-state.toml`, `panel_folded`: `grid`, `exif`,
-  `folders-personal`…).
+  `folders-personal`…). Since 2026-11-11 (feedback: the panel is long, sections had to be
+  folded to keep the histogram in view) the **histogram is pinned** at the top of the
+  right panel, above the scrolling area, and no longer folds
+  (`TriApp::side_panel_pinned`, `section_heading`: a title without triangle, aligned with
+  the others). `[gui] one_section_open = true` (off by default): unfolding a section folds
+  the others of the same panel (`unfold_side_section`, `fold_folder_section`).
   - *Filters*: first the files shown, RAW and JPEG (two check boxes without a title, one
     stays checked; in the filter bar until 2026-10-27, then a day in the Grid section;
     feedback of 2026-10-28), then each adjustable filter with a check box (like its bar icon), its settings
