@@ -56,6 +56,7 @@ mod meta;
 mod offload;
 mod palette;
 mod path_field;
+mod reset_dialog;
 mod settings;
 mod settings_window;
 mod stacks;

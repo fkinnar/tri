@@ -150,6 +150,8 @@ struct Args {
     delete_left: bool,
     /// `--cache-here` (vrai) / `--cache-user` (faux) : cache gardé dans le dossier.
     keep_cache: Option<bool>,
+    /// `--reset` : ce qu'on efface du dossier (issue n° 411).
+    reset: Option<tri::reset::Parts>,
     /// `--adjust` : réglages de la référence (première image).
     adjust: AdjustArgs,
 }
@@ -275,6 +277,7 @@ fn parse() -> AnyResult<Args> {
             "--cache-usage" => args.usage = true,
             "--cache-here" => args.keep_cache = Some(true),
             "--cache-user" => args.keep_cache = Some(false),
+            "--reset" => args.reset = Some(tri::reset::Parts::parse(&value()?).ok_or_else(usage)?),
             "--check-update" => args.check_update = true,
             "--convert-xmp" => {
                 args.convert = Some(match value()?.as_str() {
@@ -1672,6 +1675,50 @@ fn run() -> AnyResult<()> {
             println!("{}", t!("cli-cache-released", place = place));
         }
         println!("{}", t!("cli-cache-moved", n = moved.entries));
+        return Ok(());
+    }
+    if let Some(parts) = args.reset {
+        let dir = std::path::absolute(args.dir.as_ref().ok_or_else(usage)?)?;
+        let cache = settings.open_cache()?;
+        let data = settings.data_dir();
+        let folders = tri::reset::folders(&dir, args.depth.unwrap_or(1));
+        let convention = settings.xmp.sidecar;
+        if args.dry_run {
+            let s = tri::reset::survey(Some(&cache), data.as_deref(), &folders, convention);
+            if parts.cache {
+                println!("{}", t!("cli-reset-cache", n = s.cache.entries));
+            }
+            if parts.data {
+                println!("{}", t!("cli-reset-data", n = s.data));
+            }
+            if parts.notes {
+                println!("{}", t!("cli-reset-notes", n = s.notes));
+            }
+            if parts.versions {
+                println!("{}", t!("cli-reset-versions", n = s.versions.1));
+            }
+            if s.conflicts > 0 && parts.notes {
+                println!("{}", t!("cli-reset-conflicts", n = s.conflicts));
+            }
+            return Ok(());
+        }
+        let done = tri::reset::run(Some(&cache), data.as_deref(), &folders, parts, convention);
+        if parts.cache {
+            println!("{}", t!("cli-reset-cache", n = done.freed.entries));
+        }
+        if parts.data {
+            println!("{}", t!("cli-reset-data", n = done.data));
+        }
+        if parts.notes {
+            println!("{}", t!("cli-reset-notes", n = done.notes.len()));
+        }
+        if parts.versions {
+            let n: usize = done.versions.iter().map(|(_, v)| v.len()).sum();
+            println!("{}", t!("cli-reset-versions", n = n));
+        }
+        for (image, why) in &done.skipped {
+            eprintln!("{}: {why}", image.display());
+        }
         return Ok(());
     }
     if args.check_update {

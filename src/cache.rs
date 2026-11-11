@@ -764,6 +764,31 @@ impl Cache {
         Ok(())
     }
 
+    /// Place des entrées des images du dossier `folder` (pas de ses sous-dossiers), tous
+    /// niveaux ([`Cache::clear_folder`] la libère).
+    pub fn folder_usage(&self, folder: &Path) -> io::Result<Usage> {
+        let folder = std::path::absolute(folder)?;
+        let mut total = Usage::default();
+        for level in Level::ALL {
+            let dir = self.shard(level, &folder).0;
+            let entries = match fs::read_dir(&dir) {
+                Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+                result => result?,
+            };
+            for file in entries.flatten() {
+                if file
+                    .path()
+                    .extension()
+                    .is_some_and(|e| e == "jpg" || e == "bin")
+                {
+                    total.bytes += file.metadata()?.len();
+                    total.entries += 1;
+                }
+            }
+        }
+        Ok(total)
+    }
+
     /// Supprime les entrées des images du dossier `folder` (pas de ses sous-dossiers), à
     /// un niveau ou à tous si `level` vaut `None`, quels que soient les réglages avec
     /// lesquels elles ont été calculées. Renvoie l'espace libéré.
@@ -862,7 +887,8 @@ pub struct Usage {
 }
 
 impl Usage {
-    fn add(&mut self, other: Usage) {
+    /// Ajoute `other`.
+    pub fn add(&mut self, other: Usage) {
         self.bytes += other.bytes;
         self.entries += other.entries;
     }

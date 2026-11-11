@@ -395,6 +395,27 @@ pub fn choose(
     Ok(())
 }
 
+/// Efface les fichiers de données de `folder` (le repère de l'interrupteur et le cache
+/// restent) ; renvoie le nombre de fichiers effacés (issue n° 411).
+pub fn clear(data: Option<&Path>, folder: &Path) -> io::Result<usize> {
+    let mut cleared = 0;
+    for name in FILES {
+        if read(data, folder, name).is_some() {
+            write(data, folder, name, None)?;
+            cleared += 1;
+        }
+    }
+    Ok(cleared)
+}
+
+/// Nombre de fichiers de données de `folder` ([`clear`]).
+pub fn count(data: Option<&Path>, folder: &Path) -> usize {
+    FILES
+        .iter()
+        .filter(|name| read(data, folder, name).is_some())
+        .count()
+}
+
 // --- Mise en ordre --------------------------------------------------------------------------
 
 /// Met en ordre les données de `folder` (absolu) à son ouverture :

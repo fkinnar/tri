@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- **Reset a folder** (#412): right click on a folder, Preferences, "Reset this folder…"
+  ("this drive…"): one dialog with a checkbox per thing to clear, each with what it
+  concerns, measured in the background: cache, tri's data (filters, sliders, covers…),
+  ratings and versions. Ratings are reset inside the sidecars, never deleted: only
+  stars, colours and flags change, so darktable's or Lightroom's sidecars keep the rest.
+  Ratings need "File actions" allowed. Ratings and versions can be undone, in one step.
+  "Clear the cache…" opens the same dialog with only the cache ticked, now on every
+  folder. Command line: `tri <folder> --reset cache,data,notes,versions [--dry-run]`.
 - **Everything on the drive** (#410): "Keep tri's data in this folder / on this drive"
   (right click on a folder or a drive) now keeps, besides the cache, everything `tri`
   remembers about the folders below: filters and sort, slider values, stack covers,
