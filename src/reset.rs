@@ -10,7 +10,7 @@
 //!   supprimés (idée de l'utilisateur) : seuls nos champs changent, le reste (historique
 //!   darktable, mots-clés de Lightroom…) est réécrit à l'identique. Toutes les sources de
 //!   la photo, sinon une source restée notée reviendrait. Une photo en conflit est sautée.
-//! - **Versions** : la liste `tri:Versions` (recadrages) vidée.
+//! - **Versions** : la liste `tri:Versions` vidée.
 //!
 //! Notes et versions s'annulent ensemble, en un pas ([`crate::history::Step::Reset`]) ;
 //! le cache et les données, non. Voir `doc/en/reset.md`.
@@ -31,7 +31,7 @@ pub struct Parts {
     pub data: bool,
     /// Les notes (étoiles, couleurs, drapeau).
     pub notes: bool,
-    /// Les versions (recadrages).
+    /// Les versions.
     pub versions: bool,
 }
 

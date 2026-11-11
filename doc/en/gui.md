@@ -61,7 +61,7 @@ system one ("cold" measurements, experiments).
   forgets it, 2026-10-28; a second click on the icon or the cross at the end of the field
   closes the search, 2026-11-05; see [servers.md](servers.md)), personal folders (with Desktop, Documents, Downloads, Pictures), favourites,
   then only the system (root, collapsed); **Subfolders** icon next to the title (2026-10-20,
-  remembered; a checkbox until 2026-10-28, Refresh moved to the right edge): images of subfolders are shown too (`[gui.folders] subfolders_depth`
+  kept per folder since 2026-11-11; a checkbox until 2026-10-28, Refresh moved to the right edge): images of subfolders are shown too (`[gui.folders] subfolders_depth`
   levels), read on demand by the engine (`places::Tree`, see [places.md](places.md)). The
   triangle expands or collapses (double-clicking the name too), a click on the name opens
   the folder without restarting (`folder::Folder`, see [folder.md](folder.md)): the
@@ -154,7 +154,10 @@ system one ("cold" measurements, experiments).
   (`f d`: camera JPEG, cover, a software, LibRaw; `[gui.grid] render` is the value of a
   folder never set, not the previous folder's: one culls in camera JPEG and comes back to
   a processed folder in cover) and, since 2026-11-11, **"Stack automatically"**
-  (`[gui.grid] stacks` for a folder never set) are kept in the folder's data (`view.json`, written when
+  (`[gui.grid] stacks` for a folder never set), the developed-filter engines, the
+  **"Subfolders"** checkbox (`[gui.folders] subfolders` for a folder never set), the
+  **current image** and the **unfolded stacks** (#414; these two written when leaving
+  the folder or closing `tri`, not at every image) are kept in the folder's data (`view.json`, written when
   they change; [store.md](store.md)) and restored when it opens, at launch too;
   a software disabled or uninstalled since gives way to the cover, or to the camera JPEG
   without any software (2026-11-05); a folder with nothing kept opens without filters, in the order kept for all. The name

@@ -62,7 +62,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   second clic sur l'icône ou la croix au bout du champ referme la recherche, 05/11/2026 ; voir
   [servers.md](servers.md)), dossiers personnels (avec Bureau, Documents,
   Téléchargements, Images), favoris, puis seulement le système (racine, repliée) ; icône
-  **Sous-dossiers** à côté du titre (20/10/2026, gardée ; une case jusqu'au 28/10/2026,
+  **Sous-dossiers** à côté du titre (20/10/2026, gardée par dossier depuis le 11/11/2026 ; une case jusqu'au 28/10/2026,
   Actualiser passé au bord droit) : les images des sous-dossiers s'affichent aussi
   (`[gui.folders] subfolders_depth` niveaux), lue à la demande par le
   moteur (`places::Tree`, voir [places.md](places.md)). Le triangle déplie ou replie (le
@@ -159,8 +159,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`f d` : JPEG boîtier, couverture, un logiciel, LibRaw ; `[gui.grid] render` est la
   valeur d'un dossier jamais réglé, pas celle du dossier précédent : on trie en JPEG
   boîtier, on revient sur un dossier traité en couverture) et, depuis le 11/11/2026,
-  **« Empiler automatiquement »** (`[gui.grid] stacks` pour un dossier jamais réglé) de
-  chaque dossier sont retenus
+  **« Empiler automatiquement »** (`[gui.grid] stacks` pour un dossier jamais réglé), les
+  logiciels du filtre « développées », la case **« Sous-dossiers »** (`[gui.folders]
+  subfolders` pour un dossier jamais réglé), l'**image courante** et les **piles
+  dépliées** (#414 ; ces deux-là écrites en quittant le dossier ou en fermant `tri`, pas à
+  chaque image) de chaque dossier sont retenus
   dans les données du dossier (`view.json`, écrit quand ils changent ;
   [store.md](store.md)) et repris à son ouverture, au lancement compris ; un logiciel désactivé ou désinstallé depuis
   cède la place à la couverture, ou au JPEG boîtier sans aucun logiciel (05/11/2026) ;

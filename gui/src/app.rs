@@ -466,6 +466,11 @@ pub struct TriApp {
     /// Filtres et tri du dossier ouvert tels que retenus (`[gui] remember_folder_view`) :
     /// changés, ils sont réécrits ([`Self::save_folder_view`]).
     folder_view: Option<crate::state::FolderView>,
+    /// Filtres et tri du dossier ouvert tels que lus dans son fichier, et tels
+    /// qu'appliqués à l'ouverture : un choix qui ne peut pas s'appliquer ici (logiciel
+    /// absent) et qu'on n'a pas touché est réécrit tel qu'il était (#414).
+    folder_view_file: Option<crate::state::FolderView>,
+    folder_view_open: Option<crate::state::FolderView>,
     /// Tri par date de prise de vue : des dates sont arrivées depuis le dernier tri
     /// (empreintes de similarité) ; la grille sera triée à nouveau une fois toutes là.
     sort_pending: bool,
@@ -1240,6 +1245,7 @@ impl TriApp {
             self.notice = Some((t!("filter-developed-off"), false));
             self.apply_filter();
         }
+        self.forced_view_change();
         // Les développements des seuls logiciels actifs (un logiciel coché ou décoché).
         self.refilter(Reveal::Minimal);
     }
@@ -1307,7 +1313,7 @@ impl TriApp {
             .flatten();
         let start_dir = dir.or(remembered.clone());
         let (folder, error, missing_last) = (Folder::default(), None, None);
-        let subfolders = data.as_deref().is_some_and(tri::folder::subfolders);
+        let subfolders = gui.folders.subfolders;
         let mut tree = Tree::new(settings.places.clone(), gui.folders.hidden);
         if let Some(data) = &data {
             tree.set_favorites(tri::places::favorites(data));
@@ -1447,6 +1453,8 @@ impl TriApp {
             conflicts_only: false,
             developed_on: false,
             developed_checked: None,
+            folder_view_file: None,
+            folder_view_open: None,
             filter_inverted: false,
             folder_view: None,
             order: tri::sort::Order {
@@ -1823,10 +1831,6 @@ impl TriApp {
             grid_info: Some(self.grid_info),
             grid_cell: Some(self.grid_cell),
             grid_render: Some(self.grid_render),
-            developed_engines: self
-                .developed_checked
-                .as_ref()
-                .map(|v| v.iter().map(|e| e.id().to_string()).collect()),
             panel_folded: Some({
                 let mut folded: Vec<String> = self.panel_folded.iter().cloned().collect();
                 folded.sort();
@@ -1944,13 +1948,6 @@ impl TriApp {
                     .set_folded(section, self.panel_folded.contains(&key));
             }
         }
-        if let Some(ids) = &s.developed_engines {
-            self.developed_checked = Some(
-                ids.iter()
-                    .filter_map(|id| tri::develop::Engine::from_id(id))
-                    .collect(),
-            );
-        }
         self.display_saved = self.display();
     }
 
@@ -1976,6 +1973,14 @@ impl TriApp {
     /// filtres sont gardés ; la sélection repart de la première image. En cas d'erreur, le
     /// message remplace la grille, le panneau reste là pour choisir un autre dossier.
     fn open_folder(&mut self, dir: &Path) {
+        // Le dossier quitté garde l'image où l'on en était (#414) ; puis la case
+        // « Sous-dossiers » du dossier ouvert, qui décide de ce qu'on lit.
+        self.save_folder_position();
+        if self.gui.remember_folder_view {
+            self.subfolders = crate::state::folder_view(self.settings.data_dir().as_deref(), dir)
+                .and_then(|v| v.subfolders)
+                .unwrap_or(self.gui.folders.subfolders);
+        }
         // Un dossier choisi : le dernier, disparu, ne sera plus rouvert de lui-même.
         self.missing_last = None;
         // Ses fichiers ont pu changer depuis (développés ailleurs) : relevés refaits.
@@ -2135,6 +2140,9 @@ impl TriApp {
                 self.group_curve =
                     tri::similarity::folder_curve(self.settings.data_dir().as_deref(), &folder.dir)
                         .unwrap_or(self.settings.similarity.strictness_curve);
+                self.group_gap =
+                    tri::similarity::folder_gap(self.settings.data_dir().as_deref(), &folder.dir)
+                        .unwrap_or(self.settings.similarity.max_gap_s);
                 self.blur_strictness = tri::sharpness::folder_strictness(
                     self.settings.data_dir().as_deref(),
                     &folder.dir,
@@ -2206,6 +2214,7 @@ impl TriApp {
             meta.clear();
         }
         self.apply_filter();
+        self.restore_folder_position();
         if let Some(i) = self.start_select.take() {
             self.selected = i.min(self.files.len().saturating_sub(1));
         }
@@ -5658,6 +5667,9 @@ impl TriApp {
             let curve = (self.group_curve != self.settings.similarity.strictness_curve)
                 .then_some(self.group_curve);
             let _ = tri::similarity::remember_curve(data.as_deref(), dir, curve);
+            let gap =
+                (self.group_gap != self.settings.similarity.max_gap_s).then_some(self.group_gap);
+            let _ = tri::similarity::remember_gap(data.as_deref(), dir, gap);
         }
     }
 
@@ -5836,6 +5848,106 @@ impl TriApp {
             order: Some(self.order),
             render: Some(self.grid_render),
             stacking: Some(self.stacking),
+            developed_engines: self
+                .developed_checked
+                .as_ref()
+                .map(|v| v.iter().map(|e| e.id().to_string()).collect()),
+            subfolders: Some(self.subfolders),
+            current: self
+                .files
+                .get(self.selected)
+                .and_then(|f| crate::state::relative(&self.folder.dir, &f.path)),
+            expanded: self.relative_list(self.expanded.iter()),
+            dev_unfolded: self.relative_list(self.dev_unfolded.iter()),
+        }
+    }
+
+    /// Chemins relatifs au dossier ouvert, triés (fichier stable d'une écriture à l'autre).
+    fn relative_list<'a>(&self, paths: impl Iterator<Item = &'a PathBuf>) -> Vec<String> {
+        let mut list: Vec<String> = paths
+            .filter_map(|p| crate::state::relative(&self.folder.dir, p))
+            .collect();
+        list.sort();
+        list
+    }
+
+    /// Ce qu'on écrit : `view`, sauf ce qu'un repli a imposé à l'ouverture et qu'on n'a pas
+    /// touché depuis (rendu d'un logiciel absent, filtre « développées » éteint faute de
+    /// logiciel) : la valeur du fichier, pour l'ordinateur qui a ces logiciels (#414). Les
+    /// logiciels cochés qu'on n'a pas ici restent écrits aussi.
+    fn view_to_write(&self, mut view: crate::state::FolderView) -> crate::state::FolderView {
+        let (Some(file), Some(open)) = (&self.folder_view_file, &self.folder_view_open) else {
+            return view;
+        };
+        if view.render == open.render {
+            view.render = file.render;
+        }
+        if view.developed == open.developed {
+            view.developed = file.developed;
+        }
+        if let (Some(ids), Some(old)) = (&mut view.developed_engines, &file.developed_engines) {
+            let here: Vec<&str> = self.developers.engines().iter().map(|e| e.id()).collect();
+            for id in old {
+                if !here.contains(&id.as_str()) && !ids.contains(id) {
+                    ids.push(id.clone());
+                }
+            }
+        }
+        view
+    }
+
+    /// Un repli vient d'imposer le rendu ou d'éteindre le filtre « développées »
+    /// (logiciels trouvés après l'ouverture, ou désactivés) : pas un choix à écrire.
+    fn forced_view_change(&mut self) {
+        let now = self.current_folder_view();
+        for view in [&mut self.folder_view_open, &mut self.folder_view]
+            .into_iter()
+            .flatten()
+        {
+            view.render = now.render;
+            view.developed = now.developed;
+        }
+    }
+
+    /// Image courante et piles dépliées du dossier ouvert : écrites en le quittant et en
+    /// fermant `tri` (pas à chaque image : un NAS, une synchronisation).
+    fn save_folder_position(&mut self) {
+        if !self.gui.remember_folder_view || self.folder.is_none() || self.folder_view.is_none() {
+            return;
+        }
+        let view = self.current_folder_view();
+        if self.folder_view.as_ref() == Some(&view) {
+            return;
+        }
+        let data = self.settings.data_dir();
+        let written = self.view_to_write(view.clone());
+        if let Err(e) =
+            crate::state::remember_folder_view(data.as_deref(), &self.folder.dir, &written)
+        {
+            trace(|| format!("position dans le dossier pas retenue : {e}"));
+        }
+        self.folder_view = Some(view);
+    }
+
+    /// Reprend l'image où l'on en était et les piles dépliées du dossier qui vient de
+    /// s'ouvrir (#414) ; une image disparue : on reste au début.
+    fn restore_folder_position(&mut self) {
+        let Some(file) = self.folder_view_file.clone() else {
+            return;
+        };
+        let dir = self.folder.dir.clone();
+        let abs = |r: &String| crate::state::absolute(&dir, r);
+        self.expanded = file.expanded.iter().map(abs).collect();
+        self.dev_unfolded = file.dev_unfolded.iter().map(abs).collect();
+        if !file.expanded.is_empty() || !file.dev_unfolded.is_empty() {
+            self.stacks_dirty = true;
+        }
+        if let Some(current) = &file.current {
+            let path = abs(current);
+            if let Some(i) = self.files.iter().position(|f| f.path == path) {
+                self.selected = i;
+                self.reveal = Some(Reveal::Minimal);
+            }
         }
     }
 
@@ -5849,6 +5961,14 @@ impl TriApp {
         }
         let view =
             crate::state::folder_view(self.settings.data_dir().as_deref(), dir).unwrap_or_default();
+        self.subfolders = view.subfolders.unwrap_or(self.gui.folders.subfolders);
+        let here = self.developers.engines();
+        self.developed_checked = view.developed_engines.as_ref().map(|ids| {
+            ids.iter()
+                .filter_map(|id| tri::develop::Engine::from_id(id))
+                .filter(|e| here.is_empty() || here.contains(e))
+                .collect()
+        });
         self.filter = view.kind;
         self.notes_rule = view.notes.clone();
         self.stars_op = view.stars_op;
@@ -5889,7 +6009,17 @@ impl TriApp {
         }
         // Le plein écran suit (un seul rendu affiché).
         self.sync_source();
-        self.folder_view = Some(self.current_folder_view());
+        // Ce qui est appliqué ; la position (image, piles dépliées) est celle du fichier,
+        // reprise une fois les images listées (`restore_folder_position`).
+        let applied = crate::state::FolderView {
+            current: view.current.clone(),
+            expanded: view.expanded.clone(),
+            dev_unfolded: view.dev_unfolded.clone(),
+            ..self.current_folder_view().settled()
+        };
+        self.folder_view_open = Some(applied.clone());
+        self.folder_view = Some(applied);
+        self.folder_view_file = Some(view);
     }
 
     /// Formats de sidecars créés quand on note (`[sidecars]`, 31/10/2026) : d'après les
@@ -5929,12 +6059,24 @@ impl TriApp {
         if !self.gui.remember_folder_view || self.folder.is_none() || self.folder_view.is_none() {
             return;
         }
-        let view = self.current_folder_view();
-        if self.folder_view.as_ref() == Some(&view) {
+        let Some(saved) = &self.folder_view else {
+            return;
+        };
+        // La position (image, piles dépliées) n'est pas comparée ici : écrite en quittant.
+        let now = self.current_folder_view().settled();
+        if saved.settled() == now {
             return;
         }
+        let view = crate::state::FolderView {
+            current: saved.current.clone(),
+            expanded: saved.expanded.clone(),
+            dev_unfolded: saved.dev_unfolded.clone(),
+            ..now
+        };
         let data = self.settings.data_dir();
-        if let Err(e) = crate::state::remember_folder_view(data.as_deref(), &self.folder.dir, &view)
+        let written = self.view_to_write(view.clone());
+        if let Err(e) =
+            crate::state::remember_folder_view(data.as_deref(), &self.folder.dir, &written)
         {
             trace(|| format!("filtres du dossier pas retenus : {e}"));
         }
@@ -6631,6 +6773,7 @@ impl TriApp {
             self.notice = Some((t!("filter-developed-off"), false));
             self.apply_filter();
         }
+        self.forced_view_change();
     }
 
     /// Rendu des vignettes ramené à un choix possible : un logiciel retenu d'une session
@@ -13934,10 +14077,8 @@ impl TriApp {
     /// Case « sous-dossiers » : retenue, et le dossier ouvert relu à la nouvelle
     /// profondeur.
     fn set_subfolders(&mut self, on: bool) {
+        // Retenue avec le dossier (#414 ; `save_folder_view`).
         self.subfolders = on;
-        if let Some(data) = self.settings.data_dir() {
-            let _ = tri::folder::remember_subfolders(&data, on);
-        }
         if !self.folder.is_none() {
             self.reload_folder(None);
         }
@@ -17791,6 +17932,7 @@ impl eframe::App for TriApp {
             tri::cache::on_stamps_read(move || repaint.request_repaint());
         }
         if ctx.input(|i| i.viewport().close_requested()) {
+            self.save_folder_position();
             self.stop_background();
         }
         ctx.data_mut(|d| d.insert_temp(dialog_settings_id(), self.gui.dialogs()));
@@ -25314,6 +25456,81 @@ mod tests {
             !h.state().stacks_pending(),
             "au-delà de l'attente : affichée"
         );
+    }
+
+    #[test]
+    fn the_current_image_and_more_are_kept_per_folder() {
+        // #414 (11/11/2026) : image où l'on en était, case « Sous-dossiers », écart de
+        // temps des piles, par dossier ; un rendu ou des logiciels qu'on n'a pas ici
+        // restent écrits pour l'ordinateur qui les a.
+        let (mut h, dir) = harness();
+        let photos = dir.path().join("photos");
+        let other = dir.path().join("autre");
+        std::fs::create_dir(&other).unwrap();
+        image::RgbImage::new(8, 8)
+            .save(other.join("x.jpg"))
+            .unwrap();
+        h.run_steps(3);
+        let open = |h: &mut Harness<'_, TriApp>, dir: &Path| {
+            h.state_mut().open_folder(dir);
+            let dir = dir.to_path_buf();
+            run_until(h, move |app| app.folder.dir == dir && app.opening.is_none());
+            h.run_steps(2);
+        };
+        h.state_mut().select(2);
+        h.state_mut().group_gap = 7.0;
+        h.state_mut().remember_group_tuning();
+        h.state_mut().set_subfolders(true);
+        h.run_steps(2);
+        h.state_mut().select(2);
+        h.run_steps(2);
+        let current = h.state().files[2].path.clone();
+        h.state_mut().expanded.insert(current.clone());
+        h.state_mut().dev_unfolded.insert(current.clone());
+        open(&mut h, &other);
+        assert!(!h.state().subfolders, "autre dossier : la configuration");
+        assert!(h.state().expanded.is_empty());
+        assert_eq!(h.state().selected, 0);
+        assert_eq!(h.state().group_gap, h.state().settings.similarity.max_gap_s);
+        open(&mut h, &photos);
+        assert!(h.state().subfolders, "repris");
+        assert_eq!(
+            h.state().files[h.state().selected].path,
+            current,
+            "image reprise"
+        );
+        assert!(
+            h.state().expanded.contains(&current),
+            "pile dépliée reprise"
+        );
+        assert!(h.state().dev_unfolded.contains(&current));
+        assert_eq!(h.state().group_gap, 7.0);
+        // Un dossier venu d'ailleurs : rendu d'un logiciel et logiciels cochés qu'on n'a
+        // pas ici (aucun logiciel dans les tests).
+        use crate::grid_render::GridRender;
+        use tri::develop::Engine;
+        let data = h.state().settings.data_dir();
+        let elsewhere = crate::state::FolderView {
+            render: Some(GridRender::Engine(Engine::Darktable)),
+            developed_engines: Some(vec!["darktable".into(), "rapidraw".into()]),
+            ..Default::default()
+        };
+        crate::state::remember_folder_view(data.as_deref(), &other, &elsewhere).unwrap();
+        open(&mut h, &other);
+        assert_eq!(h.state().grid_render, GridRender::Embedded, "repli");
+        // Un autre réglage changé ici : le fichier garde le rendu et les logiciels.
+        h.state_mut().set_order(tri::sort::Order {
+            key: tri::sort::SortKey::Modified,
+            descending: true,
+        });
+        h.run_steps(2);
+        let written = crate::state::folder_view(data.as_deref(), &other).unwrap();
+        assert_eq!(written.render, Some(GridRender::Engine(Engine::Darktable)));
+        assert_eq!(
+            written.developed_engines,
+            Some(vec!["darktable".into(), "rapidraw".into()])
+        );
+        assert_eq!(written.order.unwrap().key, tri::sort::SortKey::Modified);
     }
 
     #[test]
