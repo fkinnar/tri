@@ -14,7 +14,9 @@
   also keep their covers: shown first with their first image, they switched to the real
   cover once ratings and sharpness scores were read; the covers are now remembered too.
   And the grid waits for the folder's ratings: sorted by colour, its first frame showed the
-  name order without marks, then reordered.
+  name order without marks, then reordered. The ratings are read with the folder's list,
+  within the opening wait (`[gui.folders] open_wait_ms`): the previous folder stays shown
+  until the new one arrives complete.
 - **Stacked folders open already folded** (#417): the stacks of a folder are remembered in
   its cache after a complete grouping; reopened with nothing changed, it shows folded at
   once instead of folding on screen. Otherwise the grid waits for its stacks a moment

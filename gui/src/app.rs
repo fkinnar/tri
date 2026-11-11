@@ -234,11 +234,54 @@ impl Drop for DeferStamps {
 /// Ouverture d'un dossier lent ([`TriApp::open_folder`]) : sa liste lue en fond.
 struct Opening {
     dir: PathBuf,
-    result: Receiver<std::io::Result<Folder>>,
+    result: Receiver<std::io::Result<Opened>>,
     /// Interrompt la lecture.
     stop: Arc<AtomicBool>,
     /// Images trouvées jusqu'ici.
     found: Arc<AtomicUsize>,
+}
+
+/// Dossier lu par [`TriApp::open_folder`], avec ses notes si elles sont arrivées dans le
+/// délai d'attente (sinon leur lecture, qui continue en fond).
+struct Opened {
+    folder: Folder,
+    loading: Option<tri::folder::Loading>,
+    snapshot: Option<tri::watch::Snapshot>,
+}
+
+impl Opened {
+    /// Lit les notes de `folder` jusqu'à `deadline` : le dossier arrive complet (retour du
+    /// 11/11/2026 : une grille vide un instant, le temps de ses notes) ; au-delà (NAS, très
+    /// gros dossier), la lecture continue en fond, comme avant.
+    fn read(folder: Folder, depth: usize, watching: bool, deadline: Instant) -> Opened {
+        let mut folder = folder;
+        if folder.is_none() || !folder.notes.is_pending() {
+            return Opened {
+                folder,
+                loading: None,
+                snapshot: None,
+            };
+        }
+        let loading = tri::folder::Loading::start(&folder, depth, watching);
+        loop {
+            if let Some(loaded) = loading.try_take() {
+                folder.notes.adopt(loaded.notes);
+                return Opened {
+                    folder,
+                    loading: None,
+                    snapshot: loaded.snapshot,
+                };
+            }
+            if Instant::now() >= deadline {
+                return Opened {
+                    folder,
+                    loading: Some(loading),
+                    snapshot: None,
+                };
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
 }
 
 struct Engine {
@@ -2013,9 +2056,15 @@ impl TriApp {
         let (stop_scan, found_scan) = (stop.clone(), found.clone());
         let slow = Duration::from_millis(self.gui.folders.type_check_ms);
         let repaint = self.repaint.clone();
+        // Ses notes aussi, dans le délai d'attente (un peu avant, pour arriver à temps).
+        let wait = self.open_wait();
+        let deadline = Instant::now() + wait.saturating_sub(wait / 5);
+        let watching = self.settings.watch.interval_ms > 0
+            && !self.watch.as_ref().is_some_and(|(w, _, _)| w.dir() == dir);
         std::thread::spawn(move || {
             let result =
-                Folder::scan_counting(&target, depth, convention, slow, &stop_scan, &found_scan);
+                Folder::scan_counting(&target, depth, convention, slow, &stop_scan, &found_scan)
+                    .map(|folder| Opened::read(folder, depth, watching, deadline));
             let _ = tx.send(result);
             if let Some(ctx) = repaint {
                 ctx.request_repaint();
@@ -2108,7 +2157,11 @@ impl TriApp {
     }
 
     /// Installe le dossier `dir` lu (ou son erreur) : grille, filtres, moteur.
-    fn install_folder(&mut self, dir: &Path, result: std::io::Result<Folder>) {
+    fn install_folder(&mut self, dir: &Path, result: std::io::Result<Opened>) {
+        let (result, loading, snapshot) = match result {
+            Ok(opened) => (Ok(opened.folder), opened.loading, opened.snapshot),
+            Err(e) => (Err(e), None, None),
+        };
         // Dossier du lancement : l'arborescence se déplie jusqu'à lui ; le dernier dossier
         // disparu est dit et attendu, pas une erreur.
         let start = self.start_dir.take().filter(|(d, _)| d == dir);
@@ -2191,7 +2244,22 @@ impl TriApp {
                 self.folder = folder;
                 self.refresh_any_developed();
                 self.apply_sidecar_policy();
-                self.start_loading();
+                match loading {
+                    // Notes encore en lecture (au-delà du délai) : elle continue en fond.
+                    Some(loading) => {
+                        self.watch_snapshot = None;
+                        self.auto_develop_pending = true;
+                        self.loading = Some(loading);
+                    }
+                    // Déjà lues avec la liste : le dossier arrive complet.
+                    None => {
+                        self.start_loading();
+                        if snapshot.is_some() {
+                            self.watch_snapshot = snapshot;
+                        }
+                        self.load_choices();
+                    }
+                }
                 self.apply_sort();
                 self.error = None;
             }
@@ -25795,6 +25863,26 @@ mod tests {
         h.state_mut().gui.grid.render_wait_ms = 60_000;
         run_until(&mut h, |app| app.loading.is_none());
         assert!(!h.state().notes_pending(), "notes lues");
+    }
+
+    #[test]
+    fn a_folder_arrives_with_its_notes_read() {
+        // Retour du 11/11/2026 : une image vide entre deux dossiers, le temps des notes du
+        // nouveau. Lues dans le délai d'attente de l'ouverture, avec la liste : le dossier
+        // arrive complet, l'ancien reste affiché jusque-là.
+        let (mut h, dir) = harness();
+        let other = dir.path().join("autre");
+        std::fs::create_dir(&other).unwrap();
+        image::RgbImage::new(8, 8)
+            .save(other.join("x.jpg"))
+            .unwrap();
+        h.run_steps(2);
+        h.state_mut().open_wait_override = Some(Duration::from_secs(5));
+        h.state_mut().open_folder(&other);
+        assert_eq!(h.state().folder.dir, other, "installé tout de suite");
+        assert!(h.state().loading.is_none(), "notes déjà lues");
+        assert!(!h.state().folder.notes.is_pending());
+        assert!(!h.state().notes_pending(), "la grille n'attend rien");
     }
 
     #[test]
