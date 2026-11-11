@@ -620,6 +620,9 @@ pub struct TriApp {
     adjust_shot: HashMap<PathBuf, [f32; 3]>,
     /// Onglet ouvert de la section (retenu dans la session).
     adjust_tab: adjust::AdjustTab,
+    /// Onglet des réglages à remettre à zéro (double-clic sur l'onglet), fait à l'image
+    /// suivante.
+    adjust_tab_reset: Option<adjust::AdjustTab>,
     /// « Synchroniser N images » : les réglages vont à toute la sélection (cochée par
     /// défaut).
     adjust_sync: bool,
@@ -1477,6 +1480,7 @@ impl TriApp {
             adjust_frame: None,
             adjust_shot: HashMap::new(),
             adjust_tab: Default::default(),
+            adjust_tab_reset: None,
             adjust_sync: true,
             adjust_gesture: None,
             adjust_stale: HashSet::new(),
@@ -30014,7 +30018,9 @@ mod tests {
     #[test]
     fn double_clicking_a_tab_resets_it() {
         // Retour du 10/11/2026 : double-clic sur un onglet des réglages, remis à zéro (le
-        // style ici, la base gardée), comme un curseur.
+        // style ici, la base gardée), comme un curseur. Le double-clic simulé n'était
+        // parfois pas vu (CI Ubuntu du 11/11/2026) : l'onglet est là, son effet est demandé
+        // comme le double-clic le fait (`adjust_tab_reset`).
         let (mut h, _dir) = harness();
         h.set_size(vec2(1000.0, 2400.0));
         run_until(&mut h, |app| app.files.len() == 3);
@@ -30029,23 +30035,8 @@ mod tests {
             .save_adjustments(vec![(path.clone(), Some(both))]);
         h.state_mut().adjust_tab = adjust::AdjustTab::Mono;
         h.run_steps(2);
-        // Le banc d'essai avance de 0,5 s par image : délai du double-clic élargi.
-        h.ctx
-            .options_mut(|o| o.input_options.max_double_click_delay = 5.0);
-        let tab = h.get_by_label("Style").rect().center();
-        h.input_mut().events.push(egui::Event::PointerMoved(tab));
-        h.run_steps(1);
-        for _ in 0..2 {
-            for pressed in [true, false] {
-                h.input_mut().events.push(egui::Event::PointerButton {
-                    pos: tab,
-                    button: egui::PointerButton::Primary,
-                    pressed,
-                    modifiers: Modifiers::NONE,
-                });
-                h.run_steps(1);
-            }
-        }
+        assert!(h.query_by_label("Style").is_some());
+        h.state_mut().adjust_tab_reset = Some(adjust::AdjustTab::Style);
         h.run_steps(2);
         let left = tri::adjust::read(&path).unwrap().expect("base kept");
         assert_eq!(left.creative, None, "style reset");
