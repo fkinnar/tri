@@ -620,6 +620,9 @@ pub struct TriApp {
     adjust_shot: HashMap<PathBuf, [f32; 3]>,
     /// Onglet ouvert de la section (retenu dans la session).
     adjust_tab: adjust::AdjustTab,
+    /// Onglet des réglages à remettre à zéro (double-clic sur l'onglet), fait à l'image
+    /// suivante.
+    adjust_tab_reset: Option<adjust::AdjustTab>,
     /// « Synchroniser N images » : les réglages vont à toute la sélection (cochée par
     /// défaut).
     adjust_sync: bool,
@@ -1477,6 +1480,7 @@ impl TriApp {
             adjust_frame: None,
             adjust_shot: HashMap::new(),
             adjust_tab: Default::default(),
+            adjust_tab_reset: None,
             adjust_sync: true,
             adjust_gesture: None,
             adjust_stale: HashSet::new(),
@@ -6267,7 +6271,12 @@ impl TriApp {
     /// Toutes les empreintes de similarité de la liste sont là (lues ou calculées).
     fn signatures_complete(&self) -> bool {
         let p = self.progress[5];
-        p.total > 0 && p.done >= p.total
+        // Annoncées toutes par le moteur, ou déjà toutes là (un développement n'en a pas).
+        (p.total > 0 && p.done >= p.total)
+            || (!self.files.is_empty()
+                && self.files.iter().all(|f| {
+                    tri::media::is_development(&f.path) || self.signatures.contains_key(&f.path)
+                }))
     }
 
     /// Empreinte de ce qui détermine les piles, en dehors des empreintes des images : la
@@ -12415,15 +12424,30 @@ impl TriApp {
         let file = &self.files[index];
         let key = preview::key(file, level, &engine.preview).ok()?;
         if level == Level::Thumbnail {
-            engine.cache.get(&key)
-        } else {
-            let side = engine.preview.sizes.thumbnail;
-            Some(
-                tri::jpeg::decode(&engine.cache.get_bytes(&key)?, side)
-                    .ok()?
-                    .fit(side),
-            )
+            return engine.cache.get(&key);
         }
+        // Rendu RAW ou développé : sa copie à la taille des vignettes, gardée dans le cache
+        // la première fois (11/11/2026 : au lancement, chaque vignette relisait un aperçu
+        // de 2560 px, et la grille se remplissait une à une).
+        let side = engine.preview.sizes.thumbnail;
+        let small = preview::grid_key(file, level, &engine.preview, side).ok();
+        if let Some(small) = &small
+            && let Some(bitmap) = engine.cache.get(small)
+        {
+            return Some(bitmap);
+        }
+        let bitmap = tri::jpeg::decode(&engine.cache.get_bytes(&key)?, side)
+            .ok()?
+            .fit(side);
+        // Écrite en fond : une écriture du cache attend le disque (`sync_all`), lent sous
+        // Windows ; pas pendant l'image (CI Windows du 11/11/2026).
+        if let Some(small) = small {
+            let (cache, copy) = (engine.cache.clone(), bitmap.clone());
+            std::thread::spawn(move || {
+                let _ = cache.put(&small, &copy);
+            });
+        }
+        Some(bitmap)
     }
 
     /// Politique des rendus RAW de fond : tout le dossier quand la grille les montre.
@@ -25886,6 +25910,35 @@ mod tests {
     }
 
     #[test]
+    fn a_rendered_thumbnail_is_kept_small_in_the_cache() {
+        // 11/11/2026 : au lancement, chaque vignette en rendu RAW relisait un aperçu de
+        // 2560 px (la grille se remplissait une à une). Sa copie à la taille des vignettes
+        // est gardée la première fois, puis relue.
+        let (mut h, _dir) = harness_with(1200, 900);
+        run_until(&mut h, |app| {
+            !app.files.is_empty() && app.ready(0, Level::Standard)
+        });
+        let state = h.state();
+        let engine = state.engine.as_ref().unwrap();
+        let file = state.files[0].clone();
+        let side = engine.preview.sizes.thumbnail;
+        let small = preview::grid_key(&file, Level::Standard, &engine.preview, side).unwrap();
+        assert!(!engine.cache.contains(&small), "pas encore");
+        let first = state.grid_bitmap(0, Level::Standard).expect("réduite");
+        // Écrite en fond.
+        for _ in 0..400 {
+            if engine.cache.contains(&small) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(engine.cache.contains(&small), "gardée");
+        assert!(first.width.max(first.height) <= side);
+        let again = state.grid_bitmap(0, Level::Standard).expect("relue");
+        assert_eq!((again.width, again.height), (first.width, first.height));
+    }
+
+    #[test]
     fn the_filter_bar_shows_and_hides_with_shift_f() {
         let (mut h, _dir) = harness();
         // Fenêtre étroite, panneaux ouverts : la fin de la barre (effacer) reste dans la
@@ -28056,6 +28109,9 @@ mod tests {
         let (mut h, _dir) = harness_images(images);
         h.state_mut().stacking = true;
         h.state_mut().settings.similarity.background = true;
+        // Toutes les empreintes là : les piles sont prêtes, la grille n'attend pas (CI du
+        // 11/11/2026 : elle restait vide les 2 s de `stacks_wait_ms` sur une machine lente).
+        h.state_mut().gui.grid.stacks_wait_ms = 60_000;
         // Empreintes calculées directement (le moteur du banc de test ne les fait pas).
         let files = h.state().files.clone();
         let preview = tri::preview::Settings::default();
@@ -29982,7 +30038,9 @@ mod tests {
     #[test]
     fn double_clicking_a_tab_resets_it() {
         // Retour du 10/11/2026 : double-clic sur un onglet des réglages, remis à zéro (le
-        // style ici, la base gardée), comme un curseur.
+        // style ici, la base gardée), comme un curseur. Le double-clic simulé n'était
+        // parfois pas vu (CI Ubuntu du 11/11/2026) : l'onglet est là, son effet est demandé
+        // comme le double-clic le fait (`adjust_tab_reset`).
         let (mut h, _dir) = harness();
         h.set_size(vec2(1000.0, 2400.0));
         run_until(&mut h, |app| app.files.len() == 3);
@@ -29997,23 +30055,8 @@ mod tests {
             .save_adjustments(vec![(path.clone(), Some(both))]);
         h.state_mut().adjust_tab = adjust::AdjustTab::Mono;
         h.run_steps(2);
-        // Le banc d'essai avance de 0,5 s par image : délai du double-clic élargi.
-        h.ctx
-            .options_mut(|o| o.input_options.max_double_click_delay = 5.0);
-        let tab = h.get_by_label("Style").rect().center();
-        h.input_mut().events.push(egui::Event::PointerMoved(tab));
-        h.run_steps(1);
-        for _ in 0..2 {
-            for pressed in [true, false] {
-                h.input_mut().events.push(egui::Event::PointerButton {
-                    pos: tab,
-                    button: egui::PointerButton::Primary,
-                    pressed,
-                    modifiers: Modifiers::NONE,
-                });
-                h.run_steps(1);
-            }
-        }
+        assert!(h.query_by_label("Style").is_some());
+        h.state_mut().adjust_tab_reset = Some(adjust::AdjustTab::Style);
         h.run_steps(2);
         let left = tri::adjust::read(&path).unwrap().expect("base kept");
         assert_eq!(left.creative, None, "style reset");

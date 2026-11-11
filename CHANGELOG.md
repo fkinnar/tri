@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Faster first grid at launch** (#419): thumbnails in RAW or developed render keep a
+  small copy in the cache the first time they are reduced; later launches read it instead
+  of the whole preview, and the grid no longer fills in one by one.
 - **Development thumbnails no longer swap on opening** (#418): a thumbnail whose
   developed render is not known yet (its sidecar being read) stays empty a moment
   (`[gui.grid] render_wait_ms`) instead of showing the camera JPEG and then changing image;

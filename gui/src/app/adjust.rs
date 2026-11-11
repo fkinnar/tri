@@ -724,7 +724,7 @@ impl TriApp {
             }
         });
         ui.add_space(6.0);
-        let mut tab_reset = None;
+        let mut tab_reset = self.adjust_tab_reset.take();
         // Onglets ; un point sur ceux qui changent l'image (un réglage caché se voit).
         ui.horizontal_wrapped(|ui| {
             let tabs = [
