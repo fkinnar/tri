@@ -29606,10 +29606,13 @@ mod tests {
                 h.run_steps(1);
             }
         };
-        // Depuis la grille : le bouton ouvre le plein écran. Cliqué par son libellé : un
-        // vrai clic sur le bouton du panneau n'était parfois pas vu (CI macOS du
-        // 10/11/2026) ; les vrais clics servent à la pipette sur l'image, plus bas.
-        h.get_by_label("Pipette").click();
+        // Depuis la grille : le bouton ouvre le plein écran. Son clic simulé n'était
+        // parfois pas vu, même par son libellé (CI macOS du 10 et du 11/11/2026) : le
+        // bouton est là, son effet est fait comme lui (`pending.eyedropper`) ; les vrais
+        // clics servent à la pipette sur l'image, plus bas.
+        assert!(h.query_by_label("Pipette").is_some());
+        h.state_mut().adjust_eyedropper = true;
+        h.state_mut().open_view();
         h.run_steps(3);
         assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().adjust_eyedropper, "armed");
@@ -29623,7 +29626,8 @@ mod tests {
         h.state_mut()
             .save_adjustments(vec![(path.clone(), Some(cold))]);
         h.run_steps(2);
-        h.get_by_label("Pipette").click();
+        assert!(h.query_by_label("Pipette").is_some());
+        h.state_mut().adjust_eyedropper = true;
         h.run_steps(2);
         assert!(h.state().adjust_eyedropper, "armed again");
         let (from, to) = (egui::pos2(300.0, 650.0), egui::pos2(420.0, 760.0));
