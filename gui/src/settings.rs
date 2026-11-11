@@ -271,6 +271,9 @@ pub struct GuiSettings {
     /// 30/10/2026) ; `false` : chaque dossier s'ouvre sans filtre, dans l'ordre retenu
     /// pour tous.
     pub remember_folder_view: bool,
+    /// Panneaux latéraux : une seule section dépliée à la fois (en déplier une replie les
+    /// autres du même panneau ; retour du 11/11/2026 : panneau de droite long).
+    pub one_section_open: bool,
     /// Fenêtre déplacée ou redimensionnée : retenue une fois immobile depuis ce délai (ms),
     /// pas à chaque image du mouvement (et toujours à la fermeture).
     pub window_save_ms: u64,
@@ -353,6 +356,7 @@ impl Default for GuiSettings {
             sort_descending: false,
             remember_display: true,
             remember_folder_view: true,
+            one_section_open: false,
             window_save_ms: 1000,
             rating_bar: true,
             title_bar: true,
@@ -1528,6 +1532,16 @@ pub struct HistogramSettings {
     pub camera_jpeg: bool,
     /// Épaisseur de ce trait (points).
     pub camera_width: f32,
+    /// Histogramme, indicateurs et zones d'une image qui a des réglages de visualisation :
+    /// montrés **après** les réglages d'eux-mêmes (sinon : données réelles, et le bouton
+    /// du grand histogramme ou `e` pour passer à l'après ; issue n° 420).
+    pub after_auto: bool,
+    /// Badges saturé / bouché de la grille d'une image réglée : suivent son exposition et
+    /// sa balance réglées (sinon : données réelles).
+    pub badges_follow_adjustments: bool,
+    /// Après réglages : côté long de l'image mesurée (pixels), réduite depuis l'aperçu
+    /// affiché.
+    pub after_side: u32,
 }
 
 impl Default for HistogramSettings {
@@ -1553,6 +1567,9 @@ impl Default for HistogramSettings {
             analysis_lighten: 0.06,
             camera_jpeg: true,
             camera_width: 1.5,
+            after_auto: false,
+            badges_follow_adjustments: false,
+            after_side: 1280,
         }
     }
 }

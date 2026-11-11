@@ -7,6 +7,13 @@
 - **Stack covers right from the opening** (#426): while ratings are still being read, a
   stack shows its usual cover even when the list changed a little since last time
   (sorting or filtering by ratings, a moved slider); it used to show its first image.
+- **Histogram after the adjustments** (#427): a button in the large histogram (or `e`
+  there) shows the histogram, the clipping percentages and the zones of the image as you
+  see it, viewing adjustments included; the sensor's saturated share stays shown. While a
+  slider moves, the histogram follows at once. A checkbox at the top of the Adjustments
+  section switches automatically for adjusted images; a setting lets the grid badges
+  follow the adjustments. The histogram is now pinned at the top of the right panel and
+  no longer folds; `[gui] one_section_open` keeps a single section unfolded per panel.
 - **Colour charts** (#425): `cargo run --release --example colour_charts -- <folder>`
   writes the same chart in every common colour space (sRGB, Adobe RGB, Display P3,
   ProPhoto, Rec.2020, linear ones), as JPEG, TIFF and PNG with their profile, and checks
