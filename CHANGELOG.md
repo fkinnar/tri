@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Histogram after the adjustments** (#427): a button in the large histogram (or `e`
+  there) shows the histogram, the clipping percentages and the zones of the image as you
+  see it, viewing adjustments included; the sensor's saturated share stays shown. While a
+  slider moves, the histogram follows at once. Settings to switch automatically for
+  adjusted images, and to let the grid badges follow the adjustments.
 - **Colour charts** (#425): `cargo run --release --example colour_charts -- <folder>`
   writes the same chart in every common colour space (sRGB, Adobe RGB, Display P3,
   ProPhoto, Rec.2020, linear ones), as JPEG, TIFF and PNG with their profile, and checks
