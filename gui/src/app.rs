@@ -40,6 +40,7 @@ use crate::trace::trace;
 use crate::view::{self, Source};
 
 mod adjust;
+mod after;
 mod controls;
 use controls::{Control, Host};
 
@@ -844,6 +845,22 @@ pub struct TriApp {
     /// Expositions du JPEG boîtier en calcul (en fond), et leur arrivée.
     camera_pending: HashSet<PathBuf>,
     camera_read: (mpsc::Sender<CameraRead>, Receiver<CameraRead>),
+    /// Histogramme, indicateurs et zones après les réglages (issue n° 420) : demandé
+    /// (bouton, `e`) ; la session seulement, réel à l'ouverture.
+    histogram_after: bool,
+    /// Expositions après réglages mesurées ([`after::After`]).
+    afters: std::collections::HashMap<PathBuf, after::After>,
+    /// Mesures de l'« après » finies, envoyées par leurs fils.
+    after_read: (mpsc::Sender<after::AfterDone>, Receiver<after::AfterDone>),
+    /// Images dont l'« après » est en mesure.
+    after_pending: HashSet<PathBuf>,
+    /// Images dont l'aperçu manquait à la dernière mesure, et quand (nouvel essai après
+    /// `[gui.grid] render_poll_ms`).
+    after_failed: std::collections::HashMap<PathBuf, Instant>,
+    /// Masques des zones après réglages, en textures.
+    after_masks: Lru<PathBuf, TextureHandle>,
+    /// Badges après réglages (`badges_follow_adjustments`) : réglages et parts.
+    clip_after: std::collections::HashMap<PathBuf, (tri::adjust::Layers, (f64, f64))>,
     /// Masques des zones, en textures.
     mask_textures: Lru<PathBuf, TextureHandle>,
     /// Parts de pixels saturés / bouchés par image, pour les badges de la grille.
@@ -1621,6 +1638,13 @@ impl TriApp {
             screen: crate::display::Screen::default(),
             camera_pending: HashSet::new(),
             camera_read: mpsc::channel(),
+            histogram_after: false,
+            afters: std::collections::HashMap::new(),
+            after_read: mpsc::channel(),
+            after_pending: HashSet::new(),
+            after_failed: std::collections::HashMap::new(),
+            after_masks: Lru::new(gui.view.textures),
+            clip_after: std::collections::HashMap::new(),
             mask_textures: Lru::new(gui.view.textures),
             clip_summary: std::collections::HashMap::new(),
             selected,
@@ -2782,8 +2806,8 @@ impl TriApp {
     /// l'image. Un clic l'ouvre en grand.
     fn histogram_section(&mut self, ui: &mut Ui) {
         let settings = self.gui.metadata;
-        match self.exposure_of(self.selected) {
-            Some(e) => {
+        match self.shown_exposure(self.selected) {
+            Some((e, real)) => {
                 self.meta_has_histogram = true;
                 let (rect, response) = ui.allocate_exact_size(
                     vec2(ui.available_width(), settings.histogram_height),
@@ -2809,6 +2833,7 @@ impl TriApp {
                     ui.painter(),
                     rect,
                     &e,
+                    real.as_deref(),
                     camera.as_deref(),
                     look,
                     &self.gui.histogram,
@@ -7367,7 +7392,8 @@ impl TriApp {
                     | Action::HistogramAll
                     | Action::HistogramLuminance
                     | Action::HistogramPhoto
-                    | Action::HistogramCamera => self.perform(ctx, action),
+                    | Action::HistogramCamera
+                    | Action::HistogramAfter => self.perform(ctx, action),
                     // Se déplacer d'image en image sous la boîte (retour du 19/10/2026) :
                     // l'histogramme suit l'image courante.
                     Action::NavPrev
@@ -8395,6 +8421,7 @@ impl TriApp {
             Action::HistogramLuminance => self.histogram_channel = Some(tri::exposure::LUMINANCE),
             Action::HistogramPhoto => self.histogram_photo = !self.histogram_photo,
             Action::HistogramCamera => self.histogram_camera = !self.histogram_camera,
+            Action::HistogramAfter => self.histogram_after = !self.histogram_after,
             Action::HistogramChannel => {
                 self.histogram_channel = match self.histogram_channel {
                     None => Some(0),
@@ -12228,10 +12255,19 @@ impl TriApp {
     /// Masque des zones de l'image `index`, en texture (créée à la première demande).
     fn mask_texture(&mut self, ctx: &egui::Context, index: usize) -> Option<TextureHandle> {
         let path = self.files.get(index)?.path.clone();
-        if let Some(t) = self.mask_textures.get(&path) {
+        // Après réglages (#420) : les zones de l'image réglée, quand elles sont mesurées.
+        let (e, after) = match self.shown_exposure(index)? {
+            (e, Some(_)) => (e, true),
+            (e, None) => (e, false),
+        };
+        let cached = if after {
+            self.after_masks.get(&path)
+        } else {
+            self.mask_textures.get(&path)
+        };
+        if let Some(t) = cached {
             return Some(t.clone());
         }
-        let e = self.exposure_of(index)?;
         let c = self.gui.colors.clone();
         let zones = histogram::ZoneColors {
             channels: [c.clip_red.into(), c.clip_green.into(), c.clip_blue.into()],
@@ -12242,17 +12278,29 @@ impl TriApp {
         let image = histogram::mask_image(&e.mask, &zones);
         // Au plus proche : des cases nettes, pas un dégradé flou.
         let texture = ctx.load_texture(
-            format!("{}#zones", path.display()),
+            format!(
+                "{}#zones{}",
+                path.display(),
+                if after { "-after" } else { "" }
+            ),
             image,
             TextureOptions::NEAREST,
         );
-        self.mask_textures.insert(path, texture.clone());
+        if after {
+            self.after_masks.insert(path, texture.clone());
+        } else {
+            self.mask_textures.insert(path, texture.clone());
+        }
         Some(texture)
     }
 
     /// Parts de pixels saturés / bouchés de l'image `index` (badges de la grille), lues
     /// dans le cache si l'analyse est prête et que le budget de l'image le permet.
     fn clip_fractions(&mut self, index: usize, deadline: Instant) -> Option<(f64, f64)> {
+        // Image réglée, badges qui suivent les réglages (#420) : l'analyse décalée.
+        if let Some(fractions) = self.adjusted_clip_fractions(index) {
+            return Some(fractions);
+        }
         let path = &self.files.get(index)?.path;
         if let Some(&fractions) = self.clip_summary.get(path) {
             return Some(fractions);
@@ -13438,7 +13486,11 @@ impl TriApp {
         if !self.histogram_large {
             return;
         }
-        let exposure = self.exposure_of(self.selected);
+        let shown = self.shown_exposure(self.selected);
+        let (exposure, real) = match shown {
+            Some((e, real)) => (Some(e), real),
+            None => (None, None),
+        };
         let camera = self.camera_exposure_of(self.selected);
         let is_raw = self
             .files
@@ -13458,7 +13510,7 @@ impl TriApp {
         // centre et à sa propre largeur.
         let at = ctx.content_rect().center() - size / 2.0 - vec2(20.0, 40.0);
         let dialog = modal_at("histogram_dialog", at).title(name).free_width();
-        let (mut toggle_photo, mut toggle_camera) = (false, false);
+        let (mut toggle_photo, mut toggle_camera, mut toggle_after) = (false, false, false);
         let modal = dialog.show(ctx, |ui| {
             // Photo d'analyse à droite de l'histogramme, à sa hauteur (retour du
             // 19/10/2026 : boîte plus compacte) ; sans elle, l'histogramme prend toute la
@@ -13482,6 +13534,7 @@ impl TriApp {
                             ui.painter(),
                             rect,
                             e,
+                            real.as_deref(),
                             camera.as_deref(),
                             look,
                             &self.gui.histogram,
@@ -13577,6 +13630,26 @@ impl TriApp {
                                 toggle_camera = true;
                             }
                         }
+                        // Réel / après réglages (#420) : à gauche des autres boutons, en
+                        // couleur d'accent quand l'après est montré.
+                        let button =
+                            histogram::after_button(rect, self.gui.histogram.channel_dot, is_raw);
+                        let key = self.keys_text(Action::HistogramAfter);
+                        let response = ui
+                            .interact(button, egui::Id::unique("histogram_after"), Sense::click())
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .on_hover_text(t!("histogram-after-button-tip", keys = key));
+                        let color = if real.is_some() {
+                            crate::marks::accent_bright(ui.visuals())
+                        } else if response.hovered() {
+                            ui.visuals().strong_text_color()
+                        } else {
+                            ui.visuals().text_color()
+                        };
+                        histogram::after_icon(ui.painter(), button, color);
+                        if response.clicked() {
+                            toggle_after = true;
+                        }
                         for (i, (dot, name)) in dots.into_iter().zip(names).enumerate() {
                             let tip = t!(
                                 "histogram-channel-tip",
@@ -13645,6 +13718,9 @@ impl TriApp {
         }
         if toggle_camera {
             self.histogram_camera = !self.histogram_camera;
+        }
+        if toggle_after {
+            self.histogram_after = !self.histogram_after;
         }
         if modal.should_close() {
             self.histogram_large = false;
@@ -29725,6 +29801,77 @@ mod tests {
             &[(Key::I, Modifiers::NONE), (Key::A, Modifiers::NONE)],
         );
         assert_eq!(h.state().small_histogram_look().channel, None);
+    }
+
+    #[test]
+    fn the_histogram_shows_the_image_after_its_adjustments() {
+        // #420 (11/11/2026) : réel par défaut, « après réglages » au bouton ou à `e` ;
+        // pendant le glissement, la dernière mesure décalée tout de suite ; d'office avec
+        // `after_auto` ; badges qui suivent avec `badges_follow_adjustments`.
+        let (mut h, _dir) = harness();
+        let path = h.state().files[0].path.clone();
+        run_until(&mut h, |app| app.exposures.contains(&path));
+        let real = h.state_mut().shown_exposure(0).unwrap();
+        assert!(real.1.is_none(), "réel par défaut");
+        let set_exposure = |h: &mut Harness<'_, TriApp>, ev: f32| {
+            let mut layers = tri::adjust::Layers::default();
+            layers.correction.exposure = ev;
+            h.state()
+                .adjust_map
+                .write()
+                .unwrap()
+                .layers
+                .insert(path.clone(), layers);
+        };
+        set_exposure(&mut h, 2.0);
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::HistogramAfter);
+        assert!(h.state().histogram_after);
+        // La mesure arrive en fond, réglages compris.
+        let measured = |app: &TriApp| {
+            app.afters
+                .get(&path)
+                .is_some_and(|a| a.layers.is_some_and(|l| l.correction.exposure == 2.0))
+        };
+        run_until(&mut h, |app| app.after_pending.is_empty() && measured(app));
+        let (after, sensor) = h.state_mut().shown_exposure(0).unwrap();
+        let sensor = sensor.expect("avec les données réelles à côté");
+        assert!(
+            after.over_fraction() > sensor.over_fraction(),
+            "+2 IL : plus de saturés ({} / {})",
+            after.over_fraction(),
+            sensor.over_fraction()
+        );
+        // Glissement : la mesure n'est pas refaite, la dernière est décalée tout de suite.
+        set_exposure(&mut h, -2.0);
+        let (live, _) = h.state_mut().shown_exposure(0).unwrap();
+        assert!(measured(h.state()), "dernière mesure encore à +2 IL");
+        assert!(
+            live.over_fraction() < after.over_fraction(),
+            "décalée vers le sombre : {} / {}",
+            live.over_fraction(),
+            after.over_fraction()
+        );
+        run_until(&mut h, |app| app.after_pending.is_empty() && !measured(app));
+        // `e` dans le grand histogramme rebascule sur le réel.
+        press(&mut h, Key::I, Modifiers::SHIFT);
+        press(&mut h, Key::E, Modifiers::NONE);
+        assert!(!h.state().histogram_after, "e : retour au réel");
+        assert!(h.state_mut().shown_exposure(0).unwrap().1.is_none());
+        // D'office pour une image réglée.
+        h.state_mut().gui.histogram.after_auto = true;
+        assert!(h.state_mut().shown_exposure(0).unwrap().1.is_some());
+        h.state_mut().gui.histogram.after_auto = false;
+        // Badges : sur le réel, sauf s'ils suivent les réglages.
+        set_exposure(&mut h, 3.0);
+        let far = Instant::now() + Duration::from_secs(5);
+        let (real_over, _) = h.state_mut().clip_fractions(0, far).unwrap();
+        h.state_mut().gui.histogram.badges_follow_adjustments = true;
+        let (follow_over, _) = h.state_mut().clip_fractions(0, far).unwrap();
+        assert!(
+            follow_over > real_over,
+            "+3 IL : badge saturé ({follow_over} / {real_over})"
+        );
     }
 
     #[test]

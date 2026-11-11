@@ -934,6 +934,29 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     histogramme pour la montrer ou la masquer, retenu d'une session à l'autre ;
     `[gui.histogram] camera_jpeg` (valeur au premier lancement), `camera_width`, couleur
     `[gui.colors] hist_camera` ;
+  - **après les réglages de visualisation** (11/11/2026, issue n° 420, décidé avec
+    l'utilisateur) :
+    - **Données réelles par défaut.** Un bouton (deux curseurs, à gauche des autres
+      boutons) et `e` dans le grand histogramme (`<leader> i e` ailleurs) font passer
+      l'histogramme, les pourcentages et les zones à **l'image telle qu'on la voit**,
+      réglages compris (exposition, balance, contraste, saturation, noir et blanc), pour
+      toutes les sources. « après réglages » est écrit en haut, et le pourcentage saturé
+      du **capteur** reste dans les indicateurs : ce que le capteur a perdu est perdu,
+      quel que soit le réglage. `[gui.histogram] after_auto = true` : une image réglée
+      montre l'« après » d'elle-même.
+    - **Comment c'est mesuré** (`app/after.rs`) : l'aperçu affiché est réglé comme à
+      l'écran, réduit à `[gui.histogram] after_side` (1280 px), puis mesuré
+      (`Exposure::from_bitmap`), dans un fil en arrière-plan, jamais sur celui de
+      l'interface. En plein écran, c'est l'aperçu à l'écran ; en grille, celui de la
+      vignette. Tant que cet aperçu n'est pas calculé, la vignette sert en attendant.
+    - **Pendant le glissement d'un curseur**, la dernière mesure est décalée tout de suite
+      de l'écart d'exposition et de balance (`Exposure::shifted` : histogrammes en IL
+      déplacés le long de leur axe, exacts sur le décalage, au 1/8 d'IL près dans une
+      case). La mesure complète suit ; le contraste et le noir et blanc arrivent avec elle.
+    - **Badges de la grille** : sur les données réelles. `[gui.histogram]
+      badges_follow_adjustments = true` : ceux d'une image réglée suivent son exposition et
+      sa balance, d'après l'analyse réelle décalée de la même façon, sans repasser sur les
+      pixels ;
   - **zones** superposées à l'image (`w`, « warnings » ; `o` jusqu'au 19/10/2026) : masque du moteur en texture (échantillonnage au
     plus proche), étiré sur l'image (aussi à 100 %). Saturé **par canal** (demandé le
     17/10/2026, comme FastRawViewer) : un seul canal → sa couleur (`clip_red`,

@@ -310,6 +310,8 @@ loupe = "m"
 "core.histogram.photo" = ["p"]
 # j: the curve of the camera JPEG, over the RAW data.
 "core.histogram.camera" = ["j"]
+# e: real data / image after the viewing adjustments (histogram, indicators, areas).
+"core.histogram.after" = ["e"]
 
 # --- Crop (while cropping) ---
 # Digits for the ratio (with or without Shift, for AZERTY), "x" for the orientation
@@ -512,6 +514,7 @@ loupe = "m"
 "core.histogram.blue" = ["i b"]
 "core.histogram.all" = ["i a"]
 "core.histogram.luminance" = ["i l"]
+"core.histogram.after" = ["i e"]
 # p: the sharpness map. c: its colour; j / k (or Down / Up): more lenient / stricter.
 # z then a number, without Enter: the full-screen zoom (same rules as m below); z again
 # (before any digit): 100 %; / (fit, as without the leader): fitted.

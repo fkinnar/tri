@@ -142,3 +142,14 @@ at most 1; at -1, 1 (that side no longer excludes anything: black backgrounds, i
 #48). `folder_strictness` / `remember_strictness`: strictness remembered per folder and
 per side (keys `clip-over-strictness`, `clip-under-strictness` of the folder's
 `tuning.json`, see [store.md](store.md)).
+
+## Shifted exposure (`Exposure::shifted`, 2026-11-11, #420)
+
+The exposure of the same image with each series multiplied by `2^ev`: the histogram
+**after** an exposure or balance adjustment, at once, without going over the pixels
+again (used while a slider moves, and for the grid badges that follow the adjustments).
+Exact on the shift, approximate within a bin (values assumed evenly spread): 1/8 EV by
+default. Pixels at white are a point at white: they stay saturated when brightening, and
+go down with the rest when darkening (what they become in the image; the sensor lost
+them). Pure black stays black. The zone mask is not shifted: it comes with the measure of
+the adjusted image.

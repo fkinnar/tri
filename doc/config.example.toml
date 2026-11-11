@@ -1103,6 +1103,16 @@ analysis_lighten = 0.06
 # j ou le bouton du grand histogramme la montre ou la masque, et c'est retenu.
 camera_jpeg = true
 camera_width = 1.5
+# Histogramme, indicateurs et zones : sur les données réelles par défaut ; le bouton du
+# grand histogramme ou <core.histogram.after> montre l'image après les réglages de
+# visualisation (le pourcentage saturé du capteur reste affiché : ce qu'il a perdu est
+# perdu). true : une image réglée les montre après d'elle-même.
+after_auto = false
+# Badges saturé / bouché de la grille : sur les données réelles ; true : une image réglée
+# les montre après son exposition et sa balance réglées.
+badges_follow_adjustments = false
+# Après réglages : côté long de l'image mesurée (pixels), réduite depuis l'aperçu affiché.
+after_side = 1280
 
 [gui.sharpness]
 # Carte de netteté (focus peaking), en vue ajustée comme en 1:1 : affichée au démarrage

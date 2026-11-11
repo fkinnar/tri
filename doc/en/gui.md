@@ -870,6 +870,26 @@ system one ("cold" measurements, experiments).
     histogram show or hide it, remembered between sessions; `[gui.histogram]
     camera_jpeg` (value at the first launch), `camera_width`, colour `[gui.colors]
     hist_camera`;
+  - **after the viewing adjustments** (2026-11-11, issue #420, decided with the user):
+    - **Real data by default.** A button (two sliders, left of the other buttons) and `e`
+      in the large histogram (`<leader> i e` elsewhere) switch the histogram, the
+      percentages and the zones to the **image as shown**, adjustments included
+      (exposure, balance, contrast, saturation, B&W), for every source. "after
+      adjustments" is written at the top, and the **sensor's** saturated percentage stays
+      in the indicators: what the sensor lost is lost, whatever the adjustment.
+      `[gui.histogram] after_auto = true`: an adjusted image shows the "after" by itself.
+    - **How it is measured** (`app/after.rs`): the preview shown is adjusted as on screen
+      and reduced to `[gui.histogram] after_side` (1280 px), then measured
+      (`Exposure::from_bitmap`), in a background thread, never on the UI thread. In full
+      screen it is the preview on screen; in the grid, the thumbnail's. When that preview
+      is not computed yet, the thumbnail is used meanwhile.
+    - **During a slider drag**, the last measurement is shifted at once by the change of
+      exposure and balance (`Exposure::shifted`: EV histograms moved along their axis,
+      exact on the shift, 1/8 EV within a bin). The full measurement follows; contrast and
+      B&W appear with it.
+    - **Grid badges** stay on the real data. `[gui.histogram] badges_follow_adjustments
+      = true`: an adjusted image's badges follow its exposure and balance, from the real
+      analysis shifted the same way, without going over the pixels again;
   - **zones** overlaid on the image (`w`, "warnings"; `o` until 2026-10-19): engine mask as
     a texture (nearest-neighbour sampling), stretched over the image (also at 100 %).
     Saturated **per channel** (requested on 2026-10-17, like FastRawViewer): a single
