@@ -153,7 +153,8 @@ system one ("cold" measurements, experiments).
   developed, inversion), sort order and, since 2026-10-31, the **thumbnail render**
   (`f d`: camera JPEG, cover, a software, LibRaw; `[gui.grid] render` is the value of a
   folder never set, not the previous folder's: one culls in camera JPEG and comes back to
-  a processed folder in cover) are kept in the folder's data (`view.json`, written when
+  a processed folder in cover) and, since 2026-11-11, **"Stack automatically"**
+  (`[gui.grid] stacks` for a folder never set) are kept in the folder's data (`view.json`, written when
   they change; [store.md](store.md)) and restored when it opens, at launch too;
   a software disabled or uninstalled since gives way to the cover, or to the camera JPEG
   without any software (2026-11-05); a folder with nothing kept opens without filters, in the order kept for all. The name

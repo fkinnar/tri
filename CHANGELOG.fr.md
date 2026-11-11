@@ -4,6 +4,8 @@
 
 ## Non publié
 
+- **« Empiler automatiquement » retenu par dossier** (#413) : comme les filtres, le tri
+  et le rendu des vignettes ; un dossier jamais réglé prend la valeur de la configuration.
 - **Tout sur le disque** (#410) : « Garder les données de tri dans ce dossier / sur ce
   disque » (clic droit sur un dossier ou un disque) garde désormais, en plus du cache,
   tout ce que `tri` retient des dossiers en dessous : filtres et tri, valeurs des

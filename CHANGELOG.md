@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **"Stack automatically" kept per folder** (#413): like the filters, the sort and the
+  thumbnail render; a folder never set takes the configuration's value.
 - **Everything on the drive** (#410): "Keep tri's data in this folder / on this drive"
   (right click on a folder or a drive) now keeps, besides the cache, everything `tri`
   remembers about the folders below: filters and sort, slider values, stack covers,
