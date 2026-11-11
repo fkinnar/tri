@@ -1579,18 +1579,10 @@ impl TriApp {
             subfolders,
             group_gap: settings.similarity.max_gap_s,
             group_dialog: false,
-            chosen: settings
-                .engine()
-                .data_dir()
-                .map(|d| tri::similarity::chosen_covers(&d))
-                .unwrap_or_default(),
+            chosen: HashSet::new(),
             dev_unfolded: HashSet::new(),
             dev_shown: HashMap::new(),
-            dev_preferred: settings
-                .engine()
-                .data_dir()
-                .map(|d| tri::developments::preferred(&d))
-                .unwrap_or_default(),
+            dev_preferred: HashSet::new(),
             dev_before: false,
             grouping_preview: false,
             history_open: false,
@@ -1754,6 +1746,25 @@ impl TriApp {
         self.neighbour_browser = None;
     }
 
+    /// Couvertures de piles et développements préférés du dossier ouvert et des
+    /// sous-dossiers de ses images (gardés dans les données de tri de chaque dossier,
+    /// issue n° 378).
+    fn load_choices(&mut self) {
+        let data = self.settings.data_dir();
+        let mut dirs: std::collections::BTreeSet<&Path> = self
+            .folder
+            .files
+            .iter()
+            .filter_map(|f| f.path.parent())
+            .collect();
+        if !self.folder.is_none() {
+            dirs.insert(&self.folder.dir);
+        }
+        self.chosen = tri::similarity::chosen_covers(data.as_deref(), dirs.iter().copied());
+        self.dev_preferred = tri::developments::preferred(data.as_deref(), dirs);
+        self.stacks_dirty = true;
+    }
+
     /// Notes lues en fond : reprises (les notes posées entre-temps gardées), filtres et
     /// piles revus.
     fn poll_loading(&mut self, ctx: &egui::Context) {
@@ -1767,6 +1778,8 @@ impl TriApp {
         };
         self.loading = None;
         self.folder.notes.adopt(loaded.notes);
+        // Données de tri des sous-dossiers mises en ordre avec les notes : leurs choix.
+        self.load_choices();
         self.apply_sidecar_policy();
         self.watch_snapshot = loaded.snapshot;
         trace(|| format!("notes lues : {}", self.folder.notes.len()));
@@ -2093,31 +2106,36 @@ impl TriApp {
                 if let Some(data) = self.settings.data_dir() {
                     let _ = tri::folder::remember(&data, &folder.dir);
                 }
-                self.group_strictness = self
-                    .settings
-                    .data_dir()
-                    .and_then(|d| tri::similarity::folder_strictness(&d, &folder.dir))
-                    .unwrap_or(0.0);
-                self.group_pauses = self
-                    .settings
-                    .data_dir()
-                    .and_then(|d| tri::similarity::folder_pauses(&d, &folder.dir))
-                    .unwrap_or(0.0);
-                self.group_curve = self
-                    .settings
-                    .data_dir()
-                    .and_then(|d| tri::similarity::folder_curve(&d, &folder.dir))
-                    .unwrap_or(self.settings.similarity.strictness_curve);
-                self.blur_strictness = self
-                    .settings
-                    .data_dir()
-                    .and_then(|d| tri::sharpness::folder_strictness(&d, &folder.dir))
-                    .unwrap_or(0.0);
+                let data = self.settings.data_dir();
+                self.chosen =
+                    tri::similarity::chosen_covers(data.as_deref(), [folder.dir.as_path()]);
+                self.dev_preferred =
+                    tri::developments::preferred(data.as_deref(), [folder.dir.as_path()]);
+                self.group_strictness = tri::similarity::folder_strictness(
+                    self.settings.data_dir().as_deref(),
+                    &folder.dir,
+                )
+                .unwrap_or(0.0);
+                self.group_pauses = tri::similarity::folder_pauses(
+                    self.settings.data_dir().as_deref(),
+                    &folder.dir,
+                )
+                .unwrap_or(0.0);
+                self.group_curve =
+                    tri::similarity::folder_curve(self.settings.data_dir().as_deref(), &folder.dir)
+                        .unwrap_or(self.settings.similarity.strictness_curve);
+                self.blur_strictness = tri::sharpness::folder_strictness(
+                    self.settings.data_dir().as_deref(),
+                    &folder.dir,
+                )
+                .unwrap_or(0.0);
                 let clip = |side| {
-                    self.settings
-                        .data_dir()
-                        .and_then(|d| tri::exposure::folder_strictness(&d, &folder.dir, side))
-                        .unwrap_or(0.0)
+                    tri::exposure::folder_strictness(
+                        self.settings.data_dir().as_deref(),
+                        &folder.dir,
+                        side,
+                    )
+                    .unwrap_or(0.0)
                 };
                 self.clip_strictness = (
                     clip(tri::exposure::Clip::Over),
@@ -4374,6 +4392,17 @@ impl TriApp {
             location: self.settings.cache.location,
             places: self.settings.places.clone(),
         });
+        let removable = self
+            .tree
+            .places()
+            .iter()
+            .filter(|p| self.settings.places.ejectable(p))
+            .map(|p| p.path.clone())
+            .collect();
+        dialog.set_keep(crate::offload::KeepData {
+            cache: engine.cache.clone(),
+            removable,
+        });
         self.session_previews.push(scheduler);
     }
 
@@ -5609,26 +5638,24 @@ impl TriApp {
 
     /// Retient la sévérité des piles pour le dossier ouvert (oubliée au centre).
     fn remember_group_strictness(&self) {
-        if let Some(data) = self.settings.data_dir()
-            && !self.folder.is_none()
-        {
+        if !self.folder.is_none() {
+            let data = self.settings.data_dir();
             let keep = (self.group_strictness != 0.0).then_some(self.group_strictness);
-            let _ = tri::similarity::remember_strictness(&data, &self.folder.dir, keep);
+            let _ = tri::similarity::remember_strictness(data.as_deref(), &self.folder.dir, keep);
         }
     }
 
     /// Retient l'importance des pauses et la progression du curseur pour le dossier ouvert
     /// (oubliées à leur valeur par défaut).
     fn remember_group_tuning(&self) {
-        if let Some(data) = self.settings.data_dir()
-            && !self.folder.is_none()
-        {
+        if !self.folder.is_none() {
+            let data = self.settings.data_dir();
             let dir = &self.folder.dir;
             let pauses = (self.group_pauses != 0.0).then_some(self.group_pauses);
-            let _ = tri::similarity::remember_pauses(&data, dir, pauses);
+            let _ = tri::similarity::remember_pauses(data.as_deref(), dir, pauses);
             let curve = (self.group_curve != self.settings.similarity.strictness_curve)
                 .then_some(self.group_curve);
-            let _ = tri::similarity::remember_curve(&data, dir, curve);
+            let _ = tri::similarity::remember_curve(data.as_deref(), dir, curve);
         }
     }
 
@@ -5689,22 +5716,22 @@ impl TriApp {
             self.refilter(Reveal::Minimal);
         }
         if (slider.drag_stopped() || slider.double_clicked_slider(ui) || key.is_some())
-            && let Some(data) = self.settings.data_dir()
             && !self.folder.is_none()
         {
             let keep = (t != 0.0).then_some(t);
-            let _ = tri::exposure::remember_strictness(&data, &self.folder.dir, side, keep);
+            let data = self.settings.data_dir();
+            let _ =
+                tri::exposure::remember_strictness(data.as_deref(), &self.folder.dir, side, keep);
         }
         slider
     }
 
     /// Retient la sévérité du flou pour le dossier ouvert (oubliée au centre).
     fn remember_strictness(&self) {
-        if let Some(data) = self.settings.data_dir()
-            && !self.folder.is_none()
-        {
+        if !self.folder.is_none() {
+            let data = self.settings.data_dir();
             let keep = (self.blur_strictness != 0.0).then_some(self.blur_strictness);
-            let _ = tri::sharpness::remember_strictness(&data, &self.folder.dir, keep);
+            let _ = tri::sharpness::remember_strictness(data.as_deref(), &self.folder.dir, keep);
         }
     }
 
@@ -5817,11 +5844,8 @@ impl TriApp {
             self.folder_view = None;
             return;
         }
-        let view = self
-            .settings
-            .data_dir()
-            .and_then(|data| crate::state::folder_view(&data, dir))
-            .unwrap_or_default();
+        let view =
+            crate::state::folder_view(self.settings.data_dir().as_deref(), dir).unwrap_or_default();
         self.filter = view.kind;
         self.notes_rule = view.notes.clone();
         self.stars_op = view.stars_op;
@@ -5898,8 +5922,8 @@ impl TriApp {
         if self.folder_view.as_ref() == Some(&view) {
             return;
         }
-        if let Some(data) = self.settings.data_dir()
-            && let Err(e) = crate::state::remember_folder_view(&data, &self.folder.dir, &view)
+        let data = self.settings.data_dir();
+        if let Err(e) = crate::state::remember_folder_view(data.as_deref(), &self.folder.dir, &view)
         {
             trace(|| format!("filtres du dossier pas retenus : {e}"));
         }
@@ -6177,9 +6201,8 @@ impl TriApp {
         } else {
             self.chosen.remove(&path);
         }
-        if let Some(data) = self.settings.data_dir() {
-            let _ = tri::similarity::choose_cover(&data, &path, &others, on);
-        }
+        let data = self.settings.data_dir();
+        let _ = tri::similarity::choose_cover(data.as_deref(), &path, &others, on);
         self.stacks_dirty = true;
     }
 
@@ -6203,19 +6226,18 @@ impl TriApp {
         } else {
             self.notice = Some((t!("dev-preferred-none"), false));
         }
-        if let Some(data) = self.settings.data_dir() {
-            let result = if tri::media::is_development(&path) {
-                tri::developments::prefer(&data, &path, on)
-            } else {
-                // La photo elle-même : plus de préféré.
-                others
-                    .iter()
-                    .filter(|p| tri::media::is_development(p))
-                    .try_for_each(|p| tri::developments::prefer(&data, p, false))
-            };
-            if let Err(e) = result {
-                self.notice = Some((e.to_string(), true));
-            }
+        let data = self.settings.data_dir();
+        let result = if tri::media::is_development(&path) {
+            tri::developments::prefer(data.as_deref(), &path, on)
+        } else {
+            // La photo elle-même : plus de préféré.
+            others
+                .iter()
+                .filter(|p| tri::media::is_development(p))
+                .try_for_each(|p| tri::developments::prefer(data.as_deref(), p, false))
+        };
+        if let Err(e) = result {
+            self.notice = Some((e.to_string(), true));
         }
         self.stacks_dirty = true;
     }
@@ -13435,9 +13457,14 @@ impl TriApp {
         if let Some(step) = step {
             self.history.push(step);
         }
-        // Le cache suit le dossier renommé ou déplacé (sinon, recalculé).
+        // Le cache suit le dossier renommé ou déplacé (sinon, recalculé), et ses données de
+        // tri gardées sur la machine (celles de son `.tri/` sont parties avec lui).
         if cache_follows && let Some((from, to)) = renamed.clone() {
+            let data = self.settings.data_dir();
             self.cache_job(move |cache| {
+                if let Some(data) = &data {
+                    tri::store::relocate(data, &from, &to);
+                }
                 cache
                     .relocate(&from, &to)
                     .err()
@@ -26422,7 +26449,7 @@ mod tests {
         h.state_mut().tree = Tree::with_places(vec![place], false);
         h.state_mut().tree.expand(dir.path());
         h.run_steps(2);
-        let marker = seance.join(tri::cache::DISK_DIR);
+        let marker = tri::cache::disk_dir(&seance);
         for (label, kept) in [
             (t!("folder-menu-cache-folder"), true),
             (t!("folder-menu-cache-release-folder"), false),
@@ -26576,10 +26603,7 @@ mod tests {
         h.run_steps(2);
         run_until(&mut h, |app| app.cache_jobs.is_empty());
         assert_eq!(cache.disk_usage(&seance).unwrap().entries, 0);
-        assert!(
-            seance.join(tri::cache::DISK_DIR).is_dir(),
-            "still kept there"
-        );
+        assert!(tri::cache::disk_dir(&seance).is_dir(), "still kept there");
     }
 
     #[test]
@@ -26858,13 +26882,14 @@ mod tests {
         assert!(!h.state().group_dialog);
         let data = h.state().settings.data_dir().unwrap();
         let folder = h.state().folder.dir.clone();
-        assert_eq!(tri::similarity::folder_pauses(&data, &folder), Some(-1.0));
+        let data = Some(data.as_path());
+        assert_eq!(tri::similarity::folder_pauses(data, &folder), Some(-1.0));
         assert_eq!(
-            tri::similarity::folder_strictness(&data, &folder),
+            tri::similarity::folder_strictness(data, &folder),
             Some(-1.0),
             "la sévérité aussi, fermée au clavier"
         );
-        assert_eq!(tri::similarity::folder_curve(&data, &folder), Some(3.0));
+        assert_eq!(tri::similarity::folder_curve(data, &folder), Some(3.0));
         drop(dir);
     }
 
@@ -28212,6 +28237,12 @@ mod tests {
         };
         wait_for(&mut h, "Décharger");
         assert!(h.query_by_label_contains("2 à copier").is_some());
+        // Destination sur un disque interne : « garder les données de tri » proposé pour
+        // la séance, pas coché d'office (issue n° 378).
+        assert!(
+            h.query_by_label("Garder les données de tri dans le dossier de la séance")
+                .is_some()
+        );
         // « Ouvrir le dossier à la fin » est coché par défaut ; « RAW seulement » non.
         settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
@@ -28259,6 +28290,58 @@ mod tests {
         assert_eq!(opened.parent().unwrap(), dir.path().join("photos-local"));
         let history = std::fs::read_to_string(dir.path().join("history.tsv")).unwrap();
         assert_eq!(history.lines().count(), 2, "historique écrit");
+        assert!(!tri::store::kept(&opened), "rien gardé à côté des photos");
+        assert!(!opened.join(tri::store::DIR).exists());
+    }
+
+    #[test]
+    fn an_offload_can_keep_tri_s_data_with_the_session() {
+        // Issue n° 378 : case cochée, la séance garde cache et données de tri.
+        let (mut h, dir) = harness();
+        let card = dir.path().join("CARTE");
+        std::fs::create_dir_all(card.join("DCIM/100_TEST")).unwrap();
+        image::RgbImage::from_pixel(32, 24, image::Rgb([90, 90, 90]))
+            .save(card.join("DCIM/100_TEST/IMG0.jpg"))
+            .unwrap();
+        h.state_mut().tree = Tree::with_places(
+            vec![tri::places::Place {
+                name: "CARTE".into(),
+                path: card.clone(),
+                kind: tri::places::PlaceKind::Volume,
+            }],
+            false,
+        );
+        h.run_steps(2);
+        h.get_by_label("Décharger la carte…").click();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.query_by_label("Décharger").is_none() {
+            assert!(Instant::now() < deadline, "boîte jamais prête");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            h.query_by_label("Garder les données de tri dans le dossier de la séance")
+                .is_some()
+        );
+        h.state_mut().offload.as_mut().unwrap().keep_choice = Some(true);
+        settle_dialog(&mut h);
+        h.get_by_label("Décharger").click();
+        while h
+            .query_by_label_contains("1 fichiers copiés et vérifiés")
+            .is_none()
+        {
+            assert!(Instant::now() < deadline, "jamais copié");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        h.run_steps(3);
+        let opened = h.state().folder.dir.clone();
+        assert!(
+            opened.starts_with(dir.path().join("photos-local")),
+            "{opened:?}"
+        );
+        assert_eq!(tri::store::holder(&opened), Some(opened.clone()));
+        assert!(opened.join(".tri/keep").is_file());
     }
 
     #[test]

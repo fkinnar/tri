@@ -165,7 +165,7 @@ of the judgement (`blur_ratio`, `neighbour_ratio`, `group_ratio`) by `strictness
 severity` (×0.5 to ×2 by default, never above 1): `SharpnessSettings::with_strictness`.
 Live effect (badges, "blurry" filter), instantaneous: the scores are cached, only
 the judgement is redone. Remembered per folder on release (`sharpness::folder_strictness`,
-file `blur-strictness.tsv` in the data folder); double-click: back to the centre
+key `blur-strictness` of the folder's `tuning.json`); double-click: back to the centre
 (marker). The metadata panel gives the score relative to the folder and to the neighbours
 (or to the stack): enough to understand a judgement. Same principle to come for the stack
 slider (centre computed from the folder). The real remedy for this borderline case remains

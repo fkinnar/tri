@@ -111,9 +111,6 @@ pub fn save(data: &Path, state: &DisplayState) -> io::Result<()> {
     std::fs::rename(tmp, data.join(FILE))
 }
 
-/// Fichier des filtres et du tri de chaque dossier, dans le dossier de données.
-const FOLDER_VIEWS: &str = "folder-views";
-
 /// Filtres et tri d'un dossier, retenus d'un lancement à l'autre (demandé le 30/10/2026 :
 /// on trie en plusieurs passes, filtre changé entre deux ; `[gui] remember_folder_view`).
 /// La recherche par nom n'en fait pas partie (un geste du moment).
@@ -140,18 +137,20 @@ pub struct FolderView {
     pub render: Option<crate::grid_render::GridRender>,
 }
 
-/// Filtres et tri retenus pour `dir`, s'il y en a.
-pub fn folder_view(data: &Path, dir: &Path) -> Option<FolderView> {
-    serde_json::from_str(&tri::folder::folder_text(data, FOLDER_VIEWS, dir)?).ok()
+/// Filtres et tri retenus pour `dir`, s'il y en a ; `data` : dossier de données, pour le
+/// repli ([`tri::store`] : dans le `.tri/` du dossier si l'interrupteur « garder les
+/// données de tri ici » le couvre).
+pub fn folder_view(data: Option<&Path>, dir: &Path) -> Option<FolderView> {
+    serde_json::from_slice(&tri::store::read(data, dir, tri::store::VIEW)?).ok()
 }
 
 /// Retient `view` pour `dir` ; les filtres par défaut et pas de tri à lui : oublié.
-pub fn remember_folder_view(data: &Path, dir: &Path, view: &FolderView) -> io::Result<()> {
+pub fn remember_folder_view(data: Option<&Path>, dir: &Path, view: &FolderView) -> io::Result<()> {
     let json = (*view != FolderView::default())
-        .then(|| serde_json::to_string(view))
+        .then(|| serde_json::to_vec(view))
         .transpose()
         .map_err(io::Error::other)?;
-    tri::folder::remember_folder_text(data, FOLDER_VIEWS, dir, json.as_deref())
+    tri::store::write(data, dir, tri::store::VIEW, json.as_deref())
 }
 
 #[cfg(test)]
@@ -204,6 +203,7 @@ mod tests {
     #[test]
     fn a_folder_view_is_kept_per_folder_and_forgotten_when_empty() {
         let dir = tempfile::tempdir().unwrap();
+        let data = Some(dir.path());
         let (a, b) = (Path::new("/photos/a"), Path::new("/photos/b"));
         let view = FolderView {
             notes: tri::notes::NotesRule {
@@ -217,10 +217,10 @@ mod tests {
             render: Some(crate::grid_render::GridRender::Cover),
             ..Default::default()
         };
-        remember_folder_view(dir.path(), a, &view).unwrap();
-        assert_eq!(folder_view(dir.path(), a), Some(view));
-        assert_eq!(folder_view(dir.path(), b), None, "par dossier");
-        remember_folder_view(dir.path(), a, &FolderView::default()).unwrap();
-        assert_eq!(folder_view(dir.path(), a), None, "rien à retenir : oublié");
+        remember_folder_view(data, a, &view).unwrap();
+        assert_eq!(folder_view(data, a), Some(view));
+        assert_eq!(folder_view(data, b), None, "par dossier");
+        remember_folder_view(data, a, &FolderView::default()).unwrap();
+        assert_eq!(folder_view(data, a), None, "rien à retenir : oublié");
     }
 }

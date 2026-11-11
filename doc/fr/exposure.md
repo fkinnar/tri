@@ -139,4 +139,5 @@ mais `VERSION` passe à 5 : les analyses déjà en cache sont recalculées.
 `Clip::Under` bouché) à la sévérité d'un curseur (-1 à 1) : `base × span ^ -sévérité`,
 au plus 1 ; à -1, 1 (ce côté n'exclut plus rien : fonds noirs, issue n° 48).
 `folder_strictness` / `remember_strictness` : sévérité retenue par dossier et par côté
-(`clip-over-strictness.tsv`, `clip-under-strictness.tsv` du dossier de données).
+(clés `clip-over-strictness`, `clip-under-strictness` du `tuning.json` du dossier, voir
+[store.md](store.md)).

@@ -25,6 +25,34 @@ pub struct SessionPreviews {
     pub places: tri::places::PlaceSettings,
 }
 
+/// De quoi proposer « garder les données de tri » de la séance (issue n° 378) : le cache
+/// (ses entrées déjà calculées suivent) et les racines des disques amovibles.
+pub struct KeepData {
+    pub cache: tri::cache::Cache,
+    pub removable: Vec<PathBuf>,
+}
+
+/// Où poser l'interrupteur « garder les données de tri » pour la séance `dest` : la racine
+/// du disque amovible qui la contient (vrai), sinon la séance elle-même (faux) ; `None` :
+/// déjà gardées (un interrupteur au-dessus), ou rien pour proposer.
+fn keep_root(keep: Option<&KeepData>, dest: &Path) -> Option<(PathBuf, bool)> {
+    let keep = keep?;
+    if tri::store::kept(dest) {
+        return None;
+    }
+    Some(
+        match keep
+            .removable
+            .iter()
+            .filter(|r| dest.starts_with(r))
+            .max_by_key(|r| r.components().count())
+        {
+            Some(root) => (root.clone(), true),
+            None => (dest.to_path_buf(), false),
+        },
+    )
+}
+
 /// Ce que la boîte demande à l'application.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Request {
@@ -110,6 +138,11 @@ pub struct OffloadDialog {
     folder_here: Option<String>,
     /// Aperçus calculés pendant la copie ([`OffloadSettings::previews`]).
     previews: Option<SessionPreviews>,
+    /// De quoi garder les données de tri de la séance ([`KeepData`]).
+    keep: Option<KeepData>,
+    /// Case « garder les données de tri » touchée ; `None` : cochée d'office sur un
+    /// disque amovible (décidé le 11/11/2026).
+    pub(crate) keep_choice: Option<bool>,
 }
 
 impl OffloadDialog {
@@ -133,6 +166,8 @@ impl OffloadDialog {
             sources: Vec::new(),
             folder_here: None,
             previews: None,
+            keep: None,
+            keep_choice: None,
         }
     }
 
@@ -157,6 +192,11 @@ impl OffloadDialog {
     /// [`SessionPreviews`]).
     pub fn set_previews(&mut self, previews: SessionPreviews) {
         self.previews = Some(previews);
+    }
+
+    /// Propose de garder les données de tri de la séance avec `keep` ([`KeepData`]).
+    pub fn set_keep(&mut self, keep: KeepData) {
+        self.keep = Some(keep);
     }
 
     /// Nouvelle carte branchée alors que la boîte montre le bilan d'une autre (issue
@@ -402,10 +442,22 @@ impl OffloadDialog {
         let (plan, mut history) = (plan.clone(), history.take().unwrap_or_default());
         let (settings, stop, repaint) = (self.settings.clone(), cancel.clone(), ctx.clone());
         let previews = self.previews.take().filter(|_| settings.previews);
+        // « Garder les données de tri » : posé avant la copie, le cache se remplit
+        // directement à sa place.
+        let keep_at = keep_root(self.keep.as_ref(), &destination)
+            .filter(|(_, disk)| self.keep_choice.unwrap_or(*disk))
+            .map(|(root, _)| root);
+        let keep_cache = self.keep.as_ref().map(|k| k.cache.clone());
+        let location_too = self.keep_choice != Some(false);
         std::thread::spawn(move || {
             let progress_tx = tx.clone();
             let progress_ctx = repaint.clone();
-            if let Some(p) = &previews {
+            if let (Some(root), Some(cache)) = (&keep_at, &keep_cache) {
+                // Un échec (disque en lecture seule) laisse tout sur la machine.
+                let _ = std::fs::create_dir_all(&destination)
+                    .and_then(|()| cache.use_disk(root).map(|_| ()));
+            }
+            if let Some(p) = previews.as_ref().filter(|_| location_too) {
                 session_cache(p, &destination);
                 p.scheduler.set_folder(Vec::new());
             }
@@ -554,6 +606,9 @@ impl OffloadDialog {
                         if let Some(dest) = &dest {
                             ui.weak(t!("offload-destination", path = dest.display().to_string()));
                         }
+                        let keep_here = dest
+                            .as_deref()
+                            .and_then(|d| keep_root(self.keep.as_ref(), d));
                         if let Some(e) = error {
                             ui.colored_label(ui.visuals().error_fg_color, e.as_str());
                         }
@@ -562,6 +617,21 @@ impl OffloadDialog {
                         ui.add_space(6.0);
                         ui.checkbox(&mut settings.raw_only, t!("offload-raw-only"))
                             .on_hover_text(t!("offload-raw-only-tip"));
+                        if let Some((_, disk)) = keep_here {
+                            let mut on = self.keep_choice.unwrap_or(disk);
+                            let label = if disk {
+                                t!("offload-keep-disk")
+                            } else {
+                                t!("offload-keep-folder")
+                            };
+                            if ui
+                                .checkbox(&mut on, label)
+                                .on_hover_text(t!("folder-menu-cache-tip"))
+                                .changed()
+                            {
+                                self.keep_choice = Some(on);
+                            }
+                        }
                         ui.checkbox(&mut settings.open_after, t!("offload-open-after"));
                         if self.previews.is_some() {
                             ui.checkbox(&mut settings.previews, t!("offload-previews"))

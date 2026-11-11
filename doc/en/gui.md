@@ -153,8 +153,8 @@ system one ("cold" measurements, experiments).
   developed, inversion), sort order and, since 2026-10-31, the **thumbnail render**
   (`f d`: camera JPEG, cover, a software, LibRaw; `[gui.grid] render` is the value of a
   folder never set, not the previous folder's: one culls in camera JPEG and comes back to
-  a processed folder in cover) are kept in `folder-views` in the data folder (one JSON
-  line per folder, written when they change) and restored when it opens, at launch too;
+  a processed folder in cover) are kept in the folder's data (`view.json`, written when
+  they change; [store.md](store.md)) and restored when it opens, at launch too;
   a software disabled or uninstalled since gives way to the cover, or to the camera JPEG
   without any software (2026-11-05); a folder with nothing kept opens without filters, in the order kept for all. The name
   search is not part of it. `[gui] remember_folder_view = false`: as before, the
@@ -438,7 +438,7 @@ system one ("cold" measurements, experiments).
   (thumbnails, camera previews, RAW previews, 1:1, developed, analyses) and the total,
   measured in the background on opening; "Clear" per row and "Clear all", confirmed in
   place (the button becomes "Clear" / "Cancel"), in the background, the freed space
-  announced below. The general cache only: the one kept with the photos (`.tri-cache`)
+  announced below. The general cache only: the one kept with the photos (`.tri/cache`)
   follows its folder. Nothing to restart: what is missing is recomputed on demand.
 - **Settings window** (`Ctrl+,`, 2026-10-18; `gui/src/settings_window.rs`, engine:
   `tri::config_edit`, see `config_edit.md`): sections on the left (up / down arrows from
@@ -523,7 +523,7 @@ system one ("cold" measurements, experiments).
   developments, even from a development; `Shift+Delete` / `d)` the whole stack. Same
   confirmation dialog; several developments chosen: one ticked checkbox per development,
   untick to keep one. Without developments, Delete and Ctrl+Delete do the same thing.
-  `preferred-developments.txt` of the data). In full screen, a development shows **its
+  `choices.json` of the folder's data). In full screen, a development shows **its
   render** (requested by itself when missing, the camera JPEG meanwhile, labelled
   "· clone 1" and "before (… pending)"); `b` toggles before / after there (the camera
   JPEG instead) without touching the photos' source. In the grid, a development's
@@ -573,8 +573,8 @@ system one ("cold" measurements, experiments).
   end with `[gui.view] stack_wrap`), ↑ / ↓ go to the cover of the previous / next stack
   (↑ ↓ buttons next to ‹ ›), "stack: 3 / 12" in the status bar. **The favourite**:
   Enter in stack mode, or `Shift+Enter`, makes the image the cover of its stack,
-  separate from ratings (one per stack, remembered: `stack-covers.txt` in the data
-  folder; choosing it again forgets it).
+  separate from ratings (one per stack, remembered: `choices.json` of the folder's data;
+  choosing it again forgets it).
 - **Panels from the keyboard, tmux style** (2026-10-18, `actions::Scope`): the leader
   (`[gui] leader`, `Ctrl+B` by default) then `h` / `l` (or ← / →) gives the keyboard to
   the left / right panel, `o` to the next one (leader then `b`: report a problem,
@@ -666,9 +666,14 @@ system one ("cold" measurements, experiments).
   button at the bottom (Cancel stays in dialogs to confirm). Without a cross
   (`Dialog::busy`): copy and deletion in progress, which cannot be interrupted. The help,
   an egui window, already had its own.
-- **Cache kept with the photos** (2026-10-24, issue #55): right click on a folder of
-  the panel, "Keep the cache in this folder" (on a removable drive: "on this drive"), or
-  "No longer keep the cache in this folder" ("on this drive"); not offered where `[cache] location` already puts it.
+- **tri's data kept with the photos** (2026-10-24, issue #55; cache and data together
+  since 2026-11-11, issue #378, [store.md](store.md)): right click on a folder of the
+  panel, "Keep tri's data in this folder" (on a removable drive: "on this drive"), or "No
+  longer keep tri's data in this folder" ("on this drive"): one switch for the cache and
+  the folders' data (filters and sort, sliders, stack covers, ratings memory); not offered
+  where `[cache] location` already puts it. Offload dialog: "Keep tri's data on this
+  drive" (ticked by default when the destination is on a removable drive) or "…in the
+  session folder" (not ticked), not shown where the data are already kept.
   When a folder is opened, `location` (`disk`, `folder`) applies if its cache is still
   the user's. Moving a folder: "Bring the cache along" checkbox (ticked); renaming: the
   cache always follows. The work is done in the background (`TriApp::cache_job`), message

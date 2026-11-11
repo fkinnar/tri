@@ -159,8 +159,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`f d` : JPEG boîtier, couverture, un logiciel, LibRaw ; `[gui.grid] render` est la
   valeur d'un dossier jamais réglé, pas celle du dossier précédent : on trie en JPEG
   boîtier, on revient sur un dossier traité en couverture) de chaque dossier sont retenus
-  dans `folder-views` du dossier de données (une ligne JSON par dossier, écrite quand ils
-  changent) et repris à son ouverture, au lancement compris ; un logiciel désactivé ou désinstallé depuis
+  dans les données du dossier (`view.json`, écrit quand ils changent ;
+  [store.md](store.md)) et repris à son ouverture, au lancement compris ; un logiciel désactivé ou désinstallé depuis
   cède la place à la couverture, ou au JPEG boîtier sans aucun logiciel (05/11/2026) ;
   un dossier sans rien de retenu s'ouvre sans filtre, dans l'ordre retenu pour tous. La recherche par nom n'en
   fait pas partie.
@@ -457,7 +457,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   niveaux (vignettes, aperçus boîtier, aperçus RAW, 1:1, développés, analyses) et le
   total, mesurés en fond à l'ouverture ; « Vider » par ligne et « Tout vider », confirmés
   sur place (le bouton devient « Vider » / « Annuler »), en fond, l'espace libéré annoncé
-  dessous. Le cache général seulement : celui gardé avec les photos (`.tri-cache`) suit
+  dessous. Le cache général seulement : celui gardé avec les photos (`.tri/cache`) suit
   son dossier. Rien n'est à relancer : ce qui manque se recalcule à la demande.
 - **Fenêtre de réglages** (`Ctrl+,`, 18/10/2026 ; `gui/src/settings_window.rs`, moteur :
   `tri::config_edit`, voir `config_edit.md`) : sections à gauche (flèches haut / bas
@@ -527,7 +527,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   harmonisation du 31/10/2026, voir plus bas), `Maj+W` / `Maj+Q` passent au développement suivant / précédent (en boucle ; une pile repliée le
   montre à la place de sa couverture, en grille comme en plein écran, boutons ‹‹ ›› du
   bandeau) ; `Maj+Entrée` sur un développement en fait le **préféré** (couverture ; sur la
-  photo elle-même : plus de préféré ; `preferred-developments.txt` des données), **sans
+  photo elle-même : plus de préféré ; `choices.json` des données du dossier), **sans
   bascule** (31/10/2026 : refaire ne retire rien). Dépliée, chaque vignette porte une
   icône « replier » (`marks::fold`, 31/10/2026, demande de l'utilisateur : rien ne
   repliait à la souris) : clic = replier, **Alt+clic** = replier en gardant ce
@@ -600,8 +600,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   avec `[gui.view] stack_wrap`), ↑ / ↓ passent à la couverture de la pile d'avant /
   d'après (boutons ↑ ↓ à côté de ‹ ›), « pile : 3 / 12 » dans la barre d'état. **La
   préférée** : Entrée en mode pile, ou `Maj+Entrée`, fait de l'image la couverture de sa
-  pile, séparée des notes (une par pile, retenue : `stack-covers.txt` du dossier de
-  données ; la rechoisir l'oublie).
+  pile, séparée des notes (une par pile, retenue : `choices.json` des données du dossier ;
+  la rechoisir l'oublie).
 - **Panneaux au clavier, façon tmux** (18/10/2026, `actions::Scope`) : le leader
   (`[gui] leader`, `Ctrl+B` par défaut) puis `h` / `l` (ou ← / →) donne le clavier au
   panneau de gauche / de droite, `o` au suivant (leader puis `b` : signaler un problème,
@@ -709,10 +709,15 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   « Fermer » ; plus de bouton « Fermer » en bas (Annuler reste dans les boîtes à
   confirmer). Sans croix (`Dialog::busy`) : copie et suppression en cours, qu'on ne peut
   pas interrompre. L'aide, fenêtre d'egui, avait déjà la sienne.
-- **Cache gardé avec les photos** (24/10/2026, issue n° 55) : clic droit sur un dossier
-  du panneau, « Garder le cache dans ce dossier » (sur un disque amovible : « sur ce
-  disque »), ou « Ne plus garder le cache dans ce dossier » (« sur ce disque ») ; pas proposé là où `[cache] location`
-  le met déjà. À l'ouverture d'un dossier, `location` (`disk`, `folder`) s'applique s'il
+- **Données de tri gardées avec les photos** (24/10/2026, issue n° 55 ; cache et données
+  ensemble depuis le 11/11/2026, issue n° 378, [store.md](store.md)) : clic droit sur un
+  dossier du panneau, « Garder les données de tri dans ce dossier » (sur un disque
+  amovible : « sur ce disque »), ou « Ne plus garder les données de tri dans ce dossier »
+  (« sur ce disque ») : un seul interrupteur pour le cache et les données des dossiers
+  (filtres et tri, curseurs, couvertures de piles, mémoire des notes) ; pas proposé là où
+  `[cache] location` les met déjà. Boîte de déchargement : « Garder les données de tri
+  sur ce disque » (cochée d'office quand la destination est sur un disque amovible) ou
+  « …dans le dossier de la séance » (non cochée), absente là où elles sont déjà gardées. À l'ouverture d'un dossier, `location` (`disk`, `folder`) s'applique s'il
   est encore chez l'utilisateur. Déplacement d'un dossier : case « Emporter le cache »
   (cochée) ; renommage : le cache suit toujours. Le travail se fait en fond
   (`TriApp::cache_job`), message dans la barre d'état. Là où il est gardé, « Vider le

@@ -173,10 +173,11 @@ gardent leurs notes.
 `plan_transfer_dir(dossier, dest, mode)` prépare la copie ou le déplacement d'un dossier
 entier, sous-dossiers compris (`DirTransfer` : fichiers, sous-dossiers à créer, cible
 `dest/nom`) ; `transfer_dir(plan, progress)` l'exécute. Le cache de `tri` gardé dans
-le dossier (`.tri-cache`, #55) ne suit pas : rangé par chemin, il ne servirait à rien
-ailleurs, et ses fichiers temporaires allaient et venaient pendant la copie (#157 :
-« No such file ») ; après un déplacement vers un autre volume, celui resté dans la
-source est supprimé.
+le dossier (`.tri/cache`, #55, #378) ne suit pas : il se recalcule, et ses fichiers
+temporaires allaient et venaient pendant la copie (#157 : « No such file ») ; après un
+déplacement vers un autre volume, celui resté dans la source est supprimé. Le reste de
+`.tri/` (les données du dossier : filtres, curseurs, couvertures, mémoire des notes)
+suit ; un `.tri/` qui ne gardait que le cache n'est pas recréé.
 
 - **Refusés** : un dossier dans lui-même ou un de ses sous-dossiers (`IntoItself`), là
   où il est déjà (`SameFolder`), par-dessus un dossier du même nom (`Exists`).

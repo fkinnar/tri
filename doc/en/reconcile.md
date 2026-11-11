@@ -32,13 +32,15 @@ with the file's date and size ([`Stamp`]), and the ratings it settled on. On rea
 After a write by `tri` (rating, undo, resolving), what it just wrote is authoritative
 (`notes::remember`): a source left behind (the image, not rewritten) is no disagreement.
 
-## The memory: `.tri/notes.json`
+## The memory: `notes.json`
 
-Next to the photos, one file per folder, indexed by file name (travels with the folder,
-easy to delete when testing). Created only when an image has ratings, removed when it
-becomes empty again; `.tri` folder hidden on Windows (attribute), ignored by the image
-scan, subfolders and watching (dot name). Read-only folder: fallback in `tri`'s data
-folder (`notes/<fingerprint>.json`, `reconcile::set_data_dir` at start-up).
+One file per folder, indexed by file name, among the folder's data
+([store.md](store.md), 2026-11-11): in its `.tri/` when the "keep tri's data here"
+switch covers it (travels with the folder), otherwise in `tri`'s data folder
+(`folders/<fingerprint>/notes.json`; `reconcile::set_data_dir` at start-up); before
+2026-11-11 it was always written in `.tri/`, and it is moved on opening. Created only
+when an image has ratings, removed when it becomes empty again; `.tri` folder hidden on
+Windows (attribute), ignored by the image scan, subfolders and watching (dot name).
 
 Not in the XMP: darktable rewrites its XMP from its database and may erase our fields.
 

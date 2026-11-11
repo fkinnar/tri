@@ -9,9 +9,10 @@
 //! ([`Cache::clear_folder`]) n'a donc besoin ni des réglages ni de la taille de l'écran
 //! qui entrent dans les clés.
 //!
-//! Cache sur le disque des photos (24/10/2026, issue n° 55) : un dossier [`DISK_DIR`] à la
-//! racine d'un disque (ou de n'importe quel dossier) y garde le cache de toutes les photos
-//! en dessous, rangé par chemin *relatif* à cette racine ; la clé ne contient que le nom du
+//! Cache sur le disque des photos (24/10/2026, issue n° 55 ; dans `.tri/cache` depuis
+//! le 11/11/2026, issue n° 378) : la racine de l'interrupteur « garder les données de tri
+//! ici » ([`crate::store`], [`disk_dir`]), un disque ou n'importe quel dossier, y garde le
+//! cache de toutes les photos en dessous, rangé par chemin *relatif* à cette racine ; la clé ne contient que le nom du
 //! fichier (le dossier est dans le rangement). Branché sur un autre ordinateur, monté
 //! ailleurs, le disque garde son cache.
 
@@ -21,8 +22,8 @@ use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::bitmap::Bitmap;
@@ -46,18 +47,17 @@ const OLD_FORMATS: [&str; 3] = ["v1", "v2", "v3"];
 /// multiple exact de ce pas. Constante du calendrier, pas un réglage.
 const ZONE_STEP_NS: u128 = 15 * 60 * 1_000_000_000;
 
-/// Dossier caché qui garde, à la racine d'un disque, le cache des photos de ce disque
-/// ([`Cache::use_disk`]).
-pub const DISK_DIR: &str = ".tri-cache";
+/// Dossier qui garde, à la racine de l'interrupteur « garder les données de tri ici »
+/// ([`crate::store`]), le cache des photos qui sont dessous ([`Cache::use_disk`]) :
+/// `<racine>/.tri/cache`.
+pub fn disk_dir(root: &Path) -> PathBuf {
+    crate::store::cache_dir(root)
+}
 
 /// Fichier de chaque dossier d'entrées : le dossier de photos d'origine (chemin absolu
 /// dans le cache central, relatif à la racine sur un disque), pour déplacer les entrées
 /// entre les deux.
 const SOURCE: &str = ".source";
-
-/// Change à chaque [`Cache::use_disk`] / [`Cache::release_disk`] : les caches ouverts
-/// oublient où ranger chaque dossier.
-static DISK_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// Longueur (caractères hexadécimaux) du nom du dossier d'une entrée.
 const FOLDER_ID_LEN: usize = 16;
@@ -410,18 +410,12 @@ pub fn wanted_root(location: Location, folder: &Path, removable: &[PathBuf]) -> 
     }
 }
 
-/// Génération et racine du cache sur disque de chaque dossier (voir [`Cache::disk_of`]).
-type DiskMemo = (u64, HashMap<PathBuf, Option<PathBuf>>);
-
 /// Cache sur disque, enraciné dans un dossier. Ne garde aucun état en mémoire : plusieurs
 /// threads (ou processus) peuvent utiliser le même dossier en même temps.
 #[derive(Clone, Debug)]
 pub struct Cache {
     root: PathBuf,
     quality: u8,
-    /// Racine du cache sur disque de chaque dossier déjà vu (`None` : cache central), et la
-    /// génération ([`DISK_GENERATION`]) où elle a été lue.
-    disks: Arc<Mutex<DiskMemo>>,
 }
 
 impl Cache {
@@ -430,7 +424,6 @@ impl Cache {
         let cache = Cache {
             root: root.into(),
             quality: DEFAULT_JPEG_QUALITY,
-            disks: Arc::default(),
         };
         for level in Level::ALL {
             fs::create_dir_all(cache.level_dir(level))?;
@@ -500,29 +493,16 @@ impl Cache {
         }
     }
 
-    /// Racine du cache sur disque qui garde les images de `folder` (absolu) : le plus proche
-    /// dossier parent (ou `folder` lui-même) qui contient [`DISK_DIR`] ; `None` : cache
-    /// central. Gardé en mémoire par dossier.
+    /// Racine du cache sur disque qui garde les images de `folder` (absolu) : celle de
+    /// l'interrupteur « garder les données de tri ici » ([`crate::store::holder`]) ;
+    /// `None` : cache central.
     pub fn disk_of(&self, folder: &Path) -> Option<PathBuf> {
-        let generation = DISK_GENERATION.load(Ordering::Relaxed);
-        let mut disks = self.disks.lock().unwrap_or_else(|e| e.into_inner());
-        if disks.0 != generation {
-            *disks = (generation, HashMap::new());
-        }
-        disks
-            .1
-            .entry(folder.to_path_buf())
-            .or_insert_with(|| {
-                folder
-                    .ancestors()
-                    .find(|a| a.join(DISK_DIR).is_dir())
-                    .map(Path::to_path_buf)
-            })
-            .clone()
+        crate::store::holder(folder)
     }
 
     /// Garde désormais dans `root` (racine d'un disque amovible, ou un dossier qu'on veut
-    /// pouvoir déplacer) le cache des photos qui sont dessous : crée [`DISK_DIR`] et y
+    /// pouvoir déplacer) le cache et les données de tri des photos qui sont dessous : pose
+    /// l'interrupteur ([`crate::store::keep`]) et déplace dans [`disk_dir`]
     /// déplace les entrées déjà calculées (cache central, ou cache sur disque plus haut).
     /// Renvoie ce qui a été déplacé.
     pub fn use_disk(&self, root: &Path) -> io::Result<Usage> {
@@ -533,15 +513,15 @@ impl Cache {
         }
         let mut shards = self.shards_under(&self.root, None, &root);
         if let Some(holder) = &holder {
-            shards.extend(self.shards_under(&holder.join(DISK_DIR), Some(holder), &root));
+            shards.extend(self.shards_under(&disk_dir(holder), Some(holder), &root));
         }
-        fs::create_dir_all(root.join(DISK_DIR).join(FORMAT_VERSION))?;
-        DISK_GENERATION.fetch_add(1, Ordering::Relaxed);
+        fs::create_dir_all(disk_dir(&root).join(FORMAT_VERSION))?;
+        crate::store::keep(crate::store::data_dir().as_deref(), &root)?;
         self.rehome(shards, Path::to_path_buf)
     }
 
     /// Applique `location` à `folder` (dossier ouvert) si son cache est encore chez
-    /// l'utilisateur ; un choix déjà fait (un [`DISK_DIR`] au-dessus) est respecté.
+    /// l'utilisateur ; un choix déjà fait (l'interrupteur au-dessus) est respecté.
     /// Renvoie la racine choisie et ce qui y a été déplacé ; `None` : rien à faire.
     pub fn apply(
         &self,
@@ -561,21 +541,27 @@ impl Cache {
 
     /// Ne garde plus le cache dans `root` ([`Cache::use_disk`]) : ses entrées vont où ses
     /// photos les attendent désormais (cache sur disque plus haut, sinon cache central),
-    /// puis [`DISK_DIR`] est supprimé. Renvoie ce qui a été déplacé.
+    /// puis [`disk_dir`] est supprimé ; l'interrupteur est retiré
+    /// ([`crate::store::release`] : les données de tri repartent dans le dossier de
+    /// données). Renvoie ce qui a été déplacé.
     pub fn release_disk(&self, root: &Path) -> io::Result<Usage> {
         let root = std::path::absolute(root)?;
-        let marker = root.join(DISK_DIR);
-        if !marker.is_dir() {
+        if crate::store::holder(&root).as_deref() != Some(root.as_path()) {
             return Ok(Usage::default());
         }
+        let marker = disk_dir(&root);
         // Mis de côté d'abord : le dossier ne compte plus comme cache pendant le
         // déplacement.
-        let aside = root.join(format!("{DISK_DIR}-{}", std::process::id()));
-        fs::rename(&marker, &aside)?;
-        DISK_GENERATION.fetch_add(1, Ordering::Relaxed);
+        let aside = root.join(format!(".tri-cache-{}", std::process::id()));
+        if marker.is_dir() {
+            fs::rename(&marker, &aside)?;
+        }
+        crate::store::release(crate::store::data_dir().as_deref(), &root)?;
         let shards = self.shards_under(&aside, Some(&root), &root);
         let moved = self.rehome(shards, Path::to_path_buf)?;
-        fs::remove_dir_all(&aside)?;
+        if aside.is_dir() {
+            fs::remove_dir_all(&aside)?;
+        }
         Ok(moved)
     }
 
@@ -590,11 +576,11 @@ impl Cache {
     }
 
     /// Vide le cache gardé dans `root` : toutes ses entrées, celles de photos disparues
-    /// comprises ; le choix de l'y garder reste ([`DISK_DIR`] demeure). Renvoie l'espace
+    /// comprises ; le choix de l'y garder reste (l'interrupteur demeure). Renvoie l'espace
     /// libéré.
     pub fn clear_disk(&self, root: &Path) -> io::Result<Usage> {
         let root = std::path::absolute(root)?;
-        if !root.join(DISK_DIR).is_dir() {
+        if crate::store::holder(&root).as_deref() != Some(root.as_path()) {
             return Ok(Usage::default());
         }
         let mut freed = Usage::default();
@@ -618,14 +604,14 @@ impl Cache {
         if let Some(holder) = self.disk_of(&from)
             && !holder.starts_with(&from)
         {
-            shards.extend(self.shards_under(&holder.join(DISK_DIR), Some(&holder), &from));
+            shards.extend(self.shards_under(&disk_dir(&holder), Some(&holder), &from));
         }
         self.rehome(shards, |folder| {
             to.join(folder.strip_prefix(&from).unwrap_or(Path::new("")))
         })
     }
 
-    /// Dossiers d'entrées du rangement `store` (le cache central, ou le [`DISK_DIR`] d'un
+    /// Dossiers d'entrées du rangement `store` (le cache central, ou le [`disk_dir`] d'un
     /// disque dont `base` est la racine) qui gardent les photos de `under` ou d'un de ses
     /// sous-dossiers : (niveau, dossier d'entrées, dossier de photos).
     fn shards_under(
@@ -910,9 +896,7 @@ fn dir_usage(level_dir: &Path) -> io::Result<Usage> {
 
 /// Dossier d'un niveau dans le cache du disque `root`.
 fn disk_level_dir(root: &Path, level: Level) -> PathBuf {
-    root.join(DISK_DIR)
-        .join(FORMAT_VERSION)
-        .join(level.dir_name())
+    disk_dir(root).join(FORMAT_VERSION).join(level.dir_name())
 }
 
 /// Chemin relatif écrit avec des « / » quel que soit le système : le même dossier d'un

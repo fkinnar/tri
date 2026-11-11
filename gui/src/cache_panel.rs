@@ -4,7 +4,7 @@
 //! annoncé à la fin. Usages : vider les 1:1 (gros, vite recalculés) sans perdre les
 //! vignettes ; vider les développés après une mise à jour de darktable.
 //!
-//! Le cache général seulement : celui gardé avec les photos (`.tri-cache`) suit son dossier.
+//! Le cache général seulement : celui gardé avec les photos (`.tri/cache`) suit son dossier.
 
 use std::sync::mpsc::{self, Receiver};
 

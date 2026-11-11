@@ -137,22 +137,22 @@ impl SharpnessSettings {
     }
 }
 
-/// Fichier des sévérités par dossier, dans le dossier de données.
-const STRICTNESS: &str = "blur-strictness.tsv";
+/// Clé de la sévérité dans les curseurs du dossier ([`crate::store::value`]).
+const STRICTNESS: &str = "blur-strictness";
 
 /// Sévérité du jugement retenue pour le dossier `dir` (curseur de la barre des filtres),
 /// s'il y en a une.
-pub fn folder_strictness(data: &Path, dir: &Path) -> Option<f32> {
-    crate::folder::folder_value(data, STRICTNESS, dir)
+pub fn folder_strictness(data: Option<&Path>, dir: &Path) -> Option<f32> {
+    crate::store::value(data, dir, STRICTNESS)
 }
 
 /// Retient la sévérité `strictness` pour le dossier `dir` ; `None` : l'oublie (centre).
 pub fn remember_strictness(
-    data: &Path,
+    data: Option<&Path>,
     dir: &Path,
     strictness: Option<f32>,
 ) -> std::io::Result<()> {
-    crate::folder::remember_folder_value(data, STRICTNESS, dir, strictness)
+    crate::store::set_value(data, dir, STRICTNESS, strictness)
 }
 
 /// Score de netteté d'une image.
@@ -632,7 +632,7 @@ mod tests {
         assert!(!judge(&ordered, &no_neighbours.with_strictness(-0.5))[&p].blurry);
         // Retenue par dossier, oubliée au centre.
         let dir = tempfile::tempdir().unwrap();
-        let (data, a) = (dir.path(), Path::new("/photos/a"));
+        let (data, a) = (Some(dir.path()), Path::new("/photos/a"));
         assert_eq!(folder_strictness(data, a), None);
         remember_strictness(data, a, Some(-0.4)).unwrap();
         assert_eq!(folder_strictness(data, a), Some(-0.4));

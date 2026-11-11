@@ -1006,14 +1006,14 @@ pub fn plan_transfer_dir(dir: &Path, dest: &Path, mode: TransferMode) -> Result<
         files: Vec::new(),
         dirs: vec![to.clone()],
     };
-    // Le cache de `tri` gardé dans le dossier (`[cache] location = "folder"`, #55) ne
-    // suit pas : rangé par chemin, il ne servirait à rien ailleurs, et ses fichiers
-    // temporaires vont et viennent pendant la copie (#157 : « No such file »).
+    // Le cache de `tri` gardé dans le dossier (`.tri/cache`, #55, #378) ne suit pas :
+    // recalculable, et ses fichiers temporaires vont et viennent pendant la copie (#157 :
+    // « No such file »). Les données de tri du dossier (le reste de `.tri/`) suivent.
     let walk = walkdir::WalkDir::new(dir)
         .min_depth(1)
         .sort_by_file_name()
         .into_iter()
-        .filter_entry(|e| e.file_name() != crate::cache::DISK_DIR);
+        .filter_entry(|e| !is_kept_cache(e.path()));
     for entry in walk {
         let entry = entry.map_err(|e| {
             let path = e.path().unwrap_or(dir).to_path_buf();
@@ -1027,6 +1027,12 @@ pub fn plan_transfer_dir(dir: &Path, dest: &Path, mode: TransferMode) -> Result<
             plan.files.push((entry.path().to_path_buf(), target));
         }
     }
+    // Un `.tri/` qui ne gardait que le cache : rien à recréer.
+    let files = &plan.files;
+    plan.dirs.retain(|d| {
+        d.file_name().is_none_or(|n| n != crate::store::DIR)
+            || files.iter().any(|(_, t)| t.starts_with(d))
+    });
     Ok(plan)
 }
 
@@ -1101,9 +1107,13 @@ fn transfer_dir_with(
             .map(|rel| plan.from.join(rel))
             .collect();
         dirs.sort_by_key(|d| std::cmp::Reverse(d.components().count()));
+        // Le cache resté dans la source (non copié) ne vaut plus rien : il part aussi,
+        // avant les dossiers (`.tri/` d'abord, puis le dossier qui le contient).
+        for d in &dirs {
+            let _ = std::fs::remove_dir_all(crate::store::cache_dir(d));
+            let _ = std::fs::remove_dir(d.join(crate::store::DIR));
+        }
         for d in dirs {
-            // Le cache resté dans la source (non copié) ne vaut plus rien : il part aussi.
-            let _ = std::fs::remove_dir_all(d.join(crate::cache::DISK_DIR));
             let _ = std::fs::remove_dir(d);
         }
     }
@@ -1115,6 +1125,15 @@ fn transfer_dir_with(
 
 /// Fichier des destinations récentes, dans le dossier de données.
 const RECENT_FILE: &str = "destinations";
+
+/// Vrai pour le cache gardé avec les photos (`<racine>/.tri/cache`, [`crate::store`]).
+fn is_kept_cache(path: &Path) -> bool {
+    path.file_name().is_some_and(|n| n == crate::store::CACHE)
+        && path
+            .parent()
+            .and_then(Path::file_name)
+            .is_some_and(|n| n == crate::store::DIR)
+}
 
 /// Destinations récentes de « copier / déplacer vers… », la plus récente d'abord (celles
 /// qui n'existent plus sont omises : carte retirée, dossier supprimé).
@@ -2032,19 +2051,24 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let seance = dir.path().join("Séance");
         let dest = dir.path().join("Archive");
-        let cache = seance.join(crate::cache::DISK_DIR).join("v4/embedded");
+        let cache = crate::cache::disk_dir(&seance).join("v4/embedded");
         std::fs::create_dir_all(&cache).unwrap();
         std::fs::create_dir(&dest).unwrap();
         touch(&seance, &["A.RAF"]);
         touch(&cache, &["x.jpg"]);
         let plan = plan_transfer_dir(&seance, &dest, TransferMode::Copy).unwrap();
         assert_eq!(plan.len(), 1, "le RAW seul");
-        assert_eq!(plan.dirs.len(), 1);
+        assert_eq!(plan.dirs.len(), 1, "pas de `.tri/` vide");
+        // Les données de tri du dossier, elles, suivent (#378).
+        touch(&seance.join(".tri"), &["notes.json"]);
+        let plan = plan_transfer_dir(&seance, &dest, TransferMode::Copy).unwrap();
+        assert_eq!(plan.len(), 2, "le RAW et ses données");
+        std::fs::remove_file(seance.join(".tri/notes.json")).unwrap();
         // Déplacement vers un autre volume : le cache resté dans la source part aussi.
         let plan = plan_transfer_dir(&seance, &dest, TransferMode::Move).unwrap();
         transfer_dir_with(&plan, false, |_, _| {}).unwrap();
         assert!(dest.join("Séance/A.RAF").is_file());
-        assert!(!dest.join("Séance").join(crate::cache::DISK_DIR).exists());
+        assert!(!crate::cache::disk_dir(&dest.join("Séance")).exists());
         assert!(!seance.exists(), "plus rien dans la source");
     }
 

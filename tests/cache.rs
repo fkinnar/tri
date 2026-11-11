@@ -324,7 +324,7 @@ fn a_disk_keeps_its_cache_and_finds_it_mounted_elsewhere() {
     // Sur le disque : les entrées déjà calculées y passent, rien à recalculer.
     let moved = cache.use_disk(&disk).unwrap();
     assert_eq!(moved.entries, 2);
-    assert!(disk.join(tri::cache::DISK_DIR).is_dir());
+    assert!(tri::cache::disk_dir(&disk).is_dir());
     assert_eq!(cache.disk_of(photo.parent().unwrap()), Some(disk.clone()));
     assert!(cache.contains(&key));
     assert_eq!(cache.usage(Level::Thumbnail).unwrap(), Usage::default());
@@ -350,7 +350,7 @@ fn a_disk_keeps_its_cache_and_finds_it_mounted_elsewhere() {
     // Plus sur le disque : retour dans le cache central, dossier caché supprimé.
     let back = other.release_disk(&elsewhere).unwrap();
     assert_eq!(back.entries, 2);
-    assert!(!elsewhere.join(tri::cache::DISK_DIR).exists());
+    assert!(!tri::cache::disk_dir(&elsewhere).exists());
     assert!(other.disk_of(moved_photo.parent().unwrap()).is_none());
     assert!(other.contains(&key));
     assert_eq!(other.usage(Level::Thumbnail).unwrap().entries, 1);
@@ -449,7 +449,7 @@ fn a_disk_cache_is_measured_and_cleared_whole() {
     let freed = cache.clear_disk(&disk).unwrap();
     assert_eq!(freed, usage);
     assert_eq!(cache.disk_usage(&disk).unwrap(), Usage::default());
-    assert!(disk.join(tri::cache::DISK_DIR).is_dir(), "still kept there");
+    assert!(tri::cache::disk_dir(&disk).is_dir(), "still kept there");
     assert!(cache.contains(&central), "central cache untouched");
     // Rien à vider ailleurs.
     assert_eq!(cache.clear_disk(dir.path()).unwrap(), Usage::default());

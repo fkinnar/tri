@@ -61,7 +61,8 @@ double-click: back to the middle.
   fully to the right, 9 to 40 stacks remained with the geometric threshold, none now.
   Fewer than `min` links: `with_strictness`.
 - `folder_strictness` / `remember_strictness`: the chosen strictness, remembered for each
-  folder (`group-strictness.tsv` in the data folder); in the middle, it is forgotten. The
+  folder (key `group-strictness` of the folder's `tuning.json`, [store.md](store.md)); in
+  the middle, it is forgotten. The
   former per-folder thresholds (`group-thresholds.tsv`) are no longer read.
 - `tri <folder> --groups` groups at the computed centre (`--threshold X` to force a
   threshold).
@@ -114,4 +115,5 @@ did not separate the poses better. On the other hand, pose changes fell on **pau
 ## Chosen covers
 
 `chosen_covers` / `choose_cover`: the favourite of each stack, chosen by the user (one per
-stack), separate from the ratings; remembered in `stack-covers.txt` in the data folder.
+stack), separate from the ratings; remembered by name in the `choices.json` of each
+image's folder ([store.md](store.md)).

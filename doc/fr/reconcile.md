@@ -34,14 +34,16 @@ Après une écriture par `tri` (noter, annuler, trancher), ce qu'il vient d'écr
 (`notes::remember`) : une source restée en retard (l'image, non réécrite) n'est pas un
 désaccord.
 
-## La mémoire : `.tri/notes.json`
+## La mémoire : `notes.json`
 
-À côté des photos, un fichier par dossier, indexé par nom de fichier (voyage avec le
-dossier, facile à effacer pour tester). Créé seulement quand une image a des notes,
-retiré quand il redevient vide ; dossier `.tri` caché sous Windows (attribut), ignoré du
-parcours des images, des sous-dossiers et de la surveillance (nom en point). Dossier en
-lecture seule : repli dans le dossier de données de `tri` (`notes/<empreinte>.json`,
-`reconcile::set_data_dir` au démarrage).
+Un fichier par dossier, indexé par nom de fichier, parmi les données du dossier
+([store.md](store.md), 11/11/2026) : dans son `.tri/` quand l'interrupteur « garder les
+données de tri ici » le couvre (voyage avec le dossier), sinon dans le dossier de données
+de `tri` (`folders/<empreinte>/notes.json` ; `reconcile::set_data_dir` au démarrage) ;
+avant le 11/11/2026, toujours écrit dans `.tri/`, il est déplacé à l'ouverture. Créé
+seulement quand une image a des notes, retiré quand il redevient vide ; dossier `.tri`
+caché sous Windows (attribut), ignoré du parcours des images, des sous-dossiers et de la
+surveillance (nom en point).
 
 Pas dans le XMP : darktable réécrit ses XMP depuis sa base et risque d'effacer nos
 champs.

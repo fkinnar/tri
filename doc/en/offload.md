@@ -110,6 +110,11 @@ grouping, as when a folder is opened.
   what is left, what is done is read from the cache) or once everything is computed.
 - **`[cache] location`** is applied to the session before the copy: its cache fills up
   in its place directly.
+- **"Keep tri's data on this drive"** (2026-11-11, issue #378, [store.md](store.md)):
+  checkbox ticked by default when the destination is on a removable drive (otherwise
+  "…in the session folder", not ticked); the switch is set before the copy, so the
+  cache and the session's data go straight onto the drive. Unticked: `[cache] location`
+  is not applied either.
 - **Setting** `[offload] previews` (on by default), checkbox "Compute the previews during
   the copy" in the dialog. On the command line, `--previews`.
 - Known limit: in the background, while another folder is viewed, two LibRaw workers may

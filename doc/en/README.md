@@ -55,6 +55,7 @@ exists.
 | [pp3.md](pp3.md) | Module `tri::pp3`: ratings in RawTherapee (`.pp3`) and ART (`.arp`) profiles, same format |
 | [sidecars.md](sidecars.md) | Module `tri::sidecars`: the formats of the notes sidecars (XMP, `.rrdata`, `.pp3`, `.arp`), all written, the missing ones created according to `[sidecars]` or on demand |
 | [embedded.md](embedded.md) | Module `tri::embedded`: ratings written into the images themselves (JPEG, PNG, WebP, TIFF, HEIC), read without a sidecar, written and read back on demand |
+| [store.md](store.md) | Module `tri::store`: a folder's data (filters, sliders, covers, ratings memory) in its `.tri/` or on the machine, one switch with the cache |
 | [reconcile.md](reconcile.md) | Module `tri::reconcile`: ratings coming from several sources (sidecars, image), field by field merge and conflicts, `.tri/notes.json` memory |
 | [xmp.md](xmp.md) | Module `tri::xmp`: notes (stars, colors, accepted/rejected) in XMP sidecars |
 | [bitmap.md](bitmap.md) | Module `tri::bitmap`: common RGB8 image type |

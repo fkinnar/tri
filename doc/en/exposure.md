@@ -140,4 +140,5 @@ but `VERSION` goes to 5: analyses already in the cache are recomputed.
 `Clip::Under` crushed) at a slider's strictness (-1 to 1): `base × span ^ -strictness`,
 at most 1; at -1, 1 (that side no longer excludes anything: black backgrounds, issue
 #48). `folder_strictness` / `remember_strictness`: strictness remembered per folder and
-per side (`clip-over-strictness.tsv`, `clip-under-strictness.tsv` in the data folder).
+per side (keys `clip-over-strictness`, `clip-under-strictness` of the folder's
+`tuning.json`, see [store.md](store.md)).
