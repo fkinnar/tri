@@ -450,93 +450,90 @@ pub fn threshold_by_rank(
     }
 }
 
-/// Fichier des sévérités par dossier, dans le dossier de données (remplace les seuils
-/// par dossier du 18/10/2026 : le centre se calcule d'après le dossier).
-const STRICTNESS: &str = "group-strictness.tsv";
+/// Clé de la sévérité du curseur des piles dans les curseurs du dossier
+/// ([`crate::store::value`] ; remplace les seuils par dossier du 18/10/2026 : le centre
+/// se calcule d'après le dossier).
+const STRICTNESS: &str = "group-strictness";
 
-/// Sévérité retenue pour le dossier `dir` (curseur des piles), s'il y en a une.
-pub fn folder_strictness(data: &std::path::Path, dir: &std::path::Path) -> Option<f32> {
-    crate::folder::folder_value(data, STRICTNESS, dir)
+/// Sévérité retenue pour le dossier `dir` (curseur des piles), s'il y en a une ; `data` :
+/// dossier de données, pour le repli ([`crate::store`]).
+pub fn folder_strictness(data: Option<&std::path::Path>, dir: &std::path::Path) -> Option<f32> {
+    crate::store::value(data, dir, STRICTNESS)
 }
 
 /// Retient `strictness` pour le dossier `dir` ; `None` : l'oublie (centre).
 pub fn remember_strictness(
-    data: &std::path::Path,
+    data: Option<&std::path::Path>,
     dir: &std::path::Path,
     strictness: Option<f32>,
 ) -> std::io::Result<()> {
-    crate::folder::remember_folder_value(data, STRICTNESS, dir, strictness)
+    crate::store::set_value(data, dir, STRICTNESS, strictness)
 }
 
-/// Fichier des importances des pauses par dossier (curseur, -1 à 1).
-const PAUSES: &str = "group-pauses.tsv";
+/// Clé de l'importance des pauses (curseur, -1 à 1).
+const PAUSES: &str = "group-pauses";
 
 /// Importance des pauses retenue pour le dossier `dir` (curseur, -1 à 1), s'il y en a une.
-pub fn folder_pauses(data: &std::path::Path, dir: &std::path::Path) -> Option<f32> {
-    crate::folder::folder_value(data, PAUSES, dir)
+pub fn folder_pauses(data: Option<&std::path::Path>, dir: &std::path::Path) -> Option<f32> {
+    crate::store::value(data, dir, PAUSES)
 }
 
 /// Retient l'importance des pauses `t` pour le dossier `dir` ; `None` : l'oublie (centre).
 pub fn remember_pauses(
-    data: &std::path::Path,
+    data: Option<&std::path::Path>,
     dir: &std::path::Path,
     t: Option<f32>,
 ) -> std::io::Result<()> {
-    crate::folder::remember_folder_value(data, PAUSES, dir, t)
+    crate::store::set_value(data, dir, PAUSES, t)
 }
 
-/// Fichier des progressions du curseur des piles par dossier (`strictness_curve`).
-const CURVES: &str = "group-curve.tsv";
+/// Clé de la progression du curseur des piles (`strictness_curve`).
+const CURVES: &str = "group-curve";
 
 /// Progression du curseur des piles retenue pour le dossier `dir`, s'il y en a une.
-pub fn folder_curve(data: &std::path::Path, dir: &std::path::Path) -> Option<f32> {
-    crate::folder::folder_value(data, CURVES, dir)
+pub fn folder_curve(data: Option<&std::path::Path>, dir: &std::path::Path) -> Option<f32> {
+    crate::store::value(data, dir, CURVES)
 }
 
 /// Retient la progression `curve` pour le dossier `dir` ; `None` : l'oublie (réglage).
 pub fn remember_curve(
-    data: &std::path::Path,
+    data: Option<&std::path::Path>,
     dir: &std::path::Path,
     curve: Option<f32>,
 ) -> std::io::Result<()> {
-    crate::folder::remember_folder_value(data, CURVES, dir, curve)
+    crate::store::set_value(data, dir, CURVES, curve)
 }
 
-/// Fichier des couvertures choisies (une image par ligne), dans le dossier de données.
-const COVERS: &str = "stack-covers.txt";
-
-/// Couvertures choisies par l'utilisateur (la préférée de chaque pile), toutes dossiers
-/// confondus ; séparées des notes, qui restent dans les sidecars.
-pub fn chosen_covers(data: &std::path::Path) -> std::collections::HashSet<std::path::PathBuf> {
-    std::fs::read_to_string(data.join(COVERS))
-        .unwrap_or_default()
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(std::path::PathBuf::from)
+/// Couvertures choisies par l'utilisateur (la préférée de chaque pile) dans les dossiers
+/// `folders` ; séparées des notes, qui restent dans les sidecars.
+pub fn chosen_covers<'a>(
+    data: Option<&std::path::Path>,
+    folders: impl IntoIterator<Item = &'a std::path::Path>,
+) -> std::collections::HashSet<std::path::PathBuf> {
+    folders
+        .into_iter()
+        .flat_map(|f| crate::store::chosen(data, f, crate::store::Choice::Cover))
         .collect()
 }
 
 /// Retient (`on`) ou oublie `image` comme couverture choisie ; `others` (les autres
 /// images de sa pile) sont oubliées : une seule préférée par pile.
 pub fn choose_cover(
-    data: &std::path::Path,
+    data: Option<&std::path::Path>,
     image: &std::path::Path,
     others: &[std::path::PathBuf],
     on: bool,
 ) -> std::io::Result<()> {
-    let mut covers = chosen_covers(data);
-    for o in others {
-        covers.remove(o);
+    let mut forget = others.to_vec();
+    if !on {
+        forget.push(image.to_path_buf());
     }
-    if on {
-        covers.insert(image.to_path_buf());
-    } else {
-        covers.remove(image);
-    }
-    let mut lines: Vec<String> = covers.iter().map(|p| p.display().to_string()).collect();
-    lines.sort();
-    std::fs::create_dir_all(data)?;
-    std::fs::write(data.join(COVERS), lines.join("\n") + "\n")
+    crate::store::choose(
+        data,
+        crate::store::Choice::Cover,
+        &forget,
+        on.then_some(image),
+    )
 }
 
 #[cfg(test)]
@@ -601,22 +598,22 @@ mod tests {
     #[test]
     fn one_chosen_cover_per_stack() {
         let dir = tempfile::tempdir().unwrap();
-        let data = dir.path();
+        let data = Some(dir.path());
         let p = |n: &str| std::path::PathBuf::from(format!("/photos/{n}"));
         choose_cover(data, &p("a1"), &[p("a2")], true).unwrap();
         choose_cover(data, &p("b2"), &[p("b1")], true).unwrap();
         choose_cover(data, &p("a2"), &[p("a1")], true).unwrap();
-        let covers = chosen_covers(data);
+        let covers = chosen_covers(data, [std::path::Path::new("/photos")]);
         assert!(covers.contains(&p("a2")) && !covers.contains(&p("a1")));
         assert!(covers.contains(&p("b2")));
         choose_cover(data, &p("b2"), &[], false).unwrap();
-        assert!(!chosen_covers(data).contains(&p("b2")));
+        assert!(!chosen_covers(data, [std::path::Path::new("/photos")]).contains(&p("b2")));
     }
 
     #[test]
     fn strictness_is_remembered_per_folder() {
         let dir = tempfile::tempdir().unwrap();
-        let data = dir.path();
+        let data = Some(dir.path());
         let (a, b) = (
             std::path::Path::new("/photos/a"),
             std::path::Path::new("/photos/b"),
@@ -723,7 +720,7 @@ mod tests {
     #[test]
     fn pauses_and_curve_are_remembered_per_folder() {
         let dir = tempfile::tempdir().unwrap();
-        let data = dir.path();
+        let data = Some(dir.path());
         let a = std::path::Path::new("/photos/a");
         assert_eq!(
             (folder_pauses(data, a), folder_curve(data, a)),
@@ -734,7 +731,7 @@ mod tests {
         remember_strictness(data, a, Some(0.2)).unwrap();
         assert_eq!(folder_pauses(data, a), Some(-0.4));
         assert_eq!(folder_curve(data, a), Some(2.5));
-        assert_eq!(folder_strictness(data, a), Some(0.2), "fichiers séparés");
+        assert_eq!(folder_strictness(data, a), Some(0.2), "clés séparées");
         remember_pauses(data, a, None).unwrap();
         assert_eq!(folder_pauses(data, a), None);
     }

@@ -166,7 +166,7 @@ du jugement (`blur_ratio`, `neighbour_ratio`, `group_ratio`) par `strictness_spa
 sévérité` (×0,5 à ×2 par défaut, sans dépasser 1) : `SharpnessSettings::with_strictness`.
 Effet en direct (badges, filtre « floues »), instantané : les scores sont en cache, seul
 le jugement est refait. Retenu par dossier au lâcher (`sharpness::folder_strictness`,
-fichier `blur-strictness.tsv` du dossier de données) ; double-clic : retour au centre
+clé `blur-strictness` du `tuning.json` du dossier) ; double-clic : retour au centre
 (repère). Le panneau des métadonnées donne le score rapporté au dossier et aux voisines
 (ou à la pile) : de quoi comprendre un jugement. Même principe à venir pour le curseur
 des piles (centre calculé d'après le dossier). Le vrai remède à ce cas limite reste une

@@ -68,9 +68,9 @@ demande, `b` fait le tour des rendus).
   `Rank::Clone(n)` (le numéro du fichier) ou `Rank::Copy(n)` (le rang de la copie virtuelle
   parmi celles de la photo, la première = 1 : l'identifiant ne dit rien).
 - `latest(developments)` : le plus récent d'après la date de son sidecar.
-- `preferred(data)`, `prefer(data, development, on)` : le développement préféré d'une
-  photo (couverture de sa pile), un par photo, dans `preferred-developments.txt` du dossier
-  de données.
+- `preferred(data, dossiers)`, `prefer(data, development, on)` : le développement préféré
+  d'une photo (couverture de sa pile), un par photo, retenu par nom dans les données du
+  dossier (`choices.json`, voir [store.md](store.md)).
 
 ## Logiciels actifs seulement
 

@@ -295,38 +295,34 @@ impl Development {
     }
 }
 
-/// Fichier des développements préférés (couverture de la pile d'une photo), dans le
-/// dossier de données.
-const PREFERRED: &str = "preferred-developments.txt";
-
-/// Développements préférés (chemins propres), un par photo au plus.
-pub fn preferred(data: &Path) -> std::collections::HashSet<PathBuf> {
-    std::fs::read_to_string(data.join(PREFERRED))
-        .unwrap_or_default()
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(PathBuf::from)
+/// Développements préférés (chemins propres) des photos des dossiers `folders`, un par
+/// photo au plus ; `data` : dossier de données, pour le repli ([`crate::store`]).
+pub fn preferred<'a>(
+    data: Option<&Path>,
+    folders: impl IntoIterator<Item = &'a Path>,
+) -> std::collections::HashSet<PathBuf> {
+    folders
+        .into_iter()
+        .flat_map(|f| crate::store::chosen(data, f, crate::store::Choice::Development))
         .collect()
 }
 
 /// Retient (`on`) ou oublie `development` (chemin propre) comme développement préféré de
 /// sa photo ; les autres développements connus de la même photo sont oubliés.
-pub fn prefer(data: &Path, development: &Path, on: bool) -> std::io::Result<()> {
-    let mut chosen = preferred(data);
-    if let Some(d) = get(development) {
-        for other in of(&d.photo) {
-            chosen.remove(&other.path());
-        }
+pub fn prefer(data: Option<&Path>, development: &Path, on: bool) -> std::io::Result<()> {
+    let mut forget: Vec<PathBuf> = get(development)
+        .map(|d| of(&d.photo).iter().map(Development::path).collect())
+        .unwrap_or_default();
+    forget.retain(|p| p != development);
+    if !on {
+        forget.push(development.to_path_buf());
     }
-    if on {
-        chosen.insert(development.to_path_buf());
-    } else {
-        chosen.remove(development);
-    }
-    let mut lines: Vec<String> = chosen.iter().map(|p| p.display().to_string()).collect();
-    lines.sort();
-    std::fs::create_dir_all(data)?;
-    std::fs::write(data.join(PREFERRED), lines.join("\n") + "\n")
+    crate::store::choose(
+        data,
+        crate::store::Choice::Development,
+        &forget,
+        on.then_some(development),
+    )
 }
 
 /// Valeur de `darktable:history_end`, en attribut ou en élément (`None` : absent ou
@@ -661,19 +657,23 @@ mod tests {
             sidecar: photo.with_file_name("C.RAF.rrdata"),
         };
         set_for(photo, &[dt.clone(), rr.clone()]);
-        prefer(dir.path(), &dt.path(), true).unwrap();
+        prefer(Some(dir.path()), &dt.path(), true).unwrap();
         assert_eq!(
-            preferred(dir.path()).into_iter().collect::<Vec<_>>(),
+            preferred(Some(dir.path()), [photo.parent().unwrap()])
+                .into_iter()
+                .collect::<Vec<_>>(),
             [dt.path()]
         );
         // Une autre préférée : la première est oubliée.
-        prefer(dir.path(), &rr.path(), true).unwrap();
+        prefer(Some(dir.path()), &rr.path(), true).unwrap();
         assert_eq!(
-            preferred(dir.path()).into_iter().collect::<Vec<_>>(),
+            preferred(Some(dir.path()), [photo.parent().unwrap()])
+                .into_iter()
+                .collect::<Vec<_>>(),
             [rr.path()]
         );
-        prefer(dir.path(), &rr.path(), false).unwrap();
-        assert!(preferred(dir.path()).is_empty());
+        prefer(Some(dir.path()), &rr.path(), false).unwrap();
+        assert!(preferred(Some(dir.path()), [photo.parent().unwrap()]).is_empty());
     }
 
     #[test]

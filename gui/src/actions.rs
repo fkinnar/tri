@@ -337,7 +337,7 @@ pub enum Action {
     /// Panneau des dossiers : oublier le partage réseau mémorisé pointé.
     FolderForget,
     /// Panneau des dossiers : vider le cache gardé dans le dossier ou le disque pointé
-    /// (`.tri-cache`, une boîte confirme ; 10/11/2026).
+    /// (`.tri/cache`, une boîte confirme ; 10/11/2026).
     FolderCacheClear,
     /// Panneau des dossiers : ouvrir le dossier pointé dans un logiciel de
     /// développement (darktable, 28/10/2026).

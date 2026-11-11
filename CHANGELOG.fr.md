@@ -4,6 +4,17 @@
 
 ## Non publié
 
+- **Tout sur le disque** (#410) : « Garder les données de tri dans ce dossier / sur ce
+  disque » (clic droit sur un dossier ou un disque) garde désormais, en plus du cache,
+  tout ce que `tri` retient des dossiers en dessous : filtres et tri, valeurs des
+  curseurs, couvertures de piles, développements préférés, mémoire des notes, dans un
+  dossier caché `.tri`, par nom de fichier seulement. Un disque emporté sur un autre
+  ordinateur (ou un dossier synchronisé) garde tout. Désactivé par défaut : rien n'est
+  alors écrit à côté des photos (avant, `.tri/notes.json` l'était). La boîte de
+  déchargement le propose, coché quand la destination est un disque amovible. Déplacé à
+  la première ouverture : l'ancien `.tri-cache` devient `.tri/cache`, et ce que le
+  dossier de données gardait par dossier rejoint les fichiers du dossier. Pour
+  synchroniser un dossier sans son cache, exclure `.tri/cache`.
 - **Boîtes au centre** (#409) : les confirmations et boîtes s'ouvrent au centre de la
   fenêtre d'après leur taille réelle (un décalage fixe les mettait de travers), la boîte
   de notation du clic droit comprise.

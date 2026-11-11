@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- **Everything on the drive** (#410): "Keep tri's data in this folder / on this drive"
+  (right click on a folder or a drive) now keeps, besides the cache, everything `tri`
+  remembers about the folders below: filters and sort, slider values, stack covers,
+  preferred developments, ratings memory, in a hidden `.tri` folder, by file name only.
+  A drive carried to another computer (or a synced folder) keeps everything. Off by
+  default: nothing is then written next to the photos (before, `.tri/notes.json` was).
+  The offload dialog offers it, ticked when the destination is a removable drive. Moved
+  on first opening: the old `.tri-cache` becomes `.tri/cache`, and what the data folder
+  kept per folder joins the folder's files. To sync a folder without its cache, exclude
+  `.tri/cache`.
 - **Dialogs in the centre** (#409): confirmations and dialogs open in the centre of the
   window from their real size (a fixed offset put them askew), the right-click rating
   dialog included.

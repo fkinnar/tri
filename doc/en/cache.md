@@ -45,23 +45,27 @@ Three possible places for a photo's cache:
   computers;
 - **in a folder**: a folder that gets moved.
 
-The last two are one mechanism: a hidden `.tri-cache` folder (`DISK_DIR`) keeps the cache
-of all the photos below it, subfolders included, with the same layout
-(`.tri-cache/v4/<level>/<folder>/`), but the folder is identified by its path
-**relative** to the root (written with `/` on every system). Mounted elsewhere
+The last two are one mechanism, the "keep tri's data here" switch of
+[store.md](store.md) (2026-11-11, issue #378: the cache and the folders' data together,
+all or nothing): its root keeps the cache of all the photos below it, subfolders
+included, in `.tri/cache` (`disk_dir(root)`; `.tri-cache` before, renamed on opening),
+with the same layout (`.tri/cache/v4/<level>/<folder>/`), but the folder is identified by
+its path **relative** to the root (written with `/` on every system). Mounted elsewhere
 (`/Volumes/T7` on a Mac, `/media/u/T7` on Linux), the drive finds its cache again.
-`Cache::disk_of(folder)` looks for the nearest `.tri-cache` going up (remembered per
-folder, forgotten at every change).
+`Cache::disk_of(folder)` is the switch's root (`store::holder`: the nearest `.tri/keep`
+going up, remembered per folder, forgotten at every change).
 
-- `use_disk(root)`: creates `.tri-cache` and **moves** the entries already computed into
-  it (central cache, or a `.tri-cache` higher up): nothing is computed again;
+- `use_disk(root)`: sets the switch (`store::keep`: the folders' data move to their
+  `.tri/`) and **moves** the entries already computed into `.tri/cache` (central cache,
+  or a cache higher up): nothing is computed again;
 - `release_disk(root)`: the reverse, the entries go where their photos now expect them
-  (a `.tri-cache` higher up, otherwise the user's);
-- `disk_usage(root)` / `clear_disk(root)` (2026-11-10): size of everything `.tri-cache`
-  keeps, and clearing it (entries of photos gone since included); `.tri-cache` remains,
-  the cache stays kept there;
+  (a cache higher up, otherwise the user's), the switch is removed (`store::release`: the
+  data go back to the data folder);
+- `disk_usage(root)` / `clear_disk(root)` (2026-11-10): size of everything `.tri/cache`
+  keeps, and clearing it (entries of photos gone since included); the switch remains, the
+  cache stays kept there, the folders' data are untouched;
 - `relocate(from, to)`: after a folder is moved or renamed, its entries follow it (a
-  `.tri-cache` in the folder itself has left with it);
+  cache in the folder itself has left with it);
 - `apply(location, folder, removable)`: the `[cache] location` setting (`user`, `disk`,
   `folder`) applied to an opened folder whose cache is still the user's; a choice already
   made is respected (`wanted_root`, `places::removable_roots`).
@@ -69,7 +73,7 @@ folder, forgotten at every change).
 The `.source` file of each folder of entries (absolute path in the central cache,
 relative on a drive) makes these moves possible without knowing the settings. To another
 drive: copy then delete; an entry already present at the destination is kept. The 1:1
-levels of a `.tri-cache` are not limited by `zoom_max_mb`, and `--cache-usage` counts the
+levels of a `.tri/cache` are not limited by `zoom_max_mb`, and `--cache-usage` counts the
 central cache only. FAT32 drives: the modification date is in local time there, shifted
 by a clock change or a time zone; the key no longer depends on it since `v4` (see the key).
 
@@ -120,7 +124,7 @@ Consequences:
   includes them in `params`;
 - **folder moved or renamed** ⇒ the cache is no longer found, unless it follows
   (`relocate`: renaming and moving from `tri`, "Bring the cache along" checkbox) or it is
-  in the folder (`.tri-cache`); checking the content would mean re-reading every ~30 MB
+  in the folder (`.tri/cache`); checking the content would mean re-reading every ~30 MB
   RAW;
 - the old entry is **not deleted**: it remains until clearing or eviction.
 

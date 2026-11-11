@@ -116,6 +116,11 @@ histogrammes, netteté, regroupement, comme à l'ouverture d'un dossier.
   ce qui reste, le fait est lu dans le cache) ou une fois tout calculé.
 - **`[cache] location`** est appliqué à la séance avant la copie : son cache se remplit
   directement à sa place.
+- **« Garder les données de tri sur ce disque »** (11/11/2026, issue n° 378,
+  [store.md](store.md)) : case cochée d'office quand la destination est sur un disque
+  amovible (sinon « …dans le dossier de la séance », non cochée) ; l'interrupteur est
+  posé avant la copie, le cache et les données de la séance vont directement sur le
+  disque. Décochée : `[cache] location` ne s'applique pas non plus.
 - **Réglage** `[offload] previews` (oui par défaut), case « Calculer les aperçus pendant
   la copie » de la boîte. En ligne de commande, `--previews`.
 - Limite connue : en arrière-plan, pendant qu'on regarde un autre dossier, deux workers

@@ -430,9 +430,9 @@ fn named(sources: &[Source]) -> Vec<(String, Notes)> {
 // --- Mémoire d'un dossier ------------------------------------------------------------------
 
 /// Dossier caché de `tri` dans un dossier de photos.
-pub const DIR: &str = ".tri";
+pub const DIR: &str = crate::store::DIR;
 /// Fichier de la mémoire des notes, dans [`DIR`].
-pub const FILE: &str = "notes.json";
+pub const FILE: &str = crate::store::NOTES;
 
 /// Contenu de `.tri/notes.json`.
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -446,54 +446,42 @@ struct Document {
     images: BTreeMap<String, Remembered>,
 }
 
-/// Ce que `tri` retient des notes des images d'un dossier : `.tri/notes.json` à côté des
-/// photos (voyage avec le dossier, facile à effacer) ; dossier en lecture seule : un
-/// fichier du dossier de données de `tri` ([`Memory::fallback`]).
+/// Ce que `tri` retient des notes des images d'un dossier : un fichier des données du
+/// dossier ([`crate::store`] : son `.tri/` si l'interrupteur le couvre, sinon le dossier de
+/// données de `tri`).
 #[derive(Debug)]
 pub struct Memory {
     dir: PathBuf,
     images: BTreeMap<String, Remembered>,
     embed: Option<bool>,
-    fallback: Option<PathBuf>,
+    data: Option<PathBuf>,
     changed: bool,
 }
 
-/// Dossier de données de `tri`, pour le repli des dossiers en lecture seule
-/// ([`set_data_dir`]).
-static DATA_DIR: std::sync::RwLock<Option<PathBuf>> = std::sync::RwLock::new(None);
-
-/// Dossier de données de `tri` (repli des dossiers en lecture seule), donné une fois au
-/// démarrage par l'interface ou la ligne de commande ; sans lui, rien n'est retenu pour un
-/// dossier en lecture seule.
+/// Dossier de données de `tri`, donné une fois au démarrage (voir
+/// [`crate::store::set_data_dir`]).
 pub fn set_data_dir(dir: Option<PathBuf>) {
-    if let Ok(mut d) = DATA_DIR.write() {
-        *d = dir;
-    }
+    crate::store::set_data_dir(dir);
 }
 
 impl Memory {
-    /// Mémoire du dossier `dir`, avec le repli de [`set_data_dir`].
+    /// Mémoire du dossier `dir`, avec le dossier de données de [`set_data_dir`].
     pub fn open(dir: &Path) -> Memory {
-        let data = DATA_DIR.read().ok().and_then(|d| d.clone());
-        Memory::load(dir, data.as_deref())
+        Memory::load(dir, crate::store::data_dir().as_deref())
     }
 
     /// Mémoire du dossier `dir` ; `data` : dossier de données de `tri`, pour le repli.
     /// Absente ou illisible : vide (rien n'est retenu ; les sources qui ne s'accordent pas
     /// seront signalées).
     pub fn load(dir: &Path, data: Option<&Path>) -> Memory {
-        let fallback = data.map(|d| fallback_path(d, dir));
-        let document = [Some(own_path(dir)), fallback.clone()]
-            .into_iter()
-            .flatten()
-            .find_map(|p| std::fs::read(&p).ok())
+        let document = crate::store::read(data, dir, FILE)
             .and_then(|bytes| serde_json::from_slice::<Document>(&bytes).ok())
             .unwrap_or_default();
         Memory {
             dir: dir.to_path_buf(),
             images: document.images,
             embed: document.embed,
-            fallback,
+            data: data.map(Path::to_path_buf),
             changed: false,
         }
     }
@@ -531,19 +519,15 @@ impl Memory {
         self.changed |= changed;
     }
 
-    /// Écrit la mémoire si elle a changé : dans `.tri/` du dossier, sinon (lecture seule)
-    /// dans le dossier de données. Vide : le fichier (et `.tri/` s'il est vide) disparaît.
+    /// Écrit la mémoire si elle a changé ([`crate::store::write`]). Vide : le fichier (et
+    /// `.tri/` s'il est vide) disparaît.
     pub fn save(&mut self) -> io::Result<()> {
         if !self.changed {
             return Ok(());
         }
-        let own = own_path(&self.dir);
+        let data = self.data.as_deref();
         if self.images.is_empty() && self.embed.is_none() {
-            let _ = std::fs::remove_file(&own);
-            let _ = std::fs::remove_dir(self.dir.join(DIR));
-            if let Some(f) = &self.fallback {
-                let _ = std::fs::remove_file(f);
-            }
+            crate::store::write(data, &self.dir, FILE, None)?;
             self.changed = false;
             return Ok(());
         }
@@ -554,21 +538,7 @@ impl Memory {
         };
         let json = serde_json::to_vec_pretty(&document).map_err(io::Error::other);
         self.images = document.images;
-        let json = json?;
-        match write_atomic(&own, &json) {
-            Ok(()) => {
-                hide(&self.dir.join(DIR));
-                if let Some(f) = &self.fallback {
-                    let _ = std::fs::remove_file(f);
-                }
-            }
-            Err(e) => {
-                let Some(f) = &self.fallback else {
-                    return Err(e);
-                };
-                write_atomic(f, &json)?;
-            }
-        }
+        crate::store::write(data, &self.dir, FILE, Some(&json?))?;
         self.changed = false;
         Ok(())
     }
@@ -638,50 +608,6 @@ pub fn forget(images: &[PathBuf]) {
     for memory in memories.values_mut() {
         let _ = memory.save();
     }
-}
-
-/// `.tri/notes.json` de `dir`.
-fn own_path(dir: &Path) -> PathBuf {
-    dir.join(DIR).join(FILE)
-}
-
-/// Fichier de repli pour `dir` dans le dossier de données `data` : nommé d'après le
-/// chemin du dossier (`notes/<empreinte>.json`).
-fn fallback_path(data: &Path, dir: &Path) -> PathBuf {
-    let hash = blake3::hash(dir.to_string_lossy().as_bytes()).to_hex();
-    data.join("notes").join(format!("{}.json", &hash[..32]))
-}
-
-fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
-    std::fs::write(&tmp, bytes)?;
-    std::fs::rename(&tmp, path).inspect_err(|_| {
-        let _ = std::fs::remove_file(&tmp);
-    })
-}
-
-/// Cache `dir` sous Windows (ailleurs, le point au début du nom suffit).
-fn hide(dir: &Path) {
-    #[cfg(windows)]
-    {
-        use std::os::windows::ffi::OsStrExt;
-        use windows_sys::Win32::Storage::FileSystem::{
-            FILE_ATTRIBUTE_HIDDEN, GetFileAttributesW, SetFileAttributesW,
-        };
-        let wide: Vec<u16> = dir.as_os_str().encode_wide().chain(Some(0)).collect();
-        // SAFETY : chaîne terminée par 0, valable le temps des appels.
-        unsafe {
-            let attributes = GetFileAttributesW(wide.as_ptr());
-            if attributes != u32::MAX && attributes & FILE_ATTRIBUTE_HIDDEN == 0 {
-                SetFileAttributesW(wide.as_ptr(), attributes | FILE_ATTRIBUTE_HIDDEN);
-            }
-        }
-    }
-    #[cfg(not(windows))]
-    let _ = dir;
 }
 
 #[cfg(test)]
@@ -923,7 +849,9 @@ mod tests {
     }
 
     #[test]
-    fn the_memory_lives_next_to_the_photos_and_vanishes_when_empty() {
+    fn the_memory_follows_the_switch_and_vanishes_when_empty() {
+        // Issue n° 378 : dans le dossier de données par défaut, à côté des photos quand
+        // l'interrupteur « garder les données de tri ici » est posé.
         let dir = tempfile::tempdir().unwrap();
         let data = tempfile::tempdir().unwrap();
         let n = notes(3, Flag::Accepted, &[Color::Red]);
@@ -935,13 +863,18 @@ mod tests {
         );
         memory.save().unwrap();
         let file = dir.path().join(DIR).join(FILE);
-        assert!(file.is_file());
+        assert!(!file.exists(), "rien à côté des photos par défaut");
         let again = Memory::load(dir.path(), Some(data.path()));
         assert_eq!(again.get("a.jpg").unwrap().notes(), n);
-        let mut again = again;
+        crate::store::keep(Some(data.path()), dir.path()).unwrap();
+        assert!(file.is_file(), "passée dans le dossier");
+        let mut again = Memory::load(dir.path(), Some(data.path()));
+        assert_eq!(again.get("a.jpg").unwrap().notes(), n);
         again.set("a.jpg", None);
         again.save().unwrap();
-        assert!(!dir.path().join(DIR).exists(), "vide : retiré");
+        assert!(!file.exists(), "vide : retirée");
+        crate::store::release(Some(data.path()), dir.path()).unwrap();
+        assert!(!dir.path().join(DIR).exists(), "plus de `.tri/`");
     }
 
     #[test]

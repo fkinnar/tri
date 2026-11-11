@@ -66,6 +66,7 @@ pub mod sharpness;
 pub mod sidecars;
 pub mod similarity;
 pub mod sort;
+pub mod store;
 pub mod update;
 pub mod versions;
 pub mod watch;

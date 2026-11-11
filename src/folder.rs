@@ -35,6 +35,7 @@ impl Folder {
     pub fn open(dir: &Path, depth: usize, convention: Convention) -> io::Result<Folder> {
         let dir = std::path::absolute(dir)?;
         let files = media::scan(&dir, depth)?;
+        settle(&dir, &files);
         let notes = NoteBook::load_files(&files, convention);
         Ok(Folder { dir, files, notes })
     }
@@ -66,9 +67,24 @@ impl Folder {
         found: &AtomicUsize,
     ) -> io::Result<Folder> {
         let dir = std::path::absolute(dir)?;
+        // Le dossier lui-même tout de suite (ses filtres et curseurs se lisent à
+        // l'ouverture) ; ses sous-dossiers avec les notes ([`Loading`]).
+        crate::store::settle(crate::store::data_dir().as_deref(), &dir);
         let files = media::scan_counting(&dir, depth, slow, stop, found)?;
         let notes = NoteBook::pending(files.iter().map(|f| f.path.as_path()), convention);
         Ok(Folder { dir, files, notes })
+    }
+}
+
+/// Met en ordre les données de tri ([`crate::store::settle`]) de `dir` et des dossiers de
+/// `files` (sous-dossiers parcourus), avant d'en lire les notes.
+fn settle(dir: &Path, files: &[MediaFile]) {
+    let data = crate::store::data_dir();
+    let mut dirs: std::collections::BTreeSet<&Path> =
+        files.iter().filter_map(|f| f.path.parent()).collect();
+    dirs.insert(dir);
+    for d in dirs {
+        crate::store::settle(data.as_deref(), d);
     }
 }
 
@@ -104,6 +120,7 @@ impl Loading {
         let spawned = std::thread::Builder::new()
             .name("tri-folder".into())
             .spawn(move || {
+                settle(&dir, &files);
                 let notes = NoteBook::load_counting(&files, convention, &counter);
                 let snapshot = watch
                     .then(|| crate::watch::Snapshot::of_depth(&dir, depth).ok())
@@ -158,57 +175,6 @@ impl Folder {
     }
 }
 
-/// Valeur retenue pour le dossier `dir` dans le fichier `file` du dossier de données
-/// `data` (une ligne par dossier : valeur, tabulation, chemin), s'il y en a une : seuil
-/// des piles, sévérité du flou… réglés par un curseur et gardés par dossier.
-pub fn folder_value(data: &Path, file: &str, dir: &Path) -> Option<f32> {
-    folder_text(data, file, dir)?.parse().ok()
-}
-
-/// Retient `value` pour le dossier `dir` dans le fichier `file` du dossier de données
-/// `data` ; `None` : l'oublie (valeur par défaut).
-pub fn remember_folder_value(
-    data: &Path,
-    file: &str,
-    dir: &Path,
-    value: Option<f32>,
-) -> io::Result<()> {
-    remember_folder_text(data, file, dir, value.map(|v| v.to_string()).as_deref())
-}
-
-/// Comme [`folder_value`], pour un texte d'une ligne sans tabulation (les filtres et le
-/// tri d'un dossier, en JSON, retenus par l'interface).
-pub fn folder_text(data: &Path, file: &str, dir: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(data.join(file)).ok()?;
-    let wanted = dir.to_string_lossy();
-    text.lines()
-        .filter_map(|l| l.split_once('\t'))
-        .find(|(_, path)| *path == wanted)
-        .map(|(v, _)| v.to_string())
-}
-
-/// Comme [`remember_folder_value`], pour un texte d'une ligne sans tabulation.
-pub fn remember_folder_text(
-    data: &Path,
-    file: &str,
-    dir: &Path,
-    value: Option<&str>,
-) -> io::Result<()> {
-    let path = data.join(file);
-    let wanted = dir.to_string_lossy().into_owned();
-    let mut lines: Vec<String> = std::fs::read_to_string(&path)
-        .unwrap_or_default()
-        .lines()
-        .filter(|l| l.split_once('\t').is_some_and(|(_, p)| p != wanted))
-        .map(str::to_string)
-        .collect();
-    if let Some(v) = value {
-        lines.push(format!("{v}\t{wanted}"));
-    }
-    std::fs::create_dir_all(data)?;
-    std::fs::write(path, lines.join("\n") + "\n")
-}
-
 /// Fichier du choix « descendre dans les sous-dossiers », dans le dossier de données.
 const SUBFOLDERS: &str = "subfolders";
 
@@ -247,24 +213,24 @@ pub fn remembered(data: &Path) -> Option<PathBuf> {
 
 /// Octets d'un chemin : bruts sous Unix (les noms non UTF-8 survivent), UTF-8 ailleurs.
 #[cfg(unix)]
-fn path_bytes(path: &Path) -> Vec<u8> {
+pub(crate) fn path_bytes(path: &Path) -> Vec<u8> {
     use std::os::unix::ffi::OsStrExt;
     path.as_os_str().as_bytes().to_vec()
 }
 
 #[cfg(not(unix))]
-fn path_bytes(path: &Path) -> Vec<u8> {
+pub(crate) fn path_bytes(path: &Path) -> Vec<u8> {
     path.to_string_lossy().into_owned().into_bytes()
 }
 
 #[cfg(unix)]
-fn bytes_path(bytes: Vec<u8>) -> Option<PathBuf> {
+pub(crate) fn bytes_path(bytes: Vec<u8>) -> Option<PathBuf> {
     use std::os::unix::ffi::OsStringExt;
     Some(PathBuf::from(std::ffi::OsString::from_vec(bytes)))
 }
 
 #[cfg(not(unix))]
-fn bytes_path(bytes: Vec<u8>) -> Option<PathBuf> {
+pub(crate) fn bytes_path(bytes: Vec<u8>) -> Option<PathBuf> {
     String::from_utf8(bytes).ok().map(PathBuf::from)
 }
 

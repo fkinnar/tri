@@ -849,11 +849,11 @@ pub enum Clip {
 }
 
 impl Clip {
-    /// Fichier des sévérités par dossier, dans le dossier de données.
-    fn strictness_file(self) -> &'static str {
+    /// Clé de la sévérité dans les curseurs du dossier ([`crate::store::value`]).
+    fn strictness_key(self) -> &'static str {
         match self {
-            Clip::Over => "clip-over-strictness.tsv",
-            Clip::Under => "clip-under-strictness.tsv",
+            Clip::Over => "clip-over-strictness",
+            Clip::Under => "clip-under-strictness",
         }
     }
 }
@@ -872,19 +872,19 @@ pub fn clip_threshold(base: f64, strictness: f32, span: f64) -> f64 {
 }
 
 /// Sévérité du côté `clip` retenue pour le dossier `dir`, s'il y en a une.
-pub fn folder_strictness(data: &Path, dir: &Path, clip: Clip) -> Option<f32> {
-    crate::folder::folder_value(data, clip.strictness_file(), dir)
+pub fn folder_strictness(data: Option<&Path>, dir: &Path, clip: Clip) -> Option<f32> {
+    crate::store::value(data, dir, clip.strictness_key())
 }
 
 /// Retient la sévérité `strictness` du côté `clip` pour le dossier `dir` ; `None` :
 /// l'oublie (centre).
 pub fn remember_strictness(
-    data: &Path,
+    data: Option<&Path>,
     dir: &Path,
     clip: Clip,
     strictness: Option<f32>,
 ) -> std::io::Result<()> {
-    crate::folder::remember_folder_value(data, clip.strictness_file(), dir, strictness)
+    crate::store::set_value(data, dir, clip.strictness_key(), strictness)
 }
 
 #[cfg(test)]
@@ -1156,10 +1156,13 @@ mod tests {
     fn each_side_is_remembered_per_folder() {
         let data = tempfile::tempdir().unwrap();
         let dir = Path::new("/photos/séance");
-        remember_strictness(data.path(), dir, Clip::Under, Some(-1.0)).unwrap();
-        assert_eq!(folder_strictness(data.path(), dir, Clip::Under), Some(-1.0));
-        assert_eq!(folder_strictness(data.path(), dir, Clip::Over), None);
-        remember_strictness(data.path(), dir, Clip::Under, None).unwrap();
-        assert_eq!(folder_strictness(data.path(), dir, Clip::Under), None);
+        remember_strictness(Some(data.path()), dir, Clip::Under, Some(-1.0)).unwrap();
+        assert_eq!(
+            folder_strictness(Some(data.path()), dir, Clip::Under),
+            Some(-1.0)
+        );
+        assert_eq!(folder_strictness(Some(data.path()), dir, Clip::Over), None);
+        remember_strictness(Some(data.path()), dir, Clip::Under, None).unwrap();
+        assert_eq!(folder_strictness(Some(data.path()), dir, Clip::Under), None);
     }
 }

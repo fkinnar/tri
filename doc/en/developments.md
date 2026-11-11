@@ -67,8 +67,9 @@ on demand, `b` cycles through the renders).
   (the file's number) or `Rank::Copy(n)` (the virtual copy's rank among the photo's, the
   first = 1: the identifier says nothing).
 - `latest(developments)`: the most recent by its sidecar's date.
-- `preferred(data)`, `prefer(data, development, on)`: a photo's preferred development
-  (cover of its stack), one per photo, in `preferred-developments.txt` of the data folder.
+- `preferred(data, folders)`, `prefer(data, development, on)`: a photo's preferred
+  development (cover of its stack), one per photo, kept by name in the folder's data
+  (`choices.json`, see [store.md](store.md)).
 
 ## Active software only
 

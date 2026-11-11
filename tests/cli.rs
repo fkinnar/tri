@@ -514,7 +514,7 @@ fn a_folder_keeps_its_cache_and_gives_it_back() {
     assert!(computed > 0);
     let out = stdout(&ok(env.run([arg(&seance), "--cache-here".as_ref()])));
     assert!(out.contains(&format!("{computed} entries moved")), "{out}");
-    assert!(seance.join(tri::cache::DISK_DIR).is_dir());
+    assert!(tri::cache::disk_dir(&seance).is_dir());
     assert_eq!(
         cache_entries(&env),
         0,
@@ -525,6 +525,6 @@ fn a_folder_keeps_its_cache_and_gives_it_back() {
     assert_eq!(entries_in(&out), 0, "{out}");
     let out = stdout(&ok(env.run([arg(&seance), "--cache-user".as_ref()])));
     assert!(out.contains(&format!("{computed} entries moved")), "{out}");
-    assert!(!seance.join(tri::cache::DISK_DIR).exists());
+    assert!(!tri::cache::disk_dir(&seance).exists());
     assert_eq!(cache_entries(&env), computed);
 }

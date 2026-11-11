@@ -63,7 +63,8 @@ plus grandes) ; double-clic : retour au centre.
   40 piles restaient avec le seuil géométrique, aucune maintenant. Moins de `min` liens :
   `with_strictness`.
 - `folder_strictness` / `remember_strictness` : la sévérité choisie, retenue pour chaque
-  dossier (`group-strictness.tsv` du dossier de données) ; au centre, elle est oubliée.
+  dossier (clé `group-strictness` du `tuning.json` du dossier, [store.md](store.md)) ; au
+  centre, elle est oubliée.
   Les seuils par dossier d'avant (`group-thresholds.tsv`) ne sont plus lus.
 - `tri <dossier> --groups` regroupe au centre calculé (`--threshold X` pour imposer un
   seuil).
@@ -119,5 +120,6 @@ images d'une même pose.
 ## Couvertures choisies
 
 `chosen_covers` / `choose_cover` : la préférée de chaque pile, choisie par l'utilisateur
-(une par pile), séparée des notes ; retenue dans `stack-covers.txt` du dossier de données.
+(une par pile), séparée des notes ; retenue par nom dans le `choices.json` du dossier de
+chaque image ([store.md](store.md)).
 
