@@ -150,6 +150,9 @@ Each conversion is built once per pair of spaces and kept (`colour::to_working`,
 
 ## Checking by hand: colour charts
 
+For testers: [colour-check.md](colour-check.md) (step-by-step sheet, no build needed);
+the JPEG and PNG charts are in [`doc/charts`](../charts).
+
 ```
 cargo run --release --example colour_charts -- <output folder> [--side N] [--check-only]
 ```

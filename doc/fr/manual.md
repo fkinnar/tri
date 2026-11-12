@@ -54,6 +54,11 @@ avec une recherche :
 
 ![Aide](../manual-images/fr/help.jpg)
 
+## Les couleurs
+
+Écran calibré ou large gamut ? La fiche [Vérifier les couleurs](colour-check.md) montre
+en dix minutes si `tri` affiche juste chez vous, avec des mires fournies.
+
 ## Vos retours
 
 Ce qui nous aide le plus :
