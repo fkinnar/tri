@@ -28,10 +28,11 @@ pub struct OffloadSettings {
     pub destination: String,
     /// Relire chaque copie et comparer son empreinte à celle de l'original.
     pub verify: bool,
-    /// Ignorer les fichiers déjà déchargés **n'importe où** (historique global). Non par
-    /// défaut : les doublons se jugent sur le dossier de destination (une copie identique
-    /// déjà présente est ignorée), et une même carte peut être déchargée à deux endroits
-    /// (retour du 17/10/2026).
+    /// Ignorer les fichiers déjà déchargés **n'importe où** (historique global). Oui par
+    /// défaut depuis le 12/11/2026 (demande de l'utilisateur : ne pas redécharger ce qu'on
+    /// a déjà repris), avec une case dans la boîte : décochée, les doublons se jugent sur
+    /// le dossier de destination seul, et une même carte peut être déchargée à deux
+    /// endroits (retour du 17/10/2026).
     pub skip_known: bool,
     /// Fichier de l'historique (`~` accepté) ; vide : `offload-history.tsv` dans le
     /// dossier de données (`settings::data_dir`).
@@ -57,7 +58,7 @@ impl Default for OffloadSettings {
         Self {
             destination: "~/Pictures".into(),
             verify: true,
-            skip_known: false,
+            skip_known: true,
             history: String::new(),
             raw_only: false,
             open_after: true,
@@ -253,25 +254,26 @@ pub fn plan(source: &Path, history: &History) -> io::Result<Plan> {
 }
 
 /// Nom de dossier de séance proposé : `AAAA-MM-JJ_`, d'après la date de prise de vue de
-/// la plus ancienne image à copier (lue dans ses métadonnées, heure locale ; à défaut, sa
+/// la plus récente image à copier (lue dans ses métadonnées, heure locale ; à défaut, sa
 /// date de modification en UTC) ; s'il n'y a rien à copier (carte déjà déchargée), de la
-/// plus ancienne de la carte. Le `_` final invite à compléter (« _Self ») ; il est retiré
+/// plus récente de la carte. La plus récente (retour du 12/11/2026, sur une carte de
+/// plusieurs séances : la plus ancienne datait le dossier d'une séance déjà reprise). Le `_` final invite à compléter (« _Self ») ; il est retiré
 /// s'il reste seul ([`destination`]). L'année, si on la veut, va dans la racine
 /// (`…/Sources/2026`, retour du 17/10/2026). `None` si la carte est vide.
 pub fn suggest_folder(plan: &Plan, settings: &OffloadSettings) -> Option<String> {
-    let first = plan
+    let newest = plan
         .to_copy(settings)
-        .min_by_key(|i| i.modified)
-        .or_else(|| plan.items.iter().min_by_key(|i| i.modified))?;
+        .max_by_key(|i| i.modified)
+        .or_else(|| plan.items.iter().max_by_key(|i| i.modified))?;
     let file = MediaFile {
-        path: first.source.clone(),
-        kind: first.kind,
+        path: newest.source.clone(),
+        kind: newest.kind,
     };
     let date = crate::metadata::read(&file)
         .ok()
         .and_then(|m| m.date)
         .and_then(|d| d.get(0..10).map(str::to_string))
-        .unwrap_or_else(|| utc_date(first.modified));
+        .unwrap_or_else(|| utc_date(newest.modified));
     Some(format!("{date}_"))
 }
 

@@ -12,9 +12,12 @@ everyone's needs, not just his.
 - **Destination**: root + session folder. The root is **remembered** from one offload to
   the next (`root` / `remember_root`, file `offload-root` in the data folder);
   `[offload] destination` (`~/Pictures`, `~` accepted) is only used for the first one.
-  Suggested session folder: `AAAA-MM-JJ_` (`suggest_folder`, capture date of the oldest
-  image to copy, read from its metadata in local time; failing that, its modification
-  date in UTC; card already offloaded: the oldest on the card), to be completed
+  Suggested session folder: `AAAA-MM-JJ_` (`suggest_folder`, capture date of the
+  **newest** image to copy, read from its metadata in local time; failing that, its
+  modification date in UTC; card already offloaded: the newest on the card; the oldest
+  until 2026-11-12, which dated the folder after a session already taken from a card of
+  several days; the suggestion follows the "RAW only" and "Offload again" checkboxes as
+  long as it was not changed), to be completed
   ("_Self") or replaced entirely. The year, if wanted, goes into the root
   (`…/Sources/2026`): feedback from 2026-10-17, the `AAAA/AAAA-MM-JJ_` suggestion mixed
   the two, and stayed empty for a card already offloaded. A
@@ -30,11 +33,17 @@ everyone's needs, not just his.
   same card must be offloadable twice, to two places): an identical copy already present
   (same content, hash compared) is skipped; before copying, the dialog announces how many
   images are already in the chosen destination (`already_in`: same name, same size;
-  recomputed when the folder changes). As an option (`[offload] skip_known`, off by
-  default), a **global history** (`offload-history.tsv` in the data folder, or
-  `[offload] history`) skips what has already been offloaded anywhere; a file is
+  recomputed when the folder changes). A **global history** (`offload-history.tsv` in the
+  data folder, or `[offload] history`) also skips what has already been offloaded
+  anywhere, **by default** since 2026-11-12 (`[offload] skip_known = true`; owner's
+  request: do not offload again what was already taken; first an option of the
+  configuration only, off by default). The dialog says it: "1686 images: 1200 already
+  offloaded, 486 new", and offers, if there are any, an "Offload again the n images
+  already offloaded" checkbox (unticked) to offload a card a second time elsewhere. A file is
   identified there by name, size and date (numbers restart at zero: the name alone is not
-  enough). The history is kept in every case.
+  enough), without a database: a text file, one line per copy. The history is kept in
+  every case. It belongs to each machine (data folder): a card offloaded on the Mac is not
+  known on Linux.
 - **Full destination** (feedback from 2026-11-12: the offload failed without a word,
   every following file in error). A copy that fails for lack of room (`is_out_of_space`:
   disk full or quota exceeded) is not an ordinary error: `run` stops on that file and
@@ -139,7 +148,7 @@ grouping, as when a folder is opened.
 - `History::open(fichier)`, `History::open_configured(&réglages)`, `History::in_memory()`;
 - `plan(carte, &historique) -> Plan`: images (`Item`: source, size, date, `known`),
   other files; `Plan::to_copy`, `Plan::bytes`;
-- `suggest_folder(&plan, skip_known)`, `destination(racine, nom)`;
+- `suggest_folder(&plan, &settings)`, `destination(racine, nom)`;
 - `run(&plan, destination, &réglages, &mut historique, &annulation, progression,
   copie) -> Report` (`copie`: each copy as soon as it is made, for the previews) (copied, skipped, errors, interrupted, duration); `Progress`: files (without those left on the card) and bytes (a skipped file, already offloaded or already there, counts at once: the bar follows the files);
 - `delete_sources(&report)`.

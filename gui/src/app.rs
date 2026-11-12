@@ -29494,6 +29494,34 @@ mod tests {
         assert_eq!(history.lines().count(), 2, "historique écrit");
         assert!(!tri::store::kept(&opened), "rien gardé à côté des photos");
         assert!(!opened.join(tri::store::DIR).exists());
+        // Rouverte : les deux images déjà déchargées sont ignorées (retour du 12/11/2026) ;
+        // « décharger à nouveau » coché, elles sont de nouveau à copier.
+        h.get_by_label("Décharger la carte…").click();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.query_by_label("Décharger").is_none() {
+            assert!(Instant::now() < deadline, "boîte jamais rouverte");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            h.query_by_label_contains("2 images : 2 déjà déchargées, 0 nouvelle ; 0 à copier")
+                .is_some(),
+            "déjà déchargées"
+        );
+        click_settled(&mut h, "Décharger à nouveau les 2 images déjà déchargées");
+        h.run_steps(3);
+        // Cochée : plus ignorées par l'historique ; le nom proposé revient au même
+        // dossier, où elles sont déjà : annoncées comme telles.
+        assert!(
+            h.query_by_label_contains("2 déjà dans la destination")
+                .is_some()
+        );
+        assert!(
+            h.query_by_label_contains("0 nouvelle, 2 déjà dans la destination ; 0 à copier")
+                .is_some()
+        );
+        h.get_by_label("Annuler").click();
+        h.run_steps(2);
     }
 
     #[test]
@@ -29897,6 +29925,9 @@ mod tests {
     #[test]
     fn the_same_card_twice_counts_duplicates_in_the_chosen_folder() {
         let (mut h, dir) = harness();
+        // Les doublons jugés sur la destination seule (case « Ignorer les images déjà
+        // déchargées » décochée ; cochée par défaut depuis le 12/11/2026).
+        h.state_mut().settings.offload.skip_known = false;
         let card = dir.path().join("CARTE");
         std::fs::create_dir_all(card.join("DCIM")).unwrap();
         for i in 0..2 {
@@ -30631,6 +30662,10 @@ mod tests {
         };
         h.state_mut().tree = Tree::with_places(vec![place], false);
         h.state_mut().tree.expand(dir.path());
+        // Panneau de droite masqué : son bouton « Auto » (réglages de l'image courante)
+        // n'est pas confondu avec celui du menu (CI macOS du 12/11/2026 : un second pas
+        // pour la première image, et l'annulation ne défaisait que lui).
+        h.state_mut().metadata_panel = false;
         h.run_steps(2);
         h.query_all_by_label("photos")
             .min_by(|a, b| a.rect().left().total_cmp(&b.rect().left()))
@@ -30639,11 +30674,8 @@ mod tests {
         h.run_steps(3);
         h.get_by_label("Développement").hover();
         h.run_steps(3);
-        // « Auto » : balance puis exposition (celle du menu, à gauche).
-        h.query_all_by_label("Auto")
-            .min_by(|a, b| a.rect().left().total_cmp(&b.rect().left()))
-            .unwrap()
-            .click();
+        // « Auto » : balance puis exposition (le seul « Auto » affiché : celui du menu).
+        h.get_by_label("Auto").click();
         h.run_steps(2);
         // Le menu se ferme tout de suite, sous-menu compris (retour du 10/11/2026 : la
         // grille ne changeait qu'en sortant du menu) ; le calcul se fait en fond.

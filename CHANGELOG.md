@@ -10,6 +10,13 @@
   and the free room, until "Retry" (after making room) or "Give up" (the rest stays on
   the card, nothing deleted or ejected). Before the copy, the dialog warns when the room
   is not enough; on the command line, a message and an error exit code.
+- **Offloading: the session is dated by its newest image, and what was already offloaded
+  is skipped** (#437): the suggested folder takes the date of the newest image to copy
+  (it took the oldest); what an earlier offload copied anywhere is now left out by
+  default (`[offload] skip_known = true`, from the offload history), the dialog says how
+  many images are already offloaded and how many are new, and an "Offload again the n
+  images already offloaded" checkbox copies them anyway (to offload a card a second time
+  elsewhere).
 - **A known folder stays quick when its cache is partly redone** (#436): what is still
   cached (grouping signatures, sharpness, exposure, a 1:1) is delivered at once instead of
   waiting behind the thumbnails being recomputed, so the stacks form right away after a
