@@ -845,9 +845,6 @@ pub struct TriApp {
     /// Expositions du JPEG boîtier en calcul (en fond), et leur arrivée.
     camera_pending: HashSet<PathBuf>,
     camera_read: (mpsc::Sender<CameraRead>, Receiver<CameraRead>),
-    /// Histogramme, indicateurs et zones après les réglages (issue n° 420) : demandé
-    /// (bouton, `e`) ; la session seulement, réel à l'ouverture.
-    histogram_after: bool,
     /// Expositions après réglages mesurées ([`after::After`]).
     afters: std::collections::HashMap<PathBuf, after::After>,
     /// Mesures de l'« après » finies, envoyées par leurs fils.
@@ -1651,7 +1648,6 @@ impl TriApp {
             screen: crate::display::Screen::default(),
             camera_pending: HashSet::new(),
             camera_read: mpsc::channel(),
-            histogram_after: false,
             afters: std::collections::HashMap::new(),
             after_read: mpsc::channel(),
             after_pending: HashSet::new(),
@@ -8517,7 +8513,7 @@ impl TriApp {
             Action::HistogramLuminance => self.histogram_channel = Some(tri::exposure::LUMINANCE),
             Action::HistogramPhoto => self.histogram_photo = !self.histogram_photo,
             Action::HistogramCamera => self.histogram_camera = !self.histogram_camera,
-            Action::HistogramAfter => self.histogram_after = !self.histogram_after,
+            Action::HistogramAfter => self.set_histogram_after_auto(!self.gui.histogram.after_auto),
             Action::HistogramChannel => {
                 self.histogram_channel = match self.histogram_channel {
                     None => Some(0),
@@ -13744,7 +13740,8 @@ impl TriApp {
                             .interact(button, egui::Id::unique("histogram_after"), Sense::click())
                             .on_hover_cursor(egui::CursorIcon::PointingHand)
                             .on_hover_text(t!("histogram-after-button-tip", keys = key));
-                        let color = if real.is_some() {
+                        // Le réglage (le même que la case de la section Réglages).
+                        let color = if self.gui.histogram.after_auto {
                             crate::marks::accent_bright(ui.visuals())
                         } else if response.hovered() {
                             ui.visuals().strong_text_color()
@@ -13825,7 +13822,7 @@ impl TriApp {
             self.histogram_camera = !self.histogram_camera;
         }
         if toggle_after {
-            self.histogram_after = !self.histogram_after;
+            self.set_histogram_after_auto(!self.gui.histogram.after_auto);
         }
         if modal.should_close() {
             self.histogram_large = false;
@@ -16428,8 +16425,10 @@ impl TriApp {
         }
     }
 
-    /// `[gui.histogram] after_auto` (case de la section Réglages, #420) : l'histogramme
-    /// d'une image réglée montré après ses réglages d'office ; écrit dans la configuration.
+    /// `[gui.histogram] after_auto` (#420) : l'histogramme d'une image réglée montré après
+    /// ses réglages ; écrit dans la configuration. Un seul réglage pour la case de la
+    /// section Réglages, le bouton du grand histogramme et `e` (retour du 12/11/2026 : la
+    /// case cochée, le bouton ne ramenait plus l'avant).
     fn set_histogram_after_auto(&mut self, on: bool) {
         self.gui.histogram.after_auto = on;
         let Some(path) = self
@@ -30040,10 +30039,15 @@ mod tests {
 
     #[test]
     fn the_histogram_shows_the_image_after_its_adjustments() {
-        // #420 (11/11/2026) : réel par défaut, « après réglages » au bouton ou à `e` ;
-        // pendant le glissement, la dernière mesure décalée tout de suite ; d'office avec
-        // `after_auto` ; badges qui suivent avec `badges_follow_adjustments`.
-        let (mut h, _dir) = harness();
+        // #420 (11/11/2026) : réel par défaut, « après réglages » au bouton ou à `e`
+        // (`after_auto`, le réglage de la case aussi) ; pendant le glissement, la dernière
+        // mesure décalée tout de suite ; badges qui suivent avec
+        // `badges_follow_adjustments`.
+        let (mut h, dir) = harness();
+        // `e` écrit le réglage : dans un fichier du test, jamais la vraie configuration.
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "").unwrap();
+        h.state_mut().config_path = Some(config);
         let path = h.state().files[0].path.clone();
         run_until(&mut h, |app| app.exposures.contains(&path));
         let real = h.state_mut().shown_exposure(0).unwrap();
@@ -30061,7 +30065,7 @@ mod tests {
         set_exposure(&mut h, 2.0);
         let ctx = h.ctx.clone();
         h.state_mut().perform(&ctx, Action::HistogramAfter);
-        assert!(h.state().histogram_after);
+        assert!(h.state().gui.histogram.after_auto);
         // La mesure arrive en fond, réglages compris.
         let measured = |app: &TriApp| {
             app.afters
@@ -30091,12 +30095,8 @@ mod tests {
         // `e` dans le grand histogramme rebascule sur le réel.
         press(&mut h, Key::I, Modifiers::SHIFT);
         press(&mut h, Key::E, Modifiers::NONE);
-        assert!(!h.state().histogram_after, "e : retour au réel");
+        assert!(!h.state().gui.histogram.after_auto, "e : retour au réel");
         assert!(h.state_mut().shown_exposure(0).unwrap().1.is_none());
-        // D'office pour une image réglée.
-        h.state_mut().gui.histogram.after_auto = true;
-        assert!(h.state_mut().shown_exposure(0).unwrap().1.is_some());
-        h.state_mut().gui.histogram.after_auto = false;
         // Badges : sur le réel, sauf s'ils suivent les réglages.
         set_exposure(&mut h, 3.0);
         let far = Instant::now() + Duration::from_secs(5);
@@ -30126,6 +30126,19 @@ mod tests {
         let text = std::fs::read_to_string(&config).unwrap();
         let written: AppSettings = tri::settings::parse(&text).unwrap();
         assert!(written.gui.histogram.after_auto, "écrite : {text}");
+        // Retour du 12/11/2026 : le bouton du grand histogramme (et `e`) est le même
+        // réglage : la case cochée, il ramène l'avant, et la case le suit.
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::HistogramAfter);
+        assert!(
+            !h.state().gui.histogram.after_auto,
+            "le bouton décoche la case"
+        );
+        let text = std::fs::read_to_string(&config).unwrap();
+        let written: AppSettings = tri::settings::parse(&text).unwrap();
+        assert!(!written.gui.histogram.after_auto, "écrite : {text}");
+        h.state_mut().perform(&ctx, Action::HistogramAfter);
+        assert!(h.state().gui.histogram.after_auto, "et la recoche");
     }
 
     #[test]

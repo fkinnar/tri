@@ -1533,8 +1533,9 @@ pub struct HistogramSettings {
     /// Épaisseur de ce trait (points).
     pub camera_width: f32,
     /// Histogramme, indicateurs et zones d'une image qui a des réglages de visualisation :
-    /// montrés **après** les réglages d'eux-mêmes (sinon : données réelles, et le bouton
-    /// du grand histogramme ou `e` pour passer à l'après ; issue n° 420).
+    /// montrés **après** les réglages (sinon : données réelles ; issue n° 420). Un seul
+    /// réglage pour la case de la section Réglages, le bouton du grand histogramme et `e`,
+    /// retenu dans la configuration.
     pub after_auto: bool,
     /// Badges saturé / bouché de la grille d'une image réglée : suivent son exposition et
     /// sa balance réglées (sinon : données réelles).

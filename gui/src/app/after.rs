@@ -55,13 +55,13 @@ fn shift_between(from: Option<&Layers>, to: Option<&Layers>) -> [f32; SERIES] {
 }
 
 impl TriApp {
-    /// Vrai si l'histogramme de `path` se montre après les réglages : demandé (bouton, `e`),
-    /// ou d'office pour une image réglée (`[gui.histogram] after_auto`).
+    /// Vrai si l'histogramme de `path` se montre après les réglages : le réglage
+    /// `[gui.histogram] after_auto` (case de la section Réglages, bouton du grand
+    /// histogramme, `e`), pour une image réglée (sans réglage, l'après est le réel).
     pub(super) fn histogram_shows_after(&self, path: &Path) -> bool {
-        self.histogram_after
-            || (self.gui.histogram.after_auto
-                && crate::adjust_view::layers_for(&self.adjust_map, path, Level::Standard)
-                    .is_some_and(|l| !l.is_none()))
+        self.gui.histogram.after_auto
+            && crate::adjust_view::layers_for(&self.adjust_map, path, Level::Standard)
+                .is_some_and(|l| !l.is_none())
     }
 
     /// Exposition à montrer pour l'image `index` : l'« après » si elle est demandée et
