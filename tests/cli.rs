@@ -394,6 +394,12 @@ fn images_are_copied_moved_and_deleted() {
 #[test]
 fn a_card_is_offloaded_and_only_what_is_new_is_copied() {
     let env = Env::new();
+    // Les doublons jugés sur la destination seule ([offload] skip_known, vrai par défaut
+    // depuis le 12/11/2026 : l'historique global ignorerait aussi la seconde fois).
+    let config = env.path("config.toml");
+    let mut text = fs::read_to_string(&config).unwrap();
+    text.push_str("\n[offload]\nskip_known = false\n");
+    fs::write(&config, text).unwrap();
     let card = env.path("card");
     env.image(&card.join("DCIM").join("100"), "a.jpg");
     env.image(&card.join("DCIM").join("100"), "b.jpg");

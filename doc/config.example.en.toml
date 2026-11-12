@@ -362,10 +362,11 @@ mask_under_share = 0.5
 destination = "~/Pictures"
 # Read back each copy and compare its hash with the original.
 verify = true
-# Duplicates are judged on the destination folder (an identical copy already present
-# is skipped): the same card can be offloaded to two places. true: also skip what
-# has already been offloaded anywhere (global history).
-skip_known = false
+# Skip what has already been offloaded anywhere (global history). false: duplicates are
+# judged on the destination folder alone (an identical copy already present is skipped),
+# to offload the same card to two places; also the "Offload again the images already
+# offloaded" checkbox of the dialog, for once.
+skip_known = true
 # Offload history file (~ accepted); empty: offload-history.tsv in the
 # data folder (Linux ~/.local/share/tri, macOS ~/Library/Application Support/tri,
 # Windows %APPDATA%\tri).
