@@ -50,6 +50,12 @@ Filter by file kind. Use case: an SD card in RAW+JPEG must be viewable in full, 
 or JPEG only. `accepts(kind)` gives the decision for a single image (useful on the
 interface side, for example for a counter).
 
+### `ExtensionFilter`
+
+The photos of one extension ("RAF", "JPG"; case ignored), without the developments
+(clones, copies: `media::is_development`). A line of the folder summary (issue #388,
+2026-11-12); test `the_extension_filter_keeps_photos_of_that_extension`.
+
 ## Example
 
 ```rust

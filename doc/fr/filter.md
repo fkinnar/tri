@@ -50,6 +50,12 @@ Filtre par nature de fichier. Cas d'usage : une carte SD en RAW+JPEG doit pouvoi
 en entier, en RAW seuls, ou en JPEG seuls. `accepts(kind)` donne la décision pour une seule
 image (utile côté interface, par exemple pour un compteur).
 
+### `ExtensionFilter`
+
+Les photos d'une extension (« RAF », « JPG » ; casse ignorée), sans les développements
+(clones, copies : `media::is_development`). Une ligne du résumé du dossier (issue n° 388,
+12/11/2026) ; test `the_extension_filter_keeps_photos_of_that_extension`.
+
 ## Exemple
 
 ```rust
