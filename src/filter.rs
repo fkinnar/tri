@@ -79,9 +79,58 @@ impl Filter for KindFilter {
     }
 }
 
+/// Seulement les photos d'une extension (« RAF », « JPG » ; casse ignorée), sans les
+/// développements (clones, copies) : une ligne du résumé du dossier (issue n° 388).
+pub struct ExtensionFilter<'a> {
+    /// Extension voulue, sans le point.
+    pub extension: &'a str,
+}
+
+impl Filter for ExtensionFilter<'_> {
+    fn apply(&self, groups: Groups) -> Groups {
+        groups
+            .into_iter()
+            .map(|group| {
+                group
+                    .into_iter()
+                    .filter(|f| {
+                        !crate::media::is_development(&f.path)
+                            && f.path.extension().is_some_and(|e| {
+                                e.to_string_lossy().eq_ignore_ascii_case(self.extension)
+                            })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .filter(|group| !group.is_empty())
+            .collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_extension_filter_keeps_photos_of_that_extension() {
+        let file = |p: &str, kind| MediaFile {
+            path: p.into(),
+            kind,
+        };
+        let groups = vec![vec![
+            file("a.RAF", MediaKind::Raw),
+            file("b.raf", MediaKind::Raw),
+            file("c.NEF", MediaKind::Raw),
+            file("a.JPG", MediaKind::Flat),
+        ]];
+        let kept = ExtensionFilter { extension: "RAF" }.apply(groups);
+        let names: Vec<_> = kept[0].iter().map(|f| f.path.to_str().unwrap()).collect();
+        assert_eq!(names, ["a.RAF", "b.raf"]);
+        assert!(
+            ExtensionFilter { extension: "TIF" }
+                .apply(vec![vec![file("a.RAF", MediaKind::Raw)]])
+                .is_empty()
+        );
+    }
 
     fn file(name: &str, kind: MediaKind) -> MediaFile {
         MediaFile {

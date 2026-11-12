@@ -908,6 +908,8 @@ pub struct TriApp {
     group_curve: f32,
     /// Filtre « pile courante » (`f c`, issue n° 52) : les images de la pile gardée.
     stack_only: Option<HashSet<PathBuf>>,
+    /// Seulement les photos d'une extension (ligne du résumé du dossier, #388).
+    extension_only: Option<String>,
     /// Images de cette pile que `f c` a dépliées (elles étaient repliées) : repliées de
     /// nouveau en quittant le filtre (retour du 25/10/2026).
     stack_only_unfolded: Vec<PathBuf>,
@@ -1689,6 +1691,7 @@ impl TriApp {
             group_curve: settings.similarity.strictness_curve,
             group_distances: Vec::new(),
             stack_only: None,
+            extension_only: None,
             stack_only_unfolded: Vec::new(),
             group_centre: settings.similarity.threshold,
             blur_strictness: 0.0,
@@ -5682,6 +5685,11 @@ impl TriApp {
             tri::developments::ActiveEngines(&engines)
                 .apply(self.folder.filtered(self.filter, &NotesRule::default())),
         );
+        // Seulement une extension (résumé du dossier, #388).
+        let base = match &self.extension_only {
+            Some(extension) => tri::filter::ExtensionFilter { extension }.apply(base),
+            None => base,
+        };
         // Seulement la pile courante (`f c`, issue n° 52).
         let base: Vec<Vec<MediaFile>> = match &self.stack_only {
             Some(only) => base
@@ -6195,6 +6203,8 @@ impl TriApp {
     /// un dossier sans rien de retenu s'ouvre sans filtre, dans l'ordre retenu pour tous.
     /// Réglage coupé : les filtres restent ceux du dossier précédent, comme avant.
     fn restore_folder_view(&mut self, dir: &Path) {
+        // Le filtre par extension du résumé (#388) est propre au dossier quitté.
+        self.extension_only = None;
         if !self.gui.remember_folder_view {
             self.folder_view = None;
             return;
@@ -15244,6 +15254,12 @@ impl TriApp {
         }
         if let Some(only) = &self.stack_only {
             parts.push(t!("filter-summary-stack", n = only.len()));
+        }
+        if let Some(extension) = &self.extension_only {
+            parts.push(extension.clone());
+        }
+        if self.conflicts_only {
+            parts.push(t!("filter-conflicts"));
         }
         if self.filter_inverted && self.content_filtered() {
             parts.push(t!("filter-bar-inverted"));
@@ -32109,6 +32125,41 @@ mod tests {
             h.query_by_label("Données de tri : sur cette machine")
                 .is_some()
         );
+        // Chaque ligne est un filtre : ce filtre seul (les autres retirés) ; recliquée,
+        // plus de filtre.
+        h.state_mut().filter = KindFilter::RawOnly;
+        h.state_mut().apply_filter();
+        h.run_steps(2);
+        assert_eq!(h.state().files.len(), 0, "pas de RAW ici");
+        h.get_by_label("Acceptées").click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state().filter,
+            KindFilter::All,
+            "les autres filtres retirés"
+        );
+        assert_eq!(h.state().files.len(), 1, "l'image acceptée");
+        assert!(h.state().summary_line_on(&summary::Line::Accepted));
+        h.get_by_label("Acceptées").click();
+        h.run_steps(2);
+        assert_eq!(h.state().files.len(), 3, "recliquée : tout");
+        assert!(h.state().notes_rule.is_empty());
+        h.get_by_label("Sans note").click();
+        h.run_steps(2);
+        assert_eq!(h.state().files.len(), 2);
+        // Une extension.
+        h.get_by_label("JPG").click();
+        h.run_steps(2);
+        assert_eq!(h.state().extension_only.as_deref(), Some("JPG"));
+        assert_eq!(h.state().files.len(), 3);
+        assert!(
+            h.state().notes_rule.is_empty(),
+            "le filtre précédent retiré"
+        );
+        // « Photos » : plus aucun filtre.
+        h.get_by_label("Photos").click();
+        h.run_steps(2);
+        assert!(h.state().extension_only.is_none());
     }
 
     #[test]
