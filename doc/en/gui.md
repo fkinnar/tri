@@ -62,7 +62,8 @@ system one ("cold" measurements, experiments).
   on this machine). Recomputed at every frame shown while the section is unfolded (a few
   thousand lookups in memory). **Every line is a filter** (2026-11-12, decided on
   2026-11-09): one click shows that filter alone, replacing the others; the line lights up
-  (accent, underlined); a second click removes every filter; "Photos" removes them too.
+  (the same background as the open folder in the tree; first accent and underlined,
+  which looked like the titles, 2026-11-12); a second click removes every filter; "Photos" removes them too.
   Extension: `ExtensionFilter` (new, reset when changing folders); developments: the
   "developed" filter (every active software, or the line's); not rated (no star, flag nor
   colour), with stars, accepted, rejected, with a colour label (any, or one line per
@@ -117,8 +118,8 @@ system one ("cold" measurements, experiments).
 - **Filters** (2026-10-17): type (all / RAW / flat) and ratings (at least n stars;
   picked, without rejected or rejected; one or more colours), combined. Several colours
   chosen: one of them ("or"); with several colours per photo (`[xmp] multiple_colors`),
-  a small "or" / "and" button after the dots of the filter bar (like "≥ = ≤" before the
-  stars) asks for all the colours (`core.filter.colors.all`, no default shortcut;
+  a small ∨ (or) / ∧ (and) button before the dots of the filter bar (like "≥ = ≤" before
+  the stars; first "or" / "and" after them, feedback from 2026-11-12) asks for all the colours (`core.filter.colors.all`, no default shortcut;
   feedback from 2026-11-12). Kept for the colours chosen next, and in the folder's
   remembered view.
   - Keyboard: prefix `f` (user's choice), followed by the matching rating key:

@@ -15441,6 +15441,23 @@ impl TriApp {
                 }
             }
             ui.separator();
+            // Plusieurs couleurs par photo : toutes (∧) ou l'une (∨) des couleurs choisies,
+            // devant les pastilles comme « ≥ = ≤ » devant les étoiles (retours du
+            // 12/11/2026) ; avec une seule couleur par photo, c'est forcément « ou ».
+            if self.settings.xmp.multiple_colors {
+                let name = if self.colors_all {
+                    t!("filter-colors-all-tip")
+                } else {
+                    t!("filter-colors-any-tip")
+                };
+                let tip = format!("{name}\n{}", self.action_tip(Action::FilterColorsAll));
+                let (rect, op) = marks::clickable_named(ui, size, &name, &tip);
+                let color = ui.style().interact(&op).fg_stroke.color;
+                marks::and_or(ui.painter(), rect, self.colors_all, color);
+                if op.clicked() {
+                    clicked.push(Action::FilterColorsAll);
+                }
+            }
             for color in Color::ALL {
                 let tip = self.action_tip(Action::FilterColor(color));
                 let (rect, response) = marks::clickable(ui, size, &tip);
@@ -15459,25 +15476,6 @@ impl TriApp {
                 );
                 if response.clicked() {
                     clicked.push(Action::FilterColor(color));
-                }
-            }
-            // Plusieurs couleurs par photo : toutes (et) ou l'une (ou) des couleurs choisies
-            // (retour du 12/11/2026) ; avec une seule, c'est forcément « ou ».
-            if self.settings.xmp.multiple_colors {
-                let (symbol, name) = if self.colors_all {
-                    (t!("filter-colors-all"), t!("filter-colors-all-tip"))
-                } else {
-                    (t!("filter-colors-any"), t!("filter-colors-any-tip"))
-                };
-                let op = ui
-                    .add(egui::Button::new(symbol).small().frame(false))
-                    .on_hover_text(format!(
-                        "{name}\n{}",
-                        self.action_tip(Action::FilterColorsAll)
-                    ))
-                    .on_hover_cursor(egui::CursorIcon::PointingHand);
-                if op.clicked() {
-                    clicked.push(Action::FilterColorsAll);
                 }
             }
             ui.separator();
@@ -32235,8 +32233,9 @@ mod tests {
         use tri::xmp::Color;
         let (mut h, _dir) = harness();
         h.run_steps(3);
+        let any = "L'une des couleurs choisies (ou)";
         assert!(
-            h.query_by_label("ou").is_none(),
+            h.query_by_label(any).is_none(),
             "une couleur par photo : pas de choix"
         );
         h.state_mut().settings.xmp.multiple_colors = true;
@@ -32253,8 +32252,8 @@ mod tests {
             .perform(&ctx, Action::FilterColor(Color::Green));
         h.run_steps(2);
         assert_eq!(h.state().files.len(), 2, "rouge ou vert");
-        assert!(h.query_by_label("ou").is_some(), "le choix, dans la barre");
-        h.get_by_label("ou").click();
+        assert!(h.query_by_label(any).is_some(), "le choix, dans la barre");
+        h.get_by_label(any).click();
         h.run_steps(2);
         assert_eq!(h.state().files.len(), 1, "rouge et vert");
         assert_eq!(h.state().files[0].path, files[0]);
