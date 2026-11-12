@@ -11821,14 +11821,23 @@ impl TriApp {
             self.developed_level(&file.path),
             |l| self.ready(index, l),
         );
-        // En attendant que l'image voulue soit chargée, la meilleure déjà affichable.
-        let shown = view::pick(
-            file.kind,
-            source,
-            zoomed,
-            self.developed_level(&file.path),
-            |l| self.ready(index, l) && self.loaded(index, l),
-        );
+        // En attendant que l'image voulue soit chargée, la meilleure déjà affichable. Un
+        // développement déjà calculé, seulement en chargement, que la vignette montre déjà :
+        // on attend sur elle, plutôt que d'intercaler un instant le JPEG boîtier ou le rendu
+        // RAW, chargés plus vite (retour du 12/11/2026 : un éclair d'une autre image en
+        // passant d'un développement à l'autre).
+        let developed = self.developed_level(&file.path);
+        let on_thumbnail = source == Source::Developed
+            && self.ready(index, developed)
+            && self.texture_levels.get(&file.path) == Some(&developed)
+            && self.textures.contains(&file.path)
+            && !self.missing.contains(&(file.path.clone(), developed))
+            && !self.over_budget.contains(&(file.path.clone(), developed));
+        let shown = view::pick(file.kind, source, zoomed, developed, |l| {
+            self.ready(index, l)
+                && self.loaded(index, l)
+                && (!on_thumbnail || l == developed || l == Level::Thumbnail)
+        });
         if (index, shown) != self.last_shown {
             trace(|| format!("affichée : image {index} {shown:?} (voulue {desired:?})"));
             self.last_shown = (index, shown);
@@ -28598,7 +28607,9 @@ mod tests {
         let (mut h, _dir) = harness_with(4000, 3000);
         h.run_steps(3);
         press(&mut h, Key::Enter, Modifiers::NONE);
-        run_until(&mut h, |app| app.last_shown.1.is_some());
+        // L'aperçu lui-même, pas la vignette d'attente : l'ajusté se calcule sur sa taille
+        // (CI Windows du 12/11/2026 : « sous l'ajusté » mesuré sur la vignette).
+        run_until(&mut h, |app| app.last_shown.1 == Some(Level::Standard));
         // + : palier au-dessus de l'ajusté ; * : 100 % ; - : palier en dessous ; / : ajusté.
         h.event(UiEvent::Text("+".into()));
         h.run_steps(3);
@@ -31747,6 +31758,67 @@ mod tests {
         h.get_by_label(&t!("develop-with-libraw")).click();
         h.run_steps(2);
         assert!(h.state().rating_dialog.is_none());
+    }
+
+    #[test]
+    fn a_development_loading_waits_on_its_thumbnail_not_on_another_render() {
+        // Retour du 12/11/2026 : en passant d'une image développée à l'autre, le JPEG
+        // boîtier (ou le rendu RAW), chargé avant le développement, s'intercalait un instant
+        // entre la vignette (qui montre le développement) et le développement.
+        use tri::develop::Engine;
+        let (mut h, _dir) = harness_with(600, 400);
+        h.run_steps(3);
+        h.state_mut().developers = fake_darktable();
+        let files = h.state().files.clone();
+        {
+            let engine = h.state().engine.as_ref().unwrap();
+            let bitmap = tri::bitmap::Bitmap {
+                width: 300,
+                height: 200,
+                data: vec![200; 300 * 200 * 3],
+            };
+            for file in &files {
+                let key = preview::key(file, Level::Developed(Engine::Darktable), &engine.preview)
+                    .unwrap();
+                engine.cache.put(&key, &bitmap).unwrap();
+            }
+        }
+        // Sa vignette chargée dans la grille d'abord (CI : pas forcément en trois images).
+        let path = files[0].path.clone();
+        run_until(&mut h, |app| app.textures.contains(&path));
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.state_mut().source = Source::Developed;
+        run_until(&mut h, |app| app.last_shown == (0, Some(DT)));
+        assert!(
+            h.state().textures.contains(&path),
+            "sa vignette est chargée"
+        );
+        // La vignette montre le développement ; le développement pas encore chargé, une
+        // autre image (ici l'image plate elle-même) l'est déjà.
+        let dev = h.state_mut().big.get(&(path.clone(), DT)).cloned().unwrap();
+        let state = h.state_mut();
+        state.texture_levels.insert(path.clone(), DT);
+        state.big.insert((path.clone(), Level::Standard), dev);
+        state.big.remove(&(path.clone(), DT));
+        h.run_steps(1);
+        assert_ne!(
+            h.state().last_shown,
+            (0, Some(Level::Standard)),
+            "pas d'autre rendu entre la vignette et le développement"
+        );
+        run_until(&mut h, |app| app.last_shown == (0, Some(DT)));
+        // Vignette d'un autre rendu : l'image déjà chargée sert d'attente, comme avant.
+        let dev = h.state_mut().big.get(&(path.clone(), DT)).cloned().unwrap();
+        let state = h.state_mut();
+        state.texture_levels.insert(path.clone(), Level::Thumbnail);
+        state.big.insert((path.clone(), Level::Standard), dev);
+        state.big.remove(&(path.clone(), DT));
+        h.run_steps(1);
+        let shown = h.state().last_shown;
+        assert!(
+            shown == (0, Some(Level::Standard)) || shown == (0, Some(DT)),
+            "{shown:?}"
+        );
     }
 
     #[test]

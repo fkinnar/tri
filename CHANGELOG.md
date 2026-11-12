@@ -9,6 +9,10 @@
   next (creation date) and was then taken for sRGB, so the copies were converted a second
   time; full screen was right. The profile is now always the same, and the older copies
   are recognised.
+- **No flash of another render between developed images** (#432): going from one
+  developed image to the next in full screen, the camera JPEG (or the RAW render), loaded
+  sooner, showed for an instant between the thumbnail and the development; full screen
+  now waits on the thumbnail, which already shows the development.
 - **Checking colours** (#430): a sheet for testers ([doc/en/colour-check.md](doc/en/colour-check.md))
   and the colour charts in `doc/charts`, to check in ten minutes that `tri` displays
   colours right on a calibrated or wide-gamut screen, without building anything.
