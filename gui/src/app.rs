@@ -23284,7 +23284,10 @@ mod tests {
         let (mut h, _dir) = harness_with(640, 480);
         h.run_steps(3);
         press(&mut h, Key::Enter, Modifiers::NONE);
-        h.run_steps(3);
+        // L'aperçu lui-même, pas la vignette d'attente : l'ajusté se calcule sur sa taille,
+        // et un palier qui tombe dessus repasse à l'ajusté (CI Windows du 12/11/2026 : 200 %
+        // restait 200 % après Ctrl+J).
+        run_until(&mut h, |app| app.last_shown.1 == Some(Level::Standard));
         assert!(h.state().zoom.is_none(), "ajusté");
         // `<leader> z 2`, puis la pause : 200 %.
         leader(&mut h, &[(Key::Z, Modifiers::NONE)]);
