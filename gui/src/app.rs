@@ -28598,7 +28598,9 @@ mod tests {
         let (mut h, _dir) = harness_with(4000, 3000);
         h.run_steps(3);
         press(&mut h, Key::Enter, Modifiers::NONE);
-        run_until(&mut h, |app| app.last_shown.1.is_some());
+        // L'aperçu lui-même, pas la vignette d'attente : l'ajusté se calcule sur sa taille
+        // (CI Windows du 12/11/2026 : « sous l'ajusté » mesuré sur la vignette).
+        run_until(&mut h, |app| app.last_shown.1 == Some(Level::Standard));
         // + : palier au-dessus de l'ajusté ; * : 100 % ; - : palier en dessous ; / : ajusté.
         h.event(UiEvent::Text("+".into()));
         h.run_steps(3);
