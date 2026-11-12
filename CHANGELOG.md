@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Right-click on a selection acts on the whole selection** (#440): ratings and file
+  actions of the right-click dialog apply to every selected image, as the keyboard does
+  (a checkbox goes back to the right-clicked image alone; rename stays one image at a
+  time, #439). The rating bar now says it "acts on the N selected images", not only
+  their ratings.
 - **A known folder stays quick when its cache is partly redone** (#436): what is still
   cached (grouping signatures, sharpness, exposure, a 1:1) is delivered at once instead of
   waiting behind the thumbnails being recomputed, so the stacks form right away after a

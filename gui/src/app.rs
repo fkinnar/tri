@@ -463,6 +463,9 @@ pub struct TriApp {
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
+    /// Boîte du clic droit sur une image d'une sélection multiple : agir sur toute la
+    /// sélection (case de la boîte, cochée à l'ouverture ; retour du 12/11/2026).
+    rating_dialog_all: bool,
     /// Boîte pour trancher un conflit de notes (issue n° 368).
     conflict_dialog: Option<ConflictDialog>,
     /// Sélecteur ouvert par un clic sur une marque de la vignette (#257) : image, groupe
@@ -1480,6 +1483,7 @@ impl TriApp {
             grid_fit_from: None,
             cell_action: None,
             rating_dialog: None,
+            rating_dialog_all: true,
             conflict_dialog: None,
             mark_picker: None,
             file_dialog: None,
@@ -13163,6 +13167,7 @@ impl TriApp {
             let at = CENTRED;
             self.select(index);
             self.rating_dialog = Some((path, at));
+            self.rating_dialog_all = true;
         }
     }
 
@@ -14536,105 +14541,127 @@ impl TriApp {
         };
         let notes = self.folder.notes.notes(&path).clone();
         let (colors, size) = (self.gui.colors.clone(), self.gui.grid.marks + 8.0);
+        // Clic droit sur une image d'une sélection multiple : notes et actions sur toute
+        // la sélection, comme au clavier (Suppr…), sauf si l'on décoche la case.
+        let group: Vec<PathBuf> =
+            if self.selection.visible(&self.files) > 1 && self.selection.contains(&path) {
+                self.selection.targets(&self.files, self.selected)
+            } else {
+                Vec::new()
+            };
+        let mut all = self.rating_dialog_all;
+        let on_all = !group.is_empty() && all;
+        let title = if on_all {
+            t!("rating-dialog-selection", n = group.len())
+        } else {
+            shown_name(&path)
+        };
         let mut clicked = None;
         let mut file_action = None;
         // Développer avec : `Some(None)` le rendu RAW (LibRaw), `Some(Some(e))` un logiciel.
         let mut develop: Option<Option<tri::develop::Engine>> = None;
         let engines = self.developers.engines();
-        let modal = modal_at("rating_dialog", at)
-            .title(shown_name(&path))
-            .show(ctx, |ui| {
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    clicked = marks::controls(ui, &notes, &colors, size, &|a| self.action_tip(a))
-                });
-                ui.add_space(6.0);
-                ui.separator();
-                // Actions sur le fichier.
-                // Icônes carrées, libellé et raccourci au survol (retour du 17/10/2026).
-                let icon = self.gui.dialogs.icon_size;
-                ui.horizontal(|ui| {
-                    for action in [
-                        Action::FileRename,
-                        Action::FileCopy,
-                        Action::FileMove,
-                        Action::FileDelete,
-                        Action::FileReveal,
-                        Action::FileEdit,
-                        Action::Sidecars,
-                        Action::EmbedNotes,
-                        Action::ImportNotes,
-                        Action::Send("plugin.airdrop.send"),
-                    ]
-                    .into_iter()
-                    .filter(|a| a.available())
-                    {
-                        // Actions sur les fichiers interdites : grisées, la bulle dit
-                        // pourquoi (30/10/2026).
-                        let enabled = !action.changes_files() || self.settings.files.allow_actions;
-                        let tip = if enabled {
-                            self.action_tip(action)
-                        } else {
-                            t!("files-actions-off")
-                        };
-                        let (rect, response) = ui
-                            .add_enabled_ui(enabled, |ui| {
-                                marks::icon_button(ui, icon, &action.label(), &tip)
-                            })
-                            .inner;
-                        let color = if enabled {
-                            ui.style().interact(&response).fg_stroke.color
-                        } else {
-                            ui.visuals().weak_text_color()
-                        };
-                        marks::file_action(ui.painter(), rect.shrink(icon * 0.22), action, color);
-                        if response.clicked() {
-                            file_action = Some(action);
-                        }
+        let modal = modal_at("rating_dialog", at).title(title).show(ctx, |ui| {
+            if !group.is_empty() {
+                ui.checkbox(&mut all, t!("rating-dialog-all", n = group.len()))
+                    .on_hover_text(t!("rating-dialog-all-tip"));
+            }
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                clicked = marks::controls(ui, &notes, &colors, size, &|a| self.action_tip(a))
+            });
+            ui.add_space(6.0);
+            ui.separator();
+            // Actions sur le fichier.
+            // Icônes carrées, libellé et raccourci au survol (retour du 17/10/2026).
+            let icon = self.gui.dialogs.icon_size;
+            ui.horizontal(|ui| {
+                for action in [
+                    Action::FileRename,
+                    Action::FileCopy,
+                    Action::FileMove,
+                    Action::FileDelete,
+                    Action::FileReveal,
+                    Action::FileEdit,
+                    Action::Sidecars,
+                    Action::EmbedNotes,
+                    Action::ImportNotes,
+                    Action::Send("plugin.airdrop.send"),
+                ]
+                .into_iter()
+                .filter(|a| a.available())
+                {
+                    // Actions sur les fichiers interdites : grisées, la bulle dit
+                    // pourquoi (30/10/2026). Renommer : une image à la fois (pas encore
+                    // de renommage par lot).
+                    let allowed = !action.changes_files() || self.settings.files.allow_actions;
+                    let one_only = on_all && action == Action::FileRename;
+                    let enabled = allowed && !one_only;
+                    let tip = if one_only {
+                        t!("rating-dialog-rename-one")
+                    } else if enabled {
+                        self.action_tip(action)
+                    } else {
+                        t!("files-actions-off")
+                    };
+                    let (rect, response) = ui
+                        .add_enabled_ui(enabled, |ui| {
+                            marks::icon_button(ui, icon, &action.label(), &tip)
+                        })
+                        .inner;
+                    let color = if enabled {
+                        ui.style().interact(&response).fg_stroke.color
+                    } else {
+                        ui.visuals().weak_text_color()
+                    };
+                    marks::file_action(ui.painter(), rect.shrink(icon * 0.22), action, color);
+                    if response.clicked() {
+                        file_action = Some(action);
                     }
-                });
-                // Développer avec (26/10/2026) : les logiciels installés, ou le rendu RAW.
-                if !engines.is_empty() {
-                    ui.add_space(6.0);
-                    ui.horizontal(|ui| {
-                        ui.label(t!("develop-with"));
-                        egui::ComboBox::from_id_salt("develop_with")
-                            .selected_text(t!("develop-with-choose"))
-                            .show_ui(ui, |ui| {
-                                for &engine in &engines {
-                                    let action = Action::DevelopWith(engine);
-                                    // Seulement ce qu'on y a développé (un `.rrdata` de
-                                    // notes seules donnait un rendu orphelin, hors de la
-                                    // pile : retour du 31/10/2026 ; puis darktable aussi,
-                                    // le soir : sans développement, rien à voir ; seul le
-                                    // rendu LibRaw est toujours là).
-                                    let developable = tri::develop::is_developed_in(&path, engine);
-                                    let tip = if developable {
-                                        self.action_tip(action)
-                                    } else {
-                                        t!("develop-with-not-developed", engine = engine.name())
-                                    };
-                                    if ui
-                                        .add_enabled(
-                                            developable,
-                                            egui::Button::selectable(false, engine.name()),
-                                        )
-                                        .on_hover_text(tip)
-                                        .clicked()
-                                    {
-                                        develop = Some(Some(engine));
-                                    }
-                                }
-                                if ui
-                                    .selectable_label(false, t!("develop-with-libraw"))
-                                    .clicked()
-                                {
-                                    develop = Some(None);
-                                }
-                            });
-                    });
                 }
             });
+            // Développer avec (26/10/2026) : les logiciels installés, ou le rendu RAW.
+            if !engines.is_empty() {
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.label(t!("develop-with"));
+                    egui::ComboBox::from_id_salt("develop_with")
+                        .selected_text(t!("develop-with-choose"))
+                        .show_ui(ui, |ui| {
+                            for &engine in &engines {
+                                let action = Action::DevelopWith(engine);
+                                // Seulement ce qu'on y a développé (un `.rrdata` de
+                                // notes seules donnait un rendu orphelin, hors de la
+                                // pile : retour du 31/10/2026 ; puis darktable aussi,
+                                // le soir : sans développement, rien à voir ; seul le
+                                // rendu LibRaw est toujours là).
+                                let developable = tri::develop::is_developed_in(&path, engine);
+                                let tip = if developable {
+                                    self.action_tip(action)
+                                } else {
+                                    t!("develop-with-not-developed", engine = engine.name())
+                                };
+                                if ui
+                                    .add_enabled(
+                                        developable,
+                                        egui::Button::selectable(false, engine.name()),
+                                    )
+                                    .on_hover_text(tip)
+                                    .clicked()
+                                {
+                                    develop = Some(Some(engine));
+                                }
+                            }
+                            if ui
+                                .selectable_label(false, t!("develop-with-libraw"))
+                                .clicked()
+                            {
+                                develop = Some(None);
+                            }
+                        });
+                });
+            }
+        });
         if let Some(choice) = develop {
             self.rating_dialog = None;
             if let Some(i) = self.files.iter().position(|f| f.path == path) {
@@ -14651,12 +14678,18 @@ impl TriApp {
             }
             return;
         }
+        self.rating_dialog_all = all;
         if let Some(action) = clicked {
-            self.rate_path(path.clone(), action);
+            if on_all {
+                self.rate_many(&group, action);
+            } else {
+                self.rate_path(path.clone(), action);
+            }
         }
         if let Some(action) = file_action {
             self.rating_dialog = None;
-            self.file_action(action, vec![path], at);
+            let paths = if on_all { group } else { vec![path] };
+            self.file_action(action, paths, at);
             return;
         }
         if modal.should_close() {
@@ -14771,7 +14804,9 @@ impl TriApp {
                 }
             }
 
-            // En comparaison, seule l'image active est notée.
+            // En comparaison, seule l'image active est notée. Notes, réglages et actions
+            // vont à toute la sélection : le texte ne parle pas que des notes (retour du
+            // 12/11/2026, en réglant une sélection).
             if marked > 1 && self.mode != Mode::Compare {
                 ui.colored_label(
                     Color32::from(self.gui.colors.marked),
@@ -31838,6 +31873,65 @@ mod tests {
             shown == (0, Some(Level::Standard)) || shown == (0, Some(DT)),
             "{shown:?}"
         );
+    }
+
+    #[test]
+    fn a_right_click_in_a_selection_acts_on_the_whole_selection() {
+        // Retour du 12/11/2026 : Suppr efface toute la sélection, le clic droit une image
+        // seulement. La boîte du clic droit agit sur toute la sélection (case cochée),
+        // sauf renommer (une image à la fois).
+        use egui_kittest::kittest::NodeT;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().settings.files.allow_actions = true;
+        // Le bandeau de notation a aussi ses étoiles : masqué, seules celles de la boîte.
+        h.state_mut().rating_bar = false;
+        let files: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        h.state_mut().selection.toggle(&files[0]);
+        h.state_mut().selection.toggle(&files[1]);
+        h.state_mut().selected = 1;
+        h.state_mut().rating_dialog = Some((files[1].clone(), CENTRED));
+        h.state_mut().rating_dialog_all = true;
+        settle_dialog(&mut h);
+        assert!(
+            h.query_by_label("2 images sélectionnées").is_some(),
+            "titre"
+        );
+        assert!(h.query_by_label("Toute la sélection (2 images)").is_some());
+        h.get_by_label(&Action::Stars(3).label()).click();
+        h.run_steps(2);
+        for f in &files[..2] {
+            assert_eq!(h.state().folder.notes.notes(f).stars, 3, "{f:?}");
+        }
+        assert_eq!(
+            h.state().folder.notes.notes(&files[2]).stars,
+            0,
+            "hors sélection"
+        );
+        // Renommer : grisé sur la sélection.
+        assert!(
+            h.get_by_label(&Action::FileRename.label())
+                .accesskit_node()
+                .is_disabled()
+        );
+        // Supprimer : la boîte de confirmation porte sur les deux.
+        h.get_by_label(&Action::FileDelete.label()).click();
+        h.run_steps(2);
+        match &h.state().file_dialog {
+            Some(crate::files::FileDialog::Delete { images, .. }) => {
+                assert_eq!(images, &files[..2].to_vec());
+            }
+            _ => panic!("boîte de suppression attendue"),
+        }
+        h.state_mut().file_dialog = None;
+        // Décochée : l'image du clic droit seulement.
+        h.state_mut().rating_dialog = Some((files[1].clone(), CENTRED));
+        h.state_mut().rating_dialog_all = false;
+        settle_dialog(&mut h);
+        h.get_by_label(&Action::Stars(5).label()).click();
+        h.run_steps(2);
+        assert_eq!(h.state().folder.notes.notes(&files[1]).stars, 5);
+        assert_eq!(h.state().folder.notes.notes(&files[0]).stars, 3);
     }
 
     #[test]

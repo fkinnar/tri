@@ -44,11 +44,20 @@ première (ajoutée si elle ne l'a pas, retirée sinon), au lieu d'une bascule i
 qui mélangerait. **Corbeille** et **éditeur externe** prennent les cibles ; renommer et
 afficher dans le Finder, l'image courante.
 
+**Clic droit** sur une image d'une sélection multiple (retour du 12/11/2026 : Suppr
+effaçait toute la sélection, le clic droit une seule image) : la boîte s'intitule « N images
+sélectionnées », et ses notes et actions sur les fichiers portent sur toute la sélection,
+comme au clavier. Une case « Toute la sélection (N images) », cochée à l'ouverture, permet
+de revenir à l'image du clic droit seule. Renommer y est grisé (une image à la fois : pas
+encore de renommage par lot, issue n° 439). Clic droit sur une image hors de la sélection :
+cette image seule, comme avant.
+
 Affichage : cadre orange (`[gui.colors] marked`, `[gui.grid] marked_frame`) autour des
 vignettes marquées, distinct de l'image courante (fond plein) et du survol (gris) ;
 « N sélectionnées » (et « mode visuel ») dans la barre d'état ; « sélectionnée » dans la
-ligne d'information du plein écran ; le bandeau de notation annonce à combien d'images ses
-notes s'appliquent.
+ligne d'information du plein écran ; le bandeau de notation annonce sur combien d'images il
+agit (« agit sur les N images sélectionnées » : notes, réglages et actions, pas seulement
+les notes).
 
 ## Tests
 

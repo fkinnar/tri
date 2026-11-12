@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Le clic droit sur une sélection agit sur toute la sélection** (#440) : notes et
+  actions sur les fichiers de la boîte du clic droit portent sur toutes les images
+  sélectionnées, comme au clavier (une case revient à l'image du clic droit seule ;
+  renommer reste une image à la fois, #439). Le bandeau de notation dit désormais qu'il
+  « agit sur les N images sélectionnées », pas seulement sur leurs notes.
 - **Un dossier connu reste rapide quand son cache est en partie refait** (#436) : ce qui
   est encore en cache (empreintes de regroupement, netteté, exposition, un 1:1) est livré
   tout de suite au lieu d'attendre derrière les vignettes recalculées ; les piles se
