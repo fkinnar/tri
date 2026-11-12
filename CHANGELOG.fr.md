@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Plus d'éclair d'un autre rendu entre deux images développées** (#432) : en passant
+  d'une image développée à la suivante en plein écran, le JPEG boîtier (ou le rendu RAW),
+  chargé plus tôt, s'affichait un instant entre la vignette et le développement ; le
+  plein écran attend désormais sur la vignette, qui montre déjà le développement.
 - **Vérifier les couleurs** (#430) : une fiche pour les testeurs
   ([doc/fr/colour-check.md](doc/fr/colour-check.md)) et les mires de couleur dans
   `doc/charts`, pour vérifier en dix minutes que `tri` affiche juste sur un écran calibré
