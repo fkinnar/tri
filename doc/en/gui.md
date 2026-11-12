@@ -879,16 +879,19 @@ system one ("cold" measurements, experiments).
     camera_jpeg` (value at the first launch), `camera_width`, colour `[gui.colors]
     hist_camera`;
   - **after the viewing adjustments** (2026-11-11, issue #420, decided with the user):
-    - **Real data by default.** A button (two sliders, left of the other buttons) and `e`
-      in the large histogram (`<leader> i e` elsewhere) switch the histogram, the
-      percentages and the zones to the **image as shown**, adjustments included
-      (exposure, balance, contrast, saturation, B&W), for every source. "after
-      adjustments" is written at the top, and the **sensor's** saturated percentage stays
-      in the indicators: what the sensor lost is lost, whatever the adjustment.
-      `[gui.histogram] after_auto = true`: an adjusted image shows the "after" by itself,
-      from its first adjustment; also a checkbox "Histogram after adjustments" at the top
-      of the Adjustments section, written in the configuration (owner's request,
-      2026-11-11: clearer there than in the histogram box).
+    - **Real data by default.** One setting, `[gui.histogram] after_auto`, switches the
+      histogram, the percentages and the zones of an adjusted image to the **image as
+      shown**, adjustments included (exposure, balance, contrast, saturation, B&W), for
+      every source, from its first adjustment. Three ways to switch it, which reflect each
+      other: the "Histogram after adjustments" checkbox at the top of the Adjustments
+      section (owner's request, 2026-11-11: clearer there than in the histogram box), the
+      large histogram's button (two sliders, left of the other buttons, in the accent
+      colour when the setting is on) and `e` (`<leader> i e` elsewhere). Each one writes
+      it in the configuration. (The button and `e` were first a separate session switch:
+      with the checkbox ticked, they no longer brought back the "before"; merged on
+      2026-11-12.) "after adjustments" is written at the top, and the **sensor's**
+      saturated percentage stays in the indicators: what the sensor lost is lost,
+      whatever the adjustment.
     - **How it is measured** (`app/after.rs`): the preview shown is adjusted as on screen
       and reduced to `[gui.histogram] after_side` (1280 px), then measured
       (`Exposure::from_bitmap`), in a background thread, never on the UI thread. In full
