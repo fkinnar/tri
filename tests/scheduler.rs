@@ -286,6 +286,99 @@ fn cached_entries_are_reported_without_recomputing() {
 }
 
 #[test]
+fn cached_analyses_do_not_wait_for_thumbnails_being_recomputed() {
+    // Issue n° 428 : après un changement de clé du cache (gestion des couleurs, #423), un
+    // dossier connu recalculait toutes ses vignettes ; ses empreintes et sa netteté,
+    // toujours en cache, attendaient derrière (« vignettes d'abord ») et les piles se
+    // formaient pas à pas. Ce qui est en cache est livré tout de suite.
+    let fake = Fake::with_delay(Duration::from_millis(20));
+    let all = files(30, MediaKind::Raw);
+    fake.mark_all_cached(
+        &all,
+        &[Level::Similarity, Level::Sharpness, Level::Embedded],
+    );
+    let (scheduler, events) = start_with(
+        &fake,
+        Config {
+            light_workers: 1,
+            thumbnails_first: true,
+            exposure: false,
+            sharpness: true,
+            similarity: true,
+            ..Config::default()
+        },
+    );
+    let generation = scheduler.set_folder(all);
+    let deadline = Instant::now() + LONG;
+    while scheduler.progress(Level::Similarity) != complete(30)
+        || scheduler.progress(Level::Sharpness) != complete(30)
+    {
+        assert!(
+            Instant::now() < deadline,
+            "analyses en cache jamais livrées"
+        );
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let thumbnails = ready(&events, generation, Level::Thumbnail).len();
+    assert!(
+        thumbnails < 15,
+        "livrées avant la plupart des vignettes ({thumbnails} / 30 faites)"
+    );
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(
+        fake.order(Level::Thumbnail).len(),
+        30,
+        "vignettes recalculées"
+    );
+    assert!(
+        fake.order(Level::Similarity).is_empty(),
+        "rien de recalculé"
+    );
+    assert!(fake.order(Level::Embedded).is_empty());
+    assert_eq!(ready(&events, generation, Level::Similarity).len(), 30);
+}
+
+#[test]
+fn a_request_already_in_cache_does_not_wait_for_the_busy_worker() {
+    // Bonus du balayeur (#428) : un 1:1 déjà en cache est livré pendant que le worker
+    // lourd rend autre chose.
+    let fake = Fake::with_delay(Duration::from_millis(1500));
+    let all = files(6, MediaKind::Raw);
+    fake.mark_all_cached(&all, &[Level::Thumbnail, Level::Embedded]);
+    fake.mark_all_cached(&all[2..3], &[Level::Full]);
+    let (scheduler, events) = start_with(
+        &fake,
+        Config {
+            light_workers: 1,
+            raw_previews: RawPreviews::Background,
+            exposure: false,
+            sharpness: false,
+            similarity: false,
+            ..Config::default()
+        },
+    );
+    let generation = scheduler.set_folder(all);
+    scheduler.set_focus(2);
+    // Le worker lourd occupé par un rendu RAW (1,5 s).
+    let deadline = Instant::now() + LONG;
+    while fake.0.heavy_now.load(Ordering::SeqCst) == 0 {
+        assert!(Instant::now() < deadline, "rendu jamais commencé");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let asked = Instant::now();
+    scheduler.request(2, Level::Full);
+    while !ready(&events, generation, Level::Full).contains(&2) {
+        assert!(Instant::now() < deadline, "1:1 en cache jamais livré");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(
+        asked.elapsed() < Duration::from_millis(1000),
+        "sans attendre le rendu en cours : {:?}",
+        asked.elapsed()
+    );
+}
+
+#[test]
 fn failures_are_reported_and_still_counted() {
     let fake = Fake::with_delay(Duration::from_millis(1));
     let all = files(3, MediaKind::Flat);

@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Un dossier connu reste rapide quand son cache est en partie refait** (#436) : ce qui
+  est encore en cache (empreintes de regroupement, netteté, exposition, un 1:1) est livré
+  tout de suite au lieu d'attendre derrière les vignettes recalculées ; les piles se
+  forment d'emblée après un changement des clés du cache (comme après la gestion des
+  couleurs).
 - **Un logiciel de développement tout juste écrit se lance quand même** (#435) : sous
   Linux, un outil refusé un instant avec « Text file busy » est réessayé quelques fois
   (155 ms au plus) ; ça faisait échouer la CI de temps en temps.

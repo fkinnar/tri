@@ -87,6 +87,28 @@ toujours. Ainsi la grille, puis tout le dossier en plein écran, sont disponible
 avant de lancer les rendus LibRaw qui occupent tous les cœurs. Chaque tâche terminée réveille les workers, pour qu'ils reprennent les aperçus
 dès que la dernière vignette est faite.
 
+## Ce qui est déjà en cache passe tout de suite (issue n° 428)
+
+Un fil de plus, le **balayeur** (`tri-cache`), ne calcule rien : il prend les tâches en
+attente qu'il n'a pas encore vérifiées, dans l'ordre des priorités mais **sans** le
+blocage « vignettes d'abord », et regarde si le cache a déjà leur entrée
+(`Producer::is_done`, une lecture de métadonnées). La tâche **reste dans la file** pendant
+la vérification : un worker qui choisit à ce moment voit l'ordre des priorités intact, et
+peut la prendre (le balayeur n'en fait alors rien). Une première version la retirait le
+temps de vérifier, et faussait l'ordre (27 échecs sur 150 passages des tests d'ordre). Si
+l'entrée est en cache, la tâche est livrée aussitôt (`Ready`, progression) ; sinon, elle est
+marquée vérifiée (`State::checked`, vidé au changement de dossier), et les workers la
+calculent à leur tour.
+
+Pourquoi : après un changement de clé du cache (la gestion des couleurs, #423, a mis
+`cs=1` dans la clé des niveaux d'images), la première ouverture d'un dossier connu
+recalculait toutes ses vignettes et aperçus boîtier. Ses empreintes de regroupement, sa
+netteté et ses expositions, toujours en cache (leurs clés n'avaient pas changé), attendaient
+derrière : les piles se formaient pas à pas (dossier TEST, 570 RAW). Mesuré le 12/11/2026
+sur 27 RAW, vignettes et aperçus boîtier retirés du cache : empreintes, netteté et
+expositions livrées entre **0,16 et 0,4 s** au lieu de 2,7 s, vignettes inchangées (~0,9 à 1,2 s). Bonus :
+un 1:1 déjà en cache est livré pendant que le worker lourd rend autre chose.
+
 ## Mesures
 
 Dossier réel : 472 images (236 RAF X-T4 + 236 JPEG du boîtier), Mac Apple Silicon à
@@ -167,6 +189,8 @@ worker :
   jamais avant la fin des aperçus boîtier ; l'aperçu boîtier de l'image affichée passe avant
   toutes les vignettes ;
 - pause / reprise ; image affichée hors limites ignorée ; arrêt rapide à la destruction ;
+- balayeur (#428) : empreintes et netteté en cache livrées avant la plupart des vignettes à
+  recalculer, sans rien recalculer ; 1:1 en cache livré sans attendre le rendu en cours ;
 - avec `TRI_TEST_RAW` : vrai producteur sur un RAW et un JPEG, tailles et orientation des
   entrées, second passage servi par le cache (0,66 s puis ~40 µs).
 
