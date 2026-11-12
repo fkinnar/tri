@@ -43,6 +43,12 @@ manipule quand on « ouvre un dossier ».
 - `folder_value` / `remember_folder_value` : une valeur retenue par dossier (seuil des
   piles, sévérité du flou), une ligne « valeur, tabulation, chemin » dans un fichier du
   dossier de données.
+- `Folder::summary` / `Summary::of` (issue n° 388, 12/11/2026) : résumé du dossier, sur
+  **tout** le dossier et non la vue filtrée : photos par extension (RAW d'abord, puis par
+  nombre), paires RAW+image plate (même nom, même dossier), développements par logiciel
+  (d'après le registre `developments`, à part des photos), photos sans note, avec des
+  étoiles, acceptées, rejetées, et en conflit de notes. `Summary::of` prend des fonctions
+  pour les notes, le logiciel d'un développement et les conflits : testé sans fichiers.
 
 Champs publics (`dir`, `files`, `notes`) : un dossier ouvert n'a pas d'invariant à
 protéger entre eux, et l'interface modifie les notes (`folder.notes.edit`).

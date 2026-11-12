@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver};
 
+use crate::develop::Engine;
 use crate::filter::{Filter, Groups, KindFilter, ungrouped};
 use crate::media::{self, MediaFile};
 use crate::notes::{NoteBook, NotesRule};
@@ -175,6 +176,138 @@ impl Folder {
     }
 }
 
+/// Résumé d'un dossier (issue n° 388) : de quoi il est fait, sur **tout** le dossier,
+/// pas la vue filtrée (cliquer une ligne pour filtrer, plus tard, ne doit pas changer les
+/// autres). Les développements (clones, copies, principaux montrés à part) sont comptés à
+/// part des photos, par logiciel.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Summary {
+    /// Photos (sans les développements).
+    pub photos: usize,
+    /// Photos par extension (en majuscules), RAW d'abord, puis par nombre décroissant.
+    pub types: Vec<TypeCount>,
+    /// Paires RAW+JPEG (ou autre image plate) : même nom, même dossier.
+    pub pairs: usize,
+    /// Développements par logiciel, dans l'ordre de [`Engine::ALL`] (ceux qui en ont).
+    pub developments: Vec<(Engine, usize)>,
+    /// Photos sans aucune note (ni étoile, ni drapeau, ni couleur).
+    pub untouched: usize,
+    /// Photos avec des étoiles.
+    pub starred: usize,
+    /// Photos acceptées.
+    pub accepted: usize,
+    /// Photos rejetées.
+    pub rejected: usize,
+    /// Images dont les notes sont en conflit (sources en désaccord).
+    pub conflicts: usize,
+}
+
+/// Nombre de photos d'une extension.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TypeCount {
+    /// Extension, en majuscules (« RAF », « JPG »).
+    pub extension: String,
+    /// RAW ou image plate.
+    pub kind: media::MediaKind,
+    /// Nombre de photos.
+    pub count: usize,
+}
+
+impl Summary {
+    /// Résumé de `files` : `notes` donne les notes d'une image, `engine_of` le logiciel
+    /// d'un développement (`None` : une photo), `in_conflict` si ses notes sont en
+    /// conflit.
+    pub fn of<'a>(
+        files: &[MediaFile],
+        notes: impl Fn(&Path) -> &'a crate::xmp::Notes,
+        engine_of: impl Fn(&Path) -> Option<Engine>,
+        in_conflict: impl Fn(&Path) -> bool,
+    ) -> Summary {
+        use crate::xmp::Flag;
+        use std::collections::{HashMap, HashSet};
+        let mut summary = Summary::default();
+        let mut types: HashMap<(String, media::MediaKind), usize> = HashMap::new();
+        let mut developments: HashMap<Engine, usize> = HashMap::new();
+        let mut flats: HashSet<PathBuf> = HashSet::new();
+        let mut raws: Vec<PathBuf> = Vec::new();
+        for file in files {
+            if let Some(engine) = engine_of(&file.path) {
+                *developments.entry(engine).or_default() += 1;
+                continue;
+            }
+            summary.photos += 1;
+            let extension = file
+                .path
+                .extension()
+                .map(|e| e.to_string_lossy().to_uppercase())
+                .unwrap_or_default();
+            *types.entry((extension, file.kind)).or_default() += 1;
+            let stem = file.path.with_extension("");
+            match file.kind {
+                media::MediaKind::Raw => raws.push(stem),
+                media::MediaKind::Flat => {
+                    flats.insert(stem);
+                }
+            }
+            let n = notes(&file.path);
+            match n.flag {
+                Flag::Accepted => summary.accepted += 1,
+                Flag::Rejected => summary.rejected += 1,
+                Flag::None => {}
+            }
+            if n.stars > 0 {
+                summary.starred += 1;
+            }
+            if n.stars == 0 && n.flag == Flag::None && n.colors.is_empty() {
+                summary.untouched += 1;
+            }
+            if in_conflict(&file.path) {
+                summary.conflicts += 1;
+            }
+        }
+        summary.pairs = raws.iter().filter(|stem| flats.contains(*stem)).count();
+        let mut types: Vec<TypeCount> = types
+            .into_iter()
+            .map(|((extension, kind), count)| TypeCount {
+                extension,
+                kind,
+                count,
+            })
+            .collect();
+        types.sort_by(|a, b| {
+            (
+                a.kind != media::MediaKind::Raw,
+                std::cmp::Reverse(a.count),
+                &a.extension,
+            )
+                .cmp(&(
+                    b.kind != media::MediaKind::Raw,
+                    std::cmp::Reverse(b.count),
+                    &b.extension,
+                ))
+        });
+        summary.types = types;
+        summary.developments = Engine::ALL
+            .into_iter()
+            .filter_map(|e| developments.get(&e).map(|&n| (e, n)))
+            .collect();
+        summary
+    }
+}
+
+impl Folder {
+    /// Résumé du dossier ouvert ([`Summary`]), développements d'après le registre
+    /// ([`crate::developments`]).
+    pub fn summary(&self) -> Summary {
+        Summary::of(
+            &self.files,
+            |p| self.notes.notes(p),
+            |p| crate::developments::get(p).map(|d| d.engine),
+            |p| self.notes.conflict(p).is_some(),
+        )
+    }
+}
+
 /// Fichier du choix « descendre dans les sous-dossiers », dans le dossier de données.
 const SUBFOLDERS: &str = "subfolders";
 
@@ -237,6 +370,81 @@ pub(crate) fn bytes_path(bytes: Vec<u8>) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_summary_counts_types_pairs_developments_and_culling() {
+        use crate::media::MediaKind::{Flat, Raw};
+        use crate::xmp::{Color, Flag, Notes};
+        let file = |p: &str, kind| MediaFile {
+            path: PathBuf::from(p),
+            kind,
+        };
+        let files = vec![
+            file("/s/A.RAF", Raw),
+            file("/s/A.JPG", Flat),
+            file("/s/B.RAF", Raw),
+            file("/s/C.RAF", Raw),
+            file("/s/D.jpg", Flat),
+            file("/s/E.NEF", Raw),
+            file("/s/A@dt.RAF", Raw),
+            file("/s/A_01@dt.RAF", Raw),
+            file("/s/B@rr.RAF", Raw),
+        ];
+        let accepted = Notes {
+            stars: 3,
+            flag: Flag::Accepted,
+            colors: Vec::new(),
+        };
+        let rejected = Notes {
+            stars: 0,
+            flag: Flag::Rejected,
+            colors: Vec::new(),
+        };
+        let red = Notes {
+            stars: 0,
+            flag: Flag::None,
+            colors: vec![Color::Red],
+        };
+        let empty = Notes::EMPTY;
+        let summary = Summary::of(
+            &files,
+            |p| match p.to_str().unwrap() {
+                "/s/A.RAF" => &accepted,
+                "/s/B.RAF" => &rejected,
+                "/s/C.RAF" => &red,
+                _ => &empty,
+            },
+            |p| {
+                let s = p.to_str().unwrap();
+                if s.contains("@dt") {
+                    Some(Engine::Darktable)
+                } else if s.contains("@rr") {
+                    Some(Engine::RapidRaw)
+                } else {
+                    None
+                }
+            },
+            |p| p.ends_with("D.jpg"),
+        );
+        assert_eq!(summary.photos, 6, "sans les développements");
+        let types: Vec<(&str, usize)> = summary
+            .types
+            .iter()
+            .map(|t| (t.extension.as_str(), t.count))
+            .collect();
+        assert_eq!(types, [("RAF", 3), ("NEF", 1), ("JPG", 2)], "RAW d'abord");
+        assert_eq!(summary.pairs, 1, "A.RAF + A.JPG");
+        assert_eq!(
+            summary.developments,
+            [(Engine::Darktable, 2), (Engine::RapidRaw, 1)]
+        );
+        assert_eq!(
+            (summary.accepted, summary.rejected, summary.starred),
+            (1, 1, 1)
+        );
+        assert_eq!(summary.untouched, 3, "A.JPG, D.jpg, E.NEF");
+        assert_eq!(summary.conflicts, 1);
+    }
 
     #[test]
     fn a_folder_lists_at_once_and_reads_its_notes_in_the_background() {

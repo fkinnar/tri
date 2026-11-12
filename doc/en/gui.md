@@ -51,6 +51,18 @@ system one ("cold" measurements, experiments).
   the first problem without creating the second. The pointer, and the frame with it, is
   **hidden as soon as you type** and reappears at the first mouse movement, in the grid
   as in full screen.
+- **Summary of the open folder** ("This folder", issue #388, 2026-11-12): a section at
+  the bottom of the folders panel, **folded by default** (unfolded is remembered in the
+  display state, key `folders-summary-open`); the tree leaves it its height. On the whole
+  folder, not the filtered view (`Folder::summary`): photos and their count per
+  extension, RAW+JPEG pairs, developments per software (those of a missing or disabled
+  software greyed, the tooltip says they are neither in the grid nor in the total, #386),
+  not rated, with stars, accepted, rejected, ratings in conflict (only when there are
+  some, in the warning colour), and where tri's data lives (in this folder, on the disk,
+  on this machine). Recomputed at every frame shown while the section is unfolded (a few
+  thousand lookups in memory). First step, the counts only; decided on 2026-11-09 for
+  later: every line clickable as a filter (one click, that filter alone; a second,
+  removed), versions, cache size with "Clear" (`gui/src/app/summary.rs`).
 - **Folders panel** (2026-10-17), to the left of the grid: places expandable as a tree,
   arranged in titled sections separated by a line (2026-10-20); titles in bold, larger than the
   folders since 2026-10-26, `[gui.folders] section_scale`, #120): devices (cards, keys,
