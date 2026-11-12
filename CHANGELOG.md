@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Developed images no longer dull in the grid** (#433): the grid copies of
+  developments carry the working colour profile, but it changed from one launch to the
+  next (creation date) and was then taken for sRGB, so the copies were converted a second
+  time; full screen was right. The profile is now always the same, and the older copies
+  are recognised.
 - **No flash of another render between developed images** (#432): going from one
   developed image to the next in full screen, the camera JPEG (or the RAW render), loaded
   sooner, showed for an instant between the thumbnail and the development; full screen

@@ -56,9 +56,43 @@ pub fn working() -> &'static ColorProfile {
 
 /// Le profil ICC de l'espace de travail (déclaré au système par l'interface, intégré aux
 /// fichiers écrits depuis le cache).
+///
+/// Toujours les mêmes octets : `moxcms` y inscrit la date de création, remplacée ici par
+/// une date fixe (12/11/2026 : d'un lancement à l'autre, le profil des copies de la grille
+/// n'était plus reconnu, et leur image était convertie une seconde fois).
 pub fn working_icc() -> &'static [u8] {
     static ICC: OnceLock<Vec<u8>> = OnceLock::new();
-    ICC.get_or_init(|| working().encode().unwrap_or_default())
+    ICC.get_or_init(|| {
+        let mut icc = working().encode().unwrap_or_default();
+        if icc.len() >= ICC_HEADER {
+            icc[ICC_DATE].copy_from_slice(&WORKING_DATE);
+            // Identifiant (MD5) : nul veut dire « non calculé », la date ayant changé.
+            icc[ICC_ID].fill(0);
+        }
+        icc
+    })
+}
+
+/// Taille de l'en-tête d'un profil ICC.
+const ICC_HEADER: usize = 128;
+/// Date de création dans l'en-tête (année, mois, jour, heure, minute, seconde sur 16 bits).
+const ICC_DATE: std::ops::Range<usize> = 24..36;
+/// Identifiant du profil (MD5) dans l'en-tête.
+const ICC_ID: std::ops::Range<usize> = 84..100;
+/// Date de création fixe du profil de travail (11/11/2026, son introduction).
+const WORKING_DATE: [u8; 12] = [0x07, 0xEA, 0, 11, 0, 11, 0, 0, 0, 0, 0, 0];
+
+/// Vrai si `icc` est le profil de travail, quels que soient sa date de création et son
+/// identifiant : ceux écrits avant la date fixe ([`working_icc`]) en avaient une autre.
+fn is_working_icc(icc: &[u8]) -> bool {
+    let working = working_icc();
+    icc.len() == working.len()
+        && icc.len() >= ICC_HEADER
+        && icc
+            .iter()
+            .zip(working)
+            .enumerate()
+            .all(|(i, (a, b))| a == b || ICC_DATE.contains(&i) || ICC_ID.contains(&i))
 }
 
 /// Poids de luminance de l'espace de travail, en lumière linéaire (ceux de Rec.2020 : les
@@ -137,8 +171,9 @@ impl Origin {
     /// D'un profil ICC : sRGB et Adobe RGB reconnus à leur description (ASCII ou UTF-16).
     /// Un profil « linéaire » n'est jamais pris pour l'un d'eux (sa courbe diffère).
     pub fn of_icc(icc: Vec<u8>) -> Origin {
-        if icc.as_slice() == working_icc() {
-            return Origin::Icc(icc);
+        // Avant les descriptions : la sienne dit « sRGB curve ».
+        if is_working_icc(&icc) {
+            return Origin::Icc(working_icc().to_vec());
         }
         let has = |text: &str| {
             let ascii = text.as_bytes();
@@ -195,7 +230,7 @@ impl Origin {
             Origin::Srgb => Id::Srgb,
             Origin::AdobeRgb => Id::AdobeRgb,
             Origin::Icc(icc) => {
-                if icc.as_slice() == working_icc() {
+                if is_working_icc(icc) {
                     Id::Working
                 } else {
                     Id::Icc(*blake3::hash(icc).as_bytes())
@@ -425,6 +460,41 @@ mod tests {
         let origin = Origin::of_icc(working_icc().to_vec());
         assert!(origin.is_working());
         assert!(to_working(&origin, false).is_none());
+    }
+
+    #[test]
+    fn the_working_icc_is_the_same_from_one_launch_to_the_next() {
+        // 12/11/2026 : `moxcms` y inscrivait l'heure de création ; une copie de la grille
+        // écrite lors d'un lancement n'était plus reconnue au suivant, prise pour du sRGB
+        // (sa description dit « sRGB curve ») et convertie une seconde fois : couleurs
+        // ternes dans la grille seulement.
+        let mut fresh = working().encode().unwrap();
+        fresh[ICC_DATE].copy_from_slice(&WORKING_DATE);
+        fresh[ICC_ID].fill(0);
+        assert_eq!(fresh, working_icc(), "rien d'autre ne dépend de l'heure");
+        // Un profil de travail d'un ancien lancement (autre date, identifiant calculé).
+        let mut older = working_icc().to_vec();
+        older[ICC_DATE].copy_from_slice(&[0x07, 0xEA, 0, 11, 0, 12, 0, 11, 0, 31, 0, 21]);
+        older[ICC_ID].fill(7);
+        let origin = Origin::of_icc(older.clone());
+        assert!(origin.is_working(), "reconnu");
+        assert!(to_working(&origin, false).is_none(), "rien à convertir");
+        // Un JPEG qui le porte n'est pas converti.
+        let mut b = Bitmap {
+            width: 1,
+            height: 1,
+            data: vec![60, 90, 200],
+        };
+        let jpeg = crate::jpeg::encode(&b, 95, crate::jpeg::Chroma::Full).unwrap();
+        let tagged = crate::jpeg::with_icc(&jpeg, &older).unwrap();
+        assert!(Origin::of_jpeg(&tagged).is_working());
+        let before = b.data.clone();
+        bitmap_to_working(&mut b, &Origin::of_jpeg(&tagged));
+        assert_eq!(b.data, before);
+        // Un autre profil de même taille reste un autre profil.
+        let mut other = working_icc().to_vec();
+        other[ICC_HEADER + 40] ^= 0xFF;
+        assert!(!Origin::of_icc(other).is_working());
     }
 
     #[test]

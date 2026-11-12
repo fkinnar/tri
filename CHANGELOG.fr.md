@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Images développées plus ternes dans la grille** (#433) : les copies de la grille
+  des développements portent le profil de travail, mais il changeait d'un lancement à
+  l'autre (date de création) et était alors pris pour du sRGB : les copies étaient
+  converties une seconde fois ; le plein écran était juste. Le profil est désormais
+  toujours le même, et les copies plus anciennes sont reconnues.
 - **Plus d'éclair d'un autre rendu entre deux images développées** (#432) : en passant
   d'une image développée à la suivante en plein écran, le JPEG boîtier (ou le rendu RAW),
   chargé plus tôt, s'affichait un instant entre la vignette et le développement ; le

@@ -21,6 +21,13 @@ Everything `tri` shows (thumbnails, previews, 1:1) is in one **working space**:
 **Rec.2020 primaries, sRGB curve, D65 white** (`colour::working`, its ICC
 `colour::working_icc`).
 
+That ICC always has the same bytes: `moxcms` writes its creation date into it, replaced by
+a fixed date (and the MD5 ID set to zero). It is also recognised whatever its date, for
+the copies written before. Fixed on 2026-11-12: from one launch to the next it was no
+longer recognised, and its description ("sRGB curve") made it pass for sRGB. The grid
+copies of developments were converted a second time, and the grid looked dull next to
+full screen.
+
 - **Wide.** It contains Display P3, Adobe RGB, and the wide-gamut screens that go beyond
   both. The user's Eizo, wider than Adobe RGB but not P3, ruled out P3 as a working space.
 - **Independent of the screen.** The cache serves every screen, and a window moved to
@@ -133,7 +140,7 @@ Each conversion is built once per pair of spaces and kept (`colour::to_working`,
 - `src/colour.rs`:
   - unchanged greys;
   - the same colour from sRGB, Adobe RGB and P3;
-  - working ICC recognised;
+  - working ICC recognised, the same from one launch to the next, and recognised with another date;
   - linear profiles not taken for sRGB;
   - inverse matrices and Rec.2020 luminance;
   - 8-bit round trip;
