@@ -4,6 +4,12 @@
 
 ## Non publié
 
+- **Résumé du dossier ouvert** (#442, partie de #388) : une section « Ce dossier » en bas
+  du panneau des dossiers, repliée par défaut, compte les photos par type, les paires
+  RAW+JPEG, les développements par logiciel (grisés quand le logiciel est absent ou
+  désactivé), l'avancement du tri (sans note, avec des étoiles, acceptées, rejetées), les
+  notes en conflit, et dit où vivent les données de tri. Cliquer une ligne pour filtrer
+  viendra ensuite.
 - **Le clic droit sur une sélection agit sur toute la sélection** (#440) : notes et
   actions sur les fichiers de la boîte du clic droit portent sur toutes les images
   sélectionnées, comme au clavier (une case revient à l'image du clic droit seule ;

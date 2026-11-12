@@ -51,6 +51,19 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   contre fond plein) règlent le premier problème sans créer le second. Le pointeur, et
   avec lui le cadre, est **masqué dès qu'on tape** et réapparaît au premier mouvement de
   la souris, dans la grille comme en plein écran.
+- **Résumé du dossier ouvert** (« Ce dossier », issue n° 388, 12/11/2026) : section en bas
+  du panneau des dossiers, **repliée par défaut** (dépliée, retenue dans l'état
+  d'affichage, clé `folders-summary-open`) ; l'arborescence lui laisse sa hauteur. Sur
+  tout le dossier, pas la vue filtrée (`Folder::summary`) : photos et leur nombre par
+  extension, paires RAW+JPEG, développements par logiciel (ceux d'un logiciel absent ou
+  désactivé grisés, la bulle dit qu'ils ne sont ni dans la grille ni dans le total, #386),
+  sans note, avec des étoiles, acceptées, rejetées, notes en conflit (seulement s'il y en
+  a, en couleur d'avertissement), et où vivent les données de tri (dans ce dossier, sur
+  le disque, sur cette machine). Recalculé à chaque image affichée quand la section est
+  dépliée (quelques milliers de recherches en mémoire). Première étape, les comptes
+  seulement ; décidé le 09/11/2026 pour la suite : chaque ligne cliquable comme filtre (un
+  clic, ce filtre seul ; un second, retiré), versions, taille du cache avec « Vider »
+  (`gui/src/app/summary.rs`).
 - **Panneau des dossiers** (17/10/2026), à gauche de la grille : emplacements dépliables
   en arborescence, rangés par sections titrées et séparées d'un trait (20/10/2026) ; titres en gras, plus grands que
   les dossiers depuis le 26/10/2026, `[gui.folders] section_scale`, #120) :

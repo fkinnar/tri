@@ -42,6 +42,12 @@ one "opens a folder".
   (`Folder::open`, `media::scan`: hidden folders excluded).
 - `folder_value` / `remember_folder_value`: a value remembered per folder (stack
   threshold, blur severity), one line "value, tab, path" in a file of the data folder.
+- `Folder::summary` / `Summary::of` (issue #388, 2026-11-12): summary of the folder, on
+  the **whole** folder, not the filtered view: photos per extension (RAW first, then by
+  count), RAW + flat image pairs (same name, same folder), developments per software
+  (from the `developments` registry, apart from the photos), photos without ratings, with
+  stars, accepted, rejected, and with ratings in conflict. `Summary::of` takes functions
+  for the ratings, the software of a development and the conflicts: tested without files.
 
 Public fields (`dir`, `files`, `notes`): an open folder has no invariant to protect
 between them, and the interface modifies the ratings (`folder.notes.edit`).

@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- **Summary of the open folder** (#442, part of #388): a "This folder" section at the
+  bottom of the folders panel, folded by default, counts the photos per type, the
+  RAW+JPEG pairs, the developments per software (greyed when the software is missing or
+  disabled), the culling progress (not rated, with stars, accepted, rejected), the
+  ratings in conflict, and says where tri's data lives. Clicking a line to filter comes
+  next.
 - **Right-click on a selection acts on the whole selection** (#440): ratings and file
   actions of the right-click dialog apply to every selected image, as the keyboard does
   (a checkbox goes back to the right-clicked image alone; rename stays one image at a

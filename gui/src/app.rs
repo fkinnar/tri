@@ -42,6 +42,7 @@ use crate::view::{self, Source};
 mod adjust;
 mod after;
 mod controls;
+mod summary;
 use controls::{Control, Host};
 
 /// Ce qui occupe la fenêtre.
@@ -926,6 +927,9 @@ pub struct TriApp {
     /// changé par l'interrupteur à côté.
     /// Sections repliées du panneau de droite (« filters », « grid »…), retenues.
     panel_folded: HashSet<String>,
+    /// Hauteur du résumé du dossier sous l'arborescence (image précédente) : l'arborescence
+    /// lui laisse la place.
+    summary_height: f32,
     /// Dernière section dépliée du panneau de droite, et du panneau des dossiers : celle
     /// qui reste ouverte quand `[gui] one_section_open` s'allume.
     last_side_section: Option<String>,
@@ -1690,6 +1694,7 @@ impl TriApp {
             blur_strictness: 0.0,
             clip_strictness: (0.0, 0.0),
             panel_folded: HashSet::new(),
+            summary_height: 0.0,
             last_side_section: None,
             last_folder_section: None,
             one_section_was: false,
@@ -3605,503 +3610,537 @@ impl TriApp {
         let moved =
             ui.input(|i| i.pointer.delta() != Vec2::ZERO) && ui.ctx().dragged_id().is_none();
         let mut hover_point: Option<usize> = None;
-        ScrollArea::both().auto_shrink(false).show(ui, |ui| {
-            // Une section par nature d'emplacement, chacune sous son titre (demandé le
-            // 20/10/2026) : disques, dossier personnel, favoris, puis la racine.
-            // Repliables comme celles du panneau de droite (retour du 27/10/2026) : une
-            // section repliée garde son titre, sans ses lignes.
-            let mut titles = self.tree.sections().into_iter().peekable();
-            let mut first = true;
-            let mut title = |ui: &mut Ui, until: Option<tri::places::Section>| {
-                while let Some(s) = titles.next_if(|&s| until.is_none_or(|u| s <= u)) {
-                    if !std::mem::take(&mut first) {
-                        ui.separator();
-                    }
-                    if section_title(ui, &folder_section_name(s), !self.tree.is_folded(s), &f) {
-                        fold = Some(s);
-                    }
-                }
-            };
-            let mut section = None;
-            for (i, row) in self.tree.rows().into_iter().enumerate() {
-                if section != Some(row.section) {
-                    section = Some(row.section);
-                    title(ui, section);
-                }
-                let line = ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 2.0;
-                    // Survol de la ligne : la bande dessous seule (issue n° 385), sans le
-                    // fond ni le cadre d'egui autour du nom ou du triangle.
-                    let widgets = &mut ui.visuals_mut().widgets;
-                    for w in [&mut widgets.hovered, &mut widgets.active] {
-                        w.weak_bg_fill = Color32::TRANSPARENT;
-                        w.bg_fill = Color32::TRANSPARENT;
-                        w.bg_stroke = egui::Stroke::NONE;
-                    }
-                    ui.add_space(row.depth as f32 * f.indent);
-                    let tip = if row.expanded {
-                        t!("folders-collapse")
-                    } else {
-                        t!("folders-expand")
-                    };
-                    let size = ui.text_style_height(&egui::TextStyle::Body);
-                    // Support pas monté (#113) : grisé, sans dossiers à déplier ; un clic
-                    // le monte.
-                    let device = row.kind == Some(PlaceKind::Device);
-                    // Partage réseau mémorisé pas monté (28/10/2026) : de même, un clic le
-                    // rejoint.
-                    let server = matches!(row.kind, Some(PlaceKind::Server | PlaceKind::Neighbour));
-                    if device || server {
-                        ui.add_space(size + ui.spacing().item_spacing.x);
-                    } else {
-                        let (rect, response) = marks::clickable(ui, size, &tip);
-                        let color = ui.visuals().text_color();
-                        marks::disclosure(ui.painter(), rect, row.expanded, color);
-                        if response.clicked() {
-                            toggle = Some(i);
-                            pointed = Some(i);
+        // Le résumé du dossier ouvert en bas du panneau (#388) : l'arborescence lui laisse
+        // sa hauteur (mesurée à l'image précédente).
+        let tree_height = (ui.available_height() - self.summary_height).max(60.0);
+        ScrollArea::both()
+            .auto_shrink(false)
+            .max_height(tree_height)
+            .show(ui, |ui| {
+                // Une section par nature d'emplacement, chacune sous son titre (demandé le
+                // 20/10/2026) : disques, dossier personnel, favoris, puis la racine.
+                // Repliables comme celles du panneau de droite (retour du 27/10/2026) : une
+                // section repliée garde son titre, sans ses lignes.
+                let mut titles = self.tree.sections().into_iter().peekable();
+                let mut first = true;
+                let mut title = |ui: &mut Ui, until: Option<tri::places::Section>| {
+                    while let Some(s) = titles.next_if(|&s| until.is_none_or(|u| s <= u)) {
+                        if !std::mem::take(&mut first) {
+                            ui.separator();
+                        }
+                        if section_title(ui, &folder_section_name(s), !self.tree.is_folded(s), &f) {
+                            fold = Some(s);
                         }
                     }
-                    let current = row.path == self.folder.dir;
-                    let label = if device || server {
-                        let tip = if row.kind == Some(PlaceKind::Neighbour) {
-                            t!(
-                                "folders-neighbour-tip",
-                                address = row.path.display().to_string()
-                            )
-                        } else if server {
-                            t!(
-                                "folders-server-tip",
-                                address = row.path.display().to_string()
-                            )
+                };
+                let mut section = None;
+                for (i, row) in self.tree.rows().into_iter().enumerate() {
+                    if section != Some(row.section) {
+                        section = Some(row.section);
+                        title(ui, section);
+                    }
+                    let line = ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 2.0;
+                        // Survol de la ligne : la bande dessous seule (issue n° 385), sans le
+                        // fond ni le cadre d'egui autour du nom ou du triangle.
+                        let widgets = &mut ui.visuals_mut().widgets;
+                        for w in [&mut widgets.hovered, &mut widgets.active] {
+                            w.weak_bg_fill = Color32::TRANSPARENT;
+                            w.bg_fill = Color32::TRANSPARENT;
+                            w.bg_stroke = egui::Stroke::NONE;
+                        }
+                        ui.add_space(row.depth as f32 * f.indent);
+                        let tip = if row.expanded {
+                            t!("folders-collapse")
                         } else {
-                            t!("folders-device-tip")
+                            t!("folders-expand")
                         };
-                        ui.selectable_label(false, egui::RichText::new(&row.name).weak())
-                            .on_hover_text(tip)
-                    } else {
-                        ui.selectable_label(current, &row.name)
-                    };
-                    // Dossier à son propre réglage des notes dans les images : un repère
-                    // (à l'accent : toujours ; gris : jamais).
-                    if row.depth > 0
-                        && let Some(on) = self.folder.notes.folder_embed(&row.path)
-                    {
-                        let side = ui.spacing().interact_size.y * 0.6;
-                        let (rect, mark) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
-                        let color = if on {
-                            marks::accent_mark(ui.ctx())
+                        let size = ui.text_style_height(&egui::TextStyle::Body);
+                        // Support pas monté (#113) : grisé, sans dossiers à déplier ; un clic
+                        // le monte.
+                        let device = row.kind == Some(PlaceKind::Device);
+                        // Partage réseau mémorisé pas monté (28/10/2026) : de même, un clic le
+                        // rejoint.
+                        let server =
+                            matches!(row.kind, Some(PlaceKind::Server | PlaceKind::Neighbour));
+                        if device || server {
+                            ui.add_space(size + ui.spacing().item_spacing.x);
                         } else {
-                            ui.visuals().weak_text_color()
-                        };
-                        marks::file_action(ui.painter(), rect, Action::EmbedNotes, color);
-                        if !on {
-                            ui.painter().line_segment(
-                                [rect.left_bottom(), rect.right_top()],
-                                egui::Stroke::new(1.5, color),
-                            );
-                        }
-                        mark.on_hover_text(if on {
-                            t!("folder-embed-mark-always")
-                        } else {
-                            t!("folder-embed-mark-never")
-                        });
-                    }
-                    // Glisser-déposer : un dossier se glisse (pas un emplacement) ; tout
-                    // dossier reçoit un dossier ou des images de la grille.
-                    let label = if row.depth > 0 {
-                        let label = label.interact(Sense::drag());
-                        label.dnd_set_drag_payload(Dragged::Folder(row.path.clone()));
-                        label
-                    } else {
-                        label
-                    };
-                    let target = |d: &Dragged| !matches!(d, Dragged::Folder(p) if *p == row.path);
-                    if label
-                        .dnd_hover_payload::<Dragged>()
-                        .is_some_and(|d| target(&d))
-                    {
-                        ui.painter().rect_stroke(
-                            label.rect.expand(2.0),
-                            3.0,
-                            egui::Stroke::new(2.0, accent),
-                            egui::StrokeKind::Outside,
-                        );
-                    }
-                    if let Some(d) = label.dnd_release_payload::<Dragged>()
-                        && target(&d)
-                    {
-                        dropped = Some(((*d).clone(), row.path.clone()));
-                    }
-                    if label.clicked() {
-                        pointed = Some(i);
-                        if !current {
-                            open = Some(row.path.clone());
-                        }
-                    }
-                    if label.double_clicked() && !device {
-                        toggle = Some(i);
-                    }
-                    // Favori nommé ou non : son chemin au survol (plusieurs « Sources »).
-                    let label = if row.section == tri::places::Section::Favorites && row.depth == 0
-                    {
-                        label.on_hover_text(crate::files::tilde(&row.path))
-                    } else {
-                        label
-                    };
-                    // Clic droit : les actions du clavier (retour du 18/10/2026), raccourci au
-                    // survol.
-                    let removable = row.kind == Some(PlaceKind::Volume) && row.ejectable;
-                    let mut open_in = None;
-                    // Clics à l'intérieur sans fermer : un groupe passé au premier niveau
-                    // ou replié garde le menu ouvert (issue n° 406) ; chaque entrée ferme
-                    // tout le menu elle-même.
-                    egui::Popup::context_menu(&label)
-                        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-                        .show(|ui| {
-                            // Une ligne par entrée : le menu s'élargit plutôt que de couper
-                            // un libellé, même quand un groupe vient d'être déplié (sa
-                            // largeur a été mesurée sans lui ; retour du 10/11/2026).
-                            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-                            let allowed = self.settings.files.allow_actions;
-                            let mut entry = |ui: &mut Ui, action: Action, text: String| {
-                                // Interdite : grisée, la bulle dit pourquoi (30/10/2026).
-                                let enabled = !action.changes_files() || allowed;
-                                if ui
-                                    .add_enabled(enabled, egui::Button::new(text))
-                                    .on_hover_text(self.action_tip(action))
-                                    .on_disabled_hover_text(t!("files-actions-off"))
-                                    .clicked()
-                                {
-                                    menu = Some((row.path.clone(), action));
-                                    egui::Popup::close_all(ui.ctx());
-                                }
-                            };
-                            if device {
-                                entry(ui, Action::FolderOpen, t!("folder-menu-mount"));
-                                entry(ui, Action::FolderEject, t!("folder-menu-eject"));
-                                return;
+                            let (rect, response) = marks::clickable(ui, size, &tip);
+                            let color = ui.visuals().text_color();
+                            marks::disclosure(ui.painter(), rect, row.expanded, color);
+                            if response.clicked() {
+                                toggle = Some(i);
+                                pointed = Some(i);
                             }
-                            let remembered = row.depth == 0
-                                && tri::servers::of_place(
-                                    self.tree.servers(),
-                                    &row.path,
-                                    std::env::consts::OS,
+                        }
+                        let current = row.path == self.folder.dir;
+                        let label = if device || server {
+                            let tip = if row.kind == Some(PlaceKind::Neighbour) {
+                                t!(
+                                    "folders-neighbour-tip",
+                                    address = row.path.display().to_string()
                                 )
-                                .is_some();
-                            if server {
-                                entry(ui, Action::FolderOpen, t!("folder-menu-connect"));
-                                entry(ui, Action::FolderForget, t!("folder-menu-forget"));
-                                return;
+                            } else if server {
+                                t!(
+                                    "folders-server-tip",
+                                    address = row.path.display().to_string()
+                                )
+                            } else {
+                                t!("folders-device-tip")
+                            };
+                            ui.selectable_label(false, egui::RichText::new(&row.name).weak())
+                                .on_hover_text(tip)
+                        } else {
+                            ui.selectable_label(current, &row.name)
+                        };
+                        // Dossier à son propre réglage des notes dans les images : un repère
+                        // (à l'accent : toujours ; gris : jamais).
+                        if row.depth > 0
+                            && let Some(on) = self.folder.notes.folder_embed(&row.path)
+                        {
+                            let side = ui.spacing().interact_size.y * 0.6;
+                            let (rect, mark) =
+                                ui.allocate_exact_size(vec2(side, side), Sense::hover());
+                            let color = if on {
+                                marks::accent_mark(ui.ctx())
+                            } else {
+                                ui.visuals().weak_text_color()
+                            };
+                            marks::file_action(ui.painter(), rect, Action::EmbedNotes, color);
+                            if !on {
+                                ui.painter().line_segment(
+                                    [rect.left_bottom(), rect.right_top()],
+                                    egui::Stroke::new(1.5, color),
+                                );
                             }
-                            if remembered {
-                                entry(ui, Action::FolderForget, t!("folder-menu-forget"));
-                                ui.separator();
-                            }
-                            let mut groups = MenuGroups::new(
-                                &f.menu_inline,
-                                (t!("menu-group-inline"), t!("menu-group-fold")),
+                            mark.on_hover_text(if on {
+                                t!("folder-embed-mark-always")
+                            } else {
+                                t!("folder-embed-mark-never")
+                            });
+                        }
+                        // Glisser-déposer : un dossier se glisse (pas un emplacement) ; tout
+                        // dossier reçoit un dossier ou des images de la grille.
+                        let label = if row.depth > 0 {
+                            let label = label.interact(Sense::drag());
+                            label.dnd_set_drag_payload(Dragged::Folder(row.path.clone()));
+                            label
+                        } else {
+                            label
+                        };
+                        let target =
+                            |d: &Dragged| !matches!(d, Dragged::Folder(p) if *p == row.path);
+                        if label
+                            .dnd_hover_payload::<Dragged>()
+                            .is_some_and(|d| target(&d))
+                        {
+                            ui.painter().rect_stroke(
+                                label.rect.expand(2.0),
+                                3.0,
+                                egui::Stroke::new(2.0, accent),
+                                egui::StrokeKind::Outside,
                             );
-                            // Accès (issue n° 406 : d'abord au premier niveau, puis un groupe
-                            // comme les autres, retour du 10/11/2026).
-                            groups.group(ui, "open", &t!("folder-group-open"), |ui| {
-                                // Afficher le dossier dans le Finder / l'Explorateur (demandé le
-                                // 08/11/2026), comme pour une image.
-                                entry(ui, Action::FileReveal, Action::FileReveal.label());
-                                // Ouvrir le dossier dans un logiciel installé qui le sait
-                                // (darktable ; demandé le 28/10/2026).
-                                // Grisé s'il ne peut pas le recevoir : darktable déjà ouvert sous
-                                // Windows (une seconde instance plantait sous macOS avant `open -a`,
-                                // retour du 28/10/2026).
-                                for engine in self.developers.folder_openers() {
-                                    let action = Action::FolderOpenIn(engine);
-                                    let open = self.engine_blocked(engine);
-                                    let tip = if open {
-                                        t!("folder-open-in-running", name = engine.name())
-                                    } else {
-                                        self.action_tip(action)
-                                    };
-                                    let button = ui
-                                        .add_enabled(
-                                            !open,
-                                            egui::Button::new(t!(
-                                                "folder-menu-open-in",
-                                                name = engine.name()
-                                            )),
-                                        )
-                                        .on_hover_text(&tip)
-                                        .on_disabled_hover_text(&tip);
-                                    if button.clicked() {
-                                        open_in = Some((row.path.clone(), action));
+                        }
+                        if let Some(d) = label.dnd_release_payload::<Dragged>()
+                            && target(&d)
+                        {
+                            dropped = Some(((*d).clone(), row.path.clone()));
+                        }
+                        if label.clicked() {
+                            pointed = Some(i);
+                            if !current {
+                                open = Some(row.path.clone());
+                            }
+                        }
+                        if label.double_clicked() && !device {
+                            toggle = Some(i);
+                        }
+                        // Favori nommé ou non : son chemin au survol (plusieurs « Sources »).
+                        let label =
+                            if row.section == tri::places::Section::Favorites && row.depth == 0 {
+                                label.on_hover_text(crate::files::tilde(&row.path))
+                            } else {
+                                label
+                            };
+                        // Clic droit : les actions du clavier (retour du 18/10/2026), raccourci au
+                        // survol.
+                        let removable = row.kind == Some(PlaceKind::Volume) && row.ejectable;
+                        let mut open_in = None;
+                        // Clics à l'intérieur sans fermer : un groupe passé au premier niveau
+                        // ou replié garde le menu ouvert (issue n° 406) ; chaque entrée ferme
+                        // tout le menu elle-même.
+                        egui::Popup::context_menu(&label)
+                            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                            .show(|ui| {
+                                // Une ligne par entrée : le menu s'élargit plutôt que de couper
+                                // un libellé, même quand un groupe vient d'être déplié (sa
+                                // largeur a été mesurée sans lui ; retour du 10/11/2026).
+                                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                                let allowed = self.settings.files.allow_actions;
+                                let mut entry = |ui: &mut Ui, action: Action, text: String| {
+                                    // Interdite : grisée, la bulle dit pourquoi (30/10/2026).
+                                    let enabled = !action.changes_files() || allowed;
+                                    if ui
+                                        .add_enabled(enabled, egui::Button::new(text))
+                                        .on_hover_text(self.action_tip(action))
+                                        .on_disabled_hover_text(t!("files-actions-off"))
+                                        .clicked()
+                                    {
+                                        menu = Some((row.path.clone(), action));
                                         egui::Popup::close_all(ui.ctx());
                                     }
-                                }
-                                let favorite = if row.favorite {
-                                    t!("folder-menu-favorite-remove")
-                                } else {
-                                    t!("folder-menu-favorite-add")
                                 };
-                                entry(ui, Action::FolderFavorite, favorite);
-                                if row.favorite {
-                                    entry(
-                                        ui,
-                                        Action::FolderFavoriteName,
-                                        t!("folder-menu-favorite-name"),
-                                    );
+                                if device {
+                                    entry(ui, Action::FolderOpen, t!("folder-menu-mount"));
+                                    entry(ui, Action::FolderEject, t!("folder-menu-eject"));
+                                    return;
                                 }
-                            });
-                            groups.group(ui, "files", &t!("folder-group-files"), |ui| {
-                                entry(ui, Action::FolderCreate, t!("folder-menu-new"));
-                                if row.depth > 0 {
-                                    entry(ui, Action::FolderRename, t!("folder-menu-rename"));
-                                    entry(ui, Action::FolderMove, t!("folder-menu-move"));
-                                    entry(ui, Action::FolderCopy, t!("folder-menu-copy"));
-                                    entry(ui, Action::FolderDelete, t!("folder-menu-delete"));
+                                let remembered = row.depth == 0
+                                    && tri::servers::of_place(
+                                        self.tree.servers(),
+                                        &row.path,
+                                        std::env::consts::OS,
+                                    )
+                                    .is_some();
+                                if server {
+                                    entry(ui, Action::FolderOpen, t!("folder-menu-connect"));
+                                    entry(ui, Action::FolderForget, t!("folder-menu-forget"));
+                                    return;
                                 }
-                            });
-                            let opened = row.path == self.folder.dir;
-                            if opened || row.depth > 0 {
-                                groups.group(ui, "notes", &t!("folder-group-notes"), |ui| {
-                                    // Sidecars de notes manquants (31/10/2026) : du dossier
-                                    // ouvert, dont les notes sont connues.
-                                    if opened {
-                                        entry(ui, Action::Sidecars, t!("folder-menu-sidecars"));
-                                        entry(
-                                            ui,
-                                            Action::EmbedNotes,
-                                            t!("folder-menu-embed-notes"),
-                                        );
-                                        entry(
-                                            ui,
-                                            Action::ImportNotes,
-                                            t!("folder-menu-import-notes"),
-                                        );
-                                    }
-                                    // Notes dans les images, propre à ce dossier (issue n° 368 :
-                                    // « ce support amovible-là, oui ») ; pas ses sous-dossiers.
-                                    if row.depth > 0 {
-                                        let current = self.folder.notes.folder_embed(&row.path);
-                                        let global = embed_level_name(self.settings.xmp.embed);
-                                        menu_groups::subtitle(ui, &t!("folder-menu-embed"));
-                                        // Le réglage général en gris à côté (retour du
-                                        // 10/11/2026), pas entre parenthèses.
-                                        for (value, label, detail) in [
-                                            (None, t!("folder-embed-default"), Some(global)),
-                                            (Some(true), t!("folder-embed-always"), None),
-                                            (Some(false), t!("folder-embed-never"), None),
-                                        ] {
-                                            let checked = current == value;
-                                            let radio = match detail {
-                                                Some(detail) => ui.radio(
-                                                    checked,
-                                                    (label, egui::RichText::new(detail).weak()),
-                                                ),
-                                                None => ui.radio(checked, label),
-                                            };
-                                            if radio
-                                                .on_hover_text(t!("folder-menu-embed-tip"))
-                                                .clicked()
-                                            {
-                                                embed_menu = Some((row.path.clone(), value));
-                                                egui::Popup::close_all(ui.ctx());
-                                            }
-                                        }
-                                    }
-                                });
-                            }
-                            if opened || !self.developers.is_empty() {
-                                groups.group(ui, "develop", &t!("folder-group-develop"), |ui| {
-                                    // Rendus développés de tout le dossier, en fond (issue n° 69).
-                                    if !self.developers.is_empty() {
-                                        entry(ui, Action::DevelopFolder, t!("folder-menu-develop"));
-                                    }
-                                    // Réglages auto de toutes ses images (retour du 10/11/2026) :
-                                    // chacune d'après la sienne, mesurée sur sa vignette.
-                                    if opened {
-                                        menu_groups::subtitle(ui, &t!("folder-menu-adjust"));
-                                        for (what, text) in [
-                                            (
-                                                adjust::FolderAuto::Both,
-                                                t!("folder-menu-adjust-auto"),
-                                            ),
-                                            (
-                                                adjust::FolderAuto::Exposure,
-                                                t!("folder-menu-adjust-exposure"),
-                                            ),
-                                            (
-                                                adjust::FolderAuto::Balance,
-                                                t!("folder-menu-adjust-balance"),
-                                            ),
-                                        ] {
-                                            if ui
-                                                .button(text)
-                                                .on_hover_text(t!("folder-menu-adjust-tip"))
-                                                .clicked()
-                                            {
-                                                adjust_menu = Some(what);
-                                                // Tout le menu, pas seulement le sous-menu
-                                                // (retour du 10/11/2026 : resté ouvert, on
-                                                // aurait dit que rien ne se passait).
-                                                egui::Popup::close_all(ui.ctx());
-                                            }
-                                        }
-                                    }
-                                });
-                            }
-                            // Cache (issue n° 55) : pas proposé là où le réglage par défaut le
-                            // met déjà.
-                            let cache_text = cache.as_ref().and_then(|cache| {
-                                use tri::cache::Location;
-                                let here = cache.disk_of(&row.path).as_deref() == Some(&row.path);
-                                let text = if here {
-                                    // Dossier ou disque, comme pour le garder (retour du
-                                    // 10/11/2026 : « ici » sonnait faux).
-                                    Some(if removable {
-                                        t!("folder-menu-cache-release-disk")
-                                    } else {
-                                        t!("folder-menu-cache-release-folder")
-                                    })
-                                } else if removable {
-                                    (location != Location::Disk)
-                                        .then(|| t!("folder-menu-cache-disk"))
-                                } else {
-                                    (location != Location::Folder)
-                                        .then(|| t!("folder-menu-cache-folder"))
-                                };
-                                text.map(|text| (text, here))
-                            });
-                            groups.group(
-                                ui,
-                                "preferences",
-                                &t!("folder-group-preferences"),
-                                |ui| {
-                                    if let Some((text, here)) = cache_text {
-                                        if ui
-                                            .button(text)
-                                            .on_hover_text(t!("folder-menu-cache-tip"))
-                                            .clicked()
-                                        {
-                                            cache_menu = Some((row.path.clone(), !here));
+                                if remembered {
+                                    entry(ui, Action::FolderForget, t!("folder-menu-forget"));
+                                    ui.separator();
+                                }
+                                let mut groups = MenuGroups::new(
+                                    &f.menu_inline,
+                                    (t!("menu-group-inline"), t!("menu-group-fold")),
+                                );
+                                // Accès (issue n° 406 : d'abord au premier niveau, puis un groupe
+                                // comme les autres, retour du 10/11/2026).
+                                groups.group(ui, "open", &t!("folder-group-open"), |ui| {
+                                    // Afficher le dossier dans le Finder / l'Explorateur (demandé le
+                                    // 08/11/2026), comme pour une image.
+                                    entry(ui, Action::FileReveal, Action::FileReveal.label());
+                                    // Ouvrir le dossier dans un logiciel installé qui le sait
+                                    // (darktable ; demandé le 28/10/2026).
+                                    // Grisé s'il ne peut pas le recevoir : darktable déjà ouvert sous
+                                    // Windows (une seconde instance plantait sous macOS avant `open -a`,
+                                    // retour du 28/10/2026).
+                                    for engine in self.developers.folder_openers() {
+                                        let action = Action::FolderOpenIn(engine);
+                                        let open = self.engine_blocked(engine);
+                                        let tip = if open {
+                                            t!("folder-open-in-running", name = engine.name())
+                                        } else {
+                                            self.action_tip(action)
+                                        };
+                                        let button = ui
+                                            .add_enabled(
+                                                !open,
+                                                egui::Button::new(t!(
+                                                    "folder-menu-open-in",
+                                                    name = engine.name()
+                                                )),
+                                            )
+                                            .on_hover_text(&tip)
+                                            .on_disabled_hover_text(&tip);
+                                        if button.clicked() {
+                                            open_in = Some((row.path.clone(), action));
                                             egui::Popup::close_all(ui.ctx());
                                         }
-                                        // Vider le cache gardé là (10/11/2026) : une
-                                        // action (raccourci possible), une boîte confirme.
-                                        if here {
-                                            let text = if removable {
-                                                t!("folder-menu-cache-clear-disk")
-                                            } else {
-                                                t!("folder-menu-cache-clear-folder")
-                                            };
-                                            entry(ui, Action::FolderCacheClear, text);
-                                        }
                                     }
-                                    // Cache, données, notes, versions au choix (#411).
+                                    let favorite = if row.favorite {
+                                        t!("folder-menu-favorite-remove")
+                                    } else {
+                                        t!("folder-menu-favorite-add")
+                                    };
+                                    entry(ui, Action::FolderFavorite, favorite);
+                                    if row.favorite {
+                                        entry(
+                                            ui,
+                                            Action::FolderFavoriteName,
+                                            t!("folder-menu-favorite-name"),
+                                        );
+                                    }
+                                });
+                                groups.group(ui, "files", &t!("folder-group-files"), |ui| {
+                                    entry(ui, Action::FolderCreate, t!("folder-menu-new"));
+                                    if row.depth > 0 {
+                                        entry(ui, Action::FolderRename, t!("folder-menu-rename"));
+                                        entry(ui, Action::FolderMove, t!("folder-menu-move"));
+                                        entry(ui, Action::FolderCopy, t!("folder-menu-copy"));
+                                        entry(ui, Action::FolderDelete, t!("folder-menu-delete"));
+                                    }
+                                });
+                                let opened = row.path == self.folder.dir;
+                                if opened || row.depth > 0 {
+                                    groups.group(ui, "notes", &t!("folder-group-notes"), |ui| {
+                                        // Sidecars de notes manquants (31/10/2026) : du dossier
+                                        // ouvert, dont les notes sont connues.
+                                        if opened {
+                                            entry(ui, Action::Sidecars, t!("folder-menu-sidecars"));
+                                            entry(
+                                                ui,
+                                                Action::EmbedNotes,
+                                                t!("folder-menu-embed-notes"),
+                                            );
+                                            entry(
+                                                ui,
+                                                Action::ImportNotes,
+                                                t!("folder-menu-import-notes"),
+                                            );
+                                        }
+                                        // Notes dans les images, propre à ce dossier (issue n° 368 :
+                                        // « ce support amovible-là, oui ») ; pas ses sous-dossiers.
+                                        if row.depth > 0 {
+                                            let current = self.folder.notes.folder_embed(&row.path);
+                                            let global = embed_level_name(self.settings.xmp.embed);
+                                            menu_groups::subtitle(ui, &t!("folder-menu-embed"));
+                                            // Le réglage général en gris à côté (retour du
+                                            // 10/11/2026), pas entre parenthèses.
+                                            for (value, label, detail) in [
+                                                (None, t!("folder-embed-default"), Some(global)),
+                                                (Some(true), t!("folder-embed-always"), None),
+                                                (Some(false), t!("folder-embed-never"), None),
+                                            ] {
+                                                let checked = current == value;
+                                                let radio = match detail {
+                                                    Some(detail) => ui.radio(
+                                                        checked,
+                                                        (label, egui::RichText::new(detail).weak()),
+                                                    ),
+                                                    None => ui.radio(checked, label),
+                                                };
+                                                if radio
+                                                    .on_hover_text(t!("folder-menu-embed-tip"))
+                                                    .clicked()
+                                                {
+                                                    embed_menu = Some((row.path.clone(), value));
+                                                    egui::Popup::close_all(ui.ctx());
+                                                }
+                                            }
+                                        }
+                                    });
+                                }
+                                if opened || !self.developers.is_empty() {
+                                    groups.group(
+                                        ui,
+                                        "develop",
+                                        &t!("folder-group-develop"),
+                                        |ui| {
+                                            // Rendus développés de tout le dossier, en fond (issue n° 69).
+                                            if !self.developers.is_empty() {
+                                                entry(
+                                                    ui,
+                                                    Action::DevelopFolder,
+                                                    t!("folder-menu-develop"),
+                                                );
+                                            }
+                                            // Réglages auto de toutes ses images (retour du 10/11/2026) :
+                                            // chacune d'après la sienne, mesurée sur sa vignette.
+                                            if opened {
+                                                menu_groups::subtitle(
+                                                    ui,
+                                                    &t!("folder-menu-adjust"),
+                                                );
+                                                for (what, text) in [
+                                                    (
+                                                        adjust::FolderAuto::Both,
+                                                        t!("folder-menu-adjust-auto"),
+                                                    ),
+                                                    (
+                                                        adjust::FolderAuto::Exposure,
+                                                        t!("folder-menu-adjust-exposure"),
+                                                    ),
+                                                    (
+                                                        adjust::FolderAuto::Balance,
+                                                        t!("folder-menu-adjust-balance"),
+                                                    ),
+                                                ] {
+                                                    if ui
+                                                        .button(text)
+                                                        .on_hover_text(t!("folder-menu-adjust-tip"))
+                                                        .clicked()
+                                                    {
+                                                        adjust_menu = Some(what);
+                                                        // Tout le menu, pas seulement le sous-menu
+                                                        // (retour du 10/11/2026 : resté ouvert, on
+                                                        // aurait dit que rien ne se passait).
+                                                        egui::Popup::close_all(ui.ctx());
+                                                    }
+                                                }
+                                            }
+                                        },
+                                    );
+                                }
+                                // Cache (issue n° 55) : pas proposé là où le réglage par défaut le
+                                // met déjà.
+                                let cache_text = cache.as_ref().and_then(|cache| {
+                                    use tri::cache::Location;
+                                    let here =
+                                        cache.disk_of(&row.path).as_deref() == Some(&row.path);
+                                    let text = if here {
+                                        // Dossier ou disque, comme pour le garder (retour du
+                                        // 10/11/2026 : « ici » sonnait faux).
+                                        Some(if removable {
+                                            t!("folder-menu-cache-release-disk")
+                                        } else {
+                                            t!("folder-menu-cache-release-folder")
+                                        })
+                                    } else if removable {
+                                        (location != Location::Disk)
+                                            .then(|| t!("folder-menu-cache-disk"))
+                                    } else {
+                                        (location != Location::Folder)
+                                            .then(|| t!("folder-menu-cache-folder"))
+                                    };
+                                    text.map(|text| (text, here))
+                                });
+                                groups.group(
+                                    ui,
+                                    "preferences",
+                                    &t!("folder-group-preferences"),
+                                    |ui| {
+                                        if let Some((text, here)) = cache_text {
+                                            if ui
+                                                .button(text)
+                                                .on_hover_text(t!("folder-menu-cache-tip"))
+                                                .clicked()
+                                            {
+                                                cache_menu = Some((row.path.clone(), !here));
+                                                egui::Popup::close_all(ui.ctx());
+                                            }
+                                            // Vider le cache gardé là (10/11/2026) : une
+                                            // action (raccourci possible), une boîte confirme.
+                                            if here {
+                                                let text = if removable {
+                                                    t!("folder-menu-cache-clear-disk")
+                                                } else {
+                                                    t!("folder-menu-cache-clear-folder")
+                                                };
+                                                entry(ui, Action::FolderCacheClear, text);
+                                            }
+                                        }
+                                        // Cache, données, notes, versions au choix (#411).
+                                        entry(
+                                            ui,
+                                            Action::FolderReset,
+                                            crate::reset_dialog::ResetDialog::menu_label(removable),
+                                        );
+                                    },
+                                );
+                                if let Some(id) = groups.finish(ui) {
+                                    group_menu = Some(id);
+                                }
+                                if removable {
+                                    entry(ui, Action::FolderOffload, t!("folder-menu-offload"));
+                                    entry(ui, Action::FolderEject, t!("folder-menu-eject"));
+                                } else {
                                     entry(
                                         ui,
-                                        Action::FolderReset,
-                                        crate::reset_dialog::ResetDialog::menu_label(removable),
+                                        Action::FolderOffload,
+                                        t!("folder-menu-offload-here"),
                                     );
-                                },
-                            );
-                            if let Some(id) = groups.finish(ui) {
-                                group_menu = Some(id);
-                            }
-                            if removable {
-                                entry(ui, Action::FolderOffload, t!("folder-menu-offload"));
-                                entry(ui, Action::FolderEject, t!("folder-menu-eject"));
-                            } else {
-                                entry(ui, Action::FolderOffload, t!("folder-menu-offload-here"));
-                            }
-                        });
-                    if open_in.is_some() {
-                        menu = open_in;
-                    }
-                    if current && reveal {
-                        reveal = false;
-                        label.scroll_to_me(Some(egui::Align::Center));
-                    }
-                    if row.favorite {
-                        let (rect, response) =
-                            ui.allocate_exact_size(vec2(size, size), Sense::hover());
-                        let color = ui.visuals().weak_text_color();
-                        marks::star(ui.painter(), rect.center(), size * 0.4, color);
-                        response.on_hover_text(format!(
-                            "{}\n{}",
-                            t!("folders-favorite"),
-                            self.action_tip(Action::FolderFavorite)
-                        ));
-                    }
-                    if let Some(error) = &row.error {
-                        ui.colored_label(self.gui.colors.error, t!("folders-unreadable"))
-                            .on_hover_text(error);
-                    }
-                    if row.kind == Some(PlaceKind::Volume) || device {
-                        let color = ui.visuals().text_color();
-                        if !row.ejectable {
-                            // Volume fixé ([places] fixed) : pas d'éjection, une icône
-                            // de disque à la place.
+                                }
+                            });
+                        if open_in.is_some() {
+                            menu = open_in;
+                        }
+                        if current && reveal {
+                            reveal = false;
+                            label.scroll_to_me(Some(egui::Align::Center));
+                        }
+                        if row.favorite {
                             let (rect, response) =
                                 ui.allocate_exact_size(vec2(size, size), Sense::hover());
-                            marks::drive(ui.painter(), rect, ui.visuals().weak_text_color());
-                            response.on_hover_text(t!("folders-fixed-drive"));
-                        } else if self.ejecting.is_none() {
-                            // Un seul déchargement à la fois ; pas avant le montage.
-                            if self.offload.is_none() && !device {
-                                // Au survol, décharger à l'accent et éjecter en rouge :
-                                // deux petites icônes voisines à ne pas confondre (issue
-                                // n° 41).
+                            let color = ui.visuals().weak_text_color();
+                            marks::star(ui.painter(), rect.center(), size * 0.4, color);
+                            response.on_hover_text(format!(
+                                "{}\n{}",
+                                t!("folders-favorite"),
+                                self.action_tip(Action::FolderFavorite)
+                            ));
+                        }
+                        if let Some(error) = &row.error {
+                            ui.colored_label(self.gui.colors.error, t!("folders-unreadable"))
+                                .on_hover_text(error);
+                        }
+                        if row.kind == Some(PlaceKind::Volume) || device {
+                            let color = ui.visuals().text_color();
+                            if !row.ejectable {
+                                // Volume fixé ([places] fixed) : pas d'éjection, une icône
+                                // de disque à la place.
                                 let (rect, response) =
-                                    marks::clickable(ui, size, &t!("folders-offload"));
-                                let hover = marks::accent_mark(ui.ctx());
-                                let c = if response.hovered() { hover } else { color };
-                                marks::offload(ui.painter(), rect, c);
+                                    ui.allocate_exact_size(vec2(size, size), Sense::hover());
+                                marks::drive(ui.painter(), rect, ui.visuals().weak_text_color());
+                                response.on_hover_text(t!("folders-fixed-drive"));
+                            } else if self.ejecting.is_none() {
+                                // Un seul déchargement à la fois ; pas avant le montage.
+                                if self.offload.is_none() && !device {
+                                    // Au survol, décharger à l'accent et éjecter en rouge :
+                                    // deux petites icônes voisines à ne pas confondre (issue
+                                    // n° 41).
+                                    let (rect, response) =
+                                        marks::clickable(ui, size, &t!("folders-offload"));
+                                    let hover = marks::accent_mark(ui.ctx());
+                                    let c = if response.hovered() { hover } else { color };
+                                    marks::offload(ui.painter(), rect, c);
+                                    if response.clicked() {
+                                        // Au centre, comme les autres boîtes (#252 ; près du
+                                        // clic avant).
+                                        let at = CENTRED;
+                                        offload = Some((row.path.clone(), at));
+                                    }
+                                }
+                                let (rect, response) = marks::clickable(ui, size, &t!("eject"));
+                                let c = if response.hovered() {
+                                    Color32::from(self.gui.colors.error)
+                                } else {
+                                    color
+                                };
+                                marks::eject(ui.painter(), rect, c);
                                 if response.clicked() {
-                                    // Au centre, comme les autres boîtes (#252 ; près du
-                                    // clic avant).
+                                    // Au centre, comme les autres boîtes (#282 ; au coin de
+                                    // l'icône avant).
                                     let at = CENTRED;
-                                    offload = Some((row.path.clone(), at));
+                                    eject = Some((row.path.clone(), at));
                                 }
                             }
-                            let (rect, response) = marks::clickable(ui, size, &t!("eject"));
-                            let c = if response.hovered() {
-                                Color32::from(self.gui.colors.error)
-                            } else {
-                                color
-                            };
-                            marks::eject(ui.painter(), rect, c);
-                            if response.clicked() {
-                                // Au centre, comme les autres boîtes (#282 ; au coin de
-                                // l'icône avant).
-                                let at = CENTRED;
-                                eject = Some((row.path.clone(), at));
-                            }
                         }
+                    });
+                    // Survol (issue n° 385) : la bande sur toute la largeur, et la souris qui
+                    // bouge pointe la ligne, comme le clavier ; le dossier ouvert garde son
+                    // fond d'accent, à part.
+                    let band = Rect::from_x_y_ranges(
+                        ui.clip_rect().x_range(),
+                        line.response.rect.expand(1.0).y_range(),
+                    );
+                    let hovered = ui.rect_contains_pointer(band);
+                    if hovered && moved {
+                        hover_point = Some(i);
                     }
-                });
-                // Survol (issue n° 385) : la bande sur toute la largeur, et la souris qui
-                // bouge pointe la ligne, comme le clavier ; le dossier ouvert garde son
-                // fond d'accent, à part.
-                let band = Rect::from_x_y_ranges(
-                    ui.clip_rect().x_range(),
-                    line.response.rect.expand(1.0).y_range(),
-                );
-                let hovered = ui.rect_contains_pointer(band);
-                if hovered && moved {
-                    hover_point = Some(i);
+                    // Ligne pointée : une bande discrète sur toute la largeur ; au clavier si
+                    // le panneau l'a, sinon sous la souris.
+                    let pointed = if focused { cursor == Some(i) } else { hovered };
+                    if pointed {
+                        cursor_row(ui, line.response.rect, self.gui.dialogs.cursor_tint);
+                    }
+                    if cursor == Some(i) && scroll {
+                        line.response.scroll_to_me(Some(egui::Align::Center));
+                    }
                 }
-                // Ligne pointée : une bande discrète sur toute la largeur ; au clavier si
-                // le panneau l'a, sinon sous la souris.
-                let pointed = if focused { cursor == Some(i) } else { hovered };
-                if pointed {
-                    cursor_row(ui, line.response.rect, self.gui.dialogs.cursor_tint);
-                }
-                if cursor == Some(i) && scroll {
-                    line.response.scroll_to_me(Some(egui::Align::Center));
-                }
-            }
-            // Sections repliées après la dernière ligne.
-            title(ui, None);
-        });
+                // Sections repliées après la dernière ligne.
+                title(ui, None);
+            });
+        if self.folder.is_none() {
+            self.summary_height = 0.0;
+        } else {
+            let top = ui.cursor().top();
+            ui.separator();
+            self.folder_summary(ui, &f);
+            self.summary_height = ui.cursor().top() - top;
+        }
         if let Some(s) = fold {
             let folded = !self.tree.is_folded(s);
             self.fold_folder_section(s, folded);
@@ -25088,7 +25127,12 @@ mod tests {
         );
         h.run_steps(2);
         assert!(h.query_by_label("autre").is_none(), "replié");
-        h.get_by_label("Déplier").click();
+        // Le plus haut : celui de l'arborescence (le résumé du dossier, replié en bas du
+        // panneau, a le sien, #388).
+        h.query_all_by_label("Déplier")
+            .min_by(|a, b| a.rect().top().total_cmp(&b.rect().top()))
+            .unwrap()
+            .click();
         h.run_steps(2);
         h.get_by_label("autre").click();
         h.run_steps(3);
@@ -32033,6 +32077,38 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().folder.notes.notes(&files[1]).stars, 5);
         assert_eq!(h.state().folder.notes.notes(&files[0]).stars, 3);
+    }
+
+    #[test]
+    fn the_folder_panel_sums_up_the_open_folder() {
+        // #388 (12/11/2026, d'abord les comptes) : section « Ce dossier » en bas du panneau
+        // des dossiers, repliée par défaut, dépliée retenue d'une session à l'autre.
+        let (mut h, _dir) = harness();
+        h.state_mut().folder_panel = true;
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 3);
+        h.run_steps(2);
+        assert!(h.query_by_label("CE DOSSIER").is_some(), "le titre");
+        assert!(
+            h.query_by_label("Sans note").is_none(),
+            "repliée par défaut"
+        );
+        h.get_by_label("CE DOSSIER").click();
+        h.run_steps(2);
+        assert!(h.state().panel_folded.contains(summary::OPEN), "retenue");
+        assert!(h.query_by_label("Photos").is_some());
+        assert!(h.query_by_label("JPG").is_some(), "par extension");
+        assert!(h.query_by_label("Sans note").is_some());
+        // Une note : les comptes suivent.
+        let ctx = h.ctx.clone();
+        h.state_mut()
+            .perform(&ctx, Action::Flag(tri::xmp::Flag::Accepted));
+        h.run_steps(2);
+        let summary = h.state().folder.summary();
+        assert_eq!((summary.accepted, summary.untouched), (1, 2));
+        assert!(
+            h.query_by_label("Données de tri : sur cette machine")
+                .is_some()
+        );
     }
 
     #[test]
