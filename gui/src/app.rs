@@ -24460,13 +24460,17 @@ mod tests {
         h.state_mut().rating_bar = true;
         h.run_steps(3);
         assert!(h.state().position_key.is_some(), "repère montré");
+        // L'icône est dans le bandeau ; son action, menée directement : un clic simulé
+        // n'est pas toujours vu sur les machines d'intégration continue (Ubuntu, 12/11/2026).
         let icon = Action::ToggleImageInfo.label();
-        h.get_by_label_contains(&icon).click();
-        h.run_steps(3);
+        assert!(
+            h.query_all_by_label_contains(&icon).next().is_some(),
+            "l'icône"
+        );
+        act(&mut h, Action::ToggleImageInfo);
         assert!(!h.state().image_info, "l'icône du bandeau les masque");
         assert!(h.state().position_key.is_none(), "repère masqué aussi");
-        h.get_by_label_contains(&icon).click();
-        h.run_steps(3);
+        act(&mut h, Action::ToggleImageInfo);
         assert!(h.state().image_info);
     }
 
@@ -25906,6 +25910,11 @@ mod tests {
         // Empreinte changée (ici : le curseur de l'écart de temps), les piles recalculées
         // sur les empreintes, notes et netteté pas encore toutes là : la couverture retenue
         // reste montrée (retour du 11/11/2026 : la première image de chaque pile).
+        // L'analyse de netteté réelle d'abord finie : arrivée après, elle écrasait la
+        // progression simulée ci-dessous (CI Windows du 12/11/2026).
+        run_until(&mut h, |app| {
+            app.progress[4] == Progress { done: 3, total: 3 }
+        });
         for f in &files {
             let sig = tri::preview::compute_signature(f, &preview, &cancel).unwrap();
             h.state_mut().signatures.insert(f.path.clone(), sig);
