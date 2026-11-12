@@ -198,6 +198,11 @@ pub struct Summary {
     pub accepted: usize,
     /// Photos rejetées.
     pub rejected: usize,
+    /// Photos avec au moins un libellé couleur.
+    pub colored: usize,
+    /// Photos par libellé couleur, dans l'ordre de [`crate::xmp::Color::ALL`] (celles qui
+    /// en ont ; une photo à plusieurs couleurs compte pour chacune).
+    pub colors: Vec<(crate::xmp::Color, usize)>,
     /// Images dont les notes sont en conflit (sources en désaccord).
     pub conflicts: usize,
 }
@@ -228,6 +233,7 @@ impl Summary {
         let mut summary = Summary::default();
         let mut types: HashMap<(String, media::MediaKind), usize> = HashMap::new();
         let mut developments: HashMap<Engine, usize> = HashMap::new();
+        let mut colors: HashMap<crate::xmp::Color, usize> = HashMap::new();
         let mut flats: HashSet<PathBuf> = HashSet::new();
         let mut raws: Vec<PathBuf> = Vec::new();
         for file in files {
@@ -258,6 +264,12 @@ impl Summary {
             if n.stars > 0 {
                 summary.starred += 1;
             }
+            if !n.colors.is_empty() {
+                summary.colored += 1;
+            }
+            for &c in &n.colors {
+                *colors.entry(c).or_default() += 1;
+            }
             if n.stars == 0 && n.flag == Flag::None && n.colors.is_empty() {
                 summary.untouched += 1;
             }
@@ -287,6 +299,10 @@ impl Summary {
                 ))
         });
         summary.types = types;
+        summary.colors = crate::xmp::Color::ALL
+            .into_iter()
+            .filter_map(|c| colors.get(&c).map(|&n| (c, n)))
+            .collect();
         summary.developments = Engine::ALL
             .into_iter()
             .filter_map(|e| developments.get(&e).map(|&n| (e, n)))
@@ -443,6 +459,8 @@ mod tests {
             (1, 1, 1)
         );
         assert_eq!(summary.untouched, 3, "A.JPG, D.jpg, E.NEF");
+        assert_eq!(summary.colored, 1);
+        assert_eq!(summary.colors, [(Color::Red, 1)]);
         assert_eq!(summary.conflicts, 1);
     }
 
