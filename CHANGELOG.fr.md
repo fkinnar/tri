@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Plus d'éclair d'un autre rendu entre deux images développées** (#432) : en passant
+  d'une image développée à la suivante en plein écran, le JPEG boîtier (ou le rendu RAW),
+  chargé plus tôt, s'affichait un instant entre la vignette et le développement ; le
+  plein écran attend désormais sur la vignette, qui montre déjà le développement.
 - **Réglages appliqués tout de suite** (#429) : `[adjust]` (exposition et balance
   automatiques), `[sidecars]` et `[watch]` changés dans la fenêtre de réglages
   s'appliquent immédiatement ; ils attendaient le prochain lancement.

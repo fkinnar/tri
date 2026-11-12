@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **No flash of another render between developed images** (#432): going from one
+  developed image to the next in full screen, the camera JPEG (or the RAW render), loaded
+  sooner, showed for an instant between the thumbnail and the development; full screen
+  now waits on the thumbnail, which already shows the development.
 - **Settings applied at once** (#429): `[adjust]` (automatic exposure and balance),
   `[sidecars]` and `[watch]` changed in the settings window now apply immediately; they
   used to wait for the next launch.
