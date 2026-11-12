@@ -31765,10 +31765,12 @@ mod tests {
                 engine.cache.put(&key, &bitmap).unwrap();
             }
         }
+        // Sa vignette chargée dans la grille d'abord (CI : pas forcément en trois images).
+        let path = files[0].path.clone();
+        run_until(&mut h, |app| app.textures.contains(&path));
         press(&mut h, Key::Enter, Modifiers::NONE);
         h.state_mut().source = Source::Developed;
         run_until(&mut h, |app| app.last_shown == (0, Some(DT)));
-        let path = files[0].path.clone();
         assert!(
             h.state().textures.contains(&path),
             "sa vignette est chargée"
