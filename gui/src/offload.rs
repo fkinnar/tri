@@ -669,6 +669,8 @@ impl OffloadDialog {
                                 .on_hover_text(t!("offload-session-tip"));
                                 ui.end_row();
                             });
+                        // Pas assez de place : le bouton le dit (« Décharger quand même »).
+                        let mut short = false;
                         if let Some(dest) = &dest {
                             ui.weak(t!("offload-destination", path = dest.display().to_string()));
                             // Pas assez de place : dit avant la copie (elle peut encore
@@ -681,6 +683,7 @@ impl OffloadDialog {
                             if let Some((_, Some(room))) = free
                                 && needed > *room
                             {
+                                short = true;
                                 ui.colored_label(
                                     ui.visuals().warn_fg_color,
                                     t!(
@@ -734,8 +737,13 @@ impl OffloadDialog {
                         }
                         ui.add_space(6.0);
                         ui.horizontal(|ui| {
+                            let label = if short {
+                                t!("offload-start-anyway")
+                            } else {
+                                t!("offload-start")
+                            };
                             start = ui
-                                .add_enabled(count > 0, egui::Button::new(t!("offload-start")))
+                                .add_enabled(count > 0, egui::Button::new(label))
                                 .clicked();
                             if ui.button(t!("cancel")).clicked() {
                                 request = Some(Request::Close);

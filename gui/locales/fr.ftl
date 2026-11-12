@@ -1415,7 +1415,8 @@ offload-done = { $verified ->
    *[no] { $copied } fichiers copiés
 }, { $skipped } ignorés (déjà déchargés), { $errors } erreurs.
 offload-done-cancelled = { " " }— interrompu
-offload-not-enough-room = Pas assez de place : { $free } Mo libres dans la destination, { $mb } Mo à copier.
+offload-not-enough-room = Pas assez de place : { $free } Mo libres dans la destination, { $mb } Mo à copier. « Décharger quand même » lance la copie ; quand la place manquera, elle s'arrêtera et demandera quoi faire.
+offload-start-anyway = Décharger quand même
 offload-full-title = Plus de place dans la destination
 offload-full-done = { $n } fichiers déjà copiés et vérifiés, gardés dans { $path }.
 offload-full-left = { $n } fichiers restent à copier ({ $mb } Mo) ; { $free } Mo libres.

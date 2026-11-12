@@ -48,8 +48,10 @@ besoins de tous, pas seulement les siens.
   boîte revient au premier plan (même en arrière-plan) avec ce qui est fait, ce qui reste
   et la place libre, et y reste sans limite de temps (Échap ne la ferme pas) jusqu'à
   « Réessayer » (après avoir fait de la place) ou « Abandonner ». Avant la copie, la boîte
-  prévient si la place libre ne suffit pas. En ligne de commande, pas de question : un
-  message, l'arrêt, pas d'éjection, et un code de sortie d'erreur.
+  compare la taille des fichiers à copier à la place libre et prévient si elle ne suffit
+  pas ; le bouton devient alors « Décharger quand même » (en connaissance de cause). En
+  ligne de commande, pas de question : un message, l'arrêt, pas d'éjection, et un code
+  de sortie d'erreur.
 - **Vérification** (`[offload] verify`) : empreinte BLAKE3 calculée pendant la copie,
   puis copie relue et comparée ; date de modification d'origine conservée ; écriture
   atomique (fichier temporaire caché, puis renommage).

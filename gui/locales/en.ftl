@@ -1412,7 +1412,8 @@ offload-done = { $verified ->
    *[no] { $copied } files copied
 }, { $skipped } skipped (already offloaded), { $errors } errors.
 offload-done-cancelled = { " " }— interrupted
-offload-not-enough-room = Not enough room: { $free } MB free in the destination, { $mb } MB to copy.
+offload-not-enough-room = Not enough room: { $free } MB free in the destination, { $mb } MB to copy. "Offload anyway" starts the copy; when the room runs out, it will stop and ask what to do.
+offload-start-anyway = Offload anyway
 offload-full-title = No space left in the destination
 offload-full-done = { $n } files already copied and verified, kept in { $path }.
 offload-full-left = { $n } files still to copy ({ $mb } MB); { $free } MB free.

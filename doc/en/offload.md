@@ -45,8 +45,10 @@ everyone's needs, not just his.
   nothing is deleted from the card nor ejected. In the interface, the dialog comes back to
   the front (even in the background) with what is done, what is left and the free room,
   and stays, without a time limit (Escape does not close it), until "Retry" (after making
-  room) or "Give up". Before the copy, the dialog warns if the free room is not enough. On
-  the command line, no question: a message, the stop, no eject, and an error exit code.
+  room) or "Give up". Before the copy, the dialog compares the size of the files to copy
+  with the free room and warns if it is not enough; the button then reads "Offload
+  anyway" (knowingly). On the command line, no question: a message, the stop, no eject,
+  and an error exit code.
 - **Verification** (`[offload] verify`): BLAKE3 hash computed during the copy, then the
   copy is read back and compared; original modification date preserved; atomic write
   (hidden temporary file, then rename).
