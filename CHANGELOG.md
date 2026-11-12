@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **One setting for the histogram after adjustments** (#434): the "Histogram after
+  adjustments" checkbox, the large histogram's button and `e` now switch the same
+  setting and reflect each other; with the checkbox ticked, the button could no longer
+  bring back the real data.
 - **Developed images no longer dull in the grid** (#433): the grid copies of
   developments carry the working colour profile, but it changed from one launch to the
   next (creation date) and was then taken for sRGB, so the copies were converted a second

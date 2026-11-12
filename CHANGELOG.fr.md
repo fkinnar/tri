@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Un seul réglage pour l'histogramme après réglages** (#434) : la case « Histogramme
+  après réglages », le bouton du grand histogramme et `e` basculent désormais le même
+  réglage et se reflètent ; la case cochée, le bouton ne ramenait plus les données
+  réelles.
 - **Images développées plus ternes dans la grille** (#433) : les copies de la grille
   des développements portent le profil de travail, mais il changeait d'un lancement à
   l'autre (date de création) et était alors pris pour du sRGB : les copies étaient
