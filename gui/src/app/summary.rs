@@ -34,6 +34,8 @@ pub(super) enum Line {
     Accepted,
     /// Rejetées.
     Rejected,
+    /// Avec un libellé couleur, n'importe lequel (`None`) ou celui-ci.
+    Colored(Option<Color>),
     /// Notes en conflit.
     Conflicts,
 }
@@ -94,6 +96,15 @@ impl Filters {
             Line::Starred => f.notes.stars = Some(StarsRule::AtLeast(1)),
             Line::Accepted => f.notes.flags = Some(vec![Flag::Accepted]),
             Line::Rejected => f.notes.flags = Some(vec![Flag::Rejected]),
+            Line::Colored(color) => {
+                f.notes.colors = Some(ColorRule {
+                    any_of: match color {
+                        Some(c) => vec![*c],
+                        None => Color::ALL.to_vec(),
+                    },
+                    none: false,
+                })
+            }
             Line::Conflicts => f.conflicts = true,
         }
         f
@@ -316,6 +327,18 @@ impl TriApp {
             summary.rejected,
             Some(Line::Rejected),
         ));
+        // Libellés couleur (retour du 12/11/2026) : le total, puis chaque couleur présente.
+        rows.push(row(
+            t!("summary-colored"),
+            summary.colored,
+            Some(Line::Colored(None)),
+        ));
+        for &(color, n) in &summary.colors {
+            rows.push(Row {
+                indent: true,
+                ..row(color_name(color), n, Some(Line::Colored(Some(color))))
+            });
+        }
         // Conflits : seulement s'il y en a, en couleur d'avertissement.
         if summary.conflicts > 0 {
             rows.push(Row {

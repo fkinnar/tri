@@ -47,7 +47,8 @@ manipule quand on « ouvre un dossier ».
   **tout** le dossier et non la vue filtrée : photos par extension (RAW d'abord, puis par
   nombre), paires RAW+image plate (même nom, même dossier), développements par logiciel
   (d'après le registre `developments`, à part des photos), photos sans note, avec des
-  étoiles, acceptées, rejetées, et en conflit de notes. `Summary::of` prend des fonctions
+  étoiles, acceptées, rejetées, avec un libellé couleur (et par couleur), et en conflit de
+  notes. `Summary::of` prend des fonctions
   pour les notes, le logiciel d'un développement et les conflits : testé sans fichiers.
 
 Champs publics (`dir`, `files`, `notes`) : un dossier ouvert n'a pas d'invariant à

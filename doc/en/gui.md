@@ -65,8 +65,9 @@ system one ("cold" measurements, experiments).
   (accent, underlined); a second click removes every filter; "Photos" removes them too.
   Extension: `ExtensionFilter` (new, reset when changing folders); developments: the
   "developed" filter (every active software, or the line's); not rated (no star, flag nor
-  colour), with stars, accepted, rejected: the ratings rule; conflicts: the "in conflict"
-  filter. Not clickable: the pairs (no filter before grouping, #392) and inactive
+  colour), with stars, accepted, rejected, with a colour label (any, or one line per
+  colour present, feedback from 2026-11-12): the ratings rule; conflicts: the "in
+  conflict" filter. Not clickable: the pairs (no filter before grouping, #392) and inactive
   software. No Ctrl+click to combine yet (complex filters, #138). Still to come: versions,
   cache size with "Clear" (`gui/src/app/summary.rs`).
 - **Folders panel** (2026-10-17), to the left of the grid: places expandable as a tree,

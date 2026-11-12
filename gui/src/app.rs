@@ -32160,6 +32160,16 @@ mod tests {
         h.get_by_label("Photos").click();
         h.run_steps(2);
         assert!(h.state().extension_only.is_none());
+        // Libellés couleur (retour du 12/11/2026) : le total, puis chaque couleur.
+        let red = h.state().files[1].path.clone();
+        h.state_mut()
+            .rate_path(red.clone(), Action::Color(tri::xmp::Color::Red));
+        h.run_steps(2);
+        assert_eq!(h.state().folder.summary().colored, 1);
+        h.get_by_label("Avec un libellé couleur").click();
+        h.run_steps(2);
+        assert_eq!(h.state().files.len(), 1);
+        assert_eq!(h.state().files[0].path, red);
     }
 
     #[test]

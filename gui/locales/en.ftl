@@ -236,6 +236,7 @@ summary-untouched = Not rated
 summary-starred = With stars
 summary-accepted = Accepted
 summary-rejected = Rejected
+summary-colored = With a colour label
 summary-conflicts = Ratings in conflict
 summary-conflicts-tip = The ratings of these images differ between their sources (sidecar, image, other software): to settle before rating them.
 summary-data-folder = tri's data: in this folder

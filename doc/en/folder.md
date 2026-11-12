@@ -46,7 +46,8 @@ one "opens a folder".
   the **whole** folder, not the filtered view: photos per extension (RAW first, then by
   count), RAW + flat image pairs (same name, same folder), developments per software
   (from the `developments` registry, apart from the photos), photos without ratings, with
-  stars, accepted, rejected, and with ratings in conflict. `Summary::of` takes functions
+  stars, accepted, rejected, with a colour label (and per colour), and with ratings in
+  conflict. `Summary::of` takes functions
   for the ratings, the software of a development and the conflicts: tested without files.
 
 Public fields (`dir`, `files`, `notes`): an open folder has no invariant to protect

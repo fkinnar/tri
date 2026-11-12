@@ -236,6 +236,7 @@ summary-untouched = Sans note
 summary-starred = Avec des étoiles
 summary-accepted = Acceptées
 summary-rejected = Rejetées
+summary-colored = Avec un libellé couleur
 summary-conflicts = Notes en conflit
 summary-conflicts-tip = Les notes de ces images diffèrent selon leur source (sidecar, image, autre logiciel) : à trancher avant de les noter.
 summary-data-folder = Données de tri : dans ce dossier

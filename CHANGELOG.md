@@ -6,7 +6,8 @@
 
 - **The folder summary filters** (#443, part of #388): a click on a line of "This folder"
   shows that filter alone (an extension, a software's developments, not rated, with
-  stars, accepted, rejected, in conflict), the line lights up; a second click, or
+  stars, accepted, rejected, with a colour label or one colour, in conflict), the line
+  lights up; a second click, or
   "Photos", removes every filter.
 - **Summary of the open folder** (#442, part of #388): a "This folder" section at the
   bottom of the folders panel, folded by default, counts the photos per type, the

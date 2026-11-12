@@ -66,7 +66,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   ; « Photos » les retire aussi. Extension : `ExtensionFilter` (nouveau, réinitialisé en
   changeant de dossier) ; développements : le filtre « développées » (tous les logiciels
   actifs, ou celui de la ligne) ; sans note (ni étoile, ni drapeau, ni couleur), avec des
-  étoiles, acceptées, rejetées : la règle des notes ; conflits : le filtre « en conflit ».
+  étoiles, acceptées, rejetées, avec un libellé couleur (n'importe lequel, ou une ligne
+  par couleur présente, retour du 12/11/2026) : la règle des notes ; conflits : le filtre
+  « en conflit ».
   Pas cliquables : les paires (pas de filtre avant le regroupement, #392) et les
   logiciels inactifs. Pas encore de Ctrl+clic pour combiner (filtres complexes, #138).
   Restent à venir : versions, taille du cache avec « Vider » (`gui/src/app/summary.rs`).
