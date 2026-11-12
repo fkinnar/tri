@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **A development software just written is started anyway** (#435): on Linux, a tool
+  refused for a moment with "Text file busy" is tried again a few times (155 ms at most);
+  it made the CI fail now and then.
 - **Developed images no longer dull in the grid** (#433): the grid copies of
   developments carry the working colour profile, but it changed from one launch to the
   next (creation date) and was then taken for sRGB, so the copies were converted a second

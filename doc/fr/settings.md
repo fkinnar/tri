@@ -161,7 +161,9 @@ les raccourcis, `[keys]`, sont réglables depuis longtemps).
 
 - Les priorités du scheduler (classes 0 à 5) : c'est l'algorithme, pas un potard. De même
   les poids de la recherche floue (`fuzzy`) et le nombre d'essais de verrouillage d'un
-  volume à éjecter sous Windows (`places`, d'après l'exemple de Microsoft).
+  volume à éjecter sous Windows (`places`, d'après l'exemple de Microsoft), et les essais
+  de lancement d'un exécutable « occupé » (`process::spawn`, une parade à une course du
+  système).
 - L'intervalle de surveillance d'un programme externe qui travaille (`darktable-cli`,
   RapidRAW : 50 ms, puis 20 ms pour ses dernières lignes) : à régler seulement s'il
   pesait, ce qui n'est pas le cas.

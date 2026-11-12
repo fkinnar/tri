@@ -4,6 +4,9 @@
 
 ## Non publié
 
+- **Un logiciel de développement tout juste écrit se lance quand même** (#435) : sous
+  Linux, un outil refusé un instant avec « Text file busy » est réessayé quelques fois
+  (155 ms au plus) ; ça faisait échouer la CI de temps en temps.
 - **Images développées plus ternes dans la grille** (#433) : les copies de la grille
   des développements portent le profil de travail, mais il changeait d'un lancement à
   l'autre (date de création) et était alors pris pour du sRGB : les copies étaient

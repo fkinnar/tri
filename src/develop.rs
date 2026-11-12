@@ -1392,7 +1392,7 @@ fn render_darktable(
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
-    let mut child = command.spawn().map_err(|e| {
+    let mut child = crate::process::spawn(&mut command).map_err(|e| {
         tool_failed(
             Engine::Darktable,
             Some(image),
@@ -1497,7 +1497,7 @@ impl Developer for RapidRaw {
             .stdin(Stdio::null())
             .stdout(messages.try_clone().map_err(|e| failed(&e))?)
             .stderr(messages);
-        let child = command.spawn().map_err(|e| {
+        let child = crate::process::spawn(&mut command).map_err(|e| {
             tool_failed(
                 Engine::RapidRaw,
                 Some(image),
@@ -1614,8 +1614,7 @@ impl ProfileTool {
             .stdout(messages.try_clone().map_err(|e| failed(&e))?)
             .stderr(messages);
         let tool = profile_cli_names(engine).0;
-        let child = command
-            .spawn()
+        let child = crate::process::spawn(&mut command)
             .map_err(|e| tool_failed(engine, Some(image), &command, None, &e.to_string(), tool))?;
         let status = wait(child, engine, cancel);
         let text = std::fs::read_to_string(&log).unwrap_or_default();
