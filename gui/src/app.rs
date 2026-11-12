@@ -25864,8 +25864,15 @@ mod tests {
             h.state_mut().signatures.insert(f.path.clone(), sig);
         }
         h.state_mut().progress[5] = Progress { done: 3, total: 3 };
-        h.state_mut().stacks_dirty = true;
-        h.run_steps(3);
+        // Retenues seulement une fois tout connu, netteté comprise (`regroup` : `settled`) :
+        // l'analyse de fond peut finir après quelques images (CI Windows, 12/11/2026).
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while h.state().stacks_memory.is_none() {
+            assert!(Instant::now() < deadline, "piles jamais retenues");
+            h.state_mut().stacks_dirty = true;
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
         assert_eq!(h.state().stacks.count(), 1, "une rafale");
         let memory = h.state().stacks_memory.clone().expect("retenues");
         assert_eq!(memory.lengths, [3]);
