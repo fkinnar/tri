@@ -1099,11 +1099,11 @@ analysis_lighten = 0.06
 # or hides it, and that is remembered.
 camera_jpeg = true
 camera_width = 1.5
-# Histogram, indicators and areas: on the real data by default; the large histogram's
-# button or <core.histogram.after> shows the image after the viewing adjustments (the
-# sensor's saturated percentage stays shown: what it lost is lost). true: an adjusted
-# image shows them after by itself (also the "Histogram after adjustments" checkbox of
-# the Adjustments section).
+# Histogram, indicators and areas: on the real data by default; true: those of an
+# adjusted image, after its viewing adjustments (the sensor's saturated percentage stays
+# shown: what it lost is lost). The same setting as the "Histogram after adjustments"
+# checkbox of the Adjustments section, the large histogram's button and
+# <core.histogram.after>: each one switches it, and it is remembered.
 after_auto = false
 # Saturated / blocked badges of the grid: on the real data; true: an adjusted image shows
 # them after its adjusted exposure and balance.

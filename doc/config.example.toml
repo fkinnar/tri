@@ -1107,11 +1107,11 @@ analysis_lighten = 0.06
 # j ou le bouton du grand histogramme la montre ou la masque, et c'est retenu.
 camera_jpeg = true
 camera_width = 1.5
-# Histogramme, indicateurs et zones : sur les données réelles par défaut ; le bouton du
-# grand histogramme ou <core.histogram.after> montre l'image après les réglages de
-# visualisation (le pourcentage saturé du capteur reste affiché : ce qu'il a perdu est
-# perdu). true : une image réglée les montre après d'elle-même (aussi la case
-# « Histogramme après réglages » de la section Réglages).
+# Histogramme, indicateurs et zones : sur les données réelles par défaut ; true : ceux
+# d'une image réglée, après ses réglages de visualisation (le pourcentage saturé du
+# capteur reste affiché : ce qu'il a perdu est perdu). Le même réglage que la case
+# « Histogramme après réglages » de la section Réglages, le bouton du grand histogramme
+# et <core.histogram.after> : chacun le bascule, et c'est retenu.
 after_auto = false
 # Badges saturé / bouché de la grille : sur les données réelles ; true : une image réglée
 # les montre après son exposition et sa balance réglées.

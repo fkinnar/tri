@@ -944,17 +944,19 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     `[gui.colors] hist_camera` ;
   - **après les réglages de visualisation** (11/11/2026, issue n° 420, décidé avec
     l'utilisateur) :
-    - **Données réelles par défaut.** Un bouton (deux curseurs, à gauche des autres
-      boutons) et `e` dans le grand histogramme (`<leader> i e` ailleurs) font passer
-      l'histogramme, les pourcentages et les zones à **l'image telle qu'on la voit**,
-      réglages compris (exposition, balance, contraste, saturation, noir et blanc), pour
-      toutes les sources. « après réglages » est écrit en haut, et le pourcentage saturé
-      du **capteur** reste dans les indicateurs : ce que le capteur a perdu est perdu,
-      quel que soit le réglage. `[gui.histogram] after_auto = true` : une image réglée
-      montre l'« après » d'elle-même, dès son premier réglage ; aussi une case
-      « Histogramme après réglages » en tête de la section Réglages, écrite dans la
-      configuration (demande de l'utilisateur, 11/11/2026 : plus clair là que dans la
-      boîte de l'histogramme).
+    - **Données réelles par défaut.** Un seul réglage, `[gui.histogram] after_auto`, fait
+      passer l'histogramme, les pourcentages et les zones d'une image réglée à **l'image
+      telle qu'on la voit**, réglages compris (exposition, balance, contraste,
+      saturation, noir et blanc), pour toutes les sources, dès son premier réglage. Trois
+      façons de le basculer, qui se reflètent : la case « Histogramme après réglages » en
+      tête de la section Réglages (demande de l'utilisateur, 11/11/2026 : plus clair là
+      que dans la boîte de l'histogramme), le bouton du grand histogramme (deux curseurs,
+      à gauche des autres boutons, en couleur d'accent quand le réglage est actif) et `e`
+      (`<leader> i e` ailleurs). Chacun l'écrit dans la configuration. (Le bouton et `e`
+      étaient d'abord un interrupteur de session à part : la case cochée, ils ne
+      ramenaient plus l'avant ; réunis le 12/11/2026.) « après réglages » est écrit en
+      haut, et le pourcentage saturé du **capteur** reste dans les indicateurs : ce que
+      le capteur a perdu est perdu, quel que soit le réglage.
     - **Comment c'est mesuré** (`app/after.rs`) : l'aperçu affiché est réglé comme à
       l'écran, réduit à `[gui.histogram] after_side` (1280 px), puis mesuré
       (`Exposure::from_bitmap`), dans un fil en arrière-plan, jamais sur celui de
