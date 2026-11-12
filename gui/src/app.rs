@@ -29494,8 +29494,8 @@ mod tests {
         assert_eq!(history.lines().count(), 2, "historique écrit");
         assert!(!tri::store::kept(&opened), "rien gardé à côté des photos");
         assert!(!opened.join(tri::store::DIR).exists());
-        // Rouverte : les deux images déjà déchargées sont ignorées (case cochée par défaut,
-        // retour du 12/11/2026) ; décochée, elles sont de nouveau à copier.
+        // Rouverte : les deux images déjà déchargées sont ignorées (retour du 12/11/2026) ;
+        // « décharger à nouveau » coché, elles sont de nouveau à copier.
         h.get_by_label("Décharger la carte…").click();
         let deadline = Instant::now() + Duration::from_secs(20);
         while h.query_by_label("Décharger").is_none() {
@@ -29504,20 +29504,21 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         assert!(
-            h.query_by_label_contains("0 à copier").is_some(),
+            h.query_by_label_contains("2 images : 2 déjà déchargées, 0 nouvelle ; 0 à copier")
+                .is_some(),
             "déjà déchargées"
         );
-        click_settled(&mut h, "Ignorer les images déjà déchargées (2)");
+        click_settled(&mut h, "Décharger à nouveau les 2 images déjà déchargées");
         h.run_steps(3);
-        // Décochée : plus ignorées par l'historique ; le nom proposé revient au même
+        // Cochée : plus ignorées par l'historique ; le nom proposé revient au même
         // dossier, où elles sont déjà : annoncées comme telles.
         assert!(
             h.query_by_label_contains("2 déjà dans la destination")
                 .is_some()
         );
         assert!(
-            h.query_by_label_contains("déjà déchargées ;").is_none(),
-            "l'historique n'est plus compté"
+            h.query_by_label_contains("0 nouvelle, 2 déjà dans la destination ; 0 à copier")
+                .is_some()
         );
         h.get_by_label("Annuler").click();
         h.run_steps(2);

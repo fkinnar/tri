@@ -17,7 +17,7 @@ besoins de tous, pas seulement les siens.
   défaut, sa date de modification en UTC ; carte déjà déchargée : la plus récente de la
   carte ; la plus ancienne jusqu'au 12/11/2026, qui datait le dossier d'une séance déjà
   reprise sur une carte de plusieurs jours ; le nom proposé suit les cases « RAW
-  seulement » et « Ignorer les images déjà déchargées » tant qu'on ne l'a pas changé), à
+  seulement » et « Décharger à nouveau » tant qu'on ne l'a pas changé), à
   compléter (« _Self ») ou à remplacer entièrement. L'année, si on la veut,
   va dans la racine (`…/Sources/2026`) : retour du 17/10/2026, la proposition
   `AAAA/AAAA-MM-JJ_` mélangeait les deux, et restait vide pour une carte déjà
@@ -36,11 +36,12 @@ besoins de tous, pas seulement les siens.
   la copie combien d'images sont déjà dans la destination choisie (`already_in` : même
   nom, même taille ; recalculé quand le dossier change). Un **historique global**
   (`offload-history.tsv` dans le dossier de données, ou `[offload] history`) fait aussi
-  ignorer ce qui a déjà été déchargé n'importe où : case « Ignorer les images déjà
-  déchargées (n) » de la boîte, **cochée par défaut** depuis le 12/11/2026 (`[offload]
-  skip_known = true` ; demande de l'utilisateur : ne pas redécharger ce qu'on a déjà
-  repris ; d'abord une option de la configuration seule, non par défaut) ; décochée, on
-  peut décharger une carte une seconde fois ailleurs. Un fichier y est identifié par
+  ignorer ce qui a déjà été déchargé n'importe où, **par défaut** depuis le 12/11/2026
+  (`[offload] skip_known = true` ; demande de l'utilisateur : ne pas redécharger ce qu'on
+  a déjà repris ; d'abord une option de la configuration seule, non par défaut). La boîte
+  le dit : « 1686 images : 1200 déjà déchargées, 486 nouvelles », et propose, s'il y en a,
+  une case « Décharger à nouveau les n images déjà déchargées » (décochée) pour décharger
+  une carte une seconde fois ailleurs. Un fichier y est identifié par
   nom, taille et date (les numéros repartent à zéro : le nom seul ne suffit pas), sans
   base de données : un fichier texte, une ligne par copie. L'historique est tenu dans
   tous les cas. Il est propre à chaque machine (dossier de données) : une carte

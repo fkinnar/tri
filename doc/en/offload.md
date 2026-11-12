@@ -16,8 +16,8 @@ everyone's needs, not just his.
   **newest** image to copy, read from its metadata in local time; failing that, its
   modification date in UTC; card already offloaded: the newest on the card; the oldest
   until 2026-11-12, which dated the folder after a session already taken from a card of
-  several days; the suggestion follows the "RAW only" and "Skip the images already
-  offloaded" checkboxes as long as it was not changed), to be completed
+  several days; the suggestion follows the "RAW only" and "Offload again" checkboxes as
+  long as it was not changed), to be completed
   ("_Self") or replaced entirely. The year, if wanted, goes into the root
   (`…/Sources/2026`): feedback from 2026-10-17, the `AAAA/AAAA-MM-JJ_` suggestion mixed
   the two, and stayed empty for a card already offloaded. A
@@ -35,10 +35,11 @@ everyone's needs, not just his.
   images are already in the chosen destination (`already_in`: same name, same size;
   recomputed when the folder changes). A **global history** (`offload-history.tsv` in the
   data folder, or `[offload] history`) also skips what has already been offloaded
-  anywhere: "Skip the images already offloaded (n)" checkbox of the dialog, **ticked by
-  default** since 2026-11-12 (`[offload] skip_known = true`; owner's request: do not
-  offload again what was already taken; first an option of the configuration only, off by
-  default); unticked, a card can be offloaded a second time elsewhere. A file is
+  anywhere, **by default** since 2026-11-12 (`[offload] skip_known = true`; owner's
+  request: do not offload again what was already taken; first an option of the
+  configuration only, off by default). The dialog says it: "1686 images: 1200 already
+  offloaded, 486 new", and offers, if there are any, an "Offload again the n images
+  already offloaded" checkbox (unticked) to offload a card a second time elsewhere. A file is
   identified there by name, size and date (numbers restart at zero: the name alone is not
   enough), without a database: a text file, one line per copy. The history is kept in
   every case. It belongs to each machine (data folder): a card offloaded on the Mac is not

@@ -574,11 +574,19 @@ impl OffloadDialog {
                         };
                         let selected = plan.to_copy(settings).count();
                         let count = selected - there;
-                        let mut text = t!("offload-images", n = plan.items.len());
-                        if settings.skip_known {
-                            let known = plan.items.iter().filter(|i| i.known).count();
-                            text.push_str(&t!("offload-known", n = known));
-                        }
+                        // Ce que l'historique connaît déjà, et ce qui est nouveau (retour du
+                        // 12/11/2026).
+                        let known = plan.items.iter().filter(|i| i.known).count();
+                        let mut text = if known > 0 {
+                            t!(
+                                "offload-images-known",
+                                n = plan.items.len(),
+                                known = known,
+                                new = plan.items.len() - known
+                            )
+                        } else {
+                            t!("offload-images", n = plan.items.len())
+                        };
                         if there > 0 {
                             text.push_str(&t!("offload-already-there", n = there));
                         }
@@ -628,17 +636,18 @@ impl OffloadDialog {
                             .checkbox(&mut settings.raw_only, t!("offload-raw-only"))
                             .on_hover_text(t!("offload-raw-only-tip"))
                             .changed();
-                        // Ne pas redécharger ce qui l'a déjà été, n'importe où (historique
-                        // global ; retour du 12/11/2026) : décochée, une même carte peut
-                        // être déchargée à deux endroits.
-                        let known = plan.items.iter().filter(|i| i.known).count();
-                        let skip = ui
-                            .checkbox(
-                                &mut settings.skip_known,
-                                t!("offload-skip-known", n = known),
-                            )
-                            .on_hover_text(t!("offload-skip-known-tip"))
-                            .changed();
+                        // Ce qui a déjà été déchargé, n'importe où (historique global ;
+                        // retour du 12/11/2026) n'est pas recopié ; cochée, si (une même
+                        // carte déchargée à deux endroits). Seulement s'il y en a.
+                        let mut again = !settings.skip_known;
+                        let skip = known > 0
+                            && ui
+                                .checkbox(&mut again, t!("offload-again", n = known))
+                                .on_hover_text(t!("offload-again-tip"))
+                                .changed();
+                        if skip {
+                            settings.skip_known = !again;
+                        }
                         if (raw || skip)
                             && offload::suggest_folder(plan, &before).as_deref()
                                 == Some(folder.as_str())
