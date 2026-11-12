@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **A known folder stays quick when its cache is partly redone** (#436): what is still
+  cached (grouping signatures, sharpness, exposure, a 1:1) is delivered at once instead of
+  waiting behind the thumbnails being recomputed, so the stacks form right away after a
+  change of the cache keys (as after colour management).
 - **A development software just written is started anyway** (#435): on Linux, a tool
   refused for a moment with "Text file busy" is tried again a few times (155 ms at most);
   it made the CI fail now and then.

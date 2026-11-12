@@ -415,6 +415,9 @@ struct State {
     /// Vignettes visibles dans la grille (première, dernière), servies d'abord.
     visible: Option<(usize, usize)>,
     pending: HashSet<Job>,
+    /// Tâches en attente que le balayeur a trouvées absentes du cache ([`sweeper`]) : il
+    /// ne les revérifie pas ; les workers les calculent à leur tour.
+    checked: HashSet<Job>,
     running: Vec<Running>,
     progress: [Progress; 6],
     paused: bool,
@@ -538,7 +541,7 @@ impl Scheduler {
         let producer = Arc::new(producer);
         let heavy = std::iter::once(true);
         let light = std::iter::repeat_n(false, config.light_workers.max(1));
-        let threads = heavy
+        let mut threads: Vec<JoinHandle<()>> = heavy
             .chain(light)
             .enumerate()
             .map(|(n, is_heavy)| {
@@ -554,6 +557,13 @@ impl Scheduler {
                     .expect("création d'un thread de travail")
             })
             .collect();
+        let (sweep_shared, sweep_producer) = (shared.clone(), producer.clone());
+        threads.push(
+            std::thread::Builder::new()
+                .name("tri-cache".to_string())
+                .spawn(move || sweeper(&sweep_shared, sweep_producer.as_ref()))
+                .expect("création d'un thread de travail"),
+        );
         Scheduler { shared, threads }
     }
 
@@ -570,6 +580,7 @@ impl Scheduler {
         s.focus = None;
         s.group.clear();
         s.visible = None;
+        s.checked.clear();
         s.pending = (0..files.len())
             .flat_map(|i| {
                 s.background_levels(files[i].kind)
@@ -850,6 +861,79 @@ fn worker(shared: &Shared, producer: &dyn Producer, heavy: bool) {
         // Une tâche terminée peut débloquer les autres workers (fin des vignettes).
         shared.work.notify_all();
         deliver(shared);
+    }
+}
+
+/// Balayeur du cache (issue n° 428) : livre tout de suite les tâches en attente déjà en
+/// cache, sans attendre leur tour. Après un changement de clé du cache (la gestion des
+/// couleurs, #423), un dossier connu recalculait toutes ses vignettes, et ses empreintes,
+/// netteté et expositions, toujours en cache, attendaient derrière (« vignettes
+/// d'abord ») : les piles se formaient pas à pas. Il prend les tâches pas encore vérifiées
+/// dans l'ordre des priorités, sans le blocage « vignettes d'abord » ([`State::take`]) ;
+/// une tâche absente du cache reste dans la file, marquée vérifiée, pour les workers.
+/// Un seul fil, qui ne fait que regarder le cache (une lecture de métadonnées par tâche).
+fn sweeper(shared: &Shared, producer: &dyn Producer) {
+    loop {
+        // Les tâches à vérifier, par priorité : la file telle qu'elle est maintenant.
+        let (batch, generation) = {
+            let mut s = shared.lock();
+            loop {
+                if s.shutdown {
+                    return;
+                }
+                if !s.paused {
+                    let (focus, group, visible) = (s.focus, &s.group, s.visible);
+                    let mut batch: Vec<Job> = s
+                        .pending
+                        .iter()
+                        .filter(|job| !s.checked.contains(job))
+                        .copied()
+                        .collect();
+                    if !batch.is_empty() {
+                        batch.sort_by_key(|job| (priority_in(*job, focus, group, visible), job.0));
+                        break (batch, s.generation);
+                    }
+                }
+                s = shared.work.wait(s).unwrap_or_else(|e| e.into_inner());
+            }
+        };
+        for job in batch {
+            // La tâche reste dans la file pendant la vérification : un worker qui choisit
+            // à ce moment voit toujours l'ordre des priorités intact (et peut la prendre).
+            let file = {
+                let s = shared.lock();
+                if s.shutdown {
+                    return;
+                }
+                if s.paused || s.generation != generation {
+                    break;
+                }
+                // Prise entre-temps par un worker, ou abandonnée.
+                if !s.pending.contains(&job) {
+                    continue;
+                }
+                s.files[job.0].clone()
+            };
+            let done = producer.is_done(&file, job.1);
+            {
+                let mut s = shared.lock();
+                // Toujours la même tâche, toujours en attente : sinon un worker s'en charge.
+                if s.generation != generation || !s.pending.contains(&job) {
+                    continue;
+                }
+                if done {
+                    s.pending.remove(&job);
+                    let events = finish(&mut s, job, file, Ok(()));
+                    s.outbox.extend(events);
+                } else {
+                    s.checked.insert(job);
+                }
+            }
+            if done {
+                shared.work.notify_all();
+                deliver(shared);
+            }
+        }
     }
 }
 

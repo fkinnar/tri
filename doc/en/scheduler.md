@@ -88,6 +88,27 @@ available as soon as possible, before starting the LibRaw renders that take all 
 Each finished task wakes the workers up, so that they pick up the previews as soon as the
 last thumbnail is done.
 
+## What is already cached goes through at once (issue #428)
+
+One more thread, the **sweeper** (`tri-cache`), computes nothing: it takes the pending
+tasks it has not checked yet, in priority order but **without** the "thumbnails first"
+blocking, and looks whether the cache already has their entry (`Producer::is_done`, a
+metadata read). The task **stays in the queue** while it is checked: a worker choosing at
+that moment sees the priority order intact, and may take it (the sweeper then leaves it).
+A first version took it out while checking, and upset the order (27 failures out of 150
+runs of the ordering tests). If the entry is cached, the task is delivered at once
+(`Ready`, progress); otherwise it is marked as checked (`State::checked`, cleared when the
+folder changes), and the workers compute it in turn.
+
+Why: after a change of a cache key (colour management, #423, put `cs=1` in the key of the
+image levels), the first opening of a known folder recomputed all its thumbnails and camera
+previews. Its grouping signatures, sharpness and exposures, still cached (their keys had
+not changed), waited behind: the stacks formed step by step (TEST folder, 570 RAW).
+Measured on 2026-11-12 on 27 RAW, thumbnails and camera previews removed from the cache:
+signatures, sharpness and exposures delivered between **0.16 and 0.4 s** instead of 2.7 s,
+thumbnails unchanged (~0.9 to 1.2 s). Bonus: a 1:1 already cached is delivered while the heavy worker renders
+something else.
+
 ## Measurements
 
 Real folder: 472 images (236 X-T4 RAFs + 236 camera JPEGs), 8-core Apple Silicon Mac,
@@ -168,6 +189,9 @@ type:
   before the camera previews are done; the camera preview of the displayed image goes
   before all thumbnails;
 - pause / resume; out-of-range displayed image ignored; quick stop on destruction;
+- sweeper (#428): cached signatures and sharpness delivered before most of the thumbnails
+  to recompute, without recomputing anything; a cached 1:1 delivered without waiting for
+  the render in progress;
 - with `TRI_TEST_RAW`: real producer on a RAW and a JPEG, sizes and orientation of the
   entries, second pass served by the cache (0.66 s then ~40 µs).
 

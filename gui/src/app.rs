@@ -7176,6 +7176,9 @@ impl TriApp {
                     if let Some(i) = tracked(level) {
                         self.progress[i] = progress;
                     }
+                    if progress.total > 0 && progress.done == progress.total {
+                        trace(|| format!("fond : {level:?} fini ({} images)", progress.total));
+                    }
                 }
                 Event::Dropped {
                     generation: g,
