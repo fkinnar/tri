@@ -169,6 +169,9 @@ pub enum Action {
     FilterFlag(FlagFilter),
     /// Filtre : ajouter ou retirer une couleur.
     FilterColor(Color),
+    /// Filtre de couleurs : toutes les couleurs choisies (et) ou l'une d'elles (ou) ; avec
+    /// plusieurs couleurs par photo (`[xmp] multiple_colors`, 12/11/2026).
+    FilterColorsAll,
     /// Effacer tous les filtres (type compris).
     FilterClear,
     /// Filtre : masquer les photos jugées floues.
@@ -550,7 +553,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 239] = [
+    pub const ALL: [Action; 240] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -575,6 +578,7 @@ impl Action {
         Action::FilterColor(Color::Green),
         Action::FilterColor(Color::Blue),
         Action::FilterColor(Color::Purple),
+        Action::FilterColorsAll,
         Action::FilterClear,
         Action::FilterBlurry,
         Action::FilterWellExposed,
@@ -930,9 +934,9 @@ impl Action {
             | VersionName | VersionSavePreset | VersionReset => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
-            | FilterClear | FilterBlurry | FilterWellExposed | FilterStack | FilterInvert
-            | FilterDeveloped | FilterConflicts | SortNext | SortReverse | SortBy(_)
-            | FilterKind(_) | GridRenderNext | Render(_) => Group::Filters,
+            | FilterColorsAll | FilterClear | FilterBlurry | FilterWellExposed | FilterStack
+            | FilterInvert | FilterDeveloped | FilterConflicts | SortNext | SortReverse
+            | SortBy(_) | FilterKind(_) | GridRenderNext | Render(_) => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileActionsAllow | FileRename | FileDelete | FileReveal | FileEdit | FileCopy
@@ -1026,6 +1030,7 @@ impl Action {
             Action::FilterColor(Color::Green) => "core.filter.color.green",
             Action::FilterColor(Color::Blue) => "core.filter.color.blue",
             Action::FilterColor(Color::Purple) => "core.filter.color.purple",
+            Action::FilterColorsAll => "core.filter.colors.all",
             Action::FilterClear => "core.filter.clear",
             Action::FilterBlurry => "core.filter.blurry",
             Action::FilterWellExposed => "core.filter.well_exposed",

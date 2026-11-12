@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Colour filter: all the colours or one of them** (#444): with several colours per
+  photo (`[xmp] multiple_colors`), an "or" / "and" button after the colour dots of the
+  filter bar asks for photos carrying all the chosen colours instead of one of them
+  (action `core.filter.colors.all`, no default shortcut).
 - **Summary of the open folder** (#442, part of #388): a "This folder" section at the
   bottom of the folders panel, folded by default, counts the photos per type, the
   RAW+JPEG pairs, the developments per software (greyed when the software is missing or

@@ -212,6 +212,7 @@ fn filters_on_a_scanned_folder() {
         colors: Some(ColorRule {
             any_of: vec![Color::Green],
             none: false,
+            all: false,
         }),
         ..NotesRule::default()
     };

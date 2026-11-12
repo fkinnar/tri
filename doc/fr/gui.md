@@ -113,6 +113,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   disque. Une seule couleur par photo par défaut (`[xmp] multiple_colors`).
 - **Filtres** (17/10/2026) : type (tout / RAW / plates) et notes (au moins n étoiles ;
   acceptées, sans les rejetées ou rejetées ; une ou plusieurs couleurs), combinés.
+  Plusieurs couleurs choisies : l'une d'elles (« ou ») ; avec plusieurs couleurs par
+  photo (`[xmp] multiple_colors`), un petit bouton « ou » / « et » après les pastilles de
+  la barre des filtres (comme « ≥ = ≤ » devant les étoiles) demande toutes les couleurs
+  (`core.filter.colors.all`, sans raccourci par défaut ; retour du 12/11/2026). Gardé
+  pour les couleurs choisies ensuite, et dans la vue retenue du dossier.
   - Clavier : préfixe `f` (choix de l'utilisateur), suivi de la touche de notation
     correspondante : `f f` type suivant, `f 1`…`f 5` au moins n étoiles (ou exactement,
     ou au plus : `f =` ou le bouton ≥ / = / ≤ devant les étoiles de la barre, 26/10/2026,

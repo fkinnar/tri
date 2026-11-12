@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Filtre de couleurs : toutes les couleurs ou l'une d'elles** (#444) : avec plusieurs
+  couleurs par photo (`[xmp] multiple_colors`), un bouton « ou » / « et » après les
+  pastilles de la barre des filtres demande les photos qui portent toutes les couleurs
+  choisies plutôt que l'une d'elles (action `core.filter.colors.all`, sans raccourci par
+  défaut).
 - **Résumé du dossier ouvert** (#442, partie de #388) : une section « Ce dossier » en bas
   du panneau des dossiers, repliée par défaut, compte les photos par type, les paires
   RAW+JPEG, les développements par logiciel (grisés quand le logiciel est absent ou

@@ -98,6 +98,7 @@ pub fn navigate(
         | Action::FilterStarsOp
         | Action::FilterFlag(_)
         | Action::FilterColor(_)
+        | Action::FilterColorsAll
         | Action::FilterClear
         | Action::FilterBlurry
         | Action::FilterWellExposed

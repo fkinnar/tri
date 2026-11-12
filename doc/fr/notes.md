@@ -66,7 +66,9 @@ notes ont changé.
 - `stars: Option<StarsRule>` : `AtLeast(n)`, `Exactly(n)` (`Exactly(0)` : non notées),
   `AtMost(n)` ;
 - `flags: Option<Vec<Flag>>` : drapeaux acceptés (`[None, Accepted]` masque les rejetées) ;
-- `colors: Option<ColorRule>` : l'une des couleurs `any_of`, et/ou sans couleur (`none`).
+- `colors: Option<ColorRule>` : l'une des couleurs `any_of` (ou **toutes**, avec `all` :
+  plusieurs couleurs par photo, 12/11/2026 ; absent des vues retenues avant : « ou »),
+  et/ou sans couleur (`none`).
 
 `rule.filter(&book)` donne un `NotesFilter`, qui implémente le même trait
 [`Filter`](filter.md) que le filtre par type : pas de code spécial pour les filtres
