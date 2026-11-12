@@ -93,6 +93,7 @@ fn a_card_is_copied_flat_verified_and_remembered() {
         &AtomicBool::new(false),
         |_| seen += 1,
         |copy| copies.push(copy.to_path_buf()),
+        |_| false,
     );
     assert!(seen > 0, "progression signalée");
     // Chaque copie signalée dès qu'elle est faite (aperçus pendant la copie, issue n° 40).
@@ -142,6 +143,7 @@ fn a_card_is_copied_flat_verified_and_remembered() {
         &stop,
         |_| {},
         |_| {},
+        |_| false,
     );
     assert_eq!(report.skipped.len(), 3);
     assert!(
@@ -162,6 +164,7 @@ fn a_card_is_copied_flat_verified_and_remembered() {
         &stop,
         |_| {},
         |_| {},
+        |_| false,
     );
     assert_eq!(report.copied.len(), 3, "second endroit");
     let report = offload::run(
@@ -172,6 +175,7 @@ fn a_card_is_copied_flat_verified_and_remembered() {
         &stop,
         |_| {},
         |_| {},
+        |_| false,
     );
     assert!(report.copied.is_empty());
     assert_eq!(report.skipped.len(), 3, "même endroit : doublons ignorés");
@@ -197,6 +201,7 @@ fn name_clashes_and_identical_copies() {
         &AtomicBool::new(false),
         |p| last = Some(p.clone()),
         |_| {},
+        |_| false,
     );
     assert_eq!(report.skipped, [src.join("DCIM/101_FUJI/DSCF0002.RAF")]);
     // La copie identique passée compte quand même dans les octets : la barre finit
@@ -231,6 +236,7 @@ fn only_verified_copies_are_deleted_from_the_card() {
         &AtomicBool::new(false),
         |_| {},
         |_| {},
+        |_| false,
     );
     assert!(offload::delete_sources(&report).is_empty());
     assert!(!src.join("DCIM/100_FUJI/DSCF0001.RAF").exists());
@@ -257,6 +263,7 @@ fn verified_duplicates_are_deleted_too_but_not_history_only_ones() {
         &stop,
         |_| {},
         |_| {},
+        |_| false,
     );
     // Seconde fois, même destination : rien de copié, tout « déjà là » et vérifié.
     let plan = offload::plan(&src, &history).unwrap();
@@ -268,6 +275,7 @@ fn verified_duplicates_are_deleted_too_but_not_history_only_ones() {
         &stop,
         |_| {},
         |_| {},
+        |_| false,
     );
     assert!(report.copied.is_empty());
     assert!(offload::delete_sources(&report).is_empty());
@@ -292,6 +300,7 @@ fn verified_duplicates_are_deleted_too_but_not_history_only_ones() {
         &stop,
         |_| {},
         |_| {},
+        |_| false,
     );
     assert_eq!(report.skipped.len(), 3);
     assert!(report.already_there.is_empty());
@@ -317,6 +326,7 @@ fn cancelling_copies_nothing() {
         &AtomicBool::new(true),
         |_| {},
         |_| {},
+        |_| false,
     );
     assert!(report.cancelled);
     assert!(report.copied.is_empty());
@@ -348,6 +358,7 @@ fn raw_only_leaves_the_jpegs_on_the_card() {
         &AtomicBool::new(false),
         |p| counts.push((p.files_done, p.files_total)),
         |_| {},
+        |_| false,
     );
     assert_eq!(report.copied.len(), 2);
     // L'avancement ne compte que les RAW, un par un (#38).
@@ -399,6 +410,7 @@ fn the_root_is_remembered_and_a_known_card_still_gets_a_name() {
         &stop,
         |_| {},
         |_| {},
+        |_| false,
     );
     let again = offload::plan(&src, &history).unwrap();
     assert_eq!(again.to_copy(&global).count(), 0);
@@ -443,6 +455,7 @@ fn the_session_is_named_after_the_newest_image_to_copy() {
         &AtomicBool::new(false),
         |_| {},
         |_| {},
+        |_| false,
     );
     let again = offload::plan(&src, &history).unwrap();
     assert_eq!(again.to_copy(&with_history()).count(), 2);

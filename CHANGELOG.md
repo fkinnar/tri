@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- **Offloading to a full destination stops and asks** (#438): it used to fail without a
+  word, every following file in error. The copy now stops on the file that did not fit,
+  and the dialog comes back (even from the background) with what is done, what is left
+  and the free room, until "Retry" (after making room) or "Give up" (the rest stays on
+  the card, nothing deleted or ejected). Before the copy, the dialog warns when the room
+  is not enough; on the command line, a message and an error exit code.
 - **Offloading: the session is dated by its newest image, and what was already offloaded
   is skipped** (#437): the suggested folder takes the date of the newest image to copy
   (it took the oldest); what an earlier offload copied anywhere is now left out by

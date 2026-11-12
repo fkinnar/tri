@@ -4,6 +4,13 @@
 
 ## Non publié
 
+- **Un déchargement vers une destination pleine s'arrête et demande** (#438) : il
+  échouait sans rien dire, chaque fichier suivant en erreur. La copie s'arrête désormais
+  sur le fichier qui n'a pas tenu, et la boîte revient (même depuis l'arrière-plan) avec
+  ce qui est fait, ce qui reste et la place libre, jusqu'à « Réessayer » (après avoir fait
+  de la place) ou « Abandonner » (le reste demeure sur la carte, rien n'est supprimé ni
+  éjecté). Avant la copie, la boîte prévient si la place ne suffit pas ; en ligne de
+  commande, un message et un code de sortie d'erreur.
 - **Déchargement : la séance datée par sa plus récente image, et ce qui a déjà été
   déchargé ignoré** (#437) : le dossier proposé prend la date de la plus récente image à
   copier (il prenait la plus ancienne) ; ce qu'un déchargement précédent a copié
