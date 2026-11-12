@@ -1384,6 +1384,12 @@ offload-images-known = { $n ->
     [one] { $n } image
    *[other] { $n } images
 }: { $known } already offloaded, { $new } new
+offload-already-there = , { $n } already in the destination
+offload-to-copy = { " " }; { $n } to copy ({ $mb } MB).
+offload-ignored = { $n ->
+    [one] { $n } other file (video, camera file) is not copied.
+   *[other] { $n } other files (videos, camera files) are not copied.
+}
 offload-root = Root folder
 offload-session = Session folder
 offload-session-tip = Suggested: YYYY-MM-DD_ (date of the newest image to copy), to complete ("_Self") or replace entirely; the year, if wanted, goes in the root folder. Empty: straight into the root folder.
