@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **A development software just written is started anyway** (#435): on Linux, a tool
+  refused for a moment with "Text file busy" is tried again a few times (155 ms at most);
+  it made the CI fail now and then.
 - **One setting for the histogram after adjustments** (#434): the "Histogram after
   adjustments" checkbox, the large histogram's button and `e` now switch the same
   setting and reflect each other; with the checkbox ticked, the button could no longer

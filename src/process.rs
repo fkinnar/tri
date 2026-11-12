@@ -4,7 +4,9 @@
 //! `doc/en/process.md`.
 
 use std::ffi::OsStr;
-use std::process::Command;
+use std::io;
+use std::process::{Child, Command};
+use std::time::Duration;
 
 /// `CREATE_NO_WINDOW` : pas de console pour un programme lancé par une application
 /// graphique (Windows).
@@ -22,6 +24,32 @@ pub fn command(program: impl AsRef<OsStr>) -> Command {
         command.creation_flags(CREATE_NO_WINDOW);
     }
     command
+}
+
+/// Essais de plus quand l'exécutable est « occupé » ([`spawn`]), et l'attente avant le
+/// premier (doublée à chaque essai : 5, 10, 20, 40, 80 ms, 155 ms en tout). Pas un
+/// réglage : une parade à une course du système, pas un potard (`doc/en/settings.md`).
+const BUSY_RETRIES: u32 = 5;
+const BUSY_WAIT: Duration = Duration::from_millis(5);
+
+/// Lance `command`. Un exécutable « occupé » (`ETXTBSY`, Linux : il vient d'être écrit, et
+/// un processus créé au même moment ailleurs dans `tri` a hérité un instant du fichier
+/// ouvert en écriture, jusqu'à son `exec`) est réessayé quelques fois : l'erreur ne dure
+/// que le temps de ce lancement voisin. Vu sur les faux outils des tests, écrits puis
+/// lancés pendant que d'autres tests lancent les leurs (CI Ubuntu, 11/11/2026) ; possible
+/// aussi pour un outil tout juste installé ou extrait (AppImage).
+pub fn spawn(command: &mut Command) -> io::Result<Child> {
+    let mut wait = BUSY_WAIT;
+    for _ in 0..BUSY_RETRIES {
+        match command.spawn() {
+            Err(e) if e.kind() == io::ErrorKind::ExecutableFileBusy => {
+                std::thread::sleep(wait);
+                wait *= 2;
+            }
+            result => return result,
+        }
+    }
+    command.spawn()
 }
 
 /// Vrai si un programme de nom `name` tourne (sans extension : `darktable`) :
@@ -57,6 +85,29 @@ fn tasklist_lists(output: &str, image: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn a_busy_executable_is_launched_once_freed() {
+        // CI Ubuntu, 11/11/2026 : « Text file busy (os error 26) » en lançant un faux
+        // outil que le test venait d'écrire. Ici, le script reste ouvert en écriture
+        // 30 ms : Linux refuse de l'exécuter pendant ce temps (ETXTBSY) ; `spawn` attend.
+        use std::io::Write;
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("tool.sh");
+        let mut file = std::fs::File::create(&script).unwrap();
+        file.write_all(b"#!/bin/sh\nexit 0\n").unwrap();
+        file.flush().unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(30));
+            drop(file);
+        });
+        let status = spawn(&mut command(&script)).unwrap().wait().unwrap();
+        assert!(status.success());
+        release.join().unwrap();
+    }
 
     #[test]
     fn a_program_that_does_not_exist_is_not_running() {

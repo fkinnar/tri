@@ -4,6 +4,9 @@
 
 ## Non publié
 
+- **Un logiciel de développement tout juste écrit se lance quand même** (#435) : sous
+  Linux, un outil refusé un instant avec « Text file busy » est réessayé quelques fois
+  (155 ms au plus) ; ça faisait échouer la CI de temps en temps.
 - **Un seul réglage pour l'histogramme après réglages** (#434) : la case « Histogramme
   après réglages », le bouton du grand histogramme et `e` basculent désormais le même
   réglage et se reflètent ; la case cochée, le bouton ne ramenait plus les données

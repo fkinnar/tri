@@ -813,11 +813,10 @@ fn run_darktable(
     report: &mut Report,
     progress: &mut impl FnMut(usize, usize, &Path),
 ) -> Result<(std::process::ExitStatus, String), DevelopError> {
-    let mut child = cmd
-        .stdin(Stdio::null())
+    cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+        .stderr(Stdio::piped());
+    let mut child = crate::process::spawn(&mut cmd)
         .map_err(|e| DevelopError::Failed(Engine::Darktable, e.to_string()))?;
     // Sorties lues dans des fils à part : darktable ne se bloque jamais sur un tuyau plein.
     let (tx, rx) = std::sync::mpsc::channel();
@@ -1582,7 +1581,7 @@ fn rapidraw_one(
         .stdin(Stdio::null())
         .stdout(messages.try_clone().map_err(|e| failed(&e))?)
         .stderr(messages);
-    let child = command.spawn().map_err(|e| {
+    let child = crate::process::spawn(&mut command).map_err(|e| {
         crate::develop::tool_failed(
             Engine::RapidRaw,
             Some(image),

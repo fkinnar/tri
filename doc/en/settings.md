@@ -161,7 +161,8 @@ the shortcuts, `[keys]`, have been configurable for a long time).
 
 - The scheduler priorities (classes 0 to 5): that is the algorithm, not a knob. Likewise
   the weights of the fuzzy search (`fuzzy`) and the number of lock attempts on a volume
-  to eject on Windows (`places`, after Microsoft's sample).
+  to eject on Windows (`places`, after Microsoft's sample), and the attempts to start a
+  "busy" executable (`process::spawn`, a guard against a system race).
 - The polling interval of an external program at work (`darktable-cli`, RapidRAW: 50 ms,
   then 20 ms for its last lines): to make configurable only if it weighed, which it does
   not.
