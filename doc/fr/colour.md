@@ -155,6 +155,9 @@ Chaque conversion est construite une fois par couple d'espaces et gardée
 
 ## Vérifier à la main : les mires
 
+Pour les testeurs : [colour-check.md](colour-check.md) (fiche pas à pas, sans compiler) ;
+les mires JPEG et PNG sont dans [`doc/charts`](../charts).
+
 ```
 cargo run --release --example colour_charts -- <dossier de sortie> [--side N] [--check-only]
 ```
