@@ -1123,8 +1123,11 @@ pub fn broom(painter: &Painter, rect: Rect, color: Color32) {
 /// Combinaison des couleurs du filtre : ∧ (toutes, `all`) ou ∨ (l'une) ; dessinés en
 /// traits (les polices d'egui n'ont pas ces signes ; 12/11/2026).
 pub fn and_or(painter: &Painter, rect: Rect, all: bool, color: Color32) {
-    let r = rect.shrink(rect.width() * 0.25);
-    let stroke = Stroke::new((rect.width() * 0.09).max(1.2), color);
+    // De la taille du « ≥ » devant les étoiles (retour du 12/11/2026 : d'abord la moitié
+    // du bouton, trop grand à côté).
+    let side = rect.width();
+    let r = Rect::from_center_size(rect.center(), vec2(side * 0.28, side * 0.32));
+    let stroke = Stroke::new((side * 0.06).max(1.0), color);
     let (top, bottom) = if all {
         (r.center_top(), [r.left_bottom(), r.right_bottom()])
     } else {
