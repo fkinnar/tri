@@ -15441,6 +15441,23 @@ impl TriApp {
                 }
             }
             ui.separator();
+            // Plusieurs couleurs par photo : toutes (∧) ou l'une (∨) des couleurs choisies,
+            // devant les pastilles comme « ≥ = ≤ » devant les étoiles (retours du
+            // 12/11/2026) ; avec une seule couleur par photo, c'est forcément « ou ».
+            if self.settings.xmp.multiple_colors {
+                let name = if self.colors_all {
+                    t!("filter-colors-all-tip")
+                } else {
+                    t!("filter-colors-any-tip")
+                };
+                let tip = format!("{name}\n{}", self.action_tip(Action::FilterColorsAll));
+                let (rect, op) = marks::clickable_named(ui, size, &name, &tip);
+                let color = ui.style().interact(&op).fg_stroke.color;
+                marks::and_or(ui.painter(), rect, self.colors_all, color);
+                if op.clicked() {
+                    clicked.push(Action::FilterColorsAll);
+                }
+            }
             for color in Color::ALL {
                 let tip = self.action_tip(Action::FilterColor(color));
                 let (rect, response) = marks::clickable(ui, size, &tip);
@@ -15459,25 +15476,6 @@ impl TriApp {
                 );
                 if response.clicked() {
                     clicked.push(Action::FilterColor(color));
-                }
-            }
-            // Plusieurs couleurs par photo : toutes (et) ou l'une (ou) des couleurs choisies
-            // (retour du 12/11/2026) ; avec une seule, c'est forcément « ou ».
-            if self.settings.xmp.multiple_colors {
-                let (symbol, name) = if self.colors_all {
-                    (t!("filter-colors-all"), t!("filter-colors-all-tip"))
-                } else {
-                    (t!("filter-colors-any"), t!("filter-colors-any-tip"))
-                };
-                let op = ui
-                    .add(egui::Button::new(symbol).small().frame(false))
-                    .on_hover_text(format!(
-                        "{name}\n{}",
-                        self.action_tip(Action::FilterColorsAll)
-                    ))
-                    .on_hover_cursor(egui::CursorIcon::PointingHand);
-                if op.clicked() {
-                    clicked.push(Action::FilterColorsAll);
                 }
             }
             ui.separator();
@@ -28916,7 +28914,7 @@ mod tests {
         use crate::actions::Scope;
         let (mut h, _dir) = harness();
         h.state_mut().metadata_panel = true;
-        run_until(&mut h, |app| app.meta_rows.len() >= 3);
+        meta_rows_settled(&mut h, 3);
         let picked = |h: &Harness<'_, TriApp>| -> Vec<usize> {
             h.state().meta_selection().into_iter().collect()
         };
@@ -29011,7 +29009,7 @@ mod tests {
         // cliquée, en gardant ce qui était sélectionné ; Maj+clic seul la remplace.
         let (mut h, _dir) = harness();
         h.state_mut().metadata_panel = true;
-        run_until(&mut h, |app| app.meta_rows.len() >= 4);
+        meta_rows_settled(&mut h, 4);
         let picked = |app: &TriApp| -> Vec<usize> { app.meta_selection().into_iter().collect() };
         // Repris tant que l'état voulu n'est pas atteint (clics parfois perdus en CI).
         let click = |h: &mut Harness<'_, TriApp>, i: usize, m: Modifiers, want: &[usize]| {
@@ -29065,7 +29063,7 @@ mod tests {
         // retirait « Nom ».
         let (mut h, _dir) = harness();
         h.state_mut().metadata_panel = true;
-        run_until(&mut h, |app| app.meta_rows.len() >= 3);
+        meta_rows_settled(&mut h, 3);
         h.state_mut().select_all_metadata();
         h.run_steps(2);
         // Ce que Ctrl+A a pris : des lignes peuvent encore arriver ensuite (CI Windows du
@@ -29125,6 +29123,31 @@ mod tests {
     /// Laisse une boîte ouverte au centre se poser (`[gui.dialogs] centring_frames`) avant
     /// d'y cliquer : un humain ne clique pas dans ses toutes premières images, et sous
     /// Linux (autres polices) son recentrage déplaçait le bouton sous le clic simulé.
+    /// Attend que le panneau des métadonnées ait au moins `min` lignes et qu'elles ne
+    /// bougent plus (mêmes libellés pendant plusieurs images) : elles arrivent en plusieurs
+    /// temps, et une ligne insérée au-dessus décalait celle qu'un test allait cliquer (CI
+    /// Windows du 12/11/2026 : Ctrl+clic sur la ligne 1, la 2 sélectionnée).
+    fn meta_rows_settled(h: &mut Harness<'_, TriApp>, min: usize) {
+        const STABLE: usize = 10;
+        let labels = |app: &TriApp| -> Vec<String> {
+            app.meta_rows.iter().map(|r| r.label.clone()).collect()
+        };
+        let deadline = Instant::now() + Duration::from_secs(60);
+        let mut last = labels(h.state());
+        let mut same = 0;
+        while same < STABLE || last.len() < min {
+            assert!(
+                Instant::now() < deadline,
+                "lignes des métadonnées jamais stables"
+            );
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+            let now = labels(h.state());
+            same = if now == last { same + 1 } else { 0 };
+            last = now;
+        }
+    }
+
     fn settle_dialog(h: &mut Harness<'_, TriApp>) {
         h.run_steps(GuiSettings::default().dialogs.centring_frames as usize + 2);
     }
@@ -32235,8 +32258,9 @@ mod tests {
         use tri::xmp::Color;
         let (mut h, _dir) = harness();
         h.run_steps(3);
+        let any = "L'une des couleurs choisies (ou)";
         assert!(
-            h.query_by_label("ou").is_none(),
+            h.query_by_label(any).is_none(),
             "une couleur par photo : pas de choix"
         );
         h.state_mut().settings.xmp.multiple_colors = true;
@@ -32253,8 +32277,8 @@ mod tests {
             .perform(&ctx, Action::FilterColor(Color::Green));
         h.run_steps(2);
         assert_eq!(h.state().files.len(), 2, "rouge ou vert");
-        assert!(h.query_by_label("ou").is_some(), "le choix, dans la barre");
-        h.get_by_label("ou").click();
+        assert!(h.query_by_label(any).is_some(), "le choix, dans la barre");
+        h.get_by_label(any).click();
         h.run_steps(2);
         assert_eq!(h.state().files.len(), 1, "rouge et vert");
         assert_eq!(h.state().files[0].path, files[0]);

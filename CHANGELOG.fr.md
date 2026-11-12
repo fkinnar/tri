@@ -5,14 +5,14 @@
 ## Non publié
 
 - **Filtre de couleurs : toutes les couleurs ou l'une d'elles** (#444) : avec plusieurs
-  couleurs par photo (`[xmp] multiple_colors`), un bouton « ou » / « et » après les
+  couleurs par photo (`[xmp] multiple_colors`), un bouton ∨ / ∧ devant les
   pastilles de la barre des filtres demande les photos qui portent toutes les couleurs
   choisies plutôt que l'une d'elles (action `core.filter.colors.all`, sans raccourci par
   défaut).
 - **Le résumé du dossier filtre** (#443, partie de #388) : un clic sur une ligne de « Ce
   dossier » montre ce filtre seul (une extension, les développements d'un logiciel, sans
   note, avec des étoiles, acceptées, rejetées, avec un libellé couleur ou une couleur,
-  en conflit), et la ligne s'allume ; un
+  en conflit), et la ligne s'allume, du fond du dossier ouvert ; un
   second clic, ou « Photos », retire tous les filtres.
 - **Résumé du dossier ouvert** (#442, partie de #388) : une section « Ce dossier » en bas
   du panneau des dossiers, repliée par défaut, compte les photos par type, les paires

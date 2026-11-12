@@ -1120,6 +1120,20 @@ pub fn broom(painter: &Painter, rect: Rect, color: Color32) {
     }
 }
 
+/// Combinaison des couleurs du filtre : ∧ (toutes, `all`) ou ∨ (l'une) ; dessinés en
+/// traits (les polices d'egui n'ont pas ces signes ; 12/11/2026).
+pub fn and_or(painter: &Painter, rect: Rect, all: bool, color: Color32) {
+    let r = rect.shrink(rect.width() * 0.25);
+    let stroke = Stroke::new((rect.width() * 0.09).max(1.2), color);
+    let (top, bottom) = if all {
+        (r.center_top(), [r.left_bottom(), r.right_bottom()])
+    } else {
+        (r.center_bottom(), [r.left_top(), r.right_top()])
+    };
+    painter.line_segment([bottom[0], top], stroke);
+    painter.line_segment([top, bottom[1]], stroke);
+}
+
 /// Flèche circulaire (actualiser) dans `rect` : arc de cercle ouvert en haut à droite,
 /// pointe de flèche au bout.
 pub fn refresh(painter: &Painter, rect: Rect, color: Color32) {

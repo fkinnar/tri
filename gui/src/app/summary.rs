@@ -5,7 +5,8 @@
 //! cliquer une ligne ne change pas les autres.
 //!
 //! Chaque ligne est un filtre (12/11/2026) : un clic montre **ce filtre seul**, à la place
-//! des autres ; un second clic sur la ligne allumée les retire tous. Pas encore de
+//! des autres ; la ligne allumée a le fond du dossier ouvert ; un second clic sur elle les
+//! retire tous. Pas encore de
 //! Ctrl+clic pour combiner (avec les filtres complexes, #138). La ligne des paires n'est
 //! pas un filtre tant que les paires ne sont pas regroupées (#392).
 
@@ -187,13 +188,15 @@ impl TriApp {
             return;
         }
         let rows = self.summary_rows(ui.visuals());
-        let accent = marks::accent_mark(ui.ctx());
         let mut clicked: Option<Line> = None;
         egui::Grid::new("folder_summary")
             .num_columns(2)
             .spacing(vec2(12.0, 2.0))
             .show(ui, |ui| {
                 for row in rows {
+                    // Allumée (le filtre montré) : le même fond que le dossier ouvert dans
+                    // l'arborescence (retour du 12/11/2026 : l'accent souligné se confondait
+                    // avec les titres).
                     let on = row.line.as_ref().is_some_and(|l| self.summary_line_on(l));
                     let mut text = egui::RichText::new(&row.label);
                     let mut count = egui::RichText::new(row.count.to_string());
@@ -201,25 +204,31 @@ impl TriApp {
                         text = text.color(c);
                         count = count.color(c);
                     }
-                    // Allumée : le filtre montré.
-                    if on {
-                        text = text.color(accent).underline();
-                        count = count.color(accent);
-                    }
-                    let sense = if row.line.is_some() {
-                        Sense::click()
-                    } else {
-                        Sense::hover()
-                    };
+                    let clickable = row.line.is_some();
+                    // Une ligne sans filtre, alignée sur les autres (marge des boutons).
+                    let pad = ui.spacing().button_padding.x;
                     let label = ui
                         .horizontal(|ui| {
                             if row.indent {
                                 ui.add_space(12.0);
                             }
-                            ui.add(egui::Label::new(text).sense(sense))
+                            if clickable {
+                                ui.selectable_label(on, text)
+                            } else {
+                                ui.add_space(pad);
+                                ui.add(egui::Label::new(text).sense(Sense::hover()))
+                            }
                         })
                         .inner;
-                    let number = ui.add(egui::Label::new(count).sense(sense));
+                    let number = if clickable {
+                        ui.selectable_label(on, count)
+                    } else {
+                        ui.horizontal(|ui| {
+                            ui.add_space(pad);
+                            ui.add(egui::Label::new(count).sense(Sense::hover()))
+                        })
+                        .inner
+                    };
                     let tip = row.tip.clone().or_else(|| {
                         row.line.as_ref().map(|_| {
                             if on {
@@ -233,12 +242,8 @@ impl TriApp {
                         Some(tip) => (label.on_hover_text(tip), number.on_hover_text(tip)),
                         None => (label, number),
                     };
-                    if row.line.is_some() {
-                        let label = label.on_hover_cursor(egui::CursorIcon::PointingHand);
-                        let number = number.on_hover_cursor(egui::CursorIcon::PointingHand);
-                        if label.clicked() || number.clicked() {
-                            clicked = row.line.clone();
-                        }
+                    if clickable && (label.clicked() || number.clicked()) {
+                        clicked = row.line.clone();
                     }
                     ui.end_row();
                 }
@@ -250,7 +255,11 @@ impl TriApp {
             Some(root) => t!("summary-data-disk", path = root.display().to_string()),
             None => t!("summary-data-machine"),
         };
-        ui.weak(place).on_hover_text(t!("folder-menu-cache-tip"));
+        let pad = ui.spacing().button_padding.x;
+        ui.horizontal(|ui| {
+            ui.add_space(pad);
+            ui.weak(place).on_hover_text(t!("folder-menu-cache-tip"));
+        });
         if let Some(line) = clicked {
             self.summary_click(&line);
         }
