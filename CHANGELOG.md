@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Checking colours** (#430): a sheet for testers ([doc/en/colour-check.md](doc/en/colour-check.md))
+  and the colour charts in `doc/charts`, to check in ten minutes that `tri` displays
+  colours right on a calibrated or wide-gamut screen, without building anything.
 - **Settings applied at once** (#429): `[adjust]` (automatic exposure and balance),
   `[sidecars]` and `[watch]` changed in the settings window now apply immediately; they
   used to wait for the next launch.

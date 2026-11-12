@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Vérifier les couleurs** (#430) : une fiche pour les testeurs
+  ([doc/fr/colour-check.md](doc/fr/colour-check.md)) et les mires de couleur dans
+  `doc/charts`, pour vérifier en dix minutes que `tri` affiche juste sur un écran calibré
+  ou large gamut, sans rien compiler.
 - **Réglages appliqués tout de suite** (#429) : `[adjust]` (exposition et balance
   automatiques), `[sidecars]` et `[watch]` changés dans la fenêtre de réglages
   s'appliquent immédiatement ; ils attendaient le prochain lancement.

@@ -54,6 +54,11 @@ box:
 
 ![Help](../manual-images/en/help.jpg)
 
+## Colours
+
+Calibrated or wide-gamut screen? The [Checking colours](colour-check.md) sheet shows in
+ten minutes whether `tri` displays right on your machine, with charts provided.
+
 ## Your feedback
 
 What helps us most:
