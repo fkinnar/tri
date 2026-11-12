@@ -37,6 +37,19 @@ besoins de tous, pas seulement les siens.
   n'importe où ; un fichier y est identifié par nom, taille et date (les numéros
   repartent à zéro : le nom seul ne suffit pas). L'historique est tenu dans tous les
   cas.
+- **Destination pleine** (retour du 12/11/2026 : le déchargement échouait sans rien
+  dire, chaque fichier suivant en erreur). Une copie qui échoue faute de place
+  (`is_out_of_space` : disque plein ou quota dépassé) n'est pas une erreur ordinaire :
+  `run` s'arrête sur ce fichier et appelle `full` avec un `OutOfSpace` (fichiers déjà
+  copiés, fichiers et octets restant à copier, place libre, `free_space` : `statvfs`
+  sous macOS et Linux, `GetDiskFreeSpaceExW` sous Windows). `true` réessaie le **même**
+  fichier, `false` arrête là (`Report::out_of_space`) : le reste demeure sur la carte, ni
+  copié ni en erreur, et rien n'est supprimé de la carte ni éjecté. Dans l'interface, la
+  boîte revient au premier plan (même en arrière-plan) avec ce qui est fait, ce qui reste
+  et la place libre, et y reste sans limite de temps (Échap ne la ferme pas) jusqu'à
+  « Réessayer » (après avoir fait de la place) ou « Abandonner ». Avant la copie, la boîte
+  prévient si la place libre ne suffit pas. En ligne de commande, pas de question : un
+  message, l'arrêt, pas d'éjection, et un code de sortie d'erreur.
 - **Vérification** (`[offload] verify`) : empreinte BLAKE3 calculée pendant la copie,
   puis copie relue et comparée ; date de modification d'origine conservée ; écriture
   atomique (fichier temporaire caché, puis renommage).

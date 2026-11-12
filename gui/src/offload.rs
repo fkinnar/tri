@@ -5,10 +5,10 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self, Receiver, Sender};
 
 use eframe::egui::{self, Pos2};
-use tri::offload::{self, History, OffloadSettings, Plan, Progress, Report};
+use tri::offload::{self, History, OffloadSettings, OutOfSpace, Plan, Progress, Report};
 use tri::scheduler::Scheduler;
 
 /// De quoi calculer les aperçus de la séance pendant la copie (issue n° 40) : un
@@ -79,6 +79,8 @@ pub enum Request {
 
 enum Message {
     Progress(Progress),
+    /// Destination pleine : la copie attend la réponse (réessayer ou abandonner).
+    Full(OutOfSpace),
     Done(Report),
 }
 
@@ -94,6 +96,9 @@ enum Stage {
         root_field: crate::path_field::PathField,
         folder: String,
         error: Option<String>,
+        /// Place libre dans la destination : (destination, octets), relue quand elle
+        /// change (avertissement avant la copie).
+        free: Option<(PathBuf, Option<u64>)>,
         /// Déjà présentes dans la destination : (destination, RAW seulement, (nombre,
         /// octets)), recalculé seulement quand la destination ou le choix RAW changent.
         present: Option<(PathBuf, bool, (usize, u64))>,
@@ -103,6 +108,10 @@ enum Stage {
         rx: Receiver<Message>,
         progress: Progress,
         cancel: Arc<AtomicBool>,
+        /// Destination pleine : la question posée, en attente de réponse ([`Message::Full`]).
+        full: Option<OutOfSpace>,
+        /// Réponse à la copie : `true` réessayer, `false` abandonner.
+        answer: Sender<bool>,
     },
     /// Bilan.
     Done {
@@ -324,7 +333,7 @@ impl OffloadDialog {
         }
         *finished = true;
         let settings = &self.settings;
-        let complete = !report.cancelled;
+        let complete = !report.cancelled && !report.out_of_space;
         if complete && settings.delete_after && !report.copied.is_empty() {
             let mut failed = offload::delete_sources(report);
             if settings.raw_only && settings.delete_left {
@@ -353,12 +362,38 @@ impl OffloadDialog {
         if report.cancelled {
             summary.push_str(&t!("offload-summary-cancelled"));
         }
+        if report.out_of_space {
+            summary.push_str(&t!("offload-summary-full"));
+        }
         Some(Request::Finished {
             open,
             offer,
             eject,
             summary,
         })
+    }
+
+    /// Tests : une copie en arrière-plan qui vient de trouver la destination pleine
+    /// ([`Message::Full`], comme `run` l'envoie) ; renvoie de quoi lire la réponse.
+    #[cfg(test)]
+    pub fn simulate_full(&mut self, stop: OutOfSpace) -> Receiver<bool> {
+        let (tx, rx) = mpsc::channel();
+        let (answer, answers) = mpsc::channel();
+        let _ = tx.send(Message::Full(stop));
+        self.stage = Stage::Running {
+            rx,
+            progress: Progress::default(),
+            cancel: Arc::new(AtomicBool::new(false)),
+            full: None,
+            answer,
+        };
+        self.hidden = true;
+        answers
+    }
+
+    /// Vrai quand la copie attend la réponse à « destination pleine ».
+    pub fn asks_full(&self) -> bool {
+        matches!(self.stage, Stage::Running { full: Some(_), .. })
     }
 
     /// Vrai pendant la copie (la fermer l'interrompt).
@@ -384,6 +419,7 @@ impl OffloadDialog {
                                 root_field: Default::default(),
                                 folder,
                                 error: None,
+                                free: None,
                                 present: None,
                             }
                         }
@@ -391,10 +427,18 @@ impl OffloadDialog {
                     };
                 }
             }
-            Stage::Running { rx, progress, .. } => {
+            Stage::Running {
+                rx, progress, full, ..
+            } => {
                 for message in rx.try_iter() {
                     match message {
                         Message::Progress(p) => *progress = p,
+                        // Destination pleine : la boîte revient (même en arrière-plan) et
+                        // reste jusqu'à la réponse, sans limite de temps.
+                        Message::Full(stop) => {
+                            *full = Some(stop);
+                            self.hidden = false;
+                        }
                         Message::Done(report) => {
                             self.stage = Stage::Done {
                                 report,
@@ -438,6 +482,7 @@ impl OffloadDialog {
             let _ = offload::remember_root(data, root);
         }
         let (tx, rx) = mpsc::channel();
+        let (answer, answers) = mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
         let (plan, mut history) = (plan.clone(), history.take().unwrap_or_default());
         let (settings, stop, repaint) = (self.settings.clone(), cancel.clone(), ctx.clone());
@@ -452,6 +497,7 @@ impl OffloadDialog {
         std::thread::spawn(move || {
             let progress_tx = tx.clone();
             let progress_ctx = repaint.clone();
+            let (full_tx, full_ctx) = (tx.clone(), repaint.clone());
             if let (Some(root), Some(cache)) = (&keep_at, &keep_cache) {
                 // Un échec (disque en lecture seule) laisse tout sur la machine.
                 let _ = std::fs::create_dir_all(&destination)
@@ -479,6 +525,23 @@ impl OffloadDialog {
                         }]);
                     }
                 },
+                // Destination pleine : on attend la réponse de l'utilisateur (Interrompre
+                // ou la boîte fermée valent abandon).
+                |full| {
+                    let _ = full_tx.send(Message::Full(full.clone()));
+                    full_ctx.request_repaint();
+                    loop {
+                        match answers.recv_timeout(std::time::Duration::from_millis(100)) {
+                            Ok(retry) => return retry,
+                            Err(mpsc::RecvTimeoutError::Disconnected) => return false,
+                            Err(mpsc::RecvTimeoutError::Timeout) => {
+                                if stop.load(Ordering::Relaxed) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                },
             );
             let _ = tx.send(Message::Done(report));
             repaint.request_repaint();
@@ -487,6 +550,8 @@ impl OffloadDialog {
             rx,
             progress: Progress::default(),
             cancel,
+            full: None,
+            answer,
         };
     }
 
@@ -544,6 +609,7 @@ impl OffloadDialog {
                         root_field,
                         folder,
                         error,
+                        free,
                         present,
                         ..
                     } => {
@@ -605,6 +671,25 @@ impl OffloadDialog {
                             });
                         if let Some(dest) = &dest {
                             ui.weak(t!("offload-destination", path = dest.display().to_string()));
+                            // Pas assez de place : dit avant la copie (elle peut encore
+                            // passer, des images étant peut-être déjà là, ou de la place
+                            // faite entre-temps).
+                            if free.as_ref().is_none_or(|(d, _)| d != dest) {
+                                *free = Some((dest.clone(), offload::free_space(dest).ok()));
+                            }
+                            let needed = plan.bytes(settings) - there_bytes;
+                            if let Some((_, Some(room))) = free
+                                && needed > *room
+                            {
+                                ui.colored_label(
+                                    ui.visuals().warn_fg_color,
+                                    t!(
+                                        "offload-not-enough-room",
+                                        free = megabytes(*room),
+                                        mb = megabytes(needed)
+                                    ),
+                                );
+                            }
                         }
                         let keep_here = dest
                             .as_deref()
@@ -658,6 +743,43 @@ impl OffloadDialog {
                         });
                     }
                     Stage::Running {
+                        full: Some(stop),
+                        answer,
+                        ..
+                    } => {
+                        // Destination pleine (12/11/2026 : l'échec passait inaperçu) :
+                        // ce qui est fait, ce qui reste, et le choix, sans limite de temps.
+                        ui.colored_label(ui.visuals().error_fg_color, t!("offload-full-title"));
+                        ui.label(t!(
+                            "offload-full-done",
+                            n = stop.copied,
+                            path = stop.destination.display().to_string()
+                        ));
+                        ui.label(t!(
+                            "offload-full-left",
+                            n = stop.left,
+                            mb = megabytes(stop.needed),
+                            free = stop.free.map_or_else(|| "?".to_string(), megabytes)
+                        ));
+                        ui.weak(t!("offload-full-what"));
+                        ui.add_space(6.0);
+                        let mut reply = None;
+                        ui.horizontal(|ui| {
+                            if ui.button(t!("offload-full-retry")).clicked() {
+                                reply = Some(true);
+                            }
+                            if ui.button(t!("offload-full-give-up")).clicked() {
+                                reply = Some(false);
+                            }
+                        });
+                        if let Some(retry) = reply {
+                            let _ = answer.send(retry);
+                            if let Stage::Running { full, .. } = &mut self.stage {
+                                *full = None;
+                            }
+                        }
+                    }
+                    Stage::Running {
                         progress, cancel, ..
                     } => {
                         let fraction = if progress.bytes_total > 0 {
@@ -704,6 +826,9 @@ impl OffloadDialog {
                             text.push_str(&t!("offload-done-cancelled"));
                         }
                         ui.label(text);
+                        if report.out_of_space {
+                            ui.colored_label(ui.visuals().error_fg_color, t!("offload-done-full"));
+                        }
                         if !report.left.is_empty() {
                             ui.weak(t!("offload-left", n = report.left.len()));
                         }
@@ -747,10 +872,12 @@ impl OffloadDialog {
         if start {
             self.start(ctx);
         }
-        // Échap ou clic à côté : fermer ; pendant la copie, passer en arrière-plan.
-        if background || (modal.should_close() && self.is_running()) {
+        // Échap ou clic à côté : fermer ; pendant la copie, passer en arrière-plan ; pas
+        // tant que la question « destination pleine » attend sa réponse.
+        let asking = self.asks_full();
+        if !asking && (background || (modal.should_close() && self.is_running())) {
             self.hidden = true;
-        } else if request.is_none() && modal.should_close() {
+        } else if !asking && request.is_none() && modal.should_close() {
             request = Some(Request::Close);
         }
         request

@@ -29497,6 +29497,75 @@ mod tests {
     }
 
     #[test]
+    fn a_full_destination_brings_the_offload_back_until_answered() {
+        // 12/11/2026 : destination pleine, le déchargement échouait sans rien dire. La copie
+        // (ici en arrière-plan) s'arrête, la boîte revient avec ce qui est fait et ce qui
+        // reste, et y reste, sans limite de temps, jusqu'à « Réessayer » ou « Abandonner ».
+        let (mut h, dir) = harness();
+        let card = dir.path().join("CARTE");
+        std::fs::create_dir_all(&card).unwrap();
+        let ctx = h.ctx.clone();
+        let mut dialog = OffloadDialog::new(
+            card,
+            CENTRED,
+            h.state().settings.offload.clone(),
+            None,
+            &ctx,
+        );
+        let answers = dialog.simulate_full(tri::offload::OutOfSpace {
+            destination: dir.path().join("dest"),
+            file: dir.path().join("CARTE/B.RAF"),
+            copied: 12,
+            left: 30,
+            needed: 900_000_000,
+            free: Some(4_000_000),
+        });
+        h.state_mut().offload = Some(dialog);
+        h.run_steps(3);
+        let dialog = h.state().offload.as_ref().expect("toujours là");
+        assert!(!dialog.is_hidden(), "revenue au premier plan");
+        assert!(dialog.asks_full());
+        assert!(
+            h.query_by_label("Plus de place dans la destination")
+                .is_some()
+        );
+        assert!(
+            h.query_by_label_contains("12 fichiers déjà copiés")
+                .is_some()
+                && h.query_by_label_contains(
+                    "30 fichiers restent à copier (900,0 Mo) ; 4,0 Mo libres"
+                )
+                .is_some()
+        );
+        // Échap ne la ferme pas : il faut choisir.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.run_steps(3);
+        assert!(h.state().offload.as_ref().is_some_and(|d| !d.is_hidden()));
+        click_settled(&mut h, "Réessayer");
+        h.run_steps(2);
+        assert_eq!(answers.try_recv(), Ok(true), "réessayer");
+        assert!(!h.state().offload.as_ref().unwrap().asks_full());
+        // Toujours pleine : la question revient ; « Abandonner » arrête la copie.
+        let answers =
+            h.state_mut()
+                .offload
+                .as_mut()
+                .unwrap()
+                .simulate_full(tri::offload::OutOfSpace {
+                    destination: dir.path().join("dest"),
+                    file: dir.path().join("CARTE/B.RAF"),
+                    copied: 12,
+                    left: 30,
+                    needed: 900_000_000,
+                    free: Some(0),
+                });
+        h.run_steps(3);
+        click_settled(&mut h, "Abandonner");
+        h.run_steps(2);
+        assert_eq!(answers.try_recv(), Ok(false), "abandonner");
+    }
+
+    #[test]
     fn an_offload_can_keep_tri_s_data_with_the_session() {
         // Issue n° 378 : case cochée, la séance garde cache et données de tri.
         let (mut h, dir) = harness();

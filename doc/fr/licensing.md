@@ -55,8 +55,10 @@ envoi par AirDrop (feuille de partage, `tri::send`), et `objc2-quartz-core`,
 `objc2-core-graphics` et `objc2-core-foundation` — macOS, espace couleur de la fenêtre
 (`display`) —, même projet (madsmtm/objc2, actif),
 déjà présents par winit et wgpu — sous Zlib OR Apache-2.0 OR MIT ; `x11rb` — Linux, profil de l'écran publié par colord (`display`), déjà présent par
-winit — sous MIT OR Apache-2.0 ; `windows-sys` — Windows,
-éjection d'un volume (`places::eject`) et profil de l'écran (`display`), Microsoft (microsoft/windows-rs, très actif),
+winit — sous MIT OR Apache-2.0 ; `libc` — macOS et Linux, place libre d'un disque
+(`offload::free_space`), rust-lang/libc, très actif, déjà présent par socket2, mio,
+turbojpeg… — sous MIT OR Apache-2.0 ; `windows-sys` — Windows,
+éjection d'un volume (`places::eject`), profil de l'écran (`display`) et place libre d'un disque (`offload::free_space`), Microsoft (microsoft/windows-rs, très actif),
 déjà présent par winit et d'autres — sous MIT OR Apache-2.0 ; `toml_edit` — fenêtre de
 réglages : modifier le fichier sans perdre commentaires ni mise en page, mêmes
 mainteneurs que `toml` (toml-rs), très actif, déjà présent en dépendance indirecte — sous

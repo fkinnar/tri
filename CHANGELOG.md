@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- **Offloading to a full destination stops and asks** (#438): it used to fail without a
+  word, every following file in error. The copy now stops on the file that did not fit,
+  and the dialog comes back (even from the background) with what is done, what is left
+  and the free room, until "Retry" (after making room) or "Give up" (the rest stays on
+  the card, nothing deleted or ejected). Before the copy, the dialog warns when the room
+  is not enough; on the command line, a message and an error exit code.
 - **A known folder stays quick when its cache is partly redone** (#436): what is still
   cached (grouping signatures, sharpness, exposure, a 1:1) is delivered at once instead of
   waiting behind the thumbnails being recomputed, so the stacks form right away after a

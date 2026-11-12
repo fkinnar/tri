@@ -759,6 +759,24 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
                 copies.push(file);
             }
         },
+        // Destination pleine : pas de question en ligne de commande, on s'arrête en le
+        // disant (le reste est sur la carte).
+        |full| {
+            println!();
+            eprintln!(
+                "{}",
+                t!(
+                    "cli-offload-out-of-space",
+                    path = full.destination.display().to_string(),
+                    left = full.left,
+                    mb = format!("{:.0}", full.needed as f64 / 1e6),
+                    free = full
+                        .free
+                        .map_or("?".to_string(), |f| format!("{:.0}", f as f64 / 1e6))
+                )
+            );
+            false
+        },
     );
     println!();
     for (file, error) in &report.errors {
@@ -794,7 +812,8 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
             eprintln!("{}\t{} : {e}", t!("cli-not-deleted"), file.display());
         }
     }
-    if args.eject {
+    // Arrêté faute de place : la carte garde ce qui reste à copier, on ne l'éjecte pas.
+    if args.eject && !report.out_of_space {
         match tri::places::eject(card, &settings.places) {
             Ok(()) => println!("{}", t!("cli-ejected")),
             Err(e) => eprintln!("{}", t!("cli-eject-failed", error = e)),
@@ -803,7 +822,9 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
     if let Some(work) = work {
         follow_previews(settings, work, &copies)?;
     }
-    if report.errors.is_empty() {
+    if report.out_of_space {
+        Err(t!("cli-offload-stopped-full").into())
+    } else if report.errors.is_empty() {
         Ok(())
     } else {
         Err(t!("cli-some-not-copied").into())

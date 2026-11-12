@@ -4,6 +4,13 @@
 
 ## Non publié
 
+- **Un déchargement vers une destination pleine s'arrête et demande** (#438) : il
+  échouait sans rien dire, chaque fichier suivant en erreur. La copie s'arrête désormais
+  sur le fichier qui n'a pas tenu, et la boîte revient (même depuis l'arrière-plan) avec
+  ce qui est fait, ce qui reste et la place libre, jusqu'à « Réessayer » (après avoir fait
+  de la place) ou « Abandonner » (le reste demeure sur la carte, rien n'est supprimé ni
+  éjecté). Avant la copie, la boîte prévient si la place ne suffit pas ; en ligne de
+  commande, un message et un code de sortie d'erreur.
 - **Un dossier connu reste rapide quand son cache est en partie refait** (#436) : ce qui
   est encore en cache (empreintes de regroupement, netteté, exposition, un 1:1) est livré
   tout de suite au lieu d'attendre derrière les vignettes recalculées ; les piles se

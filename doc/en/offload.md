@@ -35,6 +35,18 @@ everyone's needs, not just his.
   `[offload] history`) skips what has already been offloaded anywhere; a file is
   identified there by name, size and date (numbers restart at zero: the name alone is not
   enough). The history is kept in every case.
+- **Full destination** (feedback from 2026-11-12: the offload failed without a word,
+  every following file in error). A copy that fails for lack of room (`is_out_of_space`:
+  disk full or quota exceeded) is not an ordinary error: `run` stops on that file and
+  calls `full` with an `OutOfSpace` (files already copied, files and bytes still to copy,
+  free room, `free_space`: `statvfs` on macOS and Linux, `GetDiskFreeSpaceExW` on
+  Windows). `true` retries the **same** file, `false` stops there
+  (`Report::out_of_space`): the rest stays on the card, neither copied nor in error, and
+  nothing is deleted from the card nor ejected. In the interface, the dialog comes back to
+  the front (even in the background) with what is done, what is left and the free room,
+  and stays, without a time limit (Escape does not close it), until "Retry" (after making
+  room) or "Give up". Before the copy, the dialog warns if the free room is not enough. On
+  the command line, no question: a message, the stop, no eject, and an error exit code.
 - **Verification** (`[offload] verify`): BLAKE3 hash computed during the copy, then the
   copy is read back and compared; original modification date preserved; atomic write
   (hidden temporary file, then rename).

@@ -3728,6 +3728,7 @@ dependencies = [
  "image",
  "img-parts",
  "kamadak-exif",
+ "libc",
  "libheif-rs",
  "mdns-sd",
  "moxcms",

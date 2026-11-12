@@ -223,6 +223,8 @@ cli-already-there = { $n } images déjà dans la destination (ignorées si ident
 cli-to-copy = à copier
 cli-offload-progress = { $done }/{ $total } fichiers   { $mb }/{ $total_mb } Mo
 cli-error = erreur
+cli-offload-out-of-space = plus de place dans { $path } : { $left } fichiers restent à copier ({ $mb } Mo, { $free } Mo libres) ; arrêt, ils restent sur la carte
+cli-offload-stopped-full = déchargement arrêté : destination pleine
 cli-offload-done = { $verified ->
     [yes] { $copied } copiés et vérifiés
    *[no] { $copied } copiés

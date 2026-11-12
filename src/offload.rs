@@ -380,8 +380,85 @@ pub struct Report {
     pub errors: Vec<(PathBuf, String)>,
     /// Interrompu à la demande.
     pub cancelled: bool,
+    /// Arrêté faute de place dans la destination, à la demande de l'utilisateur
+    /// ([`OutOfSpace`]) : les fichiers restants sont sur la carte, ni copiés ni en erreur.
+    pub out_of_space: bool,
     /// Durée.
     pub elapsed: Duration,
+}
+
+/// La destination est pleine (issue du 12/11/2026 : le déchargement échouait sans rien
+/// dire, chaque fichier suivant en erreur) : [`run`] s'arrête sur le fichier qui n'a pas
+/// tenu et demande quoi faire.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OutOfSpace {
+    /// Dossier de destination.
+    pub destination: PathBuf,
+    /// Fichier qui n'a pas pu être copié (réessayé en premier).
+    pub file: PathBuf,
+    /// Fichiers déjà copiés (ou trouvés identiques) pendant ce déchargement.
+    pub copied: usize,
+    /// Fichiers restant à copier, celui-ci compris.
+    pub left: usize,
+    /// Octets restant à copier, celui-ci compris (sans ceux déjà déchargés à ignorer).
+    pub needed: u64,
+    /// Place libre dans la destination (`None` : inconnue).
+    pub free: Option<u64>,
+}
+
+/// Vrai si `e` dit que la destination est pleine (disque plein ou quota dépassé).
+pub fn is_out_of_space(e: &io::Error) -> bool {
+    matches!(
+        e.kind(),
+        io::ErrorKind::StorageFull | io::ErrorKind::QuotaExceeded
+    )
+}
+
+/// Place libre (octets) pour un utilisateur ordinaire sur le disque de `path`, ou du
+/// premier dossier existant au-dessus (une destination pas encore créée).
+pub fn free_space(path: &Path) -> io::Result<u64> {
+    let existing = path
+        .ancestors()
+        .find(|p| p.exists())
+        .ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))?;
+    free_space_of(existing)
+}
+
+#[cfg(unix)]
+fn free_space_of(path: &Path) -> io::Result<u64> {
+    use std::os::unix::ffi::OsStrExt;
+    let c = std::ffi::CString::new(path.as_os_str().as_bytes())
+        .map_err(|_| io::Error::from(io::ErrorKind::InvalidInput))?;
+    let mut stat = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+    // SAFETY : chemin terminé par un zéro, structure de sortie de la bonne taille.
+    if unsafe { libc::statvfs(c.as_ptr(), stat.as_mut_ptr()) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY : remplie par `statvfs`, qui a réussi.
+    let stat = unsafe { stat.assume_init() };
+    #[allow(clippy::unnecessary_cast, clippy::useless_conversion)]
+    Ok(u64::from(stat.f_bavail as u64).saturating_mul(stat.f_frsize as u64))
+}
+
+#[cfg(windows)]
+fn free_space_of(path: &Path) -> io::Result<u64> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let mut free = 0u64;
+    // SAFETY : chemin UTF-16 terminé par un zéro ; seule la place libre est demandée.
+    let ok = unsafe {
+        GetDiskFreeSpaceExW(
+            wide.as_ptr(),
+            &mut free,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(free)
 }
 
 /// Copie les images de `plan` dans `destination` (créé au besoin), à plat (les
@@ -391,6 +468,11 @@ pub struct Report {
 /// abandonnée et effacée). `copied` reçoit chaque copie dès qu'elle est faite (et
 /// vérifiée), ou trouvée identique dans la destination : de quoi calculer ses aperçus
 /// pendant la suite de la copie.
+///
+/// Destination pleine : `full` est appelé (il peut attendre la réponse de
+/// l'utilisateur) ; `true` réessaie le même fichier (de la place a été faite), `false`
+/// arrête là ([`Report::out_of_space`]).
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     plan: &Plan,
     destination: &Path,
@@ -399,6 +481,7 @@ pub fn run(
     cancel: &AtomicBool,
     mut progress: impl FnMut(&Progress),
     mut copied: impl FnMut(&Path),
+    mut full: impl FnMut(&OutOfSpace) -> bool,
 ) -> Report {
     let start = std::time::Instant::now();
     let mut report = Report {
@@ -424,7 +507,8 @@ pub fn run(
         report.elapsed = start.elapsed();
         return report;
     }
-    for item in todo {
+    let to_copy = |i: &&&Item| !(settings.skip_known && i.known);
+    for (at, item) in todo.iter().enumerate() {
         if cancel.load(Ordering::Relaxed) {
             report.cancelled = true;
             break;
@@ -434,14 +518,41 @@ pub fn run(
         if settings.skip_known && item.known {
             report.skipped.push(item.source.clone());
         } else {
-            match copy_one(
-                item,
-                destination,
-                settings.verify,
-                cancel,
-                &mut p,
-                &mut progress,
-            ) {
+            // Faute de place : on demande, puis le même fichier est réessayé, ou c'est fini.
+            let outcome = loop {
+                let result = copy_one(
+                    item,
+                    destination,
+                    settings.verify,
+                    cancel,
+                    &mut p,
+                    &mut progress,
+                );
+                match result {
+                    Err(e) if is_out_of_space(&e) && !cancel.load(Ordering::Relaxed) => {
+                        p.bytes_done = processed;
+                        progress(&p);
+                        let rest = todo[at..].iter().filter(to_copy);
+                        let stop = OutOfSpace {
+                            destination: destination.to_path_buf(),
+                            file: item.source.clone(),
+                            copied: report.copied.len() + report.already_there.len(),
+                            left: rest.clone().count(),
+                            needed: rest.map(|i| i.size).sum(),
+                            free: free_space(destination).ok(),
+                        };
+                        if !full(&stop) {
+                            break None;
+                        }
+                    }
+                    other => break Some(other),
+                }
+            };
+            let Some(outcome) = outcome else {
+                report.out_of_space = true;
+                break;
+            };
+            match outcome {
                 Ok(Outcome::Copied(copy)) => {
                     if let Err(e) = history.record(item, &copy) {
                         report
@@ -535,6 +646,10 @@ fn copy_one(
         target.file_name().unwrap().to_string_lossy()
     ));
     let result = (|| {
+        #[cfg(test)]
+        if tests::simulated_full() {
+            return Err(io::Error::from(io::ErrorKind::StorageFull));
+        }
         let mut input = File::open(&item.source)?;
         let mut output = File::create(&tmp)?;
         let mut hasher = blake3::Hasher::new();
@@ -609,6 +724,108 @@ pub fn delete_sources(report: &Report) -> Vec<(PathBuf, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    thread_local! {
+        /// Copies à faire échouer « disque plein » dans ce fil (tests de [`run`]).
+        static FULL: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    /// Vrai (et décompté) si la prochaine copie doit échouer faute de place.
+    pub(super) fn simulated_full() -> bool {
+        FULL.with(|f| {
+            let n = f.get();
+            f.set(n.saturating_sub(1));
+            n > 0
+        })
+    }
+
+    fn card(dir: &Path) -> Plan {
+        let src = dir.join("carte");
+        fs::create_dir_all(&src).unwrap();
+        for (name, bytes) in [("A.RAF", 10), ("B.RAF", 20), ("C.RAF", 30)] {
+            fs::write(src.join(name), vec![1u8; bytes]).unwrap();
+        }
+        plan(&src, &History::in_memory()).unwrap()
+    }
+
+    #[test]
+    fn a_full_destination_asks_then_retries_the_same_file() {
+        // 12/11/2026 : destination pleine, chaque fichier suivant échouait sans rien dire.
+        // Ici, B ne tient pas deux fois : la question est posée deux fois, avec ce qui
+        // reste (B et C), puis B est réessayé et tout est copié.
+        let dir = tempfile::tempdir().unwrap();
+        let plan = card(dir.path());
+        let dest = dir.path().join("dest");
+        let settings = OffloadSettings::default();
+        let mut asked = Vec::new();
+        let mut copies = 0;
+        let report = run(
+            &plan,
+            &dest,
+            &settings,
+            &mut History::in_memory(),
+            &AtomicBool::new(false),
+            |_| {},
+            |_| {
+                copies += 1;
+                if copies == 1 {
+                    FULL.with(|f| f.set(2));
+                }
+            },
+            |full| {
+                asked.push((
+                    full.file.file_name().unwrap().to_owned(),
+                    full.copied,
+                    full.left,
+                    full.needed,
+                ));
+                assert!(full.free.is_some(), "place libre connue");
+                true
+            },
+        );
+        assert_eq!(asked.len(), 2);
+        assert_eq!(asked[0], ("B.RAF".into(), 1, 2, 50));
+        assert_eq!(report.copied.len(), 3, "tout copié après les essais");
+        assert!(report.errors.is_empty() && !report.out_of_space);
+    }
+
+    #[test]
+    fn a_full_destination_can_be_given_up_and_leaves_the_rest_on_the_card() {
+        let dir = tempfile::tempdir().unwrap();
+        let plan = card(dir.path());
+        let dest = dir.path().join("dest");
+        let mut copies = 0;
+        let report = run(
+            &plan,
+            &dest,
+            &OffloadSettings::default(),
+            &mut History::in_memory(),
+            &AtomicBool::new(false),
+            |_| {},
+            |_| {
+                copies += 1;
+                FULL.with(|f| f.set(1));
+            },
+            |_| false,
+        );
+        assert!(report.out_of_space);
+        assert_eq!(report.copied.len(), 1);
+        assert!(report.errors.is_empty(), "ni erreur pour les autres");
+        assert!(!report.cancelled);
+        let left: Vec<_> = fs::read_dir(&dest)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name())
+            .collect();
+        assert_eq!(left, ["A.RAF"], "rien d'autre, pas de fichier temporaire");
+    }
+
+    #[test]
+    fn free_space_is_read_up_to_an_existing_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let free = free_space(&dir.path().join("pas/encore/créé")).unwrap();
+        assert!(free > 0);
+    }
 
     #[test]
     fn utc_dates() {
