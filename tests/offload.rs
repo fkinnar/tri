@@ -80,7 +80,7 @@ fn a_card_is_copied_flat_verified_and_remembered() {
     assert_eq!(
         offload::suggest_folder(&plan, &settings()).as_deref(),
         Some("2026-10-16_"),
-        "date de la plus ancienne image"
+        "date de l'image la plus récente"
     );
 
     let mut seen = 0;
@@ -406,6 +406,56 @@ fn the_root_is_remembered_and_a_known_card_still_gets_a_name() {
         offload::suggest_folder(&again, &global).as_deref(),
         Some("2026-10-16_")
     );
+}
+
+#[test]
+fn the_session_is_named_after_the_newest_image_to_copy() {
+    // Retour du 12/11/2026 : sur une carte de plusieurs jours, la plus ancienne image
+    // datait le dossier ; c'est la plus récente qui le nomme.
+    let tmp = tempfile::tempdir().unwrap();
+    let src = tmp.path().join("carte");
+    write(&src.join("DCIM/100_FUJI/DSCF0001.RAF"), b"raw-1", SHOT);
+    write(
+        &src.join("DCIM/100_FUJI/DSCF0002.RAF"),
+        b"raw-2",
+        SHOT + 3 * 86_400,
+    );
+    write(
+        &src.join("DCIM/100_FUJI/DSCF0003.RAF"),
+        b"raw-3",
+        SHOT + 86_400,
+    );
+    let plan = offload::plan(&src, &History::in_memory()).unwrap();
+    assert_eq!(
+        offload::suggest_folder(&plan, &settings()).as_deref(),
+        Some("2026-10-19_")
+    );
+    // La plus récente déjà déchargée (historique global) : la plus récente du reste.
+    let mut history = History::in_memory();
+    let only = tmp.path().join("une");
+    write(&only.join("DSCF0002.RAF"), b"raw-2", SHOT + 3 * 86_400);
+    let one = offload::plan(&only, &history).unwrap();
+    offload::run(
+        &one,
+        &tmp.path().join("d"),
+        &with_history(),
+        &mut history,
+        &AtomicBool::new(false),
+        |_| {},
+        |_| {},
+    );
+    let again = offload::plan(&src, &history).unwrap();
+    assert_eq!(again.to_copy(&with_history()).count(), 2);
+    assert_eq!(
+        offload::suggest_folder(&again, &with_history()).as_deref(),
+        Some("2026-10-17_")
+    );
+}
+
+#[test]
+fn skipping_what_was_offloaded_is_the_default() {
+    // Retour du 12/11/2026 : ne pas redécharger ce qu'on a déjà repris, par défaut.
+    assert!(OffloadSettings::default().skip_known);
 }
 
 #[test]

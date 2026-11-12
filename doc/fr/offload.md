@@ -13,9 +13,12 @@ besoins de tous, pas seulement les siens.
   déchargement à l'autre (`root` / `remember_root`, fichier `offload-root` du dossier de
   données) ; `[offload] destination` (`~/Pictures`, `~` accepté) ne sert qu'au premier.
   Dossier de la séance proposé : `AAAA-MM-JJ_` (`suggest_folder`, date de prise de vue
-  de la plus ancienne image à copier, lue dans ses métadonnées en heure locale ; à
-  défaut, sa date de modification en UTC ; carte déjà déchargée : la plus ancienne de la
-  carte), à compléter (« _Self ») ou à remplacer entièrement. L'année, si on la veut,
+  de la plus **récente** image à copier, lue dans ses métadonnées en heure locale ; à
+  défaut, sa date de modification en UTC ; carte déjà déchargée : la plus récente de la
+  carte ; la plus ancienne jusqu'au 12/11/2026, qui datait le dossier d'une séance déjà
+  reprise sur une carte de plusieurs jours ; le nom proposé suit les cases « RAW
+  seulement » et « Décharger à nouveau » tant qu'on ne l'a pas changé), à
+  compléter (« _Self ») ou à remplacer entièrement. L'année, si on la veut,
   va dans la racine (`…/Sources/2026`) : retour du 17/10/2026, la proposition
   `AAAA/AAAA-MM-JJ_` mélangeait les deux, et restait vide pour une carte déjà
   déchargée. Un
@@ -31,12 +34,18 @@ besoins de tous, pas seulement les siens.
   carte doit pouvoir être déchargée deux fois, à deux endroits) : une copie identique
   déjà présente (même contenu, empreinte comparée) est ignorée ; la boîte annonce avant
   la copie combien d'images sont déjà dans la destination choisie (`already_in` : même
-  nom, même taille ; recalculé quand le dossier change). En option (`[offload]
-  skip_known`, non par défaut), un **historique global** (`offload-history.tsv` dans le
-  dossier de données, ou `[offload] history`) fait ignorer ce qui a déjà été déchargé
-  n'importe où ; un fichier y est identifié par nom, taille et date (les numéros
-  repartent à zéro : le nom seul ne suffit pas). L'historique est tenu dans tous les
-  cas.
+  nom, même taille ; recalculé quand le dossier change). Un **historique global**
+  (`offload-history.tsv` dans le dossier de données, ou `[offload] history`) fait aussi
+  ignorer ce qui a déjà été déchargé n'importe où, **par défaut** depuis le 12/11/2026
+  (`[offload] skip_known = true` ; demande de l'utilisateur : ne pas redécharger ce qu'on
+  a déjà repris ; d'abord une option de la configuration seule, non par défaut). La boîte
+  le dit : « 1686 images : 1200 déjà déchargées, 486 nouvelles », et propose, s'il y en a,
+  une case « Décharger à nouveau les n images déjà déchargées » (décochée) pour décharger
+  une carte une seconde fois ailleurs. Un fichier y est identifié par
+  nom, taille et date (les numéros repartent à zéro : le nom seul ne suffit pas), sans
+  base de données : un fichier texte, une ligne par copie. L'historique est tenu dans
+  tous les cas. Il est propre à chaque machine (dossier de données) : une carte
+  déchargée sur le Mac n'est pas connue sous Linux.
 - **Vérification** (`[offload] verify`) : empreinte BLAKE3 calculée pendant la copie,
   puis copie relue et comparée ; date de modification d'origine conservée ; écriture
   atomique (fichier temporaire caché, puis renommage).
@@ -131,7 +140,7 @@ histogrammes, netteté, regroupement, comme à l'ouverture d'un dossier.
 - `History::open(fichier)`, `History::open_configured(&réglages)`, `History::in_memory()` ;
 - `plan(carte, &historique) -> Plan` : images (`Item` : source, taille, date, `known`),
   autres fichiers ; `Plan::to_copy`, `Plan::bytes` ;
-- `suggest_folder(&plan, skip_known)`, `destination(racine, nom)` ;
+- `suggest_folder(&plan, &réglages)`, `destination(racine, nom)` ;
 - `run(&plan, destination, &réglages, &mut historique, &annulation, progression,
   copie) -> Report` (`copie` : chaque copie dès qu'elle est faite, pour les aperçus) (copiés, ignorés, erreurs, interrompu, durée) ; `Progress` : fichiers (sans ceux laissés sur la carte) et octets (un fichier passé, déjà déchargé ou déjà présent, compte d'un coup : la barre suit les fichiers) ;
 - `delete_sources(&report)`.

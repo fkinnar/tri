@@ -9,6 +9,14 @@
   sélectionnées, comme au clavier (une case revient à l'image du clic droit seule ;
   renommer reste une image à la fois, #439). Le bandeau de notation dit désormais qu'il
   « agit sur les N images sélectionnées », pas seulement sur leurs notes.
+- **Déchargement : la séance datée par sa plus récente image, et ce qui a déjà été
+  déchargé ignoré** (#437) : le dossier proposé prend la date de la plus récente image à
+  copier (il prenait la plus ancienne) ; ce qu'un déchargement précédent a copié
+  n'importe où est désormais laissé de côté par défaut (`[offload] skip_known = true`,
+  d'après l'historique des déchargements), la boîte dit combien d'images sont déjà
+  déchargées et combien sont nouvelles, et une case « Décharger à nouveau les n images
+  déjà déchargées » les copie quand même (pour décharger une carte une seconde fois
+  ailleurs).
 - **Un dossier connu reste rapide quand son cache est en partie refait** (#436) : ce qui
   est encore en cache (empreintes de regroupement, netteté, exposition, un 1:1) est livré
   tout de suite au lieu d'attendre derrière les vignettes recalculées ; les piles se
