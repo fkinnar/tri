@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Le clic droit sur une sélection agit sur toute la sélection** (#440) : notes et
+  actions sur les fichiers de la boîte du clic droit portent sur toutes les images
+  sélectionnées, comme au clavier (une case revient à l'image du clic droit seule ;
+  renommer reste une image à la fois, #439). Le bandeau de notation dit désormais qu'il
+  « agit sur les N images sélectionnées », pas seulement sur leurs notes.
 - **Un déchargement vers une destination pleine s'arrête et demande** (#438) : il
   échouait sans rien dire, chaque fichier suivant en erreur. La copie s'arrête désormais
   sur le fichier qui n'a pas tenu, et la boîte revient (même depuis l'arrière-plan) avec

@@ -44,10 +44,19 @@ does not have it, removed otherwise), instead of an image-by-image toggle that w
 things up. **Trash** and **external editor** take the targets; rename and show in the
 Finder, the current image.
 
+**Right-click** on an image of a multiple selection (feedback from 2026-11-12: Delete
+removed the whole selection, the right-click a single image): the dialog is titled "N
+images selected", and its ratings and file actions apply to the whole selection, as with
+the keyboard. A "The whole selection (N images)" checkbox, ticked when it opens, goes back
+to the right-clicked image alone. Rename is greyed there (one image at a time: no batch
+renaming yet, issue #439). Right-click on an image outside the selection: that image alone,
+as before.
+
 Display: orange frame (`[gui.colors] marked`, `[gui.grid] marked_frame`) around marked
 thumbnails, distinct from the current image (solid background) and from hover (grey);
 "N selected" (and "visual mode") in the status bar; "selected" in the full-screen info
-line; the rating bar says how many images its ratings apply to.
+line; the rating bar says how many images it acts on ("acts on the N selected images":
+ratings, adjustments and actions, not only ratings).
 
 ## Tests
 
