@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Filtre de couleurs : toutes les couleurs ou l'une d'elles** (#444) : avec plusieurs
+  couleurs par photo (`[xmp] multiple_colors`), un bouton « ou » / « et » après les
+  pastilles de la barre des filtres demande les photos qui portent toutes les couleurs
+  choisies plutôt que l'une d'elles (action `core.filter.colors.all`, sans raccourci par
+  défaut).
 - **Le résumé du dossier filtre** (#443, partie de #388) : un clic sur une ligne de « Ce
   dossier » montre ce filtre seul (une extension, les développements d'un logiciel, sans
   note, avec des étoiles, acceptées, rejetées, avec un libellé couleur ou une couleur,

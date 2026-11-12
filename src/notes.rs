@@ -1162,14 +1162,19 @@ impl StarsRule {
     }
 }
 
-/// Règle sur les couleurs : une photo passe si elle porte l'une des couleurs `any_of`, ou si
-/// elle n'en porte aucune et que `none` est vrai.
+/// Règle sur les couleurs : une photo passe si elle porte l'une des couleurs `any_of` (ou
+/// **toutes**, avec `all`), ou si elle n'en porte aucune et que `none` est vrai.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ColorRule {
     /// Couleurs acceptées.
     pub any_of: Vec<Color>,
     /// Accepter les photos sans couleur.
     pub none: bool,
+    /// Exiger toutes les couleurs de `any_of` (et), plutôt que l'une d'elles (ou). N'a de
+    /// sens qu'avec plusieurs couleurs par photo (`[xmp] multiple_colors` ; retour du
+    /// 12/11/2026). Absent des vues retenues avant : « ou ».
+    #[serde(default)]
+    pub all: bool,
 }
 
 impl ColorRule {
@@ -1177,6 +1182,8 @@ impl ColorRule {
     pub fn accepts(&self, colors: &[Color]) -> bool {
         if colors.is_empty() {
             self.none
+        } else if self.all {
+            !self.any_of.is_empty() && self.any_of.iter().all(|c| colors.contains(c))
         } else {
             colors.iter().any(|c| self.any_of.contains(c))
         }
@@ -1326,6 +1333,7 @@ mod tests {
         let rule = ColorRule {
             any_of: vec![Color::Red, Color::Green],
             none: false,
+            all: false,
         };
         assert!(rule.accepts(&[Color::Green, Color::Blue]));
         assert!(!rule.accepts(&[Color::Blue]));
@@ -1333,9 +1341,29 @@ mod tests {
         let uncolored = ColorRule {
             any_of: vec![],
             none: true,
+            all: false,
         };
         assert!(uncolored.accepts(&[]));
         assert!(!uncolored.accepts(&[Color::Red]));
+        // Toutes (et), avec plusieurs couleurs par photo (retour du 12/11/2026).
+        let both = ColorRule { all: true, ..rule };
+        assert!(both.accepts(&[Color::Green, Color::Red, Color::Blue]));
+        assert!(
+            !both.accepts(&[Color::Green, Color::Blue]),
+            "il manque le rouge"
+        );
+        assert!(!both.accepts(&[]));
+        assert!(
+            !ColorRule {
+                all: true,
+                ..ColorRule::default()
+            }
+            .accepts(&[Color::Red]),
+            "aucune couleur choisie : rien"
+        );
+        // Les vues retenues avant n'ont pas le champ : « ou ».
+        let old: ColorRule = serde_json::from_str(r#"{"any_of":["red"],"none":false}"#).unwrap();
+        assert!(!old.all);
     }
 
     #[test]

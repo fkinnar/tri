@@ -90,6 +90,7 @@ impl Filters {
                     colors: Some(ColorRule {
                         any_of: Vec::new(),
                         none: true,
+                        all: false,
                     }),
                 }
             }
@@ -103,6 +104,7 @@ impl Filters {
                         None => Color::ALL.to_vec(),
                     },
                     none: false,
+                    all: false,
                 })
             }
             Line::Conflicts => f.conflicts = true,

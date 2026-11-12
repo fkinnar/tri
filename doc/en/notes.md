@@ -64,7 +64,9 @@ elsewhere (folder watching, `doc/watch.md`) and returns those whose ratings chan
 - `stars: Option<StarsRule>`: `AtLeast(n)`, `Exactly(n)` (`Exactly(0)`: unrated),
   `AtMost(n)`;
 - `flags: Option<Vec<Flag>>`: accepted flags (`[None, Accepted]` hides rejected ones);
-- `colors: Option<ColorRule>`: one of the `any_of` colours, and/or no colour (`none`).
+- `colors: Option<ColorRule>`: one of the `any_of` colours (or **all** of them, with
+  `all`: several colours per photo, 2026-11-12; missing from views remembered before:
+  "or"), and/or no colour (`none`).
 
 `rule.filter(&book)` gives a `NotesFilter`, which implements the same
 [`Filter`](filter.md) trait as the filter by type: no special code for native filters,

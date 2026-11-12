@@ -18,7 +18,7 @@ use tri::exposure::Exposure;
 use tri::filter::{Filter, KindFilter};
 use tri::folder::Folder;
 use tri::media::{MediaFile, MediaKind};
-use tri::notes::{ColorRule, NotesRule, StarsRule};
+use tri::notes::{NotesRule, StarsRule};
 use tri::places::{Monitor, Place, PlaceKind, PlaceSettings, Tree};
 use tri::preview;
 use tri::scheduler::{CachedPreviews, Event, Progress, RawPreviews, Scheduler};
@@ -428,6 +428,9 @@ pub struct TriApp {
     notes_rule: NotesRule,
     /// Comparaison du filtre d'étoiles (au moins, exactement, au plus ; #165).
     stars_op: tri::notes::StarsOp,
+    /// Filtre de couleurs : toutes (et) plutôt que l'une (ou) ; vaut pour les couleurs
+    /// choisies ensuite (`[xmp] multiple_colors`, 12/11/2026).
+    colors_all: bool,
     /// Barre de filtres affichée (grille).
     filter_bar: bool,
     /// Bandeau de notation affiché.
@@ -1474,6 +1477,7 @@ impl TriApp {
             filter: KindFilter::All,
             notes_rule: NotesRule::default(),
             stars_op: tri::notes::StarsOp::default(),
+            colors_all: false,
             filter_bar: gui.filter_bar,
             rating_bar: gui.rating_bar,
             image_info: gui.view.image_info,
@@ -6222,6 +6226,7 @@ impl TriApp {
         self.filter = view.kind;
         self.notes_rule = view.notes.clone();
         self.stars_op = view.stars_op;
+        self.colors_all = view.notes.colors.as_ref().is_some_and(|c| c.all);
         self.blur_rule = view.blur;
         self.well_exposed = view.well_exposed;
         self.developed_on = view.developed;
@@ -8445,8 +8450,23 @@ impl TriApp {
                         rule.any_of.sort();
                     }
                 }
-                self.notes_rule.colors = (rule != ColorRule::default()).then_some(rule);
+                rule.all = self.colors_all;
+                let empty = rule.any_of.is_empty() && !rule.none;
+                self.notes_rule.colors = (!empty).then_some(rule);
                 self.apply_filter();
+            }
+            Action::FilterColorsAll => {
+                self.colors_all = !self.colors_all;
+                // Filtre en cours : mêmes couleurs, l'autre combinaison.
+                if let Some(rule) = &mut self.notes_rule.colors {
+                    rule.all = self.colors_all;
+                    self.apply_filter();
+                }
+                self.hint = Some(if self.colors_all {
+                    t!("filter-colors-all-tip")
+                } else {
+                    t!("filter-colors-any-tip")
+                });
             }
             Action::FilterClear => {
                 self.name_query.clear();
@@ -15241,7 +15261,12 @@ impl TriApp {
         }
         if let Some(colors) = &self.notes_rule.colors {
             let names: Vec<String> = colors.any_of.iter().map(|&c| color_name(c)).collect();
-            parts.push(names.join(&t!("filter-summary-or")));
+            let join = if colors.all {
+                t!("filter-summary-and")
+            } else {
+                t!("filter-summary-or")
+            };
+            parts.push(names.join(&join));
         }
         if self.blur_rule.is_some() {
             parts.push(t!("filter-bar-no-blurry"));
@@ -15434,6 +15459,25 @@ impl TriApp {
                 );
                 if response.clicked() {
                     clicked.push(Action::FilterColor(color));
+                }
+            }
+            // Plusieurs couleurs par photo : toutes (et) ou l'une (ou) des couleurs choisies
+            // (retour du 12/11/2026) ; avec une seule, c'est forcément « ou ».
+            if self.settings.xmp.multiple_colors {
+                let (symbol, name) = if self.colors_all {
+                    (t!("filter-colors-all"), t!("filter-colors-all-tip"))
+                } else {
+                    (t!("filter-colors-any"), t!("filter-colors-any-tip"))
+                };
+                let op = ui
+                    .add(egui::Button::new(symbol).small().frame(false))
+                    .on_hover_text(format!(
+                        "{name}\n{}",
+                        self.action_tip(Action::FilterColorsAll)
+                    ))
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                if op.clicked() {
+                    clicked.push(Action::FilterColorsAll);
                 }
             }
             ui.separator();
@@ -32182,6 +32226,45 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().files.len(), 1);
         assert_eq!(h.state().files[0].path, red);
+    }
+
+    #[test]
+    fn the_colour_filter_takes_all_or_one_of_the_colours() {
+        // Retour du 12/11/2026 : avec plusieurs couleurs par photo, « rouge et vert » et
+        // « rouge ou vert » sont deux filtres ; avec une seule, c'est toujours « ou ».
+        use tri::xmp::Color;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert!(
+            h.query_by_label("ou").is_none(),
+            "une couleur par photo : pas de choix"
+        );
+        h.state_mut().settings.xmp.multiple_colors = true;
+        let files: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        h.state_mut()
+            .rate_path(files[0].clone(), Action::Color(Color::Red));
+        h.state_mut()
+            .rate_path(files[0].clone(), Action::Color(Color::Green));
+        h.state_mut()
+            .rate_path(files[1].clone(), Action::Color(Color::Red));
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::FilterColor(Color::Red));
+        h.state_mut()
+            .perform(&ctx, Action::FilterColor(Color::Green));
+        h.run_steps(2);
+        assert_eq!(h.state().files.len(), 2, "rouge ou vert");
+        assert!(h.query_by_label("ou").is_some(), "le choix, dans la barre");
+        h.get_by_label("ou").click();
+        h.run_steps(2);
+        assert_eq!(h.state().files.len(), 1, "rouge et vert");
+        assert_eq!(h.state().files[0].path, files[0]);
+        assert!(h.state().filter_parts(false).contains(" et "));
+        // Gardé pour les couleurs choisies ensuite.
+        h.state_mut()
+            .perform(&ctx, Action::FilterColor(Color::Green));
+        assert!(h.state().notes_rule.colors.as_ref().unwrap().all);
+        h.state_mut().perform(&ctx, Action::FilterColorsAll);
+        assert!(!h.state().notes_rule.colors.as_ref().unwrap().all);
     }
 
     #[test]

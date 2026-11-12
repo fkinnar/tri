@@ -188,6 +188,7 @@ loupe = "m"
 "core.filter.color.green" = ["f 8", "f Shift+8"]
 "core.filter.color.blue" = ["f 9", "f Shift+9"]
 "core.filter.color.purple" = ["f °", "f ,", "f ."]
+"core.filter.colors.all" = []
 "core.filter.clear" = ["f Escape"]
 "core.filter.blurry" = ["f b"]
 # Well exposed: "w" like the exposure warnings.

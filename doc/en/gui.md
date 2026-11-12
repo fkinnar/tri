@@ -115,7 +115,12 @@ system one ("cold" measurements, experiments).
   reported in the status bar, and the displayed rating stays the one on disk. A single
   colour per photo by default (`[xmp] multiple_colors`).
 - **Filters** (2026-10-17): type (all / RAW / flat) and ratings (at least n stars;
-  picked, without rejected or rejected; one or more colours), combined.
+  picked, without rejected or rejected; one or more colours), combined. Several colours
+  chosen: one of them ("or"); with several colours per photo (`[xmp] multiple_colors`),
+  a small "or" / "and" button after the dots of the filter bar (like "≥ = ≤" before the
+  stars) asks for all the colours (`core.filter.colors.all`, no default shortcut;
+  feedback from 2026-11-12). Kept for the colours chosen next, and in the folder's
+  remembered view.
   - Keyboard: prefix `f` (user's choice), followed by the matching rating key:
     `f f` next type, `f 1`…`f 5` at least n stars (or exactly, or at most: `f =` or the
     ≥ / = / ≤ button before the stars of the bar, 2026-10-26, #165), `f 0` any stars,
