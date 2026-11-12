@@ -60,10 +60,18 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   sans note, avec des étoiles, acceptées, rejetées, notes en conflit (seulement s'il y en
   a, en couleur d'avertissement), et où vivent les données de tri (dans ce dossier, sur
   le disque, sur cette machine). Recalculé à chaque image affichée quand la section est
-  dépliée (quelques milliers de recherches en mémoire). Première étape, les comptes
-  seulement ; décidé le 09/11/2026 pour la suite : chaque ligne cliquable comme filtre (un
-  clic, ce filtre seul ; un second, retiré), versions, taille du cache avec « Vider »
-  (`gui/src/app/summary.rs`).
+  dépliée (quelques milliers de recherches en mémoire). **Chaque ligne est un filtre**
+  (12/11/2026, décidé le 09/11/2026) : un clic montre ce filtre seul, à la place des
+  autres ; la ligne s'allume (accent, soulignée) ; un second clic retire tous les filtres
+  ; « Photos » les retire aussi. Extension : `ExtensionFilter` (nouveau, réinitialisé en
+  changeant de dossier) ; développements : le filtre « développées » (tous les logiciels
+  actifs, ou celui de la ligne) ; sans note (ni étoile, ni drapeau, ni couleur), avec des
+  étoiles, acceptées, rejetées, avec un libellé couleur (n'importe lequel, ou une ligne
+  par couleur présente, retour du 12/11/2026) : la règle des notes ; conflits : le filtre
+  « en conflit ».
+  Pas cliquables : les paires (pas de filtre avant le regroupement, #392) et les
+  logiciels inactifs. Pas encore de Ctrl+clic pour combiner (filtres complexes, #138).
+  Restent à venir : versions, taille du cache avec « Vider » (`gui/src/app/summary.rs`).
 - **Panneau des dossiers** (17/10/2026), à gauche de la grille : emplacements dépliables
   en arborescence, rangés par sections titrées et séparées d'un trait (20/10/2026) ; titres en gras, plus grands que
   les dossiers depuis le 26/10/2026, `[gui.folders] section_scale`, #120) :

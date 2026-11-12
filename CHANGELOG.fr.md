@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Le résumé du dossier filtre** (#443, partie de #388) : un clic sur une ligne de « Ce
+  dossier » montre ce filtre seul (une extension, les développements d'un logiciel, sans
+  note, avec des étoiles, acceptées, rejetées, avec un libellé couleur ou une couleur,
+  en conflit), et la ligne s'allume ; un
+  second clic, ou « Photos », retire tous les filtres.
 - **Résumé du dossier ouvert** (#442, partie de #388) : une section « Ce dossier » en bas
   du panneau des dossiers, repliée par défaut, compte les photos par type, les paires
   RAW+JPEG, les développements par logiciel (grisés quand le logiciel est absent ou

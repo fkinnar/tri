@@ -60,9 +60,16 @@ system one ("cold" measurements, experiments).
   not rated, with stars, accepted, rejected, ratings in conflict (only when there are
   some, in the warning colour), and where tri's data lives (in this folder, on the disk,
   on this machine). Recomputed at every frame shown while the section is unfolded (a few
-  thousand lookups in memory). First step, the counts only; decided on 2026-11-09 for
-  later: every line clickable as a filter (one click, that filter alone; a second,
-  removed), versions, cache size with "Clear" (`gui/src/app/summary.rs`).
+  thousand lookups in memory). **Every line is a filter** (2026-11-12, decided on
+  2026-11-09): one click shows that filter alone, replacing the others; the line lights up
+  (accent, underlined); a second click removes every filter; "Photos" removes them too.
+  Extension: `ExtensionFilter` (new, reset when changing folders); developments: the
+  "developed" filter (every active software, or the line's); not rated (no star, flag nor
+  colour), with stars, accepted, rejected, with a colour label (any, or one line per
+  colour present, feedback from 2026-11-12): the ratings rule; conflicts: the "in
+  conflict" filter. Not clickable: the pairs (no filter before grouping, #392) and inactive
+  software. No Ctrl+click to combine yet (complex filters, #138). Still to come: versions,
+  cache size with "Clear" (`gui/src/app/summary.rs`).
 - **Folders panel** (2026-10-17), to the left of the grid: places expandable as a tree,
   arranged in titled sections separated by a line (2026-10-20); titles in bold, larger than the
   folders since 2026-10-26, `[gui.folders] section_scale`, #120): devices (cards, keys,
