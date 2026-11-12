@@ -1389,12 +1389,14 @@ offload-ignored = { $n ->
 }
 offload-root = Root folder
 offload-session = Session folder
-offload-session-tip = Suggested: YYYY-MM-DD_ (date of the oldest image), to complete ("_Self") or replace entirely; the year, if wanted, goes in the root folder. Empty: straight into the root folder.
+offload-session-tip = Suggested: YYYY-MM-DD_ (date of the newest image to copy), to complete ("_Self") or replace entirely; the year, if wanted, goes in the root folder. Empty: straight into the root folder.
 offload-destination = Destination: { $path }
 offload-raw-only = RAW only
 offload-keep-disk = Keep tri's data on this drive
 offload-keep-folder = Keep tri's data in the session folder
 offload-raw-only-tip = The camera JPEGs stay on the card.
+offload-skip-known = Skip the images already offloaded ({ $n })
+offload-skip-known-tip = Those a previous offload already copied, wherever it was (offload history: same name, same size, same date). Unticked: only those already in the destination are skipped, to offload a card a second time elsewhere. Default: [offload] skip_known.
 offload-open-after = Open the folder when done
 offload-previews = Compute the previews during the copy
 offload-previews-tip = Thumbnails, camera JPEGs, histograms, sharpness and grouping of each photo as soon as it is copied: the session is ready sooner.

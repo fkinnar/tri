@@ -1392,12 +1392,14 @@ offload-ignored = { $n ->
 }
 offload-root = Dossier racine
 offload-session = Dossier de la séance
-offload-session-tip = Proposé : AAAA-MM-JJ_ (date de la plus ancienne image), à compléter (« _Self ») ou à remplacer entièrement ; l'année, si on la veut, va dans le dossier racine. Vide : directement dans le dossier racine.
+offload-session-tip = Proposé : AAAA-MM-JJ_ (date de la plus récente image à copier), à compléter (« _Self ») ou à remplacer entièrement ; l'année, si on la veut, va dans le dossier racine. Vide : directement dans le dossier racine.
 offload-destination = Destination : { $path }
 offload-raw-only = RAW seulement
 offload-keep-disk = Garder les données de tri sur ce disque
 offload-keep-folder = Garder les données de tri dans le dossier de la séance
 offload-raw-only-tip = Les JPEG du boîtier restent sur la carte.
+offload-skip-known = Ignorer les images déjà déchargées ({ $n })
+offload-skip-known-tip = Celles qu'un déchargement précédent a déjà copiées, où que ce soit (historique des déchargements : même nom, même taille, même date). Décochée : seules celles déjà présentes dans la destination sont ignorées, pour décharger une carte une seconde fois ailleurs. Défaut : [offload] skip_known.
 offload-open-after = Ouvrir le dossier à la fin
 offload-previews = Calculer les aperçus pendant la copie
 offload-previews-tip = Vignettes, rendus boîtier, histogrammes, netteté et regroupement de chaque photo dès qu'elle est copiée : la séance est prête plus tôt.

@@ -82,6 +82,10 @@ enum Message {
     Done(Report),
 }
 
+/// Images déjà dans une destination : (destination, (RAW seulement, ignorer les déjà
+/// déchargées), (nombre, octets)).
+type Present = (PathBuf, (bool, bool), (usize, u64));
+
 enum Stage {
     /// Inventaire de la carte en cours.
     Planning(Receiver<Result<(Plan, History), String>>),
@@ -94,9 +98,10 @@ enum Stage {
         root_field: crate::path_field::PathField,
         folder: String,
         error: Option<String>,
-        /// Déjà présentes dans la destination : (destination, RAW seulement, (nombre,
-        /// octets)), recalculé seulement quand la destination ou le choix RAW changent.
-        present: Option<(PathBuf, bool, (usize, u64))>,
+        /// Déjà présentes dans la destination : (destination, (RAW seulement, ignorer les
+        /// déjà déchargées), (nombre, octets)), recalculé seulement quand la destination
+        /// ou ces choix changent.
+        present: Option<Present>,
     },
     /// Copie en cours.
     Running {
@@ -553,14 +558,15 @@ impl OffloadDialog {
                                 .ok();
                         // Doublons jugés sur la destination choisie (même nom, même taille ;
                         // la copie compare ensuite les contenus).
+                        let choices = (settings.raw_only, settings.skip_known);
                         let fresh = match (&dest, &*present) {
-                            (Some(d), Some((p, raw, _))) => p != d || *raw != settings.raw_only,
+                            (Some(d), Some((p, made, _))) => p != d || *made != choices,
                             (Some(_), None) => true,
                             (None, _) => false,
                         };
                         if fresh && let Some(d) = &dest {
                             let found = offload::already_in(plan, settings, d);
-                            *present = Some((d.clone(), settings.raw_only, found));
+                            *present = Some((d.clone(), choices, found));
                         }
                         let (there, there_bytes) = match (&dest, &*present) {
                             (Some(d), Some((p, _, found))) if p == d => *found,
@@ -615,8 +621,30 @@ impl OffloadDialog {
                         // Choix faits avant la copie, enchaînés à la fin (retour du
                         // 17/10/2026 : ouvrir *et* éjecter, pas l'un ou l'autre).
                         ui.add_space(6.0);
-                        ui.checkbox(&mut settings.raw_only, t!("offload-raw-only"))
-                            .on_hover_text(t!("offload-raw-only-tip"));
+                        // Le nom proposé suit ces choix (la plus récente image à copier),
+                        // tant qu'on ne l'a pas changé.
+                        let before = settings.clone();
+                        let raw = ui
+                            .checkbox(&mut settings.raw_only, t!("offload-raw-only"))
+                            .on_hover_text(t!("offload-raw-only-tip"))
+                            .changed();
+                        // Ne pas redécharger ce qui l'a déjà été, n'importe où (historique
+                        // global ; retour du 12/11/2026) : décochée, une même carte peut
+                        // être déchargée à deux endroits.
+                        let known = plan.items.iter().filter(|i| i.known).count();
+                        let skip = ui
+                            .checkbox(
+                                &mut settings.skip_known,
+                                t!("offload-skip-known", n = known),
+                            )
+                            .on_hover_text(t!("offload-skip-known-tip"))
+                            .changed();
+                        if (raw || skip)
+                            && offload::suggest_folder(plan, &before).as_deref()
+                                == Some(folder.as_str())
+                        {
+                            *folder = offload::suggest_folder(plan, settings).unwrap_or_default();
+                        }
                         if let Some((_, disk)) = keep_here {
                             let mut on = self.keep_choice.unwrap_or(disk);
                             let label = if disk {
