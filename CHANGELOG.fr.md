@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Images développées plus ternes dans la grille** (#433) : les copies de la grille
+  des développements portent le profil de travail, mais il changeait d'un lancement à
+  l'autre (date de création) et était alors pris pour du sRGB : les copies étaient
+  converties une seconde fois ; le plein écran était juste. Le profil est désormais
+  toujours le même, et les copies plus anciennes sont reconnues.
 - **Vérifier les couleurs** (#430) : une fiche pour les testeurs
   ([doc/fr/colour-check.md](doc/fr/colour-check.md)) et les mires de couleur dans
   `doc/charts`, pour vérifier en dix minutes que `tri` affiche juste sur un écran calibré

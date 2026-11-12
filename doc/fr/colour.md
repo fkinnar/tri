@@ -22,6 +22,13 @@ Tout ce que `tri` montre (vignettes, aperçus, 1:1) est dans un seul **espace de
 travail** : **primaires Rec.2020, courbe sRGB, blanc D65** (`colour::working`, son ICC
 `colour::working_icc`).
 
+Cet ICC a toujours les mêmes octets : `moxcms` y inscrit sa date de création, remplacée
+par une date fixe (et l'identifiant MD5 mis à zéro). Il est aussi reconnu quelle que soit
+sa date, pour les copies écrites avant. Corrigé le 12/11/2026 : d'un lancement à l'autre,
+il n'était plus reconnu, et sa description (« sRGB curve ») le faisait prendre pour du
+sRGB. Les copies de la grille des développements étaient converties une seconde fois, et
+la grille paraissait terne à côté du plein écran.
+
 - **Large.** Il contient Display P3, l'Adobe RGB, et les écrans wide gamut qui les
   dépassent. L'Eizo de l'utilisateur, plus large que l'Adobe RGB mais pas P3, a écarté P3
   comme espace de travail.
@@ -138,7 +145,7 @@ Chaque conversion est construite une fois par couple d'espaces et gardée
 - `src/colour.rs` :
   - gris inchangés ;
   - même couleur depuis sRGB, Adobe RGB et P3 ;
-  - ICC de travail reconnu ;
+  - ICC de travail reconnu, le même d'un lancement à l'autre, et reconnu avec une autre date ;
   - profils linéaires non pris pour du sRGB ;
   - matrices inverses et luminance Rec.2020 ;
   - aller-retour en 8 bits ;

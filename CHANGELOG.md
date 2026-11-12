@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Developed images no longer dull in the grid** (#433): the grid copies of
+  developments carry the working colour profile, but it changed from one launch to the
+  next (creation date) and was then taken for sRGB, so the copies were converted a second
+  time; full screen was right. The profile is now always the same, and the older copies
+  are recognised.
 - **Checking colours** (#430): a sheet for testers ([doc/en/colour-check.md](doc/en/colour-check.md))
   and the colour charts in `doc/charts`, to check in ten minutes that `tri` displays
   colours right on a calibrated or wide-gamut screen, without building anything.
