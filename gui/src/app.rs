@@ -28884,7 +28884,13 @@ mod tests {
             let deadline = Instant::now() + Duration::from_secs(60);
             while !done(h.state()) {
                 assert!(Instant::now() < deadline, "clic jamais reçu");
-                let label = h.state().meta_rows[i].label.clone();
+                // Lignes en cours de relecture (CI Windows du 12/11/2026 : liste vide un
+                // instant) : on attend qu'elles reviennent.
+                let Some(label) = h.state().meta_rows.get(i).map(|r| r.label.clone()) else {
+                    h.run_steps(1);
+                    std::thread::sleep(Duration::from_millis(10));
+                    continue;
+                };
                 let at = h.get_by_label(&label).rect().center();
                 h.event(UiEvent::ModifiersChanged(m));
                 h.event(UiEvent::PointerMoved(at));
@@ -28972,7 +28978,13 @@ mod tests {
                     "attendu {want:?}, sélection {:?}",
                     picked(h.state())
                 );
-                let label = h.state().meta_rows[i].label.clone();
+                // Lignes en cours de relecture (CI Windows du 12/11/2026 : liste vide un
+                // instant) : on attend qu'elles reviennent.
+                let Some(label) = h.state().meta_rows.get(i).map(|r| r.label.clone()) else {
+                    h.run_steps(1);
+                    std::thread::sleep(Duration::from_millis(10));
+                    continue;
+                };
                 let at = h.get_by_label(&label).rect().center();
                 h.event(UiEvent::ModifiersChanged(m));
                 h.event(UiEvent::PointerMoved(at));
