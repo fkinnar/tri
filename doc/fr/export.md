@@ -152,7 +152,7 @@ Règle de l'utilisateur (19/10/2026) : l'image exportée est celle qu'on regarde
 
 | Où | Image exportée |
 |---|---|
-| Grille | développée par le logiciel de son rendu développé (darktable, RapidRAW), sinon rendu LibRaw |
+| Grille | le rendu affiché des vignettes (13/11/2026) : JPEG boîtier, rendu LibRaw, ou le logiciel choisi s'il est trouvé (sinon LibRaw) ; « couverture » : rendu LibRaw. Un développement part toujours par son logiciel |
 | Plein écran, développé (`Maj+B`) | développée par le logiciel affiché |
 | Plein écran, rendu RAW (`b`) | rendu LibRaw |
 | Plein écran, JPEG boîtier | le JPEG boîtier (aperçu embarqué, à sa taille) |
