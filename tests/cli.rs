@@ -74,6 +74,35 @@ impl Env {
         }
         cmd.output().unwrap()
     }
+
+    /// [`Env::run`], avec `input` sur l'entrée standard.
+    fn run_input(&self, args: &[&std::ffi::OsStr], input: &str) -> Output {
+        use std::io::Write as _;
+        let home = self.path("home");
+        let mut child = Command::new(env!("CARGO_BIN_EXE_tri"))
+            .arg("--config")
+            .arg(self.path("config.toml"))
+            .args(args)
+            .env("HOME", &home)
+            .env("USERPROFILE", &home)
+            .env("APPDATA", &home)
+            .env("LOCALAPPDATA", &home)
+            .env("XDG_CACHE_HOME", &home)
+            .env("XDG_CONFIG_HOME", &home)
+            .env("XDG_DATA_HOME", &home)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(input.as_bytes())
+            .unwrap();
+        child.wait_with_output().unwrap()
+    }
 }
 
 fn stdout(o: &Output) -> String {
@@ -316,6 +345,77 @@ fn ratings_are_converted_to_the_other_convention() {
         before,
         "source intacte"
     );
+}
+
+#[test]
+fn images_are_rated_from_the_command_line() {
+    // Issue n° 275 : noter sans l'interface, la paire RAW+JPEG suit.
+    let env = Env::new();
+    let photos = env.photos();
+    let a = env.image(&photos, "a.jpg");
+    let pair = env.image(&photos, "a.png");
+    let b = env.image(&photos, "b.jpg");
+    let read = |image: &Path| tri::xmp::read(image).unwrap_or_default();
+
+    let out = stdout(&ok(env.run([
+        arg(&a),
+        "--stars".as_ref(),
+        "4".as_ref(),
+        "--dry-run".as_ref(),
+    ])));
+    assert!(out.contains("a.jpg") && out.contains("a.png"), "{out}");
+    assert_eq!(read(&a), Notes::default(), "--dry-run : rien écrit");
+
+    ok(env.run([
+        arg(&a),
+        "--stars".as_ref(),
+        "4".as_ref(),
+        "--color".as_ref(),
+        "red".as_ref(),
+        "--flag".as_ref(),
+        "accept".as_ref(),
+    ]));
+    let rated = Notes {
+        stars: 4,
+        flag: tri::xmp::Flag::Accepted,
+        colors: vec![tri::xmp::Color::Red],
+    };
+    assert_eq!(read(&a), rated);
+    assert_eq!(read(&pair), rated, "la paire suit");
+    assert_eq!(read(&b), Notes::default());
+
+    // Liste sur l'entrée standard ; `none` efface ; les étoiles restent.
+    let list = format!("{}\n\n{}\n", a.display(), b.display());
+    ok(env.run_input(
+        &[
+            "--color".as_ref(),
+            "none".as_ref(),
+            "--flag".as_ref(),
+            "none".as_ref(),
+        ],
+        &list,
+    ));
+    let cleared = Notes {
+        stars: 4,
+        ..Notes::default()
+    };
+    assert_eq!(read(&a), cleared);
+    assert_eq!(read(&pair), cleared);
+    assert_eq!(read(&b), Notes::default());
+
+    // Erreurs : valeur invalide, fichier absent, plusieurs couleurs sans le réglage.
+    failed(env.run([arg(&a), "--stars".as_ref(), "7".as_ref()]));
+    let missing = photos.join("missing.jpg");
+    let err = stderr(&failed(env.run([
+        arg(&missing),
+        arg(&b),
+        "--stars".as_ref(),
+        "2".as_ref(),
+    ])));
+    assert!(err.contains("missing.jpg"), "{err}");
+    assert_eq!(read(&b).stars, 2, "les autres images sont notées");
+    failed(env.run([arg(&a), "--color".as_ref(), "red,blue".as_ref()]));
+    assert_eq!(read(&a), cleared);
 }
 
 #[test]

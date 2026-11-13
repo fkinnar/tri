@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Rate from the command line** (#450, fixes #275): `tri <image>... --stars N
+  --color red|…|none --flag accept|reject|none [--dry-run]`, or the list of images on
+  standard input; the RAW+JPEG pair and the main developments follow, sidecars as in the
+  interface.
 - **Colour filter: all the colours or one of them** (#444): with several colours per
   photo (`[xmp] multiple_colors`), an ∨ / ∧ button before the colour dots of the
   filter bar asks for photos carrying all the chosen colours instead of one of them

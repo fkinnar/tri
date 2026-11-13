@@ -322,6 +322,7 @@ l'utilisateur. Options inconnues ou mal formées (mode d'emploi, code d'erreur) 
 type et profondeur ; `--previews` puis `--clear-cache` (un niveau, un dossier seul, avec
 `--depth`, tout le cache) vérifiés par `--cache-usage` ; `--cache-here` / `--cache-user`
 (entrées déplacées dans le dossier, puis rendues) ; `--convert-xmp` (et `--dry-run`) ;
+`--stars` / `--color` / `--flag` (paire, entrée standard, `--dry-run`, erreurs) ;
 `--rename`, `--copy`, `--move` (images et dossier entier), `--delete --permanent` ;
 `--offload` (simulation, copie, second passage, `--delete-copied`) ; `--metadata`,
 `--exposure`, `--sharpness`, `--groups` ; `--export asis` (copie à l'identique). Hors tests :
