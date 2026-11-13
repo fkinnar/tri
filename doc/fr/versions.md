@@ -214,6 +214,10 @@ toujours justes.
   un multiple du nombre de morceaux, les pixels en trop partagés entre les deux bords, et
   tous les morceaux ont exactement la même taille. Tout ou rien : un morceau en échec
   efface les autres. La boîte d'export l'annonce (« un fichier par morceau »).
+- **En plein écran**, une version en morceaux montrée a ses coupes tracées sur l'image
+  (idée de l'utilisateur, 13/11/2026), en tirets alternés clair et foncé, comme les
+  sélections des logiciels d'image : lisibles sur toute image sans mesurer sa luminosité
+  (`crop::draw_tile_cuts` ; `[gui.crop] tile_dash`, `tile_line_width`, `tile_opacity`).
 - Grilles et bandes verticales ajoutées le même soir (13/11/2026) : la géométrie les
   faisait déjà, il ne manquait que l'interface.
 - Dans le XMP : `"tiles":[2,1]` (colonnes, lignes), absent pour un seul morceau. Une

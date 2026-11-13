@@ -1025,6 +1025,11 @@ shade_opacity = 0.65
 line_width = 1.5
 handle_size = 9.0
 handle_grab = 10.0
+# Cuts of a version in tiles shown in full screen: dashes alternately light and dark
+# (readable on any image), length of a dash and thickness (points), opacity (0 to 1).
+tile_dash = 6.0
+tile_line_width = 1.0
+tile_opacity = 0.7
 
 [gui.folders]
 # Folders panel, left of the grid: shown at startup (<core.view.folders> shows or

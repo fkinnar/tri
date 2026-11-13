@@ -201,6 +201,10 @@ linked ones: a single frame to move, cuts always right.
   the extra pixels shared between both edges, and all tiles have exactly the same size.
   All or nothing: a failed tile removes the others. The export dialog says so ("one file
   per tile").
+- **In full screen**, a version in tiles that is shown has its cuts drawn on the image
+  (user idea, 2026-11-13), as dashes alternately light and dark, like the selections of
+  image editors: readable on any image without measuring its brightness
+  (`crop::draw_tile_cuts`; `[gui.crop] tile_dash`, `tile_line_width`, `tile_opacity`).
 - Grids and vertical strips added the same evening (2026-11-13): the geometry already
   did them, only the interface was missing.
 - In the XMP: `"tiles":[2,1]` (columns, rows), absent for a single tile. An older `tri`

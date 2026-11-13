@@ -1032,6 +1032,11 @@ shade_opacity = 0.65
 line_width = 1.5
 handle_size = 9.0
 handle_grab = 10.0
+# Coupes d'une version en morceaux montrée en plein écran : tirets alternés clair et foncé
+# (lisibles sur toute image), longueur d'un tiret et épaisseur (points), opacité (0 à 1).
+tile_dash = 6.0
+tile_line_width = 1.0
+tile_opacity = 0.7
 
 [gui.folders]
 # Panneau des dossiers, à gauche de la grille : affiché au démarrage (<core.view.folders>
