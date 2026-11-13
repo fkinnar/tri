@@ -741,7 +741,7 @@ badge-over = { $percent } % of pixels clipped (blown); click: large histogram
 badge-under = { $percent } % of pixels crushed; click: large histogram
 badge-versions = { $n ->
     [one] 1 version; click: edit it
-   *[other] { $n } versions; click: edit them
+   *[other] { $n } versions; click: see them, pick one to edit
 }
 help-title = Shortcuts
 help-search-hint = Search (e.g. "fpn", "star 3")…

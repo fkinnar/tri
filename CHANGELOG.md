@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **The versions badge edits** (#454): a click on the badge of a thumbnail reopens the
+  frame of its version, or with several opens the image full screen with the first one
+  shown (the "Version" list to pick, edit or delete); it started a new version. "Edit"
+  and "Delete" in that list look like its other items.
 - **The command line in the help** (#452, fixes #441): F1 lists the commands after the
   shortcuts, by theme, searched like them, with their form; a click unfolds an example
   filled in with the open folder or the selected images, and a button copies it. The help

@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Le badge des versions modifie** (#454) : un clic sur le badge d'une vignette rouvre
+  le cadre de sa version, ou, s'il y en a plusieurs, ouvre l'image en plein écran avec la
+  première montrée (la liste « Version » pour en choisir une, la modifier ou la
+  supprimer) ; il commençait une nouvelle version. « Modifier » et « Supprimer » ont
+  dans cette liste l'allure de ses autres éléments.
 - **La ligne de commande dans l'aide** (#452, corrige #441) : F1 liste les commandes à
   la suite des raccourcis, par thème, cherchées comme eux, avec leur forme ; un clic
   déplie un exemple rempli avec le dossier ouvert ou les images sélectionnées, et un
