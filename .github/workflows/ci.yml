@@ -150,9 +150,10 @@ jobs:
       - name: Tests
         run: cargo nextest run --workspace --profile ci ${{ env.FEATURES }}
 
-      # nextest ne lance pas les exemples de la documentation.
+      # nextest ne lance pas les exemples de la documentation (seul le moteur en a ; ses
+      # features seulement : celles de l'interface sont refusées avec -p tri).
       - name: Doc-tests
-        run: cargo test -p tri --doc ${{ env.FEATURES }}
+        run: cargo test -p tri --doc --no-default-features --features turbojpeg
 
       # Paquets prêts à installer (doc/en/packaging.md) : .dmg macOS, .tar.gz Linux,
       # .msi et .zip Windows.
