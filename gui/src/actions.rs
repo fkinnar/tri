@@ -424,6 +424,10 @@ pub enum Action {
     VersionTilesNext,
     /// Version : un morceau de moins.
     VersionTilesPrev,
+    /// Version : une ligne de morceaux de plus (grille, bande verticale ; 13/11/2026).
+    VersionRowsNext,
+    /// Version : une ligne de morceaux de moins.
+    VersionRowsPrev,
     /// Version : taper un rapport à soi (la liste s'ouvre sur le champ).
     VersionRatioCustom,
     /// Version : préréglage d'export suivant (« aucun » compris).
@@ -557,7 +561,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 242] = [
+    pub const ALL: [Action; 244] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -673,6 +677,8 @@ impl Action {
         Action::VersionRatioPrev,
         Action::VersionTilesNext,
         Action::VersionTilesPrev,
+        Action::VersionRowsNext,
+        Action::VersionRowsPrev,
         Action::VersionRatioCustom,
         Action::VersionExportNext,
         Action::VersionExportPrev,
@@ -936,9 +942,9 @@ impl Action {
             | Develop | DevelopWith(_) | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
             | CropPreset | CropPresetPrev | VersionNext | VersionPrev | VersionRatioNext
-            | VersionRatioPrev | VersionTilesNext | VersionTilesPrev | VersionRatioCustom
-            | VersionExportNext | VersionExportPrev | VersionName | VersionSavePreset
-            | VersionReset => Group::Crop,
+            | VersionRatioPrev | VersionTilesNext | VersionTilesPrev | VersionRowsNext
+            | VersionRowsPrev | VersionRatioCustom | VersionExportNext | VersionExportPrev
+            | VersionName | VersionSavePreset | VersionReset => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterColorsAll | FilterClear | FilterBlurry | FilterWellExposed | FilterStack
@@ -1117,6 +1123,8 @@ impl Action {
             Action::VersionRatioPrev => "core.version.ratio_prev",
             Action::VersionTilesNext => "core.version.tiles_next",
             Action::VersionTilesPrev => "core.version.tiles_prev",
+            Action::VersionRowsNext => "core.version.rows_next",
+            Action::VersionRowsPrev => "core.version.rows_prev",
             Action::VersionRatioCustom => "core.version.ratio_custom",
             Action::VersionExportNext => "core.version.export_next",
             Action::VersionExportPrev => "core.version.export_prev",
@@ -1336,8 +1344,9 @@ impl Action {
             | PanelRight => Some(Scope::Metadata),
             CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave | CropPreset
             | CropPresetPrev | VersionRatioNext | VersionRatioPrev | VersionTilesNext
-            | VersionTilesPrev | VersionRatioCustom | VersionExportNext | VersionExportPrev
-            | VersionName | VersionSavePreset | VersionReset => Some(Scope::Crop),
+            | VersionTilesPrev | VersionRowsNext | VersionRowsPrev | VersionRatioCustom
+            | VersionExportNext | VersionExportPrev | VersionName | VersionSavePreset
+            | VersionReset => Some(Scope::Crop),
             // Échelle et canal suivant : `s` et `c` dans le grand histogramme (retour du
             // 06/11/2026), ailleurs `<leader> i s` / `<leader> i c`.
             HistogramRed | HistogramGreen | HistogramBlue | HistogramAll | HistogramLuminance

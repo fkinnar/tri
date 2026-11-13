@@ -153,6 +153,8 @@ pub fn navigate(
         | Action::VersionRatioPrev
         | Action::VersionTilesNext
         | Action::VersionTilesPrev
+        | Action::VersionRowsNext
+        | Action::VersionRowsPrev
         | Action::VersionRatioCustom
         | Action::VersionExportNext
         | Action::VersionExportPrev

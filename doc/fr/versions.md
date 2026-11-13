@@ -199,10 +199,14 @@ toujours justes.
   (`Frame::value` : 4:5 × 2 = 8:5). Passer de 2 à 3 morceaux élargit le cadre autour de
   son centre, sans changer le 4:5. Marche aussi en libre (morceaux égaux d'un cadre libre)
   et en « original ».
-- **Barre de la version** : liste « 1 morceau », « 2 morceaux »… (jusqu'à
-  `Tiles::MAX` = 10) après l'orientation ; `c` / `Maj+C` un de plus / de moins (actions
-  `core.version.tiles_next` / `tiles_prev`) ; `0` (cadre d'origine) revient à un seul
-  morceau. Les coupes sont tracées sur le cadre. Nom proposé : « 4:5 × 2 ».
+- **Barre de la version** : partie « Morceaux », deux listes colonnes × lignes (1 à
+  `Tiles::MAX` = 10 chacune ; 3 × 1 un carrousel, 1 × 3 une bande verticale, 3 × 3 une
+  grille) ; `c` / `Maj+C` une colonne de plus / de moins, `g` / `Maj+G` une ligne
+  (actions `core.version.tiles_next` / `tiles_prev`, `rows_next` / `rows_prev`) ; `0`
+  (cadre d'origine) revient à un seul morceau. Les coupes sont tracées sur le cadre. Nom
+  proposé : « 4:5 × 2 » pour une bande horizontale, « 1:1 3×3 » sinon. Changer le
+  nombre de morceaux garde l'aire du cadre autour de son centre, comme un changement de
+  rapport.
 - **Export** : un fichier par morceau, dans l'ordre de lecture, numéroté
   (`DSCF0001-Pano_1.jpg`, `DSCF0001-Pano_2.jpg`). Le côté maximal du préréglage d'export
   vaut **pour un morceau** (1080 × 1350 pour Instagram) ; réduction et accentuation sont
@@ -210,8 +214,8 @@ toujours justes.
   un multiple du nombre de morceaux, les pixels en trop partagés entre les deux bords, et
   tous les morceaux ont exactement la même taille. Tout ou rien : un morceau en échec
   efface les autres. La boîte d'export l'annonce (« un fichier par morceau »).
-- **Pour plus tard** : la géométrie fait déjà les bandes verticales (`[1, n]`) et les
-  grilles (2 × 2, 3 × 3) ; seule l'interface reste à faire.
+- Grilles et bandes verticales ajoutées le même soir (13/11/2026) : la géométrie les
+  faisait déjà, il ne manquait que l'interface.
 - Dans le XMP : `"tiles":[2,1]` (colonnes, lignes), absent pour un seul morceau. Une
   version plus ancienne de `tri` lit une telle version comme un seul morceau, et perdrait
   les morceaux en la réécrivant.
@@ -226,8 +230,8 @@ cadre, Entrée.
   `ratio` (`"free"`, `"original"`, ou `"l:h"` dans l'orientation voulue) et `profile`
   (`""` : aucun). Une clé absente vient du préréglage fourni de même identifiant, comme
   pour les profils d'export. Préréglages fournis : `story` (9:16, Web), `post` (4:5,
-  Web) et `carousel` (deux 4:5, Web). `tiles` : nombre de morceaux côte à côte (1 par
-  défaut).
+  Web) et `carousel` (deux 4:5, Web). `tiles` et `rows` : morceaux côte à côte et l'un
+  sous l'autre (1 par défaut).
 - **Barre du recadrage** : liste « Préréglage » ; `v` / `Maj+V` ou `Tab` / `Maj+Tab` passe au suivant /
   précédent (`p` jusqu'au 21/10/2026 : c'est aussi la carte de netteté, qui restait
   affichée ; `p` l'éteint aussi pendant le recadrage).

@@ -329,8 +329,9 @@ loupe = "m"
 # Each part of the version bar from the keyboard (2026-11-07): v / Shift+V (or Tab /
 # Shift+Tab) the next / previous version preset; r / Shift+R the next / previous ratio
 # (added ones included), "/" a custom ratio (on the numeric keypad too); e / Shift+E the next / previous export
-# preset; n (or F2, like renaming) the name; Ctrl+S save as a preset; c / Shift+C one tile
-# more / less (a strip cut into equal tiles, for an Instagram carousel; 2026-11-13).
+# preset; n (or F2, like renaming) the name; Ctrl+S save as a preset; c / Shift+C one column
+# of tiles more / less (a strip for an Instagram carousel), g / Shift+G one row (a grid;
+# 2026-11-13).
 "core.version.preset" = ["v", "Tab"]
 "core.version.preset_prev" = ["Shift+v", "Shift+Tab"]
 "core.version.ratio_next" = ["r"]
@@ -338,6 +339,8 @@ loupe = "m"
 "core.version.ratio_custom" = ["/"]
 "core.version.tiles_next" = ["c"]
 "core.version.tiles_prev" = ["Shift+c"]
+"core.version.rows_next" = ["g"]
+"core.version.rows_prev" = ["Shift+g"]
 "core.version.export_next" = ["e"]
 "core.version.export_prev" = ["Shift+e"]
 "core.version.name" = ["n", "F2"]

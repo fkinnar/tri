@@ -533,8 +533,10 @@ pub struct Preset {
     pub ratio: Ratio,
     /// Profil d'export proposé ; vide : aucun.
     pub profile: String,
-    /// Morceaux côte à côte (bande horizontale) ; 1 : le cadre entier.
+    /// Morceaux côte à côte (colonnes) ; 1 : pas coupé en largeur.
     pub tiles: u32,
+    /// Morceaux l'un sous l'autre (lignes) ; 1 : pas coupé en hauteur.
+    pub rows: u32,
 }
 
 impl Preset {
@@ -545,6 +547,7 @@ impl Preset {
             ratio,
             profile: profile.into(),
             tiles: 1,
+            rows: 1,
         }
     }
 
@@ -556,6 +559,7 @@ impl Preset {
             ("ratio", Value::Str(self.ratio.label())),
             ("profile", Value::Str(self.profile.clone())),
             ("tiles", Value::Int(i64::from(self.tiles))),
+            ("rows", Value::Int(i64::from(self.rows))),
         ]
     }
 
@@ -574,7 +578,7 @@ impl Preset {
 
     /// Le dallage du préréglage.
     pub fn tiles(&self) -> Tiles {
-        Tiles::strip(self.tiles)
+        Tiles::from([self.tiles, self.rows])
     }
 }
 
@@ -587,6 +591,7 @@ struct PresetToml {
     ratio: Option<String>,
     profile: Option<String>,
     tiles: Option<u32>,
+    rows: Option<u32>,
 }
 
 /// Les préréglages : fournis, puis ceux de l'utilisateur (par identifiant).
@@ -629,6 +634,9 @@ impl<'de> Deserialize<'de> for Presets {
             }
             if let Some(v) = t.tiles {
                 p.tiles = v.clamp(1, Tiles::MAX);
+            }
+            if let Some(v) = t.rows {
+                p.rows = v.clamp(1, Tiles::MAX);
             }
         }
         Ok(Presets(list))
@@ -1010,7 +1018,11 @@ mod tests {
         );
         assert_eq!(p[0].profile, "");
         assert_eq!(p[3].ratio, Ratio::Fixed(3, 2));
-        assert_eq!(p[3].tiles, 1);
+        assert_eq!(p[3].tiles(), Tiles::ONE);
+        let grid: S =
+            toml::from_str("[versions.presets.grille]\nratio = \"1:1\"\ntiles = 3\nrows = 3\n")
+                .unwrap();
+        assert_eq!(grid.versions.presets.0[3].tiles(), Tiles::from([3, 3]));
         assert!(toml::from_str::<S>("[versions.presets.x]\nratio = \"large\"\n").is_err());
         let taken = |id: &str| ["story", "tirage-a4"].contains(&id);
         assert_eq!(new_id("Tirage A4", taken), "tirage-a4-2");
