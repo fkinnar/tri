@@ -22177,22 +22177,39 @@ mod tests {
         // des filtres n'en a plus).
         // Ouvre la liste n° `n` jusqu'à voir `choice` : le clic d'ouverture se perd
         // parfois sur la CI Windows (08/11/2026, #379).
+        // Ouvre la liste n° `n` jusqu'à voir `choice` (déjà ouverte : rien à faire, un clic
+        // la refermerait) ; la liste attendue si elle n'est pas encore dessinée.
         let combo = |h: &mut Harness<'_, TriApp>, n: usize, choice: &str| {
             for _ in 0..5 {
-                h.get_all_by_role(egui::accesskit::Role::ComboBox)
-                    .nth(n)
-                    .expect("liste déroulante")
-                    .click();
-                h.run_steps(2);
                 if h.query_by_label(choice).is_some() {
                     return;
                 }
+                let deadline = Instant::now() + Duration::from_secs(30);
+                while h
+                    .query_all_by_role(egui::accesskit::Role::ComboBox)
+                    .nth(n)
+                    .is_none()
+                {
+                    assert!(Instant::now() < deadline, "liste déroulante n° {n}");
+                    h.run_steps(1);
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                h.get_all_by_role(egui::accesskit::Role::ComboBox)
+                    .nth(n)
+                    .unwrap()
+                    .click();
+                h.run_steps(2);
             }
-            panic!("la liste n° {n} ne s'ouvre pas ({choice})");
+            assert!(
+                h.query_by_label(choice).is_some(),
+                "la liste n° {n} ne s'ouvre pas ({choice})"
+            );
         };
         // Choisit `choice` dans la liste n° `n` jusqu'à ce que `done` : les choix une fois
         // leur place arrêtée (clic tombé à côté sur la CI Windows, 07/11/2026), et le clic
-        // sur le choix aussi perdu parfois (build de nuit Windows, 13/11/2026).
+        // sur le choix aussi perdu parfois (build de nuit Windows, 13/11/2026). Pas
+        // d'Échap entre deux essais : l'application la reçoit aussi (CI Windows,
+        // 13/11/2026) ; une liste restée ouverte est reprise telle quelle.
         let pick = |h: &mut Harness<'_, TriApp>,
                     n: usize,
                     choice: &str,
@@ -22203,11 +22220,6 @@ mod tests {
                 h.run_steps(2);
                 if done(h.state()) {
                     return;
-                }
-                // La liste encore ouverte : Échap la referme avant de recommencer.
-                if h.query_by_label(choice).is_some() {
-                    h.key_press(Key::Escape);
-                    h.run_steps(2);
                 }
             }
             panic!("« {choice} » jamais choisi dans la liste n° {n}");
