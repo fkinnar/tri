@@ -151,7 +151,7 @@ User's rule (2026-10-19): the exported image is the one being looked at.
 
 | Where | Exported image |
 |---|---|
-| Grid | developed by the software of its developed render (darktable, RapidRAW), otherwise LibRaw render |
+| Grid | the thumbnails' shown render (2026-11-13): camera JPEG, LibRaw render, or the chosen software if found (otherwise LibRaw); "cover": LibRaw render. A development always goes through its software |
 | Full screen, developed (`Shift+B`) | developed by the software shown |
 | Full screen, RAW render (`b`) | LibRaw render |
 | Full screen, camera JPEG | the camera JPEG (embedded preview, at its own size) |
