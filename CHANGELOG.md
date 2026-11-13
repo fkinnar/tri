@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **The command line in the help** (#452, fixes #441): F1 lists the commands after the
+  shortcuts, by theme, searched like them; a button copies a command filled in with the
+  open folder or the selected images. A short paragraph in the manual.
 - **`tri --help`** (#451, part of #441): every command of the command line explained
   by theme, with its options and an example (`-h` too); the short usage shown on an
   error comes from the same description.

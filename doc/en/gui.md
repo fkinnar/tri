@@ -1154,6 +1154,15 @@ the `[menus]` section of `keys.toml` (`"<leader> i" = "histogram"`: message
 the most frequent theme of its actions. Screenshot: step `keys:Ctrl+b r` of
 `TRI_GUI_ACTIONS`.
 
+### Command line in the help (F1, issue 441)
+
+After the shortcuts, one section per theme ("Command line: Ratings"…), taken from
+`tri::commands` (see [commands.md](commands.md)): each command on one line, its
+description (in full on hover, with the syntax and options), then its example and a
+button that copies it, filled in with the open folder and the selection
+(`Command::example`). Searched with the rest (`help_commands`): words only, not scattered
+letters (the texts are long). A typed key searches the actions only.
+
 ### "Help here" (`?`, 2026-11-06)
 
 Second part of the help redesign (the user's idea: a newcomer should easily find what to

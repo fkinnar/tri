@@ -18147,6 +18147,7 @@ impl TriApp {
         let mut download = None;
         let mut report = false;
         let mut open_log = false;
+        let mut copied: Option<String> = None;
         let opening = self.help_search.is_none();
         let mut query = self.help_search.take().unwrap_or_default();
         // Défilement au clavier (retour du 18/10/2026) : les touches de navigation du
@@ -18335,6 +18336,58 @@ impl TriApp {
                                         HelpLine::Group(name) => {
                                             ui.label(egui::RichText::new(name).strong());
                                         }
+                                        HelpLine::Command(command) => {
+                                            // La description (en entier au survol, avec la
+                                            // syntaxe et les options), puis l'exemple rempli
+                                            // et de quoi le copier.
+                                            let example = command.example(
+                                                Some(&self.folder.dir),
+                                                &self.selection.targets(&self.files, self.selected),
+                                            );
+                                            let tip = command_tip(command);
+                                            ui.allocate_ui_with_layout(
+                                                vec2(label_column, row_height),
+                                                egui::Layout::left_to_right(egui::Align::Center),
+                                                |ui| {
+                                                    ui.set_min_width(label_column);
+                                                    ui.set_max_width(label_column);
+                                                    ui.add(
+                                                        egui::Label::new(command.description())
+                                                            .truncate(),
+                                                    )
+                                                    .on_hover_text(&tip);
+                                                },
+                                            );
+                                            let (rect, copy) = crate::marks::clickable_named(
+                                                ui,
+                                                14.0,
+                                                &format!(
+                                                    "{} {}",
+                                                    t!("help-command-copy"),
+                                                    command.id
+                                                ),
+                                                &format!("{}\n{example}", t!("help-command-copy")),
+                                            );
+                                            let back = ui.visuals().panel_fill;
+                                            crate::marks::copy_icon(
+                                                ui.painter(),
+                                                rect,
+                                                ui.visuals().text_color(),
+                                                back,
+                                            );
+                                            if copy.clicked() {
+                                                copied = Some(example.clone());
+                                            }
+                                            ui.add(
+                                                egui::Label::new(
+                                                    egui::RichText::new(&example)
+                                                        .monospace()
+                                                        .weak(),
+                                                )
+                                                .truncate(),
+                                            )
+                                            .on_hover_text(&tip);
+                                        }
                                         HelpLine::Action { label, id, keys } => {
                                             // Identifiant technique au survol seulement (utile
                                             // pour la section `[keys]` de la configuration).
@@ -18394,6 +18447,10 @@ impl TriApp {
         if open_log {
             self.help = false;
             self.open_log(ctx, Vec::new());
+        }
+        if let Some(command) = copied {
+            ctx.copy_text(command);
+            self.notice = Some((t!("help-command-copied"), false));
         }
     }
 
@@ -20246,6 +20303,9 @@ enum HelpLine {
         id: &'static str,
         keys: String,
     },
+    /// Commande de la ligne de commande (issue n° 441) : sa description, et son exemple
+    /// à copier, rempli avec le dossier et la sélection.
+    Command(&'static tri::commands::Command),
 }
 
 /// Palette de commandes ouverte.
@@ -20660,11 +20720,65 @@ impl HelpLines {
                 keys,
             });
         }
+        // La ligne de commande à la suite, par thème, cherchée de même (issue n° 441). Une
+        // touche tapée (« ctrl f ») ne cherche que les actions.
+        if keymap.actions_for_typed_keys(query).is_none() {
+            let mut theme = None;
+            for command in help_commands(query) {
+                if theme != Some(command.theme) {
+                    theme = Some(command.theme);
+                    lines.push(HelpLine::Group(t!(
+                        "help-commands-group",
+                        theme = command.theme.name()
+                    )));
+                }
+                lines.push(HelpLine::Command(command));
+            }
+        }
         HelpLines {
             query: query.to_string(),
             lines,
         }
     }
+}
+
+/// Bulle d'une commande de l'aide : description, syntaxe, options.
+fn command_tip(command: &tri::commands::Command) -> String {
+    let mut tip = format!("{}\n\n{}", command.description(), command.syntax());
+    for (option, description) in command.options() {
+        tip.push_str(&format!("\n{option}  {description}"));
+    }
+    tip
+}
+
+/// Commandes de la ligne de commande qui correspondent à `query` (toutes sans recherche),
+/// dans l'ordre de l'aide : description, syntaxe et options, thème, « ligne de commande ».
+fn help_commands(query: &str) -> Vec<&'static tri::commands::Command> {
+    let section = t!("help-commands");
+    let found: Vec<(&'static tri::commands::Command, tri::fuzzy::Match)> = tri::commands::COMMANDS
+        .iter()
+        .filter_map(|command| {
+            let fields = [
+                command.description(),
+                command.search_text(),
+                command.theme.name(),
+                section.clone(),
+            ];
+            let fields: Vec<&str> = fields.iter().map(String::as_str).collect();
+            // Des mots, pas des lettres éparpillées : les textes des commandes sont longs,
+            // trois lettres s'y trouvent presque toujours.
+            let found = tri::fuzzy::find(query, &fields)?;
+            (query.trim().is_empty() || found.close).then_some((command, found))
+        })
+        .collect();
+    let mut commands: Vec<&'static tri::commands::Command> = tri::fuzzy::relevant(found)
+        .into_iter()
+        .map(|(command, _)| command)
+        .collect();
+    let rank =
+        |c: &tri::commands::Command| tri::commands::Theme::ALL.iter().position(|t| *t == c.theme);
+    commands.sort_by_key(|c| rank(c)); // stable : ordre de la liste dans un thème
+    commands
 }
 
 /// Lignes de l'aide : (action, raccourcis), rangées par thème. Sans recherche, toutes les
@@ -26669,6 +26783,54 @@ mod tests {
     }
 
     #[test]
+    fn the_help_lists_the_command_line_and_copies_a_command() {
+        // Issue n° 441 : les commandes à la suite des raccourcis, cherchées de même, et un
+        // bouton qui copie l'exemple rempli avec le dossier ouvert.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::F1, Modifiers::NONE);
+        let commands = |h: &Harness<'_, TriApp>| -> Vec<&'static str> {
+            h.state()
+                .help_lines
+                .iter()
+                .flat_map(|l| &l.lines)
+                .filter_map(|l| match l {
+                    HelpLine::Command(c) => Some(c.id),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert_eq!(commands(&h).len(), tri::commands::COMMANDS.len());
+        // Une recherche : la commande qui y répond, avec son thème.
+        h.state_mut().help_search = Some("décharge une carte".into());
+        h.run_steps(3);
+        assert_eq!(commands(&h).first(), Some(&"offload"), "{:?}", commands(&h));
+        assert!(
+            h.query_by_label("Ligne de commande : Déchargement")
+                .is_some()
+        );
+        h.state_mut().help_search = Some("exposition de chaque image".into());
+        h.run_steps(3);
+        assert!(commands(&h).contains(&"exposure"), "{:?}", commands(&h));
+        let copy = format!("{} exposure", t!("help-command-copy"));
+        h.get_by_label(&copy).click();
+        // Le texte copié est dans la sortie de l'image où le clic est vu.
+        h.step();
+        assert_eq!(h.state().notice, Some((t!("help-command-copied"), false)));
+        let dir = tri::commands::shell_quote(&h.state().folder.dir);
+        let copied = h
+            .output()
+            .platform_output
+            .commands
+            .iter()
+            .find_map(|c| match c {
+                egui::OutputCommand::CopyText(text) => Some(text.clone()),
+                _ => None,
+            });
+        assert_eq!(copied, Some(format!("tri {dir} --exposure")));
+    }
+
+    #[test]
     fn help_search_filters_and_typing_is_not_a_shortcut() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
@@ -26685,7 +26847,7 @@ mod tests {
             .flat_map(|l| &l.lines)
             .filter_map(|l| match l {
                 HelpLine::Group(name) => Some(name.as_str()),
-                HelpLine::Action { .. } => None,
+                HelpLine::Action { .. } | HelpLine::Command(_) => None,
             })
             .collect();
         assert!(groups.contains(&"Notation"), "{groups:?}");

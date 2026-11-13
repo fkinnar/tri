@@ -748,6 +748,10 @@ badge-versions = { $n ->
 }
 help-title = Raccourcis
 help-search-hint = Rechercher (ex. « pnd », « etoile 3 »)…
+help-commands = Ligne de commande
+help-commands-group = Ligne de commande : { $theme }
+help-command-copy = Copier la commande
+help-command-copied = Commande copiée dans le presse-papier
 help-no-match = Aucune action ne correspond.
 help-close-hint = Échap ou <core.app.help> pour fermer.
 empty-folder-gone = Le dossier « { $name } » n'est plus là (disque débranché ?)

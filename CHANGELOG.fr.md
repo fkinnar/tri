@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **La ligne de commande dans l'aide** (#452, corrige #441) : F1 liste les commandes à
+  la suite des raccourcis, par thème, cherchées comme eux ; un bouton copie une commande
+  remplie avec le dossier ouvert ou les images sélectionnées. Un court paragraphe dans le
+  manuel.
 - **`tri --help`** (#451, partie de #441) : chaque commande de la ligne de commande
   expliquée par thème, avec ses options et un exemple (`-h` aussi) ; le mode d'emploi
   court affiché sur une erreur vient de la même description.
