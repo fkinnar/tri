@@ -628,6 +628,17 @@ pub fn read(image: &Path) -> Result<Versions, xmp::XmpError> {
     )?))
 }
 
+/// Les images de `images` qui ont au moins une version, d'après leurs sidecars (résumé
+/// du dossier, issue n° 388 : une lecture par image, à faire en fond). Un sidecar
+/// illisible compte comme sans version.
+pub fn with_versions(images: &[PathBuf]) -> Vec<PathBuf> {
+    images
+        .iter()
+        .filter(|image| read(image).is_ok_and(|v| !v.list.is_empty()))
+        .cloned()
+        .collect()
+}
+
 /// Écrit les versions de `image` dans son sidecar (créé selon `default` s'il le faut) ;
 /// seule la liste `tri:Versions` change. Renvoie le sidecar.
 pub fn write(
@@ -761,6 +772,32 @@ mod tests {
         assert_eq!(new_id("Tirage A4", taken), "tirage-a4-2");
         assert_eq!(new_id("Été 2026 !", taken), "ete-2026");
         assert_eq!(new_id("  ", taken), "preset");
+    }
+
+    #[test]
+    fn the_images_with_versions_are_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let with = dir.path().join("a.RAF");
+        let without = dir.path().join("b.RAF");
+        for image in [&with, &without] {
+            std::fs::write(image, b"raw").unwrap();
+        }
+        let mut versions = Versions::default();
+        versions.list.push(Version {
+            name: "Story".into(),
+            crop: Rect::fit(Ratio::Fixed(9, 16), 1.5),
+            ratio: Ratio::Fixed(9, 16),
+            source: Source::Developed,
+            profile: None,
+        });
+        write(&with, &versions, Convention::Darktable).unwrap();
+        // Des notes seules ne font pas une version.
+        let notes = xmp::Notes {
+            stars: 2,
+            ..Default::default()
+        };
+        xmp::write(&without, &notes, Convention::Darktable).unwrap();
+        assert_eq!(with_versions(&[with.clone(), without]), vec![with]);
     }
 
     #[test]
