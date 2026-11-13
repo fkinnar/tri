@@ -297,14 +297,16 @@ ratios = []
 # name : nom de la version créée (vide : nom fourni traduit, sinon l'identifiant) ;
 # ratio : "free", "original", ou "l:h" dans l'orientation voulue ("9:16" : portrait) ;
 # profile : préréglage d'export proposé (identifiant), "" : aucun ;
-# tiles : morceaux côte à côte, chacun au rapport ratio, un fichier par morceau à l'export
-#   (1 à 10 ; 1 : le cadre entier).
+# tiles, rows : morceaux côte à côte (colonnes) et l'un sous l'autre (lignes), chacun au
+#   rapport ratio, un fichier par morceau à l'export (1 à 10 ; 1 et 1 : le cadre entier ;
+#   3 et 1 : un carrousel ; 3 et 3 : une grille).
 [versions.presets.story]
 # Story (Instagram…) : 9:16, pour le web.
 name = ""
 ratio = "9:16"
 profile = "web"
 tiles = 1
+rows = 1
 
 [versions.presets.post]
 # Publication : 4:5, pour le web.
@@ -312,6 +314,7 @@ name = ""
 ratio = "4:5"
 profile = "web"
 tiles = 1
+rows = 1
 
 [versions.presets.carousel]
 # Carrousel (Instagram) : deux 4:5 côte à côte, un panorama qu'on fait défiler.
@@ -319,6 +322,7 @@ name = ""
 ratio = "4:5"
 profile = "web"
 tiles = 2
+rows = 1
 
 [update]
 # Rechercher une mise à jour (aide, tri --check-update), sur demande seulement : liste des
