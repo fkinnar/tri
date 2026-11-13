@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **CI : un test en échec est relancé une fois** (#461) : les tests passent par
+  cargo-nextest sur GitHub ; un test qui ne passe qu'à la relance est marqué FLAKY (clics
+  simulés perdus sur les machines de GitHub) au lieu de bloquer la PR ; un vrai bug
+  échoue toujours deux fois.
 - **Versions en grille** (#459) : la partie « Morceaux » de la barre de la version est
   maintenant colonnes × lignes, pour une bande verticale (1 × 3) ou une grille (2 × 2,
   3 × 3) ; `g` / `Maj+G` une ligne de plus / de moins (`c` / `Maj+C` restent pour les

@@ -139,9 +139,20 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets ${{ env.FEATURES }} -- -D warnings
 
-      # Tous les programmes de tests, même après un échec : tout voir en un passage.
+      # Tests par cargo-nextest (13/11/2026) : un test en échec est relancé une fois, et
+      # marqué FLAKY s'il passe alors (clics simulés perdus sur les machines de GitHub) ;
+      # tout voir en un passage. Configuration : .config/nextest.toml.
+      - name: nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
       - name: Tests
-        run: cargo test --workspace --no-fail-fast ${{ env.FEATURES }}
+        run: cargo nextest run --workspace --profile ci ${{ env.FEATURES }}
+
+      # nextest ne lance pas les exemples de la documentation.
+      - name: Doc-tests
+        run: cargo test -p tri --doc ${{ env.FEATURES }}
 
       # Paquets prêts à installer (doc/en/packaging.md) : .dmg macOS, .tar.gz Linux,
       # .msi et .zip Windows.

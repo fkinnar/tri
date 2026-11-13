@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **CI: a failed test is retried once** (#461): the tests run through cargo-nextest on
+  GitHub; a test that only passes on the retry is marked FLAKY (lost simulated clicks on
+  GitHub's machines) instead of blocking the pull request; a real bug still fails twice.
 - **Versions in a grid** (#459): the "Tiles" part of the version bar is now columns ×
   rows, for a vertical strip (1 × 3) or a grid (2 × 2, 3 × 3); `g` / `Shift+G` one row
   more / less (`c` / `Shift+C` stay for the columns); `rows` key in the version presets.
