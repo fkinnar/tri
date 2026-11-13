@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 
 use eframe::egui::{self, Color32, CursorIcon, Pos2, Rect as ScreenRect, Response, Stroke, Ui};
-use tri::versions::{Handle, Ratio, Rect, Source, Version, Versions};
+use tri::versions::{Frame, Handle, Ratio, Rect, Source, Tiles, Version, Versions};
 
 use crate::settings::CropSettings;
 
@@ -17,8 +17,10 @@ pub struct Crop {
     pub image: PathBuf,
     /// Cadre (proportions de l'image vue).
     pub rect: Rect,
-    /// Rapport.
+    /// Rapport (d'un morceau).
     pub ratio: Ratio,
+    /// Morceaux (bande horizontale pour un carrousel, 13/11/2026).
+    pub tiles: Tiles,
     /// Rapport largeur / hauteur de l'image vue (pixels), connu au premier dessin.
     aspect: Option<f64>,
     /// Version modifiée (sa place dans la liste), sinon nouvelle.
@@ -47,6 +49,8 @@ pub struct Crop {
     /// Bulle de la liste des préréglages, avec les raccourcis en vigueur (posée par
     /// l'appelant avant [`Crop::bar`], 08/11/2026 : « p » écrit en dur, périmé).
     pub preset_tip: String,
+    /// Bulle de la liste des morceaux, avec ses raccourcis (posée par l'appelant).
+    pub tiles_tip: String,
 }
 
 /// Ce que la barre du recadrage demande.
@@ -93,13 +97,19 @@ pub fn ratio_name(ratio: Ratio) -> String {
     }
 }
 
-/// Nom proposé d'une version de rapport `ratio` : celui du rapport, sauf « Original »,
+/// Nom proposé d'une version de forme `frame` : celui du rapport (suivi du nombre de
+/// morceaux : « 4:5 × 2 »), sauf « Original »,
 /// qui désigne l'image non recadrée dans la liste des versions (retour du 23/10/2026 : deux
 /// « Original » indiscernables) ; « Recadrage » à la place.
-fn default_name(ratio: Ratio) -> String {
-    match ratio {
+fn default_name(frame: Frame) -> String {
+    let name = match frame.ratio {
         Ratio::Original { .. } => t!("crop-name-original-ratio"),
-        _ => ratio_name(ratio),
+        ratio => ratio_name(ratio),
+    };
+    if frame.tiles.is_one() {
+        name
+    } else {
+        format!("{name} × {}", frame.tiles.count())
     }
 }
 
@@ -114,6 +124,7 @@ impl Crop {
             image,
             rect: Rect::FULL,
             ratio,
+            tiles: Tiles::ONE,
             aspect,
             editing: None,
             name: String::new(),
@@ -128,9 +139,25 @@ impl Crop {
             preset: None,
             others,
             preset_tip: String::new(),
+            tiles_tip: String::new(),
         };
-        crop.name = crop.free_name(&default_name(ratio));
+        crop.name = crop.free_name(&default_name(crop.frame()));
         crop
+    }
+
+    /// Forme du cadre : rapport d'un morceau et morceaux.
+    pub fn frame(&self) -> Frame {
+        Frame {
+            ratio: self.ratio,
+            tiles: self.tiles,
+        }
+    }
+
+    /// Le nom proposé suit la forme, tant qu'on ne l'a pas tapé.
+    fn rename(&mut self) {
+        if !self.name_edited {
+            self.name = self.free_name(&default_name(self.frame()));
+        }
     }
 
     /// Reprendre la version `index` (`version`) ; `others` : les autres versions de l'image.
@@ -139,6 +166,7 @@ impl Crop {
             image,
             rect: version.crop,
             ratio: version.ratio,
+            tiles: version.tiles,
             aspect: None,
             editing: Some(index),
             name: version.name.clone(),
@@ -153,6 +181,7 @@ impl Crop {
             preset: None,
             others,
             preset_tip: String::new(),
+            tiles_tip: String::new(),
         }
     }
 
@@ -176,12 +205,13 @@ impl Crop {
         !self.name.trim().is_empty() && !self.name_taken()
     }
 
-    /// Applique un préréglage : son rapport exact (orientation comprise), son nom et son
-    /// profil ; le cadre se recentre au plus grand, on l'ajuste ensuite.
-    pub fn apply_preset(&mut self, id: &str, name: String, ratio: Ratio, profile: Option<String>) {
-        self.ratio = ratio;
+    /// Applique un préréglage : son rapport exact (orientation comprise), ses morceaux, son
+    /// nom et son profil ; le cadre se recentre au plus grand, on l'ajuste ensuite.
+    pub fn apply_preset(&mut self, id: &str, name: String, frame: Frame, profile: Option<String>) {
+        self.ratio = frame.ratio;
+        self.tiles = frame.tiles;
         if let Some(aspect) = self.aspect {
-            self.rect = Rect::fit(ratio, aspect);
+            self.rect = Rect::fit(frame, aspect);
         }
         self.name = self.free_name(&name);
         self.name_edited = true;
@@ -203,6 +233,7 @@ impl Crop {
             ratio: self.ratio,
             source: self.source,
             profile: self.profile.clone(),
+            tiles: self.tiles,
         }
     }
 
@@ -216,17 +247,46 @@ impl Crop {
             ratio
         };
         self.ratio = ratio;
-        // Proportions encore inconnues : le cadre sera calculé au premier dessin.
+        self.refit();
+        self.rename();
+    }
+
+    /// Le cadre à la forme en cours : même centre, au plus grand qui tienne (ou le plus
+    /// grand de cette forme si le cadre couvre toute l'image). Proportions encore
+    /// inconnues : le cadre sera calculé au premier dessin.
+    fn refit(&mut self) {
         if let Some(aspect) = self.aspect {
             self.rect = if self.rect == Rect::FULL {
-                Rect::fit(ratio, aspect)
+                Rect::fit(self.frame(), aspect)
             } else {
-                self.rect.with_ratio(ratio, aspect)
+                self.rect.with_ratio(self.frame(), aspect)
             };
         }
-        if !self.name_edited {
-            self.name = self.free_name(&default_name(ratio));
+    }
+
+    /// `n` morceaux côte à côte (1 : le cadre entier) ; chacun garde le rapport choisi, le
+    /// cadre s'élargit ou se resserre autour de son centre.
+    pub fn set_tiles(&mut self, n: u32) {
+        let tiles = Tiles::strip(n);
+        if tiles == self.tiles {
+            return;
         }
+        self.tiles = tiles;
+        self.refit();
+        self.rename();
+    }
+
+    /// Un morceau de plus (`forward`) ou de moins, en boucle de 1 à [`Tiles::MAX`].
+    pub fn step_tiles(&mut self, forward: bool) {
+        let n = self.tiles.columns;
+        let next = if forward {
+            n % Tiles::MAX + 1
+        } else if n <= 1 {
+            Tiles::MAX
+        } else {
+            n - 1
+        };
+        self.set_tiles(next);
     }
 
     /// Rapport suivant (`forward`) ou précédent de la liste (avec `added`), en boucle ;
@@ -267,27 +327,24 @@ impl Crop {
     /// 07/11/2026 : `0`, ou Ctrl+clic sur « Original »).
     pub fn reset_frame(&mut self) {
         self.ratio = Ratio::Original { flipped: false };
+        self.tiles = Tiles::ONE;
         self.rect = Rect::FULL;
-        if !self.name_edited {
-            self.name = self.free_name(&default_name(self.ratio));
-        }
+        self.rename();
     }
 
     /// Portrait ↔ paysage.
     pub fn rotate(&mut self) {
         self.ratio = self.ratio.rotated();
         if let Some(aspect) = self.aspect {
-            self.rect = self.rect.with_ratio(self.ratio, aspect);
+            self.rect = self.rect.with_ratio(self.frame(), aspect);
         }
-        if !self.name_edited {
-            self.name = self.free_name(&default_name(self.ratio));
-        }
+        self.rename();
     }
 
     /// Déplace le cadre de `(dx, dy)` (proportions de l'image).
     pub fn nudge(&mut self, dx: f64, dy: f64) {
         if let Some(aspect) = self.aspect {
-            self.rect = self.rect.drag(Handle::Move, dx, dy, self.ratio, aspect);
+            self.rect = self.rect.drag(Handle::Move, dx, dy, self.frame(), aspect);
         }
     }
 
@@ -299,7 +356,7 @@ impl Crop {
             Handle::Bottom
         };
         if let Some(aspect) = self.aspect {
-            self.rect = self.rect.drag(handle, dx, dy, self.ratio, aspect);
+            self.rect = self.rect.drag(handle, dx, dy, self.frame(), aspect);
         }
     }
 
@@ -334,8 +391,8 @@ impl Crop {
             self.aspect = Some(aspect);
             if self.editing.is_none() {
                 self.rect = match known {
-                    None => Rect::fit(self.ratio, aspect),
-                    Some(_) => self.rect.with_ratio(self.ratio, aspect),
+                    None => Rect::fit(self.frame(), aspect),
+                    Some(_) => self.rect.with_ratio(self.frame(), aspect),
                 };
             }
         }
@@ -360,7 +417,7 @@ impl Crop {
                     handle,
                     f64::from(d.x / image.width()),
                     f64::from(d.y / image.height()),
-                    self.ratio,
+                    self.frame(),
                     aspect,
                 );
             }
@@ -413,6 +470,24 @@ impl Crop {
             Stroke::new(line, Color32::WHITE),
             egui::StrokeKind::Middle,
         );
+        // Les coupes entre les morceaux : même trait, plus fin.
+        let cut = (line * 0.5).max(1.0);
+        for r in self.tiles.cells(Rect::FULL).iter().skip(1) {
+            let at = |v: f64, a: f32, b: f32| a + v as f32 * (b - a);
+            let mut lines = Vec::new();
+            if r.x > 0.0 && r.y == 0.0 {
+                let x = at(r.x, frame.left(), frame.right());
+                lines.push([egui::pos2(x, frame.top()), egui::pos2(x, frame.bottom())]);
+            }
+            if r.y > 0.0 && r.x == 0.0 {
+                let y = at(r.y, frame.top(), frame.bottom());
+                lines.push([egui::pos2(frame.left(), y), egui::pos2(frame.right(), y)]);
+            }
+            for l in lines {
+                painter.line_segment(l, Stroke::new(cut + 2.0, Color32::from_black_alpha(120)));
+                painter.line_segment(l, Stroke::new(cut, Color32::WHITE));
+            }
+        }
         let size = settings.handle_size;
         for p in [
             frame.left_top(),
@@ -622,6 +697,18 @@ impl Crop {
         if turn.clicked() {
             self.rotate();
         }
+        // Morceaux : une bande horizontale (carrousel Instagram, 13/11/2026).
+        let mut n = self.tiles.columns;
+        egui::ComboBox::from_id_salt("crop_tiles")
+            .selected_text(tiles_name(n))
+            .show_ui(ui, |ui| {
+                for k in 1..=Tiles::MAX {
+                    ui.selectable_value(&mut n, k, tiles_name(k));
+                }
+            })
+            .response
+            .on_hover_text(&self.tiles_tip);
+        self.set_tiles(n);
         ui.add_space(gap);
         // Export : le préréglage d'export, facultatif.
         section(ui, &t!("crop-profile"), ui.spacing().combo_width);
@@ -704,6 +791,11 @@ impl Crop {
             }
         });
     }
+}
+
+/// « 1 morceau », « 2 morceaux »…
+pub fn tiles_name(n: u32) -> String {
+    t!("crop-tiles", n = n)
 }
 
 /// Dans une ligne qui passe à la ligne : passe à la suivante si le libellé `label` et un

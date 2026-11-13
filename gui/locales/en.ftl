@@ -148,6 +148,8 @@ action-core-version-preset = Version: next preset
 action-core-version-preset_prev = Version: previous preset
 action-core-version-ratio_next = Version: next ratio
 action-core-version-ratio_prev = Version: previous ratio
+action-core-version-tiles_next = Version: one more tile
+action-core-version-tiles_prev = Version: one tile less
 action-core-version-ratio_custom = Version: type a ratio of your own (17:23…)
 action-core-version-export_next = Version: next export preset
 action-core-version-export_prev = Version: previous export preset
@@ -390,6 +392,11 @@ crop-ratio-original = Original
 crop-turn-portrait = Turn to portrait
 crop-turn-landscape = Turn to landscape
 crop-turn-none = Free or square frame: no orientation
+crop-tiles = { $n ->
+    [one] 1 tile
+   *[other] { $n } tiles
+}
+crop-tiles-tip = Tiles: the frame cut into a strip, each tile at the chosen ratio, one file per tile when exporting (Instagram carousel); <core.version.tiles_next> / <core.version.tiles_prev>: one more / less
 crop-section-frame = Crop
 crop-ratio-original-tip = The image's ratio; Ctrl+click (Cmd+click on a Mac): the whole original frame
 crop-ratio-custom = Custom
@@ -412,6 +419,7 @@ crop-preset-save-tip = Save as version preset: ratio, name and export of the cur
 crop-preset-saved = Preset "{ $name }" saved
 preset-story = Story
 preset-post = Post
+preset-carousel = Carousel
 versions-current = Versions: { $name }
 versions-original = Original
 versions-edit = Edit
@@ -818,6 +826,7 @@ export-contents-paired = { $n ->
     [one] 1 camera JPEG (pair, suffixed name)
    *[other] { $n } camera JPEGs (pairs, suffixed names)
 }
+export-contents-tiles = one file per tile ({ $n } per image, numbered _1, _2…)
 export-profile = Export preset
 export-profile-tip = Up / down arrows: preset · Tab: folder · Enter: export
 export-destination = Folder
@@ -1068,6 +1077,7 @@ settings-member-builtin = Provided with tri: editable, not deletable
 settings-profile-none = None
 settings-section-versions-presets-story = Version preset “Story”
 settings-section-versions-presets-post = Version preset “Post”
+settings-section-versions-presets-carousel = Version preset “Carousel”
 settings-section-export = Export
 settings-section-export-sharpening = Output sharpening
 settings-section-export-profiles-edit = Export preset “Editing”
