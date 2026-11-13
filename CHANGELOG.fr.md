@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Le badge des versions modifie** (#454) : un clic sur le badge d'une vignette rouvre
+  le cadre de sa version, ou, s'il y en a plusieurs, ouvre l'image en plein écran avec la
+  première montrée (la liste « Version » pour en choisir une, la modifier ou la
+  supprimer) ; il commençait une nouvelle version. « Modifier » et « Supprimer » ont
+  dans cette liste l'allure de ses autres éléments.
 - **Résumé du dossier : versions et cache** (#453, partie de #388) : une ligne « Avec
   des versions » (comptée en fond, un filtre comme les autres lignes), et la place du
   dossier dans le cache avec un bouton « Vider » (avec confirmation). `f Échap` retire

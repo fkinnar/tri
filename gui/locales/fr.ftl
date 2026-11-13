@@ -748,7 +748,7 @@ badge-over = { $percent } % de pixels saturés (brûlée) ; clic : grand histogr
 badge-under = { $percent } % de pixels bouchés ; clic : grand histogramme
 badge-versions = { $n ->
     [one] 1 version ; clic : la modifier
-   *[other] { $n } versions ; clic : les modifier
+   *[other] { $n } versions ; clic : les voir, en choisir une à modifier
 }
 help-title = Raccourcis
 help-search-hint = Rechercher (ex. « pnd », « etoile 3 »)…

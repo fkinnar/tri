@@ -464,6 +464,8 @@ pub struct TriApp {
     /// Clic sur un badge d'une vignette (versions, écrêtage) : l'image et l'action,
     /// faite après la grille.
     cell_action: Option<(usize, Vec<Action>)>,
+    /// Badge des versions cliqué : [`TriApp::open_versions`] sur l'image choisie.
+    versions_clicked: bool,
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
@@ -1501,6 +1503,7 @@ impl TriApp {
             grid_fit_pending: false,
             grid_fit_from: None,
             cell_action: None,
+            versions_clicked: false,
             rating_dialog: None,
             rating_dialog_all: true,
             conflict_dialog: None,
@@ -10536,6 +10539,30 @@ impl TriApp {
         self.request_zoom();
     }
 
+    /// Badge des versions d'une vignette cliqué (retour du 13/11/2026 : il commençait une
+    /// nouvelle version, sa bulle disait « modifier ») : une seule version, son cadre
+    /// rouvert ; plusieurs, l'image en plein écran avec la première montrée, la liste
+    /// « Version » du bandeau pour en choisir une, la modifier ou la supprimer. Fermer
+    /// ramène à la grille. Créer une version reste `r`.
+    fn open_versions(&mut self) {
+        let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) else {
+            return;
+        };
+        let count = self.versions_of(&path).list.len();
+        if count == 0 {
+            return;
+        }
+        self.crop_from_grid = self.mode == Mode::Grid;
+        self.sync_source();
+        self.mode = Mode::View;
+        if count == 1 {
+            self.edit_version(&path, 0);
+        } else {
+            self.zoom = None;
+            self.version_shown = Some((path, 0));
+        }
+    }
+
     /// Supprime la version `index` de `path` (annulable).
     fn delete_version(&mut self, path: &Path, index: usize) {
         let convention = self.settings.xmp.sidecar;
@@ -14859,10 +14886,12 @@ impl TriApp {
                         }
                         if let Some(i) = shown {
                             ui.separator();
-                            if ui.button(t!("versions-edit")).clicked() {
+                            // Des éléments de la liste, comme ceux du dessus (retour du
+                            // 13/11/2026 : des boutons, avec leur fond).
+                            if ui.selectable_label(false, t!("versions-edit")).clicked() {
                                 version_action = Some(VersionAction::Edit(i));
                             }
-                            if ui.button(t!("versions-delete")).clicked() {
+                            if ui.selectable_label(false, t!("versions-delete")).clicked() {
                                 version_action = Some(VersionAction::Delete(i));
                             }
                         }
@@ -15759,6 +15788,9 @@ impl TriApp {
                     _ => self.perform(&ctx, action),
                 }
             }
+            if std::mem::take(&mut self.versions_clicked) {
+                self.open_versions();
+            }
         }
         // Clic dans le vide (entre ou après les vignettes) : curseur masqué et sélection
         // vidée, comme dans un gestionnaire de fichiers.
@@ -16191,7 +16223,8 @@ impl TriApp {
                 .on_hover_text(&tip)
                 .clicked();
             if clicked {
-                self.cell_action = Some((index, vec![Action::Crop]));
+                self.cell_action = Some((index, Vec::new()));
+                self.versions_clicked = true;
             }
             caption_left = icon.min.x;
         }
@@ -22306,7 +22339,7 @@ mod tests {
     }
 
     #[test]
-    fn clicking_the_versions_badge_of_a_thumbnail_starts_cropping() {
+    fn clicking_the_versions_badge_edits_or_shows_the_versions() {
         let (mut h, dir) = harness();
         h.run_steps(3);
         let image = dir.path().join("photos").join("img1.jpg");
@@ -22331,7 +22364,28 @@ mod tests {
         let app = h.state();
         assert_eq!(app.files[app.selected].path, image, "l'image du badge");
         assert_eq!(app.mode, Mode::View);
-        assert!(app.crop.is_some(), "recadrage commencé");
+        // Une seule version : son cadre rouvert pour la modifier (retour du 13/11/2026 :
+        // le clic en commençait une nouvelle).
+        assert_eq!(app.crop.as_ref().and_then(|c| c.editing), Some(0));
+        // Plusieurs : l'image en plein écran, la première montrée, rien de commencé.
+        let mut two = versions.clone();
+        two.list.push(tri::versions::Version {
+            name: "Post".into(),
+            ..versions.list[0].clone()
+        });
+        tri::versions::write(&image, &two, tri::xmp::Convention::Darktable).unwrap();
+        h.state_mut().crop = None;
+        h.state_mut().mode = Mode::Grid;
+        h.state_mut().versions.clear();
+        h.run_steps(3);
+        let badge = t!("badge-versions", n = 2);
+        wait_for_label(&mut h, &badge);
+        click_settled(&mut h, &badge);
+        h.run_steps(3);
+        let app = h.state();
+        assert_eq!(app.mode, Mode::View);
+        assert!(app.crop.is_none());
+        assert_eq!(app.version_shown, Some((image.clone(), 0)));
     }
 
     #[test]
@@ -29248,23 +29302,31 @@ mod tests {
         use crate::actions::Scope;
         let (mut h, _dir) = harness();
         h.state_mut().metadata_panel = true;
-        run_until(&mut h, |app| app.meta_rows.len() > 2);
+        // Lignes stables avant de les survoler (la mise en page bouge au remplissage).
+        meta_rows_settled(&mut h, 3);
         let label = h.state().meta_rows[1].label.clone();
-        // Repris tant que le survol n'est pas vu (mise en page qui bouge au remplissage).
+        // Survol puis copie, repris si la ligne a bougé sous le pointeur entre les deux
+        // (CI Windows, 13/11/2026 : c'est l'image qui était copiée).
         let deadline = Instant::now() + Duration::from_secs(60);
-        while h.state().meta_hover != Some(1) {
-            assert!(Instant::now() < deadline, "survol jamais vu");
+        loop {
+            assert!(Instant::now() < deadline, "ligne jamais copiée");
             let at = h.get_by_label(&label).rect().center();
             h.event(UiEvent::PointerMoved(at - vec2(0.0, 1.0)));
             h.event(UiEvent::PointerMoved(at));
             h.run_steps(2);
+            if h.state().meta_hover != Some(1) {
+                continue;
+            }
+            assert_eq!(h.state().meta_cursor, 1, "la souris pointe la ligne");
+            assert_eq!(h.state().focus, Scope::Images, "sans prendre le clavier");
+            press(&mut h, Key::C, Modifiers::CTRL);
+            let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
+            if notice.contains(&label) {
+                assert!(h.state().file_dialog.is_none(), "pas la copie de l'image");
+                break;
+            }
+            h.state_mut().file_dialog = None;
         }
-        assert_eq!(h.state().meta_cursor, 1, "la souris pointe la ligne");
-        assert_eq!(h.state().focus, Scope::Images, "sans prendre le clavier");
-        press(&mut h, Key::C, Modifiers::CTRL);
-        assert!(h.state().file_dialog.is_none(), "pas la copie de l'image");
-        let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
-        assert!(notice.contains(&label), "copiée : {notice}");
         // Hors du panneau, Ctrl+C copie de nouveau l'image.
         h.event(UiEvent::PointerMoved(pos2(1.0, 1.0)));
         h.run_steps(2);

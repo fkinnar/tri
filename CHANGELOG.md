@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **The versions badge edits** (#454): a click on the badge of a thumbnail reopens the
+  frame of its version, or with several opens the image full screen with the first one
+  shown (the "Version" list to pick, edit or delete); it started a new version. "Edit"
+  and "Delete" in that list look like its other items.
 - **Folder summary: versions and cache** (#453, part of #388): a "With versions" line
   (counted in the background, a filter like the other lines), and the folder's room in
   the cache with a "Clear" button (asks for confirmation). `f Esc` now also removes the
