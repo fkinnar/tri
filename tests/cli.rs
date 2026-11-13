@@ -142,6 +142,21 @@ fn bad_arguments_print_the_usage_and_fail() {
 }
 
 #[test]
+fn help_explains_every_command() {
+    // Issue n° 441 : `tri --help` (et `-h`), réussi, chaque commande avec son exemple.
+    let env = Env::new();
+    for flag in ["--help", "-h"] {
+        let out = stdout(&ok(env.run([flag])));
+        for command in tri::commands::COMMANDS {
+            let main = command.main.first().copied().unwrap_or("--raw");
+            assert!(out.contains(main), "{} absent : {out}", command.id);
+        }
+        assert!(out.contains("example:"), "{out}");
+        assert!(out.contains("--config"), "{out}");
+    }
+}
+
+#[test]
 fn a_folder_is_listed_by_kind_and_depth() {
     let env = Env::new();
     let photos = env.photos();

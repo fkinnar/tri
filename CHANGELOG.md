@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **`tri --help`** (#451, part of #441): every command of the command line explained
+  by theme, with its options and an example (`-h` too); the short usage shown on an
+  error comes from the same description.
 - **Colour filter: all the colours or one of them** (#444): with several colours per
   photo (`[xmp] multiple_colors`), an ∨ / ∧ button before the colour dots of the
   filter bar asks for photos carrying all the chosen colours instead of one of them

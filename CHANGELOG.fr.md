@@ -4,6 +4,9 @@
 
 ## Non publié
 
+- **`tri --help`** (#451, partie de #441) : chaque commande de la ligne de commande
+  expliquée par thème, avec ses options et un exemple (`-h` aussi) ; le mode d'emploi
+  court affiché sur une erreur vient de la même description.
 - **Filtre de couleurs : toutes les couleurs ou l'une d'elles** (#444) : avec plusieurs
   couleurs par photo (`[xmp] multiple_colors`), un bouton ∨ / ∧ devant les
   pastilles de la barre des filtres demande les photos qui portent toutes les couleurs

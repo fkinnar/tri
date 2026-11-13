@@ -29,6 +29,7 @@ pub mod adjust;
 pub mod bitmap;
 pub mod cache;
 pub mod colour;
+pub mod commands;
 pub mod config_edit;
 pub mod develop;
 pub mod developments;

@@ -58,6 +58,8 @@
 //!       boîtier ; `--passthrough` : JPEG sans recompression si possible ; voir
 //!       `tri::export`.
 //!
+//! `tri --help` (ou `-h`) explique chaque commande, d'après `tri::commands`.
+//!
 //! Toutes les commandes lisent le fichier de configuration (`--config FICHIER`, sinon
 //! l'emplacement par défaut, voir `tri::settings`) ; les options ci-dessus l'emportent sur
 //! lui.
@@ -77,9 +79,9 @@ use tri::t;
 use tri::update::Status;
 use tri::xmp::{self, Convention};
 
-/// Mode d'emploi, dans la langue choisie.
+/// Mode d'emploi court, dans la langue choisie (`tri::commands`, issue n° 441).
 fn usage() -> String {
-    t!("cli-usage")
+    tri::commands::usage()
 }
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -118,6 +120,8 @@ struct Args {
     clear: Option<Option<Level>>,
     usage: bool,
     check_update: bool,
+    /// `--help`, `-h` : l'aide complète.
+    help: bool,
     side: Option<u32>,
     thumb: Option<u32>,
     workers: Option<usize>,
@@ -279,6 +283,7 @@ fn parse() -> AnyResult<Args> {
             "--cache-user" => args.keep_cache = Some(false),
             "--reset" => args.reset = Some(tri::reset::Parts::parse(&value()?).ok_or_else(usage)?),
             "--check-update" => args.check_update = true,
+            "--help" | "-h" => args.help = true,
             "--convert-xmp" => {
                 args.convert = Some(match value()?.as_str() {
                     "darktable" => Convention::Darktable,
@@ -1665,6 +1670,10 @@ fn run() -> AnyResult<()> {
     tri::reconcile::set_data_dir(settings.data_dir());
     tri::xmp::set_rules(settings.xmp.rules());
 
+    if args.help {
+        print!("{}", tri::commands::help());
+        return Ok(());
+    }
     if let Some(level) = args.clear {
         let cache = settings.open_cache()?;
         if let Some(dir) = &args.dir {
@@ -1842,5 +1851,32 @@ fn main() {
     if let Err(e) = run() {
         eprintln!("{e}");
         exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// Chaque option lue par [`super::parse`] est décrite par `tri::commands` (issue
+    /// n° 441) : l'aide ne peut pas oublier une option ajoutée.
+    #[test]
+    fn every_parsed_option_is_in_the_help() {
+        let source = include_str!("main.rs");
+        let parse = &source[source.find("fn parse()").unwrap()..];
+        let parse = &parse[..parse.find("\n}\n").unwrap()];
+        let mut documented: Vec<&str> = tri::commands::COMMANDS
+            .iter()
+            .flat_map(|c| tri::commands::syntax_options(c.syntax))
+            .chain(tri::commands::COMMON.iter().copied())
+            .collect();
+        documented.extend(["--help", "-h"]);
+        let mut missing = Vec::new();
+        for (i, _) in parse.match_indices("\"-") {
+            let rest = &parse[i + 1..];
+            let option = &rest[..rest.find('"').unwrap()];
+            if option.len() > 2 && !documented.contains(&option) {
+                missing.push(option.to_string());
+            }
+        }
+        assert!(missing.is_empty(), "options sans aide : {missing:?}");
     }
 }
