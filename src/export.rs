@@ -909,6 +909,9 @@ fn libraw_space(color: &str) -> Option<(crate::raw::OutputSpace, moxcms::ColorPr
         p.red_trc = Some(ToneReprCurve::Lut(Vec::new()));
         p.green_trc = Some(ToneReprCurve::Lut(Vec::new()));
         p.blue_trc = Some(ToneReprCurve::Lut(Vec::new()));
+        // Sinon l'étiquette CICP (sRGB, Rec.2020) passe avant les courbes : une image
+        // convertie vers cet espace gardait la courbe d'origine (13/11/2026).
+        p.cicp = None;
         p.description = Some(moxcms::ProfileText::PlainString(name.into()));
         p
     };
@@ -1022,13 +1025,16 @@ fn developed(image: &Path) -> Result<Developed, DevelopError> {
 }
 
 /// Version (recadrage, [`crate::versions`]) à exporter : son cadre et son nom (ajouté au
-/// nom du fichier : `DSCF0001-Story.jpg`).
+/// nom du fichier : `DSCF0001-Story.jpg`), et ses morceaux : un fichier par morceau,
+/// numéroté (`DSCF0001-Pano_1.jpg`, `DSCF0001-Pano_2.jpg`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Cut {
     /// Cadre, en proportions de l'image.
     pub crop: crate::versions::Rect,
     /// Nom de la version.
     pub name: String,
+    /// Morceaux.
+    pub tiles: crate::versions::Tiles,
 }
 
 impl Cut {
@@ -1104,10 +1110,13 @@ impl<'a> Request<'a> {
         Request { sharpening, ..self }
     }
 
-    /// Ajouté au nom du fichier de `image` : version (`-Story`), puis JPEG de paire
-    /// (`-camera`).
-    fn extra(&self, image: &Path) -> String {
+    /// Ajouté au nom du fichier de `image` : version (`-Story`) et son morceau n° `tile`
+    /// s'il y en a plusieurs (`-Pano_2`), puis JPEG de paire (`-camera`).
+    fn extra(&self, image: &Path, tile: Option<usize>) -> String {
         let mut extra = self.cut.map(Cut::suffix).unwrap_or_default();
+        if let Some(n) = tile {
+            extra.push_str(&format!("_{n}"));
+        }
         if let Some((paired, suffix)) = self.paired
             && paired.contains(image)
         {
@@ -1385,14 +1394,15 @@ pub fn run(
     if !split.photos.is_empty() {
         parts.push((renderers.photos, &split.photos));
     }
+    // Images faites (une version en morceaux écrit plusieurs fichiers par image).
+    let mut offset = 0;
     for (renderer, images) in parts {
-        let offset = report.written.len();
         let step = |done: usize, _: usize, path: &Path| progress(offset + done, total, path);
         let part = render_raws(renderer, images, req, cancel, step)?;
         report.merge(part);
+        offset += images.len();
     }
     if !batch.flats.is_empty() {
-        let offset = report.written.len();
         let flats = Request {
             paired: Some((&batch.paired, pair_suffix)),
             ..*req
@@ -1454,13 +1464,11 @@ pub fn export_rapidraw(
                 return Err(DevelopError::Cancelled);
             }
             match rapidraw_one(rr, &tmp, i, image, req, cancel) {
-                Ok(out) => {
-                    report.written.push(out);
-                    progress(
-                        report.written.len(),
-                        total,
-                        report.written.last().expect("ajouté"),
-                    );
+                Ok(outs) => {
+                    report.written.extend(outs);
+                    if let Some(last) = report.written.last() {
+                        progress(i + 1, total, last);
+                    }
                 }
                 Err(DevelopError::Cancelled) => return Err(DevelopError::Cancelled),
                 Err(e) => report.errors.push(failed_image(image, &e)),
@@ -1501,13 +1509,11 @@ pub fn export_profile_tool(
                 return Err(DevelopError::Cancelled);
             }
             match profile_tool_one(tool, &tmp.join(i.to_string()), image, req, cancel) {
-                Ok(out) => {
-                    report.written.push(out);
-                    progress(
-                        report.written.len(),
-                        total,
-                        report.written.last().expect("ajouté"),
-                    );
+                Ok(outs) => {
+                    report.written.extend(outs);
+                    if let Some(last) = report.written.last() {
+                        progress(i + 1, total, last);
+                    }
                 }
                 Err(DevelopError::Cancelled) => return Err(DevelopError::Cancelled),
                 Err(e) => report.errors.push(failed_image(image, &e)),
@@ -1529,7 +1535,7 @@ fn profile_tool_one(
     image: &Path,
     req: &Request<'_>,
     cancel: &AtomicBool,
-) -> Result<PathBuf, DevelopError> {
+) -> Result<Vec<PathBuf>, DevelopError> {
     let sidecar = tool
         .engine
         .sidecar(image)
@@ -1549,7 +1555,7 @@ fn rapidraw_one(
     image: &Path,
     req: &Request<'_>,
     cancel: &AtomicBool,
-) -> Result<PathBuf, DevelopError> {
+) -> Result<Vec<PathBuf>, DevelopError> {
     let failed = |e: &dyn std::fmt::Display| DevelopError::Failed(Engine::RapidRaw, e.to_string());
     let development = crate::developments::get(image);
     let photo = development.as_ref().map_or(image, |d| d.photo.as_path());
@@ -1656,19 +1662,17 @@ pub fn export_libraw(
     let images = sources(images);
     let total = images.len();
     let mut report = Report::default();
-    for image in &images {
+    for (i, image) in images.iter().enumerate() {
         if cancel.load(Ordering::Relaxed) {
             return Err(DevelopError::Cancelled);
         }
         match export_one(image, req, local, cancel) {
-            Ok((out, copied)) => {
+            Ok((outs, copied)) => {
                 report.passthrough += usize::from(copied);
-                report.written.push(out);
-                progress(
-                    report.written.len(),
-                    total,
-                    report.written.last().expect("ajouté"),
-                );
+                report.written.extend(outs);
+                if let Some(last) = report.written.last() {
+                    progress(i + 1, total, last);
+                }
             }
             Err(DevelopError::Cancelled) => return Err(DevelopError::Cancelled),
             Err(e) => report.errors.push(failed_image(image, &e)),
@@ -1684,42 +1688,73 @@ fn export_one(
     req: &Request<'_>,
     local: Local,
     cancel: &AtomicBool,
-) -> Result<(PathBuf, bool), DevelopError> {
+) -> Result<(Vec<PathBuf>, bool), DevelopError> {
     let (profile, cut) = (req.profile, req.cut);
     let failed = |e: &dyn std::fmt::Display| DevelopError::Other(e.to_string());
     // Un développement (`IMG@rr.RAF`) se lit dans sa photo ; le fichier écrit porte son nom
     // ([`export_name`]).
     let file = crate::media::source(image);
+    // Les réglages de visualisation (exposition, balance, noir et blanc) : on exporte ce
+    // qu'on regarde (13/11/2026, ils ne suivaient pas). Un réglage illisible n'empêche
+    // pas l'export ; « JPEG tel quel » reste une copie pure.
+    let layers = (!profile.is_as_is())
+        .then(|| crate::adjust::read(image).ok().flatten())
+        .flatten();
+    let total = layers.map(|l| l.total()).unwrap_or_default();
+    let mono = layers.and_then(|l| l.mono);
+    let adjusted = layers.is_some_and(|l| !l.is_none());
     let (pixels, icc) = if kind_of(&file) == Some(MediaKind::Raw) && local == Local::LibRaw {
         let (space, target) = libraw_space(&profile.color).expect("vérifié");
         let mut raw = crate::raw::RawFile::open(&file).map_err(|e| failed(&e))?;
-        let pixels = raw
-            .render_deep(&req.render, space, cancel)
+        // L'exposition sur les données du capteur (hautes lumières récupérables), le reste
+        // sur l'image rendue.
+        let render = crate::raw::RenderOptions {
+            exposure: total.exposure,
+            ..req.render
+        };
+        let mut pixels = raw
+            .render_deep(&render, space, cancel)
             .map_err(|e| match e {
                 crate::raw::RawError::Cancelled => DevelopError::Cancelled,
                 e => failed(&e),
             })?;
+        let rest = crate::adjust::Adjust {
+            exposure: render.exposure_rest(),
+            ..total
+        };
+        crate::adjust::apply_rgb16(&mut pixels, &target, rest, mono).map_err(|e| failed(&e))?;
         let icc = target.encode().map_err(|e| failed(&format!("{e:?}")))?;
         (pixels, Some(icc))
     } else {
-        let developed = developed(&file)?;
+        let mut developed = developed(&file)?;
         let (w, h) = developed.pixels.dimensions();
         let fits = profile.max_side == 0 || w.max(h) <= profile.max_side;
         // Sans recompression : JPEG vers JPEG, sans recadrage ni réduction, sans changer
-        // d'espace.
+        // d'espace, sans réglage.
         if profile.passthrough
             && cut.is_none()
+            && !adjusted
             && profile.sharpen == Sharpen::None
             && profile.format == Format::Jpeg
             && fits
             && origin_is(&developed.origin, &profile.color)
             && let Some(bytes) = &developed.jpeg
         {
-            return write_bytes(image, req, bytes).map(|out| (out, true));
+            return write_bytes(image, req, bytes).map(|out| (vec![out], true));
+        }
+        if adjusted {
+            // Dans son espace d'origine, avant une éventuelle conversion.
+            let space = developed
+                .origin
+                .profile()
+                .ok_or_else(|| DevelopError::Other(crate::t!("export-bad-icc")))?;
+            crate::adjust::apply_rgb16(&mut developed.pixels, &space, total, mono)
+                .map_err(|e| failed(&e))?;
+            developed.jpeg = None;
         }
         in_profile_space(developed, profile)?
     };
-    finish(image, pixels, icc.as_deref(), req).map(|out| (out, false))
+    finish(image, pixels, icc.as_deref(), req).map(|outs| (outs, false))
 }
 
 /// Une image déjà développée dans l'espace du profil : gardée telle quelle (même espace,
@@ -1759,19 +1794,50 @@ fn in_profile_space(
 }
 
 /// Fin d'un export : recadrage (version), réduction au côté maximal du profil,
-/// accentuation de sortie, écriture au format du profil avec le profil ICC `icc`.
+/// accentuation de sortie, écriture au format du profil avec le profil ICC `icc`. Une
+/// version en plusieurs morceaux donne un fichier par morceau, dans l'ordre de lecture,
+/// chacun réduit et accentué pour lui-même (le côté maximal vaut pour un morceau : une
+/// publication Instagram).
 fn finish(
+    image: &Path,
+    pixels: crate::raw::Rgb16,
+    icc: Option<&[u8]>,
+    req: &Request<'_>,
+) -> Result<Vec<PathBuf>, DevelopError> {
+    let Some(cut) = req.cut else {
+        return finish_one(image, pixels, icc, req, None).map(|out| vec![out]);
+    };
+    let (w, h) = pixels.dimensions();
+    let cells = cut.tiles.pixel_cells(cut.crop.pixels(w, h));
+    let several = cells.len() > 1;
+    let mut written = Vec::with_capacity(cells.len());
+    for (i, (x, y, cw, ch)) in cells.into_iter().enumerate() {
+        let part = image::imageops::crop_imm(&pixels, x, y, cw, ch).to_image();
+        let tile = several.then_some(i + 1);
+        match finish_one(image, part, icc, req, tile) {
+            Ok(out) => written.push(out),
+            Err(e) => {
+                // Tout ou rien : un carrousel incomplet ne sert à rien.
+                for out in &written {
+                    let _ = std::fs::remove_file(out);
+                }
+                return Err(e);
+            }
+        }
+    }
+    Ok(written)
+}
+
+/// Un fichier d'export : `pixels` déjà recadrés, réduits, accentués et écrits ; `tile` : le
+/// numéro du morceau, s'il y en a plusieurs.
+fn finish_one(
     image: &Path,
     mut pixels: crate::raw::Rgb16,
     icc: Option<&[u8]>,
     req: &Request<'_>,
+    tile: Option<usize>,
 ) -> Result<PathBuf, DevelopError> {
-    let (profile, folder, cut, sharpening) = (req.profile, req.folder, req.cut, &req.sharpening);
-    if let Some(cut) = cut {
-        let (w, h) = pixels.dimensions();
-        let (x, y, cw, ch) = cut.crop.pixels(w, h);
-        pixels = image::imageops::crop_imm(&pixels, x, y, cw, ch).to_image();
-    }
+    let (profile, folder, sharpening) = (req.profile, req.folder, &req.sharpening);
     let (w, h) = pixels.dimensions();
     let side = profile.max_side;
     if side > 0 && w.max(h) > side {
@@ -1786,7 +1852,7 @@ fn finish(
     if let Some(u) = sharpening.of(profile.sharpen) {
         pixels = unsharp(&pixels, u);
     }
-    let extra = req.extra(image);
+    let extra = req.extra(image, tile);
     let out = output_path(image, profile, &extra, folder, profile.format.extension())?;
     write_image(&out, &pixels, profile, icc).map_err(|e| {
         let _ = std::fs::remove_file(&out);
@@ -1833,6 +1899,7 @@ pub fn export_via_tiff(
         )?;
         let total = images.len();
         let mut used = vec![false; total];
+        let mut done = 0;
         let mut report = Report::default();
         for file in &rendered.written {
             // L'image d'origine du rendu : même nom d'export (un clone `IMG@dt-01.RAF`
@@ -1862,13 +1929,12 @@ pub fn export_via_tiff(
                 .map_err(|e| failed(&e))?
                 .into_rgb16();
             match finish(&images[i], pixels, icc.as_deref(), req) {
-                Ok(out) => {
-                    report.written.push(out);
-                    progress(
-                        report.written.len(),
-                        total,
-                        report.written.last().expect("ajouté"),
-                    );
+                Ok(outs) => {
+                    report.written.extend(outs);
+                    done += 1;
+                    if let Some(last) = report.written.last() {
+                        progress(done, total, last);
+                    }
                 }
                 Err(e) => report.errors.push(failed_image(&images[i], &e)),
             }
@@ -1876,7 +1942,7 @@ pub fn export_via_tiff(
         if report.written.is_empty() && report.errors.is_empty() && total > 0 {
             return Err(DevelopError::Other(crate::t!("export-version-empty")));
         }
-        report.failed = total - report.written.len();
+        report.failed = total - done;
         Ok(report)
     })();
     let _ = std::fs::remove_dir_all(&tmp);
@@ -1925,7 +1991,13 @@ pub fn export_name(image: &Path) -> String {
 
 /// Écrit `bytes` (JPEG sans recompression) à la place de l'export de `image`.
 fn write_bytes(image: &Path, req: &Request<'_>, bytes: &[u8]) -> Result<PathBuf, DevelopError> {
-    let out = output_path(image, req.profile, &req.extra(image), req.folder, "jpg")?;
+    let out = output_path(
+        image,
+        req.profile,
+        &req.extra(image, None),
+        req.folder,
+        "jpg",
+    )?;
     std::fs::write(&out, bytes).map_err(|e| DevelopError::Other(e.to_string()))?;
     Ok(out)
 }
@@ -2626,6 +2698,62 @@ mod tests {
         assert_eq!(second, dir.path().join("DSCF0001-web_01.jpg"));
     }
 
+    /// Une version en deux morceaux (13/11/2026) : deux fichiers numérotés, de même
+    /// taille, côte à côte dans l'image, chacun réduit au côté maximal du profil.
+    #[test]
+    fn a_version_in_tiles_is_exported_one_file_per_tile() {
+        use crate::versions::{Frame, Ratio, Rect, Tiles};
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("photo.png");
+        // Moitié gauche rouge, moitié droite bleue : chaque morceau garde la sienne.
+        image::RgbImage::from_fn(601, 400, |x, _| {
+            if x < 300 {
+                image::Rgb([255, 0, 0])
+            } else {
+                image::Rgb([0, 0, 255])
+            }
+        })
+        .save(&src)
+        .unwrap();
+        let frame = Frame {
+            ratio: Ratio::Fixed(4, 5),
+            tiles: Tiles::strip(2),
+        };
+        let cut = Cut {
+            crop: Rect::fit(frame, 601.0 / 400.0),
+            name: "Pano".into(),
+            tiles: frame.tiles,
+        };
+        let profile = Profile {
+            format: Format::Png,
+            bits: 8,
+            max_side: 100,
+            ..Profile::base("t")
+        };
+        let mut steps = Vec::new();
+        let report = export_libraw(
+            std::slice::from_ref(&src),
+            &Request::new(&profile, "export").cut(Some(&cut)),
+            Local::LibRaw,
+            &AtomicBool::new(false),
+            |done, total, _| steps.push((done, total)),
+        )
+        .unwrap();
+        assert_eq!(report.failed, 0, "{:?}", report.errors);
+        assert_eq!(steps, [(1, 1)], "une image faite, pas deux");
+        let names: Vec<_> = report
+            .written
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["photo-Pano_1.png", "photo-Pano_2.png"]);
+        for (out, colour) in report.written.iter().zip([[255, 0, 0], [0, 0, 255]]) {
+            let img = image::open(out).unwrap().to_rgb8();
+            assert_eq!(img.dimensions(), (80, 100), "un 4:5 réduit à 100 px");
+            assert_eq!(img.get_pixel(40, 50).0, colour);
+        }
+    }
+
     #[test]
     fn a_flat_image_is_exported_with_its_icc_profile() {
         use image::ImageDecoder;
@@ -2697,6 +2825,92 @@ mod tests {
         let named = icc.windows(8).any(|w| w == b"ProPhoto")
             || icc.windows(16).any(|w| w == wide.as_slice());
         assert!(named, "profil ProPhoto");
+    }
+
+    /// Les réglages de visualisation suivent à l'export (13/11/2026) : l'image exportée
+    /// est celle qu'on regarde ; pas de copie sans recompression d'une image réglée, sauf
+    /// le « JPEG tel quel », copie pure.
+    #[test]
+    fn adjustments_follow_the_export_but_not_an_as_is_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("photo.jpg");
+        image::RgbImage::from_pixel(60, 40, image::Rgb([100, 100, 100]))
+            .save(&src)
+            .unwrap();
+        let original = std::fs::read(&src).unwrap();
+        let mut layers = crate::adjust::Layers::default();
+        layers.correction.exposure = 1.0;
+        crate::adjust::write(&src, Some(&layers), crate::xmp::Convention::Darktable).unwrap();
+        let cancel = AtomicBool::new(false);
+        let run = |p: &Profile, folder: &str| {
+            let report = export_libraw(
+                std::slice::from_ref(&src),
+                &Request::new(p, folder),
+                Local::Embedded,
+                &cancel,
+                |_, _, _| {},
+            )
+            .unwrap();
+            assert_eq!(report.failed, 0, "{:?}", report.errors);
+            report
+        };
+        let web = Profile {
+            passthrough: true,
+            ..Profile::base("web")
+        };
+        let report = run(&web, "web");
+        assert_eq!(report.passthrough, 0, "réglée : réencodée");
+        let out = image::open(&report.written[0]).unwrap().to_rgb8();
+        let v = out.get_pixel(30, 20).0[0];
+        assert!(v > 125, "+1 IL : plus clair ({v})");
+        // En 16 bits ProPhoto aussi (conversion après les réglages).
+        let prophoto = Profile {
+            format: Format::Tiff,
+            bits: 16,
+            color: "prophoto".into(),
+            ..Profile::base("pp")
+        };
+        let report = run(&prophoto, "pp");
+        let tiff = image::open(&report.written[0]).unwrap().to_rgb16();
+        let plain = {
+            crate::adjust::write(&src, None, crate::xmp::Convention::Darktable).unwrap();
+            let report = run(&prophoto, "pp-plain");
+            crate::adjust::write(&src, Some(&layers), crate::xmp::Convention::Darktable).unwrap();
+            image::open(&report.written[0]).unwrap().to_rgb16()
+        };
+        assert!(tiff.get_pixel(30, 20).0[1] > plain.get_pixel(30, 20).0[1]);
+        // « JPEG tel quel » : copie pure, réglages ou non.
+        let as_is = Profile {
+            passthrough: true,
+            color: String::new(),
+            max_side: 0,
+            sharpen: Sharpen::None,
+            format: Format::Jpeg,
+            ..Profile::base("asis")
+        };
+        assert!(as_is.is_as_is());
+        let report = run(&as_is, "asis");
+        assert_eq!(std::fs::read(&report.written[0]).unwrap(), original);
+    }
+
+    /// Les espaces linéaires le sont vraiment : un gris sRGB 0,5 converti vers Linear
+    /// Rec709 donne 0,214 (l'étiquette CICP du profil sRGB l'emportait sur les courbes).
+    #[test]
+    fn linear_export_spaces_are_linear() {
+        for color in ["rec709", "rec2020", "prophoto"] {
+            let (_, target) = libraw_space(color).expect(color);
+            let t = moxcms::ColorProfile::new_srgb()
+                .create_transform_f32(
+                    moxcms::Layout::Rgb,
+                    &target,
+                    moxcms::Layout::Rgb,
+                    moxcms::TransformOptions::default(),
+                )
+                .unwrap();
+            let mut out = [0f32; 3];
+            t.transform(&[0.5, 0.5, 0.5], &mut out).unwrap();
+            assert!((out[1] - 0.214).abs() < 0.01, "{color} : {out:?}");
+        }
     }
 
     #[test]
@@ -2815,6 +3029,7 @@ mod tests {
         let cut = Cut {
             crop: crate::versions::Rect::fit(ratio, 2763.0 / 4912.0),
             name: "Story".into(),
+            tiles: crate::versions::Tiles::ONE,
         };
         let web = Profiles::default().get("web").unwrap().clone();
         let report = export_via_tiff(

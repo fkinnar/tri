@@ -148,6 +148,8 @@ action-core-version-preset = Version : préréglage suivant
 action-core-version-preset_prev = Version : préréglage précédent
 action-core-version-ratio_next = Version : rapport suivant
 action-core-version-ratio_prev = Version : rapport précédent
+action-core-version-tiles_next = Version : un morceau de plus
+action-core-version-tiles_prev = Version : un morceau de moins
 action-core-version-ratio_custom = Version : taper un rapport à soi (17:23…)
 action-core-version-export_next = Version : préréglage d'export suivant
 action-core-version-export_prev = Version : préréglage d'export précédent
@@ -390,6 +392,11 @@ crop-ratio-original = Original
 crop-turn-portrait = Passer en portrait
 crop-turn-landscape = Passer en paysage
 crop-turn-none = Format libre ou carré : pas d’orientation
+crop-tiles = { $n ->
+    [one] 1 morceau
+   *[other] { $n } morceaux
+}
+crop-tiles-tip = Morceaux : le cadre coupé en bande, chaque morceau au rapport choisi, un fichier par morceau à l'export (carrousel Instagram) ; <core.version.tiles_next> / <core.version.tiles_prev> : un de plus / de moins
 crop-section-frame = Recadrage
 crop-ratio-original-tip = Le rapport de l'image ; Ctrl+clic (Cmd+clic sur Mac) : tout le cadre d'origine
 crop-ratio-custom = Personnalisé
@@ -412,6 +419,7 @@ crop-preset-save-tip = Enregistrer comme préréglage de version : rapport, nom 
 crop-preset-saved = Préréglage « { $name } » enregistré
 preset-story = Story
 preset-post = Publication
+preset-carousel = Carrousel
 versions-current = Versions : { $name }
 versions-original = Original
 versions-edit = Modifier
@@ -821,6 +829,7 @@ export-contents-paired = { $n ->
     [one] 1 JPEG de l'appareil (paire, nom suffixé)
    *[other] { $n } JPEG de l'appareil (paires, noms suffixés)
 }
+export-contents-tiles = un fichier par morceau ({ $n } par image, numérotés _1, _2…)
 export-profile = Préréglage d'export
 export-profile-tip = Flèches haut / bas : préréglage · Tab : dossier · Entrée : exporter
 export-destination = Dossier
@@ -1069,6 +1078,7 @@ settings-member-builtin = Fourni avec tri : modifiable, pas supprimable
 settings-profile-none = Aucun
 settings-section-versions-presets-story = Préréglage de version « Story »
 settings-section-versions-presets-post = Préréglage de version « Publication »
+settings-section-versions-presets-carousel = Préréglage de version « Carrousel »
 settings-section-export = Export
 settings-section-export-sharpening = Accentuation de sortie
 settings-section-export-profiles-edit = Préréglage d'export « Retouche »

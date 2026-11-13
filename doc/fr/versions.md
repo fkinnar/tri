@@ -37,7 +37,11 @@ acceptés dans `[keys]` (`actions::renamed_id`). Noms internes du code (`crop.rs
 - `Ratio` : `Free`, `Original` (celui de l'image, éventuellement tourné d'un quart), ou
   `Fixed(w, h)`, où l'orientation est l'ordre (4:5 portrait, 5:4 paysage). Rapports proposés
   (`PRESETS`) : libre, original, 1:1, 5:4, 3:2, 16:9, 4:3. `rotated` change l'orientation.
-- `Version` : `name`, `crop`, `ratio`, `source`, `profile` (facultatif).
+- `Version` : `name`, `crop`, `ratio`, `source`, `profile` (facultatif), `tiles`
+  (morceaux, voir plus bas ; écrit seulement s'il y en a plusieurs).
+- `Tiles` : le cadre coupé en `columns` × `rows` morceaux égaux ; `Frame` : le rapport d'un
+  morceau et le dallage, la forme que la géométrie garde (un `Ratio` seul est un cadre d'un
+  seul morceau).
 
 ## Géométrie, testée sans interface
 
@@ -183,6 +187,35 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
 - Le cadre est en proportions de l'image **vue** : sur un développé darktable recadré
   (2763 × 4912 pour le RAF de test), ce sont ses proportions, pas celles du capteur.
 
+## Morceaux (carrousel)
+
+Idée de l'utilisateur (13/11/2026) : une photo paysage recadrée en 8:5, puis coupée en
+deux 4:5, publiés côte à côte dans un carrousel Instagram pour faire défiler le panorama.
+Fait jusque-là à la main ; maintenant une **seule version** avec un nombre de morceaux.
+Une version, plutôt que plusieurs versions liées : un seul cadre à déplacer, des coupes
+toujours justes.
+
+- **Le rapport est celui d'un morceau** ; le cadre entier s'en déduit
+  (`Frame::value` : 4:5 × 2 = 8:5). Passer de 2 à 3 morceaux élargit le cadre autour de
+  son centre, sans changer le 4:5. Marche aussi en libre (morceaux égaux d'un cadre libre)
+  et en « original ».
+- **Barre de la version** : liste « 1 morceau », « 2 morceaux »… (jusqu'à
+  `Tiles::MAX` = 10) après l'orientation ; `c` / `Maj+C` un de plus / de moins (actions
+  `core.version.tiles_next` / `tiles_prev`) ; `0` (cadre d'origine) revient à un seul
+  morceau. Les coupes sont tracées sur le cadre. Nom proposé : « 4:5 × 2 ».
+- **Export** : un fichier par morceau, dans l'ordre de lecture, numéroté
+  (`DSCF0001-Pano_1.jpg`, `DSCF0001-Pano_2.jpg`). Le côté maximal du préréglage d'export
+  vaut **pour un morceau** (1080 × 1350 pour Instagram) ; réduction et accentuation sont
+  faites morceau par morceau. Au pixel près (`Tiles::pixel_cells`) : le cadre est ramené à
+  un multiple du nombre de morceaux, les pixels en trop partagés entre les deux bords, et
+  tous les morceaux ont exactement la même taille. Tout ou rien : un morceau en échec
+  efface les autres. La boîte d'export l'annonce (« un fichier par morceau »).
+- **Pour plus tard** : la géométrie fait déjà les bandes verticales (`[1, n]`) et les
+  grilles (2 × 2, 3 × 3) ; seule l'interface reste à faire.
+- Dans le XMP : `"tiles":[2,1]` (colonnes, lignes), absent pour un seul morceau. Une
+  version plus ancienne de `tri` lit une telle version comme un seul morceau, et perdrait
+  les morceaux en la réécrivant.
+
 ## Préréglages de recadrage
 
 Idée de l'utilisateur (19/10/2026) : « Story Insta » = un nom, un rapport avec son
@@ -192,8 +225,9 @@ cadre, Entrée.
 - **Stockage** : `[versions.presets.<id>]` (`VersionSettings`, `Presets`), avec `name`,
   `ratio` (`"free"`, `"original"`, ou `"l:h"` dans l'orientation voulue) et `profile`
   (`""` : aucun). Une clé absente vient du préréglage fourni de même identifiant, comme
-  pour les profils d'export. Préréglages fournis : `story` (9:16, Web) et `post` (4:5,
-  Web).
+  pour les profils d'export. Préréglages fournis : `story` (9:16, Web), `post` (4:5,
+  Web) et `carousel` (deux 4:5, Web). `tiles` : nombre de morceaux côte à côte (1 par
+  défaut).
 - **Barre du recadrage** : liste « Préréglage » ; `v` / `Maj+V` ou `Tab` / `Maj+Tab` passe au suivant /
   précédent (`p` jusqu'au 21/10/2026 : c'est aussi la carte de netteté, qui restait
   affichée ; `p` l'éteint aussi pendant le recadrage).
