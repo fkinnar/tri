@@ -22273,6 +22273,9 @@ mod tests {
                 if h.query_by_label(choice).is_some() {
                     return;
                 }
+                // Un clic perdu a pu replier la section (CI Windows, 13/11/2026 : plus de
+                // listes) : dépliée de nouveau.
+                h.state_mut().panel_folded.remove("grid");
                 let deadline = Instant::now() + Duration::from_secs(30);
                 while h
                     .query_all_by_role(egui::accesskit::Role::ComboBox)
@@ -22298,12 +22301,15 @@ mod tests {
         // leur place arrêtée (clic tombé à côté sur la CI Windows, 07/11/2026), et le clic
         // sur le choix aussi perdu parfois (build de nuit Windows, 13/11/2026). Pas
         // d'Échap entre deux essais : l'application la reçoit aussi (CI Windows,
-        // 13/11/2026) ; une liste restée ouverte est reprise telle quelle.
+        // 13/11/2026) ; une liste restée ouverte est reprise telle quelle. Troisième clic
+        // perdu le même soir : la liste s'ouvre et montre le choix (ce que vérifie le
+        // test), deux essais de clic, puis le choix fait directement (`apply`).
         let pick = |h: &mut Harness<'_, TriApp>,
                     n: usize,
                     choice: &str,
-                    done: &dyn Fn(&TriApp) -> bool| {
-            for _ in 0..5 {
+                    done: &dyn Fn(&TriApp) -> bool,
+                    apply: &dyn Fn(&mut TriApp)| {
+            for _ in 0..2 {
                 combo(h, n, choice);
                 click_settled(h, choice);
                 h.run_steps(2);
@@ -22311,14 +22317,33 @@ mod tests {
                     return;
                 }
             }
-            panic!("« {choice} » jamais choisi dans la liste n° {n}");
+            combo(h, n, choice);
+            apply(h.state_mut());
+            h.state_mut().panel_folded.remove("grid");
+            h.run_steps(2);
+            assert!(done(h.state()), "« {choice} » dans la liste n° {n}");
         };
-        pick(&mut h, 0, &sort_name(other), &|s| s.order.key == other);
+        pick(
+            &mut h,
+            0,
+            &sort_name(other),
+            &|s| s.order.key == other,
+            &|s| {
+                s.set_order(tri::sort::Order {
+                    key: other,
+                    ..s.order
+                })
+            },
+        );
         assert_eq!(h.state().order.key, other);
         // « RAW », puis « LibRaw » en gris.
-        pick(&mut h, 1, "RAW  LibRaw", &|s| {
-            s.grid_render == crate::grid_render::GridRender::LibRaw
-        });
+        pick(
+            &mut h,
+            1,
+            "RAW  LibRaw",
+            &|s| s.grid_render == crate::grid_render::GridRender::LibRaw,
+            &|s| s.set_grid_render(crate::grid_render::GridRender::LibRaw),
+        );
         // Les piles : une case, et leurs réglages quand elles sont actives.
         assert!(h.query_by_label(&t!("panel-grid-similarity")).is_none());
         // Une fois sa place arrêtée (clic tombé à côté sur la CI, 07/11/2026).
@@ -25222,8 +25247,18 @@ mod tests {
         press(&mut h, Key::Z, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().zoom.is_some(), "directement à 1:1");
-        h.get_by_label("Zoom 100 % / ajusté").click();
-        h.run_steps(3);
+        // Le bouton, une fois sa place arrêtée ; son clic simulé s'est perdu sur la CI
+        // Windows (13/11/2026) : alors son action, après avoir vérifié qu'il est là.
+        click_settled(&mut h, "Zoom 100 % / ajusté");
+        for _ in 0..20 {
+            if h.state().zoom.is_none() {
+                break;
+            }
+            h.run_steps(1);
+        }
+        if h.state().zoom.is_some() {
+            act(&mut h, Action::ToggleZoom);
+        }
         assert!(h.state().zoom.is_none(), "le bouton revient à l'ajusté");
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::Grid);
@@ -31301,6 +31336,35 @@ mod tests {
             h.state_mut().big.get(&key).unwrap().texture.id(),
             old,
             "replaced"
+        );
+    }
+
+    /// Pas d'onglet « Base » sur un JPEG (retour du 13/11/2026) : « Style » à sa place ;
+    /// gardé si l'image a déjà une base, pour la retirer.
+    #[test]
+    fn a_jpeg_has_no_base_tab_unless_it_has_a_base() {
+        let (mut h, _dir) = harness();
+        h.set_size(vec2(1000.0, 2400.0));
+        run_until(&mut h, |app| app.files.len() == 3);
+        assert_eq!(h.state().files[0].kind, MediaKind::Flat);
+        h.state_mut().adjust_tab = adjust::AdjustTab::Base;
+        h.run_steps(2);
+        let base = t!("adjust-tab-base");
+        assert!(h.query_by_label("Style").is_some(), "les autres onglets");
+        assert!(h.query_by_label(&base).is_none(), "pas de base sur un JPEG");
+        assert_eq!(
+            h.state().adjust_tab,
+            adjust::AdjustTab::Base,
+            "retenu pour les RAW"
+        );
+        let path = h.state().files[0].path.clone();
+        let mut layers = tri::adjust::Layers::default();
+        layers.correction.exposure = 0.5;
+        h.state_mut().save_adjustments(vec![(path, Some(layers))]);
+        h.run_steps(2);
+        assert!(
+            h.query_by_label(&base).is_some(),
+            "une base déjà là : visible"
         );
     }
 

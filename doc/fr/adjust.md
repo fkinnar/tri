@@ -165,7 +165,9 @@ essai (retours du 10/11/2026) :
 - **Quatre onglets**, retenus dans la session, un point « • » sur ceux qui changent
   l'image (un réglage caché se voit) ; **double-clic sur un onglet : remis à zéro** (base :
   exposition et balance de la prise de vue ; style ; noir et blanc : la couleur), sur la
-  sélection synchronisée aussi :
+  sélection synchronisée aussi. Pas d'onglet « Base » sur une image déjà développée
+  (JPEG, TIFF… ; retour du 13/11/2026), sauf si elle en a déjà une (pour la retirer) ;
+  « Style » s'ouvre à sa place :
   - **Base** : exposition et **« Auto »** ; température (K), avec la liste des balances
     (telle que prise, auto sur toute l'image, préréglages avec leurs kelvins) et la
     **« Pipette »** (en plein écran, un clic sur une zone qui devrait être grise, `[gui]

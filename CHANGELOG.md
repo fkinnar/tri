@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **No "Base" tab on a JPEG** (#458): exposure and white balance of the adjustments
+  are for RAW files; on a JPEG (or another already developed image) the tab is hidden and
+  "Style" opens instead, unless the image already has a base, kept to remove it.
 - **The cuts of a version in tiles are shown** (#460): in full screen, a version in
   tiles has its cuts drawn on the image, as dashes alternately light and dark, readable
   on any image (`[gui.crop] tile_dash`, `tile_line_width`, `tile_opacity`).
