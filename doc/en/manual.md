@@ -54,6 +54,10 @@ box:
 
 ![Help](../manual-images/en/help.jpg)
 
+`tri` also works **from the command line** (rate, offload a card, export…): `tri --help`
+explains every command, and the **F1** help lists them after the shortcuts, with a button
+that copies the command filled in with the open folder or the selected images.
+
 ## Colours
 
 Calibrated or wide-gamut screen? The [Checking colours](colour-check.md) sheet shows in

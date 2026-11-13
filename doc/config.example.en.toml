@@ -919,8 +919,14 @@ focus_line = "accent"
 focus_line_width = 2.0
 # Side of the icon buttons (file actions, in the right-click dialog), in points.
 icon_size = 34.0
-# Minimum width of the help (<core.app.help>), in points.
-help_width = 620.0
+# Width of the help (<core.app.help>), in points (at most 90% of the window).
+help_width = 1000.0
+# Width of its label column, in points: a longer label wraps.
+help_label_width = 480.0
+# Margin above and below each line of the help, in points.
+help_row_padding = 3.0
+# Margin around a command line example in the help, in points.
+help_example_margin = 4.0
 # Keyboard scrolling of the help: per up / down arrow, in points (pages:
 # <core.nav.page_up> / <core.nav.page_down>).
 help_scroll_line = 40.0

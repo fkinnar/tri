@@ -745,6 +745,11 @@ badge-versions = { $n ->
 }
 help-title = Shortcuts
 help-search-hint = Search (e.g. "fpn", "star 3")…
+help-commands = Command line
+help-commands-group = Command line: { $theme }
+help-command-copy = Copy the command
+help-command-example = Show an example to copy
+help-command-copied = Command copied to the clipboard
 help-no-match = No matching action.
 help-close-hint = Esc or <core.app.help> to close.
 empty-folder-gone = The folder "{ $name }" is no longer there (drive unplugged?)

@@ -1042,6 +1042,8 @@ pub struct TriApp {
     /// Lignes de l'aide pour la recherche en cours, préparées une fois (issue n° 11 : les
     /// recalculer à chaque image, ~75 ms, faisait saccader l'ouverture).
     help_lines: Option<HelpLines>,
+    /// Commandes de l'aide dépliées (leur exemple, issue n° 441).
+    help_open_commands: Vec<&'static str>,
     /// Largeurs des colonnes de l'aide (libellés, touches), mesurées au démarrage, ce qui
     /// prépare aussi les caractères des polices ; refaites quand les raccourcis changent.
     help_widths: Option<(f32, f32)>,
@@ -1746,6 +1748,7 @@ impl TriApp {
                 .map(crate::palette::load_history)
                 .unwrap_or_default(),
             help_lines: None,
+            help_open_commands: Vec::new(),
             help_widths: None,
             visible_waiting: 0,
             startup_actions: startup_actions().into(),
@@ -18147,6 +18150,8 @@ impl TriApp {
         let mut download = None;
         let mut report = false;
         let mut open_log = false;
+        let mut copied: Option<String> = None;
+        let mut toggled: Option<&'static str> = None;
         let opening = self.help_search.is_none();
         let mut query = self.help_search.take().unwrap_or_default();
         // Défilement au clavier (retour du 18/10/2026) : les touches de navigation du
@@ -18184,23 +18189,28 @@ impl TriApp {
         // Largeur fixée d'avance d'après les libellés (issue n° 11) : calculée d'après la
         // fenêtre de l'image précédente, la colonne poussait la fenêtre un peu plus à chaque
         // image, qui s'ouvrait en grandissant pendant plusieurs images.
-        let (label_width, keys_width) = self.help_widths(ctx);
-        if self.help_lines.as_ref().is_none_or(|l| l.query != query) {
-            self.help_lines = Some(HelpLines::new(&self.keymap, &query));
+        self.help_widths(ctx);
+        if self
+            .help_lines
+            .as_ref()
+            .is_none_or(|l| l.query != query || l.open != self.help_open_commands)
+        {
+            self.help_lines = Some(HelpLines::new(
+                &self.keymap,
+                &query,
+                &self.help_open_commands,
+            ));
         }
-        let lines = self.help_lines.take().unwrap_or_default();
-        let style = ctx.global_style();
-        let gap = 32.0;
-        let width = (label_width + keys_width + gap)
-            .max(self.gui.dialogs.help_width)
+        let mut lines = self.help_lines.take().unwrap_or_default();
+        // Largeur réglée, et une colonne des libellés plus étroite que les plus longs
+        // (retour du 13/11/2026 : place pour les raccourcis et les formes des commandes ;
+        // un libellé trop long passe sur deux lignes).
+        let width = self
+            .gui
+            .dialogs
+            .help_width
             .min(ctx.content_rect().width() * 0.9);
-        // Colonne des libellés : le reste, moins l'espace entre colonnes et l'ascenseur.
-        let label_column = (width
-            - keys_width
-            - 2.0 * style.spacing.item_spacing.x
-            - style.spacing.scroll.bar_width
-            - style.spacing.scroll.bar_outer_margin)
-            .max(width / 2.0);
+        let label_column = self.gui.dialogs.help_label_width.min(width * 0.6);
         let shown = egui::Window::new(t!("help-title"))
             .open(&mut open)
             .min_width(width)
@@ -18306,45 +18316,240 @@ impl TriApp {
                 // hauteur, titres de thème compris ; bandes une ligne sur deux.
                 let row_height = ui.spacing().interact_size.y;
                 let spacing = ui.spacing().item_spacing;
+                // Hauteur de chaque ligne : un libellé trop long pour sa colonne passe à la
+                // ligne (13/11/2026) ; mesurée une fois par recherche et par largeur.
+                let row_padding = self.gui.dialogs.help_row_padding;
+                let example_margin = self.gui.dialogs.help_example_margin;
+                if lines.heights.len() != lines.lines.len()
+                    || lines.heights_for != (label_column, row_padding, example_margin)
+                {
+                    let font = egui::TextStyle::Body.resolve(ui.style());
+                    let measure = |text: &str, width: f32| {
+                        ui.ctx().fonts_mut(|f| {
+                            let galley =
+                                f.layout(text.to_string(), font.clone(), Color32::WHITE, width);
+                            (galley.rows.len().max(1), f.row_height(&font))
+                        })
+                    };
+                    let triangle = 12.0 + spacing.x;
+                    lines.heights = lines
+                        .lines
+                        .iter()
+                        .map(|line| {
+                            let text = match line {
+                                HelpLine::Action { label, .. } => Some((label.clone(), 0.0)),
+                                HelpLine::Command(c) => Some((c.description(), triangle)),
+                                HelpLine::Group(_) | HelpLine::Example(_) => None,
+                            };
+                            let extra = text.map_or(0.0, |(text, before)| {
+                                let (rows, line) = measure(&text, label_column - before);
+                                (rows - 1) as f32 * line
+                            });
+                            // De l'air (retour du 13/11/2026) : autour de chaque ligne, et
+                            // autour de l'exemple, dans son cadre.
+                            let example = match line {
+                                HelpLine::Example(_) => 2.0 * example_margin,
+                                _ => 0.0,
+                            };
+                            row_height + extra + spacing.y + 2.0 * row_padding + example
+                        })
+                        .collect();
+                    lines.heights_for = (label_column, row_padding, example_margin);
+                }
+                let heights = lines.heights.clone();
                 let _output = ScrollArea::vertical()
                     .id_salt("help_rows")
                     .max_height(max_height)
                     .min_scrolled_height(max_height)
                     .auto_shrink([false, true])
-                    .show_rows(ui, row_height, lines.lines.len(), |ui, range| {
+                    .show_viewport(ui, |ui, viewport| {
                         if scroll != 0.0 {
                             ui.scroll_with_delta(vec2(0.0, -scroll));
                         }
                         let full = ui.available_width();
-                        for i in range {
-                            let row = Rect::from_min_size(ui.cursor().min, vec2(full, row_height));
-                            if i % 2 == 1 {
-                                ui.painter().rect_filled(
-                                    row.expand2(vec2(0.0, spacing.y / 2.0)),
-                                    0.0,
-                                    ui.visuals().faint_bg_color,
-                                );
+                        let origin = ui.max_rect().min;
+                        ui.set_min_height(heights.iter().sum::<f32>());
+                        // Seulement les lignes visibles (une vingtaine sur ~200).
+                        let mut y = 0.0;
+                        // Fond alterné compté par ligne de données : l'exemple déplié a le
+                        // fond de sa commande (retour du 13/11/2026).
+                        let mut stripe = 0usize;
+                        for (i, &height) in heights.iter().enumerate() {
+                            if !matches!(lines.lines[i], HelpLine::Example(_)) {
+                                stripe += 1;
                             }
-                            ui.allocate_ui_with_layout(
-                                vec2(full, row_height),
-                                egui::Layout::left_to_right(egui::Align::Center),
+                            let top = y;
+                            y += height;
+                            if y < viewport.min.y {
+                                continue;
+                            }
+                            if top > viewport.max.y {
+                                break;
+                            }
+                            let row =
+                                Rect::from_min_size(origin + vec2(0.0, top), vec2(full, height));
+                            if stripe.is_multiple_of(2) {
+                                ui.painter()
+                                    .rect_filled(row, 0.0, ui.visuals().faint_bg_color);
+                            }
+                            // Sans l'espace entre lignes : compris dans la hauteur.
+                            let inner = row.shrink2(vec2(0.0, spacing.y / 2.0 + row_padding));
+                            // Deux zones fixes : les libellés à gauche, la colonne de droite
+                            // toujours au même endroit (un libellé ne la pousse plus).
+                            let left =
+                                Rect::from_min_size(inner.min, vec2(label_column, inner.height()));
+                            let right = Rect::from_min_max(
+                                pos2(inner.left() + label_column + 2.0 * spacing.x, inner.top()),
+                                inner.max,
+                            );
+                            ui.scope_builder(
+                                egui::UiBuilder::new()
+                                    .max_rect(inner)
+                                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
                                 |ui| {
-                                    ui.set_min_size(vec2(full, row_height));
                                     match &lines.lines[i] {
                                         // Rangées par thème, avec un titre (recherche comprise).
                                         HelpLine::Group(name) => {
                                             ui.label(egui::RichText::new(name).strong());
                                         }
+                                        HelpLine::Command(command) => {
+                                            // Triangle et description (en entier au survol,
+                                            // avec la syntaxe et les options) : un clic
+                                            // déplie l'exemple dessous ; à droite, la forme
+                                            // de la commande (retour du 13/11/2026 : l'exemple
+                                            // y était coupé).
+                                            let tip = command_tip(command);
+                                            let open =
+                                                self.help_open_commands.contains(&command.id);
+                                            ui.scope_builder(
+                                                egui::UiBuilder::new().max_rect(left).layout(
+                                                    egui::Layout::left_to_right(
+                                                        egui::Align::Center,
+                                                    ),
+                                                ),
+                                                |ui| {
+                                                    let (rect, fold) =
+                                                        crate::marks::clickable_named(
+                                                            ui,
+                                                            12.0,
+                                                            &format!(
+                                                                "{} {}",
+                                                                t!("help-command-example"),
+                                                                command.id
+                                                            ),
+                                                            &t!("help-command-example"),
+                                                        );
+                                                    crate::marks::disclosure(
+                                                        ui.painter(),
+                                                        rect,
+                                                        open,
+                                                        ui.visuals().weak_text_color(),
+                                                    );
+                                                    let text = ui
+                                                        .add(
+                                                            egui::Label::new(command.description())
+                                                                .wrap()
+                                                                .sense(Sense::click()),
+                                                        )
+                                                        .on_hover_text(&tip)
+                                                        .on_hover_cursor(
+                                                            egui::CursorIcon::PointingHand,
+                                                        );
+                                                    if fold.clicked() || text.clicked() {
+                                                        toggled = Some(command.id);
+                                                    }
+                                                },
+                                            );
+                                            let ui = &mut ui.new_child(
+                                                egui::UiBuilder::new().max_rect(right).layout(
+                                                    egui::Layout::left_to_right(
+                                                        egui::Align::Center,
+                                                    ),
+                                                ),
+                                            );
+                                            ui.add(
+                                                egui::Label::new(
+                                                    egui::RichText::new(command.form())
+                                                        .monospace()
+                                                        .weak(),
+                                                )
+                                                .truncate(),
+                                            )
+                                            .on_hover_text(&tip);
+                                        }
+                                        HelpLine::Example(command) => {
+                                            // L'exemple complet, rempli avec le dossier ouvert
+                                            // et la sélection, et de quoi le copier.
+                                            let example = command.example(
+                                                Some(&self.folder.dir),
+                                                &self.selection.targets(&self.files, self.selected),
+                                            );
+                                            // Dans un cadre, comme un bloc de code.
+                                            ui.add_space(16.0);
+                                            let margin = example_margin as i8;
+                                            egui::Frame::new()
+                                                .fill(ui.visuals().extreme_bg_color)
+                                                .corner_radius(4.0)
+                                                .inner_margin(egui::Margin::symmetric(
+                                                    2 * margin,
+                                                    margin,
+                                                ))
+                                                .show(ui, |ui| {
+                                                    ui.set_width(ui.available_width());
+                                                    ui.horizontal(|ui| {
+                                                        let (rect, copy) =
+                                                            crate::marks::clickable_named(
+                                                                ui,
+                                                                14.0,
+                                                                &format!(
+                                                                    "{} {}",
+                                                                    t!("help-command-copy"),
+                                                                    command.id
+                                                                ),
+                                                                &t!("help-command-copy"),
+                                                            );
+                                                        let back = ui.visuals().extreme_bg_color;
+                                                        crate::marks::copy_icon(
+                                                            ui.painter(),
+                                                            rect,
+                                                            ui.visuals().text_color(),
+                                                            back,
+                                                        );
+                                                        if copy.clicked() {
+                                                            copied = Some(example.clone());
+                                                        }
+                                                        ui.add_space(4.0);
+                                                        ui.add(
+                                                            egui::Label::new(
+                                                                egui::RichText::new(&example)
+                                                                    .monospace(),
+                                                            )
+                                                            .truncate(),
+                                                        )
+                                                        .on_hover_text(&example);
+                                                    });
+                                                });
+                                        }
                                         HelpLine::Action { label, id, keys } => {
                                             // Identifiant technique au survol seulement (utile
                                             // pour la section `[keys]` de la configuration).
-                                            ui.allocate_ui_with_layout(
-                                                vec2(label_column, row_height),
-                                                egui::Layout::left_to_right(egui::Align::Center),
+                                            ui.scope_builder(
+                                                egui::UiBuilder::new().max_rect(left).layout(
+                                                    egui::Layout::left_to_right(
+                                                        egui::Align::Center,
+                                                    ),
+                                                ),
                                                 |ui| {
-                                                    ui.set_min_width(label_column);
-                                                    ui.label(label.as_str()).on_hover_text(*id);
+                                                    ui.add(egui::Label::new(label.as_str()).wrap())
+                                                        .on_hover_text(*id);
                                                 },
+                                            );
+                                            let ui = &mut ui.new_child(
+                                                egui::UiBuilder::new().max_rect(right).layout(
+                                                    egui::Layout::left_to_right(
+                                                        egui::Align::Center,
+                                                    ),
+                                                ),
                                             );
                                             let font = egui::TextStyle::Body.resolve(ui.style());
                                             let weak = ui.visuals().weak_text_color();
@@ -18394,6 +18599,18 @@ impl TriApp {
         if open_log {
             self.help = false;
             self.open_log(ctx, Vec::new());
+        }
+        if let Some(id) = toggled {
+            match self.help_open_commands.iter().position(|&o| o == id) {
+                Some(i) => {
+                    self.help_open_commands.remove(i);
+                }
+                None => self.help_open_commands.push(id),
+            }
+        }
+        if let Some(command) = copied {
+            ctx.copy_text(command);
+            self.notice = Some((t!("help-command-copied"), false));
         }
     }
 
@@ -18836,7 +19053,7 @@ impl eframe::App for TriApp {
             // F1 : l'ouverture n'a plus rien à calculer.
             self.help_widths(&ctx);
             if self.help_lines.is_none() {
-                self.help_lines = Some(HelpLines::new(&self.keymap, ""));
+                self.help_lines = Some(HelpLines::new(&self.keymap, "", &self.help_open_commands));
             }
         }
         steps.mark("centre");
@@ -20246,6 +20463,10 @@ enum HelpLine {
         id: &'static str,
         keys: String,
     },
+    /// Commande de la ligne de commande (issue n° 441) : sa description et sa forme.
+    Command(&'static tri::commands::Command),
+    /// Son exemple, déplié dessous : rempli avec le dossier et la sélection, à copier.
+    Example(&'static tri::commands::Command),
 }
 
 /// Palette de commandes ouverte.
@@ -20641,12 +20862,19 @@ fn help_here_card(
 struct HelpLines {
     /// Recherche pour laquelle elles ont été préparées.
     query: String,
+    /// Commandes dépliées pour lesquelles elles ont été préparées.
+    open: Vec<&'static str>,
+    /// Hauteur de chaque ligne (libellés sur plusieurs lignes), pour une colonne des
+    /// libellés de largeur `heights_for`.
+    heights: Vec<f32>,
+    /// Largeur de la colonne, marge des lignes et de l'exemple de ces hauteurs.
+    heights_for: (f32, f32, f32),
     /// Titres de thème et actions, dans l'ordre d'affichage.
     lines: Vec<HelpLine>,
 }
 
 impl HelpLines {
-    fn new(keymap: &Keymap, query: &str) -> HelpLines {
+    fn new(keymap: &Keymap, query: &str, open: &[&'static str]) -> HelpLines {
         let mut lines = Vec::new();
         let mut group = None;
         for (action, keys) in help_rows(keymap, query) {
@@ -20660,11 +20888,71 @@ impl HelpLines {
                 keys,
             });
         }
+        // La ligne de commande à la suite, par thème, cherchée de même (issue n° 441). Une
+        // touche tapée (« ctrl f ») ne cherche que les actions.
+        if keymap.actions_for_typed_keys(query).is_none() {
+            let mut theme = None;
+            for command in help_commands(query) {
+                if theme != Some(command.theme) {
+                    theme = Some(command.theme);
+                    lines.push(HelpLine::Group(t!(
+                        "help-commands-group",
+                        theme = command.theme.name()
+                    )));
+                }
+                lines.push(HelpLine::Command(command));
+                if open.contains(&command.id) {
+                    lines.push(HelpLine::Example(command));
+                }
+            }
+        }
         HelpLines {
             query: query.to_string(),
+            open: open.to_vec(),
+            heights: Vec::new(),
+            heights_for: (0.0, 0.0, 0.0),
             lines,
         }
     }
+}
+
+/// Bulle d'une commande de l'aide : description, syntaxe, options.
+fn command_tip(command: &tri::commands::Command) -> String {
+    let mut tip = format!("{}\n\n{}", command.description(), command.syntax());
+    for (option, description) in command.options() {
+        tip.push_str(&format!("\n{option}  {description}"));
+    }
+    tip
+}
+
+/// Commandes de la ligne de commande qui correspondent à `query` (toutes sans recherche),
+/// dans l'ordre de l'aide : description, syntaxe et options, thème, « ligne de commande ».
+fn help_commands(query: &str) -> Vec<&'static tri::commands::Command> {
+    let section = t!("help-commands");
+    let found: Vec<(&'static tri::commands::Command, tri::fuzzy::Match)> = tri::commands::COMMANDS
+        .iter()
+        .filter_map(|command| {
+            let fields = [
+                command.description(),
+                command.search_text(),
+                command.theme.name(),
+                section.clone(),
+            ];
+            let fields: Vec<&str> = fields.iter().map(String::as_str).collect();
+            // Des mots, pas des lettres éparpillées : les textes des commandes sont longs,
+            // trois lettres s'y trouvent presque toujours.
+            let found = tri::fuzzy::find(query, &fields)?;
+            (query.trim().is_empty() || found.close).then_some((command, found))
+        })
+        .collect();
+    let mut commands: Vec<&'static tri::commands::Command> = tri::fuzzy::relevant(found)
+        .into_iter()
+        .map(|(command, _)| command)
+        .collect();
+    let rank =
+        |c: &tri::commands::Command| tri::commands::Theme::ALL.iter().position(|t| *t == c.theme);
+    commands.sort_by_key(|c| rank(c)); // stable : ordre de la liste dans un thème
+    commands
 }
 
 /// Lignes de l'aide : (action, raccourcis), rangées par thème. Sans recherche, toutes les
@@ -26669,6 +26957,59 @@ mod tests {
     }
 
     #[test]
+    fn the_help_lists_the_command_line_and_copies_a_command() {
+        // Issue n° 441 : les commandes à la suite des raccourcis, cherchées de même, et un
+        // bouton qui copie l'exemple rempli avec le dossier ouvert.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::F1, Modifiers::NONE);
+        let commands = |h: &Harness<'_, TriApp>| -> Vec<&'static str> {
+            h.state()
+                .help_lines
+                .iter()
+                .flat_map(|l| &l.lines)
+                .filter_map(|l| match l {
+                    HelpLine::Command(c) => Some(c.id),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert_eq!(commands(&h).len(), tri::commands::COMMANDS.len());
+        // Une recherche : la commande qui y répond, avec son thème.
+        h.state_mut().help_search = Some("décharge une carte".into());
+        h.run_steps(3);
+        assert_eq!(commands(&h).first(), Some(&"offload"), "{:?}", commands(&h));
+        assert!(
+            h.query_by_label("Ligne de commande : Déchargement")
+                .is_some()
+        );
+        h.state_mut().help_search = Some("exposition de chaque image".into());
+        h.run_steps(3);
+        assert!(commands(&h).contains(&"exposure"), "{:?}", commands(&h));
+        // L'exemple dans une ligne dépliée sous la commande.
+        let copy = format!("{} exposure", t!("help-command-copy"));
+        assert!(h.query_by_label(&copy).is_none());
+        h.get_by_label(&format!("{} exposure", t!("help-command-example")))
+            .click();
+        h.run_steps(3);
+        h.get_by_label(&copy).click();
+        // Le texte copié est dans la sortie de l'image où le clic est vu.
+        h.step();
+        assert_eq!(h.state().notice, Some((t!("help-command-copied"), false)));
+        let dir = tri::commands::shell_quote(&h.state().folder.dir);
+        let copied = h
+            .output()
+            .platform_output
+            .commands
+            .iter()
+            .find_map(|c| match c {
+                egui::OutputCommand::CopyText(text) => Some(text.clone()),
+                _ => None,
+            });
+        assert_eq!(copied, Some(format!("tri {dir} --exposure")));
+    }
+
+    #[test]
     fn help_search_filters_and_typing_is_not_a_shortcut() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
@@ -26685,7 +27026,7 @@ mod tests {
             .flat_map(|l| &l.lines)
             .filter_map(|l| match l {
                 HelpLine::Group(name) => Some(name.as_str()),
-                HelpLine::Action { .. } => None,
+                HelpLine::Action { .. } | HelpLine::Command(_) | HelpLine::Example(_) => None,
             })
             .collect();
         assert!(groups.contains(&"Notation"), "{groups:?}");

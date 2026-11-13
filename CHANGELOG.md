@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- **The command line in the help** (#452, fixes #441): F1 lists the commands after the
+  shortcuts, by theme, searched like them, with their form; a click unfolds an example
+  filled in with the open folder or the selected images, and a button copies it. The help
+  window has a narrower label column where long labels wrap, a little air between the
+  lines and the example in a frame (`[gui.dialogs] help_width`, `help_label_width`,
+  `help_row_padding`, `help_example_margin`). A short paragraph in the manual.
 - **`tri --help`** (#451, part of #441): every command of the command line explained
   by theme, with its options and an example (`-h` too); the short usage shown on an
   error comes from the same description.

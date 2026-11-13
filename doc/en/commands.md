@@ -30,6 +30,8 @@ that make the command, `--copy` and `--move`), `options` (the others, each descr
 - `usage()`: the syntax of every command, and a pointer to `tri --help`.
 - `help()`: by theme, every command with its description, its options and an example;
   then the common option `--config`. `tri --help` or `tri -h`.
+- `Command::form()`: the short form (required parts of the syntax, without `tri` nor the
+  leading folder), shown on the right in the interface's help.
 - `Command::search_text()`: what the interface's help search goes through.
 
 ## Tests

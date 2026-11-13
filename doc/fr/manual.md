@@ -54,6 +54,11 @@ avec une recherche :
 
 ![Aide](../manual-images/fr/help.jpg)
 
+`tri` se pilote aussi **en ligne de commande** (noter, décharger une carte, exporter…) :
+`tri --help` explique chaque commande, et l'aide **F1** les liste à la suite des
+raccourcis, avec un bouton qui copie la commande remplie avec le dossier ouvert ou les
+images sélectionnées.
+
 ## Les couleurs
 
 Écran calibré ou large gamut ? La fiche [Vérifier les couleurs](colour-check.md) montre
