@@ -1860,7 +1860,8 @@ mod tests {
     /// n° 441) : l'aide ne peut pas oublier une option ajoutée.
     #[test]
     fn every_parsed_option_is_in_the_help() {
-        let source = include_str!("main.rs");
+        // Fins de ligne normalisées : `\r\n` dans une copie de travail Windows.
+        let source = include_str!("main.rs").replace("\r\n", "\n");
         let parse = &source[source.find("fn parse()").unwrap()..];
         let parse = &parse[..parse.find("\n}\n").unwrap()];
         let mut documented: Vec<&str> = tri::commands::COMMANDS

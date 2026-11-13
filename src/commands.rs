@@ -124,6 +124,14 @@ pub const COMMANDS: &[Command] = &[
         example: "tri <folder> --previews",
     },
     Command {
+        id: "rate",
+        theme: Theme::Notes,
+        syntax: "tri <image>… [--stars N] [--color <color>[,…]|+<color>,-<color>…|none] [--flag accept|reject|none] [--dry-run]",
+        main: &[],
+        options: opts!["--stars", "--color", "--flag", "--dry-run"],
+        example: "tri <images> --stars 3 --dry-run",
+    },
+    Command {
         id: "convert-xmp",
         theme: Theme::Notes,
         syntax: "tri <folder> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]",
