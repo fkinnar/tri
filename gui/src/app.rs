@@ -913,6 +913,13 @@ pub struct TriApp {
     stack_only: Option<HashSet<PathBuf>>,
     /// Seulement les photos d'une extension (ligne du résumé du dossier, #388).
     extension_only: Option<String>,
+    /// Seulement les photos qui ont des versions (résumé du dossier, #388).
+    versions_only: bool,
+    /// Compteur des changements de versions (écrites, annulées, relues) : le résumé
+    /// recompte les photos qui en ont quand il change.
+    versions_epoch: u64,
+    /// Résumé du dossier : comptages faits en fond (versions, taille du cache).
+    summary_jobs: summary::Jobs,
     /// Images de cette pile que `f c` a dépliées (elles étaient repliées) : repliées de
     /// nouveau en quittant le filtre (retour du 25/10/2026).
     stack_only_unfolded: Vec<PathBuf>,
@@ -1698,6 +1705,9 @@ impl TriApp {
             group_distances: Vec::new(),
             stack_only: None,
             extension_only: None,
+            versions_only: false,
+            versions_epoch: 0,
+            summary_jobs: Default::default(),
             stack_only_unfolded: Vec::new(),
             group_centre: settings.similarity.threshold,
             blur_strictness: 0.0,
@@ -3492,6 +3502,7 @@ impl TriApp {
             }
             // Versions peut-être changées ailleurs : relues à la demande.
             self.versions.clear();
+            self.versions_epoch += 1;
             self.forget_grid_versions();
             let changed = self.folder.notes.reload_sidecars(&sidecars);
             trace(|| format!("XMP modifiés ailleurs : {}", changed.len()));
@@ -5697,6 +5708,16 @@ impl TriApp {
             Some(extension) => tri::filter::ExtensionFilter { extension }.apply(base),
             None => base,
         };
+        // Seulement les photos qui ont des versions (résumé du dossier, #388), une fois
+        // comptées.
+        let base: Vec<Vec<MediaFile>> = match self.summary_versions() {
+            Some(with) if self.versions_only => base
+                .into_iter()
+                .map(|g| g.into_iter().filter(|f| with.contains(&f.path)).collect())
+                .filter(|g: &Vec<MediaFile>| !g.is_empty())
+                .collect(),
+            _ => base,
+        };
         // Seulement la pile courante (`f c`, issue n° 52).
         let base: Vec<Vec<MediaFile>> = match &self.stack_only {
             Some(only) => base
@@ -6210,8 +6231,9 @@ impl TriApp {
     /// un dossier sans rien de retenu s'ouvre sans filtre, dans l'ordre retenu pour tous.
     /// Réglage coupé : les filtres restent ceux du dossier précédent, comme avant.
     fn restore_folder_view(&mut self, dir: &Path) {
-        // Le filtre par extension du résumé (#388) est propre au dossier quitté.
+        // Les filtres du résumé (#388) sont propres au dossier quitté.
         self.extension_only = None;
+        self.versions_only = false;
         if !self.gui.remember_folder_view {
             self.folder_view = None;
             return;
@@ -8479,6 +8501,8 @@ impl TriApp {
                 self.well_exposed = false;
                 self.developed_on = false;
                 self.conflicts_only = false;
+                self.extension_only = None;
+                self.versions_only = false;
                 self.leave_stack_only();
                 self.filter_inverted = false;
                 self.apply_filter();
@@ -10525,6 +10549,7 @@ impl TriApp {
             Ok(Some((before, versions.items(), removed.name)))
         });
         self.versions.remove(path);
+        self.versions_epoch += 1;
         self.version_shown = None;
         match result {
             Ok(Some((before, after, name))) => {
@@ -10764,6 +10789,7 @@ impl TriApp {
         match result {
             Ok((before, after, change, name)) => {
                 self.versions.remove(&image);
+                self.versions_epoch += 1;
                 // La version enregistrée est montrée.
                 let index = self
                     .versions_of(&image)
@@ -14529,6 +14555,7 @@ impl TriApp {
     /// sélection garde sa place (l'image suivante, après une suppression).
     fn reload_folder(&mut self, select: Option<PathBuf>) {
         self.versions.clear();
+        self.versions_epoch += 1;
         self.forget_grid_versions();
         match Folder::scan(
             &self.folder.dir,
@@ -15285,6 +15312,9 @@ impl TriApp {
         }
         if let Some(extension) = &self.extension_only {
             parts.push(extension.clone());
+        }
+        if self.versions_only {
+            parts.push(t!("summary-versions"));
         }
         if self.conflicts_only {
             parts.push(t!("filter-conflicts"));
@@ -17086,6 +17116,7 @@ impl TriApp {
         self.adjust_reread(&touched);
         // Versions peut-être changées : relues.
         self.versions.clear();
+        self.versions_epoch += 1;
         self.forget_grid_versions();
         self.version_shown = None;
         if applied.iter().any(|a| a.files_changed) {
@@ -22146,22 +22177,39 @@ mod tests {
         // des filtres n'en a plus).
         // Ouvre la liste n° `n` jusqu'à voir `choice` : le clic d'ouverture se perd
         // parfois sur la CI Windows (08/11/2026, #379).
+        // Ouvre la liste n° `n` jusqu'à voir `choice` (déjà ouverte : rien à faire, un clic
+        // la refermerait) ; la liste attendue si elle n'est pas encore dessinée.
         let combo = |h: &mut Harness<'_, TriApp>, n: usize, choice: &str| {
             for _ in 0..5 {
-                h.get_all_by_role(egui::accesskit::Role::ComboBox)
-                    .nth(n)
-                    .expect("liste déroulante")
-                    .click();
-                h.run_steps(2);
                 if h.query_by_label(choice).is_some() {
                     return;
                 }
+                let deadline = Instant::now() + Duration::from_secs(30);
+                while h
+                    .query_all_by_role(egui::accesskit::Role::ComboBox)
+                    .nth(n)
+                    .is_none()
+                {
+                    assert!(Instant::now() < deadline, "liste déroulante n° {n}");
+                    h.run_steps(1);
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                h.get_all_by_role(egui::accesskit::Role::ComboBox)
+                    .nth(n)
+                    .unwrap()
+                    .click();
+                h.run_steps(2);
             }
-            panic!("la liste n° {n} ne s'ouvre pas ({choice})");
+            assert!(
+                h.query_by_label(choice).is_some(),
+                "la liste n° {n} ne s'ouvre pas ({choice})"
+            );
         };
         // Choisit `choice` dans la liste n° `n` jusqu'à ce que `done` : les choix une fois
         // leur place arrêtée (clic tombé à côté sur la CI Windows, 07/11/2026), et le clic
-        // sur le choix aussi perdu parfois (build de nuit Windows, 13/11/2026).
+        // sur le choix aussi perdu parfois (build de nuit Windows, 13/11/2026). Pas
+        // d'Échap entre deux essais : l'application la reçoit aussi (CI Windows,
+        // 13/11/2026) ; une liste restée ouverte est reprise telle quelle.
         let pick = |h: &mut Harness<'_, TriApp>,
                     n: usize,
                     choice: &str,
@@ -22172,11 +22220,6 @@ mod tests {
                 h.run_steps(2);
                 if done(h.state()) {
                     return;
-                }
-                // La liste encore ouverte : Échap la referme avant de recommencer.
-                if h.query_by_label(choice).is_some() {
-                    h.key_press(Key::Escape);
-                    h.run_steps(2);
                 }
             }
             panic!("« {choice} » jamais choisi dans la liste n° {n}");
@@ -32600,6 +32643,51 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().files.len(), 1);
         assert_eq!(h.state().files[0].path, red);
+    }
+
+    #[test]
+    fn the_summary_counts_versions_and_clears_the_cache() {
+        // #388, fin (13/11/2026) : les photos avec des versions (comptées en fond, un
+        // filtre comme les autres lignes) ; la place du dossier dans le cache, et « Vider »
+        // qui ouvre la boîte de réinitialisation sur le cache seul.
+        let (mut h, _dir) = harness();
+        h.state_mut().folder_panel = true;
+        h.state_mut().panel_folded.insert(summary::OPEN.to_string());
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 3);
+        let image = h.state().files[1].path.clone();
+        let mut versions = tri::versions::Versions::default();
+        versions.list.push(tri::versions::Version {
+            name: "Story".into(),
+            crop: tri::versions::Rect::fit(tri::versions::Ratio::Fixed(9, 16), 1.5),
+            ratio: tri::versions::Ratio::Fixed(9, 16),
+            source: tri::versions::Source::Embedded,
+            profile: None,
+        });
+        tri::versions::write(&image, &versions, tri::xmp::Convention::Darktable).unwrap();
+        // Une version changée dans tri : recomptée.
+        h.state_mut().versions_epoch += 1;
+        run_until(&mut h, |app| {
+            app.summary_versions().is_some_and(|with| with.len() == 1)
+        });
+        h.run_steps(2);
+        h.get_by_label("Avec des versions").click();
+        h.run_steps(2);
+        assert!(h.state().versions_only);
+        assert_eq!(h.state().files.len(), 1);
+        assert_eq!(h.state().files[0].path, image);
+        assert!(h.state().summary_line_on(&summary::Line::Versions));
+        h.get_by_label("Avec des versions").click();
+        h.run_steps(2);
+        assert!(!h.state().versions_only);
+        assert_eq!(h.state().files.len(), 3);
+        // Le cache : mesuré, et « Vider » demande confirmation, le cache seul coché.
+        run_until(&mut h, |app| app.summary_cache().is_some());
+        h.run_steps(2);
+        h.get_by_label("Vider").click();
+        h.run_steps(2);
+        let dialog = h.state().reset.as_ref().expect("boîte de réinitialisation");
+        assert_eq!(dialog.folder(), h.state().folder.dir.as_path());
+        assert!(dialog.parts.cache && !dialog.parts.data && !dialog.parts.notes);
     }
 
     #[test]
