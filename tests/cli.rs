@@ -416,6 +416,34 @@ fn images_are_rated_from_the_command_line() {
     assert_eq!(read(&b).stars, 2, "les autres images sont notées");
     failed(env.run([arg(&a), "--color".as_ref(), "red,blue".as_ref()]));
     assert_eq!(read(&a), cleared);
+
+    // Une seule couleur par photo : `+` remplace, `-` retire si c'est elle.
+    let colors = |image: &Path| read(image).colors;
+    use tri::xmp::Color::{Blue, Green, Red};
+    ok(env.run([arg(&a), "--color".as_ref(), "+red".as_ref()]));
+    ok(env.run([arg(&a), "--color".as_ref(), "+blue".as_ref()]));
+    assert_eq!(colors(&a), vec![Blue]);
+    ok(env.run([arg(&a), "--color".as_ref(), "-red".as_ref()]));
+    assert_eq!(colors(&a), vec![Blue]);
+
+    // Plusieurs couleurs par photo : ajouts et retraits gardent les autres, et relancer
+    // la commande ne change rien.
+    let config = env.path("config.toml");
+    let text = fs::read_to_string(&config).unwrap();
+    fs::write(&config, format!("{text}\n[xmp]\nmultiple_colors = true\n")).unwrap();
+    ok(env.run([arg(&a), "--color".as_ref(), "red,blue".as_ref()]));
+    assert_eq!(colors(&a), vec![Red, Blue]);
+    for _ in 0..2 {
+        ok(env.run([arg(&a), arg(&b), "--color".as_ref(), "+green,-red".as_ref()]));
+        assert_eq!(colors(&a), vec![Green, Blue]);
+        assert_eq!(colors(&pair), vec![Green, Blue], "la paire suit");
+        assert_eq!(colors(&b), vec![Green]);
+    }
+    assert_eq!(read(&a).stars, 4, "les étoiles restent");
+    // Remplacer et ajouter à la fois : refusé.
+    failed(env.run([arg(&a), "--color".as_ref(), "red,+blue".as_ref()]));
+    failed(env.run([arg(&a), "--color".as_ref(), "+red,-red".as_ref()]));
+    assert_eq!(colors(&a), vec![Green, Blue]);
 }
 
 #[test]

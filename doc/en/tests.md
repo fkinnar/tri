@@ -318,7 +318,7 @@ or malformed options (usage, error code); listing by kind and depth; `--previews
 `--clear-cache` (one level, one folder alone, with `--depth`, the whole cache) checked
 with `--cache-usage`; `--cache-here` / `--cache-user` (entries moved into the folder,
 then given back); `--convert-xmp` (and `--dry-run`); `--stars` / `--color` / `--flag` (pair, standard input,
-`--dry-run`, errors); `--rename`, `--copy`, `--move`
+`--dry-run`, colours added and removed, errors); `--rename`, `--copy`, `--move`
 (images and a whole folder), `--delete --permanent`; `--offload` (dry run, copy, second
 pass, `--delete-copied`); `--metadata`, `--exposure`, `--sharpness`, `--groups`; `--export
 asis` (identical copy). Not tested: `--reveal`, `--edit`, `--eject` (the system),

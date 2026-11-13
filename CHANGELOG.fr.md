@@ -5,8 +5,9 @@
 ## Non publié
 
 - **Noter en ligne de commande** (#450, corrige #275) : `tri <image>... --stars N
-  --color red|…|none --flag accept|reject|none [--dry-run]`, ou la liste des images sur
-  l'entrée standard ; la paire RAW+JPEG et les développements principaux suivent, sidecars
+  --color red,…|+blue,-red|none --flag accept|reject|none [--dry-run]`, ou la liste des
+  images sur l'entrée standard ; couleurs remplacées, ou ajoutées et retirées en gardant
+  les autres ; la paire RAW+JPEG et les développements principaux suivent, sidecars
   comme dans l'interface.
 - **Filtre de couleurs : toutes les couleurs ou l'une d'elles** (#444) : avec plusieurs
   couleurs par photo (`[xmp] multiple_colors`), un bouton ∨ / ∧ devant les

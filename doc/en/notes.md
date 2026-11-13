@@ -66,9 +66,10 @@ tri --stars 1 --flag reject < list.txt
 
 `--stars 0..5`, `--color red|yellow|green|blue|purple` (several, comma-separated, with
 `[xmp] multiple_colors`, refused otherwise), `--flag accept|reject|none`; `--color none`
-removes the colours, `--stars 0` the stars. The given colours **replace** the photo's
-(no toggle as with the keyboard: a command must give the same result every time it
-runs). Without images, the list is read on standard input, one per line. Same rules as
+removes the colours, `--stars 0` the stars. The given colours **replace** the photo's;
+`+blue` adds one and `-red` removes one, keeping the others (`+green,-red`: both; with
+one colour per photo, `+` replaces as with the keyboard). No toggle: a command gives the
+same result every time it runs. Replacing and adding at once (`red,+blue`) is refused. Without images, the list is read on standard input, one per line. Same rules as
 the interface, through `NoteBook::edit`: the RAW+JPEG pair and the main developments
 follow (rated once), sidecars created according to `[sidecars]` and the installed
 software, ratings written into the images according to `[xmp] embed`, an image in

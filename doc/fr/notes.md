@@ -69,8 +69,10 @@ tri --stars 1 --flag reject < liste.txt
 `--stars 0..5`, `--color red|yellow|green|blue|purple` (plusieurs séparées par des
 virgules avec `[xmp] multiple_colors`, sinon refusé), `--flag accept|reject|none` ;
 `--color none` retire les couleurs, `--stars 0` les étoiles. Les couleurs données
-**remplacent** celles de la photo (pas de bascule comme au clavier : une commande doit
-donner le même résultat à chaque lancement). Sans image, la liste est lue sur l'entrée
+**remplacent** celles de la photo ; `+blue` en ajoute une et `-red` en retire une en
+gardant les autres (`+green,-red` : les deux ; avec une seule couleur par photo, `+`
+remplace comme au clavier). Pas de bascule : une commande donne le même résultat à
+chaque lancement. Remplacer et ajouter à la fois (`red,+blue`) est refusé. Sans image, la liste est lue sur l'entrée
 standard, une par ligne. Mêmes règles que l'interface, par `NoteBook::edit` : la paire
 RAW+JPEG et les développements principaux suivent (notés une fois), sidecars créés selon
 `[sidecars]` et les logiciels installés, notes inscrites dans les images selon

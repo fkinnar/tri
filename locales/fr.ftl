@@ -191,7 +191,7 @@ cli-usage =
       tri <dossier> --groups [--threshold X]
       tri <dossier> --sharpness [--raw|--flat] [--depth N]
       tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
-      tri <image>... [--stars 0-5] [--color red|yellow|green|blue|purple[,…]|none] [--flag accept|reject|none] [--dry-run]   (sans image : liste sur l'entrée standard)
+      tri <image>... [--stars 0-5] [--color red|yellow|green|blue|purple[,…]|+blue,-red…|none] [--flag accept|reject|none] [--dry-run]   (sans image : liste sur l'entrée standard)
       tri --rename <image> <nom> [--dry-run]
       tri --delete <image>... [--permanent] [--dry-run]
       tri --copy|--move <image>...|<dossier> --to <dossier> [--dry-run]
@@ -227,6 +227,7 @@ cli-rate-bad-stars = nombre d'étoiles invalide : { $value } (0 à 5)
 cli-rate-bad-color = couleur inconnue : { $value } (red, yellow, green, blue, purple ou none)
 cli-rate-bad-flag = drapeau inconnu : { $value } (accept, reject ou none)
 cli-rate-one-color = une seule couleur par photo : plusieurs couleurs demandent [xmp] multiple_colors = true
+cli-rate-mixed-colors = { $value } : soit des couleurs qui remplacent (red,blue), soit des ajouts et retraits (+blue,-red), pas les deux
 cli-rate-not-an-image = pas une image
 cli-rate-written = { $mode ->
     [dry-run] à noter

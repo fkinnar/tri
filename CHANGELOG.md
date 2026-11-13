@@ -5,8 +5,8 @@
 ## Unreleased
 
 - **Rate from the command line** (#450, fixes #275): `tri <image>... --stars N
-  --color red|…|none --flag accept|reject|none [--dry-run]`, or the list of images on
-  standard input; the RAW+JPEG pair and the main developments follow, sidecars as in the
+  --color red,…|+blue,-red|none --flag accept|reject|none [--dry-run]`, or the list of
+  images on standard input; colours replaced, or added and removed keeping the others; the RAW+JPEG pair and the main developments follow, sidecars as in the
   interface.
 - **Colour filter: all the colours or one of them** (#444): with several colours per
   photo (`[xmp] multiple_colors`), an ∨ / ∧ button before the colour dots of the

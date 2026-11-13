@@ -39,7 +39,7 @@
 //!   tri <dossier> --conflicts [--raw|--flat] [--depth N]
 //!       liste les images dont les sources de notes (sidecars, image) se contredisent, et
 //!       les fusions faites, voir `tri::reconcile` ;
-//!   tri <image>... [--stars N] [--color <couleur>[,<couleur>…]|none] [--flag accept|reject|none] [--dry-run]
+//!   tri <image>... [--stars N] [--color <couleur>[,…]|+<couleur>,-<couleur>…|none] [--flag accept|reject|none] [--dry-run]
 //!       note les images (liste lue sur l'entrée standard s'il n'y en a pas) : leur paire
 //!       RAW+JPEG et leurs développements principaux suivent, comme dans l'interface ;
 //!       sidecars des logiciels installés (`[sidecars]`), voir `tri::notes` ;
@@ -166,8 +166,7 @@ struct Args {
 #[derive(Default)]
 struct NotesArgs {
     stars: Option<u8>,
-    /// Couleurs de la photo, à la place des siennes (vide : aucune).
-    colors: Option<Vec<xmp::Color>>,
+    colors: Option<ColorEdit>,
     flag: Option<xmp::Flag>,
 }
 
@@ -177,13 +176,29 @@ impl NotesArgs {
         self.stars.is_some() || self.colors.is_some() || self.flag.is_some()
     }
 
-    /// Pose les notes demandées sur `notes`.
-    fn apply(&self, notes: &mut xmp::Notes) {
+    /// Pose les notes demandées sur `notes` ; `multiple` : plusieurs couleurs par photo
+    /// (`[xmp] multiple_colors`).
+    fn apply(&self, notes: &mut xmp::Notes, multiple: bool) {
         if let Some(stars) = self.stars {
             notes.set_stars(stars);
         }
-        if let Some(colors) = &self.colors {
-            notes.colors = colors.clone();
+        match &self.colors {
+            Some(ColorEdit::Set(colors)) => notes.colors = colors.clone(),
+            Some(ColorEdit::Change { add, remove }) => {
+                notes.colors.retain(|c| !remove.contains(c));
+                if !add.is_empty() {
+                    if !multiple {
+                        // Une seule couleur : l'ajoutée remplace, comme au clavier.
+                        notes.colors.clear();
+                    }
+                    notes.colors.extend(add.iter().copied());
+                }
+                notes.colors = xmp::Color::ALL
+                    .into_iter()
+                    .filter(|c| notes.colors.contains(c))
+                    .collect();
+            }
+            None => {}
         }
         if let Some(flag) = self.flag {
             notes.flag = flag;
@@ -199,23 +214,66 @@ fn parse_stars(text: &str) -> AnyResult<u8> {
     }
 }
 
-/// `--color` : `none`, ou des couleurs séparées par des virgules (`red,blue`), rangées
-/// dans l'ordre des couleurs, sans doublon.
-fn parse_colors(text: &str) -> AnyResult<Vec<xmp::Color>> {
-    if text.trim().eq_ignore_ascii_case("none") {
-        return Ok(Vec::new());
-    }
-    let mut wanted = Vec::new();
-    for part in text.split(',') {
-        match xmp::Color::from_id(part) {
-            Some(color) => wanted.push(color),
-            None => return Err(t!("cli-rate-bad-color", value = part.trim()).into()),
+/// Ce que `--color` fait des couleurs de la photo.
+#[derive(Clone, Debug, PartialEq)]
+enum ColorEdit {
+    /// Celles-ci à la place des siennes (vide : aucune), rangées, sans doublon.
+    Set(Vec<xmp::Color>),
+    /// Ajouter (`+blue`) et retirer (`-red`), en gardant les autres : relancer la
+    /// commande ne change rien (pas de bascule comme au clavier).
+    Change {
+        add: Vec<xmp::Color>,
+        remove: Vec<xmp::Color>,
+    },
+}
+
+impl ColorEdit {
+    /// Nombre de couleurs que la photo recevra au plus de cette commande.
+    fn added(&self) -> usize {
+        match self {
+            ColorEdit::Set(colors) => colors.len(),
+            ColorEdit::Change { add, .. } => add.len(),
         }
     }
-    Ok(xmp::Color::ALL
-        .into_iter()
-        .filter(|c| wanted.contains(c))
-        .collect())
+}
+
+/// `--color` : `none` ; des couleurs séparées par des virgules (`red,blue`), qui
+/// remplacent celles de la photo ; ou des ajouts et retraits (`+blue,-red`). Les deux
+/// formes ne se mélangent pas.
+fn parse_colors(text: &str) -> AnyResult<ColorEdit> {
+    if text.trim().eq_ignore_ascii_case("none") {
+        return Ok(ColorEdit::Set(Vec::new()));
+    }
+    let (mut set, mut add, mut remove) = (Vec::new(), Vec::new(), Vec::new());
+    for part in text.split(',') {
+        let part = part.trim();
+        let (list, name) = if let Some(name) = part.strip_prefix('+') {
+            (&mut add, name)
+        } else if let Some(name) = part.strip_prefix('-') {
+            (&mut remove, name)
+        } else {
+            (&mut set, part)
+        };
+        match xmp::Color::from_id(name) {
+            Some(color) if !list.contains(&color) => list.push(color),
+            Some(_) => {}
+            None => return Err(t!("cli-rate-bad-color", value = part).into()),
+        }
+    }
+    let changes = !add.is_empty() || !remove.is_empty();
+    if !set.is_empty() && changes || add.iter().any(|c| remove.contains(c)) {
+        return Err(t!("cli-rate-mixed-colors", value = text.trim()).into());
+    }
+    Ok(if changes {
+        ColorEdit::Change { add, remove }
+    } else {
+        ColorEdit::Set(
+            xmp::Color::ALL
+                .into_iter()
+                .filter(|c| set.contains(c))
+                .collect(),
+        )
+    })
 }
 
 /// `--flag` : `accept`, `reject` ou `none`.
@@ -1328,9 +1386,10 @@ fn rate(settings: &EngineSettings, args: &Args) -> AnyResult<()> {
             }
         }
     }
+    let multiple = settings.xmp.multiple_colors;
     if let Some(colors) = &args.notes.colors
-        && colors.len() > 1
-        && !settings.xmp.multiple_colors
+        && colors.added() > 1
+        && !multiple
     {
         return Err(t!("cli-rate-one-color").into());
     }
@@ -1408,13 +1467,13 @@ fn rate(settings: &EngineSettings, args: &Args) -> AnyResult<()> {
                 continue;
             }
             let mut notes = book.notes(image).clone();
-            args.notes.apply(&mut notes);
+            args.notes.apply(&mut notes, multiple);
             shared
                 .into_iter()
                 .filter(|p| *book.notes(p) != notes || book.sidecars(p).is_empty())
                 .collect()
         } else {
-            match book.edit(image, |n| args.notes.apply(n)) {
+            match book.edit(image, |n| args.notes.apply(n, multiple)) {
                 Ok(changed) => changed,
                 Err(e) => {
                     errors += 1;
