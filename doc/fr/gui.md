@@ -1230,10 +1230,12 @@ le plus fréquent de ses actions. Capture : étape `keys:Ctrl+b r` de `TRI_GUI_A
 ### Ligne de commande dans l'aide (F1, issue n° 441)
 
 À la suite des raccourcis, une section par thème (« Ligne de commande : Notes »…), tirée
-de `tri::commands` (voir [commands.md](commands.md)) : chaque commande sur une ligne, sa
-description (en entier au survol, avec la syntaxe et les options), puis son exemple et un
-bouton qui le copie, rempli avec le dossier ouvert et la sélection
-(`Command::example`). Cherchée avec le reste (`help_commands`) : des mots seulement, pas
+de `tri::commands` (voir [commands.md](commands.md)) : chaque commande sur une ligne, un
+triangle et sa description (en entier au survol, avec la syntaxe et les options), et à
+droite sa forme (`Command::form` : `--offload <carte>`). Un clic déplie dessous, sur toute
+la largeur, l'exemple rempli avec le dossier ouvert et la sélection (`Command::example`)
+et un bouton qui le copie (retour du 13/11/2026 : l'exemple entier, à droite, était
+coupé). Cherchée avec le reste (`help_commands`) : des mots seulement, pas
 des lettres éparpillées (les textes sont longs). Une touche tapée ne cherche que les
 actions.
 

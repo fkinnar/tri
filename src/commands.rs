@@ -387,6 +387,30 @@ impl Command {
         placeholders(self.syntax, &|_| None)
     }
 
+    /// Sa forme courte, traduite : les parties obligatoires de la syntaxe, sans `tri` ni
+    /// le dossier de tête (`--offload <carte>`, `--previews`) ; le dossier seul pour la
+    /// liste d'un dossier.
+    pub fn form(&self) -> String {
+        let mut depth = 0;
+        let mut required = String::new();
+        for c in self.syntax.chars() {
+            match c {
+                '[' => depth += 1,
+                ']' => depth -= 1,
+                c if depth == 0 => required.push(c),
+                _ => {}
+            }
+        }
+        let mut words: Vec<&str> = required.split_whitespace().collect();
+        if words.first() == Some(&"tri") {
+            words.remove(0);
+        }
+        if words.len() > 1 && words[0] == "<folder>" {
+            words.remove(0);
+        }
+        placeholders(&words.join(" "), &|_| None)
+    }
+
     /// Ce que fait la commande, en une phrase.
     pub fn description(&self) -> String {
         t!(&format!("cli-cmd-{}", self.id))
@@ -596,6 +620,22 @@ mod tests {
             Command::get("reveal").unwrap().example(None, &images),
             "tri --reveal /p/a.RAF"
         );
+    }
+
+    #[test]
+    fn the_form_keeps_the_required_parts() {
+        let form = |id: &str| Command::get(id).unwrap().form();
+        assert_eq!(form("previews"), "--previews");
+        assert_eq!(form("check-update"), "--check-update");
+        assert!(
+            form("offload").starts_with("--offload <"),
+            "{}",
+            form("offload")
+        );
+        // La liste d'un dossier : le dossier seul.
+        assert!(form("list").starts_with('<'), "{}", form("list"));
+        // Les options facultatives n'y sont pas.
+        assert!(!form("rate").contains("--stars"), "{}", form("rate"));
     }
 
     #[test]

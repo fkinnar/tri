@@ -30,6 +30,8 @@ décrite) et `example`.
 - `usage()` : la syntaxe de chaque commande, et un renvoi vers `tri --help`.
 - `help()` : par thème, chaque commande avec sa description, ses options et un exemple ;
   puis l'option commune `--config`. `tri --help` ou `tri -h`.
+- `Command::form()` : la forme courte (parties obligatoires de la syntaxe, sans `tri` ni
+  le dossier de tête), montrée à droite dans l'aide de l'interface.
 - `Command::search_text()` : ce que la recherche de l'aide de l'interface parcourt.
 
 ## Tests

@@ -1042,6 +1042,8 @@ pub struct TriApp {
     /// Lignes de l'aide pour la recherche en cours, préparées une fois (issue n° 11 : les
     /// recalculer à chaque image, ~75 ms, faisait saccader l'ouverture).
     help_lines: Option<HelpLines>,
+    /// Commandes de l'aide dépliées (leur exemple, issue n° 441).
+    help_open_commands: Vec<&'static str>,
     /// Largeurs des colonnes de l'aide (libellés, touches), mesurées au démarrage, ce qui
     /// prépare aussi les caractères des polices ; refaites quand les raccourcis changent.
     help_widths: Option<(f32, f32)>,
@@ -1746,6 +1748,7 @@ impl TriApp {
                 .map(crate::palette::load_history)
                 .unwrap_or_default(),
             help_lines: None,
+            help_open_commands: Vec::new(),
             help_widths: None,
             visible_waiting: 0,
             startup_actions: startup_actions().into(),
@@ -18148,6 +18151,7 @@ impl TriApp {
         let mut report = false;
         let mut open_log = false;
         let mut copied: Option<String> = None;
+        let mut toggled: Option<&'static str> = None;
         let opening = self.help_search.is_none();
         let mut query = self.help_search.take().unwrap_or_default();
         // Défilement au clavier (retour du 18/10/2026) : les touches de navigation du
@@ -18186,8 +18190,16 @@ impl TriApp {
         // fenêtre de l'image précédente, la colonne poussait la fenêtre un peu plus à chaque
         // image, qui s'ouvrait en grandissant pendant plusieurs images.
         let (label_width, keys_width) = self.help_widths(ctx);
-        if self.help_lines.as_ref().is_none_or(|l| l.query != query) {
-            self.help_lines = Some(HelpLines::new(&self.keymap, &query));
+        if self
+            .help_lines
+            .as_ref()
+            .is_none_or(|l| l.query != query || l.open != self.help_open_commands)
+        {
+            self.help_lines = Some(HelpLines::new(
+                &self.keymap,
+                &query,
+                &self.help_open_commands,
+            ));
         }
         let lines = self.help_lines.take().unwrap_or_default();
         let style = ctx.global_style();
@@ -18337,27 +18349,70 @@ impl TriApp {
                                             ui.label(egui::RichText::new(name).strong());
                                         }
                                         HelpLine::Command(command) => {
-                                            // La description (en entier au survol, avec la
-                                            // syntaxe et les options), puis l'exemple rempli
-                                            // et de quoi le copier.
-                                            let example = command.example(
-                                                Some(&self.folder.dir),
-                                                &self.selection.targets(&self.files, self.selected),
-                                            );
+                                            // Triangle et description (en entier au survol,
+                                            // avec la syntaxe et les options) : un clic
+                                            // déplie l'exemple dessous ; à droite, la forme
+                                            // de la commande (retour du 13/11/2026 : l'exemple
+                                            // y était coupé).
                                             let tip = command_tip(command);
+                                            let open =
+                                                self.help_open_commands.contains(&command.id);
                                             ui.allocate_ui_with_layout(
                                                 vec2(label_column, row_height),
                                                 egui::Layout::left_to_right(egui::Align::Center),
                                                 |ui| {
                                                     ui.set_min_width(label_column);
                                                     ui.set_max_width(label_column);
-                                                    ui.add(
-                                                        egui::Label::new(command.description())
-                                                            .truncate(),
-                                                    )
-                                                    .on_hover_text(&tip);
+                                                    let (rect, fold) =
+                                                        crate::marks::clickable_named(
+                                                            ui,
+                                                            12.0,
+                                                            &format!(
+                                                                "{} {}",
+                                                                t!("help-command-example"),
+                                                                command.id
+                                                            ),
+                                                            &t!("help-command-example"),
+                                                        );
+                                                    crate::marks::disclosure(
+                                                        ui.painter(),
+                                                        rect,
+                                                        open,
+                                                        ui.visuals().weak_text_color(),
+                                                    );
+                                                    let text = ui
+                                                        .add(
+                                                            egui::Label::new(command.description())
+                                                                .truncate()
+                                                                .sense(Sense::click()),
+                                                        )
+                                                        .on_hover_text(&tip)
+                                                        .on_hover_cursor(
+                                                            egui::CursorIcon::PointingHand,
+                                                        );
+                                                    if fold.clicked() || text.clicked() {
+                                                        toggled = Some(command.id);
+                                                    }
                                                 },
                                             );
+                                            ui.add(
+                                                egui::Label::new(
+                                                    egui::RichText::new(command.form())
+                                                        .monospace()
+                                                        .weak(),
+                                                )
+                                                .truncate(),
+                                            )
+                                            .on_hover_text(&tip);
+                                        }
+                                        HelpLine::Example(command) => {
+                                            // L'exemple complet, rempli avec le dossier ouvert
+                                            // et la sélection, et de quoi le copier.
+                                            let example = command.example(
+                                                Some(&self.folder.dir),
+                                                &self.selection.targets(&self.files, self.selected),
+                                            );
+                                            ui.add_space(16.0);
                                             let (rect, copy) = crate::marks::clickable_named(
                                                 ui,
                                                 14.0,
@@ -18366,7 +18421,7 @@ impl TriApp {
                                                     t!("help-command-copy"),
                                                     command.id
                                                 ),
-                                                &format!("{}\n{example}", t!("help-command-copy")),
+                                                &t!("help-command-copy"),
                                             );
                                             let back = ui.visuals().panel_fill;
                                             crate::marks::copy_icon(
@@ -18380,13 +18435,11 @@ impl TriApp {
                                             }
                                             ui.add(
                                                 egui::Label::new(
-                                                    egui::RichText::new(&example)
-                                                        .monospace()
-                                                        .weak(),
+                                                    egui::RichText::new(&example).monospace(),
                                                 )
                                                 .truncate(),
                                             )
-                                            .on_hover_text(&tip);
+                                            .on_hover_text(&example);
                                         }
                                         HelpLine::Action { label, id, keys } => {
                                             // Identifiant technique au survol seulement (utile
@@ -18447,6 +18500,14 @@ impl TriApp {
         if open_log {
             self.help = false;
             self.open_log(ctx, Vec::new());
+        }
+        if let Some(id) = toggled {
+            match self.help_open_commands.iter().position(|&o| o == id) {
+                Some(i) => {
+                    self.help_open_commands.remove(i);
+                }
+                None => self.help_open_commands.push(id),
+            }
         }
         if let Some(command) = copied {
             ctx.copy_text(command);
@@ -18893,7 +18954,7 @@ impl eframe::App for TriApp {
             // F1 : l'ouverture n'a plus rien à calculer.
             self.help_widths(&ctx);
             if self.help_lines.is_none() {
-                self.help_lines = Some(HelpLines::new(&self.keymap, ""));
+                self.help_lines = Some(HelpLines::new(&self.keymap, "", &self.help_open_commands));
             }
         }
         steps.mark("centre");
@@ -20303,9 +20364,10 @@ enum HelpLine {
         id: &'static str,
         keys: String,
     },
-    /// Commande de la ligne de commande (issue n° 441) : sa description, et son exemple
-    /// à copier, rempli avec le dossier et la sélection.
+    /// Commande de la ligne de commande (issue n° 441) : sa description et sa forme.
     Command(&'static tri::commands::Command),
+    /// Son exemple, déplié dessous : rempli avec le dossier et la sélection, à copier.
+    Example(&'static tri::commands::Command),
 }
 
 /// Palette de commandes ouverte.
@@ -20701,12 +20763,14 @@ fn help_here_card(
 struct HelpLines {
     /// Recherche pour laquelle elles ont été préparées.
     query: String,
+    /// Commandes dépliées pour lesquelles elles ont été préparées.
+    open: Vec<&'static str>,
     /// Titres de thème et actions, dans l'ordre d'affichage.
     lines: Vec<HelpLine>,
 }
 
 impl HelpLines {
-    fn new(keymap: &Keymap, query: &str) -> HelpLines {
+    fn new(keymap: &Keymap, query: &str, open: &[&'static str]) -> HelpLines {
         let mut lines = Vec::new();
         let mut group = None;
         for (action, keys) in help_rows(keymap, query) {
@@ -20733,10 +20797,14 @@ impl HelpLines {
                     )));
                 }
                 lines.push(HelpLine::Command(command));
+                if open.contains(&command.id) {
+                    lines.push(HelpLine::Example(command));
+                }
             }
         }
         HelpLines {
             query: query.to_string(),
+            open: open.to_vec(),
             lines,
         }
     }
@@ -26812,7 +26880,12 @@ mod tests {
         h.state_mut().help_search = Some("exposition de chaque image".into());
         h.run_steps(3);
         assert!(commands(&h).contains(&"exposure"), "{:?}", commands(&h));
+        // L'exemple dans une ligne dépliée sous la commande.
         let copy = format!("{} exposure", t!("help-command-copy"));
+        assert!(h.query_by_label(&copy).is_none());
+        h.get_by_label(&format!("{} exposure", t!("help-command-example")))
+            .click();
+        h.run_steps(3);
         h.get_by_label(&copy).click();
         // Le texte copié est dans la sortie de l'image où le clic est vu.
         h.step();
@@ -26847,7 +26920,7 @@ mod tests {
             .flat_map(|l| &l.lines)
             .filter_map(|l| match l {
                 HelpLine::Group(name) => Some(name.as_str()),
-                HelpLine::Action { .. } | HelpLine::Command(_) => None,
+                HelpLine::Action { .. } | HelpLine::Command(_) | HelpLine::Example(_) => None,
             })
             .collect();
         assert!(groups.contains(&"Notation"), "{groups:?}");
