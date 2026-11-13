@@ -21875,20 +21875,34 @@ mod tests {
             }
             panic!("la liste n° {n} ne s'ouvre pas ({choice})");
         };
-        // Les choix d'une liste une fois sa place arrêtée (clic tombé à côté sur la CI
-        // Windows, 07/11/2026).
-        combo(&mut h, 0, &sort_name(other));
-        click_settled(&mut h, &sort_name(other));
-        h.run_steps(2);
+        // Choisit `choice` dans la liste n° `n` jusqu'à ce que `done` : les choix une fois
+        // leur place arrêtée (clic tombé à côté sur la CI Windows, 07/11/2026), et le clic
+        // sur le choix aussi perdu parfois (build de nuit Windows, 13/11/2026).
+        let pick = |h: &mut Harness<'_, TriApp>,
+                    n: usize,
+                    choice: &str,
+                    done: &dyn Fn(&TriApp) -> bool| {
+            for _ in 0..5 {
+                combo(h, n, choice);
+                click_settled(h, choice);
+                h.run_steps(2);
+                if done(h.state()) {
+                    return;
+                }
+                // La liste encore ouverte : Échap la referme avant de recommencer.
+                if h.query_by_label(choice).is_some() {
+                    h.key_press(Key::Escape);
+                    h.run_steps(2);
+                }
+            }
+            panic!("« {choice} » jamais choisi dans la liste n° {n}");
+        };
+        pick(&mut h, 0, &sort_name(other), &|s| s.order.key == other);
         assert_eq!(h.state().order.key, other);
         // « RAW », puis « LibRaw » en gris.
-        combo(&mut h, 1, "RAW  LibRaw");
-        click_settled(&mut h, "RAW  LibRaw");
-        h.run_steps(2);
-        assert_eq!(
-            h.state().grid_render,
-            crate::grid_render::GridRender::LibRaw
-        );
+        pick(&mut h, 1, "RAW  LibRaw", &|s| {
+            s.grid_render == crate::grid_render::GridRender::LibRaw
+        });
         // Les piles : une case, et leurs réglages quand elles sont actives.
         assert!(h.query_by_label(&t!("panel-grid-similarity")).is_none());
         // Une fois sa place arrêtée (clic tombé à côté sur la CI, 07/11/2026).
