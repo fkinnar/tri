@@ -464,6 +464,8 @@ pub struct TriApp {
     /// Clic sur un badge d'une vignette (versions, écrêtage) : l'image et l'action,
     /// faite après la grille.
     cell_action: Option<(usize, Vec<Action>)>,
+    /// Badge des versions cliqué : [`TriApp::open_versions`] sur l'image choisie.
+    versions_clicked: bool,
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
@@ -913,6 +915,13 @@ pub struct TriApp {
     stack_only: Option<HashSet<PathBuf>>,
     /// Seulement les photos d'une extension (ligne du résumé du dossier, #388).
     extension_only: Option<String>,
+    /// Seulement les photos qui ont des versions (résumé du dossier, #388).
+    versions_only: bool,
+    /// Compteur des changements de versions (écrites, annulées, relues) : le résumé
+    /// recompte les photos qui en ont quand il change.
+    versions_epoch: u64,
+    /// Résumé du dossier : comptages faits en fond (versions, taille du cache).
+    summary_jobs: summary::Jobs,
     /// Images de cette pile que `f c` a dépliées (elles étaient repliées) : repliées de
     /// nouveau en quittant le filtre (retour du 25/10/2026).
     stack_only_unfolded: Vec<PathBuf>,
@@ -1494,6 +1503,7 @@ impl TriApp {
             grid_fit_pending: false,
             grid_fit_from: None,
             cell_action: None,
+            versions_clicked: false,
             rating_dialog: None,
             rating_dialog_all: true,
             conflict_dialog: None,
@@ -1698,6 +1708,9 @@ impl TriApp {
             group_distances: Vec::new(),
             stack_only: None,
             extension_only: None,
+            versions_only: false,
+            versions_epoch: 0,
+            summary_jobs: Default::default(),
             stack_only_unfolded: Vec::new(),
             group_centre: settings.similarity.threshold,
             blur_strictness: 0.0,
@@ -3492,6 +3505,7 @@ impl TriApp {
             }
             // Versions peut-être changées ailleurs : relues à la demande.
             self.versions.clear();
+            self.versions_epoch += 1;
             self.forget_grid_versions();
             let changed = self.folder.notes.reload_sidecars(&sidecars);
             trace(|| format!("XMP modifiés ailleurs : {}", changed.len()));
@@ -5697,6 +5711,16 @@ impl TriApp {
             Some(extension) => tri::filter::ExtensionFilter { extension }.apply(base),
             None => base,
         };
+        // Seulement les photos qui ont des versions (résumé du dossier, #388), une fois
+        // comptées.
+        let base: Vec<Vec<MediaFile>> = match self.summary_versions() {
+            Some(with) if self.versions_only => base
+                .into_iter()
+                .map(|g| g.into_iter().filter(|f| with.contains(&f.path)).collect())
+                .filter(|g: &Vec<MediaFile>| !g.is_empty())
+                .collect(),
+            _ => base,
+        };
         // Seulement la pile courante (`f c`, issue n° 52).
         let base: Vec<Vec<MediaFile>> = match &self.stack_only {
             Some(only) => base
@@ -6210,8 +6234,9 @@ impl TriApp {
     /// un dossier sans rien de retenu s'ouvre sans filtre, dans l'ordre retenu pour tous.
     /// Réglage coupé : les filtres restent ceux du dossier précédent, comme avant.
     fn restore_folder_view(&mut self, dir: &Path) {
-        // Le filtre par extension du résumé (#388) est propre au dossier quitté.
+        // Les filtres du résumé (#388) sont propres au dossier quitté.
         self.extension_only = None;
+        self.versions_only = false;
         if !self.gui.remember_folder_view {
             self.folder_view = None;
             return;
@@ -8479,6 +8504,8 @@ impl TriApp {
                 self.well_exposed = false;
                 self.developed_on = false;
                 self.conflicts_only = false;
+                self.extension_only = None;
+                self.versions_only = false;
                 self.leave_stack_only();
                 self.filter_inverted = false;
                 self.apply_filter();
@@ -10512,6 +10539,30 @@ impl TriApp {
         self.request_zoom();
     }
 
+    /// Badge des versions d'une vignette cliqué (retour du 13/11/2026 : il commençait une
+    /// nouvelle version, sa bulle disait « modifier ») : une seule version, son cadre
+    /// rouvert ; plusieurs, l'image en plein écran avec la première montrée, la liste
+    /// « Version » du bandeau pour en choisir une, la modifier ou la supprimer. Fermer
+    /// ramène à la grille. Créer une version reste `r`.
+    fn open_versions(&mut self) {
+        let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) else {
+            return;
+        };
+        let count = self.versions_of(&path).list.len();
+        if count == 0 {
+            return;
+        }
+        self.crop_from_grid = self.mode == Mode::Grid;
+        self.sync_source();
+        self.mode = Mode::View;
+        if count == 1 {
+            self.edit_version(&path, 0);
+        } else {
+            self.zoom = None;
+            self.version_shown = Some((path, 0));
+        }
+    }
+
     /// Supprime la version `index` de `path` (annulable).
     fn delete_version(&mut self, path: &Path, index: usize) {
         let convention = self.settings.xmp.sidecar;
@@ -10525,6 +10576,7 @@ impl TriApp {
             Ok(Some((before, versions.items(), removed.name)))
         });
         self.versions.remove(path);
+        self.versions_epoch += 1;
         self.version_shown = None;
         match result {
             Ok(Some((before, after, name))) => {
@@ -10764,6 +10816,7 @@ impl TriApp {
         match result {
             Ok((before, after, change, name)) => {
                 self.versions.remove(&image);
+                self.versions_epoch += 1;
                 // La version enregistrée est montrée.
                 let index = self
                     .versions_of(&image)
@@ -14529,6 +14582,7 @@ impl TriApp {
     /// sélection garde sa place (l'image suivante, après une suppression).
     fn reload_folder(&mut self, select: Option<PathBuf>) {
         self.versions.clear();
+        self.versions_epoch += 1;
         self.forget_grid_versions();
         match Folder::scan(
             &self.folder.dir,
@@ -14832,10 +14886,12 @@ impl TriApp {
                         }
                         if let Some(i) = shown {
                             ui.separator();
-                            if ui.button(t!("versions-edit")).clicked() {
+                            // Des éléments de la liste, comme ceux du dessus (retour du
+                            // 13/11/2026 : des boutons, avec leur fond).
+                            if ui.selectable_label(false, t!("versions-edit")).clicked() {
                                 version_action = Some(VersionAction::Edit(i));
                             }
-                            if ui.button(t!("versions-delete")).clicked() {
+                            if ui.selectable_label(false, t!("versions-delete")).clicked() {
                                 version_action = Some(VersionAction::Delete(i));
                             }
                         }
@@ -15286,6 +15342,9 @@ impl TriApp {
         if let Some(extension) = &self.extension_only {
             parts.push(extension.clone());
         }
+        if self.versions_only {
+            parts.push(t!("summary-versions"));
+        }
         if self.conflicts_only {
             parts.push(t!("filter-conflicts"));
         }
@@ -15729,6 +15788,9 @@ impl TriApp {
                     _ => self.perform(&ctx, action),
                 }
             }
+            if std::mem::take(&mut self.versions_clicked) {
+                self.open_versions();
+            }
         }
         // Clic dans le vide (entre ou après les vignettes) : curseur masqué et sélection
         // vidée, comme dans un gestionnaire de fichiers.
@@ -16161,7 +16223,8 @@ impl TriApp {
                 .on_hover_text(&tip)
                 .clicked();
             if clicked {
-                self.cell_action = Some((index, vec![Action::Crop]));
+                self.cell_action = Some((index, Vec::new()));
+                self.versions_clicked = true;
             }
             caption_left = icon.min.x;
         }
@@ -17086,6 +17149,7 @@ impl TriApp {
         self.adjust_reread(&touched);
         // Versions peut-être changées : relues.
         self.versions.clear();
+        self.versions_epoch += 1;
         self.forget_grid_versions();
         self.version_shown = None;
         if applied.iter().any(|a| a.files_changed) {
@@ -22146,22 +22210,39 @@ mod tests {
         // des filtres n'en a plus).
         // Ouvre la liste n° `n` jusqu'à voir `choice` : le clic d'ouverture se perd
         // parfois sur la CI Windows (08/11/2026, #379).
+        // Ouvre la liste n° `n` jusqu'à voir `choice` (déjà ouverte : rien à faire, un clic
+        // la refermerait) ; la liste attendue si elle n'est pas encore dessinée.
         let combo = |h: &mut Harness<'_, TriApp>, n: usize, choice: &str| {
             for _ in 0..5 {
-                h.get_all_by_role(egui::accesskit::Role::ComboBox)
-                    .nth(n)
-                    .expect("liste déroulante")
-                    .click();
-                h.run_steps(2);
                 if h.query_by_label(choice).is_some() {
                     return;
                 }
+                let deadline = Instant::now() + Duration::from_secs(30);
+                while h
+                    .query_all_by_role(egui::accesskit::Role::ComboBox)
+                    .nth(n)
+                    .is_none()
+                {
+                    assert!(Instant::now() < deadline, "liste déroulante n° {n}");
+                    h.run_steps(1);
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                h.get_all_by_role(egui::accesskit::Role::ComboBox)
+                    .nth(n)
+                    .unwrap()
+                    .click();
+                h.run_steps(2);
             }
-            panic!("la liste n° {n} ne s'ouvre pas ({choice})");
+            assert!(
+                h.query_by_label(choice).is_some(),
+                "la liste n° {n} ne s'ouvre pas ({choice})"
+            );
         };
         // Choisit `choice` dans la liste n° `n` jusqu'à ce que `done` : les choix une fois
         // leur place arrêtée (clic tombé à côté sur la CI Windows, 07/11/2026), et le clic
-        // sur le choix aussi perdu parfois (build de nuit Windows, 13/11/2026).
+        // sur le choix aussi perdu parfois (build de nuit Windows, 13/11/2026). Pas
+        // d'Échap entre deux essais : l'application la reçoit aussi (CI Windows,
+        // 13/11/2026) ; une liste restée ouverte est reprise telle quelle.
         let pick = |h: &mut Harness<'_, TriApp>,
                     n: usize,
                     choice: &str,
@@ -22172,11 +22253,6 @@ mod tests {
                 h.run_steps(2);
                 if done(h.state()) {
                     return;
-                }
-                // La liste encore ouverte : Échap la referme avant de recommencer.
-                if h.query_by_label(choice).is_some() {
-                    h.key_press(Key::Escape);
-                    h.run_steps(2);
                 }
             }
             panic!("« {choice} » jamais choisi dans la liste n° {n}");
@@ -22263,7 +22339,7 @@ mod tests {
     }
 
     #[test]
-    fn clicking_the_versions_badge_of_a_thumbnail_starts_cropping() {
+    fn clicking_the_versions_badge_edits_or_shows_the_versions() {
         let (mut h, dir) = harness();
         h.run_steps(3);
         let image = dir.path().join("photos").join("img1.jpg");
@@ -22288,7 +22364,28 @@ mod tests {
         let app = h.state();
         assert_eq!(app.files[app.selected].path, image, "l'image du badge");
         assert_eq!(app.mode, Mode::View);
-        assert!(app.crop.is_some(), "recadrage commencé");
+        // Une seule version : son cadre rouvert pour la modifier (retour du 13/11/2026 :
+        // le clic en commençait une nouvelle).
+        assert_eq!(app.crop.as_ref().and_then(|c| c.editing), Some(0));
+        // Plusieurs : l'image en plein écran, la première montrée, rien de commencé.
+        let mut two = versions.clone();
+        two.list.push(tri::versions::Version {
+            name: "Post".into(),
+            ..versions.list[0].clone()
+        });
+        tri::versions::write(&image, &two, tri::xmp::Convention::Darktable).unwrap();
+        h.state_mut().crop = None;
+        h.state_mut().mode = Mode::Grid;
+        h.state_mut().versions.clear();
+        h.run_steps(3);
+        let badge = t!("badge-versions", n = 2);
+        wait_for_label(&mut h, &badge);
+        click_settled(&mut h, &badge);
+        h.run_steps(3);
+        let app = h.state();
+        assert_eq!(app.mode, Mode::View);
+        assert!(app.crop.is_none());
+        assert_eq!(app.version_shown, Some((image.clone(), 0)));
     }
 
     #[test]
@@ -29205,23 +29302,31 @@ mod tests {
         use crate::actions::Scope;
         let (mut h, _dir) = harness();
         h.state_mut().metadata_panel = true;
-        run_until(&mut h, |app| app.meta_rows.len() > 2);
+        // Lignes stables avant de les survoler (la mise en page bouge au remplissage).
+        meta_rows_settled(&mut h, 3);
         let label = h.state().meta_rows[1].label.clone();
-        // Repris tant que le survol n'est pas vu (mise en page qui bouge au remplissage).
+        // Survol puis copie, repris si la ligne a bougé sous le pointeur entre les deux
+        // (CI Windows, 13/11/2026 : c'est l'image qui était copiée).
         let deadline = Instant::now() + Duration::from_secs(60);
-        while h.state().meta_hover != Some(1) {
-            assert!(Instant::now() < deadline, "survol jamais vu");
+        loop {
+            assert!(Instant::now() < deadline, "ligne jamais copiée");
             let at = h.get_by_label(&label).rect().center();
             h.event(UiEvent::PointerMoved(at - vec2(0.0, 1.0)));
             h.event(UiEvent::PointerMoved(at));
             h.run_steps(2);
+            if h.state().meta_hover != Some(1) {
+                continue;
+            }
+            assert_eq!(h.state().meta_cursor, 1, "la souris pointe la ligne");
+            assert_eq!(h.state().focus, Scope::Images, "sans prendre le clavier");
+            press(&mut h, Key::C, Modifiers::CTRL);
+            let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
+            if notice.contains(&label) {
+                assert!(h.state().file_dialog.is_none(), "pas la copie de l'image");
+                break;
+            }
+            h.state_mut().file_dialog = None;
         }
-        assert_eq!(h.state().meta_cursor, 1, "la souris pointe la ligne");
-        assert_eq!(h.state().focus, Scope::Images, "sans prendre le clavier");
-        press(&mut h, Key::C, Modifiers::CTRL);
-        assert!(h.state().file_dialog.is_none(), "pas la copie de l'image");
-        let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
-        assert!(notice.contains(&label), "copiée : {notice}");
         // Hors du panneau, Ctrl+C copie de nouveau l'image.
         h.event(UiEvent::PointerMoved(pos2(1.0, 1.0)));
         h.run_steps(2);
@@ -32600,6 +32705,51 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().files.len(), 1);
         assert_eq!(h.state().files[0].path, red);
+    }
+
+    #[test]
+    fn the_summary_counts_versions_and_clears_the_cache() {
+        // #388, fin (13/11/2026) : les photos avec des versions (comptées en fond, un
+        // filtre comme les autres lignes) ; la place du dossier dans le cache, et « Vider »
+        // qui ouvre la boîte de réinitialisation sur le cache seul.
+        let (mut h, _dir) = harness();
+        h.state_mut().folder_panel = true;
+        h.state_mut().panel_folded.insert(summary::OPEN.to_string());
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 3);
+        let image = h.state().files[1].path.clone();
+        let mut versions = tri::versions::Versions::default();
+        versions.list.push(tri::versions::Version {
+            name: "Story".into(),
+            crop: tri::versions::Rect::fit(tri::versions::Ratio::Fixed(9, 16), 1.5),
+            ratio: tri::versions::Ratio::Fixed(9, 16),
+            source: tri::versions::Source::Embedded,
+            profile: None,
+        });
+        tri::versions::write(&image, &versions, tri::xmp::Convention::Darktable).unwrap();
+        // Une version changée dans tri : recomptée.
+        h.state_mut().versions_epoch += 1;
+        run_until(&mut h, |app| {
+            app.summary_versions().is_some_and(|with| with.len() == 1)
+        });
+        h.run_steps(2);
+        h.get_by_label("Avec des versions").click();
+        h.run_steps(2);
+        assert!(h.state().versions_only);
+        assert_eq!(h.state().files.len(), 1);
+        assert_eq!(h.state().files[0].path, image);
+        assert!(h.state().summary_line_on(&summary::Line::Versions));
+        h.get_by_label("Avec des versions").click();
+        h.run_steps(2);
+        assert!(!h.state().versions_only);
+        assert_eq!(h.state().files.len(), 3);
+        // Le cache : mesuré, et « Vider » demande confirmation, le cache seul coché.
+        run_until(&mut h, |app| app.summary_cache().is_some());
+        h.run_steps(2);
+        h.get_by_label("Vider").click();
+        h.run_steps(2);
+        let dialog = h.state().reset.as_ref().expect("boîte de réinitialisation");
+        assert_eq!(dialog.folder(), h.state().folder.dir.as_path());
+        assert!(dialog.parts.cache && !dialog.parts.data && !dialog.parts.notes);
     }
 
     #[test]

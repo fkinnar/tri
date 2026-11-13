@@ -72,7 +72,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   « en conflit ».
   Pas cliquables : les paires (pas de filtre avant le regroupement, #392) et les
   logiciels inactifs. Pas encore de Ctrl+clic pour combiner (filtres complexes, #138).
-  Restent à venir : versions, taille du cache avec « Vider » (`gui/src/app/summary.rs`).
+  Lus sur le disque, en fond (13/11/2026, `summary::Jobs`) : **avec des versions**
+  (`tri::versions::with_versions`, une lecture de sidecar par photo ; recompté quand une
+  version change, `versions_epoch`), un filtre comme les autres (`versions_only`) ; la
+  **place du dossier dans le cache** (`Cache::folder_usage`, remesurée quand les calculs
+  avancent) et **« Vider »**, qui ouvre la boîte « Réinitialiser » sur le cache seul
+  (confirmation, mesures). `f Échap` retire aussi les filtres du résumé
+  (`gui/src/app/summary.rs`).
 - **Panneau des dossiers** (17/10/2026), à gauche de la grille : emplacements dépliables
   en arborescence, rangés par sections titrées et séparées d'un trait (20/10/2026) ; titres en gras, plus grands que
   les dossiers depuis le 26/10/2026, `[gui.folders] section_scale`, #120) :

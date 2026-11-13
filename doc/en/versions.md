@@ -142,8 +142,11 @@ The interface only draws; all the computation is here.
   `handle_grab`.
 
 - **Grid**: badge in the caption of thumbnails that have versions, left of the format
-  (drawn crop icon and their number; at the top left until 2026-10-21); a click starts
-  cropping. Versions read from the sidecars on demand, then kept; read again after a
+  (drawn crop icon and their number; at the top left until 2026-10-21); a click **reopens the
+  frame** of the version when there is only one, otherwise opens the image full screen
+  with the first one shown, the bar's "Version" list to pick one, edit or delete it
+  (2026-11-13: it started a new version while its tooltip said "edit"; creating stays
+  `r`). Versions read from the sidecars on demand, then kept; read again after a
   modification (save, undo, folder watching).
 - The crop bar only offers the export presets that apply to the cropped image
   (`applies_to`), and **never an "as is" preset**, whatever the image. A crop changes the

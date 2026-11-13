@@ -148,7 +148,10 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
 
 - **Grille** : badge dans la légende des vignettes qui ont des versions, à gauche du
   format (icône de recadrage dessinée et leur nombre ; en haut à gauche jusqu'au
-  21/10/2026) ; un clic passe en recadrage. Versions lues dans les sidecars à la demande, puis
+  21/10/2026) ; un clic **rouvre le cadre** de la version s'il n'y en a qu'une, sinon
+  ouvre l'image en plein écran avec la première montrée, la liste « Version » du bandeau
+  pour en choisir une, la modifier ou la supprimer (13/11/2026 : il commençait une
+  nouvelle version, sa bulle disait « modifier » ; créer reste `r`). Versions lues dans les sidecars à la demande, puis
   gardées ; relues après une modification (enregistrement, annulation, surveillance du
   dossier).
 - La barre du recadrage ne propose que les profils d'export qui s'appliquent à l'image

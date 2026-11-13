@@ -240,6 +240,10 @@ summary-rejected = Rejected
 summary-colored = With a colour label
 summary-conflicts = Ratings in conflict
 summary-conflicts-tip = The ratings of these images differ between their sources (sidecar, image, other software): to settle before rating them.
+summary-versions = With versions
+summary-cache = Cache: { $size }
+summary-cache-clear = Clear
+summary-cache-clear-tip = Clear this folder's cache (thumbnails, previews, analyses; they are computed again), after confirmation
 summary-data-folder = tri's data: in this folder
 summary-data-disk = tri's data: on the disk ({ $path })
 summary-data-machine = tri's data: on this machine
@@ -741,7 +745,7 @@ badge-over = { $percent } % of pixels clipped (blown); click: large histogram
 badge-under = { $percent } % of pixels crushed; click: large histogram
 badge-versions = { $n ->
     [one] 1 version; click: edit it
-   *[other] { $n } versions; click: edit them
+   *[other] { $n } versions; click: see them, pick one to edit
 }
 help-title = Shortcuts
 help-search-hint = Search (e.g. "fpn", "star 3")…
