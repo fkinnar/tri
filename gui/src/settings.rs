@@ -772,8 +772,10 @@ pub struct DialogSettings {
     pub focus_line_width: f32,
     /// Côté des boutons à icône (actions sur le fichier de la boîte du clic droit).
     pub icon_size: f32,
-    /// Largeur minimale de l'aide (F1), points : ses lignes ne débordent pas.
+    /// Largeur de l'aide (F1), points (au plus 90 % de la fenêtre).
     pub help_width: f32,
+    /// Largeur de sa colonne des libellés, points : au-delà, sur deux lignes.
+    pub help_label_width: f32,
     /// Défilement de l'aide par flèche haut / bas (points).
     pub help_scroll_line: f32,
     /// Aide « ici » (`?`) : taille du texte (points), en grand pour se lire d'un coup d'œil.
@@ -847,7 +849,8 @@ impl Default for DialogSettings {
             focus_line: ThemeColor::Accent,
             focus_line_width: 2.0,
             icon_size: 34.0,
-            help_width: 620.0,
+            help_width: 1200.0,
+            help_label_width: 520.0,
             help_scroll_line: 40.0,
             help_here_text: 16.0,
             help_here_column: 420.0,

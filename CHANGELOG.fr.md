@@ -7,7 +7,9 @@
 - **La ligne de commande dans l'aide** (#452, corrige #441) : F1 liste les commandes à
   la suite des raccourcis, par thème, cherchées comme eux, avec leur forme ; un clic
   déplie un exemple rempli avec le dossier ouvert ou les images sélectionnées, et un
-  bouton le copie. Un court paragraphe dans le
+  bouton le copie. La fenêtre de l'aide est un peu plus large, avec une colonne des
+  libellés plus étroite où les libellés longs passent à la ligne (`[gui.dialogs]
+  help_width`, `help_label_width`). Un court paragraphe dans le
   manuel.
 - **`tri --help`** (#451, partie de #441) : chaque commande de la ligne de commande
   expliquée par thème, avec ses options et un exemple (`-h` aussi) ; le mode d'emploi

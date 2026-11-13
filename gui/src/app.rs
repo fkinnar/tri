@@ -18189,7 +18189,7 @@ impl TriApp {
         // Largeur fixée d'avance d'après les libellés (issue n° 11) : calculée d'après la
         // fenêtre de l'image précédente, la colonne poussait la fenêtre un peu plus à chaque
         // image, qui s'ouvrait en grandissant pendant plusieurs images.
-        let (label_width, keys_width) = self.help_widths(ctx);
+        self.help_widths(ctx);
         if self
             .help_lines
             .as_ref()
@@ -18201,19 +18201,16 @@ impl TriApp {
                 &self.help_open_commands,
             ));
         }
-        let lines = self.help_lines.take().unwrap_or_default();
-        let style = ctx.global_style();
-        let gap = 32.0;
-        let width = (label_width + keys_width + gap)
-            .max(self.gui.dialogs.help_width)
+        let mut lines = self.help_lines.take().unwrap_or_default();
+        // Largeur réglée, et une colonne des libellés plus étroite que les plus longs
+        // (retour du 13/11/2026 : place pour les raccourcis et les formes des commandes ;
+        // un libellé trop long passe sur deux lignes).
+        let width = self
+            .gui
+            .dialogs
+            .help_width
             .min(ctx.content_rect().width() * 0.9);
-        // Colonne des libellés : le reste, moins l'espace entre colonnes et l'ascenseur.
-        let label_column = (width
-            - keys_width
-            - 2.0 * style.spacing.item_spacing.x
-            - style.spacing.scroll.bar_width
-            - style.spacing.scroll.bar_outer_margin)
-            .max(width / 2.0);
+        let label_column = self.gui.dialogs.help_label_width.min(width * 0.6);
         let shown = egui::Window::new(t!("help-title"))
             .open(&mut open)
             .min_width(width)
@@ -18319,30 +18316,74 @@ impl TriApp {
                 // hauteur, titres de thème compris ; bandes une ligne sur deux.
                 let row_height = ui.spacing().interact_size.y;
                 let spacing = ui.spacing().item_spacing;
+                // Hauteur de chaque ligne : un libellé trop long pour sa colonne passe à la
+                // ligne (13/11/2026) ; mesurée une fois par recherche et par largeur.
+                if lines.heights.len() != lines.lines.len() || lines.heights_for != label_column {
+                    let font = egui::TextStyle::Body.resolve(ui.style());
+                    let measure = |text: &str, width: f32| {
+                        ui.ctx().fonts_mut(|f| {
+                            let galley =
+                                f.layout(text.to_string(), font.clone(), Color32::WHITE, width);
+                            (galley.rows.len().max(1), f.row_height(&font))
+                        })
+                    };
+                    let triangle = 12.0 + spacing.x;
+                    lines.heights = lines
+                        .lines
+                        .iter()
+                        .map(|line| {
+                            let text = match line {
+                                HelpLine::Action { label, .. } => Some((label.clone(), 0.0)),
+                                HelpLine::Command(c) => Some((c.description(), triangle)),
+                                HelpLine::Group(_) | HelpLine::Example(_) => None,
+                            };
+                            let extra = text.map_or(0.0, |(text, before)| {
+                                let (rows, line) = measure(&text, label_column - before);
+                                (rows - 1) as f32 * line
+                            });
+                            row_height + extra + spacing.y
+                        })
+                        .collect();
+                    lines.heights_for = label_column;
+                }
+                let heights = lines.heights.clone();
                 let _output = ScrollArea::vertical()
                     .id_salt("help_rows")
                     .max_height(max_height)
                     .min_scrolled_height(max_height)
                     .auto_shrink([false, true])
-                    .show_rows(ui, row_height, lines.lines.len(), |ui, range| {
+                    .show_viewport(ui, |ui, viewport| {
                         if scroll != 0.0 {
                             ui.scroll_with_delta(vec2(0.0, -scroll));
                         }
                         let full = ui.available_width();
-                        for i in range {
-                            let row = Rect::from_min_size(ui.cursor().min, vec2(full, row_height));
-                            if i % 2 == 1 {
-                                ui.painter().rect_filled(
-                                    row.expand2(vec2(0.0, spacing.y / 2.0)),
-                                    0.0,
-                                    ui.visuals().faint_bg_color,
-                                );
+                        let origin = ui.max_rect().min;
+                        ui.set_min_height(heights.iter().sum::<f32>());
+                        // Seulement les lignes visibles (une vingtaine sur ~200).
+                        let mut y = 0.0;
+                        for (i, &height) in heights.iter().enumerate() {
+                            let top = y;
+                            y += height;
+                            if y < viewport.min.y {
+                                continue;
                             }
-                            ui.allocate_ui_with_layout(
-                                vec2(full, row_height),
-                                egui::Layout::left_to_right(egui::Align::Center),
+                            if top > viewport.max.y {
+                                break;
+                            }
+                            let row =
+                                Rect::from_min_size(origin + vec2(0.0, top), vec2(full, height));
+                            if i % 2 == 1 {
+                                ui.painter()
+                                    .rect_filled(row, 0.0, ui.visuals().faint_bg_color);
+                            }
+                            // Sans l'espace entre lignes : compris dans la hauteur.
+                            let inner = row.shrink2(vec2(0.0, spacing.y / 2.0));
+                            let line_height = inner.height();
+                            ui.scope_builder(
+                                egui::UiBuilder::new()
+                                    .max_rect(inner)
+                                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
                                 |ui| {
-                                    ui.set_min_size(vec2(full, row_height));
                                     match &lines.lines[i] {
                                         // Rangées par thème, avec un titre (recherche comprise).
                                         HelpLine::Group(name) => {
@@ -18358,7 +18399,7 @@ impl TriApp {
                                             let open =
                                                 self.help_open_commands.contains(&command.id);
                                             ui.allocate_ui_with_layout(
-                                                vec2(label_column, row_height),
+                                                vec2(label_column, line_height),
                                                 egui::Layout::left_to_right(egui::Align::Center),
                                                 |ui| {
                                                     ui.set_min_width(label_column);
@@ -18383,7 +18424,7 @@ impl TriApp {
                                                     let text = ui
                                                         .add(
                                                             egui::Label::new(command.description())
-                                                                .truncate()
+                                                                .wrap()
                                                                 .sense(Sense::click()),
                                                         )
                                                         .on_hover_text(&tip)
@@ -18445,11 +18486,12 @@ impl TriApp {
                                             // Identifiant technique au survol seulement (utile
                                             // pour la section `[keys]` de la configuration).
                                             ui.allocate_ui_with_layout(
-                                                vec2(label_column, row_height),
+                                                vec2(label_column, line_height),
                                                 egui::Layout::left_to_right(egui::Align::Center),
                                                 |ui| {
                                                     ui.set_min_width(label_column);
-                                                    ui.label(label.as_str()).on_hover_text(*id);
+                                                    ui.add(egui::Label::new(label.as_str()).wrap())
+                                                        .on_hover_text(*id);
                                                 },
                                             );
                                             let font = egui::TextStyle::Body.resolve(ui.style());
@@ -20765,6 +20807,10 @@ struct HelpLines {
     query: String,
     /// Commandes dépliées pour lesquelles elles ont été préparées.
     open: Vec<&'static str>,
+    /// Hauteur de chaque ligne (libellés sur plusieurs lignes), pour une colonne des
+    /// libellés de largeur `heights_for`.
+    heights: Vec<f32>,
+    heights_for: f32,
     /// Titres de thème et actions, dans l'ordre d'affichage.
     lines: Vec<HelpLine>,
 }
@@ -20805,6 +20851,8 @@ impl HelpLines {
         HelpLines {
             query: query.to_string(),
             open: open.to_vec(),
+            heights: Vec::new(),
+            heights_for: 0.0,
             lines,
         }
     }
