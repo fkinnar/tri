@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Filter bar: the stars comparison looks like the other buttons** (#449): "≥ / = / ≤"
+  is drawn like the ∨ / ∧ of the colour filter, same size, grey frame on hover, and the
+  usual gap after "FILTER".
 - **Colour filter: all the colours or one of them** (#444): with several colours per
   photo (`[xmp] multiple_colors`), an ∨ / ∧ button before the colour dots of the
   filter bar asks for photos carrying all the chosen colours instead of one of them

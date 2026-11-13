@@ -1137,6 +1137,34 @@ pub fn and_or(painter: &Painter, rect: Rect, all: bool, color: Color32) {
     painter.line_segment([top, bottom[1]], stroke);
 }
 
+/// Comparaison du filtre des étoiles (≥, =, ≤), dessinée en traits comme [`and_or`], à
+/// sa taille (#447 : un bouton comme les autres de la barre des filtres).
+pub fn stars_op(painter: &Painter, rect: Rect, op: tri::notes::StarsOp, color: Color32) {
+    use tri::notes::StarsOp;
+    let side = rect.width();
+    let r = Rect::from_center_size(rect.center(), vec2(side * 0.28, side * 0.32));
+    let stroke = Stroke::new((side * 0.06).max(1.0), color);
+    let y = |t: f32| r.top() + r.height() * t;
+    match op {
+        StarsOp::Exactly => {
+            for t in [0.3, 0.7] {
+                painter.line_segment([pos2(r.left(), y(t)), pos2(r.right(), y(t))], stroke);
+            }
+        }
+        StarsOp::AtLeast | StarsOp::AtMost => {
+            // Chevron dans le haut, trait plein dessous.
+            let (open, tip) = if op == StarsOp::AtLeast {
+                (r.left(), r.right())
+            } else {
+                (r.right(), r.left())
+            };
+            painter.line_segment([pos2(open, y(0.0)), pos2(tip, y(0.35))], stroke);
+            painter.line_segment([pos2(tip, y(0.35)), pos2(open, y(0.7))], stroke);
+            painter.line_segment([pos2(r.left(), y(1.0)), pos2(r.right(), y(1.0))], stroke);
+        }
+    }
+}
+
 /// Flèche circulaire (actualiser) dans `rect` : arc de cercle ouvert en haut à droite,
 /// pointe de flèche au bout.
 pub fn refresh(painter: &Painter, rect: Rect, color: Color32) {

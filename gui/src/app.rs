@@ -15327,18 +15327,14 @@ impl TriApp {
             let current = self.notes_rule.stars.map_or(0, |r| r.parts().1);
             let size = self.gui.grid.marks + 4.0;
             // Comparaison (≥, =, ≤) devant les étoiles ; un clic passe à la suivante.
-            let op = ui
-                .add(
-                    egui::Button::new(self.stars_op.symbol())
-                        .small()
-                        .frame(false),
-                )
-                .on_hover_text(format!(
-                    "{}\n{}",
-                    stars_op_name(self.stars_op),
-                    self.action_tip(Action::FilterStarsOp)
-                ))
-                .on_hover_cursor(egui::CursorIcon::PointingHand);
+            // Un bouton comme les autres de la barre, dessiné comme ∨ / ∧ (#447).
+            let name = stars_op_name(self.stars_op);
+            let tip = format!("{name}\n{}", self.action_tip(Action::FilterStarsOp));
+            // Nom accessible : le symbole (le nom complet est aussi le message affiché au
+            // changement, deux nœuds du même nom).
+            let (rect, op) = marks::clickable_named(ui, size, self.stars_op.symbol(), &tip);
+            let color = ui.style().interact(&op).fg_stroke.color;
+            marks::stars_op(ui.painter(), rect, self.stars_op, color);
             if op.clicked() {
                 clicked.push(Action::FilterStarsOp);
             }
