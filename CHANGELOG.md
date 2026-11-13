@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- **Adjustments follow the export** (#456): exposure, white balance, contrast,
+  saturation and black and white are applied when exporting through LibRaw (RAW render,
+  camera JPEG, flat images), the exposure on the sensor data for a RAW; computed in 16
+  bits without clamping, whatever the export colour space. "JPEG as is" stays a pure
+  copy. Also fixed: the "Linear Rec709" and "Linear Rec2020" export spaces kept the sRGB
+  curve when converting an already developed image.
 - **The versions badge edits** (#454): a click on the badge of a thumbnail reopens the
   frame of its version, or with several opens the image full screen with the first one
   shown (the "Version" list to pick, edit or delete); it started a new version. "Edit"

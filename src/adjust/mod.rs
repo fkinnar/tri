@@ -584,52 +584,141 @@ fn encode(table: &[u8], v: f32) -> u8 {
     table[i]
 }
 
+/// Les réglages d'une image prêts à appliquer pixel par pixel, en **lumière linéaire aux
+/// primaires sRGB** (là où ils sont définis) : partagé par l'affichage ([`apply_bitmap`],
+/// 8 bits) et l'export ([`apply_rgb16`], 16 bits, n'importe quel espace).
+pub struct PixelOp {
+    /// Gains rouge, vert, bleu (exposition comprise).
+    k: [f32; 3],
+    mono: Option<[f32; 3]>,
+    saturation: f32,
+    colour: bool,
+    contrast: Contrast,
+}
+
+impl PixelOp {
+    /// `None` : rien à faire.
+    pub fn new(adjust: Adjust, mono: Option<Mixer>) -> Option<PixelOp> {
+        if adjust.is_none() && mono.is_none() {
+            return None;
+        }
+        let k = adjust.exposure.exp2();
+        let saturation = 1.0 + adjust.saturation.clamp(-1.0, 1.0);
+        Some(PixelOp {
+            k: [k * adjust.gains.red, k, k * adjust.gains.blue],
+            mono: mono.map(Mixer::weights),
+            saturation,
+            colour: (saturation - 1.0).abs() > 1e-3,
+            contrast: Contrast::new(adjust.contrast),
+        })
+    }
+
+    /// Noir et blanc : les trois canaux sortent égaux.
+    pub fn is_mono(&self) -> bool {
+        self.mono.is_some()
+    }
+
+    /// Un pixel, lumière linéaire aux primaires sRGB.
+    pub fn apply(&self, [r, g, b]: [f32; 3]) -> [f32; 3] {
+        let (mut r, mut g, mut b) = (r * self.k[0], g * self.k[1], b * self.k[2]);
+        if let Some([mr, mg, mb]) = self.mono {
+            let y = mr * r + mg * g + mb * b;
+            let y = y * self.contrast.factor(y);
+            return [y, y, y];
+        }
+        let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        if self.colour {
+            r = y + (r - y) * self.saturation;
+            g = y + (g - y) * self.saturation;
+            b = y + (b - y) * self.saturation;
+        }
+        let f = self.contrast.factor(y);
+        [r * f, g * f, b * f]
+    }
+}
+
 /// Applique `adjust` (exposition et balance) puis `mono` à une image 8 bits, en passant
 /// par le linéaire. Sur un JPEG, c'est une approximation : sa courbe de tonalité est déjà
 /// appliquée et ce qui est brûlé ne revient pas. Sur un rendu RAW déjà réglé par LibRaw,
 /// passer seulement le reste (exposition au-delà de ses bornes, noir et blanc).
 pub fn apply_bitmap(bitmap: &mut Bitmap, transfer: Transfer, adjust: Adjust, mono: Option<Mixer>) {
-    if adjust.is_none() && mono.is_none() {
+    let Some(op) = PixelOp::new(adjust, mono) else {
         return;
-    }
+    };
     let lin = transfer.to_linear();
     let out = transfer.to_coded();
-    let k = adjust.exposure.exp2();
-    let (kr, kg, kb) = (k * adjust.gains.red, k, k * adjust.gains.blue);
-    let mono = mono.map(Mixer::weights);
-    let saturation = 1.0 + adjust.saturation.clamp(-1.0, 1.0);
-    let colour = (saturation - 1.0).abs() > 1e-3;
-    let contrast = Contrast::new(adjust.contrast);
     for px in bitmap.data.as_chunks_mut::<3>().0 {
         // Espace de travail (primaires Rec.2020) vers primaires sRGB : les réglages y sont
         // définis ([`crate::colour::working_to_srgb_linear`]).
-        let [r, g, b] = crate::colour::working_to_srgb_linear([
+        let rgb = op.apply(crate::colour::working_to_srgb_linear([
             lin[px[0] as usize],
             lin[px[1] as usize],
             lin[px[2] as usize],
-        ]);
-        let (mut r, mut g, mut b) = (r * kr, g * kg, b * kb);
-        match mono {
-            Some([mr, mg, mb]) => {
-                let y = mr * r + mg * g + mb * b;
-                let y = encode(&out, y * contrast.factor(y));
-                *px = [y, y, y];
-            }
-            None => {
-                let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-                if colour {
-                    r = y + (r - y) * saturation;
-                    g = y + (g - y) * saturation;
-                    b = y + (b - y) * saturation;
-                }
-                let f = contrast.factor(y);
-                let [r, g, b] = crate::colour::srgb_linear_to_working([r * f, g * f, b * f]);
-                px[0] = encode(&out, r);
-                px[1] = encode(&out, g);
-                px[2] = encode(&out, b);
-            }
+        ]));
+        // Un gris est le même dans les deux espaces (même blanc).
+        let [r, g, b] = if op.is_mono() {
+            rgb
+        } else {
+            crate::colour::srgb_linear_to_working(rgb)
+        };
+        px[0] = encode(&out, r);
+        px[1] = encode(&out, g);
+        px[2] = encode(&out, b);
+    }
+}
+
+/// Pixels traités d'un coup par [`apply_rgb16`] (la mémoire reste bornée sur une grande
+/// image : 26 Mpx en flottants, ce serait 300 Mo par copie).
+const RGB16_CHUNK: usize = 1 << 16;
+
+/// Applique les réglages à une image 16 bits dans l'espace `space` (celui d'un export :
+/// sRGB, Adobe RGB, ProPhoto…), sans rien perdre : passage en flottants vers la lumière
+/// linéaire aux primaires sRGB (sans borner : une couleur hors du sRGB reste ce qu'elle
+/// est), réglages, puis retour dans `space` (issue de l'export, 13/11/2026 : les réglages
+/// ne suivaient pas).
+pub fn apply_rgb16(
+    pixels: &mut [u16],
+    space: &moxcms::ColorProfile,
+    adjust: Adjust,
+    mono: Option<Mixer>,
+) -> Result<(), String> {
+    let Some(op) = PixelOp::new(adjust, mono) else {
+        return Ok(());
+    };
+    let mut linear = moxcms::ColorProfile::new_srgb();
+    let identity = moxcms::ToneReprCurve::Parametric(vec![1.0]);
+    linear.red_trc = Some(identity.clone());
+    linear.green_trc = Some(identity.clone());
+    linear.blue_trc = Some(identity);
+    // Sinon l'étiquette CICP du sRGB passe avant les courbes : la « version linéaire »
+    // resterait en sRGB.
+    linear.cicp = None;
+    let options = moxcms::TransformOptions::default();
+    let rgb = moxcms::Layout::Rgb;
+    let error = |e: moxcms::CmsError| format!("{e:?}");
+    let to = space
+        .create_transform_f32(rgb, &linear, rgb, options)
+        .map_err(error)?;
+    let back = linear
+        .create_transform_f32(rgb, space, rgb, options)
+        .map_err(error)?;
+    let mut a = vec![0f32; RGB16_CHUNK * 3];
+    let mut b = vec![0f32; RGB16_CHUNK * 3];
+    for chunk in pixels.chunks_mut(RGB16_CHUNK * 3) {
+        let n = chunk.len();
+        for (f, &v) in a.iter_mut().zip(chunk.iter()) {
+            *f = f32::from(v) / 65535.0;
+        }
+        to.transform(&a[..n], &mut b[..n]).map_err(error)?;
+        for px in b[..n].as_chunks_mut::<3>().0 {
+            *px = op.apply(*px);
+        }
+        back.transform(&b[..n], &mut a[..n]).map_err(error)?;
+        for (v, &f) in chunk.iter_mut().zip(a.iter()) {
+            *v = (f * 65535.0).round().clamp(0.0, 65535.0) as u16;
         }
     }
+    Ok(())
 }
 
 /// Le contraste d'une couche : le facteur à appliquer à un pixel de luminance `y`
@@ -1067,6 +1156,52 @@ pub fn report(layers: &Layers, shot: [f32; 3]) -> Report {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 16 bits, dans n'importe quel espace : le même calcul que l'affichage, sans perte.
+    #[test]
+    fn a_16_bit_image_is_adjusted_in_its_own_space() {
+        let srgb = moxcms::ColorProfile::new_srgb();
+        // Un gris moyen (sRGB 0,5 : 0,214 en linéaire), +1 IL : 0,428 en linéaire.
+        let grey = (0.5 * 65535.0f32).round() as u16;
+        let mut px = vec![grey; 3];
+        let plus = Adjust {
+            exposure: 1.0,
+            ..Adjust::default()
+        };
+        apply_rgb16(&mut px, &srgb, plus, None).unwrap();
+        let expected = Transfer::Srgb.encode(2.0 * Transfer::Srgb.decode(0.5)) * 65535.0;
+        for v in &px {
+            assert!((f32::from(*v) - expected).abs() < 100.0, "{v} / {expected}");
+        }
+        // Rien à faire : rien ne bouge, pas même d'un arrondi.
+        let mut same = vec![1234u16, 40000, 65535];
+        apply_rgb16(&mut same, &srgb, Adjust::default(), None).unwrap();
+        assert_eq!(same, [1234, 40000, 65535]);
+        // Noir et blanc en Adobe RGB : trois canaux égaux, un gris reste neutre.
+        let adobe = moxcms::ColorProfile::new_adobe_rgb();
+        let mut colour = vec![50000u16, 20000, 10000];
+        apply_rgb16(
+            &mut colour,
+            &adobe,
+            Adjust::default(),
+            Some(Mixer::default()),
+        )
+        .unwrap();
+        assert!(
+            colour.iter().all(|&v| v.abs_diff(colour[0]) < 40),
+            "{colour:?}"
+        );
+        // Comme l'affichage sur une image 8 bits (au quantum près).
+        let mut b = Bitmap {
+            width: 1,
+            height: 1,
+            data: vec![128, 128, 128],
+        };
+        apply_bitmap(&mut b, Transfer::Srgb, plus, None);
+        let mut deep = vec![128u16 * 257; 3];
+        apply_rgb16(&mut deep, &srgb, plus, None).unwrap();
+        assert!((f32::from(deep[0]) / 257.0 - f32::from(b.data[0])).abs() <= 1.0);
+    }
 
     fn flat(width: u32, height: u32, rgb: [u8; 3]) -> Bitmap {
         Bitmap {

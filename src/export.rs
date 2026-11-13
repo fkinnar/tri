@@ -909,6 +909,9 @@ fn libraw_space(color: &str) -> Option<(crate::raw::OutputSpace, moxcms::ColorPr
         p.red_trc = Some(ToneReprCurve::Lut(Vec::new()));
         p.green_trc = Some(ToneReprCurve::Lut(Vec::new()));
         p.blue_trc = Some(ToneReprCurve::Lut(Vec::new()));
+        // Sinon l'étiquette CICP (sRGB, Rec.2020) passe avant les courbes : une image
+        // convertie vers cet espace gardait la courbe d'origine (13/11/2026).
+        p.cicp = None;
         p.description = Some(moxcms::ProfileText::PlainString(name.into()));
         p
     };
@@ -1690,25 +1693,46 @@ fn export_one(
     // Un développement (`IMG@rr.RAF`) se lit dans sa photo ; le fichier écrit porte son nom
     // ([`export_name`]).
     let file = crate::media::source(image);
+    // Les réglages de visualisation (exposition, balance, noir et blanc) : on exporte ce
+    // qu'on regarde (13/11/2026, ils ne suivaient pas). Un réglage illisible n'empêche
+    // pas l'export ; « JPEG tel quel » reste une copie pure.
+    let layers = (!profile.is_as_is())
+        .then(|| crate::adjust::read(image).ok().flatten())
+        .flatten();
+    let total = layers.map(|l| l.total()).unwrap_or_default();
+    let mono = layers.and_then(|l| l.mono);
+    let adjusted = layers.is_some_and(|l| !l.is_none());
     let (pixels, icc) = if kind_of(&file) == Some(MediaKind::Raw) && local == Local::LibRaw {
         let (space, target) = libraw_space(&profile.color).expect("vérifié");
         let mut raw = crate::raw::RawFile::open(&file).map_err(|e| failed(&e))?;
-        let pixels = raw
-            .render_deep(&req.render, space, cancel)
+        // L'exposition sur les données du capteur (hautes lumières récupérables), le reste
+        // sur l'image rendue.
+        let render = crate::raw::RenderOptions {
+            exposure: total.exposure,
+            ..req.render
+        };
+        let mut pixels = raw
+            .render_deep(&render, space, cancel)
             .map_err(|e| match e {
                 crate::raw::RawError::Cancelled => DevelopError::Cancelled,
                 e => failed(&e),
             })?;
+        let rest = crate::adjust::Adjust {
+            exposure: render.exposure_rest(),
+            ..total
+        };
+        crate::adjust::apply_rgb16(&mut pixels, &target, rest, mono).map_err(|e| failed(&e))?;
         let icc = target.encode().map_err(|e| failed(&format!("{e:?}")))?;
         (pixels, Some(icc))
     } else {
-        let developed = developed(&file)?;
+        let mut developed = developed(&file)?;
         let (w, h) = developed.pixels.dimensions();
         let fits = profile.max_side == 0 || w.max(h) <= profile.max_side;
         // Sans recompression : JPEG vers JPEG, sans recadrage ni réduction, sans changer
-        // d'espace.
+        // d'espace, sans réglage.
         if profile.passthrough
             && cut.is_none()
+            && !adjusted
             && profile.sharpen == Sharpen::None
             && profile.format == Format::Jpeg
             && fits
@@ -1716,6 +1740,16 @@ fn export_one(
             && let Some(bytes) = &developed.jpeg
         {
             return write_bytes(image, req, bytes).map(|out| (out, true));
+        }
+        if adjusted {
+            // Dans son espace d'origine, avant une éventuelle conversion.
+            let space = developed
+                .origin
+                .profile()
+                .ok_or_else(|| DevelopError::Other(crate::t!("export-bad-icc")))?;
+            crate::adjust::apply_rgb16(&mut developed.pixels, &space, total, mono)
+                .map_err(|e| failed(&e))?;
+            developed.jpeg = None;
         }
         in_profile_space(developed, profile)?
     };
@@ -2697,6 +2731,92 @@ mod tests {
         let named = icc.windows(8).any(|w| w == b"ProPhoto")
             || icc.windows(16).any(|w| w == wide.as_slice());
         assert!(named, "profil ProPhoto");
+    }
+
+    /// Les réglages de visualisation suivent à l'export (13/11/2026) : l'image exportée
+    /// est celle qu'on regarde ; pas de copie sans recompression d'une image réglée, sauf
+    /// le « JPEG tel quel », copie pure.
+    #[test]
+    fn adjustments_follow_the_export_but_not_an_as_is_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("photo.jpg");
+        image::RgbImage::from_pixel(60, 40, image::Rgb([100, 100, 100]))
+            .save(&src)
+            .unwrap();
+        let original = std::fs::read(&src).unwrap();
+        let mut layers = crate::adjust::Layers::default();
+        layers.correction.exposure = 1.0;
+        crate::adjust::write(&src, Some(&layers), crate::xmp::Convention::Darktable).unwrap();
+        let cancel = AtomicBool::new(false);
+        let run = |p: &Profile, folder: &str| {
+            let report = export_libraw(
+                std::slice::from_ref(&src),
+                &Request::new(p, folder),
+                Local::Embedded,
+                &cancel,
+                |_, _, _| {},
+            )
+            .unwrap();
+            assert_eq!(report.failed, 0, "{:?}", report.errors);
+            report
+        };
+        let web = Profile {
+            passthrough: true,
+            ..Profile::base("web")
+        };
+        let report = run(&web, "web");
+        assert_eq!(report.passthrough, 0, "réglée : réencodée");
+        let out = image::open(&report.written[0]).unwrap().to_rgb8();
+        let v = out.get_pixel(30, 20).0[0];
+        assert!(v > 125, "+1 IL : plus clair ({v})");
+        // En 16 bits ProPhoto aussi (conversion après les réglages).
+        let prophoto = Profile {
+            format: Format::Tiff,
+            bits: 16,
+            color: "prophoto".into(),
+            ..Profile::base("pp")
+        };
+        let report = run(&prophoto, "pp");
+        let tiff = image::open(&report.written[0]).unwrap().to_rgb16();
+        let plain = {
+            crate::adjust::write(&src, None, crate::xmp::Convention::Darktable).unwrap();
+            let report = run(&prophoto, "pp-plain");
+            crate::adjust::write(&src, Some(&layers), crate::xmp::Convention::Darktable).unwrap();
+            image::open(&report.written[0]).unwrap().to_rgb16()
+        };
+        assert!(tiff.get_pixel(30, 20).0[1] > plain.get_pixel(30, 20).0[1]);
+        // « JPEG tel quel » : copie pure, réglages ou non.
+        let as_is = Profile {
+            passthrough: true,
+            color: String::new(),
+            max_side: 0,
+            sharpen: Sharpen::None,
+            format: Format::Jpeg,
+            ..Profile::base("asis")
+        };
+        assert!(as_is.is_as_is());
+        let report = run(&as_is, "asis");
+        assert_eq!(std::fs::read(&report.written[0]).unwrap(), original);
+    }
+
+    /// Les espaces linéaires le sont vraiment : un gris sRGB 0,5 converti vers Linear
+    /// Rec709 donne 0,214 (l'étiquette CICP du profil sRGB l'emportait sur les courbes).
+    #[test]
+    fn linear_export_spaces_are_linear() {
+        for color in ["rec709", "rec2020", "prophoto"] {
+            let (_, target) = libraw_space(color).expect(color);
+            let t = moxcms::ColorProfile::new_srgb()
+                .create_transform_f32(
+                    moxcms::Layout::Rgb,
+                    &target,
+                    moxcms::Layout::Rgb,
+                    moxcms::TransformOptions::default(),
+                )
+                .unwrap();
+            let mut out = [0f32; 3];
+            t.transform(&[0.5, 0.5, 0.5], &mut out).unwrap();
+            assert!((out[1] - 0.214).abs() < 0.01, "{color} : {out:?}");
+        }
     }
 
     #[test]

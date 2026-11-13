@@ -6,8 +6,8 @@ The key: **apply one image's adjustments to the others**, matching what must be 
 (a photo at -1 EV and a well-exposed one end up alike).
 
 Done: the engine, the command line, the interface ("Adjustments" section), the report of
-the values. Next: writing them for other software (RawTherapee / ART first), real LibRaw
-thumbnails as an option, exporting adjusted images. The
+the values, exporting adjusted images (see "Export"). Next: writing them for other
+software (RawTherapee / ART first), real LibRaw thumbnails as an option. The
 adjustments apply **before** any development by another program: an image developed in
 darktable is not affected.
 
@@ -242,8 +242,19 @@ release, one history step per gesture (`u` / Ctrl+Z undoes it). Adjustments are 
 the background from the sidecars (never waiting on a slow disk) and applied to the pixels
 just before the texture (`gui/src/adjust_view.rs`, shared with the loading thread). **On
 screen, everything is done on the image** (approximation on JPEGs, exact mixer); exposure
-on the sensor data stays for the command line and the export to come. A development
+on the sensor data stays for the command line and the export. A development
 (darktable…) is never adjusted.
+
+**Export** (2026-11-13, user feedback: the adjustments did not follow): what you look at
+is what is exported, adjustments included, when the export goes through LibRaw (RAW
+render, camera JPEG, flat image; `export_one` in `src/export.rs`). On a RAW render, the
+exposure is done by LibRaw on the sensor data (recoverable highlights, as on the command
+line), the rest on the image; on a JPEG, everything on the image. In 16 bits and floating
+point (`adjust::apply_rgb16`, same computation as the display, `PixelOp`): to linear light
+with sRGB primaries without clamping (a colour outside sRGB, in Adobe RGB or ProPhoto,
+stays what it is), adjustments, back to the export's space. An adjusted image is no longer
+copied without recompression; "JPEG as is" stays a pure copy, without adjustments. A
+development (darktable, RawTherapee, ART, RapidRAW) is not adjusted, as on screen.
 
 Actions without a default shortcut, in the palette: `core.adjust.before_after`,
 `core.adjust.apply` (harmonise the selection), `core.adjust.copy`, `core.adjust.paste`.

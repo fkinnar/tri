@@ -4,7 +4,7 @@
 //!
 //! À l'affichage, tout est fait sur l'image (approximation sur un JPEG, exacte pour le
 //! mélangeur) : l'exposition sur les données du capteur (LibRaw) sert à la ligne de
-//! commande et viendra à l'export. Une image développée par un autre logiciel n'est
+//! commande et à l'export (`tri::export`). Une image développée par un autre logiciel n'est
 //! jamais réglée (les réglages valent *avant* le développement).
 
 use std::collections::HashMap;
