@@ -18371,7 +18371,13 @@ impl TriApp {
                         ui.set_min_height(heights.iter().sum::<f32>());
                         // Seulement les lignes visibles (une vingtaine sur ~200).
                         let mut y = 0.0;
+                        // Fond alterné compté par ligne de données : l'exemple déplié a le
+                        // fond de sa commande (retour du 13/11/2026).
+                        let mut stripe = 0usize;
                         for (i, &height) in heights.iter().enumerate() {
+                            if !matches!(lines.lines[i], HelpLine::Example(_)) {
+                                stripe += 1;
+                            }
                             let top = y;
                             y += height;
                             if y < viewport.min.y {
@@ -18382,13 +18388,20 @@ impl TriApp {
                             }
                             let row =
                                 Rect::from_min_size(origin + vec2(0.0, top), vec2(full, height));
-                            if i % 2 == 1 {
+                            if stripe.is_multiple_of(2) {
                                 ui.painter()
                                     .rect_filled(row, 0.0, ui.visuals().faint_bg_color);
                             }
                             // Sans l'espace entre lignes : compris dans la hauteur.
                             let inner = row.shrink2(vec2(0.0, spacing.y / 2.0 + row_padding));
-                            let line_height = inner.height();
+                            // Deux zones fixes : les libellés à gauche, la colonne de droite
+                            // toujours au même endroit (un libellé ne la pousse plus).
+                            let left =
+                                Rect::from_min_size(inner.min, vec2(label_column, inner.height()));
+                            let right = Rect::from_min_max(
+                                pos2(inner.left() + label_column + 2.0 * spacing.x, inner.top()),
+                                inner.max,
+                            );
                             ui.scope_builder(
                                 egui::UiBuilder::new()
                                     .max_rect(inner)
@@ -18408,12 +18421,13 @@ impl TriApp {
                                             let tip = command_tip(command);
                                             let open =
                                                 self.help_open_commands.contains(&command.id);
-                                            ui.allocate_ui_with_layout(
-                                                vec2(label_column, line_height),
-                                                egui::Layout::left_to_right(egui::Align::Center),
+                                            ui.scope_builder(
+                                                egui::UiBuilder::new().max_rect(left).layout(
+                                                    egui::Layout::left_to_right(
+                                                        egui::Align::Center,
+                                                    ),
+                                                ),
                                                 |ui| {
-                                                    ui.set_min_width(label_column);
-                                                    ui.set_max_width(label_column);
                                                     let (rect, fold) =
                                                         crate::marks::clickable_named(
                                                             ui,
@@ -18445,6 +18459,13 @@ impl TriApp {
                                                         toggled = Some(command.id);
                                                     }
                                                 },
+                                            );
+                                            let ui = &mut ui.new_child(
+                                                egui::UiBuilder::new().max_rect(right).layout(
+                                                    egui::Layout::left_to_right(
+                                                        egui::Align::Center,
+                                                    ),
+                                                ),
                                             );
                                             ui.add(
                                                 egui::Label::new(
@@ -18512,14 +18533,23 @@ impl TriApp {
                                         HelpLine::Action { label, id, keys } => {
                                             // Identifiant technique au survol seulement (utile
                                             // pour la section `[keys]` de la configuration).
-                                            ui.allocate_ui_with_layout(
-                                                vec2(label_column, line_height),
-                                                egui::Layout::left_to_right(egui::Align::Center),
+                                            ui.scope_builder(
+                                                egui::UiBuilder::new().max_rect(left).layout(
+                                                    egui::Layout::left_to_right(
+                                                        egui::Align::Center,
+                                                    ),
+                                                ),
                                                 |ui| {
-                                                    ui.set_min_width(label_column);
                                                     ui.add(egui::Label::new(label.as_str()).wrap())
                                                         .on_hover_text(*id);
                                                 },
+                                            );
+                                            let ui = &mut ui.new_child(
+                                                egui::UiBuilder::new().max_rect(right).layout(
+                                                    egui::Layout::left_to_right(
+                                                        egui::Align::Center,
+                                                    ),
+                                                ),
                                             );
                                             let font = egui::TextStyle::Body.resolve(ui.style());
                                             let weak = ui.visuals().weak_text_color();
