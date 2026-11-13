@@ -32738,7 +32738,7 @@ mod tests {
         h.state_mut().apply_filter();
         h.run_steps(2);
         assert_eq!(h.state().files.len(), 0, "pas de RAW ici");
-        h.get_by_label("Acceptées").click();
+        click_settled(&mut h, "Acceptées");
         h.run_steps(2);
         assert_eq!(
             h.state().filter,
@@ -32747,15 +32747,15 @@ mod tests {
         );
         assert_eq!(h.state().files.len(), 1, "l'image acceptée");
         assert!(h.state().summary_line_on(&summary::Line::Accepted));
-        h.get_by_label("Acceptées").click();
+        click_settled(&mut h, "Acceptées");
         h.run_steps(2);
         assert_eq!(h.state().files.len(), 3, "recliquée : tout");
         assert!(h.state().notes_rule.is_empty());
-        h.get_by_label("Sans note").click();
+        click_settled(&mut h, "Sans note");
         h.run_steps(2);
         assert_eq!(h.state().files.len(), 2);
         // Une extension.
-        h.get_by_label("JPG").click();
+        click_settled(&mut h, "JPG");
         h.run_steps(2);
         assert_eq!(h.state().extension_only.as_deref(), Some("JPG"));
         assert_eq!(h.state().files.len(), 3);
@@ -32764,7 +32764,7 @@ mod tests {
             "le filtre précédent retiré"
         );
         // « Photos » : plus aucun filtre.
-        h.get_by_label("Photos").click();
+        click_settled(&mut h, "Photos");
         h.run_steps(2);
         assert!(h.state().extension_only.is_none());
         // Libellés couleur (retour du 12/11/2026) : le total, puis chaque couleur.
@@ -32773,7 +32773,7 @@ mod tests {
             .rate_path(red.clone(), Action::Color(tri::xmp::Color::Red));
         h.run_steps(2);
         assert_eq!(h.state().folder.summary().colored, 1);
-        h.get_by_label("Avec un libellé couleur").click();
+        click_settled(&mut h, "Avec un libellé couleur");
         h.run_steps(2);
         assert_eq!(h.state().files.len(), 1);
         assert_eq!(h.state().files[0].path, red);
@@ -32805,13 +32805,13 @@ mod tests {
             app.summary_versions().is_some_and(|with| with.len() == 1)
         });
         h.run_steps(2);
-        h.get_by_label("Avec des versions").click();
+        click_settled(&mut h, "Avec des versions");
         h.run_steps(2);
         assert!(h.state().versions_only);
         assert_eq!(h.state().files.len(), 1);
         assert_eq!(h.state().files[0].path, image);
         assert!(h.state().summary_line_on(&summary::Line::Versions));
-        h.get_by_label("Avec des versions").click();
+        click_settled(&mut h, "Avec des versions");
         h.run_steps(2);
         assert!(!h.state().versions_only);
         assert_eq!(h.state().files.len(), 3);

@@ -6,8 +6,8 @@ mélange des canaux. La clé : **appliquer les réglages d'une image aux autres*
 harmonisant ce qui doit l'être (une photo à -1 IL et une bien exposée finissent pareilles).
 
 Faits : le moteur, la ligne de commande, l'interface (section « Réglages »), le rapport
-des valeurs. Ensuite : l'écriture pour d'autres logiciels (RawTherapee / ART d'abord),
-les vraies vignettes LibRaw en option, l'export des images réglées. Les réglages s'appliquent **avant** tout développement par un autre logiciel :
+des valeurs, l'export des images réglées (voir « Export »). Ensuite : l'écriture pour
+d'autres logiciels (RawTherapee / ART d'abord), les vraies vignettes LibRaw en option. Les réglages s'appliquent **avant** tout développement par un autre logiciel :
 une image développée dans darktable n'est pas concernée.
 
 ## Couches
@@ -253,7 +253,19 @@ réglages sont lus en fond dans les sidecars (jamais d'attente sur un disque len
 appliqués aux pixels juste avant la texture (`gui/src/adjust_view.rs`, partagé avec le fil
 de chargement). **À l'écran, tout est fait sur l'image** (approximation sur les JPEG,
 mélangeur exact) ; l'exposition sur les données du capteur reste pour la ligne de
-commande et l'export à venir. Un développement (darktable…) n'est jamais réglé.
+commande et l'export. Un développement (darktable…) n'est jamais réglé.
+
+**Export** (13/11/2026, retour de l'utilisateur : les réglages ne suivaient pas) : on
+exporte ce qu'on regarde, réglages compris, quand l'export passe par LibRaw (rendu RAW,
+JPEG boîtier, image plate ; `export_one` dans `src/export.rs`). Sur un rendu RAW,
+l'exposition est faite par LibRaw sur les données du capteur (hautes lumières
+récupérables, comme en ligne de commande), le reste sur l'image ; sur un JPEG, tout sur
+l'image. En 16 bits et en flottants (`adjust::apply_rgb16`, même calcul que l'affichage,
+`PixelOp`) : passage en lumière linéaire aux primaires sRGB sans borner (une couleur hors
+du sRGB, en Adobe RGB ou ProPhoto, reste ce qu'elle est), réglages, retour dans l'espace
+de l'export. Une image réglée n'est plus copiée sans recompression ; le « JPEG tel quel »
+reste une copie pure, sans réglage. Un développement (darktable, RawTherapee, ART,
+RapidRAW) n'est pas réglé, comme à l'écran.
 
 Actions sans raccourci par défaut, dans la palette : `core.adjust.before_after`,
 `core.adjust.apply` (harmoniser la sélection), `core.adjust.copy`, `core.adjust.paste`.

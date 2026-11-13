@@ -4,6 +4,13 @@
 
 ## Non publié
 
+- **Les réglages suivent à l'export** (#456) : exposition, balance des blancs,
+  contraste, saturation et noir et blanc sont appliqués à l'export par LibRaw (rendu RAW,
+  JPEG boîtier, images plates), l'exposition sur les données du capteur pour un RAW ;
+  calculés en 16 bits sans borner, quel que soit l'espace couleur de l'export. Le « JPEG
+  tel quel » reste une copie pure. Corrigé aussi : les espaces d'export « Linear Rec709 »
+  et « Linear Rec2020 » gardaient la courbe sRGB en convertissant une image déjà
+  développée.
 - **Une version en morceaux, pour un carrousel** (#455) : une version peut être coupée
   en morceaux égaux côte à côte (liste « Morceaux » de la barre de la version, `c` /
   `Maj+C` un de plus / de moins), chacun au rapport choisi, les coupes tracées sur le
