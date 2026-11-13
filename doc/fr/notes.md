@@ -59,6 +59,27 @@ même retire ; plusieurs : ajout / retrait, comme darktable), `clear_colors()`.
 modifiés ailleurs (surveillance du dossier, `doc/watch.md`) et renvoie celles dont les
 notes ont changé.
 
+## En ligne de commande (issue n° 275)
+
+```
+tri DSCF0306.RAF DSCF0307.RAF --stars 3 --color red --flag accept
+tri --stars 1 --flag reject < liste.txt
+```
+
+`--stars 0..5`, `--color red|yellow|green|blue|purple` (plusieurs séparées par des
+virgules avec `[xmp] multiple_colors`, sinon refusé), `--flag accept|reject|none` ;
+`--color none` retire les couleurs, `--stars 0` les étoiles. Les couleurs données
+**remplacent** celles de la photo ; `+blue` en ajoute une et `-red` en retire une en
+gardant les autres (`+green,-red` : les deux ; avec une seule couleur par photo, `+`
+remplace comme au clavier). Pas de bascule : une commande donne le même résultat à
+chaque lancement. Remplacer et ajouter à la fois (`red,+blue`) est refusé. Sans image, la liste est lue sur l'entrée
+standard, une par ligne. Mêmes règles que l'interface, par `NoteBook::edit` : la paire
+RAW+JPEG et les développements principaux suivent (notés une fois), sidecars créés selon
+`[sidecars]` et les logiciels installés, notes inscrites dans les images selon
+`[xmp] embed`, image en conflit refusée. `--dry-run` liste les images dont les notes
+changeraient. Une ligne par image notée (avec ses sidecars), bilan, erreurs sur la sortie
+d'erreur et code de retour non nul ; les autres images sont quand même notées.
+
 ## Filtres
 
 `NotesRule` regroupe les critères, combinés par « et » ; `None` = critère ignoré :

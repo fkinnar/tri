@@ -39,6 +39,10 @@
 //!   tri <dossier> --conflicts [--raw|--flat] [--depth N]
 //!       liste les images dont les sources de notes (sidecars, image) se contredisent, et
 //!       les fusions faites, voir `tri::reconcile` ;
+//!   tri <image>... [--stars N] [--color <couleur>[,…]|+<couleur>,-<couleur>…|none] [--flag accept|reject|none] [--dry-run]
+//!       note les images (liste lue sur l'entrée standard s'il n'y en a pas) : leur paire
+//!       RAW+JPEG et leurs développements principaux suivent, comme dans l'interface ;
+//!       sidecars des logiciels installés (`[sidecars]`), voir `tri::notes` ;
 //!   tri --rename <image> <nom> [--dry-run]
 //!       renomme l'image (extension gardée), sa paire RAW+JPEG et ses sidecars ;
 //!   tri --delete <image>... [--permanent] [--dry-run]
@@ -64,7 +68,7 @@
 //! l'emplacement par défaut, voir `tri::settings`) ; les options ci-dessus l'emportent sur
 //! lui.
 
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::sync::mpsc;
@@ -158,6 +162,132 @@ struct Args {
     reset: Option<tri::reset::Parts>,
     /// `--adjust` : réglages de la référence (première image).
     adjust: AdjustArgs,
+    /// `--stars`, `--color`, `--flag` : notes à poser (issue n° 275).
+    notes: NotesArgs,
+}
+
+/// Notes à poser en ligne de commande (issue n° 275) ; `None` : inchangée.
+#[derive(Default)]
+struct NotesArgs {
+    stars: Option<u8>,
+    colors: Option<ColorEdit>,
+    flag: Option<xmp::Flag>,
+}
+
+impl NotesArgs {
+    /// Vrai si une note est demandée.
+    fn any(&self) -> bool {
+        self.stars.is_some() || self.colors.is_some() || self.flag.is_some()
+    }
+
+    /// Pose les notes demandées sur `notes` ; `multiple` : plusieurs couleurs par photo
+    /// (`[xmp] multiple_colors`).
+    fn apply(&self, notes: &mut xmp::Notes, multiple: bool) {
+        if let Some(stars) = self.stars {
+            notes.set_stars(stars);
+        }
+        match &self.colors {
+            Some(ColorEdit::Set(colors)) => notes.colors = colors.clone(),
+            Some(ColorEdit::Change { add, remove }) => {
+                notes.colors.retain(|c| !remove.contains(c));
+                if !add.is_empty() {
+                    if !multiple {
+                        // Une seule couleur : l'ajoutée remplace, comme au clavier.
+                        notes.colors.clear();
+                    }
+                    notes.colors.extend(add.iter().copied());
+                }
+                notes.colors = xmp::Color::ALL
+                    .into_iter()
+                    .filter(|c| notes.colors.contains(c))
+                    .collect();
+            }
+            None => {}
+        }
+        if let Some(flag) = self.flag {
+            notes.flag = flag;
+        }
+    }
+}
+
+/// `--stars` : 0 à 5.
+fn parse_stars(text: &str) -> AnyResult<u8> {
+    match text.trim().parse::<u8>() {
+        Ok(n) if n <= 5 => Ok(n),
+        _ => Err(t!("cli-rate-bad-stars", value = text).into()),
+    }
+}
+
+/// Ce que `--color` fait des couleurs de la photo.
+#[derive(Clone, Debug, PartialEq)]
+enum ColorEdit {
+    /// Celles-ci à la place des siennes (vide : aucune), rangées, sans doublon.
+    Set(Vec<xmp::Color>),
+    /// Ajouter (`+blue`) et retirer (`-red`), en gardant les autres : relancer la
+    /// commande ne change rien (pas de bascule comme au clavier).
+    Change {
+        add: Vec<xmp::Color>,
+        remove: Vec<xmp::Color>,
+    },
+}
+
+impl ColorEdit {
+    /// Nombre de couleurs que la photo recevra au plus de cette commande.
+    fn added(&self) -> usize {
+        match self {
+            ColorEdit::Set(colors) => colors.len(),
+            ColorEdit::Change { add, .. } => add.len(),
+        }
+    }
+}
+
+/// `--color` : `none` ; des couleurs séparées par des virgules (`red,blue`), qui
+/// remplacent celles de la photo ; ou des ajouts et retraits (`+blue,-red`). Les deux
+/// formes ne se mélangent pas.
+fn parse_colors(text: &str) -> AnyResult<ColorEdit> {
+    if text.trim().eq_ignore_ascii_case("none") {
+        return Ok(ColorEdit::Set(Vec::new()));
+    }
+    let (mut set, mut add, mut remove) = (Vec::new(), Vec::new(), Vec::new());
+    for part in text.split(',') {
+        let part = part.trim();
+        let (list, name) = if let Some(name) = part.strip_prefix('+') {
+            (&mut add, name)
+        } else if let Some(name) = part.strip_prefix('-') {
+            (&mut remove, name)
+        } else {
+            (&mut set, part)
+        };
+        match xmp::Color::from_id(name) {
+            Some(color) if !list.contains(&color) => list.push(color),
+            Some(_) => {}
+            None => return Err(t!("cli-rate-bad-color", value = part).into()),
+        }
+    }
+    let changes = !add.is_empty() || !remove.is_empty();
+    if !set.is_empty() && changes || add.iter().any(|c| remove.contains(c)) {
+        return Err(t!("cli-rate-mixed-colors", value = text.trim()).into());
+    }
+    Ok(if changes {
+        ColorEdit::Change { add, remove }
+    } else {
+        ColorEdit::Set(
+            xmp::Color::ALL
+                .into_iter()
+                .filter(|c| set.contains(c))
+                .collect(),
+        )
+    })
+}
+
+/// `--flag` : `accept`, `reject` ou `none`.
+fn parse_flag(text: &str) -> AnyResult<xmp::Flag> {
+    match text.trim().to_ascii_lowercase().as_str() {
+        "accept" | "accepted" => Ok(xmp::Flag::Accepted),
+        "reject" | "rejected" => Ok(xmp::Flag::Rejected),
+        "none" => Ok(xmp::Flag::None),
+        _ => Err(t!("cli-rate-bad-flag", value = text).into()),
+    }
 }
 
 /// Réglages de `--adjust` (issue n° 137), pour la référence.
@@ -339,6 +469,9 @@ fn parse() -> AnyResult<Args> {
             "--contrast" => args.adjust.contrast = value()?.parse::<f32>()? / 100.0,
             "--saturation" => args.adjust.saturation = value()?.parse::<f32>()? / 100.0,
             "--mono" => args.adjust.mono = Some(parse_mixer(&value()?)?),
+            "--stars" => args.notes.stars = Some(parse_stars(&value()?)?),
+            "--color" => args.notes.colors = Some(parse_colors(&value()?)?),
+            "--flag" => args.notes.flag = Some(parse_flag(&value()?)?),
             "--permanent" => args.permanent = true,
             "--exposure" => args.exposure = true,
             "--metadata" => args.metadata = true,
@@ -369,6 +502,7 @@ fn parse() -> AnyResult<Args> {
         }
     }
     if args.file_action.is_none()
+        && !args.notes.any()
         && let Some(other) = args.rest.first()
     {
         return Err(format!(
@@ -1233,6 +1367,157 @@ fn generate_sidecars(
     }
 }
 
+/// `--stars`, `--color`, `--flag` (issue n° 275) : note les images données (ou lues sur
+/// l'entrée standard, une par ligne), comme l'interface : la paire RAW+JPEG et les
+/// développements principaux suivent, les sidecars créés sont ceux des logiciels
+/// installés (`[sidecars]`), une image en conflit de notes est refusée. Une ligne par
+/// image notée, erreurs sur la sortie d'erreur.
+fn rate(settings: &EngineSettings, args: &Args) -> AnyResult<()> {
+    let mut given: Vec<PathBuf> = args
+        .dir
+        .iter()
+        .cloned()
+        .chain(args.rest.iter().map(PathBuf::from))
+        .collect();
+    if given.is_empty() {
+        let stdin = std::io::stdin();
+        if stdin.is_terminal() {
+            return Err(usage().into());
+        }
+        for line in stdin.lines() {
+            let line = line?;
+            if !line.trim().is_empty() {
+                given.push(line.trim().into());
+            }
+        }
+    }
+    let multiple = settings.xmp.multiple_colors;
+    if let Some(colors) = &args.notes.colors
+        && colors.added() > 1
+        && !multiple
+    {
+        return Err(t!("cli-rate-one-color").into());
+    }
+    // Chemins absolus : le dossier de chaque image, pour y trouver sa paire.
+    let mut images = Vec::new();
+    let mut errors = 0;
+    for path in given {
+        let path = std::path::absolute(&path).unwrap_or(path);
+        if path.is_file() && tri::media::kind_of(&path).is_some() {
+            images.push(path);
+        } else {
+            errors += 1;
+            eprintln!(
+                "{}\t{} : {}",
+                t!("cli-error"),
+                path.display(),
+                t!("cli-rate-not-an-image")
+            );
+        }
+    }
+    let mut dirs: Vec<PathBuf> = images
+        .iter()
+        .filter_map(|p| p.parent().map(Path::to_path_buf))
+        .collect();
+    dirs.sort();
+    dirs.dedup();
+    let mut files = Vec::new();
+    for dir in &dirs {
+        files.extend(scan(dir, 1)?);
+    }
+    let mut book = tri::notes::NoteBook::load_files(&files, settings.xmp.sidecar);
+    // Les mêmes sidecars que l'interface : ceux des logiciels installés et du dossier,
+    // et les notes inscrites dans les images selon `[xmp] embed`.
+    let cache = settings.open_cache()?;
+    let installed = tri::develop::Developers::find(
+        &settings.develop,
+        &cache.root().join("develop"),
+        settings.develop.high_quality,
+    )
+    .engines();
+    let creates = settings
+        .sidecars
+        .creates(&installed, |f| book.has_format(f));
+    book.set_creates(creates);
+    let outside = if settings.xmp.embed == tri::embedded::Auto::Internal {
+        tri::places::outside_roots(&settings.places)
+    } else {
+        Vec::new()
+    };
+    book.set_embed(settings.xmp.embed, outside);
+
+    // Chemins affichés relatifs au dossier courant quand ils y sont.
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let shown = |p: &Path| p.strip_prefix(&cwd).unwrap_or(p).display().to_string();
+    let mode = if args.dry_run { "dry-run" } else { "write" };
+    let mut rated = 0;
+    let mut unchanged = 0;
+    // Une paire, une photo et ses développements principaux : notés une seule fois.
+    let mut done: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+    for image in &images {
+        if done.contains(image) {
+            continue;
+        }
+        let shared = book.shared(image);
+        done.extend(shared.iter().cloned());
+        let changed: Vec<PathBuf> = if args.dry_run {
+            if book.conflict(image).is_some() {
+                errors += 1;
+                eprintln!(
+                    "{}\t{} : {}",
+                    t!("cli-error"),
+                    shown(image),
+                    t!("notes-conflict")
+                );
+                continue;
+            }
+            let mut notes = book.notes(image).clone();
+            args.notes.apply(&mut notes, multiple);
+            shared
+                .into_iter()
+                .filter(|p| *book.notes(p) != notes || book.sidecars(p).is_empty())
+                .collect()
+        } else {
+            match book.edit(image, |n| args.notes.apply(n, multiple)) {
+                Ok(changed) => changed,
+                Err(e) => {
+                    errors += 1;
+                    eprintln!("{}\t{e}", t!("cli-error"));
+                    continue;
+                }
+            }
+        };
+        if changed.is_empty() {
+            unchanged += 1;
+        }
+        for path in &changed {
+            rated += 1;
+            let sidecars: Vec<String> = book.sidecars(path).iter().map(|s| shown(s)).collect();
+            println!(
+                "{}\t{}\t{}",
+                t!("cli-rate-written", mode = mode),
+                shown(path),
+                sidecars.join(", ")
+            );
+        }
+    }
+    println!(
+        "{}",
+        t!(
+            "cli-rate-summary",
+            rated = rated,
+            mode = mode,
+            unchanged = unchanged,
+            errors = errors
+        )
+    );
+    if errors == 0 {
+        Ok(())
+    } else {
+        Err(t!("cli-rate-some-failed").into())
+    }
+}
+
 /// `--rename`, `--delete`, `--reveal`, `--edit` : voir `tri::files`.
 fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> AnyResult<()> {
     let s = &settings.files;
@@ -1776,6 +2061,12 @@ fn run() -> AnyResult<()> {
 
     if let Some(card) = &args.offload {
         return offload(&settings, &args, card);
+    }
+    if args.notes.any() {
+        if args.file_action.is_some() {
+            return Err(usage().into());
+        }
+        return rate(&settings, &args);
     }
     if let Some(action) = args.file_action {
         return file_action(&settings, &args, action);

@@ -7,6 +7,13 @@
 - **`tri --help`** (#451, part of #441): every command of the command line explained
   by theme, with its options and an example (`-h` too); the short usage shown on an
   error comes from the same description.
+- **Rate from the command line** (#450, fixes #275): `tri <image>... --stars N
+  --color red,…|+blue,-red|none --flag accept|reject|none [--dry-run]`, or the list of
+  images on standard input; colours replaced, or added and removed keeping the others; the RAW+JPEG pair and the main developments follow, sidecars as in the
+  interface.
+- **Filter bar: the stars comparison looks like the other buttons** (#449): "≥ / = / ≤"
+  is drawn like the ∨ / ∧ of the colour filter, same size, grey frame on hover, and the
+  usual gap after "FILTER".
 - **Colour filter: all the colours or one of them** (#444): with several colours per
   photo (`[xmp] multiple_colors`), an ∨ / ∧ button before the colour dots of the
   filter bar asks for photos carrying all the chosen colours instead of one of them

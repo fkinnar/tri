@@ -57,6 +57,26 @@ the same one removes it; multiple: add / remove, as in darktable), `clear_colors
 `reload_sidecars(&sidecars)` rereads only the images concerned by sidecars modified
 elsewhere (folder watching, `doc/watch.md`) and returns those whose ratings changed.
 
+## From the command line (issue 275)
+
+```
+tri DSCF0306.RAF DSCF0307.RAF --stars 3 --color red --flag accept
+tri --stars 1 --flag reject < list.txt
+```
+
+`--stars 0..5`, `--color red|yellow|green|blue|purple` (several, comma-separated, with
+`[xmp] multiple_colors`, refused otherwise), `--flag accept|reject|none`; `--color none`
+removes the colours, `--stars 0` the stars. The given colours **replace** the photo's;
+`+blue` adds one and `-red` removes one, keeping the others (`+green,-red`: both; with
+one colour per photo, `+` replaces as with the keyboard). No toggle: a command gives the
+same result every time it runs. Replacing and adding at once (`red,+blue`) is refused. Without images, the list is read on standard input, one per line. Same rules as
+the interface, through `NoteBook::edit`: the RAW+JPEG pair and the main developments
+follow (rated once), sidecars created according to `[sidecars]` and the installed
+software, ratings written into the images according to `[xmp] embed`, an image in
+conflict refused. `--dry-run` lists the images whose ratings would change. One line per
+rated image (with its sidecars), a summary, errors on standard error and a non-zero exit
+code; the other images are rated anyway.
+
 ## Filters
 
 `NotesRule` groups the criteria, combined with "and"; `None` = criterion ignored:

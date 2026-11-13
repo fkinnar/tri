@@ -195,6 +195,21 @@ cli-destination = destination : { $path }
 cli-already-there = { $n } images déjà dans la destination (ignorées si identiques)
 cli-to-copy = à copier
 cli-offload-progress = { $done }/{ $total } fichiers   { $mb }/{ $total_mb } Mo
+cli-rate-bad-stars = nombre d'étoiles invalide : { $value } (0 à 5)
+cli-rate-bad-color = couleur inconnue : { $value } (red, yellow, green, blue, purple ou none)
+cli-rate-bad-flag = drapeau inconnu : { $value } (accept, reject ou none)
+cli-rate-one-color = une seule couleur par photo : plusieurs couleurs demandent [xmp] multiple_colors = true
+cli-rate-mixed-colors = { $value } : soit des couleurs qui remplacent (red,blue), soit des ajouts et retraits (+blue,-red), pas les deux
+cli-rate-not-an-image = pas une image
+cli-rate-written = { $mode ->
+    [dry-run] à noter
+   *[write] noté
+}
+cli-rate-summary = { $rated } images { $mode ->
+    [dry-run] à noter
+   *[write] notées
+}, { $unchanged } inchangées, { $errors } erreurs
+cli-rate-some-failed = certaines images n'ont pas été notées
 cli-error = erreur
 cli-offload-out-of-space = plus de place dans { $path } : { $left } fichiers restent à copier ({ $mb } Mo, { $free } Mo libres) ; arrêt, ils restent sur la carte
 cli-offload-stopped-full = déchargement arrêté : destination pleine
