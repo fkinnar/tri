@@ -12042,7 +12042,9 @@ impl TriApp {
             .as_ref()
             .filter(|(p, _)| *p == file.path && self.zoom.is_none() && self.crop.is_none())
             .and_then(|(p, i)| self.versions.get(p).and_then(|v| v.list.get(*i)))
-            .map(|v| v.crop);
+            .map(|v| (v.crop, v.tiles));
+        let shown_tiles = shown_crop.map(|(_, t)| t);
+        let shown_crop = shown_crop.map(|(c, _)| c);
         if let Some((texture, original, ratio)) = drawable {
             sensor_ratio = ratio;
             // Taille du 1:1 en pixels : connue si c'est lui qui est affiché ; sinon estimée
@@ -12152,6 +12154,10 @@ impl TriApp {
             _ => None,
         };
         self.draw_overlay(&ctx, &painter, crop_frame.or(image_rect));
+        // Version en morceaux montrée : ses coupes, en tirets.
+        if let (Some(tiles), Some(rect)) = (shown_tiles, image_rect) {
+            crate::crop::draw_tile_cuts(&painter, rect, tiles, &self.gui.crop);
+        }
         // Collimateur : placé sur le capteur entier, faux sur un développé recadré.
         let sensor_rect = image_rect
             .filter(|_| !matches!(shown, Some(Level::Developed(_))) && shown_crop.is_none());

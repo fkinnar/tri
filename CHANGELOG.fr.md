@@ -8,6 +8,10 @@
   valent pour les RAW ; sur un JPEG (ou une autre image déjà développée), l'onglet est
   caché et « Style » s'ouvre à sa place, sauf si l'image a déjà une base, gardée pour la
   retirer.
+- **Les coupes d'une version en morceaux se voient** (#460) : en plein écran, une
+  version en morceaux a ses coupes tracées sur l'image, en tirets alternés clair et
+  foncé, lisibles sur toute image (`[gui.crop] tile_dash`, `tile_line_width`,
+  `tile_opacity`).
 - **Versions en grille** (#459) : la partie « Morceaux » de la barre de la version est
   maintenant colonnes × lignes, pour une bande verticale (1 × 3) ou une grille (2 × 2,
   3 × 3) ; `g` / `Maj+G` une ligne de plus / de moins (`c` / `Maj+C` restent pour les

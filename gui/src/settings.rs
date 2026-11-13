@@ -889,6 +889,13 @@ pub struct CropSettings {
     pub handle_size: f32,
     /// Distance de prise d'un bord ou d'un angle (points).
     pub handle_grab: f32,
+    /// Coupes d'une version en morceaux, montrée en plein écran (13/11/2026) : tirets
+    /// alternés clair / foncé, lisibles sur toute image ; longueur d'un tiret (points).
+    pub tile_dash: f32,
+    /// Épaisseur de ces coupes (points).
+    pub tile_line_width: f32,
+    /// Leur opacité (0 à 1).
+    pub tile_opacity: f32,
 }
 
 impl Default for CropSettings {
@@ -900,6 +907,9 @@ impl Default for CropSettings {
             line_width: 1.5,
             handle_size: 9.0,
             handle_grab: 10.0,
+            tile_dash: 6.0,
+            tile_line_width: 1.0,
+            tile_opacity: 0.7,
         }
     }
 }
