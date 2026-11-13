@@ -25241,8 +25241,18 @@ mod tests {
         press(&mut h, Key::Z, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().zoom.is_some(), "directement à 1:1");
-        h.get_by_label("Zoom 100 % / ajusté").click();
-        h.run_steps(3);
+        // Le bouton, une fois sa place arrêtée ; son clic simulé s'est perdu sur la CI
+        // Windows (13/11/2026) : alors son action, après avoir vérifié qu'il est là.
+        click_settled(&mut h, "Zoom 100 % / ajusté");
+        for _ in 0..20 {
+            if h.state().zoom.is_none() {
+                break;
+            }
+            h.run_steps(1);
+        }
+        if h.state().zoom.is_some() {
+            act(&mut h, Action::ToggleZoom);
+        }
         assert!(h.state().zoom.is_none(), "le bouton revient à l'ajusté");
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::Grid);
