@@ -440,6 +440,9 @@ impl ExportDialog {
         if !b.paired.is_empty() {
             parts.push(t!("export-contents-paired", n = b.paired.len()));
         }
+        if let Some(cut) = self.cut.as_ref().filter(|c| !c.tiles.is_one()) {
+            parts.push(t!("export-contents-tiles", n = cut.tiles.count()));
+        }
         parts.join(" · ")
     }
 

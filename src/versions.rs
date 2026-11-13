@@ -6,6 +6,11 @@
 //!   éventuel recadrage), le rendu RAW de LibRaw, ou le JPEG boîtier.
 //! - Une version a un nom, un cadre ([`Rect`], en proportions de l'image vue, redressée),
 //!   un rapport ([`Ratio`]) et, en option, un profil d'export (qui pré-remplit la boîte).
+//! - Un cadre peut être coupé en **morceaux** égaux ([`Tiles`], idée de l'utilisateur du
+//!   13/11/2026) : une bande 8:5 coupée en deux 4:5 pour un carrousel Instagram qui fait
+//!   défiler le panorama. Le rapport est alors celui d'un morceau ; le cadre entier s'en
+//!   déduit ([`Frame`]). Une bande horizontale seulement dans l'interface pour l'instant,
+//!   mais la géométrie fait aussi les bandes verticales et les grilles (2 × 2, 3 × 3).
 //! - Stockage : le sidecar XMP de la photo, liste `tri:Versions` (un objet JSON par
 //!   élément, [`crate::xmp::VERSIONS`]) ; les autres logiciels l'ignorent, rien d'autre
 //!   n'est touché. Une version illisible (écrite par une version plus récente de `tri`)
@@ -149,6 +154,128 @@ impl<'de> Deserialize<'de> for Ratio {
     }
 }
 
+/// Dallage d'une version : le cadre coupé en `columns` × `rows` morceaux égaux, exportés
+/// chacun dans son fichier (`DSCF0001-Pano_1.jpg`, `_2`…), dans l'ordre de lecture (de
+/// gauche à droite, puis de haut en bas). 1 × 1 : un seul morceau, le cadre entier.
+/// Stocké `[colonnes, lignes]`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "[u32; 2]", into = "[u32; 2]")]
+pub struct Tiles {
+    /// Morceaux côte à côte.
+    pub columns: u32,
+    /// Morceaux l'un sous l'autre.
+    pub rows: u32,
+}
+
+impl Default for Tiles {
+    fn default() -> Self {
+        Tiles::ONE
+    }
+}
+
+impl From<[u32; 2]> for Tiles {
+    fn from([columns, rows]: [u32; 2]) -> Self {
+        Tiles {
+            columns: columns.clamp(1, Tiles::MAX),
+            rows: rows.clamp(1, Tiles::MAX),
+        }
+    }
+}
+
+impl From<Tiles> for [u32; 2] {
+    fn from(t: Tiles) -> Self {
+        [t.columns, t.rows]
+    }
+}
+
+impl Tiles {
+    /// Un seul morceau : le cadre entier.
+    pub const ONE: Tiles = Tiles {
+        columns: 1,
+        rows: 1,
+    };
+
+    /// Le plus de morceaux sur un côté (un carrousel Instagram en prend 20 au plus ; au-delà,
+    /// des morceaux trop fins).
+    pub const MAX: u32 = 10;
+
+    /// Une bande horizontale de `n` morceaux (le carrousel).
+    pub fn strip(n: u32) -> Tiles {
+        Tiles::from([n, 1])
+    }
+
+    /// Nombre de morceaux.
+    pub fn count(self) -> u32 {
+        self.columns * self.rows
+    }
+
+    /// Un seul morceau (rien à couper).
+    pub fn is_one(&self) -> bool {
+        self.count() == 1
+    }
+
+    /// Les morceaux de `rect`, dans l'ordre de lecture.
+    pub fn cells(self, rect: Rect) -> Vec<Rect> {
+        let (w, h) = (
+            rect.w / f64::from(self.columns),
+            rect.h / f64::from(self.rows),
+        );
+        (0..self.rows)
+            .flat_map(|r| (0..self.columns).map(move |c| (c, r)))
+            .map(|(c, r)| Rect {
+                x: rect.x + w * f64::from(c),
+                y: rect.y + h * f64::from(r),
+                w,
+                h,
+            })
+            .collect()
+    }
+
+    /// Les morceaux d'un cadre en pixels `(x, y, largeur, hauteur)`, tous exactement de la
+    /// même taille : le cadre est d'abord ramené à un multiple du nombre de colonnes (de
+    /// lignes), les pixels en trop partagés entre les deux bords. Rien à couper : le cadre.
+    pub fn pixel_cells(self, (x, y, w, h): (u32, u32, u32, u32)) -> Vec<(u32, u32, u32, u32)> {
+        let cw = (w / self.columns).max(1);
+        let ch = (h / self.rows).max(1);
+        let x0 = x + w.saturating_sub(cw * self.columns) / 2;
+        let y0 = y + h.saturating_sub(ch * self.rows) / 2;
+        (0..self.rows)
+            .flat_map(|r| (0..self.columns).map(move |c| (c, r)))
+            .map(|(c, r)| (x0 + cw * c, y0 + ch * r, cw, ch))
+            .collect()
+    }
+}
+
+/// Forme d'un cadre : le rapport d'un morceau et le dallage. C'est elle que la géométrie
+/// ([`Rect::fit`], [`Rect::with_ratio`], [`Rect::drag`]) garde ; un [`Ratio`] seul est un
+/// cadre d'un seul morceau.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Frame {
+    /// Rapport d'un morceau.
+    pub ratio: Ratio,
+    /// Dallage.
+    pub tiles: Tiles,
+}
+
+impl From<Ratio> for Frame {
+    fn from(ratio: Ratio) -> Self {
+        Frame {
+            ratio,
+            tiles: Tiles::ONE,
+        }
+    }
+}
+
+impl Frame {
+    /// Largeur / hauteur en pixels du cadre entier, pour une image de rapport `aspect` ;
+    /// `None` : libre (les morceaux se partagent alors un cadre libre).
+    pub fn value(self, aspect: f64) -> Option<f64> {
+        self.ratio
+            .value(aspect)
+            .map(|r| r * f64::from(self.tiles.columns) / f64::from(self.tiles.rows))
+    }
+}
+
 /// Cadre, en proportions de l'image vue (redressée) : origine en haut à gauche, tout entre
 /// 0 et 1. Stocké `[x, y, largeur, hauteur]`.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -202,10 +329,10 @@ impl Rect {
         }
     }
 
-    /// Le plus grand cadre de rapport `ratio`, centré dans une image de rapport `aspect`
+    /// Le plus grand cadre de forme `frame` (un rapport, ou un rapport et des morceaux), centré dans une image de rapport `aspect`
     /// (largeur / hauteur en pixels).
-    pub fn fit(ratio: Ratio, aspect: f64) -> Rect {
-        let Some(r) = ratio.value(aspect) else {
+    pub fn fit(frame: impl Into<Frame>, aspect: f64) -> Rect {
+        let Some(r) = frame.into().value(aspect) else {
             return Rect::FULL;
         };
         // En proportions, largeur / hauteur = r / aspect.
@@ -219,10 +346,10 @@ impl Rect {
         }
     }
 
-    /// Le même cadre au rapport `ratio`, autour du même centre, aussi grand que possible
+    /// Le même cadre de forme `frame`, autour du même centre, aussi grand que possible
     /// sans dépasser l'aire actuelle ni l'image (changement de rapport ou d'orientation).
-    pub fn with_ratio(self, ratio: Ratio, aspect: f64) -> Rect {
-        let Some(r) = ratio.value(aspect) else {
+    pub fn with_ratio(self, frame: impl Into<Frame>, aspect: f64) -> Rect {
+        let Some(r) = frame.into().value(aspect) else {
             return self;
         };
         let k = r / aspect;
@@ -257,9 +384,16 @@ impl Rect {
     }
 
     /// Déplace la poignée `handle` de `(dx, dy)` (en proportions), en gardant le rapport
-    /// `ratio` (image de rapport `aspect`) et le cadre dans l'image. Un angle garde l'angle
+    /// `frame` (image de rapport `aspect`) et le cadre dans l'image. Un angle garde l'angle
     /// opposé fixe ; un côté, le côté opposé (et, rapport fixe, le centre de l'autre axe).
-    pub fn drag(self, handle: Handle, dx: f64, dy: f64, ratio: Ratio, aspect: f64) -> Rect {
+    pub fn drag(
+        self,
+        handle: Handle,
+        dx: f64,
+        dy: f64,
+        frame: impl Into<Frame>,
+        aspect: f64,
+    ) -> Rect {
         if handle == Handle::Move {
             return Rect {
                 x: self.x + dx,
@@ -282,7 +416,7 @@ impl Rect {
         if handle.bottom() {
             b = (bottom + dy).clamp(top + MIN_SIDE, 1.0);
         }
-        let Some(value) = ratio.value(aspect) else {
+        let Some(value) = frame.into().value(aspect) else {
             return Rect {
                 x: l,
                 y: t,
@@ -399,6 +533,8 @@ pub struct Preset {
     pub ratio: Ratio,
     /// Profil d'export proposé ; vide : aucun.
     pub profile: String,
+    /// Morceaux côte à côte (bande horizontale) ; 1 : le cadre entier.
+    pub tiles: u32,
 }
 
 impl Preset {
@@ -408,6 +544,7 @@ impl Preset {
             name: String::new(),
             ratio,
             profile: profile.into(),
+            tiles: 1,
         }
     }
 
@@ -418,15 +555,26 @@ impl Preset {
             ("name", Value::Str(self.name.clone())),
             ("ratio", Value::Str(self.ratio.label())),
             ("profile", Value::Str(self.profile.clone())),
+            ("tiles", Value::Int(i64::from(self.tiles))),
         ]
     }
 
-    /// Les préréglages fournis : story (9:16) et publication (4:5), pour le web.
+    /// Les préréglages fournis : story (9:16), publication (4:5) et carrousel (deux 4:5
+    /// côte à côte, 13/11/2026), pour le web.
     pub fn defaults() -> Vec<Preset> {
         vec![
             Preset::new("story", Ratio::Fixed(9, 16), "web"),
             Preset::new("post", Ratio::Fixed(4, 5), "web"),
+            Preset {
+                tiles: 2,
+                ..Preset::new("carousel", Ratio::Fixed(4, 5), "web")
+            },
         ]
+    }
+
+    /// Le dallage du préréglage.
+    pub fn tiles(&self) -> Tiles {
+        Tiles::strip(self.tiles)
     }
 }
 
@@ -438,6 +586,7 @@ struct PresetToml {
     name: Option<String>,
     ratio: Option<String>,
     profile: Option<String>,
+    tiles: Option<u32>,
 }
 
 /// Les préréglages : fournis, puis ceux de l'utilisateur (par identifiant).
@@ -477,6 +626,9 @@ impl<'de> Deserialize<'de> for Presets {
             }
             if let Some(v) = t.profile {
                 p.profile = v;
+            }
+            if let Some(v) = t.tiles {
+                p.tiles = v.clamp(1, Tiles::MAX);
             }
         }
         Ok(Presets(list))
@@ -564,6 +716,20 @@ pub struct Version {
     /// Profil d'export proposé pour cette version (pré-remplit la boîte d'export).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
+    /// Morceaux (13/11/2026) ; non écrit pour un seul (les versions d'avant restent
+    /// identiques).
+    #[serde(default, skip_serializing_if = "Tiles::is_one")]
+    pub tiles: Tiles,
+}
+
+impl Version {
+    /// Forme du cadre : rapport d'un morceau et dallage.
+    pub fn frame(&self) -> Frame {
+        Frame {
+            ratio: self.ratio,
+            tiles: self.tiles,
+        }
+    }
 }
 
 /// Les versions d'une photo, dans l'ordre, et les éléments illisibles gardés tels quels.
@@ -748,6 +914,82 @@ mod tests {
     }
 
     #[test]
+    fn a_frame_is_cut_into_equal_tiles() {
+        // Deux 4:5 côte à côte dans une image 3:2 : un cadre 8:5, toute la largeur.
+        let frame = Frame {
+            ratio: Ratio::Fixed(4, 5),
+            tiles: Tiles::strip(2),
+        };
+        assert!(close(frame.value(1.5).unwrap(), 1.6));
+        let r = Rect::fit(frame, 1.5);
+        assert!(close(r.w, 1.0) && close(r.h, 1.5 / 1.6));
+        let cells = frame.tiles.cells(r);
+        assert_eq!(cells.len(), 2);
+        assert!(close(cells[0].w, 0.5) && close(cells[1].x, 0.5));
+        // Tiré par un angle, le cadre garde la forme des deux morceaux.
+        let d = r.drag(Handle::BottomRight, -0.2, -0.2, frame, 1.5);
+        assert!(close((d.w * 1.5) / d.h, 1.6));
+        // Au pixel près : tous de la même taille, le reste partagé entre les bords.
+        assert_eq!(
+            Tiles::strip(2).pixel_cells((10, 0, 6001, 3750)),
+            vec![(10, 0, 3000, 3750), (3010, 0, 3000, 3750)]
+        );
+        assert_eq!(
+            Tiles::strip(3).pixel_cells((0, 0, 3001, 100)),
+            vec![
+                (0, 0, 1000, 100),
+                (1000, 0, 1000, 100),
+                (2000, 0, 1000, 100)
+            ]
+        );
+        // Une grille, dans l'ordre de lecture (pour plus tard : 2 × 2, 3 × 3).
+        let grid = Tiles::from([2, 2]).pixel_cells((0, 0, 200, 101));
+        assert_eq!(
+            grid,
+            vec![
+                (0, 0, 100, 50),
+                (100, 0, 100, 50),
+                (0, 50, 100, 50),
+                (100, 50, 100, 50)
+            ]
+        );
+        assert_eq!(Tiles::ONE.pixel_cells((5, 6, 7, 8)), vec![(5, 6, 7, 8)]);
+        // Bornés.
+        assert_eq!(
+            Tiles::from([0, 99]),
+            Tiles {
+                columns: 1,
+                rows: Tiles::MAX
+            }
+        );
+    }
+
+    #[test]
+    fn tiles_are_written_only_when_there_are_several() {
+        let mut v = Version {
+            name: "Pano".into(),
+            crop: Rect::FULL,
+            ratio: Ratio::Fixed(4, 5),
+            source: Source::Embedded,
+            profile: None,
+            tiles: Tiles::ONE,
+        };
+        let one = serde_json::to_string(&v).unwrap();
+        assert!(!one.contains("tiles"), "{one}");
+        v.tiles = Tiles::strip(3);
+        let three = serde_json::to_string(&v).unwrap();
+        assert!(three.contains(r#""tiles":[3,1]"#), "{three}");
+        let back: Version = serde_json::from_str(&three).unwrap();
+        assert_eq!(back.tiles, Tiles::strip(3));
+        let old: Version = serde_json::from_str(&one).unwrap();
+        assert_eq!(
+            old.tiles,
+            Tiles::ONE,
+            "une version d'avant : un seul morceau"
+        );
+    }
+
+    #[test]
     fn presets_come_with_defaults_and_complete_from_them() {
         #[derive(Deserialize)]
         struct S {
@@ -759,14 +1001,16 @@ mod tests {
         .unwrap();
         let p = &s.versions.presets.0;
         let ids: Vec<&str> = p.iter().map(|p| p.id.as_str()).collect();
-        assert_eq!(ids, ["story", "post", "tirage"]);
+        assert_eq!(ids, ["story", "post", "carousel", "tirage"]);
+        assert_eq!(p[2].tiles(), Tiles::strip(2), "le carrousel : deux 4:5");
         assert_eq!(
             p[0].ratio,
             Ratio::Fixed(9, 16),
             "le reste du préréglage fourni"
         );
         assert_eq!(p[0].profile, "");
-        assert_eq!(p[2].ratio, Ratio::Fixed(3, 2));
+        assert_eq!(p[3].ratio, Ratio::Fixed(3, 2));
+        assert_eq!(p[3].tiles, 1);
         assert!(toml::from_str::<S>("[versions.presets.x]\nratio = \"large\"\n").is_err());
         let taken = |id: &str| ["story", "tirage-a4"].contains(&id);
         assert_eq!(new_id("Tirage A4", taken), "tirage-a4-2");
@@ -789,6 +1033,7 @@ mod tests {
             ratio: Ratio::Fixed(9, 16),
             source: Source::Developed,
             profile: None,
+            tiles: Tiles::ONE,
         });
         write(&with, &versions, Convention::Darktable).unwrap();
         // Des notes seules ne font pas une version.
@@ -813,6 +1058,7 @@ mod tests {
             ratio: Ratio::Fixed(9, 16),
             source: Source::Developed,
             profile: Some("web".into()),
+            tiles: Tiles::ONE,
         });
         versions.unknown.push(r#"{"futur":true}"#.into());
         let sidecar = write(&image, &versions, Convention::Darktable).unwrap();

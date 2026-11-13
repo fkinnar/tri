@@ -37,7 +37,10 @@ accepted in `[keys]` (`actions::renamed_id`). Internal code names (`crop.rs`,
   `Fixed(w, h)`, where the orientation is the order (4:5 portrait, 5:4 landscape). Offered
   ratios (`PRESETS`): free, original, 1:1, 5:4, 3:2, 16:9, 4:3. `rotated` changes the
   orientation.
-- `Version`: `name`, `crop`, `ratio`, `source`, `profile` (optional).
+- `Version`: `name`, `crop`, `ratio`, `source`, `profile` (optional), `tiles` (see below;
+  written only when there are several).
+- `Tiles`: the frame cut into `columns` × `rows` equal tiles; `Frame`: the ratio of one
+  tile and the tiling, the shape the geometry keeps (a `Ratio` alone is a one-tile frame).
 
 ## Geometry, tested without an interface
 
@@ -174,6 +177,32 @@ The interface only draws; all the computation is here.
 - The frame is in proportions of the **viewed** image: on a cropped darktable development
   (2763 × 4912 for the test RAF), these are its proportions, not the sensor's.
 
+## Tiles (carousel)
+
+User idea (2026-11-13): a landscape photo cropped to 8:5, then cut into two 4:5, posted
+side by side in an Instagram carousel to swipe through the panorama. Done by hand until
+then; now a **single version** with a number of tiles. One version rather than several
+linked ones: a single frame to move, cuts always right.
+
+- **The ratio is that of one tile**; the whole frame follows (`Frame::value`: 4:5 × 2 =
+  8:5). Going from 2 to 3 tiles widens the frame around its centre, keeping the 4:5. Works
+  with free (equal tiles of a free frame) and "original" too.
+- **Version bar**: a "1 tile", "2 tiles"… list (up to `Tiles::MAX` = 10) after the
+  orientation; `c` / `Shift+C` one more / less (actions `core.version.tiles_next` /
+  `tiles_prev`); `0` (original frame) goes back to a single tile. The cuts are drawn on the
+  frame. Proposed name: "4:5 × 2".
+- **Export**: one file per tile, in reading order, numbered (`DSCF0001-Pano_1.jpg`,
+  `DSCF0001-Pano_2.jpg`). The export preset's longest side applies **to one tile**
+  (1080 × 1350 for Instagram); downscaling and sharpening are done tile by tile. Pixel
+  exact (`Tiles::pixel_cells`): the frame is brought to a multiple of the number of tiles,
+  the extra pixels shared between both edges, and all tiles have exactly the same size.
+  All or nothing: a failed tile removes the others. The export dialog says so ("one file
+  per tile").
+- **Later**: the geometry already does vertical strips (`[1, n]`) and grids (2 × 2,
+  3 × 3); only the interface is left to do.
+- In the XMP: `"tiles":[2,1]` (columns, rows), absent for a single tile. An older `tri`
+  reads such a version as a single tile, and would lose the tiles when rewriting it.
+
 ## Crop presets
 
 User idea (2026-10-19): "Insta story" = a name, a ratio with its orientation (9:16) and an
@@ -182,7 +211,8 @@ export preset (Web). You choose the preset, adjust the frame, Enter.
 - **Storage**: `[versions.presets.<id>]` (`VersionSettings`, `Presets`), with `name`,
   `ratio` (`"free"`, `"original"`, or `"l:h"` in the desired orientation) and `profile`
   (`""`: none). A missing key comes from the built-in preset with the same identifier, as
-  for export presets. Built-in presets: `story` (9:16, Web) and `post` (4:5, Web).
+  for export presets. Built-in presets: `story` (9:16, Web), `post` (4:5, Web) and
+  `carousel` (two 4:5, Web). `tiles`: number of tiles side by side (1 by default).
 - **Crop bar**: "Preset" list; `v` / `Shift+V` or `Tab` / `Shift+Tab` moves to the next / previous one
   (`p` until 2026-10-21: it is also the sharpness map, which stayed on; `p` turns it off
   during cropping too).
