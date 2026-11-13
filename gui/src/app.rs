@@ -31268,6 +31268,35 @@ mod tests {
         );
     }
 
+    /// Pas d'onglet « Base » sur un JPEG (retour du 13/11/2026) : « Style » à sa place ;
+    /// gardé si l'image a déjà une base, pour la retirer.
+    #[test]
+    fn a_jpeg_has_no_base_tab_unless_it_has_a_base() {
+        let (mut h, _dir) = harness();
+        h.set_size(vec2(1000.0, 2400.0));
+        run_until(&mut h, |app| app.files.len() == 3);
+        assert_eq!(h.state().files[0].kind, MediaKind::Flat);
+        h.state_mut().adjust_tab = adjust::AdjustTab::Base;
+        h.run_steps(2);
+        let base = t!("adjust-tab-base");
+        assert!(h.query_by_label("Style").is_some(), "les autres onglets");
+        assert!(h.query_by_label(&base).is_none(), "pas de base sur un JPEG");
+        assert_eq!(
+            h.state().adjust_tab,
+            adjust::AdjustTab::Base,
+            "retenu pour les RAW"
+        );
+        let path = h.state().files[0].path.clone();
+        let mut layers = tri::adjust::Layers::default();
+        layers.correction.exposure = 0.5;
+        h.state_mut().save_adjustments(vec![(path, Some(layers))]);
+        h.run_steps(2);
+        assert!(
+            h.query_by_label(&base).is_some(),
+            "une base déjà là : visible"
+        );
+    }
+
     #[test]
     fn double_clicking_a_tab_resets_it() {
         // Retour du 10/11/2026 : double-clic sur un onglet des réglages, remis à zéro (le
