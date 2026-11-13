@@ -69,8 +69,14 @@ system one ("cold" measurements, experiments).
   colour), with stars, accepted, rejected, with a colour label (any, or one line per
   colour present, feedback from 2026-11-12): the ratings rule; conflicts: the "in
   conflict" filter. Not clickable: the pairs (no filter before grouping, #392) and inactive
-  software. No Ctrl+click to combine yet (complex filters, #138). Still to come: versions,
-  cache size with "Clear" (`gui/src/app/summary.rs`).
+  software. No Ctrl+click to combine yet (complex filters, #138). Read from the disk, in the
+  background (2026-11-13, `summary::Jobs`): **with versions**
+  (`tri::versions::with_versions`, one sidecar read per photo; counted again when a
+  version changes, `versions_epoch`), a filter like the others (`versions_only`); the
+  **folder's room in the cache** (`Cache::folder_usage`, measured again as the
+  computations go on) and **"Clear"**, which opens the "Reset" dialog on the cache only
+  (confirmation, measures). `f Esc` also removes the summary's filters
+  (`gui/src/app/summary.rs`).
 - **Folders panel** (2026-10-17), to the left of the grid: places expandable as a tree,
   arranged in titled sections separated by a line (2026-10-20); titles in bold, larger than the
   folders since 2026-10-26, `[gui.folders] section_scale`, #120): devices (cards, keys,

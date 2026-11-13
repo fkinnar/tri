@@ -8,6 +8,10 @@
   frame of its version, or with several opens the image full screen with the first one
   shown (the "Version" list to pick, edit or delete); it started a new version. "Edit"
   and "Delete" in that list look like its other items.
+- **Folder summary: versions and cache** (#453, part of #388): a "With versions" line
+  (counted in the background, a filter like the other lines), and the folder's room in
+  the cache with a "Clear" button (asks for confirmation). `f Esc` now also removes the
+  summary's filters.
 - **The command line in the help** (#452, fixes #441): F1 lists the commands after the
   shortcuts, by theme, searched like them, with their form; a click unfolds an example
   filled in with the open folder or the selected images, and a button copies it. The help

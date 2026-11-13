@@ -9,8 +9,14 @@
 //! retire tous. Pas encore de
 //! Ctrl+clic pour combiner (avec les filtres complexes, #138). La ligne des paires n'est
 //! pas un filtre tant que les paires ne sont pas regroupées (#392).
+//!
+//! Deux comptages demandent de lire le disque, faits en fond (13/11/2026) : les photos
+//! qui ont des versions (leurs sidecars), refait quand une version change, et la taille
+//! du cache du dossier, remesurée quand le calcul des aperçus avance ; « Vider » ouvre la
+//! boîte « Réinitialiser » sur le cache seul.
 
 use super::*;
+use std::collections::HashSet;
 use tri::develop::Engine;
 use tri::notes::{ColorRule, StarsRule};
 
@@ -37,8 +43,22 @@ pub(super) enum Line {
     Rejected,
     /// Avec un libellé couleur, n'importe lequel (`None`) ou celui-ci.
     Colored(Option<Color>),
+    /// Avec des versions.
+    Versions,
     /// Notes en conflit.
     Conflicts,
+}
+
+/// Comptages du résumé faits en fond.
+#[derive(Default)]
+pub(super) struct Jobs {
+    /// Photos qui ont des versions, pour un dossier et un état des versions
+    /// (`versions_epoch`).
+    versions: Option<(PathBuf, u64, HashSet<PathBuf>)>,
+    counting: Option<(PathBuf, u64, mpsc::Receiver<Vec<PathBuf>>)>,
+    /// Taille du cache du dossier, pour un dossier et un avancement des calculs.
+    cache: Option<(PathBuf, usize, tri::cache::Usage)>,
+    measuring: Option<(PathBuf, usize, mpsc::Receiver<tri::cache::Usage>)>,
 }
 
 /// Ce que les lignes du résumé changent : les filtres de la vue, sans l'ordre, le rendu ni
@@ -54,6 +74,7 @@ struct Filters {
     inverted: bool,
     conflicts: bool,
     extension: Option<String>,
+    versions: bool,
     stack_only: bool,
 }
 
@@ -70,6 +91,7 @@ impl Filters {
             inverted: false,
             conflicts: false,
             extension: None,
+            versions: false,
             stack_only: false,
         }
     }
@@ -108,6 +130,7 @@ impl Filters {
                     all: false,
                 })
             }
+            Line::Versions => f.versions = true,
             Line::Conflicts => f.conflicts = true,
         }
         f
@@ -141,6 +164,7 @@ impl TriApp {
             inverted: self.filter_inverted,
             conflicts: self.conflicts_only,
             extension: self.extension_only.clone(),
+            versions: self.versions_only,
             stack_only: self.stack_only.is_some(),
         }
     }
@@ -171,6 +195,7 @@ impl TriApp {
         self.filter_inverted = wanted.inverted;
         self.conflicts_only = wanted.conflicts;
         self.extension_only = wanted.extension;
+        self.versions_only = wanted.versions;
         self.apply_filter();
     }
 
@@ -187,6 +212,7 @@ impl TriApp {
         if !open {
             return;
         }
+        self.summary_background(ui.ctx());
         let rows = self.summary_rows(ui.visuals());
         let mut clicked: Option<Line> = None;
         egui::Grid::new("folder_summary")
@@ -260,6 +286,24 @@ impl TriApp {
             ui.add_space(pad);
             ui.weak(place).on_hover_text(t!("folder-menu-cache-tip"));
         });
+        // Sa place dans le cache, et de quoi le vider (avec confirmation).
+        let mut clear = false;
+        if let Some(usage) = self.summary_cache() {
+            ui.horizontal(|ui| {
+                ui.add_space(pad);
+                ui.weak(t!(
+                    "summary-cache",
+                    size = crate::cache_panel::size_text(usage.bytes)
+                ));
+                clear = ui
+                    .small_button(t!("summary-cache-clear"))
+                    .on_hover_text(t!("summary-cache-clear-tip"))
+                    .clicked();
+            });
+        }
+        if clear {
+            self.ask_reset(self.folder.dir.clone(), true);
+        }
         if let Some(line) = clicked {
             self.summary_click(&line);
         }
@@ -350,6 +394,14 @@ impl TriApp {
                 ..row(color_name(color), n, Some(Line::Colored(Some(color))))
             });
         }
+        // Avec des versions, une fois comptées (lecture des sidecars, en fond).
+        if let Some(with) = self.summary_versions() {
+            rows.push(row(
+                t!("summary-versions"),
+                with.len(),
+                Some(Line::Versions),
+            ));
+        }
         // Conflits : seulement s'il y en a, en couleur d'avertissement.
         if summary.conflicts > 0 {
             rows.push(Row {
@@ -362,5 +414,83 @@ impl TriApp {
             });
         }
         rows
+    }
+
+    /// Les photos du dossier ouvert qui ont des versions, une fois comptées (le dernier
+    /// comptage du dossier, pendant qu'un nouveau se fait).
+    pub(super) fn summary_versions(&self) -> Option<&HashSet<PathBuf>> {
+        match &self.summary_jobs.versions {
+            Some((dir, _, with)) if *dir == self.folder.dir => Some(with),
+            _ => None,
+        }
+    }
+
+    /// La place du dossier ouvert dans le cache, une fois mesurée.
+    pub(super) fn summary_cache(&self) -> Option<tri::cache::Usage> {
+        match &self.summary_jobs.cache {
+            Some((dir, _, usage)) if *dir == self.folder.dir => Some(*usage),
+            _ => None,
+        }
+    }
+
+    /// Comptages en fond : reçoit ceux qui sont finis, relance ceux qui ne sont plus à
+    /// jour (dossier changé, versions changées, calculs avancés).
+    fn summary_background(&mut self, ctx: &egui::Context) {
+        let dir = self.folder.dir.clone();
+        let jobs = &mut self.summary_jobs;
+        let mut refilter = false;
+        if let Some((d, epoch, rx)) = &jobs.counting
+            && let Ok(with) = rx.try_recv()
+        {
+            jobs.versions = Some((d.clone(), *epoch, with.into_iter().collect()));
+            jobs.counting = None;
+            refilter = self.versions_only;
+        }
+        if let Some((d, done, rx)) = &jobs.measuring
+            && let Ok(usage) = rx.try_recv()
+        {
+            jobs.cache = Some((d.clone(), *done, usage));
+            jobs.measuring = None;
+        }
+        let epoch = self.versions_epoch;
+        let counted = |v: &Option<(PathBuf, u64, HashSet<PathBuf>)>| {
+            v.as_ref().is_some_and(|(d, e, _)| *d == dir && *e == epoch)
+        };
+        if jobs.counting.is_none() && !counted(&jobs.versions) {
+            let photos: Vec<PathBuf> = self
+                .folder
+                .files
+                .iter()
+                .filter(|f| !tri::media::is_development(&f.path))
+                .map(|f| f.path.clone())
+                .collect();
+            let (tx, rx) = mpsc::channel();
+            std::thread::spawn(move || {
+                let _ = tx.send(tri::versions::with_versions(&photos));
+            });
+            jobs.counting = Some((dir.clone(), epoch, rx));
+        }
+        let done: usize = self.progress.iter().map(|p| p.done).sum();
+        let measured = jobs
+            .cache
+            .as_ref()
+            .is_some_and(|(d, n, _)| *d == dir && *n == done);
+        if jobs.measuring.is_none()
+            && !measured
+            && let Some(engine) = &self.engine
+        {
+            let (tx, rx) = mpsc::channel();
+            let (cache, folder) = (engine.cache.clone(), dir.clone());
+            std::thread::spawn(move || {
+                let _ = tx.send(cache.folder_usage(&folder).unwrap_or_default());
+            });
+            jobs.measuring = Some((dir, done, rx));
+        }
+        if jobs.counting.is_some() || jobs.measuring.is_some() {
+            ctx.request_repaint_after(poll_interval(ctx));
+        }
+        if refilter {
+            self.apply_filter();
+        }
     }
 }
