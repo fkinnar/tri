@@ -4,6 +4,9 @@
 
 ## Non publié
 
+- **`tri --help`** (#451, partie de #441) : chaque commande de la ligne de commande
+  expliquée par thème, avec ses options et un exemple (`-h` aussi) ; le mode d'emploi
+  court affiché sur une erreur vient de la même description.
 - **Noter en ligne de commande** (#450, corrige #275) : `tri <image>... --stars N
   --color red,…|+blue,-red|none --flag accept|reject|none [--dry-run]`, ou la liste des
   images sur l'entrée standard ; couleurs remplacées, ou ajoutées et retirées en gardant

@@ -16,6 +16,7 @@ exists.
 | [packaging.md](packaging.md) | Ready-to-install packages (`.dmg`, `.tar.gz`), shipped licenses, macOS signing |
 | [config_edit.md](config_edit.md) | Module `tri::config_edit`: list of settings taken from the example, editing the file without losing anything (settings window) |
 | [settings.md](settings.md) | Configuration file (TOML): location, sections, errors; module `tri::settings` |
+| [commands.md](commands.md) | `tri::commands` module: the commands described once (`tri --help`, the interface's help) |
 | [config.example.toml](../config.example.toml) | All keys with their default value, commented |
 | [media.md](media.md) | Module `tri::media`: folder scanning, RAW / flat images |
 | [filter.md](filter.md) | Module `tri::filter`: `Filter` trait, groups, `KindFilter` |

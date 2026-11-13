@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **`tri --help`** (#451, part of #441): every command of the command line explained
+  by theme, with its options and an example (`-h` too); the short usage shown on an
+  error comes from the same description.
 - **Rate from the command line** (#450, fixes #275): `tri <image>... --stars N
   --color red,…|+blue,-red|none --flag accept|reject|none [--dry-run]`, or the list of
   images on standard input; colours replaced, or added and removed keeping the others; the RAW+JPEG pair and the main developments follow, sidecars as in the

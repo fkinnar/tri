@@ -172,34 +172,6 @@ settings-file-error = configuration { $path } : { $error }
 
 ## Ligne de commande
 
-cli-usage = 
-    usage :
-      tri <dossier> [--raw|--flat] [--depth N]
-      tri <dossier> --previews [--raw|--flat] [--depth N] [--side N] [--thumb N] [--workers N] [--mixed] [--cache DOSSIER]
-      tri [<dossier>] --clear-cache [<niveau>] [--depth N] [--cache DOSSIER]
-      tri --cache-usage [--cache DOSSIER]
-      tri <dossier> --cache-here|--cache-user [--cache DOSSIER]
-      tri <dossier> --reset cache,data,notes,versions [--depth N] [--dry-run] [--cache DOSSIER]
-      tri --check-update
-      tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
-      tri <dossier> --sidecars rapidraw|xmp|all [--rewrite] [--dry-run] [--raw|--flat] [--depth N]
-      tri <dossier> --embed-notes [--dry-run] [--raw|--flat] [--depth N]
-      tri <dossier> --import-notes [--dry-run] [--raw|--flat] [--depth N]
-      tri <dossier> --conflicts [--raw|--flat] [--depth N]
-      tri <dossier> --exposure [--raw|--flat] [--depth N]
-      tri <dossier> --metadata [--raw|--flat] [--depth N]
-      tri <dossier> --groups [--threshold X]
-      tri <dossier> --sharpness [--raw|--flat] [--depth N]
-      tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
-      tri <image>... [--stars 0-5] [--color red|yellow|green|blue|purple[,…]|+blue,-red…|none] [--flag accept|reject|none] [--dry-run]   (sans image : liste sur l'entrée standard)
-      tri --rename <image> <nom> [--dry-run]
-      tri --delete <image>... [--permanent] [--dry-run]
-      tri --copy|--move <image>...|<dossier> --to <dossier> [--dry-run]
-      tri --reveal <image>
-      tri --edit <image>...
-      tri --export <préréglage> <image>... [--to <dossier>] [--libraw|--embedded] [--passthrough] [--dry-run]
-      tri --adjust <référence> <image>... --to <dossier> [--ev IL|auto] [--neutral auto|x,y,l,h] [--kelvin K[,teinte]|daylight|cloudy|shade|tungsten|fluorescent|flash] [--creative-ev IL] [--warmth IL] [--tint IL] [--contrast %] [--saturation %] [--mono neutral|red|orange|yellow|green|blue|r,v,b] [--embedded] [--side N]
-    option commune : --config FICHIER (réglages ; défaut : emplacement du système)
 cli-unknown-convention = convention inconnue : { $value } (darktable ou adobe)
 cli-adjust-not-an-image = pas une image : { $path }
 cli-adjust-report = { $image } : exposition { $exposure } IL (correction { $correction }, créatif { $creative }), balance { $kelvin } K, teinte { $tint }, N&B { $mixer } → { $out }
@@ -397,3 +369,94 @@ update-build-behind = { $count ->
 }
 update-build-unknown = Impossible de comparer avec la branche main (commit inconnu, ou pas encore poussé).
 update-nothing-published = rien de publié pour ce système
+
+## Aide de la ligne de commande (src/commands.rs, issue n° 441)
+cli-usage-title = usage :
+cli-usage-more = tri --help : chaque commande expliquée, avec ses options et un exemple ; option commune : --config <fichier>
+cli-help-intro = tri — visionneuse RAW pour le tri. Sans option : l'interface. En ligne de commande :
+cli-help-example = exemple :
+cli-help-common = option commune :
+cli-theme-folder = Dossier et aperçus
+cli-theme-notes = Notes
+cli-theme-files = Fichiers
+cli-theme-export = Export
+cli-theme-offload = Déchargement
+cli-theme-analysis = Analyses
+cli-theme-cache = Cache et données
+cli-theme-other = Divers
+cli-ph-folder = dossier
+cli-ph-image = image
+cli-ph-images = images
+cli-ph-name = nom
+cli-ph-card = carte
+cli-ph-root = racine
+cli-ph-preset = préréglage
+cli-ph-reference = référence
+cli-ph-level = niveau
+cli-ph-file = fichier
+cli-ph-destination = destination
+cli-cmd-list = Liste les images du dossier, par nature.
+cli-cmd-previews = Calcule en fond vignettes, aperçus et analyses du dossier, avec la progression.
+cli-cmd-convert-xmp = Recopie les notes dans les sidecars de l'autre convention (darktable : IMAGE.RAF.xmp, Adobe : IMAGE.xmp).
+cli-cmd-sidecars = Crée les sidecars manquants des photos notées, pour un logiciel qu'on n'utilise qu'à l'occasion.
+cli-cmd-embed-notes = Inscrit les notes dans les images elles-mêmes (JPEG, PNG, WebP, TIFF, HEIC ; les RAW sont passés).
+cli-cmd-import-notes = Recopie dans les sidecars les notes inscrites dans les images (changées dans un autre logiciel).
+cli-cmd-conflicts = Liste les images dont les sources de notes se contredisent, et les fusions faites.
+cli-cmd-rename = Renomme l'image (extension gardée), sa paire RAW+JPEG et ses sidecars.
+cli-cmd-delete = Met les images, leurs paires et leurs sidecars à la corbeille.
+cli-cmd-copy = Copie ou déplace les images (ou un dossier entier), leurs paires et leurs sidecars ; copies vérifiées.
+cli-cmd-reveal = Montre l'image dans le gestionnaire de fichiers.
+cli-cmd-edit = Ouvre les images dans l'éditeur externe ([files] editor).
+cli-cmd-export = Exporte les images avec un préréglage d'export (darktable s'il est installé, sinon LibRaw).
+cli-cmd-adjust = Harmonise l'exposition et la balance des images sur la première (la référence) et écrit le résultat.
+cli-cmd-offload = Décharge une carte : copie vérifiée des nouvelles images vers le dossier de la séance.
+cli-cmd-exposure = Exposition de chaque image : marge avant saturation, pixels saturés et bouchés.
+cli-cmd-metadata = Métadonnées de prise de vue de chaque image.
+cli-cmd-sharpness = Score de netteté de chaque image, et les floues.
+cli-cmd-groups = Regroupe les images semblables en piles.
+cli-cmd-clear-cache = Vide le cache (un niveau ou tout) ; avec un dossier, seulement ses images.
+cli-cmd-cache-usage = Taille du cache, par niveau.
+cli-cmd-cache-here = Garde le cache et les données de tri dans le dossier (--cache-here), ou les rend au cache de l'utilisateur (--cache-user).
+cli-cmd-reset = Efface du dossier le cache, les données de tri, les notes ou les versions.
+cli-cmd-check-update = Cherche une version plus récente (sur demande seulement).
+cli-ph-color = couleur
+cli-cmd-rate = Note les images (sans image : la liste sur l'entrée standard) ; la paire RAW+JPEG et les développements principaux suivent.
+cli-opt-stars = étoiles, 0 à 5
+cli-opt-color = couleurs : red, yellow, green, blue, purple ; red,blue remplace, +blue ajoute, -red retire, none efface
+cli-opt-flag = drapeau : accept, reject ou none
+cli-opt-raw = RAW seulement
+cli-opt-flat = images plates seulement (JPEG, TIFF, PNG, HEIC…)
+cli-opt-depth = profondeur des sous-dossiers (1 : le dossier seul)
+cli-opt-side = côté long des aperçus, en pixels
+cli-opt-adjust-side = côté long de l'image écrite, en pixels
+cli-opt-thumb = côté des vignettes, en pixels
+cli-opt-workers = nombre de calculs légers en parallèle
+cli-opt-mixed = aperçus sans attendre la fin des vignettes
+cli-opt-cache = dossier du cache, à la place de celui des réglages
+cli-opt-dry-run = montre ce qui serait fait, sans rien changer
+cli-opt-rewrite = réécrit aussi les notes des sidecars existants
+cli-opt-permanent = suppression définitive, sans corbeille
+cli-opt-to = dossier de destination
+cli-opt-offload-to = racine des séances (défaut : [offload] destination)
+cli-opt-export-to = dossier, à la place de celui du préréglage
+cli-opt-libraw = rendu LibRaw, même avec darktable installé
+cli-opt-embedded = le JPEG boîtier
+cli-opt-adjust-embedded = part du JPEG boîtier plutôt que du rendu RAW
+cli-opt-passthrough = JPEG sans recompression quand c'est possible
+cli-opt-ev = correction d'exposition en IL, ou auto
+cli-opt-neutral = balance neutralisée : toute l'image (auto) ou une zone en fractions
+cli-opt-kelvin = balance en kelvins (et teinte), ou un préréglage
+cli-opt-creative-ev = décalage créatif d'exposition, en IL
+cli-opt-warmth = décalage créatif de chaleur
+cli-opt-tint = décalage créatif de teinte
+cli-opt-contrast = contraste, en pour cent
+cli-opt-saturation = saturation, en pour cent
+cli-opt-mono = noir et blanc : un préréglage ou trois pourcentages r,v,b
+cli-opt-folder = nom du dossier de la séance (défaut : AAAA-MM-JJ)
+cli-opt-raw-only = laisse les JPEG sur la carte
+cli-opt-previews = calcule ensuite vignettes et aperçus
+cli-opt-delete-copied = supprime de la carte les fichiers copiés et vérifiés
+cli-opt-delete-left = supprime aussi les JPEG laissés par --raw-only
+cli-opt-eject = éjecte la carte à la fin
+cli-opt-threshold = seuil de similarité (plus haut : piles plus grandes)
+cli-opt-config = fichier de réglages (défaut : l'emplacement du système)

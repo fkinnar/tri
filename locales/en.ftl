@@ -171,34 +171,6 @@ settings-file-error = configuration { $path }: { $error }
 
 ## Command line
 
-cli-usage = 
-    usage:
-      tri <folder> [--raw|--flat] [--depth N]
-      tri <folder> --previews [--raw|--flat] [--depth N] [--side N] [--thumb N] [--workers N] [--mixed] [--cache FOLDER]
-      tri [<folder>] --clear-cache [<level>] [--depth N] [--cache FOLDER]
-      tri --cache-usage [--cache FOLDER]
-      tri <folder> --cache-here|--cache-user [--cache FOLDER]
-      tri <folder> --reset cache,data,notes,versions [--depth N] [--dry-run] [--cache FOLDER]
-      tri --check-update
-      tri <folder> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
-      tri <folder> --sidecars rapidraw|xmp|all [--rewrite] [--dry-run] [--raw|--flat] [--depth N]
-      tri <folder> --embed-notes [--dry-run] [--raw|--flat] [--depth N]
-      tri <folder> --import-notes [--dry-run] [--raw|--flat] [--depth N]
-      tri <folder> --conflicts [--raw|--flat] [--depth N]
-      tri <folder> --exposure [--raw|--flat] [--depth N]
-      tri <folder> --metadata [--raw|--flat] [--depth N]
-      tri <folder> --groups [--threshold X]
-      tri <folder> --sharpness [--raw|--flat] [--depth N]
-      tri --offload <card> [--to <root>] [--folder <name>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
-      tri <image>... [--stars 0-5] [--color red|yellow|green|blue|purple[,…]|+blue,-red…|none] [--flag accept|reject|none] [--dry-run]   (no image: list on standard input)
-      tri --rename <image> <name> [--dry-run]
-      tri --delete <image>... [--permanent] [--dry-run]
-      tri --copy|--move <image>...|<folder> --to <folder> [--dry-run]
-      tri --reveal <image>
-      tri --edit <image>...
-      tri --export <preset> <image>... [--to <folder>] [--libraw|--embedded] [--passthrough] [--dry-run]
-      tri --adjust <reference> <image>... --to <folder> [--ev EV|auto] [--neutral auto|x,y,w,h] [--kelvin K[,tint]|daylight|cloudy|shade|tungsten|fluorescent|flash] [--creative-ev EV] [--warmth EV] [--tint EV] [--contrast %] [--saturation %] [--mono neutral|red|orange|yellow|green|blue|r,g,b] [--embedded] [--side N]
-    common option: --config FILE (settings; default: the system location)
 cli-unknown-convention = unknown convention: { $value } (darktable or adobe)
 cli-adjust-not-an-image = not an image: { $path }
 cli-adjust-report = { $image }: exposure { $exposure } EV (correction { $correction }, creative { $creative }), balance { $kelvin } K, tint { $tint }, B&W { $mixer } → { $out }
@@ -396,3 +368,94 @@ update-build-behind = { $count ->
 }
 update-build-unknown = Cannot compare with the main branch (unknown commit, or not pushed yet).
 update-nothing-published = nothing published for this system
+
+## Command line help (src/commands.rs, issue 441)
+cli-usage-title = usage:
+cli-usage-more = tri --help: every command explained, with its options and an example; common option: --config <file>
+cli-help-intro = tri — RAW viewer for culling. Without options: the interface. From the command line:
+cli-help-example = example:
+cli-help-common = common option:
+cli-theme-folder = Folder and previews
+cli-theme-notes = Ratings
+cli-theme-files = Files
+cli-theme-export = Export
+cli-theme-offload = Offload
+cli-theme-analysis = Analyses
+cli-theme-cache = Cache and data
+cli-theme-other = Other
+cli-ph-folder = folder
+cli-ph-image = image
+cli-ph-images = images
+cli-ph-name = name
+cli-ph-card = card
+cli-ph-root = root
+cli-ph-preset = preset
+cli-ph-reference = reference
+cli-ph-level = level
+cli-ph-file = file
+cli-ph-destination = destination
+cli-cmd-list = Lists the images of the folder, by kind.
+cli-cmd-previews = Computes the folder's thumbnails, previews and analyses in the background, with progress.
+cli-cmd-convert-xmp = Copies the ratings into the sidecars of the other convention (darktable: IMAGE.RAF.xmp, Adobe: IMAGE.xmp).
+cli-cmd-sidecars = Creates the missing sidecars of rated photos, for software used only now and then.
+cli-cmd-embed-notes = Writes the ratings into the images themselves (JPEG, PNG, WebP, TIFF, HEIC; RAW files are skipped).
+cli-cmd-import-notes = Copies into the sidecars the ratings written in the images (changed in other software).
+cli-cmd-conflicts = Lists the images whose rating sources disagree, and the merges made.
+cli-cmd-rename = Renames the image (extension kept), its RAW+JPEG pair and its sidecars.
+cli-cmd-delete = Moves the images, their pairs and their sidecars to the trash.
+cli-cmd-copy = Copies or moves the images (or a whole folder), their pairs and their sidecars; verified copies.
+cli-cmd-reveal = Shows the image in the file manager.
+cli-cmd-edit = Opens the images in the external editor ([files] editor).
+cli-cmd-export = Exports the images with an export preset (darktable if installed, LibRaw otherwise).
+cli-cmd-adjust = Matches the exposure and balance of the images to the first one (the reference) and writes the result.
+cli-cmd-offload = Offloads a card: verified copy of the new images to the session folder.
+cli-cmd-exposure = Exposure of each image: headroom before clipping, clipped and crushed pixels.
+cli-cmd-metadata = Shooting metadata of each image.
+cli-cmd-sharpness = Sharpness score of each image, and the blurry ones.
+cli-cmd-groups = Groups similar images into stacks.
+cli-cmd-clear-cache = Clears the cache (one level or all); with a folder, only its images.
+cli-cmd-cache-usage = Size of the cache, by level.
+cli-cmd-cache-here = Keeps the cache and tri's data in the folder (--cache-here), or gives them back to the user's cache (--cache-user).
+cli-cmd-reset = Removes from the folder the cache, tri's data, the ratings or the versions.
+cli-cmd-check-update = Looks for a newer version (on request only).
+cli-ph-color = colour
+cli-cmd-rate = Rates the images (without images: the list on standard input); the RAW+JPEG pair and the main developments follow.
+cli-opt-stars = stars, 0 to 5
+cli-opt-color = colours: red, yellow, green, blue, purple; red,blue replaces, +blue adds, -red removes, none clears
+cli-opt-flag = flag: accept, reject or none
+cli-opt-raw = RAW only
+cli-opt-flat = flat images only (JPEG, TIFF, PNG, HEIC…)
+cli-opt-depth = depth of subfolders (1: the folder alone)
+cli-opt-side = long side of the previews, in pixels
+cli-opt-adjust-side = long side of the written image, in pixels
+cli-opt-thumb = side of the thumbnails, in pixels
+cli-opt-workers = number of light computations in parallel
+cli-opt-mixed = previews without waiting for all thumbnails
+cli-opt-cache = cache folder, instead of the settings' one
+cli-opt-dry-run = shows what would be done, without changing anything
+cli-opt-rewrite = also rewrites the ratings of existing sidecars
+cli-opt-permanent = permanent deletion, no trash
+cli-opt-to = destination folder
+cli-opt-offload-to = root of the sessions (default: [offload] destination)
+cli-opt-export-to = folder, instead of the preset's
+cli-opt-libraw = LibRaw rendering, even with darktable installed
+cli-opt-embedded = the camera JPEG
+cli-opt-adjust-embedded = starts from the camera JPEG rather than the RAW rendering
+cli-opt-passthrough = JPEG without recompression when possible
+cli-opt-ev = exposure correction in EV, or auto
+cli-opt-neutral = neutralised balance: the whole image (auto) or an area in fractions
+cli-opt-kelvin = balance in kelvins (and tint), or a preset
+cli-opt-creative-ev = creative exposure shift, in EV
+cli-opt-warmth = creative warmth shift
+cli-opt-tint = creative tint shift
+cli-opt-contrast = contrast, in percent
+cli-opt-saturation = saturation, in percent
+cli-opt-mono = black and white: a preset or three percentages r,g,b
+cli-opt-folder = name of the session folder (default: YYYY-MM-DD)
+cli-opt-raw-only = leaves the JPEGs on the card
+cli-opt-previews = then computes thumbnails and previews
+cli-opt-delete-copied = deletes the copied and verified files from the card
+cli-opt-delete-left = also deletes the JPEGs left by --raw-only
+cli-opt-eject = ejects the card at the end
+cli-opt-threshold = similarity threshold (higher: larger stacks)
+cli-opt-config = settings file (default: the system location)
