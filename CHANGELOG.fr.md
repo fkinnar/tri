@@ -9,6 +9,9 @@
   images sur l'entrée standard ; couleurs remplacées, ou ajoutées et retirées en gardant
   les autres ; la paire RAW+JPEG et les développements principaux suivent, sidecars
   comme dans l'interface.
+- **Barre des filtres : la comparaison des étoiles comme les autres boutons** (#449) :
+  « ≥ / = / ≤ » est dessiné comme le ∨ / ∧ du filtre de couleurs, à sa taille, cadre gris
+  au survol, et l'écart habituel après « FILTRE ».
 - **Filtre de couleurs : toutes les couleurs ou l'une d'elles** (#444) : avec plusieurs
   couleurs par photo (`[xmp] multiple_colors`), un bouton ∨ / ∧ devant les
   pastilles de la barre des filtres demande les photos qui portent toutes les couleurs
