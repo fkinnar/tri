@@ -18318,7 +18318,11 @@ impl TriApp {
                 let spacing = ui.spacing().item_spacing;
                 // Hauteur de chaque ligne : un libellé trop long pour sa colonne passe à la
                 // ligne (13/11/2026) ; mesurée une fois par recherche et par largeur.
-                if lines.heights.len() != lines.lines.len() || lines.heights_for != label_column {
+                let row_padding = self.gui.dialogs.help_row_padding;
+                let example_margin = self.gui.dialogs.help_example_margin;
+                if lines.heights.len() != lines.lines.len()
+                    || lines.heights_for != (label_column, row_padding, example_margin)
+                {
                     let font = egui::TextStyle::Body.resolve(ui.style());
                     let measure = |text: &str, width: f32| {
                         ui.ctx().fonts_mut(|f| {
@@ -18341,10 +18345,16 @@ impl TriApp {
                                 let (rows, line) = measure(&text, label_column - before);
                                 (rows - 1) as f32 * line
                             });
-                            row_height + extra + spacing.y
+                            // De l'air (retour du 13/11/2026) : autour de chaque ligne, et
+                            // autour de l'exemple, dans son cadre.
+                            let example = match line {
+                                HelpLine::Example(_) => 2.0 * example_margin,
+                                _ => 0.0,
+                            };
+                            row_height + extra + spacing.y + 2.0 * row_padding + example
                         })
                         .collect();
-                    lines.heights_for = label_column;
+                    lines.heights_for = (label_column, row_padding, example_margin);
                 }
                 let heights = lines.heights.clone();
                 let _output = ScrollArea::vertical()
@@ -18377,7 +18387,7 @@ impl TriApp {
                                     .rect_filled(row, 0.0, ui.visuals().faint_bg_color);
                             }
                             // Sans l'espace entre lignes : compris dans la hauteur.
-                            let inner = row.shrink2(vec2(0.0, spacing.y / 2.0));
+                            let inner = row.shrink2(vec2(0.0, spacing.y / 2.0 + row_padding));
                             let line_height = inner.height();
                             ui.scope_builder(
                                 egui::UiBuilder::new()
@@ -18453,34 +18463,51 @@ impl TriApp {
                                                 Some(&self.folder.dir),
                                                 &self.selection.targets(&self.files, self.selected),
                                             );
+                                            // Dans un cadre, comme un bloc de code.
                                             ui.add_space(16.0);
-                                            let (rect, copy) = crate::marks::clickable_named(
-                                                ui,
-                                                14.0,
-                                                &format!(
-                                                    "{} {}",
-                                                    t!("help-command-copy"),
-                                                    command.id
-                                                ),
-                                                &t!("help-command-copy"),
-                                            );
-                                            let back = ui.visuals().panel_fill;
-                                            crate::marks::copy_icon(
-                                                ui.painter(),
-                                                rect,
-                                                ui.visuals().text_color(),
-                                                back,
-                                            );
-                                            if copy.clicked() {
-                                                copied = Some(example.clone());
-                                            }
-                                            ui.add(
-                                                egui::Label::new(
-                                                    egui::RichText::new(&example).monospace(),
-                                                )
-                                                .truncate(),
-                                            )
-                                            .on_hover_text(&example);
+                                            let margin = example_margin as i8;
+                                            egui::Frame::new()
+                                                .fill(ui.visuals().extreme_bg_color)
+                                                .corner_radius(4.0)
+                                                .inner_margin(egui::Margin::symmetric(
+                                                    2 * margin,
+                                                    margin,
+                                                ))
+                                                .show(ui, |ui| {
+                                                    ui.set_width(ui.available_width());
+                                                    ui.horizontal(|ui| {
+                                                        let (rect, copy) =
+                                                            crate::marks::clickable_named(
+                                                                ui,
+                                                                14.0,
+                                                                &format!(
+                                                                    "{} {}",
+                                                                    t!("help-command-copy"),
+                                                                    command.id
+                                                                ),
+                                                                &t!("help-command-copy"),
+                                                            );
+                                                        let back = ui.visuals().extreme_bg_color;
+                                                        crate::marks::copy_icon(
+                                                            ui.painter(),
+                                                            rect,
+                                                            ui.visuals().text_color(),
+                                                            back,
+                                                        );
+                                                        if copy.clicked() {
+                                                            copied = Some(example.clone());
+                                                        }
+                                                        ui.add_space(4.0);
+                                                        ui.add(
+                                                            egui::Label::new(
+                                                                egui::RichText::new(&example)
+                                                                    .monospace(),
+                                                            )
+                                                            .truncate(),
+                                                        )
+                                                        .on_hover_text(&example);
+                                                    });
+                                                });
                                         }
                                         HelpLine::Action { label, id, keys } => {
                                             // Identifiant technique au survol seulement (utile
@@ -20810,7 +20837,8 @@ struct HelpLines {
     /// Hauteur de chaque ligne (libellés sur plusieurs lignes), pour une colonne des
     /// libellés de largeur `heights_for`.
     heights: Vec<f32>,
-    heights_for: f32,
+    /// Largeur de la colonne, marge des lignes et de l'exemple de ces hauteurs.
+    heights_for: (f32, f32, f32),
     /// Titres de thème et actions, dans l'ordre d'affichage.
     lines: Vec<HelpLine>,
 }
@@ -20852,7 +20880,7 @@ impl HelpLines {
             query: query.to_string(),
             open: open.to_vec(),
             heights: Vec::new(),
-            heights_for: 0.0,
+            heights_for: (0.0, 0.0, 0.0),
             lines,
         }
     }
