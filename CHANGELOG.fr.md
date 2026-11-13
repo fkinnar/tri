@@ -11,6 +11,12 @@
   tel quel » reste une copie pure. Corrigé aussi : les espaces d'export « Linear Rec709 »
   et « Linear Rec2020 » gardaient la courbe sRGB en convertissant une image déjà
   développée.
+- **Une version en morceaux, pour un carrousel** (#455) : une version peut être coupée
+  en morceaux égaux côte à côte (liste « Morceaux » de la barre de la version, `c` /
+  `Maj+C` un de plus / de moins), chacun au rapport choisi, les coupes tracées sur le
+  cadre ; l'export écrit un fichier par morceau, numéroté (`DSCF0001-Pano_1.jpg`,
+  `_2`…), chacun à la taille du préréglage d'export. Un préréglage « Carrousel » fourni :
+  deux 4:5 pour un panorama Instagram. Clé `tiles` dans les préréglages de version.
 - **Le badge des versions modifie** (#454) : un clic sur le badge d'une vignette rouvre
   le cadre de sa version, ou, s'il y en a plusieurs, ouvre l'image en plein écran avec la
   première montrée (la liste « Version » pour en choisir une, la modifier ou la
