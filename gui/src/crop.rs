@@ -49,8 +49,11 @@ pub struct Crop {
     /// Bulle de la liste des préréglages, avec les raccourcis en vigueur (posée par
     /// l'appelant avant [`Crop::bar`], 08/11/2026 : « p » écrit en dur, périmé).
     pub preset_tip: String,
-    /// Bulle de la liste des morceaux, avec ses raccourcis (posée par l'appelant).
+    /// Bulles des listes des colonnes et des lignes de morceaux, avec leurs raccourcis
+    /// (posées par l'appelant).
     pub tiles_tip: String,
+    /// Voir `tiles_tip`.
+    pub rows_tip: String,
 }
 
 /// Ce que la barre du recadrage demande.
@@ -106,10 +109,13 @@ fn default_name(frame: Frame) -> String {
         Ratio::Original { .. } => t!("crop-name-original-ratio"),
         ratio => ratio_name(ratio),
     };
-    if frame.tiles.is_one() {
+    let t = frame.tiles;
+    if t.is_one() {
         name
+    } else if t.rows == 1 {
+        format!("{name} × {}", t.columns)
     } else {
-        format!("{name} × {}", frame.tiles.count())
+        format!("{name} {}×{}", t.columns, t.rows)
     }
 }
 
@@ -140,6 +146,7 @@ impl Crop {
             others,
             preset_tip: String::new(),
             tiles_tip: String::new(),
+            rows_tip: String::new(),
         };
         crop.name = crop.free_name(&default_name(crop.frame()));
         crop
@@ -182,6 +189,7 @@ impl Crop {
             others,
             preset_tip: String::new(),
             tiles_tip: String::new(),
+            rows_tip: String::new(),
         }
     }
 
@@ -264,10 +272,10 @@ impl Crop {
         }
     }
 
-    /// `n` morceaux côte à côte (1 : le cadre entier) ; chacun garde le rapport choisi, le
-    /// cadre s'élargit ou se resserre autour de son centre.
-    pub fn set_tiles(&mut self, n: u32) {
-        let tiles = Tiles::strip(n);
+    /// Les morceaux : `tiles` (colonnes × lignes ; 1 × 1 : le cadre entier). Chacun garde
+    /// le rapport choisi, le cadre s'élargit ou se resserre autour de son centre.
+    pub fn set_tiles(&mut self, tiles: Tiles) {
+        let tiles = Tiles::from([tiles.columns, tiles.rows]);
         if tiles == self.tiles {
             return;
         }
@@ -276,17 +284,25 @@ impl Crop {
         self.rename();
     }
 
-    /// Un morceau de plus (`forward`) ou de moins, en boucle de 1 à [`Tiles::MAX`].
-    pub fn step_tiles(&mut self, forward: bool) {
-        let n = self.tiles.columns;
-        let next = if forward {
-            n % Tiles::MAX + 1
-        } else if n <= 1 {
-            Tiles::MAX
-        } else {
-            n - 1
+    /// Une colonne (`rows` : une ligne) de plus (`forward`) ou de moins, en boucle de 1 à
+    /// [`Tiles::MAX`].
+    pub fn step_tiles(&mut self, rows: bool, forward: bool) {
+        let step = |n: u32| {
+            if forward {
+                n % Tiles::MAX + 1
+            } else if n <= 1 {
+                Tiles::MAX
+            } else {
+                n - 1
+            }
         };
-        self.set_tiles(next);
+        let mut tiles = self.tiles;
+        if rows {
+            tiles.rows = step(tiles.rows);
+        } else {
+            tiles.columns = step(tiles.columns);
+        }
+        self.set_tiles(tiles);
     }
 
     /// Rapport suivant (`forward`) ou précédent de la liste (avec `added`), en boucle ;
@@ -697,18 +713,31 @@ impl Crop {
         if turn.clicked() {
             self.rotate();
         }
-        // Morceaux : une bande horizontale (carrousel Instagram, 13/11/2026).
-        let mut n = self.tiles.columns;
-        egui::ComboBox::from_id_salt("crop_tiles")
-            .selected_text(tiles_name(n))
-            .show_ui(ui, |ui| {
-                for k in 1..=Tiles::MAX {
-                    ui.selectable_value(&mut n, k, tiles_name(k));
-                }
-            })
-            .response
-            .on_hover_text(&self.tiles_tip);
-        self.set_tiles(n);
+        ui.add_space(gap);
+        // Morceaux : colonnes × lignes (13/11/2026) ; 3 × 1 une bande horizontale (carrousel
+        // Instagram), 1 × 3 une bande verticale, 3 × 3 une grille.
+        let width = ui.spacing().interact_size.y * 2.2;
+        section(ui, &t!("crop-tiles-title"), width * 2.0);
+        let mut tiles = self.tiles;
+        for (id, n, tip) in [
+            ("crop_tiles", &mut tiles.columns, &self.tiles_tip),
+            ("crop_tile_rows", &mut tiles.rows, &self.rows_tip),
+        ] {
+            if id == "crop_tile_rows" {
+                ui.label("×");
+            }
+            egui::ComboBox::from_id_salt(id)
+                .width(width)
+                .selected_text(n.to_string())
+                .show_ui(ui, |ui| {
+                    for k in 1..=Tiles::MAX {
+                        ui.selectable_value(n, k, k.to_string());
+                    }
+                })
+                .response
+                .on_hover_text(tip);
+        }
+        self.set_tiles(tiles);
         ui.add_space(gap);
         // Export : le préréglage d'export, facultatif.
         section(ui, &t!("crop-profile"), ui.spacing().combo_width);
@@ -791,11 +820,6 @@ impl Crop {
             }
         });
     }
-}
-
-/// « 1 morceau », « 2 morceaux »…
-pub fn tiles_name(n: u32) -> String {
-    t!("crop-tiles", n = n)
 }
 
 /// Dans une ligne qui passe à la ligne : passe à la suivante si le libellé `label` et un

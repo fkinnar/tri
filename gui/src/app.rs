@@ -7546,6 +7546,8 @@ impl TriApp {
                     | Action::VersionRatioPrev
                     | Action::VersionTilesNext
                     | Action::VersionTilesPrev
+                    | Action::VersionRowsNext
+                    | Action::VersionRowsPrev
                     | Action::VersionRatioCustom
                     | Action::VersionExportNext
                     | Action::VersionExportPrev
@@ -8072,9 +8074,14 @@ impl TriApp {
                     crop.step_ratio(action == Action::VersionRatioNext, &ratios);
                 }
             }
+            Action::VersionRowsNext | Action::VersionRowsPrev => {
+                if let Some(crop) = &mut self.crop {
+                    crop.step_tiles(true, action == Action::VersionRowsNext);
+                }
+            }
             Action::VersionTilesNext | Action::VersionTilesPrev => {
                 if let Some(crop) = &mut self.crop {
-                    crop.step_tiles(action == Action::VersionTilesNext);
+                    crop.step_tiles(false, action == Action::VersionTilesNext);
                 }
             }
             Action::VersionExportNext | Action::VersionExportPrev => {
@@ -10787,6 +10794,7 @@ impl TriApp {
             file.set(&section, "profile", &Value::Str(profile))?;
             if !tiles.is_one() {
                 file.set(&section, "tiles", &Value::Int(i64::from(tiles.columns)))?;
+                file.set(&section, "rows", &Value::Int(i64::from(tiles.rows)))?;
             }
             let settings = tri::settings::parse::<AppSettings>(&file.text())?;
             file.save()
@@ -19030,11 +19038,13 @@ impl eframe::App for TriApp {
             let mut action = None;
             let preset_tip = self.keymap.with_keys(&t!("crop-preset-tip"));
             let tiles_tip = self.keymap.with_keys(&t!("crop-tiles-tip"));
+            let rows_tip = self.keymap.with_keys(&t!("crop-rows-tip"));
             egui::Panel::bottom("crop").show(ui, |ui| {
                 bar_texts(ui);
                 if let Some(crop) = &mut self.crop {
                     crop.preset_tip = preset_tip;
                     crop.tiles_tip = tiles_tip;
+                    crop.rows_tip = rows_tip;
                     action = crop.bar(
                         ui,
                         &profiles,
@@ -32482,6 +32492,14 @@ mod tests {
         press(&mut h, Key::C, Modifiers::NONE);
         assert_eq!(crop(&h).0, tri::versions::Tiles::strip(3));
         press(&mut h, Key::C, Modifiers::SHIFT);
+        assert_eq!(crop(&h).0, tri::versions::Tiles::strip(2));
+        // g / Maj+G : une ligne de plus / de moins (grille 2 × 2 : le rapport de l'image).
+        press(&mut h, Key::G, Modifiers::NONE);
+        let (tiles, rect, name) = crop(&h);
+        assert_eq!(tiles, tri::versions::Tiles::from([2, 2]));
+        assert!((rect.w - rect.h).abs() < 1e-6, "{rect:?}");
+        assert!(name.ends_with(" 2×2"), "{name}");
+        press(&mut h, Key::G, Modifiers::SHIFT);
         assert_eq!(crop(&h).0, tri::versions::Tiles::strip(2));
         // Le préréglage « Carrousel » (le troisième) : deux 4:5, pour le web.
         for _ in 0..3 {

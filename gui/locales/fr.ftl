@@ -148,8 +148,10 @@ action-core-version-preset = Version : préréglage suivant
 action-core-version-preset_prev = Version : préréglage précédent
 action-core-version-ratio_next = Version : rapport suivant
 action-core-version-ratio_prev = Version : rapport précédent
-action-core-version-tiles_next = Version : un morceau de plus
-action-core-version-tiles_prev = Version : un morceau de moins
+action-core-version-tiles_next = Version : une colonne de morceaux de plus
+action-core-version-tiles_prev = Version : une colonne de morceaux de moins
+action-core-version-rows_next = Version : une ligne de morceaux de plus
+action-core-version-rows_prev = Version : une ligne de morceaux de moins
 action-core-version-ratio_custom = Version : taper un rapport à soi (17:23…)
 action-core-version-export_next = Version : préréglage d'export suivant
 action-core-version-export_prev = Version : préréglage d'export précédent
@@ -392,11 +394,9 @@ crop-ratio-original = Original
 crop-turn-portrait = Passer en portrait
 crop-turn-landscape = Passer en paysage
 crop-turn-none = Format libre ou carré : pas d’orientation
-crop-tiles = { $n ->
-    [one] 1 morceau
-   *[other] { $n } morceaux
-}
-crop-tiles-tip = Morceaux : le cadre coupé en bande, chaque morceau au rapport choisi, un fichier par morceau à l'export (carrousel Instagram) ; <core.version.tiles_next> / <core.version.tiles_prev> : un de plus / de moins
+crop-tiles-title = Morceaux
+crop-tiles-tip = Colonnes de morceaux : le cadre coupé en morceaux égaux, chacun au rapport choisi, un fichier par morceau à l'export (3 × 1 : un carrousel Instagram) ; <core.version.tiles_next> / <core.version.tiles_prev> : une de plus / de moins
+crop-rows-tip = Lignes de morceaux (1 × 3 : une bande verticale ; 3 × 3 : une grille) ; <core.version.rows_next> / <core.version.rows_prev> : une de plus / de moins
 crop-section-frame = Recadrage
 crop-ratio-original-tip = Le rapport de l'image ; Ctrl+clic (Cmd+clic sur Mac) : tout le cadre d'origine
 crop-ratio-custom = Personnalisé

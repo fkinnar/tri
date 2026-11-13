@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Versions en grille** (#459) : la partie « Morceaux » de la barre de la version est
+  maintenant colonnes × lignes, pour une bande verticale (1 × 3) ou une grille (2 × 2,
+  3 × 3) ; `g` / `Maj+G` une ligne de plus / de moins (`c` / `Maj+C` restent pour les
+  colonnes) ; clé `rows` dans les préréglages de version.
 - **La grille exporte ce qu'elle montre** (#457) : Ctrl+E en grille suit le rendu
   affiché des vignettes (JPEG boîtier, rendu LibRaw ou un logiciel de développement),
   réglages compris ; il passait par darktable dès qu'il était installé, sans les
