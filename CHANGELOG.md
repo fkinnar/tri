@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **CI: a failed test is retried once** (#461): the tests run through cargo-nextest on
+  GitHub; a test that only passes on the retry is marked FLAKY (lost simulated clicks on
+  GitHub's machines) instead of blocking the pull request; a real bug still fails twice.
 - **No "Base" tab on a JPEG** (#458): exposure and white balance of the adjustments
   are for RAW files; on a JPEG (or another already developed image) the tab is hidden and
   "Style" opens instead, unless the image already has a base, kept to remove it.

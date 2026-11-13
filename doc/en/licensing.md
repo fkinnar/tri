@@ -269,6 +269,8 @@ requires the agreement of all contributors.
       program that mounts the contents; it embeds libfuse (LGPL-2.1) and squashfuse
       (BSD-2-Clause), not linked with `tri` (mere aggregation), sources at
       `github.com/AppImage/type2-runtime`.
+- [x] CI tests (2026-11-13): `cargo-nextest` (MIT or Apache-2.0, actively maintained),
+      test tool only, installed by the CI (prebuilt binary); nothing goes into `tri`.
 - [x] Decide how HEIF is handled in distributed binaries (§3): **without HEIC**
       (decided on 2026-10-19), builds without the `heif` feature; to be reopened with the
       system decoders (ImageIO, WIC).

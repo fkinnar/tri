@@ -1,0 +1,27 @@
+# Configuration de cargo-nextest, qui lance les tests en intégration continue
+# (.github/workflows/ci.yml ; doc/en/tests.md). En local, `cargo test` reste la règle.
+
+[test-groups]
+# Les tests sur vrai RAW (tests/raw.rs, #[ignore]) se gênent en parallèle : un rendu
+# LibRaw occupe déjà plusieurs cœurs. Leur verrou (`static LIBRAW`) ne joue qu'entre fils
+# d'un même processus ; nextest lance un processus par test, d'où ce groupe à un seul fil.
+libraw = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = "binary(raw)"
+test-group = "libraw"
+
+[profile.ci]
+# Une relance pour un test en échec (13/11/2026, retour de l'utilisateur : les clics
+# simulés des tests de l'interface se perdent parfois sur les machines de GitHub, Windows
+# surtout). Un test qui ne passe qu'à la relance est marqué FLAKY dans le journal, à
+# fiabiliser ; un vrai bug échoue deux fois et la CI reste rouge.
+retries = 1
+# Tout voir en un passage, comme `cargo test --no-fail-fast`.
+fail-fast = false
+# Les sorties des tests en échec, à la fin du journal (plus faciles à trouver).
+failure-output = "final"
+
+[[profile.ci.overrides]]
+filter = "binary(raw)"
+test-group = "libraw"

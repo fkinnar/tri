@@ -44,6 +44,20 @@ parallel made them about 50× slower (302 s instead of 5.7 s).
 The whole workspace: `cargo test --workspace` (and `--no-default-features`). The
 interface tests are described in [gui.md](gui.md#tests).
 
+### In continuous integration: cargo-nextest
+
+On GitHub (`.github/workflows/ci.yml`), the tests run through
+[cargo-nextest](https://nexte.st) (2026-11-13), with the `ci` profile of
+`.config/nextest.toml`: a failed test is **retried once**. The simulated clicks of the
+interface tests are sometimes lost on GitHub's machines (Windows mostly; five different
+tests on the same evening). A test that only passes on the retry is marked **FLAKY** in
+the log: the CI stays green, but it should be hardened (check it, then perform the action
+directly: see [gui.md](gui.md#tests)). A real bug fails twice and the CI stays red.
+nextest runs one process per test: the lock of the real-RAW tests no longer works between
+them, hence the single-thread `libraw` group. The documentation examples run apart
+(`cargo test -p tri --doc`). Locally, `cargo test` remains the rule; `cargo nextest run
+--profile ci` reproduces the CI.
+
 ### Coverage
 
 Measured with [`cargo-llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov) (a

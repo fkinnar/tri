@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **CI : un test en échec est relancé une fois** (#461) : les tests passent par
+  cargo-nextest sur GitHub ; un test qui ne passe qu'à la relance est marqué FLAKY (clics
+  simulés perdus sur les machines de GitHub) au lieu de bloquer la PR ; un vrai bug
+  échoue toujours deux fois.
 - **Pas d'onglet « Base » sur un JPEG** (#458) : exposition et balance des réglages
   valent pour les RAW ; sur un JPEG (ou une autre image déjà développée), l'onglet est
   caché et « Style » s'ouvre à sa place, sauf si l'image a déjà une base, gardée pour la
