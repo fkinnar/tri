@@ -187,10 +187,13 @@ linked ones: a single frame to move, cuts always right.
 - **The ratio is that of one tile**; the whole frame follows (`Frame::value`: 4:5 × 2 =
   8:5). Going from 2 to 3 tiles widens the frame around its centre, keeping the 4:5. Works
   with free (equal tiles of a free frame) and "original" too.
-- **Version bar**: a "1 tile", "2 tiles"… list (up to `Tiles::MAX` = 10) after the
-  orientation; `c` / `Shift+C` one more / less (actions `core.version.tiles_next` /
-  `tiles_prev`); `0` (original frame) goes back to a single tile. The cuts are drawn on the
-  frame. Proposed name: "4:5 × 2".
+- **Version bar**: a "Tiles" part, two lists columns × rows (1 to `Tiles::MAX` = 10 each;
+  3 × 1 a carousel, 1 × 3 a vertical strip, 3 × 3 a grid); `c` / `Shift+C` one column
+  more / less, `g` / `Shift+G` one row (actions `core.version.tiles_next` / `tiles_prev`,
+  `rows_next` / `rows_prev`); `0` (original frame) goes back to a single tile. The cuts
+  are drawn on the frame. Proposed name: "4:5 × 2" for a horizontal strip, "1:1 3×3"
+  otherwise. Changing the number of tiles keeps the frame's area around its centre, like
+  a change of ratio.
 - **Export**: one file per tile, in reading order, numbered (`DSCF0001-Pano_1.jpg`,
   `DSCF0001-Pano_2.jpg`). The export preset's longest side applies **to one tile**
   (1080 × 1350 for Instagram); downscaling and sharpening are done tile by tile. Pixel
@@ -198,8 +201,8 @@ linked ones: a single frame to move, cuts always right.
   the extra pixels shared between both edges, and all tiles have exactly the same size.
   All or nothing: a failed tile removes the others. The export dialog says so ("one file
   per tile").
-- **Later**: the geometry already does vertical strips (`[1, n]`) and grids (2 × 2,
-  3 × 3); only the interface is left to do.
+- Grids and vertical strips added the same evening (2026-11-13): the geometry already
+  did them, only the interface was missing.
 - In the XMP: `"tiles":[2,1]` (columns, rows), absent for a single tile. An older `tri`
   reads such a version as a single tile, and would lose the tiles when rewriting it.
 
@@ -212,7 +215,8 @@ export preset (Web). You choose the preset, adjust the frame, Enter.
   `ratio` (`"free"`, `"original"`, or `"l:h"` in the desired orientation) and `profile`
   (`""`: none). A missing key comes from the built-in preset with the same identifier, as
   for export presets. Built-in presets: `story` (9:16, Web), `post` (4:5, Web) and
-  `carousel` (two 4:5, Web). `tiles`: number of tiles side by side (1 by default).
+  `carousel` (two 4:5, Web). `tiles` and `rows`: tiles side by side and one under the
+  other (1 by default).
 - **Crop bar**: "Preset" list; `v` / `Shift+V` or `Tab` / `Shift+Tab` moves to the next / previous one
   (`p` until 2026-10-21: it is also the sharpness map, which stayed on; `p` turns it off
   during cropping too).

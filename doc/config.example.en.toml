@@ -298,14 +298,16 @@ ratios = []
 #   identifier);
 # ratio: "free", "original", or "w:h" in the wanted orientation ("9:16": portrait);
 # profile: export preset offered (identifier), "": none;
-# tiles: tiles side by side, each at the ratio, one file per tile when exporting (1 to 10;
-#   1: the whole frame).
+# tiles, rows: tiles side by side (columns) and one under the other (rows), each at the
+#   ratio, one file per tile when exporting (1 to 10; 1 and 1: the whole frame; 3 and 1:
+#   a carousel; 3 and 3: a grid).
 [versions.presets.story]
 # Story (Instagram…): 9:16, for the web.
 name = ""
 ratio = "9:16"
 profile = "web"
 tiles = 1
+rows = 1
 
 [versions.presets.post]
 # Post: 4:5, for the web.
@@ -313,6 +315,7 @@ name = ""
 ratio = "4:5"
 profile = "web"
 tiles = 1
+rows = 1
 
 [versions.presets.carousel]
 # Carousel (Instagram): two 4:5 side by side, a panorama to swipe through.
@@ -320,6 +323,7 @@ name = ""
 ratio = "4:5"
 profile = "web"
 tiles = 2
+rows = 1
 
 [update]
 # Check for updates (help, tri --check-update), on demand only: list of published

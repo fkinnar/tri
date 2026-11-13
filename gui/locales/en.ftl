@@ -148,8 +148,10 @@ action-core-version-preset = Version: next preset
 action-core-version-preset_prev = Version: previous preset
 action-core-version-ratio_next = Version: next ratio
 action-core-version-ratio_prev = Version: previous ratio
-action-core-version-tiles_next = Version: one more tile
-action-core-version-tiles_prev = Version: one tile less
+action-core-version-tiles_next = Version: one more column of tiles
+action-core-version-tiles_prev = Version: one column of tiles less
+action-core-version-rows_next = Version: one more row of tiles
+action-core-version-rows_prev = Version: one row of tiles less
 action-core-version-ratio_custom = Version: type a ratio of your own (17:23…)
 action-core-version-export_next = Version: next export preset
 action-core-version-export_prev = Version: previous export preset
@@ -392,11 +394,9 @@ crop-ratio-original = Original
 crop-turn-portrait = Turn to portrait
 crop-turn-landscape = Turn to landscape
 crop-turn-none = Free or square frame: no orientation
-crop-tiles = { $n ->
-    [one] 1 tile
-   *[other] { $n } tiles
-}
-crop-tiles-tip = Tiles: the frame cut into a strip, each tile at the chosen ratio, one file per tile when exporting (Instagram carousel); <core.version.tiles_next> / <core.version.tiles_prev>: one more / less
+crop-tiles-title = Tiles
+crop-tiles-tip = Columns of tiles: the frame cut into equal tiles, each at the chosen ratio, one file per tile when exporting (3 × 1: an Instagram carousel); <core.version.tiles_next> / <core.version.tiles_prev>: one more / less
+crop-rows-tip = Rows of tiles (1 × 3: a vertical strip; 3 × 3: a grid); <core.version.rows_next> / <core.version.rows_prev>: one more / less
 crop-section-frame = Crop
 crop-ratio-original-tip = The image's ratio; Ctrl+click (Cmd+click on a Mac): the whole original frame
 crop-ratio-custom = Custom
