@@ -29259,23 +29259,31 @@ mod tests {
         use crate::actions::Scope;
         let (mut h, _dir) = harness();
         h.state_mut().metadata_panel = true;
-        run_until(&mut h, |app| app.meta_rows.len() > 2);
+        // Lignes stables avant de les survoler (la mise en page bouge au remplissage).
+        meta_rows_settled(&mut h, 3);
         let label = h.state().meta_rows[1].label.clone();
-        // Repris tant que le survol n'est pas vu (mise en page qui bouge au remplissage).
+        // Survol puis copie, repris si la ligne a bougé sous le pointeur entre les deux
+        // (CI Windows, 13/11/2026 : c'est l'image qui était copiée).
         let deadline = Instant::now() + Duration::from_secs(60);
-        while h.state().meta_hover != Some(1) {
-            assert!(Instant::now() < deadline, "survol jamais vu");
+        loop {
+            assert!(Instant::now() < deadline, "ligne jamais copiée");
             let at = h.get_by_label(&label).rect().center();
             h.event(UiEvent::PointerMoved(at - vec2(0.0, 1.0)));
             h.event(UiEvent::PointerMoved(at));
             h.run_steps(2);
+            if h.state().meta_hover != Some(1) {
+                continue;
+            }
+            assert_eq!(h.state().meta_cursor, 1, "la souris pointe la ligne");
+            assert_eq!(h.state().focus, Scope::Images, "sans prendre le clavier");
+            press(&mut h, Key::C, Modifiers::CTRL);
+            let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
+            if notice.contains(&label) {
+                assert!(h.state().file_dialog.is_none(), "pas la copie de l'image");
+                break;
+            }
+            h.state_mut().file_dialog = None;
         }
-        assert_eq!(h.state().meta_cursor, 1, "la souris pointe la ligne");
-        assert_eq!(h.state().focus, Scope::Images, "sans prendre le clavier");
-        press(&mut h, Key::C, Modifiers::CTRL);
-        assert!(h.state().file_dialog.is_none(), "pas la copie de l'image");
-        let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
-        assert!(notice.contains(&label), "copiée : {notice}");
         // Hors du panneau, Ctrl+C copie de nouveau l'image.
         h.event(UiEvent::PointerMoved(pos2(1.0, 1.0)));
         h.run_steps(2);
