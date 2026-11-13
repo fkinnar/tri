@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **The cuts of a version in tiles are shown** (#460): in full screen, a version in
+  tiles has its cuts drawn on the image, as dashes alternately light and dark, readable
+  on any image (`[gui.crop] tile_dash`, `tile_line_width`, `tile_opacity`).
 - **Versions in a grid** (#459): the "Tiles" part of the version bar is now columns ×
   rows, for a vertical strip (1 × 3) or a grid (2 × 2, 3 × 3); `g` / `Shift+G` one row
   more / less (`c` / `Shift+C` stay for the columns); `rows` key in the version presets.

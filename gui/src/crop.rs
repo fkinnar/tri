@@ -822,6 +822,56 @@ impl Crop {
     }
 }
 
+/// Les coupes d'une version en morceaux (`tiles`) montrée en plein écran sur `rect`, pour
+/// qu'on voie d'un coup d'œil qu'elle sera exportée en plusieurs fichiers (idée de
+/// l'utilisateur, 13/11/2026) : des tirets alternés clair et foncé, comme les sélections
+/// des logiciels d'image, lisibles sur toute image sans en mesurer la luminosité.
+pub fn draw_tile_cuts(
+    painter: &egui::Painter,
+    rect: ScreenRect,
+    tiles: Tiles,
+    settings: &CropSettings,
+) {
+    if tiles.is_one() {
+        return;
+    }
+    let opacity = settings.tile_opacity.clamp(0.0, 1.0);
+    let colours = [
+        Color32::WHITE.gamma_multiply(opacity),
+        Color32::BLACK.gamma_multiply(opacity),
+    ];
+    let width = settings.tile_line_width.max(0.5);
+    let dash = settings.tile_dash.max(1.0);
+    let dashed = |a: Pos2, b: Pos2| {
+        for (k, segment) in dashes(a, b, dash).into_iter().enumerate() {
+            painter.line_segment(segment, Stroke::new(width, colours[k % 2]));
+        }
+    };
+    for c in 1..tiles.columns {
+        let x = rect.left() + rect.width() * c as f32 / tiles.columns as f32;
+        dashed(egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom()));
+    }
+    for r in 1..tiles.rows {
+        let y = rect.top() + rect.height() * r as f32 / tiles.rows as f32;
+        dashed(egui::pos2(rect.left(), y), egui::pos2(rect.right(), y));
+    }
+}
+
+/// Les tirets de `a` à `b`, de longueur `dash` (le dernier plus court), bout à bout : un
+/// sur deux clair, l'autre foncé.
+fn dashes(a: Pos2, b: Pos2, dash: f32) -> Vec<[Pos2; 2]> {
+    let length = a.distance(b);
+    let dir = (b - a) / length.max(1e-3);
+    let mut out = Vec::new();
+    let mut t = 0.0;
+    while t < length {
+        let end = (t + dash).min(length);
+        out.push([a + dir * t, a + dir * end]);
+        t = end;
+    }
+    out
+}
+
 /// Dans une ligne qui passe à la ligne : passe à la suivante si le libellé `label` et un
 /// champ de largeur `width` qui le suit ne tiennent pas ensemble sur celle-ci.
 fn keep_together(ui: &mut Ui, label: &str, width: f32) {
@@ -911,6 +961,15 @@ fn orientation_icon(ui: &egui::Ui, response: &egui::Response, portrait: bool, sq
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tile_cuts_are_dashes_end_to_end() {
+        let d = dashes(egui::pos2(0.0, 0.0), egui::pos2(0.0, 20.0), 6.0);
+        assert_eq!(d.len(), 4, "6 + 6 + 6 + 2");
+        assert_eq!(d[0], [egui::pos2(0.0, 0.0), egui::pos2(0.0, 6.0)]);
+        assert_eq!(d[3], [egui::pos2(0.0, 18.0), egui::pos2(0.0, 20.0)]);
+        assert!(dashes(egui::pos2(1.0, 1.0), egui::pos2(1.0, 1.0), 6.0).is_empty());
+    }
 
     #[test]
     fn handles_are_grabbed_on_both_sides_of_the_edge() {
