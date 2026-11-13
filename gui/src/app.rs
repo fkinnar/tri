@@ -7544,6 +7544,8 @@ impl TriApp {
                     | Action::CropPresetPrev
                     | Action::VersionRatioNext
                     | Action::VersionRatioPrev
+                    | Action::VersionTilesNext
+                    | Action::VersionTilesPrev
                     | Action::VersionRatioCustom
                     | Action::VersionExportNext
                     | Action::VersionExportPrev
@@ -8068,6 +8070,11 @@ impl TriApp {
                 let ratios = self.settings.versions.ratios.clone();
                 if let Some(crop) = &mut self.crop {
                     crop.step_ratio(action == Action::VersionRatioNext, &ratios);
+                }
+            }
+            Action::VersionTilesNext | Action::VersionTilesPrev => {
+                if let Some(crop) = &mut self.crop {
+                    crop.step_tiles(action == Action::VersionTilesNext);
                 }
             }
             Action::VersionExportNext | Action::VersionExportPrev => {
@@ -10378,8 +10385,9 @@ impl TriApp {
         };
         let (mut w, mut h) = (native.x as f64, native.y as f64);
         if let Some(v) = version {
-            w *= v.crop.w;
-            h *= v.crop.h;
+            // Celle d'un morceau : ce que sera chaque fichier exporté.
+            w *= v.crop.w / f64::from(v.tiles.columns);
+            h *= v.crop.h / f64::from(v.tiles.rows);
             let side = v
                 .profile
                 .as_deref()
@@ -10648,7 +10656,11 @@ impl TriApp {
             .find(|p| p.id == preset.profile && !p.is_as_is())
             .map(|p| p.id.clone());
         if let Some(crop) = &mut self.crop {
-            crop.apply_preset(&preset.id, preset_name(&preset), preset.ratio, profile);
+            let frame = tri::versions::Frame {
+                ratio: preset.ratio,
+                tiles: preset.tiles(),
+            };
+            crop.apply_preset(&preset.id, preset_name(&preset), frame, profile);
         }
     }
 
@@ -10735,7 +10747,8 @@ impl TriApp {
     fn save_preset(&mut self) {
         let Some(crop) = &self.crop else { return };
         let name = crop.name.trim().to_string();
-        let (ratio, profile) = (crop.ratio, crop.profile.clone().unwrap_or_default());
+        let (ratio, tiles) = (crop.ratio, crop.tiles);
+        let profile = crop.profile.clone().unwrap_or_default();
         let Some(path) = self
             .config_path
             .clone()
@@ -10758,6 +10771,9 @@ impl TriApp {
             file.set(&section, "name", &Value::Str(name.clone()))?;
             file.set(&section, "ratio", &Value::Str(ratio.label()))?;
             file.set(&section, "profile", &Value::Str(profile))?;
+            if !tiles.is_one() {
+                file.set(&section, "tiles", &Value::Int(i64::from(tiles.columns)))?;
+            }
             let settings = tri::settings::parse::<AppSettings>(&file.text())?;
             file.save()
                 .map_err(|e| format!("{} : {e}", path.display()))?;
@@ -14077,6 +14093,7 @@ impl TriApp {
                 .with_cut(tri::export::Cut {
                     crop: version.crop,
                     name: version.name.clone(),
+                    tiles: version.tiles,
                 });
                 self.file_dialog = Some(crate::files::FileDialog::Export(Box::new(dialog)));
                 Ok(())
@@ -18992,10 +19009,12 @@ impl eframe::App for TriApp {
                 .collect();
             let mut action = None;
             let preset_tip = self.keymap.with_keys(&t!("crop-preset-tip"));
+            let tiles_tip = self.keymap.with_keys(&t!("crop-tiles-tip"));
             egui::Panel::bottom("crop").show(ui, |ui| {
                 bar_texts(ui);
                 if let Some(crop) = &mut self.crop {
                     crop.preset_tip = preset_tip;
+                    crop.tiles_tip = tiles_tip;
                     action = crop.bar(
                         ui,
                         &profiles,
@@ -21100,6 +21119,7 @@ fn preset_name(p: &tri::versions::Preset) -> String {
     match p.id.as_str() {
         "story" => t!("preset-story"),
         "post" => t!("preset-post"),
+        "carousel" => t!("preset-carousel"),
         id => id.to_string(),
     }
 }
@@ -22350,6 +22370,7 @@ mod tests {
                 ratio: tri::versions::Ratio::Free,
                 source: tri::versions::Source::Embedded,
                 profile: None,
+                tiles: tri::versions::Tiles::ONE,
             }],
             unknown: Vec::new(),
         };
@@ -24494,6 +24515,7 @@ mod tests {
             ratio: tri::versions::Ratio::Free,
             source: tri::versions::Source::Embedded,
             profile: None,
+            tiles: tri::versions::Tiles::ONE,
         };
         let shown = |h: &mut Harness<'_, TriApp>, v: &tri::versions::Version| {
             h.state_mut().shown_resolution(&ctx, &file, Some(v))
@@ -32346,7 +32368,7 @@ mod tests {
         assert!(text.contains("ratio = \"9:16\""), "{text}");
         assert_eq!(
             h.state().settings.versions.presets.0.len(),
-            3,
+            4,
             "appliqué à chaud"
         );
         // Entrée : la version prend le nom et le profil du préréglage.
@@ -32382,6 +32404,56 @@ mod tests {
         assert!(h.state().crop.as_ref().unwrap().name_ok());
         h.state_mut().crop.as_mut().unwrap().name = "Story".into();
         assert!(h.state().crop.as_ref().unwrap().name_taken());
+    }
+
+    /// Une version en morceaux (13/11/2026) : c / Maj+C en ajoutent ou en retirent, le
+    /// cadre s'élargit d'autant ; le préréglage « Carrousel » donne deux 4:5 ; la version
+    /// enregistrée garde ses morceaux.
+    #[test]
+    fn a_version_is_cut_into_tiles_for_a_carousel() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        let image = h.state().files[0].path.clone();
+        press(&mut h, Key::V, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
+        });
+        let crop = |h: &Harness<'_, TriApp>| {
+            let c = h.state().crop.as_ref().unwrap();
+            (c.tiles, c.rect, c.name.clone())
+        };
+        // Cadre d'origine, puis deux morceaux au rapport de l'image : toute la largeur,
+        // la moitié de la hauteur.
+        assert_eq!(crop(&h).0, tri::versions::Tiles::ONE);
+        press(&mut h, Key::C, Modifiers::NONE);
+        let (tiles, rect, name) = crop(&h);
+        assert_eq!(tiles, tri::versions::Tiles::strip(2));
+        assert!(
+            (rect.w - 1.0).abs() < 1e-6 && (rect.h - 0.5).abs() < 1e-6,
+            "{rect:?}"
+        );
+        assert!(name.ends_with(" × 2"), "{name}");
+        press(&mut h, Key::C, Modifiers::NONE);
+        assert_eq!(crop(&h).0, tri::versions::Tiles::strip(3));
+        press(&mut h, Key::C, Modifiers::SHIFT);
+        assert_eq!(crop(&h).0, tri::versions::Tiles::strip(2));
+        // Le préréglage « Carrousel » (le troisième) : deux 4:5, pour le web.
+        for _ in 0..3 {
+            press(&mut h, Key::Tab, Modifiers::NONE);
+        }
+        let c = h.state().crop.as_ref().unwrap();
+        assert_eq!(c.preset.as_deref(), Some("carousel"));
+        assert_eq!(c.ratio, tri::versions::Ratio::Fixed(4, 5));
+        assert_eq!(c.tiles, tri::versions::Tiles::strip(2));
+        assert_eq!(c.name, t!("preset-carousel"));
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        let saved = tri::versions::read(&image).unwrap();
+        assert_eq!(saved.list[0].tiles, tri::versions::Tiles::strip(2));
+        // Reprise : les morceaux reviennent, 0 rend le cadre entier d'un seul morceau.
+        h.state_mut().edit_version(&image, 0);
+        assert_eq!(crop(&h).0, tri::versions::Tiles::strip(2));
+        press(&mut h, Key::Num0, Modifiers::NONE);
+        assert_eq!(crop(&h).0, tri::versions::Tiles::ONE);
     }
 
     #[test]
@@ -32724,6 +32796,7 @@ mod tests {
             ratio: tri::versions::Ratio::Fixed(9, 16),
             source: tri::versions::Source::Embedded,
             profile: None,
+            tiles: tri::versions::Tiles::ONE,
         });
         tri::versions::write(&image, &versions, tri::xmp::Convention::Darktable).unwrap();
         // Une version changée dans tri : recomptée.

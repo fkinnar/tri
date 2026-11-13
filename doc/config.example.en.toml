@@ -292,22 +292,34 @@ ratios = []
 
 # Version presets (v in full screen): [versions.presets.<identifier>], as many as wanted;
 # chosen in the version bar (or p), then the frame is adjusted.
-# A missing key comes from the built-in preset with the same identifier (story, post).
+# A missing key comes from the built-in preset with the same identifier (story, post,
+# carousel).
 # name: name of the created version (empty: translated built-in name, otherwise the
 #   identifier);
 # ratio: "free", "original", or "w:h" in the wanted orientation ("9:16": portrait);
-# profile: export preset offered (identifier), "": none.
+# profile: export preset offered (identifier), "": none;
+# tiles: tiles side by side, each at the ratio, one file per tile when exporting (1 to 10;
+#   1: the whole frame).
 [versions.presets.story]
 # Story (Instagram…): 9:16, for the web.
 name = ""
 ratio = "9:16"
 profile = "web"
+tiles = 1
 
 [versions.presets.post]
 # Post: 4:5, for the web.
 name = ""
 ratio = "4:5"
 profile = "web"
+tiles = 1
+
+[versions.presets.carousel]
+# Carousel (Instagram): two 4:5 side by side, a panorama to swipe through.
+name = ""
+ratio = "4:5"
+profile = "web"
+tiles = 2
 
 [update]
 # Check for updates (help, tri --check-update), on demand only: list of published
