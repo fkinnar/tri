@@ -10270,6 +10270,20 @@ impl TriApp {
     /// Logiciel du rendu développé exporté pour `path` (celui de son développement, ou
     /// celui qu'on regarde : [`Self::developed_level`]), s'il est trouvé ; sinon `None`,
     /// rendu de base par LibRaw.
+    /// Ce qu'exporte la grille : son rendu affiché ([`Self::shown_render`]). JPEG boîtier
+    /// ou rendu LibRaw tels quels (réglages compris) ; un logiciel, s'il est trouvé ;
+    /// « couverture » : chaque développement par son logiciel, les photos par LibRaw.
+    fn grid_export_render(&self) -> crate::export::Render {
+        use crate::export::Render;
+        use crate::grid_render::GridRender;
+        match self.shown_render() {
+            GridRender::Embedded => Render::Embedded,
+            GridRender::LibRaw | GridRender::Cover => Render::LibRaw,
+            GridRender::Engine(e) if self.developers.engines().contains(&e) => Render::Developed(e),
+            GridRender::Engine(_) => Render::LibRaw,
+        }
+    }
+
     fn export_engine(&self, path: &Path) -> Option<tri::develop::Engine> {
         let Level::Developed(engine) = self.developed_level(path) else {
             return None;
@@ -14110,7 +14124,13 @@ impl TriApp {
                     .map(|f| f.path.as_path())
                     .or(paths.first().map(PathBuf::as_path))
                     .and_then(|p| self.export_engine(p));
-                let render = crate::export::Render::of(shown.map(|f| self.source_for(f)), engine);
+                // En grille, le rendu affiché des vignettes (13/11/2026 : on y exportait
+                // d'office par darktable, sans les réglages, en regardant le JPEG boîtier) ;
+                // chaque développement part de toute façon par son logiciel.
+                let render = match shown {
+                    Some(f) => crate::export::Render::of(Some(self.source_for(f)), engine),
+                    None => self.grid_export_render(),
+                };
                 // Un JPEG (boîtier ou d'origine) : « JPEG tel quel » proposé d'abord (retour
                 // du 19/10/2026) ; le choix de la séance est retenu à part de celui des rendus.
                 let jpeg = crate::export::exports_flat(render, &paths);
@@ -31678,9 +31698,34 @@ mod tests {
         assert!(h.state().export_toasts.is_empty());
     }
 
+    /// En grille, on exporte le rendu affiché des vignettes (13/11/2026 : darktable d'office,
+    /// sans les réglages, alors qu'on regardait le JPEG boîtier).
+    #[test]
+    fn the_grid_exports_its_shown_render() {
+        use crate::export::Render;
+        use crate::grid_render::GridRender;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        for (grid, expected) in [
+            (GridRender::Embedded, Render::Embedded),
+            (GridRender::LibRaw, Render::LibRaw),
+            (GridRender::Cover, Render::LibRaw),
+            // Logiciel absent (tests) : LibRaw.
+            (
+                GridRender::Engine(tri::develop::Engine::Darktable),
+                Render::LibRaw,
+            ),
+        ] {
+            h.state_mut().grid_render = grid;
+            assert_eq!(h.state().grid_export_render(), expected, "{grid:?}");
+        }
+    }
+
     #[test]
     fn ctrl_e_offers_the_export_profiles_and_remembers_the_choice() {
         let (mut h, dir) = harness();
+        // La grille montre le rendu LibRaw : c'est lui qu'on exporte.
+        h.state_mut().grid_render = crate::grid_render::GridRender::LibRaw;
         h.run_steps(3);
         press(&mut h, Key::E, Modifiers::CTRL);
         assert!(matches!(
@@ -31770,7 +31815,7 @@ mod tests {
             panic!("boîte d'export attendue");
         };
         assert_eq!(dialog.choice(), 2);
-        // En grille, sans darktable : rendu LibRaw.
+        // En grille sur le rendu LibRaw : rendu LibRaw.
         assert_eq!(dialog.render(), crate::export::Render::LibRaw);
         // JPEG, rendu local : la case « sans recompression » est proposée, cochée.
         h.get_by_label("Sans recompression");
@@ -31778,6 +31823,7 @@ mod tests {
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
         // On exporte ce qu'on regarde : plein écran sur le JPEG boîtier, puis le rendu RAW.
+        h.state_mut().grid_render = crate::grid_render::GridRender::Embedded;
         press(&mut h, Key::Enter, Modifiers::NONE);
         for (key, expected) in [
             (None, crate::export::Render::Embedded),

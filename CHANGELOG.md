@@ -7,6 +7,10 @@
 - **No "Base" tab on a JPEG** (#458): exposure and white balance of the adjustments
   are for RAW files; on a JPEG (or another already developed image) the tab is hidden and
   "Style" opens instead, unless the image already has a base, kept to remove it.
+- **The grid exports what it shows** (#457): Ctrl+E in the grid follows the thumbnails'
+  shown render (camera JPEG, LibRaw render or a development software), adjustments
+  included; it went through darktable whenever darktable was installed, without the
+  adjustments.
 - **Adjustments follow the export** (#456): exposure, white balance, contrast,
   saturation and black and white are applied when exporting through LibRaw (RAW render,
   camera JPEG, flat images), the exposure on the sensor data for a RAW; computed in 16

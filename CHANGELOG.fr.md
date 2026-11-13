@@ -8,6 +8,10 @@
   valent pour les RAW ; sur un JPEG (ou une autre image déjà développée), l'onglet est
   caché et « Style » s'ouvre à sa place, sauf si l'image a déjà une base, gardée pour la
   retirer.
+- **La grille exporte ce qu'elle montre** (#457) : Ctrl+E en grille suit le rendu
+  affiché des vignettes (JPEG boîtier, rendu LibRaw ou un logiciel de développement),
+  réglages compris ; il passait par darktable dès qu'il était installé, sans les
+  réglages.
 - **Les réglages suivent à l'export** (#456) : exposition, balance des blancs,
   contraste, saturation et noir et blanc sont appliqués à l'export par LibRaw (rendu RAW,
   JPEG boîtier, images plates), l'exposition sur les données du capteur pour un RAW ;
