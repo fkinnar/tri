@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Rate from the command line** (#450, fixes #275): `tri <image>... --stars N
+  --color red,…|+blue,-red|none --flag accept|reject|none [--dry-run]`, or the list of
+  images on standard input; colours replaced, or added and removed keeping the others; the RAW+JPEG pair and the main developments follow, sidecars as in the
+  interface.
 - **Filter bar: the stars comparison looks like the other buttons** (#449): "≥ / = / ≤"
   is drawn like the ∨ / ∧ of the colour filter, same size, grey frame on hover, and the
   usual gap after "FILTER".

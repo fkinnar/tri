@@ -190,6 +190,7 @@ cli-usage =
       tri <folder> --groups [--threshold X]
       tri <folder> --sharpness [--raw|--flat] [--depth N]
       tri --offload <card> [--to <root>] [--folder <name>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
+      tri <image>... [--stars 0-5] [--color red|yellow|green|blue|purple[,…]|+blue,-red…|none] [--flag accept|reject|none] [--dry-run]   (no image: list on standard input)
       tri --rename <image> <name> [--dry-run]
       tri --delete <image>... [--permanent] [--dry-run]
       tri --copy|--move <image>...|<folder> --to <folder> [--dry-run]
@@ -221,6 +222,21 @@ cli-destination = destination: { $path }
 cli-already-there = { $n } images already in the destination (skipped if identical)
 cli-to-copy = to copy
 cli-offload-progress = { $done }/{ $total } files   { $mb }/{ $total_mb } MB
+cli-rate-bad-stars = invalid number of stars: { $value } (0 to 5)
+cli-rate-bad-color = unknown colour: { $value } (red, yellow, green, blue, purple or none)
+cli-rate-bad-flag = unknown flag: { $value } (accept, reject or none)
+cli-rate-one-color = one colour per photo: several colours need [xmp] multiple_colors = true
+cli-rate-mixed-colors = { $value }: either colours that replace (red,blue) or additions and removals (+blue,-red), not both
+cli-rate-not-an-image = not an image
+cli-rate-written = { $mode ->
+    [dry-run] to rate
+   *[write] rated
+}
+cli-rate-summary = { $rated } images { $mode ->
+    [dry-run] to rate
+   *[write] rated
+}, { $unchanged } unchanged, { $errors } errors
+cli-rate-some-failed = some images were not rated
 cli-error = error
 cli-offload-out-of-space = no space left in { $path }: { $left } files still to copy ({ $mb } MB, { $free } MB free); stopping, they stay on the card
 cli-offload-stopped-full = offload stopped: destination full
