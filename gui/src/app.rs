@@ -26694,12 +26694,14 @@ mod tests {
             .expect("le développement");
         run_until(&mut h, move |app| app.ready(index, Level::Thumbnail));
         let ctx = h.ctx.clone();
-        let far = Instant::now() + Duration::from_secs(5);
+        // Échéance d'image lointaine : un runner lent (Windows, nightly du 14/11/2026)
+        // dépassait 5 s pendant les attentes, et la vignette n'était plus chargée.
+        let far = Instant::now() + Duration::from_secs(3600);
         let path = h.state().files[index].path.clone();
         // Sidecar pas encore relu (l'image, elle, connue), dossier qui vient de s'ouvrir :
         // rien. La même chose sans attente montre la vignette (ci-dessous).
         let sidecar = photos.join("img0.jpg.xmp");
-        for _ in 0..200 {
+        for _ in waiting(Duration::from_secs(30)) {
             let _deferred = DeferStamps::start();
             if h.state_mut().thumbnail_texture(&ctx, index, far).is_some() {
                 break;
@@ -26719,7 +26721,7 @@ mod tests {
         // relevés arrivés en fond).
         h.state_mut().gui.grid.render_wait_ms = 0;
         let mut shown = None;
-        for _ in 0..200 {
+        for _ in waiting(Duration::from_secs(30)) {
             let _deferred = DeferStamps::start();
             shown = h.state_mut().thumbnail_texture(&ctx, index, far);
             if shown.is_some() {
@@ -26746,7 +26748,9 @@ mod tests {
             .save_adjustments(vec![(path.clone(), Some(warm))]);
         h.run_steps(2);
         let ctx = h.ctx.clone();
-        let far = Instant::now() + Duration::from_secs(5);
+        // Échéance d'image lointaine : un runner lent (Windows, nightly du 14/11/2026)
+        // dépassait 5 s pendant les attentes, et la vignette n'était plus chargée.
+        let far = Instant::now() + Duration::from_secs(3600);
         // Comme à l'ouverture d'un dossier : réglages oubliés, vignette à charger.
         h.state_mut().adjust_forget();
         h.state_mut().textures.remove(&path);
@@ -26759,7 +26763,7 @@ mod tests {
         assert!(shown.is_none(), "pas sans ses réglages");
         // Lus en fond : chargée une fois, avec eux, sans rien à refaire.
         let mut shown = None;
-        for _ in 0..400 {
+        for _ in waiting(Duration::from_secs(30)) {
             let _deferred = DeferStamps::start();
             shown = h.state_mut().thumbnail_texture(&ctx, 0, far);
             if shown.is_some() {
@@ -26773,7 +26777,7 @@ mod tests {
         // Retour dans le dossier (trace du 11/11/2026, 523 ms) : la vignette déjà faite
         // reste, ses réglages relus identiques ne la font pas refaire.
         h.state_mut().adjust_forget();
-        for _ in 0..400 {
+        for _ in waiting(Duration::from_secs(30)) {
             let _deferred = DeferStamps::start();
             h.state_mut().adjust_layers(&path);
             if h.state().adjust_known.contains(&path) {
@@ -29699,6 +29703,14 @@ mod tests {
 
     fn settle_dialog(h: &mut Harness<'_, TriApp>) {
         h.run_steps(GuiSettings::default().dialogs.centring_frames as usize + 2);
+    }
+
+    /// Tours d'une boucle d'attente bornée par une durée plutôt que par un nombre de tours :
+    /// le sommeil de 5 ms dure ~15 ms sous Windows, et 400 tours ne suffisaient plus sur un
+    /// runner chargé.
+    fn waiting(limit: Duration) -> impl Iterator<Item = ()> {
+        let deadline = Instant::now() + limit;
+        std::iter::from_fn(move || (Instant::now() < deadline).then_some(()))
     }
 
     fn run_until(h: &mut Harness<'_, TriApp>, done: impl Fn(&TriApp) -> bool) {
