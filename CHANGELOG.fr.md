@@ -13,8 +13,8 @@
   si la photo n'en a pas, devient le rendu affiché de toutes les photos. Un signet devant
   chaque rendu qui peut être la couverture de la photo (JPEG boîtier, chaque
   développement, rendu LibRaw) en fait la couverture d'un clic et l'affiche ; une seule
-  couverture par photo (pleine, aussi devant la liste fermée quand le rendu à l'écran est
-  la couverture), un développement du JPEG regroupé est marqué « · JPEG ».
+  couverture par photo (plein ; dans la liste fermée, entre le nom et sa précision,
+  « RAW ▮ LibRaw », quand le rendu à l'écran est la couverture), un développement du JPEG regroupé est marqué « · JPEG ».
   Aussi : changer le rendu de la grille change aussi la vignette du développement qu'on
   vient de regarder en plein écran, et un dossier ouvert au lancement montre les
   développements des logiciels trouvés au démarrage (écartés jusqu'au premier changement

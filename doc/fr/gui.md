@@ -1388,7 +1388,8 @@ développement, le JPEG (d'une paire regroupée, l'image plate elle-même, sinon
 `IMG@camera.RAF` pour le JPEG embarqué) ou la photo (son rendu LibRaw) ; le signet plein
 est la couverture effective (`effective_cover` : choisie, sinon la plus récente) ; un clic
 la choisit et l'affiche, recliquer la retire ; liste fermée, un signet plein (non
-cliquable) devant elle si le rendu à l'écran est la couverture ; Maj+Entrée sur un
+cliquable, couleur du texte) entre le nom et sa précision (« RAW ▮ LibRaw ») si le rendu à
+l'écran est la couverture ; Maj+Entrée sur un
 développement le garde à l'écran ; ni étoile ni coche, prises par les notes.
 Un développement du JPEG regroupé est marqué « · JPEG ». Changer de rendu oublie le
 développement regardé en grand (`dev_shown`). Puis les

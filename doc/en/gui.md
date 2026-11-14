@@ -1309,7 +1309,8 @@ also on "Camera JPEG" and "RAW LibRaw": a photo's cover is **one** key (`cover_k
 `IMG@camera.RAF` for the embedded JPEG) or the photo (its LibRaw render); the filled
 bookmark is the effective cover (`effective_cover`: chosen, else the latest); a click
 chooses and shows it, clicking again removes it; list closed, a filled bookmark (not
-clickable) in front of it when the render on screen is the cover; Shift+Enter on a
+clickable, text colour) between the name and its detail ("RAW ▮ LibRaw") when the render
+on screen is the cover; Shift+Enter on a
 development keeps it on screen; neither star nor tick, taken by the
 ratings. A development of the grouped JPEG is marked "· JPEG". Changing the render
 forgets the development viewed in full screen (`dev_shown`). Then the software it has none of

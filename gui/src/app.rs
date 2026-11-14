@@ -3133,59 +3133,39 @@ impl TriApp {
         type Row = (ViewRender, egui::WidgetText, Option<PathBuf>);
         let rows: Vec<Row> = choices
             .iter()
-            .map(|&c| match c {
-                ViewRender::Render(render) => {
-                    let key = match render {
-                        crate::grid_render::GridRender::Embedded => Some(camera.clone()),
-                        crate::grid_render::GridRender::LibRaw if photo_raw => Some(photo.clone()),
-                        _ => None,
-                    };
-                    (c, render.label(weak), key)
-                }
-                ViewRender::Development(i) => {
-                    let path = &self.files[i].path;
-                    let development = tri::developments::get(path);
-                    let when = development
-                        .as_ref()
-                        .and_then(|d| std::fs::metadata(&d.sidecar).ok())
-                        .and_then(|m| m.modified().ok())
-                        .map(|t| {
-                            chrono::DateTime::<chrono::Local>::from(t)
-                                .format(&t!("dev-modified-format"))
-                                .to_string()
-                        });
-                    let mut name = development_label(path);
-                    if development.is_some_and(|d| self.camera_raw.contains_key(&d.photo)) {
-                        name.push_str(" · JPEG");
+            .map(|&c| {
+                let key = match c {
+                    ViewRender::Render(crate::grid_render::GridRender::Embedded) => {
+                        Some(camera.clone())
                     }
-                    let mut job = egui::text::LayoutJob::default();
-                    let style = egui::Style::default();
-                    egui::RichText::new(name).append_to(
-                        &mut job,
-                        &style,
-                        egui::FontSelection::Default,
-                        egui::Align::Center,
-                    );
-                    if let Some(when) = when {
-                        egui::RichText::new(format!("  {when}"))
-                            .color(weak)
-                            .append_to(
-                                &mut job,
-                                &style,
-                                egui::FontSelection::Default,
-                                egui::Align::Center,
-                            );
+                    ViewRender::Render(crate::grid_render::GridRender::LibRaw) if photo_raw => {
+                        Some(photo.clone())
                     }
-                    (c, job.into(), Some(path.clone()))
+                    ViewRender::Render(_) => None,
+                    ViewRender::Development(i) => Some(self.files[i].path.clone()),
+                };
+                let (main, note) = self.view_render_parts(c);
+                let mut job = egui::text::LayoutJob::default();
+                let style = egui::Style::default();
+                egui::RichText::new(main).append_to(
+                    &mut job,
+                    &style,
+                    egui::FontSelection::Default,
+                    egui::Align::Center,
+                );
+                if let Some(note) = note {
+                    egui::RichText::new(format!("  {note}"))
+                        .color(weak)
+                        .append_to(
+                            &mut job,
+                            &style,
+                            egui::FontSelection::Default,
+                            egui::Align::Center,
+                        );
                 }
+                (c, job.into(), key)
             })
             .collect();
-        let name = |c: ViewRender| {
-            rows.iter()
-                .find(|(k, _, _)| *k == c)
-                .map(|(_, text, _)| text.clone())
-                .unwrap_or_default()
-        };
         let (item, key) = self.side_begin(false);
         let at = choices.iter().position(|&c| c == choice).unwrap_or(0);
         match key {
@@ -3209,51 +3189,81 @@ impl TriApp {
             .find(|(c, _, _)| *c == shown)
             .and_then(|(_, _, key)| key.as_ref())
             .is_some_and(|key| cover.as_ref() == Some(key));
-        let mut response = None;
-        ui.horizontal(|ui| {
-            let (rect, mark_response) =
-                ui.allocate_exact_size(egui::vec2(mark, mark), egui::Sense::hover());
-            if shown_is_cover {
-                marks::cover_mark(ui.painter(), rect, true, accent);
-                let text = t!("view-render-is-cover");
-                mark_response
-                    .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, &text));
-                mark_response.on_hover_text(&text);
-            }
-            response = Some(
-                egui::ComboBox::from_id_salt("view_render")
-                    .selected_text(name(choice))
-                    .show_ui(ui, |ui| {
-                        for (c, text, key) in &rows {
-                            ui.horizontal(|ui| {
-                                match key {
-                                    Some(key) => {
-                                        let on = cover.as_ref() == Some(key);
-                                        let (rect, response) = marks::clickable_named(
-                                            ui,
-                                            mark,
-                                            &t!("view-render-cover"),
-                                            &cover_tip,
-                                        );
-                                        let color = if on { accent } else { weak };
-                                        marks::cover_mark(ui.painter(), rect, on, color);
-                                        if response.clicked() {
-                                            cover_click = Some((*c, key.clone(), on));
-                                        }
-                                    }
-                                    None => {
-                                        ui.add_space(mark);
-                                    }
+        // Liste fermée : le signet, dans la couleur du texte, entre le nom et sa précision
+        // (« RAW ▮ LibRaw »), si le rendu à l'écran est la couverture (retours du
+        // 14/11/2026 : sinon il fallait déplier la liste pour le savoir ; un signet devant
+        // laissait un grand blanc quand il n'y en avait pas).
+        let (main, note) = self.view_render_parts(shown);
+        let gap = if shown_is_cover {
+            mark + ui.spacing().item_spacing.x
+        } else {
+            ui.spacing().item_spacing.x
+        };
+        let mut closed = egui::text::LayoutJob::default();
+        let style = ui.style().clone();
+        egui::RichText::new(main.clone()).append_to(
+            &mut closed,
+            &style,
+            egui::FontSelection::Default,
+            egui::Align::Center,
+        );
+        let body = egui::TextStyle::Body.resolve(&style);
+        closed.append(
+            note.as_deref().unwrap_or(" "),
+            gap,
+            egui::TextFormat::simple(body.clone(), weak),
+        );
+        let response = egui::ComboBox::from_id_salt("view_render")
+            .selected_text(closed)
+            .show_ui(ui, |ui| {
+                for (c, text, key) in &rows {
+                    ui.horizontal(|ui| {
+                        match key {
+                            Some(key) => {
+                                let on = cover.as_ref() == Some(key);
+                                let (rect, response) = marks::clickable_named(
+                                    ui,
+                                    mark,
+                                    &t!("view-render-cover"),
+                                    &cover_tip,
+                                );
+                                let color = if on { accent } else { weak };
+                                marks::cover_mark(ui.painter(), rect, on, color);
+                                if response.clicked() {
+                                    cover_click = Some((*c, key.clone(), on));
                                 }
-                                ui.selectable_value(&mut choice, *c, text.clone());
-                            });
+                            }
+                            None => {
+                                ui.add_space(mark);
+                            }
                         }
-                    })
-                    .response
-                    .on_hover_text(tip),
+                        ui.selectable_value(&mut choice, *c, text.clone());
+                    });
+                }
+            })
+            .response
+            .on_hover_text(tip);
+        if shown_is_cover {
+            let width = ui
+                .fonts_mut(|f| f.layout_no_wrap(main, body, weak))
+                .size()
+                .x;
+            let left = response.rect.left() + ui.spacing().button_padding.x + width;
+            let rect = Rect::from_center_size(
+                egui::pos2(left + gap / 2.0, response.rect.center().y),
+                egui::vec2(mark, mark),
             );
-        });
-        let response = response.expect("liste dessinée");
+            let color = ui.visuals().widgets.inactive.text_color();
+            marks::cover_mark(ui.painter(), rect, true, color);
+            let text = t!("view-render-is-cover");
+            let hover = ui.interact(
+                rect,
+                ui.scope_id().with("view_render_cover"),
+                egui::Sense::hover(),
+            );
+            hover.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, &text));
+            hover.on_hover_text(&text);
+        }
         self.side_end(ui, item, response.rect, response.clicked());
         if let Some((c, key, on)) = cover_click {
             // Déjà la couverture choisie : plus de choix (le plus récent) ; sinon elle, et
@@ -3272,6 +3282,39 @@ impl TriApp {
                     self.show_development(i);
                     self.request_zoom();
                 }
+            }
+        }
+    }
+
+    /// Nom et précision (en gris) d'un choix de la liste « Rendu affiché » : « RAW »
+    /// « LibRaw », « JPEG » « boîtier », un développement et l'heure de son sidecar.
+    fn view_render_parts(&self, choice: ViewRender) -> (String, Option<String>) {
+        use crate::grid_render::GridRender;
+        match choice {
+            ViewRender::Render(GridRender::LibRaw) => {
+                (t!("grid-render-raw"), Some(t!("grid-render-libraw-short")))
+            }
+            ViewRender::Render(GridRender::Embedded) => {
+                (t!("grid-render-jpeg"), Some(t!("grid-render-camera")))
+            }
+            ViewRender::Render(render) => (render.name(), None),
+            ViewRender::Development(i) => {
+                let path = &self.files[i].path;
+                let development = tri::developments::get(path);
+                let when = development
+                    .as_ref()
+                    .and_then(|d| std::fs::metadata(&d.sidecar).ok())
+                    .and_then(|m| m.modified().ok())
+                    .map(|t| {
+                        chrono::DateTime::<chrono::Local>::from(t)
+                            .format(&t!("dev-modified-format"))
+                            .to_string()
+                    });
+                let mut name = development_label(path);
+                if development.is_some_and(|d| self.camera_raw.contains_key(&d.photo)) {
+                    name.push_str(" · JPEG");
+                }
+                (name, when)
             }
         }
     }
