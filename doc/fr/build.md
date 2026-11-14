@@ -204,3 +204,25 @@ description ferme l'issue à la fusion). `main` est protégée : fusion par pull
 seulement, une fois les trois systèmes passés (tâches `ubuntu-24.04`, `macos-15`,
 `windows-2022`). Avant l'envoi, comme d'habitude : `cargo fmt`, clippy et les tests
 autour du code modifié.
+
+### Historique : un fragment par pull request (14/11/2026)
+
+Une pull request n'écrit plus en tête de `CHANGELOG.md` / `CHANGELOG.fr.md` (deux pull
+requests ouvertes s'y heurtaient à chaque fois) : elle ajoute son entrée dans deux petits
+fichiers, `changelog.d/<numéro de la PR>.md` (anglais) et
+`changelog.d/<numéro de la PR>.fr.md` (français), chacun une ou plusieurs entrées de
+liste `- ` comme dans les historiques. N'importe quel nom convient si le numéro n'est pas
+encore connu ; le numéro ne sert qu'à l'ordre (la plus récente d'abord).
+
+`scripts/changelog.py` :
+
+- `check` : chaque fragment existe dans les deux langues et commence par une entrée de
+  liste (lancé par la CI sous Linux : une traduction oubliée fait échouer la pull
+  request) ;
+- `show [--fr]` : les entrées en attente, telles qu'elles paraîtront ;
+- `collect [--version 1.0.0-beta.2] [--date 2026-11-21] [--dry-run]` : dans la pull
+  request de la montée de version, range les entrées en tête de « ## Unreleased » /
+  « ## Non publié » (créées au besoin) et efface les fragments ; avec `--version`, la
+  section prend le titre de la version (« ## 1.0.0-beta.2 — 21/11/2026 », « — 2026-11-21 »
+  en anglais), sous lequel on écrit toujours à la main le résumé d'une ligne. Le workflow
+  de publication lit cette section comme avant.
