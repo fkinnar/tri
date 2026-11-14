@@ -396,6 +396,16 @@ Crop presets are created the same way (see `versions.md`).
     while the pointer is on it, and an error stays until "Close". One bubble per export,
     one under the other (`TriApp::export_toasts`): an error is never replaced by the
     summary of a later export. Not shown for an export stopped by hand.
+  - **Export queue** (#400, 2026-11-14): `Ctrl+E` during an export is accepted; the
+    new export waits its turn and starts when the previous one ends, in the order they
+    were asked for (a queue rather than exports in parallel: darktable and LibRaw
+    already use every core, two at once would be slower than one after the other). Use
+    case: a 4:5 version then a 9:16 one of the same image, without waiting. A queued
+    export keeps what it was asked for (images, preset, folder, render): changing the
+    selection afterwards changes nothing. Each one has its line in the status bar,
+    "Export "Web" waiting (3 images)", with a × to remove it from the queue; the × of the
+    running export stops only that one. Each keeps its own end bubble and report line
+    (`TriApp::export_queue`, `QueuedExport`).
 - **Export report** (`Ctrl+Shift+E`, action `core.file.export.report`; user's idea from
   2026-10-20): the list of finished exports, most recent at the top, in a scrolling area
   of limited height. For each: preset, version, files written out of images requested,

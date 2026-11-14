@@ -607,6 +607,12 @@ pub struct TriApp {
     export_choice: [Option<String>; 2],
     /// Export en cours (darktable, en fond), suivi dans la barre d'état.
     export_job: Option<crate::export::Job>,
+    /// Exports demandés pendant un autre (#400), lancés l'un après l'autre dans l'ordre
+    /// des demandes : une file plutôt que des exports en parallèle (darktable et LibRaw
+    /// occupent déjà tous les cœurs).
+    export_queue: std::collections::VecDeque<QueuedExport>,
+    /// Numéro du prochain export mis en file (pour en retirer un précis).
+    export_queue_next: u64,
     /// Journal des exports terminés (rapport d'export, `Ctrl+Maj+E`), gardé dans le dossier
     /// de données ([`tri::export_log`]).
     export_log: Vec<tri::export_log::Entry>,
@@ -1581,6 +1587,8 @@ impl TriApp {
             versions_read: mpsc::channel(),
             export_choice: [None, None],
             export_job: None,
+            export_queue: std::collections::VecDeque::new(),
+            export_queue_next: 0,
             export_log: data
                 .as_deref()
                 .map(tri::export_log::read)
@@ -13775,6 +13783,23 @@ impl TriApp {
                 cancel: Some((t!("export-cancel"), StatusClick::CancelExport)),
             });
         }
+        // Exports en attente (#400), chacun retirable.
+        for queued in &self.export_queue {
+            tasks.push(Task {
+                text: t!(
+                    "export-queued",
+                    profile = queued.profile.as_str(),
+                    total = queued.total
+                ),
+                fraction: 0.0,
+                tip: None,
+                click: None,
+                cancel: Some((
+                    t!("export-queued-cancel"),
+                    StatusClick::CancelQueuedExport(queued.id),
+                )),
+            });
+        }
         // Rendus développés d'un dossier (issue n° 69).
         if let Some(batch) = &self.develop_batch {
             let (done, total) = batch.progress();
@@ -15192,7 +15217,9 @@ impl TriApp {
         }
     }
 
-    /// Lance l'export en fond (darktable) ; un seul à la fois.
+    /// Lance l'export en fond (darktable) ; un seul à la fois : pendant un autre, il
+    /// attend son tour dans la file (#400), avec tout ce qu'il exporte déjà décidé
+    /// (images, préréglage, dossier, rendu).
     fn start_export(
         &mut self,
         ctx: &egui::Context,
@@ -15202,10 +15229,6 @@ impl TriApp {
         render: crate::export::Render,
         cut: Option<tri::export::Cut>,
     ) {
-        if self.export_job.is_some() {
-            self.notice = Some((t!("export-busy"), true));
-            return;
-        }
         let Some(engine) = &self.engine else { return };
         // Configuration et fichiers de travail à part de ceux des rendus développés : un
         // rendu demandé par Maj+B pendant un export ne gêne pas. Les deux logiciels sont
@@ -15263,7 +15286,34 @@ impl TriApp {
             render: self.settings.render.options(),
             pair_suffix: self.settings.export.camera_suffix.clone(),
         };
-        self.export_job = Some(crate::export::Job::start(tools, order, ctx));
+        if self.export_job.is_none() {
+            self.export_job = Some(crate::export::Job::start(tools, order, ctx));
+            return;
+        }
+        let queued = QueuedExport {
+            id: self.export_queue_next,
+            profile: crate::export::profile_name(&order.profile),
+            total: order.images.len(),
+            tools,
+            order,
+            ctx: ctx.clone(),
+        };
+        self.export_queue_next += 1;
+        self.export_queue.push_back(queued);
+        self.notice = Some((
+            t!("export-queued-notice", n = self.export_queue.len()),
+            false,
+        ));
+    }
+
+    /// L'export suivant de la file, s'il y en a un et que rien ne tourne.
+    fn start_next_export(&mut self) {
+        if self.export_job.is_some() {
+            return;
+        }
+        if let Some(next) = self.export_queue.pop_front() {
+            self.export_job = Some(crate::export::Job::start(next.tools, next.order, &next.ctx));
+        }
     }
 
     /// Export fini : bilan dans la barre d'état.
@@ -15351,6 +15401,7 @@ impl TriApp {
             self.export_toasts.push(toast);
         }
         self.export_job = None;
+        self.start_next_export();
     }
 
     /// Bulles de fin d'export au milieu de la zone des images (#381), l'une sous l'autre :
@@ -19800,6 +19851,9 @@ impl eframe::App for TriApp {
                     job.cancel();
                 }
             }
+            Some(StatusClick::CancelQueuedExport(id)) => {
+                self.export_queue.retain(|q| q.id != id);
+            }
             Some(StatusClick::CancelDevelop) => {
                 if let Some(batch) = &self.develop_batch {
                     batch.cancel();
@@ -20396,6 +20450,19 @@ pub(crate) fn folder_name(path: &Path) -> String {
 }
 
 /// Une tâche de fond, pour la barre globale (issue n° 36).
+/// Export qui attend son tour (#400) : tout est décidé à la demande, changer la
+/// sélection ensuite n'y change rien.
+struct QueuedExport {
+    id: u64,
+    /// Nom du préréglage, pour la barre d'état.
+    profile: String,
+    /// Nombre d'images.
+    total: usize,
+    tools: crate::export::Tools,
+    order: crate::export::Order,
+    ctx: egui::Context,
+}
+
 struct Task {
     text: String,
     fraction: f32,
@@ -20418,6 +20485,8 @@ enum StatusClick {
     ToggleTasks,
     /// Interrompre l'export en cours.
     CancelExport,
+    /// Retirer un export de la file d'attente (#400).
+    CancelQueuedExport(u64),
     /// Interrompre les rendus développés du dossier.
     CancelDevelop,
     /// Progression d'une copie en arrière-plan : réafficher sa boîte.
@@ -33208,6 +33277,52 @@ mod tests {
         );
         press(&mut h, Key::E, Modifiers::CTRL);
         assert_eq!(dialog(&h), elsewhere.to_string_lossy(), "retenu");
+    }
+
+    #[test]
+    fn an_export_asked_during_another_waits_its_turn() {
+        // #400 : un export demandé pendant un autre attend dans la file, puis part ; un
+        // export retiré de la file ne part pas.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let ctx = h.ctx.clone();
+        let profile = tri::export::Profile::defaults()
+            .into_iter()
+            .find(|p| p.id == "asis")
+            .unwrap();
+        let image = dir.path().join("photos/img0.jpg");
+        let out = |n: usize| dir.path().join(format!("out{n}"));
+        for n in 1..=3 {
+            h.state_mut().start_export(
+                &ctx,
+                vec![image.clone()],
+                profile.clone(),
+                out(n).to_string_lossy().into_owned(),
+                crate::export::Render::LibRaw,
+                None,
+            );
+        }
+        assert!(h.state().export_job.is_some(), "le premier part");
+        assert_eq!(h.state().export_queue.len(), 2, "les deux autres attendent");
+        assert!(
+            h.state()
+                .notice
+                .as_ref()
+                .unwrap()
+                .0
+                .contains("2 en attente")
+        );
+        // Le dernier est retiré de la file (le « × » de sa ligne dans la barre d'état
+        // fait exactement ceci), avant que les autres, instantanés ici, ne finissent.
+        let last = h.state().export_queue.back().unwrap().id;
+        h.state_mut().export_queue.retain(|q| q.id != last);
+        run_until(&mut h, |app| {
+            app.export_job.is_none() && app.export_queue.is_empty()
+        });
+        assert!(out(1).join("img0.jpg").is_file());
+        assert!(out(2).join("img0.jpg").is_file(), "parti après le premier");
+        assert!(!out(3).exists(), "retiré de la file");
+        assert_eq!(h.state().export_toasts.len(), 2, "une bulle par export");
     }
 
     #[test]

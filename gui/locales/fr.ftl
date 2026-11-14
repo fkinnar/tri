@@ -850,7 +850,15 @@ export-sharpen-screen = accentuation écran
 export-sharpen-print = accentuation tirage
 export-size-full = pleine définition
 export-size-max = { $side } px au plus
-export-busy = Un export est déjà en cours.
+export-queued = Export « { $profile } » en attente ({ $total ->
+    [one] 1 image
+   *[other] { $total } images
+})
+export-queued-cancel = Retirer de la file
+export-queued-notice = { $n ->
+    [one] Export en file : il partira à la fin de celui en cours.
+   *[other] Export en file ({ $n } en attente) : il partira après les précédents.
+}
 export-done = { $n ->
     [one] 1 image exportée dans { $dest }
    *[other] { $n } images exportées dans { $dest }
