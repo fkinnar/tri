@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Grouped pairs: three-way filter** (#464, #392): in a grouped folder the type filter
+  has three checkboxes, RAW (without a JPEG), RAW+JPEG (the pairs) and JPEG (without a
+  RAW), combinable, stepped by the type key. Also: a darktable development of the JPEG
+  joins the RAW's stack too, and the status bar counts photos (the grouped JPEGs with
+  the developments).
 - **RAW+JPEG pairs grouped as one photo** (#463, first part of #392): in a grouped
   folder a pair is one thumbnail, the camera JPEG filed with the RAW's developments
   ("Camera" chip, Shift+V to unfold). Off by default: opening a folder that has pairs

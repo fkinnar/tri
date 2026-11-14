@@ -140,6 +140,9 @@ pub struct FolderView {
     pub developed_engines: Option<Vec<String>>,
     /// Case « Sous-dossiers » (#414) ; `None` : `[gui.folders] subfolders`.
     pub subfolders: Option<bool>,
+    /// Cases RAW / RAW+JPEG / JPEG d'un dossier regroupé (#392) ; `None` : toutes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pair_kinds: Option<tri::pairs::PairKinds>,
     /// Image où l'on en était (#414), chemin relatif au dossier avec des « / » ; écrite en
     /// quittant le dossier, pas à chaque image.
     pub current: Option<String>,
