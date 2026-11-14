@@ -3082,29 +3082,108 @@ impl TriApp {
         let mut choice = shown;
         let weak = ui.visuals().weak_text_color();
         let tip = self.render_tip();
-        let labels: Vec<(ViewRender, String)> = choices
+        // Chaque développement : son nom, l'heure de son sidecar (deux développements d'un
+        // même logiciel se distinguent, retour du 14/11/2026), et s'il est la couverture.
+        // (choix, libellé, couverture : index et si c'est elle)
+        type Row = (ViewRender, egui::WidgetText, Option<(usize, bool)>);
+        let rows: Vec<Row> = choices
             .iter()
-            .filter_map(|&c| match c {
-                ViewRender::Development(i) => Some((c, development_label(&self.files[i].path))),
-                ViewRender::Render(_) => None,
+            .map(|&c| match c {
+                ViewRender::Render(render) => (c, render.label(weak), None),
+                ViewRender::Development(i) => {
+                    let path = &self.files[i].path;
+                    let when = tri::developments::get(path)
+                        .and_then(|d| std::fs::metadata(&d.sidecar).ok())
+                        .and_then(|m| m.modified().ok())
+                        .map(|t| {
+                            chrono::DateTime::<chrono::Local>::from(t)
+                                .format(&t!("dev-modified-format"))
+                                .to_string()
+                        });
+                    let mut job = egui::text::LayoutJob::default();
+                    let style = egui::Style::default();
+                    egui::RichText::new(development_label(path)).append_to(
+                        &mut job,
+                        &style,
+                        egui::FontSelection::Default,
+                        egui::Align::Center,
+                    );
+                    if let Some(when) = when {
+                        egui::RichText::new(format!("  {when}"))
+                            .color(weak)
+                            .append_to(
+                                &mut job,
+                                &style,
+                                egui::FontSelection::Default,
+                                egui::Align::Center,
+                            );
+                    }
+                    (c, job.into(), Some((i, self.dev_preferred.contains(path))))
+                }
             })
             .collect();
-        self.side_combo(
-            ui,
-            "view_render",
-            &mut choice,
-            &choices,
-            |c| match c {
-                ViewRender::Render(render) => render.label(weak),
-                ViewRender::Development(_) => labels
-                    .iter()
-                    .find(|(k, _)| *k == c)
-                    .map(|(_, l)| l.clone())
-                    .unwrap_or_default()
-                    .into(),
-            },
-            Some(tip),
+        let name = |c: ViewRender| {
+            rows.iter()
+                .find(|(k, _, _)| *k == c)
+                .map(|(_, text, _)| text.clone())
+                .unwrap_or_default()
+        };
+        let (item, key) = self.side_begin(false);
+        let at = choices.iter().position(|&c| c == choice).unwrap_or(0);
+        match key {
+            Some(SideKey::Left) => choice = choices[at.saturating_sub(1)],
+            Some(SideKey::Right) => choice = choices[(at + 1).min(choices.len() - 1)],
+            Some(SideKey::Activate) => choice = choices[(at + 1) % choices.len()],
+            None => {}
+        }
+        let mark = ui.text_style_height(&egui::TextStyle::Body);
+        let accent = marks::accent_mark(ui.ctx());
+        let cover_tip = format!(
+            "{}\n{}",
+            t!("view-render-cover-tip"),
+            self.action_tip(Action::StackChoose)
         );
+        let mut cover_click = None;
+        let response = egui::ComboBox::from_id_salt("view_render")
+            .selected_text(name(choice))
+            .show_ui(ui, |ui| {
+                for (c, text, cover) in &rows {
+                    ui.horizontal(|ui| {
+                        match cover {
+                            Some((i, on)) => {
+                                let (rect, response) = marks::clickable_named(
+                                    ui,
+                                    mark,
+                                    &t!("view-render-cover"),
+                                    &cover_tip,
+                                );
+                                let color = if *on { accent } else { weak };
+                                marks::cover_mark(ui.painter(), rect, *on, color);
+                                if response.clicked() {
+                                    cover_click = Some((*i, *on));
+                                }
+                            }
+                            None => {
+                                ui.add_space(mark);
+                            }
+                        }
+                        ui.selectable_value(&mut choice, *c, text.clone());
+                    });
+                }
+            })
+            .response
+            .on_hover_text(tip);
+        self.side_end(ui, item, response.rect, response.clicked());
+        if let Some((i, on)) = cover_click {
+            // Déjà la couverture : plus de préféré (la pile reprend le plus récent).
+            let target = if on {
+                let photo = self.stack_photo(&self.files[i].path);
+                self.files.iter().position(|f| f.path == photo).unwrap_or(i)
+            } else {
+                i
+            };
+            self.prefer_development(target);
+        }
         if choice != shown {
             match choice {
                 ViewRender::Render(render) => self.show_render(render),
@@ -26812,6 +26891,31 @@ mod tests {
         assert!(
             !choices.contains(&ViewRender::Render(GridRender::Engine(Engine::Darktable))),
             "{choices:?}"
+        );
+        // La liste ouverte : un signet par développement (couverture). Laquelle des listes
+        // du panneau : celle qui montre les signets une fois ouverte.
+        let combos = h.query_all_by_role(egui::accesskit::Role::ComboBox).count();
+        let mut marks = 0;
+        for n in 0..combos {
+            h.get_all_by_role(egui::accesskit::Role::ComboBox)
+                .nth(n)
+                .unwrap()
+                .click();
+            h.run_steps(3);
+            marks = h.query_all_by_label("Couverture").count();
+            h.key_press(egui::Key::Escape);
+            h.run_steps(2);
+            if marks > 0 {
+                break;
+            }
+        }
+        assert_eq!(marks, 2, "un signet par développement");
+        // Le clic du signet (règle des tests d'interface : l'action directement).
+        h.state_mut().prefer_development(clone);
+        assert!(
+            h.state()
+                .dev_preferred
+                .contains(&photos.join("img0@dt-01.jpg"))
         );
         // Darktable choisi sur la photo : son développement s'affiche.
         h.state_mut()

@@ -1303,7 +1303,10 @@ the per-photo rotation (`Source::next`), the "Development of each photo" list.
 list used to become "Before / after", under the pointer while stepping through the
 images. It now keeps its title and choices (without "Cover", a grid choice); one entry
 per **development** of the photo ("Darktable", "Darktable · clone 1", active software),
-then the software it has none of (`view_render_choices`); its value is the render **on
+with the time of its sidecar (`dev-modified-format`) and a **bookmark** in front (filled:
+the cover; a click makes it the cover, clicking again removes it, `prefer_development`;
+neither star nor tick, taken by the ratings), then the software it has none of
+(`view_render_choices`); its value is the render **on
 screen** (`TriApp::displayed_render`); choosing one
 (`TriApp::show_render`) goes to the member of the photo's stack that has it (its main
 development, the JPEG of a grouped pair), takes the "before" of a development for the
