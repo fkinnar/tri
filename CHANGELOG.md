@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Grouped pairs: summary filter, offload and folder mark** (#466, #392, closes #388):
+  in a grouped folder the summary's "RAW+JPEG pairs" line is a filter (the pairs only);
+  offloading a card that has pairs offers "Group RAW and JPEG", kept for the session
+  folder; a grouped folder has a small mark in the folder panel.
 - **Grouped pairs: three-way filter** (#464, #392): in a grouped folder the type filter
   has three checkboxes, RAW (without a JPEG), RAW+JPEG (the pairs) and JPEG (without a
   RAW), combinable, stepped by the type key. Also: a darktable development of the JPEG

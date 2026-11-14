@@ -235,7 +235,7 @@ summary-photos-tip = Toutes les photos du dossier : un clic retire tous les filt
 summary-filter-on = Cliquer : ne montrer que celles-ci (les autres filtres sont retirés)
 summary-filter-off = Filtre montré ; cliquer : tout montrer
 summary-pairs = Paires RAW+JPEG
-summary-pairs-tip = Un RAW et une image plate du même nom, dans le même dossier (le RAW+JPEG du boîtier).
+summary-pairs-tip = Un RAW et une image plate du même nom, dans le même dossier (le RAW+JPEG du boîtier). Regroupées (menu du dossier, clic droit), la ligne devient un filtre.
 summary-developments = Développements
 summary-engine-off = { $engine } est absent ou désactivé : ses développements ne sont pas montrés dans la grille ni comptés dans le total du dossier.
 summary-untouched = Sans note
@@ -1816,3 +1816,9 @@ pairs-filter-jpeg = JPEG
 pairs-filter-raw-tip = Les RAW sans JPEG
 pairs-filter-pairs-tip = Les paires RAW+JPEG regroupées
 pairs-filter-jpeg-tip = Les JPEG (et autres images) sans RAW
+offload-group-pairs = Regrouper RAW et JPEG ({ $n ->
+    [one] une paire
+   *[other] { $n } paires
+})
+offload-group-pairs-tip = Dans la séance, chaque paire RAW+JPEG n'est qu'une photo : le JPEG du boîtier est rangé avec les développements du RAW. Retenu pour le dossier de la séance ; se change dans son menu (clic droit)
+folders-pairs-grouped = RAW et JPEG regroupés dans ce dossier (une photo par paire)

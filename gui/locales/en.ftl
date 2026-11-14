@@ -235,7 +235,7 @@ summary-photos-tip = All the photos of the folder: a click removes every filter.
 summary-filter-on = Click: show only these (the other filters are removed)
 summary-filter-off = Filter shown; click: show everything
 summary-pairs = RAW+JPEG pairs
-summary-pairs-tip = A RAW and a flat image of the same name, in the same folder (the camera's RAW+JPEG).
+summary-pairs-tip = A RAW and a flat image of the same name, in the same folder (the camera's RAW+JPEG). Once grouped (folder menu, right-click), the line becomes a filter.
 summary-developments = Developments
 summary-engine-off = { $engine } is missing or disabled: its developments are neither shown in the grid nor counted in the folder's total.
 summary-untouched = Not rated
@@ -1810,3 +1810,9 @@ pairs-filter-jpeg = JPEG
 pairs-filter-raw-tip = RAW files without a JPEG
 pairs-filter-pairs-tip = Grouped RAW+JPEG pairs
 pairs-filter-jpeg-tip = JPEGs (and other images) without a RAW
+offload-group-pairs = Group RAW and JPEG ({ $n ->
+    [one] one pair
+   *[other] { $n } pairs
+})
+offload-group-pairs-tip = In the session, each RAW+JPEG pair is one photo: the camera JPEG is filed with the RAW's developments. Kept for the session folder; changed from its menu (right-click)
+folders-pairs-grouped = RAW and JPEG grouped in this folder (one photo per pair)

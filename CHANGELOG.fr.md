@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **Paires regroupées : filtre du résumé, déchargement et marque du dossier** (#466,
+  #392, ferme #388) : dans un dossier regroupé, la ligne « Paires RAW+JPEG » du résumé
+  est un filtre (les paires seules) ; décharger une carte qui a des paires propose
+  « Regrouper RAW et JPEG », retenu pour le dossier de la séance ; un dossier regroupé a
+  une petite marque dans le panneau des dossiers.
 - **Paires regroupées : filtre à trois cases** (#464, #392) : dans un dossier regroupé,
   le filtre de type a trois cases, RAW (sans JPEG), RAW+JPEG (les paires) et JPEG (sans
   RAW), combinables, parcourues par la touche du type. Aussi : un développement darktable
