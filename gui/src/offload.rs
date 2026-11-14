@@ -117,6 +117,10 @@ enum Stage {
         full: Option<OutOfSpace>,
         /// Réponse à la copie : `true` réessayer, `false` abandonner.
         answer: Sender<bool>,
+        /// Début de la copie, et dernier changement de l'avancement (#470 : dire depuis
+        /// quand rien ne bouge).
+        started: std::time::Instant,
+        last_activity: std::time::Instant,
     },
     /// Bilan.
     Done {
@@ -409,6 +413,8 @@ impl OffloadDialog {
         self.stage = Stage::Running {
             rx,
             progress: Progress::default(),
+            started: std::time::Instant::now(),
+            last_activity: std::time::Instant::now(),
             cancel: Arc::new(AtomicBool::new(false)),
             full: None,
             answer,
@@ -454,11 +460,20 @@ impl OffloadDialog {
                 }
             }
             Stage::Running {
-                rx, progress, full, ..
+                rx,
+                progress,
+                full,
+                last_activity,
+                ..
             } => {
                 for message in rx.try_iter() {
                     match message {
-                        Message::Progress(p) => *progress = p,
+                        Message::Progress(p) => {
+                            if p != *progress {
+                                *last_activity = std::time::Instant::now();
+                            }
+                            *progress = p;
+                        }
                         // Destination pleine : la boîte revient (même en arrière-plan) et
                         // reste jusqu'à la réponse, sans limite de temps.
                         Message::Full(stop) => {
@@ -584,6 +599,8 @@ impl OffloadDialog {
         self.stage = Stage::Running {
             rx,
             progress: Progress::default(),
+            started: std::time::Instant::now(),
+            last_activity: std::time::Instant::now(),
             cancel,
             full: None,
             answer,
@@ -750,9 +767,22 @@ impl OffloadDialog {
                         // Le nom proposé suit ces choix (la plus récente image à copier),
                         // tant qu'on ne l'a pas changé.
                         let before = settings.clone();
+                        // « RAW seulement » et « Regrouper RAW et JPEG » s'excluent (#469) :
+                        // les deux restent à leur place (la mémoire des gestes), l'une grisée
+                        // quand l'autre est cochée.
+                        let pairs = plan.pairs(&OffloadSettings {
+                            raw_only: false,
+                            ..settings.clone()
+                        });
+                        let grouping =
+                            pairs > 0 && self.pairs_choice.unwrap_or(self.group_pairs.groups());
                         let raw = ui
-                            .checkbox(&mut settings.raw_only, t!("offload-raw-only"))
+                            .add_enabled(
+                                !grouping,
+                                egui::Checkbox::new(&mut settings.raw_only, t!("offload-raw-only")),
+                            )
                             .on_hover_text(t!("offload-raw-only-tip"))
+                            .on_disabled_hover_text(t!("offload-raw-only-grouped"))
                             .changed();
                         // Ce qui a déjà été déchargé, n'importe où (historique global ;
                         // retour du 12/11/2026) n'est pas recopié ; cochée, si (une même
@@ -787,13 +817,21 @@ impl OffloadDialog {
                                 self.keep_choice = Some(on);
                             }
                         }
-                        // Paires RAW+JPEG à copier : les regrouper dans la séance (#392).
-                        let pairs = plan.pairs(settings);
+                        // Paires RAW+JPEG sur la carte : les regrouper dans la séance (#392) ;
+                        // grisée avec « RAW seulement » (pas de JPEG copié, #469).
                         if pairs > 0 {
-                            let mut on = self.pairs_choice.unwrap_or(self.group_pairs.groups());
+                            let mut on = !settings.raw_only
+                                && self.pairs_choice.unwrap_or(self.group_pairs.groups());
                             if ui
-                                .checkbox(&mut on, t!("offload-group-pairs", n = pairs))
+                                .add_enabled(
+                                    !settings.raw_only,
+                                    egui::Checkbox::new(
+                                        &mut on,
+                                        t!("offload-group-pairs", n = pairs),
+                                    ),
+                                )
                                 .on_hover_text(t!("offload-group-pairs-tip"))
+                                .on_disabled_hover_text(t!("offload-group-pairs-raw-only"))
                                 .changed()
                             {
                                 self.pairs_choice = Some(on);
@@ -867,7 +905,11 @@ impl OffloadDialog {
                         }
                     }
                     Stage::Running {
-                        progress, cancel, ..
+                        progress,
+                        cancel,
+                        started,
+                        last_activity,
+                        ..
                     } => {
                         let fraction = if progress.bytes_total > 0 {
                             progress.bytes_done as f32 / progress.bytes_total as f32
@@ -881,9 +923,34 @@ impl OffloadDialog {
                             mb = megabytes(progress.bytes_done),
                             total_mb = megabytes(progress.bytes_total)
                         )));
-                        if let Some(current) = &progress.current {
-                            ui.weak(file_name(current));
+                        // Ce qui se fait, le débit, et depuis quand rien ne bouge (#470) :
+                        // lent ou bloqué, et où.
+                        let elapsed = started.elapsed().as_secs_f64();
+                        let rate = if elapsed > 0.5 {
+                            progress.bytes_done as f64 / 1_000_000.0 / elapsed
+                        } else {
+                            0.0
+                        };
+                        let file = progress
+                            .current
+                            .as_deref()
+                            .map(file_name)
+                            .unwrap_or_default();
+                        ui.weak(t!(
+                            "offload-activity",
+                            phase = phase_name(progress.phase),
+                            file = file,
+                            rate = format!("{rate:.1}")
+                        ));
+                        let idle = last_activity.elapsed().as_secs();
+                        if idle >= ACTIVITY_SILENCE_S {
+                            ui.colored_label(
+                                ui.visuals().warn_fg_color,
+                                t!("offload-idle", s = idle),
+                            );
                         }
+                        ui.ctx()
+                            .request_repaint_after(std::time::Duration::from_secs(1));
                         ui.horizontal(|ui| {
                             if ui.button(t!("offload-background")).clicked() {
                                 background = true;
@@ -984,6 +1051,19 @@ fn file_name(path: &Path) -> String {
 }
 
 /// Mégaoctets, une décimale, à la façon de la langue (« 109,4 » en français).
+/// Silence (secondes sans avancement) au-delà duquel la boîte le signale (#470).
+const ACTIVITY_SILENCE_S: u64 = 3;
+
+/// Nom d'une étape du déchargement.
+fn phase_name(phase: offload::Phase) -> String {
+    t!(match phase {
+        offload::Phase::Preparing => "offload-phase-preparing",
+        offload::Phase::Writing => "offload-phase-writing",
+        offload::Phase::Syncing => "offload-phase-syncing",
+        offload::Phase::Verifying => "offload-phase-verifying",
+    })
+}
+
 fn megabytes(bytes: u64) -> String {
     tri::i18n::decimal(bytes as f64 / 1e6, 1)
 }

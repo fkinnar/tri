@@ -5049,6 +5049,14 @@ impl TriApp {
         if !self.folder.is_none() && self.folder.dir.starts_with(&volume) {
             self.close_folder();
         }
+        // Les rendus de fond sur ses fichiers s'arrêtent aussi (14/11/2026 : tri tenait
+        // une clé qu'on venait de remplir) ; ceux déjà en cours finissent pendant que
+        // l'éjection réessaie (`[places] eject_retries`).
+        if let Some(batch) = &self.develop_batch
+            && batch.folder.starts_with(&volume)
+        {
+            batch.cancel();
+        }
         let (tx, rx) = mpsc::channel();
         let repaint = ctx.clone();
         let target = volume.clone();
@@ -31666,6 +31674,15 @@ mod tests {
         );
         h.state_mut().offload.as_mut().unwrap().pairs_choice = Some(true);
         settle_dialog(&mut h);
+        // #469 : « RAW seulement » grisée tant que les paires sont regroupées.
+        {
+            use egui_kittest::kittest::NodeT;
+            let raw_only = t!("offload-raw-only");
+            assert!(
+                h.get_by_label(&raw_only).accesskit_node().is_disabled(),
+                "RAW seulement grisée"
+            );
+        }
         h.get_by_label("Décharger").click();
         while h
             .query_by_label_contains("2 fichiers copiés et vérifiés")

@@ -88,7 +88,11 @@ d'utilisation » avec la raison), le démonter, autoriser le retrait, éjecter l
 un disque dont le support ne s'éjecte pas (disque dur USB) passe ensuite par le verbe
 « Éjecter » (**à vérifier sous Windows**). Bloquant (de 0,4 s à quelques secondes) : l'interface l'appelle
 dans un fil à part. En cas de refus (disque interne, fichier ouvert), le message du
-système est renvoyé tel quel. Un disque USB « fixe » (disque dur externe) s'éjecte comme
+système est renvoyé tel quel ; refusé parce qu'**occupé** (« target is busy »,
+`DeviceBusy`, « dissented »…), réessayé `[places] eject_retries` fois (5) à
+`eject_retry_ms` d'intervalle (1 s) : le 14/11/2026, tri lui-même tenait une clé où il
+venait de déplacer un dossier (rendus en cours) ; l'interface ferme aussi le dossier
+ouvert et arrête le lot de développements s'ils sont dessus. Un disque USB « fixe » (disque dur externe) s'éjecte comme
 une carte, comme dans le Finder. Vérifié sur macOS avec une image disque : éjectée en
 0,36 s ; volume absent : « diskutil : Failed to find disk ».
 

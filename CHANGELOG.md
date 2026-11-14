@@ -4,6 +4,17 @@
 
 ## Unreleased
 
+- **Ejecting waits for tri's own work** (#473): a USB stick tri was still busy with (a
+  folder just moved there, renders running) was refused "target is busy"; ejecting now
+  stops the development batch on it and retries a few times while the running
+  computations finish (`[places] eject_retries`, `eject_retry_ms`).
+- **No more "Enter / Esc" hint** (#472) next to the buttons of the export, rename,
+  copy / move and delete dialogs: it goes without saying.
+- **Offloading says what it is doing** (#471, #469, #470): the progress shows the step
+  (preparing, copying, writing to the disk, verifying), the file, the throughput, and
+  "Nothing has moved for n s" when it stalls, to tell a slow copy (a USB stick) from a
+  stuck one. "RAW only" and "Group RAW and JPEG" exclude each other: both stay in place,
+  one greyed while the other is checked.
 - **Folder summary counts photos** (#468): in a grouped folder a pair is one photo
   (472 files made 236 photos, ratings were counted twice); "Photos" = pairs + RAW alone
   + JPEG alone, each a filter; developments show the photos shown and the developments,
