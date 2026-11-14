@@ -244,6 +244,9 @@ print_threshold = 3.0
 #   préréglages qui conviennent ;
 # sharpen : accentuation de sortie, "none", "screen" (écran) ou "print" (tirage), réglée
 #   dans [export.sharpening] ; une copie sans recompression n'est pas accentuée.
+
+# Préréglages d'export, autant que voulu : « Nouveau… » en crée un sur le modèle de celui
+# montré.
 [export.profiles.edit]
 # Vers un éditeur externe : TIFF 16 bits, ProPhoto (linéaire), pleine définition.
 name = ""
@@ -305,6 +308,9 @@ ratios = []
 # tiles, rows : morceaux côte à côte (colonnes) et l'un sous l'autre (lignes), chacun au
 #   rapport ratio, un fichier par morceau à l'export (1 à 10 ; 1 et 1 : le cadre entier ;
 #   3 et 1 : un carrousel ; 3 et 3 : une grille).
+
+# Préréglages de version, choisis dans la barre des versions (ou p) : « Nouveau… » en
+# crée un sur le modèle de celui montré.
 [versions.presets.story]
 # Story (Instagram…) : 9:16, pour le web.
 name = ""

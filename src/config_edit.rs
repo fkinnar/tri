@@ -136,16 +136,16 @@ pub struct Schema {
 /// Dernier paragraphe de commentaires d'un préfixe (lignes après la dernière ligne vide),
 /// sans les `#`, en une seule ligne.
 fn comment(prefix: Option<&str>) -> String {
-    let text = prefix.unwrap_or_default();
-    let paragraph = text
-        .rsplit("\n\n")
-        .next()
-        .unwrap_or_default()
-        .lines()
-        .map(str::trim)
-        .filter_map(|l| l.strip_prefix('#'))
-        .map(str::trim)
-        .collect::<Vec<_>>();
+    // Ligne par ligne (une ligne vide peut garder un `\r` : fichier extrait en CRLF sous
+    // Windows) ; le paragraphe repart à chaque ligne blanche.
+    let mut paragraph: Vec<&str> = Vec::new();
+    for line in prefix.unwrap_or_default().lines().map(str::trim) {
+        if line.is_empty() {
+            paragraph.clear();
+        } else if let Some(text) = line.strip_prefix('#') {
+            paragraph.push(text.trim());
+        }
+    }
     paragraph.join(" ").trim().to_string()
 }
 
@@ -495,6 +495,22 @@ hover = \"#b4b4b4\"
         assert!(s.default_of("files", "recent").is_some());
         let keys = s.sections.iter().find(|s| s.name == "keys").unwrap();
         assert!(keys.groups.is_empty());
+        // Une phrase pour la fenêtre de réglages, pas la référence des clés qui la précède
+        // dans le fichier (retour du 14/11/2026 : « personne ne va lire ça »).
+        // Fichier extrait en CRLF (Windows) : même résultat.
+        // (Déjà en CRLF sous Windows : ramené en LF d'abord.)
+        let crlf = include_str!("../doc/config.example.toml")
+            .replace("\r\n", "\n")
+            .replace('\n', "\r\n");
+        for s in [s, Schema::parse(&crlf).unwrap()] {
+            for family in ["export.profiles.edit", "versions.presets.story"] {
+                let doc = &s.sections.iter().find(|s| s.name == family).unwrap().doc;
+                assert!(
+                    doc.len() < 160 && doc.contains("Nouveau…"),
+                    "{family} : {doc}"
+                );
+            }
+        }
     }
 
     /// L'exemple décrit en anglais : mêmes sections, clés et valeurs que l'exemple de
