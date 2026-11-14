@@ -1226,6 +1226,17 @@ pub fn shown_name(path: &Path) -> String {
 }
 
 /// Nom lisible d'un développement (« Darktable · clone 1 »), ou de la photo (son nom).
+/// Photo de la pile de développements de `path` : la photo d'un développement, puis le
+/// RAW si c'est le JPEG d'une paire regroupée (`camera` : JPEG → RAW, #392) ; un
+/// développement darktable du JPEG va ainsi avec le RAW lui aussi.
+fn camera_photo(camera: &HashMap<PathBuf, PathBuf>, path: &Path) -> PathBuf {
+    let source = tri::media::source(path);
+    camera
+        .get(source.as_ref())
+        .cloned()
+        .unwrap_or_else(|| source.into_owned())
+}
+
 pub fn development_label(path: &Path) -> String {
     match tri::developments::get(path) {
         Some(development) => {
@@ -6662,13 +6673,7 @@ impl TriApp {
         self.refresh_camera_raw();
         let files = &self.files;
         let camera = &self.camera_raw;
-        let photo = |i: usize| {
-            let path = &files[i].path;
-            camera
-                .get(path)
-                .cloned()
-                .unwrap_or_else(|| tri::media::source(path).into_owned())
-        };
+        let photo = |i: usize| camera_photo(camera, &files[i].path);
         let same_photo = |i: usize, j: usize| photo(i) == photo(j);
         // Une photo et ses développements ne se séparent jamais (31/10/2026) : un
         // développement n'a pas d'empreinte, la similarité coupait entre eux et la pile de
@@ -6968,12 +6973,10 @@ impl TriApp {
     }
 
     /// Photo de la pile de développements de `path` : la photo d'un développement, le RAW
-    /// du JPEG d'une paire regroupée (#392), sinon l'image elle-même.
+    /// du JPEG d'une paire regroupée (#392) et de ses développements, sinon l'image
+    /// elle-même.
     fn stack_photo(&self, path: &Path) -> PathBuf {
-        self.camera_raw
-            .get(path)
-            .cloned()
-            .unwrap_or_else(|| tri::media::source(path).into_owned())
+        camera_photo(&self.camera_raw, path)
     }
 
     /// Vrai si les paires RAW+JPEG de `dir` sont regroupées (#392) : sa décision, sinon
@@ -13338,10 +13341,13 @@ impl TriApp {
             ui.separator();
             // Les photos, sans leurs développements (comptés à part, 31/10/2026 : une
             // photo et ses deux copies ne font pas « 3 images »).
+            // Le JPEG d'une paire regroupée (#392) aussi : un développement du boîtier.
             let developments = self
                 .files
                 .iter()
-                .filter(|f| tri::media::is_development(&f.path))
+                .filter(|f| {
+                    tri::media::is_development(&f.path) || self.camera_raw.contains_key(&f.path)
+                })
                 .count();
             let raws = self
                 .files
@@ -27032,6 +27038,21 @@ mod tests {
             h.state().development_badge(&h.state().files[jpeg].path),
             Some("Boîtier".to_string())
         );
+        // Un développement du JPEG (darktable sur le JPEG) va aussi avec le RAW.
+        let jpeg_dev = tri::developments::Development {
+            engine: tri::develop::Engine::Darktable,
+            copy: tri::developments::Copy::Clone(1),
+            photo: h.state().files[jpeg].path.clone(),
+            sidecar: photos.join("img0_01.jpg.xmp"),
+        };
+        tri::developments::register(&jpeg_dev);
+        assert_eq!(
+            h.state().stack_photo(&jpeg_dev.path()),
+            h.state().files[raw].path,
+            "le développement du JPEG, avec le RAW"
+        );
+        // Barre d'état : une photo de moins, le JPEG compté avec les développements.
+        h.get_by_label("3 images (1 RAW, 1 dév.) · filtre : tout");
         let data = dir.path().join("data");
         assert_eq!(
             tri::pairs::decided(Some(&data), &photos),
