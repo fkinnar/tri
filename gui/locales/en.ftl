@@ -182,6 +182,7 @@ action-core-stack-mode = Stacks: similar photos grouped (in full screen: next / 
 action-core-dev-toggle = Unfold / fold the photo's developments
 action-core-dev-next = Next development of the photo
 action-core-dev-fold_all = Fold every development stack
+action-core-dev-pairs = Group or separate RAW and JPEG (the folder's pairs)
 action-core-dev-prev = Previous development of the photo
 action-core-stack-choose = Make it the stack cover (its pick)
 action-core-stack-first = First image of the stack (or the photo, before its developments)
@@ -1044,6 +1045,9 @@ settings-choice-xmp-sidecar-darktable-hint = IMAGE.RAF.xmp
 settings-choice-xmp-sidecar-adobe = Adobe
 settings-choice-xmp-sidecar-adobe-hint = IMAGE.xmp
 settings-choice-xmp-sidecar-both = Both
+settings-choice-files-group-pairs-ask = Ask
+settings-choice-files-group-pairs-separate = Separate
+settings-choice-files-group-pairs-grouped = Grouped
 settings-section-xmp-fields = Ratings: fields handled per program
 settings-section-sidecars-rapidraw = RapidRAW sidecars (ratings)
 settings-section-sidecars-rawtherapee = RawTherapee sidecars (ratings)
@@ -1783,3 +1787,20 @@ zoom-percent-range = { $value } %: out of bounds ({ $low } to { $high } %)
 zoom-steps-empty = at least one zoom step
 zoom-fit-value = Fit
 zoom-fit-tip = Fit to the view: { $percent } %
+
+# RAW+JPEG pairs grouped (#392)
+pairs-ask-title = Group RAW and JPEG?
+pairs-ask-text = { $name } has { $n ->
+    [one] a RAW+JPEG pair
+   *[other] { $n } RAW+JPEG pairs
+} (same name). Group each into one photo?
+pairs-ask-detail = Grouped, a pair is a single thumbnail; the camera JPEG is filed with the RAW's developments (unfold them to see it). Nothing changes on disk. The choice is kept for this folder and can be changed from its menu (right-click).
+pairs-ask-always = Don't ask again (this choice for every folder)
+pairs-group = Group
+pairs-separate = Keep separate
+pairs-camera-chip = Camera
+pairs-camera-tip = The camera JPEG, grouped with its RAW
+pairs-grouped-notice = RAW and JPEG grouped in this folder
+pairs-separated-notice = RAW and JPEG separated in this folder
+folder-menu-pairs-group = Group RAW and JPEG
+folder-menu-pairs-separate = Separate RAW and JPEG

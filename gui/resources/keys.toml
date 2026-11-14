@@ -234,6 +234,7 @@ loupe = "m"
 "core.dev.prev" = []
 "core.dev.toggle" = []
 "core.dev.fold_all" = []
+"core.dev.pairs" = []
 
 # --- Versions (v) ---
 # A version is a framing of the image (crop, ratio) with an optional export preset

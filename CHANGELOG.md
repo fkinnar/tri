@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- **RAW+JPEG pairs grouped as one photo** (#463, first part of #392): in a grouped
+  folder a pair is one thumbnail, the camera JPEG filed with the RAW's developments
+  ("Camera" chip, Shift+V to unfold). Off by default: opening a folder that has pairs
+  asks once ("Don't ask again" makes the answer the global setting, `[files]
+  group_pairs` = `ask` / `separate` / `grouped`); the decision is kept per folder and
+  changed from the folder's menu or the palette (`core.dev.pairs`).
 - **CI: a failed test is retried once** (#461): the tests run through cargo-nextest on
   GitHub; a test that only passes on the retry is marked FLAKY (lost simulated clicks on
   GitHub's machines) instead of blocking the pull request; a real bug still fails twice.

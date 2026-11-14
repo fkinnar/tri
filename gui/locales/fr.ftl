@@ -182,6 +182,7 @@ action-core-stack-mode = Piles : les photos semblables regroupées (en plein éc
 action-core-dev-toggle = Déplier / replier les développements de la photo
 action-core-dev-next = Développement suivant de la photo
 action-core-dev-fold_all = Replier toutes les piles de développements
+action-core-dev-pairs = Regrouper ou séparer RAW et JPEG (paires du dossier)
 action-core-dev-prev = Développement précédent de la photo
 action-core-stack-choose = Choisir comme couverture de la pile (sa préférée)
 action-core-stack-first = Première image de la pile (ou la photo, avant ses développements)
@@ -1044,6 +1045,9 @@ settings-choice-xmp-sidecar-darktable-hint = IMAGE.RAF.xmp
 settings-choice-xmp-sidecar-adobe = Adobe
 settings-choice-xmp-sidecar-adobe-hint = IMAGE.xmp
 settings-choice-xmp-sidecar-both = Les deux
+settings-choice-files-group-pairs-ask = Demander
+settings-choice-files-group-pairs-separate = Séparées
+settings-choice-files-group-pairs-grouped = Regroupées
 settings-section-xmp-fields = Notes : champs gérés par logiciel
 settings-section-sidecars-rapidraw = Sidecars RapidRAW (notes)
 settings-section-sidecars-rawtherapee = Sidecars RawTherapee (notes)
@@ -1789,3 +1793,20 @@ zoom-percent-range = { $value } % : hors des bornes ({ $low } à { $high } %)
 zoom-steps-empty = au moins un palier de zoom
 zoom-fit-value = Ajusté
 zoom-fit-tip = Ajusté à la vue : { $percent } %
+
+# Paires RAW+JPEG regroupées (#392)
+pairs-ask-title = Regrouper RAW et JPEG ?
+pairs-ask-text = { $name } a { $n ->
+    [one] une paire RAW+JPEG
+   *[other] { $n } paires RAW+JPEG
+} (même nom). Les regrouper en une seule photo ?
+pairs-ask-detail = Regroupée, une paire n'est qu'une vignette ; le JPEG du boîtier est rangé avec les développements du RAW (dépliez-les pour le voir). Rien ne change sur le disque. Ce choix est retenu pour ce dossier, et se change dans son menu (clic droit).
+pairs-ask-always = Ne plus demander (ce choix pour tous les dossiers)
+pairs-group = Regrouper
+pairs-separate = Garder séparées
+pairs-camera-chip = Boîtier
+pairs-camera-tip = Le JPEG du boîtier, regroupé avec son RAW
+pairs-grouped-notice = RAW et JPEG regroupés dans ce dossier
+pairs-separated-notice = RAW et JPEG séparés dans ce dossier
+folder-menu-pairs-group = Regrouper RAW et JPEG
+folder-menu-pairs-separate = Séparer RAW et JPEG

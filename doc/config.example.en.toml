@@ -423,6 +423,11 @@ recent = 9
 # allowed, every dialog says so. Also a checkbox in the right panel (Grid). Offloading a
 # card is not affected.
 allow_actions = false
+# RAW+JPEG pairs grouped as one photo in the grid, the JPEG filed with the RAW's
+# developments ("Camera"): "ask" asks when opening a folder that has pairs, "separate"
+# keeps them apart, "grouped" groups them. Each folder keeps its own decision (folder
+# menu, palette), which wins over this setting.
+group_pairs = "ask"
 
 [sharpness]
 # Sharpness map (focus peaking, p at 1:1): a pixel is marked if the luminance gradient
