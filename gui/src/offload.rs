@@ -157,6 +157,11 @@ pub struct OffloadDialog {
     /// Case « garder les données de tri » touchée ; `None` : cochée d'office sur un
     /// disque amovible (décidé le 11/11/2026).
     pub(crate) keep_choice: Option<bool>,
+    /// `[files] group_pairs` : la case « Regrouper RAW et JPEG » cochée d'office pour
+    /// `grouped`.
+    group_pairs: tri::pairs::Grouping,
+    /// Case « Regrouper RAW et JPEG » touchée (#392) ; `None` : le réglage.
+    pub(crate) pairs_choice: Option<bool>,
 }
 
 impl OffloadDialog {
@@ -182,6 +187,8 @@ impl OffloadDialog {
             previews: None,
             keep: None,
             keep_choice: None,
+            group_pairs: tri::pairs::Grouping::Ask,
+            pairs_choice: None,
         }
     }
 
@@ -206,6 +213,20 @@ impl OffloadDialog {
     /// [`SessionPreviews`]).
     pub fn set_previews(&mut self, previews: SessionPreviews) {
         self.previews = Some(previews);
+    }
+
+    /// `[files] group_pairs`, pour la case « Regrouper RAW et JPEG ».
+    pub fn set_group_pairs(&mut self, setting: tri::pairs::Grouping) {
+        self.group_pairs = setting;
+    }
+
+    /// Décision de regroupement à retenir pour la séance : la case touchée, sinon le
+    /// réglage s'il n'est pas « demander » (alors la séance demandera à son ouverture).
+    fn pairs_decision(&self) -> Option<bool> {
+        self.pairs_choice.or(match self.group_pairs {
+            tri::pairs::Grouping::Ask => None,
+            setting => Some(setting.groups()),
+        })
     }
 
     /// Propose de garder les données de tri de la séance avec `keep` ([`KeepData`]).
@@ -499,6 +520,10 @@ impl OffloadDialog {
             .map(|(root, _)| root);
         let keep_cache = self.keep.as_ref().map(|k| k.cache.clone());
         let location_too = self.keep_choice != Some(false);
+        // Paires de la séance regroupées ou non (#392), retenu une fois la copie faite
+        // (le dossier existe, ses données de tri à leur place).
+        let pairs = self.pairs_decision().filter(|_| plan.pairs(&settings) > 0);
+        let data = self.data.clone();
         std::thread::spawn(move || {
             let progress_tx = tx.clone();
             let progress_ctx = repaint.clone();
@@ -548,6 +573,11 @@ impl OffloadDialog {
                     }
                 },
             );
+            if let Some(grouped) = pairs
+                && destination.is_dir()
+            {
+                let _ = tri::pairs::decide(data.as_deref(), &destination, Some(grouped));
+            }
             let _ = tx.send(Message::Done(report));
             repaint.request_repaint();
         });
@@ -755,6 +785,18 @@ impl OffloadDialog {
                                 .changed()
                             {
                                 self.keep_choice = Some(on);
+                            }
+                        }
+                        // Paires RAW+JPEG à copier : les regrouper dans la séance (#392).
+                        let pairs = plan.pairs(settings);
+                        if pairs > 0 {
+                            let mut on = self.pairs_choice.unwrap_or(self.group_pairs.groups());
+                            if ui
+                                .checkbox(&mut on, t!("offload-group-pairs", n = pairs))
+                                .on_hover_text(t!("offload-group-pairs-tip"))
+                                .changed()
+                            {
+                                self.pairs_choice = Some(on);
                             }
                         }
                         ui.checkbox(&mut settings.open_after, t!("offload-open-after"));

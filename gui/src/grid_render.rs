@@ -185,6 +185,19 @@ pub enum GridDevelop {
     Manual,
 }
 
+/// Couverture d'une photo sans couverture choisie, en mode « Couverture » (`[gui.grid]
+/// cover_default`, #391, décidé le 14/11/2026) : son dernier développement (sans
+/// développement, le rendu LibRaw), le JPEG boîtier (le fichier JPEG d'une paire
+/// regroupée, sinon l'aperçu embarqué) ou le rendu LibRaw.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CoverDefault {
+    #[default]
+    Latest,
+    Camera,
+    Libraw,
+}
+
 /// Ce que le lot de la grille rend en fond parmi `files` : les développements (leur
 /// vignette est leur rendu, dans leur logiciel : `force` à `None`, « chacun dans le
 /// sien ») toujours ; avec `develop` à `Auto` et un rendu `shown` développé, toutes les

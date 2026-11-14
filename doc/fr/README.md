@@ -39,6 +39,7 @@ existe.
 | [folder.md](folder.md) | Module `tri::folder` : dossier ouvert (images, notes, liste filtrée) |
 | [offload.md](offload.md) | Module `tri::offload` : déchargement d'une carte (copie vérifiée, historique, suppression) |
 | [developments.md](developments.md) | Module `tri::developments` : les développements d'une photo (darktable et ses clones, RapidRAW et ses copies virtuelles), une image de la grille chacun |
+| [pairs.md](pairs.md) | Module `tri::pairs` : paires RAW+JPEG regroupées en une photo, le JPEG rangé avec les développements du RAW ; décision par dossier |
 | [develop.md](develop.md) | Module `tri::develop` : rendu par darktable (plugin qui pilote `darktable-cli`) |
 | [versions.md](versions.md) | Module `tri::versions` : recadrages d'une photo (versions), stockés dans le XMP |
 | [export.md](export.md) | Module `tri::export` : export JPEG / TIFF / PNG par préréglages (darktable), pas de ProPhoto en 8 bits ; `tri::export_log` : rapport d'export |

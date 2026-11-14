@@ -52,6 +52,7 @@ pub mod neighbourhood;
 pub mod notes;
 pub mod offload;
 pub mod overlay;
+pub mod pairs;
 pub mod places;
 pub mod pp3;
 pub mod preview;

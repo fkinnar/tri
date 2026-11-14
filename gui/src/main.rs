@@ -55,6 +55,7 @@ mod marks;
 mod menu_groups;
 mod meta;
 mod offload;
+mod pairs_dialog;
 mod palette;
 mod path_field;
 mod reset_dialog;

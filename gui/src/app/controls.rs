@@ -187,6 +187,10 @@ impl TriApp {
     /// titre). Le type tourne en boucle, comme au clavier : autant de crans que
     /// nécessaire.
     fn file_kinds_control(&mut self, ui: &mut Ui) {
+        if self.pairs_view() {
+            self.pair_kinds_control(ui);
+            return;
+        }
         let (raw, jpeg) = match self.filter {
             KindFilter::All => (true, true),
             KindFilter::RawOnly => (true, false),
@@ -232,6 +236,61 @@ impl TriApp {
         let ctx = ui.ctx().clone();
         for _ in 0..cycles {
             self.perform(&ctx, Action::FilterCycle);
+        }
+    }
+
+    /// Cases d'un dossier regroupé (#392, décidé le 09/11/2026) : RAW seuls, paires
+    /// RAW+JPEG, JPEG seuls ; combinables, une au moins cochée (la dernière est grisée).
+    fn pair_kinds_control(&mut self, ui: &mut Ui) {
+        use tri::pairs::PairKind;
+        let kinds = self.pair_kinds;
+        let checked_count = [kinds.raw, kinds.pairs, kinds.jpeg]
+            .iter()
+            .filter(|&&on| on)
+            .count();
+        let mut changed = None;
+        ui.horizontal(|ui| {
+            for (kind, on, name, tip) in [
+                (
+                    PairKind::Raw,
+                    kinds.raw,
+                    t!("pairs-filter-raw"),
+                    t!("pairs-filter-raw-tip"),
+                ),
+                (
+                    PairKind::Pair,
+                    kinds.pairs,
+                    t!("pairs-filter-pairs"),
+                    t!("pairs-filter-pairs-tip"),
+                ),
+                (
+                    PairKind::Jpeg,
+                    kinds.jpeg,
+                    t!("pairs-filter-jpeg"),
+                    t!("pairs-filter-jpeg-tip"),
+                ),
+            ] {
+                let tip = format!("{tip}\n{}", self.action_tip(Action::FilterCycle));
+                let mut checked = on;
+                let alone = on && checked_count == 1;
+                let (item, key) = self.side_begin(false);
+                let mut response = ui
+                    .add_enabled(!alone, egui::Checkbox::new(&mut checked, name))
+                    .on_hover_text(&tip)
+                    .on_disabled_hover_text(&tip);
+                if key == Some(SideKey::Activate) && !alone {
+                    checked = !checked;
+                    response.mark_changed();
+                }
+                self.side_end(ui, item, response.rect, response.changed());
+                if response.changed() {
+                    changed = Some(kinds.with(kind, checked));
+                }
+            }
+        });
+        if let Some(kinds) = changed {
+            self.pair_kinds = kinds;
+            self.apply_filter();
         }
     }
 

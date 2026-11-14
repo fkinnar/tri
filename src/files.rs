@@ -44,6 +44,9 @@ pub struct FileSettings {
     /// les déplacer ou les supprimer d'ailleurs casse sa bibliothèque. Autorisé, chaque
     /// boîte le rappelle. Le déchargement d'une carte n'est pas concerné.
     pub allow_actions: bool,
+    /// Paires RAW+JPEG regroupées en une photo (#392) dans un dossier sans décision :
+    /// demander, séparées ou regroupées ([`crate::pairs`]).
+    pub group_pairs: crate::pairs::Grouping,
 }
 
 impl Default for FileSettings {
@@ -54,6 +57,7 @@ impl Default for FileSettings {
             editor: Vec::new(),
             recent: 9,
             allow_actions: false,
+            group_pairs: crate::pairs::Grouping::Ask,
         }
     }
 }

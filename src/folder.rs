@@ -229,13 +229,11 @@ impl Summary {
         in_conflict: impl Fn(&Path) -> bool,
     ) -> Summary {
         use crate::xmp::Flag;
-        use std::collections::{HashMap, HashSet};
+        use std::collections::HashMap;
         let mut summary = Summary::default();
         let mut types: HashMap<(String, media::MediaKind), usize> = HashMap::new();
         let mut developments: HashMap<Engine, usize> = HashMap::new();
         let mut colors: HashMap<crate::xmp::Color, usize> = HashMap::new();
-        let mut flats: HashSet<PathBuf> = HashSet::new();
-        let mut raws: Vec<PathBuf> = Vec::new();
         for file in files {
             if let Some(engine) = engine_of(&file.path) {
                 *developments.entry(engine).or_default() += 1;
@@ -248,13 +246,6 @@ impl Summary {
                 .map(|e| e.to_string_lossy().to_uppercase())
                 .unwrap_or_default();
             *types.entry((extension, file.kind)).or_default() += 1;
-            let stem = file.path.with_extension("");
-            match file.kind {
-                media::MediaKind::Raw => raws.push(stem),
-                media::MediaKind::Flat => {
-                    flats.insert(stem);
-                }
-            }
             let n = notes(&file.path);
             match n.flag {
                 Flag::Accepted => summary.accepted += 1,
@@ -277,7 +268,7 @@ impl Summary {
                 summary.conflicts += 1;
             }
         }
-        summary.pairs = raws.iter().filter(|stem| flats.contains(*stem)).count();
+        summary.pairs = crate::pairs::camera_jpegs(files).len();
         let mut types: Vec<TypeCount> = types
             .into_iter()
             .map(|((extension, kind), count)| TypeCount {

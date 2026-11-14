@@ -182,6 +182,7 @@ action-core-stack-mode = Piles : les photos semblables regroupées (en plein éc
 action-core-dev-toggle = Déplier / replier les développements de la photo
 action-core-dev-next = Développement suivant de la photo
 action-core-dev-fold_all = Replier toutes les piles de développements
+action-core-dev-pairs = Regrouper ou séparer RAW et JPEG (paires du dossier)
 action-core-dev-prev = Développement précédent de la photo
 action-core-stack-choose = Choisir comme couverture de la pile (sa préférée)
 action-core-stack-first = Première image de la pile (ou la photo, avant ses développements)
@@ -234,7 +235,7 @@ summary-photos-tip = Toutes les photos du dossier : un clic retire tous les filt
 summary-filter-on = Cliquer : ne montrer que celles-ci (les autres filtres sont retirés)
 summary-filter-off = Filtre montré ; cliquer : tout montrer
 summary-pairs = Paires RAW+JPEG
-summary-pairs-tip = Un RAW et une image plate du même nom, dans le même dossier (le RAW+JPEG du boîtier).
+summary-pairs-tip = Un RAW et une image plate du même nom, dans le même dossier (le RAW+JPEG du boîtier). Regroupées (menu du dossier, clic droit), la ligne devient un filtre.
 summary-developments = Développements
 summary-engine-off = { $engine } est absent ou désactivé : ses développements ne sont pas montrés dans la grille ni comptés dans le total du dossier.
 summary-untouched = Sans note
@@ -1044,6 +1045,9 @@ settings-choice-xmp-sidecar-darktable-hint = IMAGE.RAF.xmp
 settings-choice-xmp-sidecar-adobe = Adobe
 settings-choice-xmp-sidecar-adobe-hint = IMAGE.xmp
 settings-choice-xmp-sidecar-both = Les deux
+settings-choice-files-group-pairs-ask = Demander
+settings-choice-files-group-pairs-separate = Séparées
+settings-choice-files-group-pairs-grouped = Regroupées
 settings-section-xmp-fields = Notes : champs gérés par logiciel
 settings-section-sidecars-rapidraw = Sidecars RapidRAW (notes)
 settings-section-sidecars-rawtherapee = Sidecars RawTherapee (notes)
@@ -1789,3 +1793,39 @@ zoom-percent-range = { $value } % : hors des bornes ({ $low } à { $high } %)
 zoom-steps-empty = au moins un palier de zoom
 zoom-fit-value = Ajusté
 zoom-fit-tip = Ajusté à la vue : { $percent } %
+
+# Paires RAW+JPEG regroupées (#392)
+pairs-ask-title = Regrouper RAW et JPEG ?
+pairs-ask-text = { $name } a { $n ->
+    [one] une paire RAW+JPEG
+   *[other] { $n } paires RAW+JPEG
+} (même nom). Les regrouper en une seule photo ?
+pairs-ask-detail = Regroupée, une paire n'est qu'une vignette ; le JPEG du boîtier est rangé avec les développements du RAW (dépliez-les pour le voir). Rien ne change sur le disque. Ce choix est retenu pour ce dossier, et se change dans son menu (clic droit).
+pairs-ask-always = Ne plus demander (ce choix pour tous les dossiers)
+pairs-group = Regrouper
+pairs-separate = Garder séparées
+pairs-camera-chip = Boîtier
+pairs-camera-tip = Le JPEG du boîtier, regroupé avec son RAW
+pairs-grouped-notice = RAW et JPEG regroupés dans ce dossier
+pairs-separated-notice = RAW et JPEG séparés dans ce dossier
+folder-menu-pairs-group = Regrouper RAW et JPEG
+folder-menu-pairs-separate = Séparer RAW et JPEG
+pairs-filter-raw = RAW
+pairs-filter-pairs = RAW+JPEG
+pairs-filter-jpeg = JPEG
+pairs-filter-raw-tip = Les RAW sans JPEG
+pairs-filter-pairs-tip = Les paires RAW+JPEG regroupées
+pairs-filter-jpeg-tip = Les JPEG (et autres images) sans RAW
+offload-group-pairs = Regrouper RAW et JPEG ({ $n ->
+    [one] une paire
+   *[other] { $n } paires
+})
+offload-group-pairs-tip = Dans la séance, chaque paire RAW+JPEG n'est qu'une photo : le JPEG du boîtier est rangé avec les développements du RAW. Retenu pour le dossier de la séance ; se change dans son menu (clic droit)
+folders-pairs-grouped = RAW et JPEG regroupés dans ce dossier (une photo par paire)
+dev-modified-format = %d/%m %H:%M
+view-render-cover = Couverture
+view-render-cover-tip = En faire la couverture de la photo (la vignette de sa pile) ; recliquer : plus de couverture choisie, le plus récent
+view-render-is-cover = Ce rendu est la couverture de la photo
+settings-choice-gui-grid-cover-default-latest = Dernier développement
+settings-choice-gui-grid-cover-default-camera = JPEG boîtier
+settings-choice-gui-grid-cover-default-libraw = RAW LibRaw

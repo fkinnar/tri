@@ -283,6 +283,9 @@ pub enum Action {
     DevPrev,
     /// Replier toutes les piles de développements (31/10/2026).
     DevFoldAll,
+    /// Regrouper les paires RAW+JPEG du dossier ouvert en une photo, ou les séparer
+    /// (issue n° 392) : décision retenue pour le dossier.
+    PairsToggle,
     /// Zoom : palier supérieur.
     ZoomIn,
     /// Zoom : palier inférieur (jusqu'à l'ajusté).
@@ -561,7 +564,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 244] = [
+    pub const ALL: [Action; 245] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -701,6 +704,7 @@ impl Action {
         Action::DevNext,
         Action::DevPrev,
         Action::DevFoldAll,
+        Action::PairsToggle,
         Action::ZoomIn,
         Action::ZoomOut,
         Action::ZoomFit,
@@ -958,7 +962,7 @@ impl Action {
             Undo | Redo | History => Group::Edit,
             StackToggle | StackOpen | StackClose | StacksAll | GroupingWindow | StackMode
             | StackChoose | StackFirst | StackLast | StackEnterToggle | DevToggle | DevNext
-            | DevPrev | DevFoldAll => Group::Selection,
+            | DevPrev | DevFoldAll | PairsToggle => Group::Selection,
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
             | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
             | FolderEject | FolderCreate | FolderRename | FolderDelete | FolderFavorite
@@ -1145,6 +1149,7 @@ impl Action {
             Action::DevToggle => "core.dev.toggle",
             Action::DevNext => "core.dev.next",
             Action::DevFoldAll => "core.dev.fold_all",
+            Action::PairsToggle => "core.dev.pairs",
             Action::DevPrev => "core.dev.prev",
             Action::ZoomIn => "core.view.zoom_in",
             Action::ZoomOut => "core.view.zoom_out",
