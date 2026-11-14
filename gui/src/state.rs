@@ -30,6 +30,9 @@ pub struct DisplayState {
     pub histogram_camera: Option<bool>,
     /// Dernier format de paquet téléchargé depuis l'aide (« AppImage »…), 28/10/2026.
     pub download_format: Option<String>,
+    /// Dernier dossier d'export de chaque préréglage (identifiant → dossier), retour du
+    /// 14/11/2026.
+    pub export_folders: Option<std::collections::BTreeMap<String, String>>,
     /// Panneau des dossiers (`Maj+D`).
     pub folder_panel: Option<bool>,
     /// Panneau des métadonnées (`Maj+M`).

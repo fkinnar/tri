@@ -84,6 +84,9 @@ pub struct ExportDialog {
     input: String,
     /// Dossier modifié à la main : il ne suit plus le profil choisi.
     edited: bool,
+    /// Dernier dossier de chaque préréglage (identifiant → chemin tel que tapé ou choisi),
+    /// gardé d'une session à l'autre (retour du 14/11/2026).
+    folders: std::collections::BTreeMap<String, String>,
     /// JPEG sans recompression (case de la boîte) et le profil dont elle vient : elle
     /// reprend la valeur du profil quand on en change (voir [`Profile::passthrough`]).
     passthrough: (bool, usize),
@@ -111,11 +114,13 @@ pub enum Outcome {
     Open,
     /// Annulée.
     Cancelled,
-    /// Export demandé ; `folder` : celui du profil, ou un autre pour cette fois.
+    /// Export demandé ; `folder` : celui du profil, ou un autre pour cette fois ;
+    /// `remember` : le dossier à retenir pour ce préréglage (vide : l'oublier).
     Start {
         images: Vec<PathBuf>,
         profile: Box<Profile>,
         folder: String,
+        remember: String,
         render: Render,
         cut: Option<tri::export::Cut>,
     },
@@ -204,9 +209,10 @@ impl ExportDialog {
             choice,
             input: profiles
                 .get(choice)
-                .map(|p| p.folder.clone())
+                .map(|p| tri::export::folder_template(&p.folder))
                 .unwrap_or_default(),
             edited: false,
+            folders: Default::default(),
             passthrough: (profiles.get(choice).is_some_and(|p| p.passthrough), choice),
             developer,
             render,
@@ -329,28 +335,30 @@ impl ExportDialog {
                 });
                 // Le dossier suit le profil, tant qu'on ne l'a pas modifié.
                 if !self.edited
-                    && let Some(p) = self.profiles.get(self.choice)
-                    && self.input != p.folder
+                    && let Some(wanted) = self.profiles.get(self.choice).map(|p| self.shown(p))
+                    && self.input != wanted
                 {
-                    self.input = p.folder.clone();
+                    self.input = wanted;
                     self.field.replaced();
                 }
                 ui.add_space(6.0);
                 ui.label(t!("export-destination"));
-                let field = self.field.show(ui, id, &mut self.input, 420.0);
+                // Le gabarit tel quel (#480) : des images de plusieurs dossiers n'ont pas le
+                // même dossier réel ; ses champs au survol.
+                let field = self
+                    .field
+                    .show(ui, id, &mut self.input, 420.0)
+                    .on_hover_text(t!("export-folder-tip"));
+                let folder_error = tri::export::check_folder(&self.input).err();
+                if let Some(e) = &folder_error {
+                    ui.colored_label(ui.visuals().error_fg_color, e.to_string());
+                }
                 if field.changed() {
                     self.edited = true;
                 }
                 let enter = field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-                // Où ira la première image (relatif : à côté de chaque image).
-                if let Some(first) = self.images.first() {
-                    let dest = tri::export::folder_for(&self.input, first);
-                    let mut text = t!("export-goes-to", dest = crate::files::tilde(&dest));
-                    if !dest.is_dir() {
-                        text.push_str(&format!(" ({})", t!("export-create")));
-                    }
-                    ui.weak(text);
-                }
+                // Tout est dans le champ : plus de ligne « Destination » dessous (retour du
+                // 14/11/2026 : on ne savait plus où ça allait).
                 ui.add_space(6.0);
                 // L'image exportée est celle qu'on regarde (retour du 19/10/2026 : pas de
                 // choix dans la boîte, Ctrl+E sur l'image voulue) ; dite ci-dessous.
@@ -392,7 +400,10 @@ impl ExportDialog {
                 }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
-                    let ok = n > 0 && !self.profiles.is_empty() && unsupported.is_none();
+                    let ok = n > 0
+                        && !self.profiles.is_empty()
+                        && unsupported.is_none()
+                        && tri::export::check_folder(&self.input).is_ok();
                     confirm = ui
                         .add_enabled(ok, egui::Button::new(t!("export-button")))
                         .clicked()
@@ -401,13 +412,25 @@ impl ExportDialog {
                 });
             });
         if confirm {
+            let profile = &self.profiles[self.choice];
+            let typed = self.input.trim().to_string();
+            // Le gabarit du préréglage tel quel : rien à retenir ; un autre : retenu pour
+            // ce préréglage.
+            let default = tri::export::folder_template(&profile.folder);
+            let remember = if typed == default {
+                String::new()
+            } else {
+                typed.clone()
+            };
+            let folder = typed;
             return Outcome::Start {
                 images: std::mem::take(&mut self.images),
                 profile: Box::new(tri::export::Profile {
                     passthrough: self.passthrough.0,
-                    ..self.profiles[self.choice].clone()
+                    ..profile.clone()
                 }),
-                folder: self.input.trim().to_string(),
+                folder,
+                remember,
                 render: self.render,
                 cut: self.cut.clone(),
             };
@@ -463,10 +486,44 @@ impl ExportDialog {
             })
             .unwrap_or(0);
         if let Some(p) = self.profiles.get(self.choice) {
-            self.input = p.folder.clone();
+            self.input = self.shown(p);
             self.passthrough = (p.passthrough, self.choice);
         }
         self
+    }
+
+    /// Les derniers dossiers des préréglages (identifiant → dossier), gardés d'une session
+    /// à l'autre : le champ montre celui du préréglage choisi.
+    pub fn with_folders(mut self, folders: std::collections::BTreeMap<String, String>) -> Self {
+        self.folders = folders;
+        if let Some(p) = self.profiles.get(self.choice) {
+            self.input = self.shown(p);
+        }
+        // Curseur au bout : d'un long chemin, on voit le dossier final.
+        self.field.replaced();
+        self
+    }
+
+    /// Gabarit montré pour le préréglage `p` : le dernier retenu, sinon le sien (forme
+    /// explicite, `{source}/export`).
+    fn shown(&self, p: &Profile) -> String {
+        self.folders
+            .get(&p.id)
+            .cloned()
+            .unwrap_or_else(|| tri::export::folder_template(&p.folder))
+    }
+
+    /// Dossier dans le champ (tests).
+    #[cfg(test)]
+    pub fn input(&self) -> &str {
+        &self.input
+    }
+
+    /// Dossier tapé dans le champ (tests).
+    #[cfg(test)]
+    pub fn type_folder(&mut self, folder: &str) {
+        self.input = folder.to_string();
+        self.edited = true;
     }
 
     #[cfg(test)]
