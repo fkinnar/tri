@@ -415,6 +415,8 @@ pub struct TriApp {
     camera_raw: HashMap<PathBuf, PathBuf>,
     /// Boîte « Regrouper RAW et JPEG ? » ouverte.
     pairs_dialog: Option<crate::pairs_dialog::PairsDialog>,
+    /// Cases RAW / RAW+JPEG / JPEG d'un dossier regroupé (#392).
+    pair_kinds: tri::pairs::PairKinds,
     /// Réinitialisation en cours : le dossier, et ce qu'elle a fait, à la fin.
     reset_job: Option<(PathBuf, Receiver<tri::reset::Outcome>)>,
     /// Message pour la barre d'état (texte, vrai si c'est une erreur).
@@ -1500,6 +1502,7 @@ impl TriApp {
             pairs_dirs: HashMap::new(),
             camera_raw: HashMap::new(),
             pairs_dialog: None,
+            pair_kinds: tri::pairs::PairKinds::default(),
             reset_job: None,
             notice: None,
             settings: settings.engine(),
@@ -5741,13 +5744,30 @@ impl TriApp {
             .iter()
             .filter(|f| tri::developments::get(&f.path).is_none_or(|d| engines.contains(&d.engine)))
             .count();
+        // Dossier regroupé (#392) : les trois cases RAW / RAW+JPEG / JPEG à la place des
+        // deux.
+        self.refresh_camera_raw();
+        let kind = if self.pairs_view() {
+            KindFilter::All
+        } else {
+            self.filter
+        };
         let base = tri::fuzzy::NameFilter {
             query: &self.name_query,
         }
         .apply(
             tri::developments::ActiveEngines(&engines)
-                .apply(self.folder.filtered(self.filter, &NotesRule::default())),
+                .apply(self.folder.filtered(kind, &NotesRule::default())),
         );
+        let base = if self.pairs_view() {
+            tri::pairs::PairFilter {
+                kinds: self.pair_kinds,
+                camera: &self.camera_raw,
+            }
+            .apply(base)
+        } else {
+            base
+        };
         // Seulement une extension (résumé du dossier, #388).
         let base = match &self.extension_only {
             Some(extension) => tri::filter::ExtensionFilter { extension }.apply(base),
@@ -6174,6 +6194,7 @@ impl TriApp {
                 .as_ref()
                 .map(|v| v.iter().map(|e| e.id().to_string()).collect()),
             subfolders: Some(self.subfolders),
+            pair_kinds: (!self.pair_kinds.is_all()).then_some(self.pair_kinds),
             current: self
                 .files
                 .get(self.selected)
@@ -6294,6 +6315,7 @@ impl TriApp {
                 .collect()
         });
         self.filter = view.kind;
+        self.pair_kinds = view.pair_kinds.unwrap_or_default();
         self.notes_rule = view.notes.clone();
         self.stars_op = view.stars_op;
         self.colors_all = view.notes.colors.as_ref().is_some_and(|c| c.all);
@@ -7027,6 +7049,7 @@ impl TriApp {
             self.pairs_dialog = None;
         }
         self.stacks_dirty = true;
+        self.refilter(Reveal::Minimal);
         self.notice = Some((
             t!(if grouped {
                 "pairs-grouped-notice"
@@ -7035,6 +7058,12 @@ impl TriApp {
             }),
             false,
         ));
+    }
+
+    /// Vrai si le dossier ouvert est regroupé (#392) : ses filtres de type sont les trois
+    /// cases RAW / RAW+JPEG / JPEG.
+    fn pairs_view(&self) -> bool {
+        !self.folder.is_none() && self.pairs_dirs.get(&self.folder.dir) == Some(&true)
     }
 
     /// Bascule les paires du dossier ouvert (`core.dev.pairs`).
@@ -8643,6 +8672,10 @@ impl TriApp {
             }
             Action::SelectAll => self.selection.select_all(&self.files),
             Action::SelectClear => self.selection.clear(),
+            Action::FilterCycle if self.pairs_view() => {
+                self.pair_kinds = self.pair_kinds.next();
+                self.apply_filter();
+            }
             Action::FilterCycle => {
                 self.filter = match self.filter {
                     KindFilter::All => KindFilter::RawOnly,
@@ -8705,6 +8738,7 @@ impl TriApp {
             Action::FilterClear => {
                 self.name_query.clear();
                 self.filter = KindFilter::All;
+                self.pair_kinds = tri::pairs::PairKinds::default();
                 self.notes_rule = NotesRule::default();
                 self.blur_rule = None;
                 self.well_exposed = false;
@@ -15418,7 +15452,9 @@ impl TriApp {
         let photos = self
             .files
             .iter()
-            .filter(|f| !tri::media::is_development(&f.path))
+            .filter(|f| {
+                !tri::media::is_development(&f.path) && !self.camera_raw.contains_key(&f.path)
+            })
             .count();
         if photos == 0 {
             self.files.len()
@@ -15549,7 +15585,20 @@ impl TriApp {
     /// Parties du résumé des filtres ; `name` : avec la recherche par nom.
     fn filter_parts(&self, name: bool) -> String {
         let mut parts: Vec<String> = Vec::new();
-        if self.filter != KindFilter::All {
+        if self.pairs_view() {
+            if !self.pair_kinds.is_all() {
+                let k = self.pair_kinds;
+                let names: Vec<String> = [
+                    (k.raw, t!("pairs-filter-raw")),
+                    (k.pairs, t!("pairs-filter-pairs")),
+                    (k.jpeg, t!("pairs-filter-jpeg")),
+                ]
+                .into_iter()
+                .filter_map(|(on, name)| on.then_some(name))
+                .collect();
+                parts.push(names.join(&t!("filter-summary-or")));
+            }
+        } else if self.filter != KindFilter::All {
             parts.push(filter_name(self.filter));
         }
         if let Some(rule) = self.notes_rule.stars {
@@ -27062,6 +27111,22 @@ mod tests {
         assert!(h.state().pairs_dialog.is_none(), "décidé : pas de question");
         let (raw, jpeg) = (index(h.state(), "img0.RAF"), index(h.state(), "img0.jpg"));
         assert_eq!(h.state().stacks.photo_visible(jpeg), raw);
+        // Filtres : les trois cases du dossier regroupé (une paire, deux JPEG seuls).
+        h.get_by_label("RAW+JPEG");
+        act(&mut h, Action::FilterCycle);
+        assert!(h.state().files.is_empty(), "RAW seuls : aucun");
+        act(&mut h, Action::FilterCycle);
+        let names: Vec<String> = h
+            .state()
+            .files
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["img0.RAF", "img0.jpg"], "les paires");
+        act(&mut h, Action::FilterCycle);
+        assert_eq!(h.state().files.len(), 2, "JPEG seuls : img1, img2");
+        act(&mut h, Action::FilterCycle);
+        assert_eq!(h.state().files.len(), 4, "tout");
         // Le menu du dossier (ou la palette) les sépare.
         act(&mut h, Action::PairsToggle);
         assert_eq!(h.state().stacks.photo_visible(jpeg), jpeg, "séparées");
