@@ -94,6 +94,15 @@ history-purple = violet
 history-notes-one = { $what } : { $name }
 history-notes-many = { $what } : { $n } images
 history-rename = { $from } renommé en { $to }
+naming-help = { $field ->
+    [date] Date de prise de vue : 2026-11-14 · noms et dossiers
+    [time] Heure de prise de vue : 153012 · noms et dossiers
+    [name] Nom d'origine, sans extension : DSCF8158 · noms et dossiers
+    [n] Compteur, dans l'ordre de la grille ; { "{" }n:3{ "}" } = 001 · noms seulement (renommage par lot)
+    [folder] Nom du dossier sans la date en tête : 2026-11-14_Bleu_Jaune donne Bleu_Jaune · noms et dossiers
+    [camera] Modèle de l'appareil : X-T4 · noms et dossiers
+   *[source] Dossier de chaque image, en entier : { "{" }source{ "}" }/export · dossiers d'export seulement
+}
 naming-unclosed = accolade { "{" } jamais fermée
 naming-not-here = { "{" }{ $field }{ "}" } n'a pas de sens ici
 naming-unknown = champ inconnu : { "{" }{ $field }{ "}" } (champs : { $fields })

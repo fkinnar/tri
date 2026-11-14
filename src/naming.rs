@@ -15,6 +15,31 @@ use crate::media::{MediaFile, MediaKind};
 /// Les champs connus, dans l'ordre de l'aide.
 pub const FIELDS: [&str; 6] = ["date", "time", "name", "n", "folder", "camera"];
 
+/// Un champ pour l'aide : comment l'écrire, et ce qu'il donne (exemple et usage compris),
+/// dans la langue de l'interface. Les noms des champs, eux, ne se traduisent jamais.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FieldHelp {
+    /// Le champ tel qu'on l'écrit (`{date}`).
+    pub token: String,
+    /// Ce qu'il donne, un exemple, et où il s'utilise.
+    pub description: String,
+}
+
+/// Tous les champs des gabarits, pour l'aide (renommage par lot et dossiers d'export) :
+/// ceux de [`FIELDS`], puis `{source}`, propre aux dossiers d'export
+/// ([`crate::export::SOURCE`]).
+pub fn help() -> Vec<FieldHelp> {
+    FIELDS
+        .iter()
+        .copied()
+        .chain(std::iter::once("source"))
+        .map(|field| FieldHelp {
+            token: format!("{{{field}}}"),
+            description: crate::t!("naming-help", field = field),
+        })
+        .collect()
+}
+
 /// Ce qu'un gabarit peut citer d'une photo.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Fields {
@@ -275,6 +300,21 @@ mod tests {
         assert!(needs_metadata("{name}_{camera}"));
         assert!(!needs_metadata("{name}_{n}"));
         assert!(check("{folder}").is_ok());
+    }
+
+    #[test]
+    fn the_help_lists_every_field_with_a_description() {
+        let help = help();
+        assert_eq!(help.len(), FIELDS.len() + 1, "les champs et {{source}}");
+        for field in FIELDS.iter().chain(&["source"]) {
+            let token = format!("{{{field}}}");
+            let line = help.iter().find(|h| h.token == token).unwrap();
+            assert!(
+                !line.description.is_empty() && !line.description.contains("naming-help"),
+                "{token} : {}",
+                line.description
+            );
+        }
     }
 
     #[test]
