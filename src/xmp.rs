@@ -1853,6 +1853,15 @@ pub const ADJUST: ListField = ListField {
     prefix: "tri",
 };
 
+/// Réglages du JPEG d'une paire RAW+JPEG quand il partage le sidecar de son RAW
+/// (convention Adobe, `IMG.xmp`) : `tri:AdjustJpeg`, pour que chacun garde les siens
+/// (#481, décidé le 14/11/2026).
+pub const ADJUST_JPEG: ListField = ListField {
+    uri: ns::TRI,
+    local: "AdjustJpeg",
+    prefix: "tri",
+};
+
 /// Éléments de la liste `field` dans un paquet XMP (vide si absente).
 pub fn read_list(xml: &str, field: ListField) -> Result<Vec<String>> {
     let mut reader = new_reader(xml);

@@ -27999,6 +27999,36 @@ mod tests {
     }
 
     #[test]
+    fn a_grouped_pair_does_not_pass_its_adjustments_between_raw_and_jpeg() {
+        // #481 : +1 IL posé sur le RAW d'une paire regroupée écrêtait son JPEG. Synchroniser
+        // sur une sélection qui contient les deux ne passe plus de l'un à l'autre.
+        let (mut h, _dir) = harness();
+        h.run_steps(2);
+        let photos = h.state().folder.dir.clone();
+        std::fs::write(photos.join("img0.RAF"), b"raw").unwrap();
+        h.state_mut().settings.files.group_pairs = tri::pairs::Grouping::Grouped;
+        h.state_mut().open_folder(&photos);
+        run_until(&mut h, |app| app.files.len() == 4);
+        h.run_steps(3);
+        let (raw, jpeg) = (photos.join("img0.RAF"), photos.join("img0.jpg"));
+        assert!(h.state().camera_raw.contains_key(&jpeg), "paire regroupée");
+        let files = h.state().files.clone();
+        h.state_mut().selection.select_all(&files);
+        h.state_mut().adjust_sync = true;
+        let from_raw = h.state().adjust_sync_targets(&raw);
+        assert!(!from_raw.contains(&jpeg), "pas son JPEG : {from_raw:?}");
+        assert!(
+            from_raw.contains(&photos.join("img1.jpg")),
+            "les autres photos"
+        );
+        let from_jpeg = h.state().adjust_sync_targets(&jpeg);
+        assert!(
+            from_jpeg.is_empty(),
+            "ni le RAW ni les autres : {from_jpeg:?}"
+        );
+    }
+
+    #[test]
     fn raw_and_jpeg_pairs_are_grouped_on_request_and_remembered_per_folder() {
         // Issue n° 392 : un dossier qui a des paires RAW+JPEG et pas de décision demande ;
         // regroupée, la paire est une vignette, le JPEG rangé avec les développements du

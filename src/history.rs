@@ -726,9 +726,9 @@ fn set_versions(
 /// vérifié avant d'écrire : une image modifiée ailleurs depuis refuse le pas entier, rien
 /// n'est écrasé.
 fn set_adjust(changes: &[AdjustChange], convention: Convention, undo: bool) -> Result<()> {
-    let field = crate::xmp::ADJUST;
     for c in changes {
         let expected = if undo { &c.after } else { &c.before };
+        let field = crate::adjust::field(&c.image, convention);
         let current = crate::xmp::read_list_of(&c.image, field)
             .map_err(|e| HistoryError::Notes(e.to_string()))?;
         if current != *expected {
@@ -737,6 +737,7 @@ fn set_adjust(changes: &[AdjustChange], convention: Convention, undo: bool) -> R
     }
     for c in changes {
         let wanted = if undo { &c.before } else { &c.after };
+        let field = crate::adjust::field(&c.image, convention);
         crate::xmp::write_list(&c.image, field, wanted, convention)
             .map_err(|e| HistoryError::Notes(e.to_string()))?;
     }
