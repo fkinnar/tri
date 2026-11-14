@@ -4,14 +4,18 @@
 
 ## Non publié
 
+- **Paires regroupées : filtre à trois cases** (#464, #392) : dans un dossier regroupé,
+  le filtre de type a trois cases, RAW (sans JPEG), RAW+JPEG (les paires) et JPEG (sans
+  RAW), combinables, parcourues par la touche du type. Aussi : un développement darktable
+  du JPEG rejoint lui aussi la pile du RAW, et la barre d'état compte les photos (les
+  JPEG regroupés avec les développements).
 - **Paires RAW+JPEG regroupées en une photo** (#463, première partie de #392) : dans un
   dossier regroupé, une paire n'est qu'une vignette, le JPEG du boîtier rangé avec les
   développements du RAW (puce « Boîtier », Maj+V pour déplier). Désactivé par défaut :
   l'ouverture d'un dossier qui a des paires pose la question une fois (« Ne plus
   demander » en fait le réglage global, `[files] group_pairs` = `ask` / `separate` /
   `grouped`) ; la décision est retenue par dossier et se change dans le menu du dossier
-  ou la palette (`core.dev.pairs`). Dans un dossier regroupé, le filtre de type a trois
-  cases : RAW (seuls), RAW+JPEG (paires), JPEG (seuls).
+  ou la palette (`core.dev.pairs`).
 - **CI : un test en échec est relancé une fois** (#461) : les tests passent par
   cargo-nextest sur GitHub ; un test qui ne passe qu'à la relance est marqué FLAKY (clics
   simulés perdus sur les machines de GitHub) au lieu de bloquer la PR ; un vrai bug
