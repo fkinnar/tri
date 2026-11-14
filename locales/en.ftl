@@ -168,6 +168,20 @@ remote-sftp-keys = SFTP: SSH key login only (ssh-copy-id, or a key in ~/.ssh)
 remote-sftp-host-key = SFTP: unknown server; connect once with ssh to accept its key
 settings-defaults-used = { $warning }; default settings used
 settings-file-error = configuration { $path }: { $error }
+settings-error-at = line { $line }, column { $column }
+settings-error-expected = expected { $expected } (given: { $given })
+settings-error-choice = "{ $value }" is not one of the choices: { $choices }
+settings-error-unknown = unknown key "{ $name }"
+settings-error-unknown-near = unknown key "{ $name }" (did you mean "{ $closest }"?)
+settings-error-missing = missing key "{ $name }"
+settings-error-duplicate = key given twice
+settings-kind-unsigned = a whole number, zero or more
+settings-kind-integer = a whole number
+settings-kind-number = a number
+settings-kind-boolean = true or false
+settings-kind-text = a text in quotes
+settings-kind-list = a list in brackets [ ]
+settings-kind-section = a section
 
 ## Command line
 
