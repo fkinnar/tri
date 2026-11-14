@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Une paire regroupée est filtrée comme une photo** (#474) : sous un filtre sur le
+  contenu (bien exposées, nettes, notes…), le JPEG d'une paire regroupée suit son RAW ;
+  jugé seul pendant l'arrivée des analyses, il sortait du filtre, la vignette de la
+  paire basculait du JPEG au RAW et la grille clignotait.
 - **L'éjection attend la fin du travail de tri** (#473) : une clé USB sur laquelle tri
   travaillait encore (un dossier qu'on venait d'y déplacer, des rendus en cours) était
   refusée, « target is busy » ; l'éjection arrête maintenant le lot de développements

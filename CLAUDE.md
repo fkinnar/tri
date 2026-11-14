@@ -425,7 +425,8 @@ Proposition : sortir cette étape du logiciel de développement.
     (commentaires en français et en anglais, lus par la fenêtre de réglages selon la
     langue), `doc/overlay.example.toml`, `doc/manual-images/`. Historique des versions aussi en deux
     langues (22/10/2026) : `CHANGELOG.md` (anglais) et `CHANGELOG.fr.md`, mis à jour
-    ensemble ; la Release porte les deux, l'interface montre celle de sa langue. Les chemins
+    ensemble (depuis le 14/11/2026 : une entrée par PR dans `changelog.d/<PR>.md` et
+    `.fr.md`, rassemblées à la version par `scripts/changelog.py collect`) ; la Release porte les deux, l'interface montre celle de sa langue. Les chemins
     cités dans le code pointent vers `doc/en/`. Commentaires `///` sur tout l'API public
     pour `cargo doc` ;
   - avant chaque commit : `cargo fmt`, `cargo clippy --workspace --all-targets` sans

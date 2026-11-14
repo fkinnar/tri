@@ -202,3 +202,23 @@ request to `main` ("Fixes #n" in its description closes the issue on merge). `ma
 protected: merging through a pull request only, once the three systems (`ubuntu-24.04`,
 `macos-15`, `windows-2022` jobs) pass. Before pushing, as usual: `cargo fmt`, clippy
 and the tests around the changed code.
+
+### Changelog: one fragment per pull request (2026-11-14)
+
+A pull request no longer writes at the top of `CHANGELOG.md` / `CHANGELOG.fr.md` (two
+open pull requests always conflicted there): it adds its entry in two small files,
+`changelog.d/<PR number>.md` (English) and `changelog.d/<PR number>.fr.md` (French),
+each one or more `- ` list items as in the changelogs. Any name works when the number is
+not known yet; the number only sets the order (newest first).
+
+`scripts/changelog.py`:
+
+- `check`: every fragment exists in both languages and starts with a list item (run by
+  the CI on Linux, so a forgotten translation fails the pull request);
+- `show [--fr]`: the pending entries, as they will appear;
+- `collect [--version 1.0.0-beta.2] [--date 2026-11-21] [--dry-run]`: in the version
+  bump pull request, moves the entries to the top of "## Unreleased" / "## Non publié"
+  (created if missing) and deletes the fragments; with `--version`, the section takes
+  the version's title ("## 1.0.0-beta.2 — 2026-11-21", "— 21/11/2026" in French), under
+  which the one-line summary is still written by hand. The release workflow reads that
+  section as before.
