@@ -44,8 +44,13 @@ to each one alone. A development follows its photo; kept with the folder's filte
 ## Interface
 
 Development stacks gather the images that have the same photo: for the JPEG of a
-grouped pair, that photo is its RAW (`TriApp::stack_photo`). The stack's cover stays the
-RAW.
+grouped pair, that photo is its RAW (`TriApp::stack_photo`). The stack's thumbnail follows
+the shown render: with **camera JPEG**, it is the **JPEG file itself**, at its true
+resolution (full screen and 1:1 included, with its own histogram and metadata), rather
+than the RAW's embedded preview; with LibRaw or a software, the RAW or its development;
+with "Cover", the chosen cover (bookmark of the "Shown render" list), else `[gui.grid]
+cover_default` (#391): `latest` (the latest development, else LibRaw; default), `camera`
+(the camera JPEG) or `libraw`.
 
 Coming next (same issue and #391): the folder summary's "RAW+JPEG pairs" line as a filter, a checkbox when offloading, a
 mark in the folder panel, the JPEG as a cover on demand, and the full-resolution JPEG as

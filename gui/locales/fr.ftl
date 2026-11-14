@@ -1820,3 +1820,6 @@ dev-modified-format = %d/%m %H:%M
 view-render-cover = Couverture
 view-render-cover-tip = En faire la couverture de la photo (la vignette de sa pile) ; recliquer : plus de couverture choisie, le plus récent
 view-render-is-cover = Ce rendu est la couverture de la photo
+settings-choice-gui-grid-cover-default-latest = Dernier développement
+settings-choice-gui-grid-cover-default-camera = JPEG boîtier
+settings-choice-gui-grid-cover-default-libraw = RAW LibRaw

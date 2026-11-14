@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- **Grouped pairs: the real JPEG, and a default cover** (#467, closes #391 and #392):
+  with the camera JPEG render, a grouped pair shows the JPEG file itself, at its true
+  resolution (full screen and 1:1 included) instead of the RAW's embedded preview; with
+  the "Cover" render, a photo without a chosen cover shows `[gui.grid] cover_default`:
+  its latest development (default), the camera JPEG or the LibRaw render. Also: the
+  development reel of a thumbnail is no longer hidden under a landscape image.
 - **One "Shown render" list in full screen** (#465): the View section's list no longer
   turns into "Before / after" on a development while stepping through the images; it
   keeps its title and choices, says which render is on screen (camera JPEG, one entry

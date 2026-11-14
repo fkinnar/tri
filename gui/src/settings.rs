@@ -687,6 +687,10 @@ pub struct GridSettings {
     /// LibRaw ; un développement absent retombe sur le rendu LibRaw. Changé à la volée
     /// dans la barre des filtres (`f d`), retenu d'une session à l'autre.
     pub render: crate::grid_render::GridRender,
+    /// Couverture d'une photo sans couverture choisie, en mode « Couverture » (#391) :
+    /// `latest` (le dernier développement, sinon LibRaw), `camera` (JPEG boîtier) ou
+    /// `libraw`.
+    pub cover_default: crate::grid_render::CoverDefault,
     /// Développements que la grille montre mais pas encore rendus : en fond (`auto`), ou
     /// seulement sur demande (`manual`, Ctrl+Maj+B).
     pub develop: crate::grid_render::GridDevelop,
@@ -727,6 +731,7 @@ impl Default for GridSettings {
             search_width: 200.0,
             search_min_width: 80.0,
             render: crate::grid_render::GridRender::Embedded,
+            cover_default: crate::grid_render::CoverDefault::Latest,
             develop: crate::grid_render::GridDevelop::Auto,
             render_poll_ms: 1000,
         }
