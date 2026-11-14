@@ -3584,6 +3584,12 @@ mod tests {
                 .contains_key(&("preview".into(), "thumbnail".into()))
         );
         assert_eq!(w.file.get("preview", "thumbnail"), None, "ancienne valeur");
+        // Dit avec des mots de tous les jours, pas « expected u32 » (issue n° 353).
+        let message = &w.errors[&("preview".into(), "thumbnail".into())];
+        assert!(
+            message.contains("\"grand\"") && !message.contains("u32"),
+            "{message}"
+        );
         // Le message seul, sans la ligne du fichier ni ses `^^^^` (retour du 07/11/2026).
         assert!(
             w.commit("gui.zoom", "max", Some(Value::Int(4000)))

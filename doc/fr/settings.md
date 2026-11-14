@@ -61,15 +61,24 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 ### Erreurs
 
 Une clé inconnue dans une section (faute de frappe), une valeur du mauvais type ou hors
-domaine est **signalée**, avec la ligne et la liste des clés valides :
+domaine est **signalée**, avec la ligne et, pour une faute de frappe, la clé valide la plus proche :
 
 ```
-attention : configuration ~/.config/tri/config.toml : TOML parse error at line 2, column 1
+attention : configuration ~/.config/tri/config.toml : ligne 2, colonne 1
   |
 2 | thumbnial = 300
   | ^^^^^^^^^
-unknown field `thumbnial`, expected one of `thumbnail`, `standard`, … ; réglages par défaut utilisés
+clé inconnue : « thumbnial » (vouliez-vous dire « thumbnail » ?) ; réglages par défaut utilisés
 ```
+
+Les messages sont dits avec des mots de tous les jours, dans la langue de l'interface
+(issue n° 353 : « expected u64 » n'aide personne) : « attendu : un nombre entier positif
+ou nul (donné : -2) », « « sepia » n'est pas un choix possible : dark, light, system,
+neutral », « clé donnée deux fois ». `tri::settings::readable` traduit les formes
+courantes de serde / TOML (type attendu, choix inconnu, clé inconnue ou manquante, clé en
+double) ; tout autre message (nos propres vérifications, syntaxe TOML) est montré tel
+quel. La fenêtre de réglages montre le même message sous la valeur refusée, sans la
+ligne.
 
 Le programme démarre quand même, avec **tous** les réglages par défaut (pas un mélange : un
 fichier à moitié pris en compte serait plus trompeur). Une faute de frappe ne doit pas

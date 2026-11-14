@@ -522,19 +522,231 @@ pub fn load<T: DeserializeOwned + Default>(path: Option<&Path>) -> Loaded<T> {
 /// Lit des réglages depuis un texte TOML. Le message d'erreur indique la ligne et la clé
 /// en cause.
 pub fn parse<T: DeserializeOwned>(text: &str) -> Result<T, String> {
-    toml::from_str(text).map_err(|e| e.to_string().trim_end().to_string())
+    toml::from_str(text).map_err(|e| {
+        let full = e.to_string().trim_end().to_string();
+        let raw = e.message().trim_end();
+        let Some(place) = full.strip_suffix(raw) else {
+            return full;
+        };
+        // « TOML parse error at line 2, column 13 » : la position, dans la langue choisie.
+        let place = match place.split_once('\n') {
+            Some((head, rest)) => match position(head) {
+                Some((line, column)) => {
+                    let head = crate::t!("settings-error-at", line = line, column = column);
+                    format!("{head}\n{rest}")
+                }
+                None => place.to_string(),
+            },
+            None => place.to_string(),
+        };
+        format!("{place}{}", readable(raw))
+    })
 }
 
 /// Comme [`parse`], mais l'erreur sans sa position ni l'extrait du fichier : pour un
 /// message montré sous la valeur en cause (fenêtre de réglages, retour du 07/11/2026 :
 /// « TOML parse error at line 22 » et ses `^^^^` n'y disaient rien de plus).
 pub fn parse_message<T: DeserializeOwned>(text: &str) -> Result<T, String> {
-    toml::from_str(text).map_err(|e| e.message().trim_end().to_string())
+    toml::from_str(text).map_err(|e| readable(e.message().trim_end()))
+}
+
+/// Ligne et colonne de « TOML parse error at line 2, column 13 ».
+fn position(head: &str) -> Option<(u64, u64)> {
+    let rest = head.strip_prefix("TOML parse error at line ")?;
+    let (line, column) = rest.split_once(", column ")?;
+    Some((line.trim().parse().ok()?, column.trim().parse().ok()?))
+}
+
+/// Message d'erreur de serde / TOML dit avec des mots de tous les jours, dans la langue
+/// de l'interface (issue n° 353 : « expected u64 » ne dit rien à personne). Les formes
+/// courantes sont traduites (type attendu, choix inconnu, clé inconnue avec la plus
+/// proche, clé en double) ; les autres messages, dont les nôtres, passent tels quels.
+pub fn readable(message: &str) -> String {
+    readable_parts(message).unwrap_or_else(|| message.to_string())
+}
+
+fn readable_parts(message: &str) -> Option<String> {
+    if let Some(rest) = message
+        .strip_prefix("invalid value: ")
+        .or_else(|| message.strip_prefix("invalid type: "))
+    {
+        let (given, expected) = rest.rsplit_once(", expected ")?;
+        return Some(crate::t!(
+            "settings-error-expected",
+            expected = expected_kind(expected)?,
+            given = given_value(given)
+        ));
+    }
+    if let Some(rest) = message.strip_prefix("unknown variant ") {
+        let (value, choices) = rest.split_once(", expected ")?;
+        return Some(crate::t!(
+            "settings-error-choice",
+            value = unquote(value),
+            choices = quoted(choices).join(", ")
+        ));
+    }
+    if let Some(rest) = message.strip_prefix("unknown field ") {
+        let (name, known) = rest.split_once(", expected ").unwrap_or((rest, ""));
+        let name = unquote(name);
+        let closest = closest(&name, quoted(known).into_iter());
+        return Some(match closest {
+            Some(closest) => crate::t!(
+                "settings-error-unknown-near",
+                name = name,
+                closest = closest
+            ),
+            None => crate::t!("settings-error-unknown", name = name),
+        });
+    }
+    if let Some(rest) = message.strip_prefix("missing field ") {
+        return Some(crate::t!("settings-error-missing", name = unquote(rest)));
+    }
+    if message == "duplicate key" {
+        return Some(crate::t!("settings-error-duplicate"));
+    }
+    None
+}
+
+/// Ce que serde attend (« u64 », « a boolean »…), en mots ; `None` si inconnu.
+fn expected_kind(expected: &str) -> Option<String> {
+    let id = match expected {
+        "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => "settings-kind-unsigned",
+        "i8" | "i16" | "i32" | "i64" | "i128" | "isize" => "settings-kind-integer",
+        "f32" | "f64" => "settings-kind-number",
+        "a boolean" => "settings-kind-boolean",
+        "a string" | "a character" | "a borrowed string" => "settings-kind-text",
+        "a sequence" => "settings-kind-list",
+        "a map" => "settings-kind-section",
+        _ if expected.starts_with("struct ") || expected.starts_with("a table") => {
+            "settings-kind-section"
+        }
+        _ => return None,
+    };
+    Some(crate::t!(id))
+}
+
+/// La valeur donnée telle que serde la décrit (« integer `-2` », « string "a" »,
+/// « sequence ») : la valeur seule, ou son genre en mots.
+fn given_value(given: &str) -> String {
+    for prefix in [
+        "integer ",
+        "floating point ",
+        "boolean ",
+        "string ",
+        "char ",
+    ] {
+        if let Some(value) = given.strip_prefix(prefix) {
+            let value = value.trim_matches('`');
+            return if prefix == "string " || prefix == "char " {
+                format!("\"{}\"", value.trim_matches('"').trim_matches('\''))
+            } else {
+                value.to_string()
+            };
+        }
+    }
+    match given {
+        "sequence" => crate::t!("settings-kind-list"),
+        "map" => crate::t!("settings-kind-section"),
+        _ => given.to_string(),
+    }
+}
+
+/// Les noms entre accents graves de `text` (« `a`, `b` », « `a` or `b` », « one of … »).
+fn quoted(text: &str) -> Vec<String> {
+    text.split('`')
+        .skip(1)
+        .step_by(2)
+        .map(str::to_string)
+        .collect()
+}
+
+fn unquote(text: &str) -> String {
+    text.trim().trim_matches('`').to_string()
+}
+
+/// Le nom de `known` le plus proche de `name` (faute de frappe), s'il l'est assez.
+fn closest(name: &str, known: impl Iterator<Item = String>) -> Option<String> {
+    let limit = (name.chars().count() / 3).clamp(1, 3);
+    known
+        .filter(|k| !k.is_empty())
+        .map(|k| (edit_distance(name, &k), k))
+        .filter(|(d, _)| *d <= limit)
+        .min_by_key(|(d, _)| *d)
+        .map(|(_, k)| k)
+}
+
+/// Distance d'édition (Levenshtein) entre deux noms.
+fn edit_distance(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.chars().enumerate() {
+        let mut diagonal = row[0];
+        row[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let above = row[j + 1];
+            row[j + 1] = (above + 1)
+                .min(row[j] + 1)
+                .min(diagonal + usize::from(ca != *cb));
+            diagonal = above;
+        }
+    }
+    row[b.len()]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn serde_messages_are_said_in_plain_words() {
+        #[derive(Debug, Deserialize)]
+        #[serde(deny_unknown_fields)]
+        #[allow(dead_code)]
+        struct Probe {
+            delay_ms: Option<u64>,
+            ratio: Option<f32>,
+            on: Option<bool>,
+            mode: Option<Mode>,
+        }
+        #[derive(Debug, Deserialize)]
+        #[serde(rename_all = "lowercase")]
+        enum Mode {
+            Fast,
+            Slow,
+        }
+        let message = |text: &str| parse_message::<Probe>(text).unwrap_err();
+        assert_eq!(
+            message("delay_ms = -2"),
+            "attendu : un nombre entier positif ou nul (donné : -2)"
+        );
+        assert_eq!(
+            message("delay_ms = \"a\""),
+            "attendu : un nombre entier positif ou nul (donné : \"a\")"
+        );
+        assert_eq!(
+            message("ratio = true"),
+            "attendu : un nombre (donné : true)"
+        );
+        assert_eq!(
+            message("on = [1]"),
+            "attendu : true ou false (donné : une liste entre crochets [ ])"
+        );
+        assert_eq!(
+            message("mode = \"medium\""),
+            "« medium » n'est pas un choix possible : fast, slow"
+        );
+        assert_eq!(
+            message("dlay_ms = 3"),
+            "clé inconnue : « dlay_ms » (vouliez-vous dire « delay_ms » ?)"
+        );
+        assert_eq!(message("zzz = 3"), "clé inconnue : « zzz »");
+        assert_eq!(message("on = true\non = false"), "clé donnée deux fois");
+        let full = parse::<Probe>("\ndelay_ms = -2").unwrap_err();
+        assert!(full.starts_with("ligne 2, colonne 12\n"), "{full}");
+        assert!(full.contains("delay_ms = -2"), "extrait gardé : {full}");
+        assert!(full.ends_with("(donné : -2)"), "{full}");
+        assert_eq!(readable("our own message"), "our own message");
+    }
 
     fn env<'a>(vars: &'a [(&str, &str)]) -> impl Fn(&str) -> Option<OsString> + 'a {
         move |name| {
@@ -679,7 +891,7 @@ mod tests {
         let err =
             parse::<EngineSettings>("[preview]\nthumbnail = 300\nstandart = 2000").unwrap_err();
         assert!(err.contains("standart"), "{err}");
-        assert!(err.contains("line 3"), "{err}");
+        assert!(err.contains("ligne 3"), "{err}");
     }
 
     #[test]
