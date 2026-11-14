@@ -801,6 +801,24 @@ rename-title = Rename "{ $name }"
 rename-becomes = { $from } becomes { $to }
 rename-copied = { $from } copied as { $to } (shared with the pair)
 rename-button = Rename
+batch-rename-title = Rename { $n } photos
+batch-rename-template = Template
+batch-rename-start = First number
+batch-rename-fields = Fields:
+batch-rename-field = { $field ->
+    [date] Capture date (2026-11-14)
+    [time] Capture time (153012)
+    [name] Original name, without extension
+    [n] Counter, in grid order; { "{" }n:3{ "}" } = 001
+    [folder] Folder name, without its leading date
+   *[camera] Camera model
+}
+batch-rename-reading = Reading dates and cameras…
+batch-rename-row = { $from } becomes { $to }
+batch-rename-others = { $n ->
+    [one] and 1 more file that follows (pair, sidecar)
+   *[other] and { $n } more files that follow (pairs, sidecars)
+}
 export-title = { $n ->
     [one] Export 1 image
    *[other] Export { $n } images
@@ -1398,7 +1416,6 @@ files-actions-off = File actions are off: tick "File actions" (right panel, Grid
 rating-dialog-selection = { $n } images selected
 rating-dialog-all = The whole selection ({ $n } images)
 rating-dialog-all-tip = Ratings and actions on all the selected images, as with the keyboard; unticked: only the right-clicked image.
-rating-dialog-rename-one = Rename: one image at a time (untick "The whole selection")
 files-library-warning = tri acts on the files themselves: a software that keeps them in its library or catalogue (darktable, Lightroom, Capture One…) will no longer find them there.
 slider-lenient = more lenient
 slider-strict = stricter

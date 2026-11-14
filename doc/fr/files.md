@@ -232,3 +232,32 @@ dossier ouvert supprimé, il se ferme et ses calculs s'arrêtent ; sous-dossier 
 « Sous-dossiers » coché, ses images quittent la liste ; rendus darktable d'un dossier
 supprimé, interrompus (25/10/2026).
 
+## Renommage par lot (#439, 14/11/2026)
+
+Plusieurs photos sélectionnées (marquées), `F2` ou « Renommer » dans la boîte du clic
+droit ouvre le renommage par lot : un **gabarit** de champs entre accolades
+(`tri::naming`), le **premier numéro**, et la liste en direct « ancien devient
+nouveau ». Décidé avec l'utilisateur :
+
+- champs : `{date}` (prise de vue, `2026-11-14`), `{time}` (`153012`), `{name}` (nom
+  d'origine), `{n}` compteur (`{n:3}` = `001`), `{folder}` (nom du dossier sans la date en
+  tête, `2026-11-14_Bleu_Jaune` → `Bleu_Jaune`), `{camera}` (modèle de l'appareil) ; dans
+  une valeur, `/`, `\` et `:` deviennent `-`, les blancs `_`. Les champs sous le gabarit
+  sont des boutons qui l'y ajoutent au bout. `{date}`, `{time}` et `{camera}` sont lus
+  dans les fichiers en fond à l'ouverture de la boîte (`naming::Fields::read`, ~10 ms par
+  RAW) ;
+- le compteur suit **l'ordre de la grille** (trier par date de prise de vue d'abord pour
+  une numérotation chronologique) ;
+- une photo compte une fois : sa paire RAW+JPEG, ses sidecars et ses clones darktable
+  suivent comme pour un renommage simple (`files::photos`, `files::plan_batch` bâti sur
+  `plan_rename`) ;
+- **conflits refusés et montrés** : un nom déjà pris, donné à deux photos (comparé sans la
+  casse) ou un champ sans valeur (pas de date de prise de vue) est écrit en rouge sur sa
+  ligne, et « Renommer » reste grisé ; rien n'est écrasé, rien renommé à moitié ;
+- un seul pas d'historique (« 3 photos renommées »), annulé d'un coup ; les marques
+  suivent les nouveaux noms ;
+- le gabarit proposé la première fois est `[files] rename_template`
+  (`{date}_{folder}_{n:3}`), puis le dernier utilisé dans la session.
+
+Donner à une photo le nom actuel d'une autre (décaler une numérotation d'un cran) est
+refusé comme tout nom pris : passer par un gabarit intermédiaire.

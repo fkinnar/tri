@@ -48,6 +48,7 @@ pub mod jpeg;
 pub mod log;
 pub mod media;
 pub mod metadata;
+pub mod naming;
 pub mod neighbourhood;
 pub mod notes;
 pub mod offload;

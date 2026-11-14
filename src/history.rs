@@ -295,6 +295,18 @@ impl Step {
                 }
             }
             Step::Rename(plan) => {
+                // Lot (#439) : le nombre de photos (une paire et ses sidecars : une).
+                let photos = crate::files::photos(
+                    &plan
+                        .moves
+                        .iter()
+                        .map(|(from, _)| from.clone())
+                        .filter(|p| crate::media::kind_of(p).is_some())
+                        .collect::<Vec<_>>(),
+                );
+                if photos.len() > 1 {
+                    return crate::t!("history-rename-many", n = photos.len());
+                }
                 let (from, to) = plan.moves.first().cloned().unwrap_or_default();
                 crate::t!("history-rename", from = name(&from), to = name(&to))
             }
