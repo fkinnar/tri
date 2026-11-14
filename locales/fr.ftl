@@ -94,6 +94,19 @@ history-purple = violet
 history-notes-one = { $what } : { $name }
 history-notes-many = { $what } : { $n } images
 history-rename = { $from } renommé en { $to }
+naming-unclosed = accolade { "{" } jamais fermée
+naming-unknown = champ inconnu : { "{" }{ $field }{ "}" } (champs : { $fields })
+naming-width = largeur invalide : { "{" }{ $field }{ "}" } (seul le compteur en a une : { "{" }n:3{ "}" } = 001)
+naming-missing = pas de { $field ->
+    [date] date de prise de vue
+    [time] heure de prise de vue
+    [camera] appareil connu
+   *[other] { $field }
+}
+batch-rename-invalid = nom invalide
+batch-rename-taken = « { $name } » existe déjà
+batch-rename-twice = même nom qu'une autre photo
+history-rename-many = { $n } photos renommées
 history-reset = Réinitialisation de « { $name } »
 history-copy-dir = dossier { $name } copié vers { $dest }
 history-move-dir = dossier { $name } déplacé vers { $dest }

@@ -603,6 +603,8 @@ pub struct TriApp {
     /// Profil d'export choisi la dernière fois (session) : pour un rendu (RAW), et pour un
     /// JPEG (boîtier ou d'origine), retenus à part.
     export_choice: [Option<String>; 2],
+    /// Dernier gabarit du renommage par lot (#439), pour la session.
+    rename_template: Option<String>,
     /// Export en cours (darktable, en fond), suivi dans la barre d'état.
     export_job: Option<crate::export::Job>,
     /// Exports demandés pendant un autre (#400), lancés l'un après l'autre dans l'ordre
@@ -1583,6 +1585,7 @@ impl TriApp {
             versions_pending: HashSet::new(),
             versions_read: mpsc::channel(),
             export_choice: [None, None],
+            rename_template: None,
             export_job: None,
             export_queue: std::collections::VecDeque::new(),
             export_queue_next: 0,
@@ -9212,8 +9215,12 @@ impl TriApp {
             | Action::EmbedNotes
             | Action::ImportNotes
             | Action::Send(_) => {
-                // Renommer, afficher : l'image courante ; les autres : la sélection.
+                // Afficher : l'image courante ; renommer : la sélection marquée (par lot,
+                // #439), sinon l'image courante ; les autres : la sélection.
                 let paths = match action {
+                    Action::FileRename if self.selection.visible(&self.files) > 1 => {
+                        self.selection.targets(&self.files, self.selected)
+                    }
                     Action::FileDelete
                     | Action::FileEdit
                     | Action::FileCopy
@@ -14905,7 +14912,19 @@ impl TriApp {
         };
         let result = match action {
             Action::FileRename => {
-                self.file_dialog = Some(crate::files::FileDialog::rename(first, at));
+                // Plusieurs photos : renommage par lot, par un gabarit (#439).
+                let photos = tri::files::photos(&paths);
+                self.file_dialog = Some(if photos.len() > 1 {
+                    let template = self
+                        .rename_template
+                        .clone()
+                        .unwrap_or_else(|| settings.rename_template.clone());
+                    crate::files::FileDialog::RenameBatch(Box::new(
+                        crate::rename_batch::BatchDialog::new(photos, template, at),
+                    ))
+                } else {
+                    crate::files::FileDialog::rename(first, at)
+                });
                 Ok(())
             }
             Action::FileDelete => {
@@ -15185,6 +15204,15 @@ impl TriApp {
                 self.start_export(ctx, images, profile, folder, render, cut);
             }
             crate::files::Outcome::Done { select, step } => {
+                // Lot (#439) : toutes les photos marquées le restent ; gabarit retenu.
+                if let Some(crate::files::FileDialog::RenameBatch(batch)) = &self.file_dialog {
+                    self.rename_template = Some(batch.template.clone());
+                    if let Some(tri::history::Step::Rename(plan)) = &step {
+                        for (from, to) in &plan.moves {
+                            self.selection.renamed(from, to);
+                        }
+                    }
+                }
                 if let Some(step) = step {
                     self.history.push(step);
                 }
@@ -15649,14 +15677,9 @@ impl TriApp {
                 .filter(|a| a.available())
                 {
                     // Actions sur les fichiers interdites : grisées, la bulle dit
-                    // pourquoi (30/10/2026). Renommer : une image à la fois (pas encore
-                    // de renommage par lot).
-                    let allowed = !action.changes_files() || self.settings.files.allow_actions;
-                    let one_only = on_all && action == Action::FileRename;
-                    let enabled = allowed && !one_only;
-                    let tip = if one_only {
-                        t!("rating-dialog-rename-one")
-                    } else if enabled {
+                    // pourquoi (30/10/2026). Renommer toute la sélection : par lot (#439).
+                    let enabled = !action.changes_files() || self.settings.files.allow_actions;
+                    let tip = if enabled {
                         self.action_tip(action)
                     } else {
                         t!("files-actions-off")
@@ -26237,6 +26260,73 @@ mod tests {
     }
 
     #[test]
+    fn f2_on_a_selection_renames_the_batch_by_a_template() {
+        // #439 : plusieurs photos marquées, F2 = renommage par lot ; la paire suit, un pas
+        // d'historique, annulable.
+        let names = ["img0.jpg", "img0.png", "img1.jpg", "img2.jpg"];
+        let (mut h, dir) = harness_files(&names, 64, 48);
+        h.run_steps(3);
+        h.state_mut().settings.files.allow_actions = true;
+        let files: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        for name in ["img0.png", "img1.jpg", "img2.jpg"] {
+            let path = files.iter().find(|p| p.ends_with(name)).unwrap();
+            h.state_mut().selection.toggle(path);
+        }
+        press(&mut h, Key::F2, Modifiers::NONE);
+        assert!(matches!(
+            h.state().file_dialog,
+            Some(crate::files::FileDialog::RenameBatch(_))
+        ));
+        // Gabarit par défaut : des JPEG sans date de prise de vue, signalé en rouge.
+        run_until(
+            &mut h,
+            |app| matches!(&app.file_dialog, Some(crate::files::FileDialog::RenameBatch(b)) if b.is_read()),
+        );
+        h.run_steps(2);
+        assert_eq!(
+            h.query_all_by_label_contains("pas de date de prise de vue")
+                .count(),
+            3,
+            "une ligne par photo"
+        );
+        // Un autre gabarit (piloté directement) : les nouveaux noms en direct.
+        if let Some(crate::files::FileDialog::RenameBatch(b)) = &mut h.state_mut().file_dialog {
+            b.template = "{folder}_{n:2}".into();
+        }
+        h.run_steps(2);
+        assert!(h.query_by_label("img0.png devient photos_01.png").is_some());
+        assert!(h.query_by_label("img2.jpg devient photos_03.jpg").is_some());
+        assert!(
+            h.query_by_label_contains("1 autre fichier").is_some(),
+            "la paire suit"
+        );
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_none());
+        let photos = dir.path().join("photos");
+        for name in [
+            "photos_01.png",
+            "photos_01.jpg",
+            "photos_02.jpg",
+            "photos_03.jpg",
+        ] {
+            assert!(photos.join(name).exists(), "{name}");
+        }
+        assert_eq!(
+            h.state().selection.visible(&h.state().files),
+            3,
+            "marques suivies"
+        );
+        assert_eq!(h.state().rename_template.as_deref(), Some("{folder}_{n:2}"));
+        // Un seul pas d'historique, annulé d'un coup.
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::Undo);
+        h.run_steps(3);
+        for name in names {
+            assert!(photos.join(name).exists(), "{name} revenu");
+        }
+    }
+
+    #[test]
     fn rename_refuses_a_taken_name_and_escape_cancels() {
         let (mut h, dir) = harness();
         h.run_steps(3);
@@ -34275,7 +34365,7 @@ mod tests {
     fn a_right_click_in_a_selection_acts_on_the_whole_selection() {
         // Retour du 12/11/2026 : Suppr efface toute la sélection, le clic droit une image
         // seulement. La boîte du clic droit agit sur toute la sélection (case cochée),
-        // sauf renommer (une image à la fois).
+        // renommer compris (par lot depuis #439).
         use egui_kittest::kittest::NodeT;
         let (mut h, _dir) = harness();
         h.run_steps(3);
@@ -34304,9 +34394,9 @@ mod tests {
             0,
             "hors sélection"
         );
-        // Renommer : grisé sur la sélection.
+        // Renommer : permis sur la sélection (par lot, #439).
         assert!(
-            h.get_by_label(&Action::FileRename.label())
+            !h.get_by_label(&Action::FileRename.label())
                 .accesskit_node()
                 .is_disabled()
         );

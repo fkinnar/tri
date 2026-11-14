@@ -221,3 +221,29 @@ it back out). Names checked as for images (`check_name`). Undoable (see `history
 In the interface (`TriApp::after_folder_change`), background work follows: open folder
 deleted, it closes and its computations stop; subfolder deleted with "Subfolders" on, its
 images leave the list; darktable renders of a deleted folder, interrupted (2026-10-25).
+
+## Batch rename (#439, 2026-11-14)
+
+Several photos selected (marked), `F2` or "Rename" in the right-click dialog opens the
+batch rename: a **template** of fields in braces (`tri::naming`), the **first number**,
+and the live list "old becomes new". Decided with the owner:
+
+- fields: `{date}` (capture, `2026-11-14`), `{time}` (`153012`), `{name}` (original name),
+  `{n}` counter (`{n:3}` = `001`), `{folder}` (folder name without its leading date,
+  `2026-11-14_Bleu_Jaune` → `Bleu_Jaune`), `{camera}` (camera model); in a value, `/`,
+  `\` and `:` become `-`, blanks `_`. The fields under the template are buttons adding
+  them at its end. `{date}`, `{time}` and `{camera}` are read from the files in the
+  background when the dialog opens (`naming::Fields::read`, ~10 ms per RAW);
+- the counter follows the **grid order** (sort by capture date first for a
+  chronological numbering);
+- a photo counts once: its RAW+JPEG pair, its sidecars and its darktable clones follow
+  as for a single rename (`files::photos`, `files::plan_batch` built on `plan_rename`);
+- **conflicts refused and shown**: a name already taken, given to two photos (compared
+  without case), or a field without value (no capture date) is written in red on its
+  line, and "Rename" stays greyed; nothing is overwritten, nothing renamed halfway;
+- one history step ("3 photos renamed"), undone at once; the marks follow the new names;
+- the template offered the first time is `[files] rename_template`
+  (`{date}_{folder}_{n:3}`), then the last one used in the session.
+
+Renaming another photo's current name (shifting a numbering by one) is refused like any
+taken name: rename through an intermediate template.
