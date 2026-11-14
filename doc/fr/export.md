@@ -397,6 +397,16 @@ Les préréglages de recadrage se créent de la même façon (voir `versions.md`
     dessus, et une erreur reste jusqu'à « Fermer ». Une bulle par export, l'une sous
     l'autre (`TriApp::export_toasts`) : une erreur n'est jamais remplacée par le bilan
     d'un export suivant. Rien pour un export arrêté à la main.
+  - **File d'attente** (#400, 14/11/2026) : `Ctrl+E` pendant un export est accepté ; le
+    nouvel export attend son tour et part à la fin du précédent, dans l'ordre des
+    demandes (une file plutôt que des exports en parallèle : darktable et LibRaw occupent
+    déjà tous les cœurs, deux à la fois seraient plus lents que l'un après l'autre).
+    Usage : une version 4:5 puis une 9:16 de la même image, sans attendre. Un export en
+    file garde ce qui a été demandé (images, préréglage, dossier, rendu) : changer la
+    sélection ensuite n'y change rien. Chacun a sa ligne dans la barre d'état, « Export
+    « Web » en attente (3 images) », avec un × pour le retirer de la file ; le × de
+    l'export en cours n'arrête que lui. Chacun garde sa bulle de fin et sa ligne au
+    rapport (`TriApp::export_queue`, `QueuedExport`).
 - **Rapport d'export** (`Ctrl+Maj+E`, action `core.file.export.report` ; idée de
   l'utilisateur du 20/10/2026) : la liste des exports terminés, les plus récents en
   haut, dans une zone à hauteur limitée qui défile. Pour chacun : préréglage, version,

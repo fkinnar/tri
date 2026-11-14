@@ -849,7 +849,15 @@ export-sharpen-screen = screen sharpening
 export-sharpen-print = print sharpening
 export-size-full = full resolution
 export-size-max = { $side } px max
-export-busy = An export is already running.
+export-queued = Export “{ $profile }” waiting ({ $total ->
+    [one] 1 image
+   *[other] { $total } images
+})
+export-queued-cancel = Remove from the queue
+export-queued-notice = { $n ->
+    [one] Export queued: it starts when the current one ends.
+   *[other] Export queued ({ $n } waiting): it starts when the previous ones end.
+}
 export-done = { $n ->
     [one] 1 image exported to { $dest }
    *[other] { $n } images exported to { $dest }
