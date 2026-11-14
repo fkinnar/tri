@@ -1227,6 +1227,27 @@ pub fn shown_name(path: &Path) -> String {
     }
 }
 
+/// Clé du JPEG boîtier d'une photo comme couverture (retour du 14/11/2026) : un chemin
+/// propre, jamais sur le disque, à côté de ceux des développements (`IMG@camera.RAF`).
+fn camera_key(photo: &Path) -> PathBuf {
+    let stem = photo
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let mut name = format!("{stem}@camera");
+    if let Some(extension) = photo.extension() {
+        name.push('.');
+        name.push_str(&extension.to_string_lossy());
+    }
+    photo.with_file_name(name)
+}
+
+/// Vrai si `key` est une clé [`camera_key`].
+fn is_camera_key(key: &Path) -> bool {
+    key.file_stem()
+        .is_some_and(|s| s.to_string_lossy().ends_with("@camera"))
+}
+
 /// Une entrée de la liste « Rendu affiché » du plein écran : un rendu (pour toutes les
 /// photos, ou celui de la photo), ou un développement précis de la photo (index dans la
 /// liste des images).
@@ -3082,17 +3103,50 @@ impl TriApp {
         let mut choice = shown;
         let weak = ui.visuals().weak_text_color();
         let tip = self.render_tip();
-        // Chaque développement : son nom, l'heure de son sidecar (deux développements d'un
-        // même logiciel se distinguent, retour du 14/11/2026), et s'il est la couverture.
-        // (choix, libellé, couverture : index et si c'est elle)
-        type Row = (ViewRender, egui::WidgetText, Option<(usize, bool)>);
+        // Chaque rendu : son nom (un développement : l'heure de son sidecar, retour du
+        // 14/11/2026 : deux développements d'un logiciel se distinguent ; « · JPEG » s'il
+        // est celui du JPEG d'une paire) et sa clé de couverture, s'il peut l'être.
+        let photo = self.stack_photo(&file.path);
+        let range = self
+            .stacks
+            .developments_of(self.selected)
+            .cloned()
+            .unwrap_or(self.selected..self.selected + 1);
+        // Le JPEG boîtier : le JPEG d'une paire regroupée, une image plate elle-même, sinon
+        // celui qu'embarque le RAW.
+        let photo_raw = self
+            .files
+            .iter()
+            .any(|f| f.path == photo && f.kind == MediaKind::Raw);
+        let camera = range
+            .clone()
+            .map(|i| self.files[i].path.clone())
+            .find(|p| self.camera_raw.contains_key(p))
+            .unwrap_or_else(|| {
+                if photo_raw {
+                    camera_key(&photo)
+                } else {
+                    photo.clone()
+                }
+            });
+        let cover = self.effective_cover(self.selected);
+        type Row = (ViewRender, egui::WidgetText, Option<PathBuf>);
         let rows: Vec<Row> = choices
             .iter()
             .map(|&c| match c {
-                ViewRender::Render(render) => (c, render.label(weak), None),
+                ViewRender::Render(render) => {
+                    let key = match render {
+                        crate::grid_render::GridRender::Embedded => Some(camera.clone()),
+                        crate::grid_render::GridRender::LibRaw if photo_raw => Some(photo.clone()),
+                        _ => None,
+                    };
+                    (c, render.label(weak), key)
+                }
                 ViewRender::Development(i) => {
                     let path = &self.files[i].path;
-                    let when = tri::developments::get(path)
+                    let development = tri::developments::get(path);
+                    let when = development
+                        .as_ref()
                         .and_then(|d| std::fs::metadata(&d.sidecar).ok())
                         .and_then(|m| m.modified().ok())
                         .map(|t| {
@@ -3100,9 +3154,13 @@ impl TriApp {
                                 .format(&t!("dev-modified-format"))
                                 .to_string()
                         });
+                    let mut name = development_label(path);
+                    if development.is_some_and(|d| self.camera_raw.contains_key(&d.photo)) {
+                        name.push_str(" · JPEG");
+                    }
                     let mut job = egui::text::LayoutJob::default();
                     let style = egui::Style::default();
-                    egui::RichText::new(development_label(path)).append_to(
+                    egui::RichText::new(name).append_to(
                         &mut job,
                         &style,
                         egui::FontSelection::Default,
@@ -3118,7 +3176,7 @@ impl TriApp {
                                 egui::Align::Center,
                             );
                     }
-                    (c, job.into(), Some((i, self.dev_preferred.contains(path))))
+                    (c, job.into(), Some(path.clone()))
                 }
             })
             .collect();
@@ -3147,20 +3205,21 @@ impl TriApp {
         let response = egui::ComboBox::from_id_salt("view_render")
             .selected_text(name(choice))
             .show_ui(ui, |ui| {
-                for (c, text, cover) in &rows {
+                for (c, text, key) in &rows {
                     ui.horizontal(|ui| {
-                        match cover {
-                            Some((i, on)) => {
+                        match key {
+                            Some(key) => {
+                                let on = cover.as_ref() == Some(key);
                                 let (rect, response) = marks::clickable_named(
                                     ui,
                                     mark,
                                     &t!("view-render-cover"),
                                     &cover_tip,
                                 );
-                                let color = if *on { accent } else { weak };
-                                marks::cover_mark(ui.painter(), rect, *on, color);
+                                let color = if on { accent } else { weak };
+                                marks::cover_mark(ui.painter(), rect, on, color);
                                 if response.clicked() {
-                                    cover_click = Some((*i, *on));
+                                    cover_click = Some((*c, key.clone(), on));
                                 }
                             }
                             None => {
@@ -3174,15 +3233,14 @@ impl TriApp {
             .response
             .on_hover_text(tip);
         self.side_end(ui, item, response.rect, response.clicked());
-        if let Some((i, on)) = cover_click {
-            // Déjà la couverture : plus de préféré (la pile reprend le plus récent).
-            let target = if on {
-                let photo = self.stack_photo(&self.files[i].path);
-                self.files.iter().position(|f| f.path == photo).unwrap_or(i)
-            } else {
-                i
-            };
-            self.prefer_development(target);
+        if let Some((c, key, on)) = cover_click {
+            // Déjà la couverture choisie : plus de choix (le plus récent) ; sinon elle, et
+            // ce rendu à l'écran (retour du 14/11/2026).
+            let chosen = on && self.dev_preferred.contains(&key);
+            self.set_cover(self.selected, (!chosen).then_some(key));
+            if !chosen {
+                choice = c;
+            }
         }
         if choice != shown {
             match choice {
@@ -7011,6 +7069,10 @@ impl TriApp {
                     if let Some(i) = r.clone().find(|&i| dev_preferred.contains(&files[i].path)) {
                         return i;
                     }
+                    // Le JPEG boîtier de la photo choisi : la photo (montrée en JPEG).
+                    if dev_preferred.contains(&camera_key(&photo(r.start))) {
+                        return the_photo;
+                    }
                     let developments: Vec<tri::developments::Development> = r
                         .clone()
                         .filter_map(|i| tri::developments::get(&files[i].path))
@@ -7102,34 +7164,111 @@ impl TriApp {
     /// « mettre en couverture si ce n'est déjà fait ») : refaire ne retire rien.
     fn prefer_development(&mut self, index: usize) {
         let path = self.files[index].path.clone();
-        let Some(range) = self.stacks.developments_of(index).cloned() else {
-            return;
-        };
-        let on = tri::media::is_development(&path);
-        let others: Vec<PathBuf> = range.map(|i| self.files[i].path.clone()).collect();
-        for o in &others {
-            self.dev_preferred.remove(o);
-        }
-        if on {
-            self.dev_preferred.insert(path.clone());
-            self.notice = Some((t!("dev-preferred", name = development_label(&path)), false));
+        // Un développement ou le JPEG d'une paire : lui ; la photo : telle qu'elle est
+        // montrée (JPEG boîtier ou rendu LibRaw, retour du 14/11/2026).
+        let key = if tri::media::is_development(&path) || self.camera_raw.contains_key(&path) {
+            path
+        } else if self.files[index].kind == MediaKind::Raw
+            && self.source_for(&self.files[index]) == Source::Embedded
+        {
+            camera_key(&path)
         } else {
-            self.notice = Some((t!("dev-preferred-none"), false));
+            path
+        };
+        self.set_cover(index, Some(key));
+    }
+
+    /// Clés possibles de la couverture de la photo de l'image `index` (retour du
+    /// 14/11/2026 : une seule par photo, JPEG boîtier et LibRaw compris) : chaque image de
+    /// sa pile (développements, JPEG d'une paire, la photo elle-même = son rendu LibRaw),
+    /// et le JPEG boîtier de la photo ([`camera_key`]).
+    fn cover_keys(&self, index: usize) -> Vec<PathBuf> {
+        let range = self
+            .stacks
+            .developments_of(index)
+            .cloned()
+            .unwrap_or(index..index + 1);
+        let mut keys: Vec<PathBuf> = range.map(|i| self.files[i].path.clone()).collect();
+        keys.push(camera_key(&self.stack_photo(&self.files[index].path)));
+        keys
+    }
+
+    /// Couverture de la photo de l'image `index` : `key` (une de [`TriApp::cover_keys`]),
+    /// ou `None` : aucune choisie (le développement le plus récent). Les autres choix de
+    /// la photo sont oubliés, retenus dans les données de tri.
+    fn set_cover(&mut self, index: usize, key: Option<PathBuf>) {
+        let keys = self.cover_keys(index);
+        for k in &keys {
+            self.dev_preferred.remove(k);
+        }
+        let photo = self.stack_photo(&self.files[index].path);
+        self.dev_shown.remove(&photo);
+        self.grid_levels.remove(&photo);
+        let forget: Vec<PathBuf> = keys
+            .iter()
+            .filter(|k| Some(*k) != key.as_ref())
+            .cloned()
+            .collect();
+        match &key {
+            Some(k) => {
+                self.dev_preferred.insert(k.clone());
+                self.notice = Some((t!("dev-preferred", name = self.cover_name(k)), false));
+            }
+            None => self.notice = Some((t!("dev-preferred-none"), false)),
         }
         let data = self.settings.data_dir();
-        let result = if tri::media::is_development(&path) {
-            tri::developments::prefer(data.as_deref(), &path, on)
-        } else {
-            // La photo elle-même : plus de préféré.
-            others
-                .iter()
-                .filter(|p| tri::media::is_development(p))
-                .try_for_each(|p| tri::developments::prefer(data.as_deref(), p, false))
-        };
-        if let Err(e) = result {
+        if let Err(e) = tri::store::choose(
+            data.as_deref(),
+            tri::store::Choice::Development,
+            &forget,
+            key.as_deref(),
+        ) {
             self.notice = Some((e.to_string(), true));
         }
         self.stacks_dirty = true;
+    }
+
+    /// Nom d'une couverture (clé de [`TriApp::cover_keys`]) pour les messages.
+    fn cover_name(&self, key: &Path) -> String {
+        if tri::media::is_development(key) {
+            development_label(key)
+        } else if self.camera_raw.contains_key(key)
+            || is_camera_key(key)
+            || tri::media::kind_of(key) == Some(MediaKind::Flat)
+        {
+            t!("grid-render-jpeg")
+        } else {
+            t!("grid-render-raw")
+        }
+    }
+
+    /// Couverture effective de la photo de l'image `index`, en mode « Couverture » : la
+    /// choisie, sinon le développement le plus récent, sinon la photo (rendu LibRaw).
+    fn effective_cover(&self, index: usize) -> Option<PathBuf> {
+        let keys = self.cover_keys(index);
+        if let Some(k) = keys.iter().find(|k| self.dev_preferred.contains(*k)) {
+            return Some(k.clone());
+        }
+        let developments: Vec<tri::developments::Development> = keys
+            .iter()
+            .filter_map(|k| tri::developments::get(k))
+            .collect();
+        tri::developments::latest(&developments)
+            .map(|d| d.path())
+            .or_else(|| Some(self.stack_photo(&self.files.get(index)?.path)))
+    }
+
+    /// Choix de couverture de la photo `photo` qui change son propre rendu (mode
+    /// « Couverture ») : `Some(Level::Thumbnail)` pour le JPEG boîtier, `Some(Standard)`
+    /// pour le rendu LibRaw.
+    fn photo_cover_level(&self, photo: &Path) -> Option<Level> {
+        if self.dev_preferred.contains(&camera_key(photo)) {
+            Some(Level::Thumbnail)
+        } else if self.dev_preferred.contains(photo) {
+            Some(Level::Standard)
+        } else {
+            None
+        }
     }
 
     /// Replie toutes les piles de développements (Ctrl+Maj+V, 31/10/2026).
@@ -10670,6 +10809,18 @@ impl TriApp {
         if development && self.dev_before {
             return Source::Embedded;
         }
+        // Mode « Couverture » : une photo dont la couverture choisie est elle-même, en JPEG
+        // boîtier ou en rendu LibRaw (14/11/2026).
+        if !development
+            && file.kind == MediaKind::Raw
+            && self.shown_render() == crate::grid_render::GridRender::Cover
+        {
+            match self.photo_cover_level(&file.path) {
+                Some(Level::Thumbnail) => return Source::Embedded,
+                Some(_) => return Source::Raw,
+                None => {}
+            }
+        }
         if self.source != Source::Developed && !development {
             return self.source;
         }
@@ -13135,6 +13286,14 @@ impl TriApp {
             Some(rule) if file.kind == MediaKind::Raw => rule
                 .engine_for(&file.path, &engines)
                 .map_or(Level::Standard, Level::Developed),
+            // Mode « Couverture », la photo choisie comme couverture en JPEG boîtier ou en
+            // rendu LibRaw (14/11/2026).
+            _ if file.kind == MediaKind::Raw
+                && self.shown_render() == crate::grid_render::GridRender::Cover
+                && let Some(level) = self.photo_cover_level(&file.path) =>
+            {
+                level
+            }
             _ => self.shown_render().level(file, &engines),
         };
         // Un sidecar encore en lecture (en fond) : niveau provisoire, pas retenu.
@@ -13288,6 +13447,9 @@ impl TriApp {
         // Un seul « rendu affiché », grille et plein écran (décidé le 06/11/2026) : le
         // choix d'un logiciel par photo cède la place au choix du dossier.
         self.develop_choice.clear();
+        // La vignette d'un développement regardé en grand suit aussi (retour du
+        // 14/11/2026 : elle restait sur lui, les autres changeaient).
+        self.dev_shown.clear();
         self.sync_source();
         if let Some(engine) = &self.engine {
             engine.scheduler.set_raw_previews(self.raw_policy());
@@ -23428,15 +23590,18 @@ mod tests {
         );
         assert_eq!(h.state().selected, i);
         // Maj+Entrée sans bascule : sur le clone, il reste la couverture ; sur la photo,
-        // plus de préféré.
+        // la photo elle-même (14/11/2026 : JPEG et LibRaw peuvent être la couverture), une
+        // seule.
         press(&mut h, Key::Enter, Modifiers::SHIFT);
         assert!(h.state().dev_preferred.contains(&clone), "pas une bascule");
         act(&mut h, Action::DevNext);
         assert_eq!(h.state().selected, i - 1, "la photo");
         press(&mut h, Key::Enter, Modifiers::SHIFT);
+        let photo = h.state().files[i - 1].path.clone();
         assert!(
-            h.state().dev_preferred.is_empty(),
-            "la photo : plus de préféré"
+            h.state().dev_preferred.contains(&photo) && h.state().dev_preferred.len() == 1,
+            "la photo, seule couverture : {:?}",
+            h.state().dev_preferred
         );
         // Maj+S replie toutes les piles, développements compris (31/10/2026), puis les
         // redéplie toutes.
@@ -26909,7 +27074,9 @@ mod tests {
                 break;
             }
         }
-        assert_eq!(marks, 2, "un signet par développement");
+        // Un signet par rendu qui peut être la couverture : le JPEG (la photo) et les
+        // deux développements.
+        assert_eq!(marks, 3, "un signet par couverture possible");
         // Le clic du signet (règle des tests d'interface : l'action directement).
         h.state_mut().prefer_development(clone);
         assert!(
@@ -26939,6 +27106,37 @@ mod tests {
         h.state_mut()
             .show_render(GridRender::Engine(Engine::Darktable));
         assert!(!h.state().dev_before, "retour à l'après");
+        // Retour du 14/11/2026 : deux couvertures à la fois (choisies chacune pour son
+        // fichier). Une seule après un choix.
+        let (main_path, clone_path) = (developed.clone(), photos.join("img0@dt-01.jpg"));
+        h.state_mut().dev_preferred.insert(main_path.clone());
+        h.state_mut().dev_preferred.insert(clone_path.clone());
+        h.state_mut().set_cover(dev, Some(clone_path.clone()));
+        assert_eq!(
+            h.state().dev_preferred.iter().collect::<Vec<_>>(),
+            [&clone_path],
+            "une seule couverture"
+        );
+        assert_eq!(h.state().effective_cover(dev), Some(clone_path));
+        // Le JPEG comme couverture (une image plate : elle-même) : la photo couvre sa pile
+        // en mode « Couverture ».
+        let camera = photos.join("img0.jpg");
+        h.state_mut().set_cover(dev, Some(camera.clone()));
+        assert_eq!(h.state().effective_cover(dev), Some(camera));
+        h.state_mut().set_grid_render(GridRender::Cover);
+        h.state_mut().mode = Mode::Grid;
+        h.run_steps(3);
+        assert_eq!(
+            h.state().stacks.photo_visible(dev),
+            photo,
+            "la photo en couverture"
+        );
+        // Changer de rendu oublie le développement regardé en grand (sa vignette suit).
+        h.state_mut()
+            .dev_shown
+            .insert(photos.join("img0.jpg"), developed.clone());
+        h.state_mut().set_grid_render(GridRender::LibRaw);
+        assert!(h.state().dev_shown.is_empty());
     }
 
     #[test]

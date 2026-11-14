@@ -11,7 +11,10 @@
   of its sidecar, the other software, LibRaw), and choosing one shows that render of the photo (its
   development, the JPEG of a grouped pair, the "before" of a development) or, if the
   photo has none, becomes the shown render of every photo. A bookmark in front of each
-  development makes it the photo's cover in one click (filled: the cover).
+  render that can be the photo's cover (camera JPEG, each development, LibRaw render)
+  makes it the cover in one click and shows it; one cover per photo (filled), a
+  development of the grouped JPEG is marked "· JPEG". Also: changing the grid's render
+  now updates the thumbnail of the development just viewed in full screen too.
 - **Grouped pairs: three-way filter** (#464, #392): in a grouped folder the type filter
   has three checkboxes, RAW (without a JPEG), RAW+JPEG (the pairs) and JPEG (without a
   RAW), combinable, stepped by the type key. Also: a darktable development of the JPEG

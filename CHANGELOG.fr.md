@@ -11,7 +11,11 @@
   clone 1 », avec l'heure de son sidecar, les autres logiciels, LibRaw), et en choisir un montre ce rendu de la photo
   (son développement, le JPEG d'une paire regroupée, l'« avant » d'un développement) ou,
   si la photo n'en a pas, devient le rendu affiché de toutes les photos. Un signet devant
-  chaque développement en fait la couverture de la photo d'un clic (plein : la couverture).
+  chaque rendu qui peut être la couverture de la photo (JPEG boîtier, chaque
+  développement, rendu LibRaw) en fait la couverture d'un clic et l'affiche ; une seule
+  couverture par photo (pleine), un développement du JPEG regroupé est marqué « · JPEG ».
+  Aussi : changer le rendu de la grille change aussi la vignette du développement qu'on
+  vient de regarder en plein écran.
 - **Paires regroupées : filtre à trois cases** (#464, #392) : dans un dossier regroupé,
   le filtre de type a trois cases, RAW (sans JPEG), RAW+JPEG (les paires) et JPEG (sans
   RAW), combinables, parcourues par la touche du type. Aussi : un développement darktable
