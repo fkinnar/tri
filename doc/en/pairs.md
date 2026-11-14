@@ -23,12 +23,20 @@ with the RAW; copy, move, rename and delete already carry the pair (`[files] pai
   palette, action `core.dev.pairs` (no default key).
 - Subfolders shown with the folder: each image follows its own folder's decision.
 
+## Filters
+
+In a grouped folder, the RAW and JPEG checkboxes of the right panel become **three**:
+RAW (RAW files without a JPEG), RAW+JPEG (grouped pairs), JPEG (JPEGs without a RAW).
+Combinable, at least one checked; the file-type key (`core.filter.cycle`) steps from all
+to each one alone. A development follows its photo; kept with the folder's filters.
+
 ## Engine
 
 - `Grouping`: the setting's three values.
 - `decided(data, folder)` / `decide(data, folder, Some(bool) | None)`: the folder's
   decision, kept in its values (`tuning.json`, key `pairs_grouped`).
 - `grouped(setting, data, folder)`: the decision, else the setting.
+- `PairKinds`, `PairFilter`: the three checkboxes and their filter (`Filter` trait).
 - `camera_jpegs(files)`: the flat images that have a RAW of the same name (ignoring
   case) in the same folder, with that RAW. Also used by the folder summary
   ([folder.md](folder.md)).
@@ -39,7 +47,6 @@ Development stacks gather the images that have the same photo: for the JPEG of a
 grouped pair, that photo is its RAW (`TriApp::stack_photo`). The stack's cover stays the
 RAW.
 
-Coming next (same issue and #391): RAW / RAW+JPEG / JPEG filters in a grouped folder,
-the folder summary's "RAW+JPEG pairs" line as a filter, a checkbox when offloading, a
+Coming next (same issue and #391): the folder summary's "RAW+JPEG pairs" line as a filter, a checkbox when offloading, a
 mark in the folder panel, the JPEG as a cover on demand, and the full-resolution JPEG as
 the camera render.

@@ -100,6 +100,140 @@ pub fn camera_jpegs(files: &[MediaFile]) -> HashMap<PathBuf, PathBuf> {
         .collect()
 }
 
+/// Sorte d'une image dans un dossier regroupé, pour le filtre à trois cases.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PairKind {
+    /// Un RAW sans JPEG (et ses développements).
+    Raw,
+    /// Une paire regroupée : le RAW, son JPEG et leurs développements.
+    Pair,
+    /// Un JPEG (ou autre image plate) sans RAW.
+    Jpeg,
+}
+
+/// Cases du filtre d'un dossier regroupé (décidé le 09/11/2026) : RAW seuls, paires
+/// RAW+JPEG, JPEG seuls ; combinables, une au moins cochée.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PairKinds {
+    /// RAW sans JPEG.
+    pub raw: bool,
+    /// Paires regroupées.
+    pub pairs: bool,
+    /// JPEG sans RAW.
+    pub jpeg: bool,
+}
+
+impl Default for PairKinds {
+    fn default() -> Self {
+        PairKinds {
+            raw: true,
+            pairs: true,
+            jpeg: true,
+        }
+    }
+}
+
+impl PairKinds {
+    /// Suite du clavier (`core.filter.cycle`) : tout, puis chaque case seule.
+    pub const CYCLE: [PairKinds; 4] = [
+        PairKinds {
+            raw: true,
+            pairs: true,
+            jpeg: true,
+        },
+        PairKinds {
+            raw: true,
+            pairs: false,
+            jpeg: false,
+        },
+        PairKinds {
+            raw: false,
+            pairs: true,
+            jpeg: false,
+        },
+        PairKinds {
+            raw: false,
+            pairs: false,
+            jpeg: true,
+        },
+    ];
+
+    /// Vrai si tout passe.
+    pub fn is_all(self) -> bool {
+        self.raw && self.pairs && self.jpeg
+    }
+
+    /// Vrai si les images de sorte `kind` passent.
+    pub fn accepts(self, kind: PairKind) -> bool {
+        match kind {
+            PairKind::Raw => self.raw,
+            PairKind::Pair => self.pairs,
+            PairKind::Jpeg => self.jpeg,
+        }
+    }
+
+    /// Les mêmes avec la case de `kind` mise à `on` ; refusé (inchangé) si plus rien ne
+    /// serait coché.
+    pub fn with(self, kind: PairKind, on: bool) -> PairKinds {
+        let mut next = self;
+        match kind {
+            PairKind::Raw => next.raw = on,
+            PairKind::Pair => next.pairs = on,
+            PairKind::Jpeg => next.jpeg = on,
+        }
+        if next.raw || next.pairs || next.jpeg {
+            next
+        } else {
+            self
+        }
+    }
+
+    /// Suivant dans [`PairKinds::CYCLE`] (une combinaison hors de la suite : tout).
+    pub fn next(self) -> PairKinds {
+        let at = Self::CYCLE.iter().position(|&k| k == self);
+        at.map_or(Self::CYCLE[0], |i| Self::CYCLE[(i + 1) % Self::CYCLE.len()])
+    }
+}
+
+/// Filtre à trois cases d'un dossier regroupé : `camera` donne le RAW de chaque JPEG
+/// regroupé ([`camera_jpegs`], restreint aux dossiers regroupés).
+pub struct PairFilter<'a> {
+    /// Cases cochées.
+    pub kinds: PairKinds,
+    /// JPEG regroupé → son RAW.
+    pub camera: &'a HashMap<PathBuf, PathBuf>,
+}
+
+impl PairFilter<'_> {
+    /// Sorte de `file` : celle de sa photo (un développement suit la sienne, le JPEG
+    /// regroupé et ses développements suivent le RAW).
+    pub fn kind(&self, file: &MediaFile, paired: &std::collections::HashSet<&Path>) -> PairKind {
+        let source = crate::media::source(&file.path);
+        let photo: &Path = self
+            .camera
+            .get(source.as_ref())
+            .map_or(&source, |p| p.as_path());
+        if paired.contains(photo) {
+            PairKind::Pair
+        } else if file.kind == MediaKind::Raw {
+            PairKind::Raw
+        } else {
+            PairKind::Jpeg
+        }
+    }
+}
+
+impl crate::filter::Filter for PairFilter<'_> {
+    fn apply(&self, groups: crate::filter::Groups) -> crate::filter::Groups {
+        if self.kinds.is_all() {
+            return groups;
+        }
+        let paired: std::collections::HashSet<&Path> =
+            self.camera.values().map(|p| p.as_path()).collect();
+        crate::filter::retain(groups, |f| self.kinds.accepts(self.kind(f, &paired)))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -126,6 +260,36 @@ mod tests {
             pairs.get(Path::new("/a/img_1.jpg")),
             Some(&PathBuf::from("/a/IMG_1.RAF"))
         );
+    }
+
+    #[test]
+    fn the_three_boxes_sort_raws_pairs_and_jpegs() {
+        use crate::filter::Filter;
+        let files = vec![
+            file("/a/A.RAF", MediaKind::Raw),
+            file("/a/A.JPG", MediaKind::Flat),
+            file("/a/B.RAF", MediaKind::Raw),
+            file("/a/C.JPG", MediaKind::Flat),
+        ];
+        let camera = camera_jpegs(&files);
+        let names = |kinds: PairKinds| -> Vec<String> {
+            PairFilter {
+                kinds,
+                camera: &camera,
+            }
+            .apply(vec![files.clone()])
+            .concat()
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect()
+        };
+        assert_eq!(names(PairKinds::default()).len(), 4);
+        assert_eq!(names(PairKinds::CYCLE[1]), ["B.RAF"], "RAW seuls");
+        assert_eq!(names(PairKinds::CYCLE[2]), ["A.RAF", "A.JPG"], "paires");
+        assert_eq!(names(PairKinds::CYCLE[3]), ["C.JPG"], "JPEG seuls");
+        let none = PairKinds::CYCLE[1].with(PairKind::Raw, false);
+        assert_eq!(none, PairKinds::CYCLE[1], "une case au moins");
+        assert_eq!(PairKinds::CYCLE[3].next(), PairKinds::default());
     }
 
     #[test]
