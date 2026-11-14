@@ -1822,3 +1822,7 @@ offload-group-pairs = Regrouper RAW et JPEG ({ $n ->
 })
 offload-group-pairs-tip = Dans la séance, chaque paire RAW+JPEG n'est qu'une photo : le JPEG du boîtier est rangé avec les développements du RAW. Retenu pour le dossier de la séance ; se change dans son menu (clic droit)
 folders-pairs-grouped = RAW et JPEG regroupés dans ce dossier (une photo par paire)
+dev-modified-format = %d/%m %H:%M
+view-render-cover = Couverture
+view-render-cover-tip = En faire la couverture de la photo (la vignette de sa pile) ; recliquer : plus de couverture choisie, le plus récent
+view-render-is-cover = Ce rendu est la couverture de la photo

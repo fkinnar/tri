@@ -9,6 +9,21 @@
   est un filtre (les paires seules) ; décharger une carte qui a des paires propose
   « Regrouper RAW et JPEG », retenu pour le dossier de la séance ; un dossier regroupé a
   une petite marque dans le panneau des dossiers.
+- **Une seule liste « Rendu affiché » en plein écran** (#465) : la liste de la section
+  Vue ne devient plus « Avant / après » sur un développement quand on passe d'une image
+  à l'autre ; elle garde son titre et ses choix, dit le rendu à l'écran (JPEG boîtier,
+  une entrée par développement de la photo, par exemple « Darktable » et « Darktable ·
+  clone 1 », avec l'heure de son sidecar, les autres logiciels, LibRaw), et en choisir un montre ce rendu de la photo
+  (son développement, le JPEG d'une paire regroupée, l'« avant » d'un développement) ou,
+  si la photo n'en a pas, devient le rendu affiché de toutes les photos. Un signet devant
+  chaque rendu qui peut être la couverture de la photo (JPEG boîtier, chaque
+  développement, rendu LibRaw) en fait la couverture d'un clic et l'affiche ; une seule
+  couverture par photo (plein ; dans la liste fermée, entre le nom et sa précision,
+  « RAW ▮ LibRaw », quand le rendu à l'écran est la couverture), un développement du JPEG regroupé est marqué « · JPEG ».
+  Aussi : changer le rendu de la grille change aussi la vignette du développement qu'on
+  vient de regarder en plein écran, et un dossier ouvert au lancement montre les
+  développements des logiciels trouvés au démarrage (écartés jusqu'au premier changement
+  de rendu).
 - **Paires regroupées : filtre à trois cases** (#464, #392) : dans un dossier regroupé,
   le filtre de type a trois cases, RAW (sans JPEG), RAW+JPEG (les paires) et JPEG (sans
   RAW), combinables, parcourues par la touche du type. Aussi : un développement darktable

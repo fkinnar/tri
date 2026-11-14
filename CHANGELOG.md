@@ -8,6 +8,21 @@
   in a grouped folder the summary's "RAW+JPEG pairs" line is a filter (the pairs only);
   offloading a card that has pairs offers "Group RAW and JPEG", kept for the session
   folder; a grouped folder has a small mark in the folder panel.
+- **One "Shown render" list in full screen** (#465): the View section's list no longer
+  turns into "Before / after" on a development while stepping through the images; it
+  keeps its title and choices, says which render is on screen (camera JPEG, one entry
+  per development of the photo, e.g. "Darktable" and "Darktable · clone 1", with the time
+  of its sidecar, the other software, LibRaw), and choosing one shows that render of the photo (its
+  development, the JPEG of a grouped pair, the "before" of a development) or, if the
+  photo has none, becomes the shown render of every photo. A bookmark in front of each
+  render that can be the photo's cover (camera JPEG, each development, LibRaw render)
+  makes it the cover in one click and shows it; one cover per photo (filled; in the
+  closed list, between the name and its detail, "RAW ▮ LibRaw", when the render on
+  screen is the cover), a
+  development of the grouped JPEG is marked "· JPEG". Also: changing the grid's render
+  now updates the thumbnail of the development just viewed in full screen too, and a
+  folder opened at launch lists the developments of the software found at startup
+  (they were left out until the first render change).
 - **Grouped pairs: three-way filter** (#464, #392): in a grouped folder the type filter
   has three checkboxes, RAW (without a JPEG), RAW+JPEG (the pairs) and JPEG (without a
   RAW), combinable, stepped by the type key. Also: a darktable development of the JPEG

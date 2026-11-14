@@ -1816,3 +1816,7 @@ offload-group-pairs = Group RAW and JPEG ({ $n ->
 })
 offload-group-pairs-tip = In the session, each RAW+JPEG pair is one photo: the camera JPEG is filed with the RAW's developments. Kept for the session folder; changed from its menu (right-click)
 folders-pairs-grouped = RAW and JPEG grouped in this folder (one photo per pair)
+dev-modified-format = %m/%d %H:%M
+view-render-cover = Cover
+view-render-cover-tip = Make it the photo's cover (the thumbnail of its stack); click again: no chosen cover, the latest one
+view-render-is-cover = This render is the photo's cover
