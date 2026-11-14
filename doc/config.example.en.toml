@@ -242,6 +242,8 @@ print_threshold = 3.0
 #   presets that fit;
 # sharpen: output sharpening, "none", "screen" or "print", set
 #   in [export.sharpening]; a copy without recompression is not sharpened.
+
+# Export presets, as many as wanted: "New…" creates one from the one shown.
 [export.profiles.edit]
 # For an external editor: 16-bit TIFF, ProPhoto (linear), full resolution.
 name = ""
@@ -305,6 +307,9 @@ ratios = []
 # tiles, rows: tiles side by side (columns) and one under the other (rows), each at the
 #   ratio, one file per tile when exporting (1 to 10; 1 and 1: the whole frame; 3 and 1:
 #   a carousel; 3 and 3: a grid).
+
+# Version presets, picked in the version bar (or p): "New…" creates one from the one
+# shown.
 [versions.presets.story]
 # Story (Instagram…): 9:16, for the web.
 name = ""

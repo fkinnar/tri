@@ -495,6 +495,15 @@ hover = \"#b4b4b4\"
         assert!(s.default_of("files", "recent").is_some());
         let keys = s.sections.iter().find(|s| s.name == "keys").unwrap();
         assert!(keys.groups.is_empty());
+        // Une phrase pour la fenêtre de réglages, pas la référence des clés qui la précède
+        // dans le fichier (retour du 14/11/2026 : « personne ne va lire ça »).
+        for family in ["export.profiles.edit", "versions.presets.story"] {
+            let doc = &s.sections.iter().find(|s| s.name == family).unwrap().doc;
+            assert!(
+                doc.len() < 160 && doc.contains("Nouveau…"),
+                "{family} : {doc}"
+            );
+        }
     }
 
     /// L'exemple décrit en anglais : mêmes sections, clés et valeurs que l'exemple de
