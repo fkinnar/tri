@@ -498,7 +498,10 @@ hover = \"#b4b4b4\"
         // Une phrase pour la fenêtre de réglages, pas la référence des clés qui la précède
         // dans le fichier (retour du 14/11/2026 : « personne ne va lire ça »).
         // Fichier extrait en CRLF (Windows) : même résultat.
-        let crlf = include_str!("../doc/config.example.toml").replace('\n', "\r\n");
+        // (Déjà en CRLF sous Windows : ramené en LF d'abord.)
+        let crlf = include_str!("../doc/config.example.toml")
+            .replace("\r\n", "\n")
+            .replace('\n', "\r\n");
         for s in [s, Schema::parse(&crlf).unwrap()] {
             for family in ["export.profiles.edit", "versions.presets.story"] {
                 let doc = &s.sections.iter().find(|s| s.name == family).unwrap().doc;
