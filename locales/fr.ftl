@@ -169,6 +169,20 @@ remote-sftp-keys = SFTP : connexion par clé SSH seulement (ssh-copy-id, ou une 
 remote-sftp-host-key = SFTP : serveur inconnu ; connectez-vous une première fois par ssh pour accepter sa clé
 settings-defaults-used = { $warning } ; réglages par défaut utilisés
 settings-file-error = configuration { $path } : { $error }
+settings-error-at = ligne { $line }, colonne { $column }
+settings-error-expected = attendu : { $expected } (donné : { $given })
+settings-error-choice = « { $value } » n'est pas un choix possible : { $choices }
+settings-error-unknown = clé inconnue : « { $name } »
+settings-error-unknown-near = clé inconnue : « { $name } » (vouliez-vous dire « { $closest } » ?)
+settings-error-missing = clé manquante : « { $name } »
+settings-error-duplicate = clé donnée deux fois
+settings-kind-unsigned = un nombre entier positif ou nul
+settings-kind-integer = un nombre entier
+settings-kind-number = un nombre
+settings-kind-boolean = true ou false
+settings-kind-text = un texte entre guillemets
+settings-kind-list = une liste entre crochets [ ]
+settings-kind-section = une section
 
 ## Ligne de commande
 

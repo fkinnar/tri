@@ -61,15 +61,23 @@ cannot change without updating its documentation.
 ### Errors
 
 An unknown key in a section (typo), a value of the wrong type or out of range is
-**reported**, with the line and the list of valid keys:
+**reported**, with the line and, for a typo, the closest valid key:
 
 ```
-warning: configuration ~/.config/tri/config.toml: TOML parse error at line 2, column 1
+warning: configuration ~/.config/tri/config.toml: line 2, column 1
   |
 2 | thumbnial = 300
   | ^^^^^^^^^
-unknown field `thumbnial`, expected one of `thumbnail`, `standard`, …; default settings used
+unknown key "thumbnial" (did you mean "thumbnail"?); default settings used
 ```
+
+The messages are said in plain words, in the interface language (issue #353:
+"expected u64" helps nobody): "expected a whole number, zero or more (given: -2)",
+""sepia" is not one of the choices: dark, light, system, neutral", "key given twice".
+`tri::settings::readable` translates the common serde / TOML forms (type expected,
+unknown choice, unknown or missing key, duplicate key); any other message (our own
+checks, TOML syntax) is shown as it is. The settings window shows the same message
+under the refused value, without the line.
 
 The program starts anyway, with **all** the default settings (not a mix: a half-applied
 file would be more misleading). A typo must not prevent sorting one's photos. The
