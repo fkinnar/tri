@@ -6250,6 +6250,24 @@ impl TriApp {
         } else {
             groups
         };
+        // Paire regroupée (#392) : une photo ; son JPEG suit le verdict de son RAW (vidéo
+        // du 14/11/2026 : sous « Bien exposées », chaque JPEG analysé était jugé seul, la
+        // vignette de la paire basculait du JPEG au RAW et la grille clignotait).
+        let groups = if self.camera_raw.is_empty() {
+            groups
+        } else {
+            let kept: HashSet<&PathBuf> = groups.iter().flatten().map(|f| &f.path).collect();
+            let follow = |f: &MediaFile| match self.camera_raw.get(&f.path) {
+                Some(raw) => kept.contains(raw),
+                None => kept.contains(&f.path),
+            };
+            let normalised: Vec<Vec<MediaFile>> = base
+                .iter()
+                .map(|g| g.iter().filter(|f| follow(f)).cloned().collect())
+                .filter(|g: &Vec<MediaFile>| !g.is_empty())
+                .collect();
+            normalised
+        };
         // Inversé : ce que les filtres sur le contenu ont retiré de la base.
         let groups = if self.filter_inverted && self.content_filtered() {
             tri::filter::invert(base, &groups)
@@ -27939,6 +27957,33 @@ mod tests {
         assert_eq!(h.state().files.len(), 2, "JPEG seuls : img1, img2");
         act(&mut h, Action::FilterCycle);
         assert_eq!(h.state().files.len(), 4, "tout");
+        // Un filtre sur le contenu juge la paire sur son RAW (vidéo du 14/11/2026 : le
+        // JPEG jugé seul sortait du filtre, la vignette de la paire basculait).
+        let judgement = |blurry: bool| tri::sharpness::Judgement {
+            score: 1.0,
+            folder_ratio: None,
+            neighbour_ratio: None,
+            group_ratio: None,
+            blurry,
+        };
+        h.state_mut()
+            .judgements
+            .insert(photos.join("img0.jpg"), judgement(true));
+        h.state_mut()
+            .judgements
+            .insert(photos.join("img0.RAF"), judgement(false));
+        h.state_mut().blur_rule = Some(tri::sharpness::BlurRule::HideBlurry);
+        h.state_mut().refilter(Reveal::Minimal);
+        assert!(
+            h.state()
+                .files
+                .iter()
+                .any(|f| f.path == photos.join("img0.jpg")),
+            "le JPEG suit son RAW, net"
+        );
+        h.state_mut().blur_rule = None;
+        h.state_mut().judgements.clear();
+        h.state_mut().refilter(Reveal::Minimal);
         // La ligne « Paires RAW+JPEG » du résumé (#388) : la case RAW+JPEG seule ; un
         // second clic retire le filtre.
         h.state_mut().summary_click(&summary::Line::Pairs);

@@ -28,7 +28,9 @@ with the RAW; copy, move, rename and delete already carry the pair (`[files] pai
 In a grouped folder, the RAW and JPEG checkboxes of the right panel become **three**:
 RAW (RAW files without a JPEG), RAW+JPEG (grouped pairs), JPEG (JPEGs without a RAW).
 Combinable, at least one checked; the file-type key (`core.filter.cycle`) steps from all
-to each one alone. A development follows its photo; kept with the folder's filters.
+to each one alone. A development follows its photo; kept with the folder's filters. Under
+a content filter (well exposed, sharp, ratings…), the pair's JPEG follows its RAW's
+verdict (2026-11-14: judged on its own, it made the grid flicker while analyses ran).
 
 ## Engine
 

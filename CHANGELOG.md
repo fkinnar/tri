@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **A grouped pair is filtered as one photo** (#474): under a content filter (well
+  exposed, sharp, ratings…) the JPEG of a grouped pair follows its RAW; judged on its
+  own while the analyses arrived, it left the filter, the pair's thumbnail switched
+  between the JPEG and the RAW and the grid flickered.
 - **Ejecting waits for tri's own work** (#473): a USB stick tri was still busy with (a
   folder just moved there, renders running) was refused "target is busy"; ejecting now
   stops the development batch on it and retries a few times while the running
