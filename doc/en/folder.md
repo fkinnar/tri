@@ -48,7 +48,13 @@ one "opens a folder".
   (from the `developments` registry, apart from the photos), photos without ratings, with
   stars, accepted, rejected, with a colour label (and per colour), and with ratings in
   conflict. `Summary::of` takes functions
-  for the ratings, the software of a development and the conflicts: tested without files.
+  for the ratings, the software of a development, the conflicts, an image's photo
+  (`photo_of`) and the active software: tested without files. **Per photo**
+  (2026-11-14): the JPEG of a grouped pair is part of its photo (neither one more photo,
+  nor a JPG, nor ratings counted twice); each software counts the photos it develops and
+  its developments (`DevelopmentCount`), the total the photos developed by an active
+  software (`developed`, `developed_count`); also the RAW photos, those only LibRaw
+  develops (`libraw_only`) and the flat images alone.
 
 Public fields (`dir`, `files`, `notes`): an open folder has no invariant to protect
 between them, and the interface modifies the ratings (`folder.notes.edit`).

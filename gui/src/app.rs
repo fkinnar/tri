@@ -928,6 +928,9 @@ pub struct TriApp {
     extension_only: Option<String>,
     /// Seulement les photos qui ont des versions (résumé du dossier, #388).
     versions_only: bool,
+    /// Seulement les RAW qu'aucun logiciel actif ne développe (ligne « LibRaw » du
+    /// résumé, 14/11/2026), avec le JPEG de leur paire.
+    libraw_only: bool,
     /// Compteur des changements de versions (écrites, annulées, relues) : le résumé
     /// recompte les photos qui en ont quand il change.
     versions_epoch: u64,
@@ -1766,6 +1769,7 @@ impl TriApp {
             stack_only: None,
             extension_only: None,
             versions_only: false,
+            libraw_only: false,
             versions_epoch: 0,
             summary_jobs: Default::default(),
             stack_only_unfolded: Vec::new(),
@@ -6159,6 +6163,34 @@ impl TriApp {
                 .collect(),
             _ => base,
         };
+        // Seulement les RAW que seul LibRaw développe (résumé du dossier) : sans
+        // développement d'un logiciel actif, le JPEG de leur paire avec eux.
+        let base: Vec<Vec<MediaFile>> = if self.libraw_only {
+            let developed: HashSet<PathBuf> = self
+                .folder
+                .files
+                .iter()
+                .filter(|f| {
+                    tri::developments::get(&f.path).is_some_and(|d| engines.contains(&d.engine))
+                })
+                .map(|f| self.stack_photo(&f.path))
+                .collect();
+            base.into_iter()
+                .map(|g| {
+                    g.into_iter()
+                        .filter(|f| {
+                            let photo = self.stack_photo(&f.path);
+                            tri::media::kind_of(&photo) == Some(MediaKind::Raw)
+                                && !tri::media::is_development(&f.path)
+                                && !developed.contains(&photo)
+                        })
+                        .collect()
+                })
+                .filter(|g: &Vec<MediaFile>| !g.is_empty())
+                .collect()
+        } else {
+            base
+        };
         // Seulement la pile courante (`f c`, issue n° 52).
         let base: Vec<Vec<MediaFile>> = match &self.stack_only {
             Some(only) => base
@@ -6676,6 +6708,7 @@ impl TriApp {
         // Les filtres du résumé (#388) sont propres au dossier quitté.
         self.extension_only = None;
         self.versions_only = false;
+        self.libraw_only = false;
         if !self.gui.remember_folder_view {
             self.folder_view = None;
             return;
@@ -9261,6 +9294,8 @@ impl TriApp {
                 self.conflicts_only = false;
                 self.extension_only = None;
                 self.versions_only = false;
+                self.libraw_only = false;
+                self.libraw_only = false;
                 self.leave_stack_only();
                 self.filter_inverted = false;
                 self.apply_filter();
@@ -16178,6 +16213,9 @@ impl TriApp {
         }
         if self.versions_only {
             parts.push(t!("summary-versions"));
+        }
+        if self.libraw_only {
+            parts.push("LibRaw".to_string());
         }
         if self.conflicts_only {
             parts.push(t!("filter-conflicts"));
@@ -27900,6 +27938,24 @@ mod tests {
         assert!(h.state().summary_line_on(&summary::Line::Pairs));
         h.state_mut().summary_click(&summary::Line::Pairs);
         assert_eq!(h.state().files.len(), 4, "plus de filtre");
+        // Les autres lignes du dossier regroupé (14/11/2026) : JPEG seuls, et LibRaw (les
+        // RAW qu'aucun logiciel ne développe : ici la paire).
+        h.state_mut().summary_click(&summary::Line::JpegAlone);
+        assert_eq!(h.state().files.len(), 2, "img1, img2");
+        h.state_mut().summary_click(&summary::Line::LibRaw);
+        let names: Vec<String> = h
+            .state()
+            .files
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            names,
+            ["img0.RAF", "img0.jpg"],
+            "la paire, rien à développer"
+        );
+        h.state_mut().summary_click(&summary::Line::LibRaw);
+        assert_eq!(h.state().files.len(), 4);
         // Le menu du dossier (ou la palette) les sépare.
         act(&mut h, Action::PairsToggle);
         assert_eq!(h.state().stacks.photo_visible(jpeg), jpeg, "séparées");

@@ -1829,3 +1829,18 @@ view-render-is-cover = Ce rendu est la couverture de la photo
 settings-choice-gui-grid-cover-default-latest = Dernier développement
 settings-choice-gui-grid-cover-default-camera = JPEG boîtier
 settings-choice-gui-grid-cover-default-libraw = RAW LibRaw
+summary-developments-counts = { $photos ->
+    [one] { $photos } photo développée
+   *[other] { $photos } photos développées
+} (ce que montre le filtre, une vignette chacune), { $n ->
+    [one] { $n } développement
+   *[other] { $n } développements
+} en tout
+summary-raw-alone = RAW seuls
+summary-jpeg-alone = JPEG seuls
+summary-camera = JPEG boîtier
+summary-camera-tip = Le JPEG de chaque paire regroupée : un développement fait dans le boîtier
+summary-libraw-counts = { $only ->
+    [one] { $only } RAW que seul LibRaw développe
+   *[other] { $only } RAW que seul LibRaw développe
+} (aucun logiciel actif : ce qui reste à développer), sur { $n } RAW en tout (chacun a son rendu LibRaw)

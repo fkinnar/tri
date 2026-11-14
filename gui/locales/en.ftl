@@ -1823,3 +1823,18 @@ view-render-is-cover = This render is the photo's cover
 settings-choice-gui-grid-cover-default-latest = Latest development
 settings-choice-gui-grid-cover-default-camera = Camera JPEG
 settings-choice-gui-grid-cover-default-libraw = RAW LibRaw
+summary-developments-counts = { $photos ->
+    [one] { $photos } developed photo
+   *[other] { $photos } developed photos
+} (what the filter shows, one thumbnail each), { $n ->
+    [one] { $n } development
+   *[other] { $n } developments
+} in all
+summary-raw-alone = RAW alone
+summary-jpeg-alone = JPEG alone
+summary-camera = Camera JPEG
+summary-camera-tip = The JPEG of each grouped pair: a development made in the camera
+summary-libraw-counts = { $only ->
+    [one] { $only } RAW only LibRaw develops
+   *[other] { $only } RAWs only LibRaw develops
+} (no active software: what is left to develop), out of { $n } RAWs in all (each has its LibRaw render)

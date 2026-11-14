@@ -68,8 +68,13 @@ system one ("cold" measurements, experiments).
   "developed" filter (every active software, or the line's); not rated (no star, flag nor
   colour), with stars, accepted, rejected, with a colour label (any, or one line per
   colour present, feedback from 2026-11-12): the ratings rule; conflicts: the "in
-  conflict" filter. Not clickable: the pairs (no filter before grouping, #392) and inactive
-  software. No Ctrl+click to combine yet (complex filters, #138). Read from the disk, in the
+  conflict" filter. **Grouped folder** (#392, 2026-11-14): "Photos" = pairs + RAW alone +
+  JPEG alone, each a line and a box of the three-way filter; under "Developments", also
+  "Camera JPEG" (the pairs' JPEG) and "LibRaw". Developments always show two counts, "photos
+  shown (developments)", explained by the tooltip (the filter also keeps developed JPEGs,
+  2026-11-14); LibRaw "RAWs only LibRaw develops (all
+  RAWs)", its click shows what is left to develop (`libraw_only`). Not clickable: the
+  pairs of a separate folder (the tooltip says how to group) and inactive software. No Ctrl+click to combine yet (complex filters, #138). Read from the disk, in the
   background (2026-11-13, `summary::Jobs`): **with versions**
   (`tri::versions::with_versions`, one sidecar read per photo; counted again when a
   version changes, `versions_epoch`), a filter like the others (`versions_only`); the
