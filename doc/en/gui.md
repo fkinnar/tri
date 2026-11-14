@@ -1165,6 +1165,16 @@ the `[menus]` section of `keys.toml` (`"<leader> i" = "histogram"`: message
 the most frequent theme of its actions. Screenshot: step `keys:Ctrl+b r` of
 `TRI_GUI_ACTIONS`.
 
+### Template fields in the help (F1, 2026-11-14)
+
+After the command line, one group "Template fields (batch rename, export folders)":
+each field of `tri::naming::help` (`{date}`, `{time}`, `{name}`, `{n}`, `{folder}`,
+`{camera}`, then `{source}`), what it gives with an example and where it is used (names,
+folders, or only one of them) on the left, the field as written on the right, in the
+accent colour. One list for both uses, taken from the engine, so it follows the code;
+searched like the rest (`help_fields`: description, field, group title, hidden keywords
+"template", "placeholder"…). The field names never change with the language.
+
 ### Command line in the help (F1, issue 441)
 
 After the shortcuts, one section per theme ("Command line: Ratings"…), taken from

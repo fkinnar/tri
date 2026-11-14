@@ -1239,6 +1239,17 @@ section `[menus]` de `keys.toml` (`"<leader> i" = "histogram"` : message
 `key-submenu-histogram` des catalogues, sinon le texte tel quel), à défaut par le thème
 le plus fréquent de ses actions. Capture : étape `keys:Ctrl+b r` de `TRI_GUI_ACTIONS`.
 
+### Champs des gabarits dans l'aide (F1, 14/11/2026)
+
+Après la ligne de commande, un groupe « Champs des gabarits (renommage par lot, dossiers
+d'export) » : chaque champ de `tri::naming::help` (`{date}`, `{time}`, `{name}`, `{n}`,
+`{folder}`, `{camera}`, puis `{source}`), ce qu'il donne avec un exemple et où il sert
+(noms, dossiers, ou l'un des deux seulement) à gauche, le champ tel qu'on l'écrit à
+droite, en couleur d'accent. Une seule liste pour les deux usages, tirée du moteur : elle
+suit le code ; cherchée comme le reste (`help_fields` : description, champ, titre du
+groupe, mots-clés cachés « gabarit », « placeholder »…). Les noms des champs ne changent
+jamais avec la langue.
+
 ### Ligne de commande dans l'aide (F1, issue n° 441)
 
 À la suite des raccourcis, une section par thème (« Ligne de commande : Notes »…), tirée

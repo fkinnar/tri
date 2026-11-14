@@ -93,6 +93,15 @@ history-purple = purple
 history-notes-one = { $what }: { $name }
 history-notes-many = { $what }: { $n } images
 history-rename = { $from } renamed to { $to }
+naming-help = { $field ->
+    [date] Capture date: 2026-11-14 · names and folders
+    [time] Capture time: 153012 · names and folders
+    [name] Original name, without extension: DSCF8158 · names and folders
+    [n] Counter, in grid order; { "{" }n:3{ "}" } = 001 · names only (batch rename)
+    [folder] Folder name without its leading date: 2026-11-14_Bleu_Jaune gives Bleu_Jaune · names and folders
+    [camera] Camera model: X-T4 · names and folders
+   *[source] Each image's folder, in full: { "{" }source{ "}" }/export · export folders only
+}
 naming-unclosed = a { "{" } is never closed
 naming-not-here = { "{" }{ $field }{ "}" } makes no sense here
 naming-unknown = unknown field { "{" }{ $field }{ "}" } (fields: { $fields })
