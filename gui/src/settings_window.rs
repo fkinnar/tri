@@ -471,6 +471,7 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
             "libraw",
         ],
         ("gui.grid", "develop") => &["auto", "manual"],
+        ("gui.grid", "cover_default") => &["latest", "camera", "libraw"],
         ("gui.histogram", "scale") => &["ev", "linear"],
         _ => return None,
     })

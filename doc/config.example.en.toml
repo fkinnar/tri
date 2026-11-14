@@ -815,6 +815,10 @@ search_min_width = 80.0
 # image without the wanted development shows its LibRaw render, computed in the
 # background.
 render = "embedded"
+# Cover of a photo whose cover was not chosen, with the "cover" render: "latest" (its
+# latest development, else the LibRaw render), "camera" (the camera JPEG: the JPEG file of
+# a grouped pair, else the RAW's embedded preview) or "libraw".
+cover_default = "latest"
 # Photos to develop for the chosen render: "auto" (rendered in the background, one
 # image after another) or "manual" (<core.develop.folder> on the folder; LibRaw meanwhile).
 # Developments (clones, copies) are always rendered in the background: it is their

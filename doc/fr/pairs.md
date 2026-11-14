@@ -47,8 +47,13 @@ dossier.
 ## Interface
 
 Les piles de développements regroupent les images qui ont la même photo : pour le JPEG
-d'une paire regroupée, cette photo est son RAW (`TriApp::stack_photo`). La couverture de
-la pile reste le RAW.
+d'une paire regroupée, cette photo est son RAW (`TriApp::stack_photo`). La vignette de la
+pile suit le rendu affiché : en **JPEG boîtier**, c'est le **fichier JPEG lui-même**, en
+vraie résolution (plein écran et 1:1 compris, avec son histogramme et ses métadonnées),
+plutôt que l'aperçu embarqué du RAW ; en LibRaw ou dans un logiciel, le RAW ou son
+développement ; en « Couverture », la couverture choisie (signet de la liste « Rendu
+affiché »), sinon `[gui.grid] cover_default` (#391) : `latest` (le dernier développement,
+sinon LibRaw ; par défaut), `camera` (le JPEG boîtier) ou `libraw`.
 
 - **Résumé du dossier** : dans un dossier regroupé, la ligne « Paires RAW+JPEG » est un
   filtre (la case RAW+JPEG seule) ; séparées, sa bulle dit comment regrouper.
@@ -60,5 +65,4 @@ la pile reste le RAW.
 - **Panneau des dossiers** : une marque (deux feuilles décalées) après le nom d'un
   dossier regroupé, lue une fois par dossier.
 
-À venir (même issue et n° 391) : le JPEG en pleine résolution comme rendu boîtier, et la
-couverture par défaut.
+Fermées avec ceci : n° 391 et n° 392.

@@ -7131,6 +7131,7 @@ impl TriApp {
         let dev_shown = &self.dev_shown;
         let dev_preferred = &self.dev_preferred;
         let render = self.shown_render();
+        let cover_default = self.gui.grid.cover_default;
         let dev_cover = |r: &std::ops::Range<usize>| {
             use crate::grid_render::GridRender;
             if let Some(shown) = dev_shown.get(&photo(r.start))
@@ -7145,8 +7146,13 @@ impl TriApp {
                         && !camera.contains_key(&files[i].path)
                 })
                 .unwrap_or(r.start);
+            // Le JPEG d'une paire regroupée, s'il est dans la pile.
+            let jpeg = r.clone().find(|&i| camera.contains_key(&files[i].path));
             match render {
-                GridRender::Embedded | GridRender::LibRaw => the_photo,
+                // JPEG boîtier : le fichier JPEG d'une paire regroupée lui-même, en vraie
+                // résolution (#392), plutôt que l'aperçu embarqué du RAW.
+                GridRender::Embedded => jpeg.unwrap_or(the_photo),
+                GridRender::LibRaw => the_photo,
                 GridRender::Engine(engine) => r
                     .clone()
                     .find(|&i| {
@@ -7163,13 +7169,22 @@ impl TriApp {
                     if dev_preferred.contains(&camera_key(&photo(r.start))) {
                         return the_photo;
                     }
-                    let developments: Vec<tri::developments::Development> = r
-                        .clone()
-                        .filter_map(|i| tri::developments::get(&files[i].path))
-                        .collect();
-                    tri::developments::latest(&developments)
-                        .and_then(|latest| r.clone().find(|&i| files[i].path == latest.path()))
-                        .unwrap_or(the_photo)
+                    // Rien de choisi : la couverture par défaut (#391).
+                    match cover_default {
+                        crate::grid_render::CoverDefault::Camera => jpeg.unwrap_or(the_photo),
+                        crate::grid_render::CoverDefault::Libraw => the_photo,
+                        crate::grid_render::CoverDefault::Latest => {
+                            let developments: Vec<tri::developments::Development> = r
+                                .clone()
+                                .filter_map(|i| tri::developments::get(&files[i].path))
+                                .collect();
+                            tri::developments::latest(&developments)
+                                .and_then(|latest| {
+                                    r.clone().find(|&i| files[i].path == latest.path())
+                                })
+                                .unwrap_or(the_photo)
+                        }
+                    }
                 }
             }
         };
@@ -7348,13 +7363,26 @@ impl TriApp {
         if let Some(k) = keys.iter().find(|k| self.dev_preferred.contains(*k)) {
             return Some(k.clone());
         }
-        let developments: Vec<tri::developments::Development> = keys
-            .iter()
-            .filter_map(|k| tri::developments::get(k))
-            .collect();
-        tri::developments::latest(&developments)
-            .map(|d| d.path())
-            .or_else(|| Some(self.stack_photo(&self.files.get(index)?.path)))
+        let photo = self.stack_photo(&self.files.get(index)?.path);
+        let raw = tri::media::kind_of(&photo) == Some(MediaKind::Raw);
+        match self.gui.grid.cover_default {
+            crate::grid_render::CoverDefault::Camera => Some(
+                keys.iter()
+                    .find(|k| self.camera_raw.contains_key(*k))
+                    .cloned()
+                    .unwrap_or_else(|| if raw { camera_key(&photo) } else { photo }),
+            ),
+            crate::grid_render::CoverDefault::Libraw => Some(photo),
+            crate::grid_render::CoverDefault::Latest => {
+                let developments: Vec<tri::developments::Development> = keys
+                    .iter()
+                    .filter_map(|k| tri::developments::get(k))
+                    .collect();
+                tri::developments::latest(&developments)
+                    .map(|d| d.path())
+                    .or(Some(photo))
+            }
+        }
     }
 
     /// Choix de couverture de la photo `photo` qui change son propre rendu (mode
@@ -7362,11 +7390,25 @@ impl TriApp {
     /// pour le rendu LibRaw.
     fn photo_cover_level(&self, photo: &Path) -> Option<Level> {
         if self.dev_preferred.contains(&camera_key(photo)) {
-            Some(Level::Thumbnail)
-        } else if self.dev_preferred.contains(photo) {
-            Some(Level::Standard)
-        } else {
-            None
+            return Some(Level::Thumbnail);
+        }
+        if self.dev_preferred.contains(photo) {
+            return Some(Level::Standard);
+        }
+        // Une autre couverture choisie (un développement, le JPEG d'une paire) : pas la
+        // photo.
+        let chosen = self
+            .dev_preferred
+            .iter()
+            .any(|k| camera_photo(&self.camera_raw, k) == photo);
+        // Rien de choisi : la couverture par défaut (#391) ; le JPEG d'une paire
+        // regroupée est une image à part (la couverture, pas la photo).
+        let paired = self.camera_raw.values().any(|raw| raw == photo);
+        match self.gui.grid.cover_default {
+            _ if chosen => None,
+            crate::grid_render::CoverDefault::Camera if !paired => Some(Level::Thumbnail),
+            crate::grid_render::CoverDefault::Libraw => Some(Level::Standard),
+            _ => None,
         }
     }
 
@@ -16758,6 +16800,10 @@ impl TriApp {
             pos2(rect.max.x - g.padding, rect.max.y - bottom),
         );
         let reel_rect = marks::development_mark_rect(image_area, g.marks);
+        // La place de la vignette, sous la bobine et les pastilles dessinées ensuite (une
+        // image en paysage, qui prend toute la largeur, les cachait ; vu le 14/11/2026 avec
+        // le JPEG d'une paire en couverture).
+        let image_slot = ui.painter().add(egui::Shape::Noop);
         // Infos masquées (Maj+T) : pas de badge non plus (#243 : tronqué par la vignette
         // qui prend toute la case).
         if self.grid_info_shown()
@@ -16858,7 +16904,8 @@ impl TriApp {
                     Flag::Rejected => Color32::WHITE.gamma_multiply(g.rejected_opacity),
                     _ => Color32::WHITE,
                 };
-                ui.painter().image(texture.id(), dest, uv, tint);
+                ui.painter()
+                    .set(image_slot, egui::Shape::image(texture.id(), dest, uv, tint));
                 self.grid_images.push((index, dest));
             }
             (None, Avail::Failed(error)) => {
@@ -27266,6 +27313,28 @@ mod tests {
             photo,
             "la photo en couverture"
         );
+        // Rien de choisi : la couverture par défaut (#391, `[gui.grid] cover_default`).
+        h.state_mut().set_cover(dev, None);
+        h.state_mut().gui.grid.cover_default = crate::grid_render::CoverDefault::Libraw;
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(3);
+        assert_eq!(
+            h.state().stacks.photo_visible(dev),
+            photo,
+            "LibRaw : la photo"
+        );
+        assert_eq!(
+            h.state().effective_cover(dev),
+            Some(photos.join("img0.jpg"))
+        );
+        h.state_mut().gui.grid.cover_default = crate::grid_render::CoverDefault::Latest;
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(3);
+        assert_ne!(
+            h.state().stacks.photo_visible(dev),
+            photo,
+            "le dernier développement"
+        );
         // Changer de rendu oublie le développement regardé en grand (sa vignette suit).
         h.state_mut()
             .dev_shown
@@ -27736,11 +27805,30 @@ mod tests {
                 .unwrap()
         };
         let (raw, jpeg) = (index(h.state(), "img0.RAF"), index(h.state(), "img0.jpg"));
+        // Une seule vignette ; en « JPEG boîtier », c'est le fichier JPEG lui-même, en
+        // vraie résolution (#392), plutôt que l'aperçu embarqué du RAW.
+        assert_eq!(
+            h.state().grid_render,
+            crate::grid_render::GridRender::Embedded
+        );
+        assert_eq!(
+            h.state().stacks.photo_visible(raw),
+            jpeg,
+            "le JPEG couvre la paire"
+        );
+        assert_eq!(h.state().stacks.folded_count(jpeg), Some(2));
+        // En rendu LibRaw : le RAW.
+        h.state_mut()
+            .set_grid_render(crate::grid_render::GridRender::LibRaw);
+        h.run_steps(3);
         assert_eq!(
             h.state().stacks.photo_visible(jpeg),
             raw,
-            "le JPEG sous son RAW"
+            "le RAW couvre la paire"
         );
+        h.state_mut()
+            .set_grid_render(crate::grid_render::GridRender::Embedded);
+        h.run_steps(3);
         // Sa marque dans le panneau des dossiers (le dossier comme emplacement).
         h.state_mut().tree = Tree::with_places(
             vec![tri::places::Place {
@@ -27756,7 +27844,7 @@ mod tests {
             h.query_by_label(&t!("folders-pairs-grouped")).is_some(),
             "marque du dossier regroupé"
         );
-        assert_eq!(h.state().stacks.folded_count(raw), Some(2));
+        assert_eq!(h.state().stacks.folded_count(jpeg), Some(2));
         assert_eq!(
             h.state().development_badge(&h.state().files[jpeg].path),
             Some("Boîtier".to_string())
@@ -27788,7 +27876,7 @@ mod tests {
         h.run_steps(3);
         assert!(h.state().pairs_dialog.is_none(), "décidé : pas de question");
         let (raw, jpeg) = (index(h.state(), "img0.RAF"), index(h.state(), "img0.jpg"));
-        assert_eq!(h.state().stacks.photo_visible(jpeg), raw);
+        assert_eq!(h.state().stacks.photo_visible(raw), jpeg);
         // Filtres : les trois cases du dossier regroupé (une paire, deux JPEG seuls).
         h.get_by_label("RAW+JPEG");
         act(&mut h, Action::FilterCycle);

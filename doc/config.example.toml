@@ -824,6 +824,10 @@ search_min_width = 80.0
 # logiciel), "libraw" (rendu RAW). Une image sans le développement voulu montre son rendu
 # LibRaw, calculé en fond.
 render = "embedded"
+# Couverture d'une photo dont on n'a pas choisi la couverture, en rendu « cover » :
+# "latest" (son dernier développement, sinon le rendu LibRaw), "camera" (le JPEG boîtier :
+# le fichier JPEG d'une paire regroupée, sinon l'aperçu embarqué du RAW) ou "libraw".
+cover_default = "latest"
 # Photos à développer pour le rendu choisi : "auto" (rendues en fond, une image après
 # l'autre) ou "manual" (<core.develop.folder> sur le dossier ; LibRaw en attendant). Les
 # développements (clones, copies) sont toujours rendus en fond : c'est leur vignette.

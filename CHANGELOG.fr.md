@@ -4,6 +4,13 @@
 
 ## Non publié
 
+- **Paires regroupées : le vrai JPEG, et une couverture par défaut** (#467, ferme n° 391
+  et n° 392) : en rendu JPEG boîtier, une paire regroupée montre le fichier JPEG lui-même,
+  en vraie résolution (plein écran et 1:1 compris), plutôt que l'aperçu embarqué du RAW ;
+  en rendu « Couverture », une photo sans couverture choisie montre `[gui.grid]
+  cover_default` : son dernier développement (par défaut), le JPEG boîtier ou le rendu
+  LibRaw. Aussi : la bobine des développements d'une vignette n'est plus cachée sous une
+  image en paysage.
 - **Paires regroupées : filtre du résumé, déchargement et marque du dossier** (#466,
   #392, ferme #388) : dans un dossier regroupé, la ligne « Paires RAW+JPEG » du résumé
   est un filtre (les paires seules) ; décharger une carte qui a des paires propose
