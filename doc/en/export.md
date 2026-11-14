@@ -379,9 +379,14 @@ Crop presets are created the same way (see `versions.md`).
   - **Preset**: up / down arrows when the list has the keyboard (at first), or click;
     Tab moves to the folder, where the arrows no longer change the preset (feedback from
     2026-10-20). The last one chosen is remembered during the session.
-  - **Folder**: the profile's, which follows the choice of profile; can be changed for
-    this time only (Tab completion), with the rule recalled and the actual destination
-    of the first image.
+  - **Folder**: the full path, in the field itself (feedback of 2026-11-14: "export"
+    with a "Destination" line below did not say clearly where it went). It follows the
+    choice of preset: the preset's last folder if one was typed or picked with Browse
+    (remembered per preset across sessions, `export_folders` in `gui-state.toml`),
+    otherwise the preset's own folder resolved for the first image. Left as the preset's
+    own folder, a relative one (`export`) still goes next to **each** image, even
+    across several folders; any other value is used as is and remembered for that
+    preset (set back to the preset's own folder: forgotten). Tab completion, Browse.
   - **Export**: Enter. It runs in the background, with a progress bar in the status bar
     (× button to stop it), then a summary. The summary also shows **in the middle of the
     screen** (#381, 2026-11-09: the end of an export went unnoticed in the status bar):

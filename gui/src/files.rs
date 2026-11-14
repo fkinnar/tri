@@ -186,6 +186,8 @@ pub enum Outcome {
         images: Vec<PathBuf>,
         profile: tri::export::Profile,
         folder: String,
+        /// Dossier à retenir pour ce préréglage (vide : l'oublier).
+        remember: String,
         render: crate::export::Render,
         cut: Option<tri::export::Cut>,
     },
@@ -325,10 +327,12 @@ impl FileDialog {
                     folder,
                     render,
                     cut,
+                    remember,
                 } => Outcome::Export {
                     images,
                     profile: *profile,
                     folder,
+                    remember,
                     render,
                     cut,
                 },

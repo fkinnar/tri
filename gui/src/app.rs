@@ -368,6 +368,8 @@ pub struct TriApp {
     download: Option<DownloadState>,
     /// Dernier format de paquet choisi (« AppImage »…), proposé d'abord la fois suivante.
     download_format: Option<String>,
+    /// Dernier dossier d'export de chaque préréglage (gardé dans `gui-state.toml`).
+    export_folders: std::collections::BTreeMap<String, String>,
     /// Ce binaire : version distribuée ou build personnel (et son commit).
     build: tri::update::Build,
     /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
@@ -1521,6 +1523,7 @@ impl TriApp {
             update: None,
             download: None,
             download_format: None,
+            export_folders: Default::default(),
             build: tri::update::Build::current(),
             ejecting: None,
             mounting: None,
@@ -2005,6 +2008,7 @@ impl TriApp {
             histogram: Some(self.histogram),
             histogram_camera: Some(self.histogram_camera),
             download_format: self.download_format.clone(),
+            export_folders: (!self.export_folders.is_empty()).then(|| self.export_folders.clone()),
             folder_panel: Some(self.folder_panel),
             metadata_panel: Some(self.metadata_panel),
             filter_bar: Some(self.filter_bar),
@@ -2116,6 +2120,9 @@ impl TriApp {
         }
         if s.download_format.is_some() {
             self.download_format = s.download_format.clone();
+        }
+        if let Some(folders) = &s.export_folders {
+            self.export_folders = folders.clone();
         }
         self.window_kept = s.window;
         self.maximize_pending = s.window.is_some_and(|w| w.maximized);
@@ -14947,6 +14954,7 @@ impl TriApp {
                     render,
                     at,
                 )
+                .with_folders(self.export_folders.clone())
                 .with_cut(tri::export::Cut {
                     crop: version.crop,
                     name: version.name.clone(),
@@ -14987,7 +14995,8 @@ impl TriApp {
                     developer,
                     render,
                     at,
-                );
+                )
+                .with_folders(self.export_folders.clone());
                 self.file_dialog = Some(crate::files::FileDialog::Export(Box::new(dialog)));
                 Ok(())
             }
@@ -15151,10 +15160,18 @@ impl TriApp {
                 images,
                 profile,
                 folder,
+                remember,
                 render,
                 cut,
             } => {
                 self.file_dialog = None;
+                // Le dossier choisi est retenu pour ce préréglage (retour du 14/11/2026).
+                if remember.is_empty() {
+                    self.export_folders.remove(&profile.id);
+                } else {
+                    self.export_folders.insert(profile.id.clone(), remember);
+                }
+                self.save_display();
                 self.export_choice[usize::from(crate::export::exports_flat(render, &images))] =
                     Some(profile.id.clone());
                 self.start_export(ctx, images, profile, folder, render, cut);
@@ -33149,6 +33166,48 @@ mod tests {
             h.state_mut().grid_render = grid;
             assert_eq!(h.state().grid_export_render(), expected, "{grid:?}");
         }
+    }
+
+    #[test]
+    fn the_export_folder_is_shown_in_full_and_remembered_per_preset() {
+        // Retour du 14/11/2026 : le champ montre le chemin complet (plus de ligne
+        // « Destination » dessous) ; un dossier choisi est retenu pour son préréglage.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let dialog = |h: &Harness<'static, TriApp>| -> String {
+            match &h.state().file_dialog {
+                Some(crate::files::FileDialog::Export(d)) => d.input().to_string(),
+                _ => panic!("boîte d'export attendue"),
+            }
+        };
+        press(&mut h, Key::E, Modifiers::CTRL);
+        let shown = dialog(&h);
+        let photos = dir.path().join("photos");
+        assert_eq!(
+            tri::settings::expand_home(&shown),
+            photos.join("export"),
+            "« export » du préréglage, en chemin complet"
+        );
+        assert!(h.query_by_label_contains("Destination").is_none());
+        // Un autre dossier : l'export y va, et il est retenu.
+        let elsewhere = dir.path().join("ailleurs");
+        if let Some(crate::files::FileDialog::Export(d)) = &mut h.state_mut().file_dialog {
+            d.type_folder(&elsewhere.to_string_lossy());
+        }
+        h.run_steps(1);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.export_job.is_none() && app.notice.is_some()
+        });
+        assert!(elsewhere.join("img0.jpg").is_file());
+        assert_eq!(h.state().export_folders.len(), 1);
+        assert_eq!(
+            h.state().display().export_folders.unwrap().len(),
+            1,
+            "gardé dans gui-state.toml"
+        );
+        press(&mut h, Key::E, Modifiers::CTRL);
+        assert_eq!(dialog(&h), elsewhere.to_string_lossy(), "retenu");
     }
 
     #[test]

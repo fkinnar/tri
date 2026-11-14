@@ -384,9 +384,15 @@ Les préréglages de recadrage se créent de la même façon (voir `versions.md`
   - **Préréglage** : flèches haut / bas quand la liste a le clavier (au départ), ou clic ;
     Tab passe au dossier, où les flèches ne changent plus le préréglage (retour du
     20/10/2026). Le dernier choisi est retenu pendant la session.
-  - **Dossier** : celui du profil, qui suit le choix du profil ; modifiable pour cette
-    fois (complétion par Tab), avec la règle rappelée et la destination réelle de la
-    première image.
+  - **Dossier** : le chemin complet, dans le champ lui-même (retour du 14/11/2026 :
+    « export » avec une ligne « Destination » dessous ne disait pas clairement où ça
+    allait). Il suit le choix du préréglage : le dernier dossier de ce préréglage s'il a
+    été tapé ou choisi par Parcourir (retenu par préréglage d'une session à l'autre,
+    `export_folders` dans `gui-state.toml`), sinon le dossier du préréglage résolu pour
+    la première image. Laissé au dossier du préréglage, un dossier relatif (`export`) va
+    toujours à côté de **chaque** image, même sur plusieurs dossiers ; toute autre valeur
+    sert telle quelle et est retenue pour ce préréglage (remise au dossier du
+    préréglage : oubliée). Complétion par Tab, Parcourir.
   - **Export** : Entrée. Il se fait en fond, avec une barre de progression dans la barre
     d'état (bouton × pour l'arrêter), puis un bilan. Le bilan s'affiche aussi **au milieu
     de l'écran** (#381, 09/11/2026 : la fin d'un export passait inaperçue dans la barre
