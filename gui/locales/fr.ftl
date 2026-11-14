@@ -804,7 +804,6 @@ rename-title = Renommer « { $name } »
 rename-becomes = { $from } devient { $to }
 rename-copied = { $from } copié en { $to } (partagé avec la paire)
 rename-button = Renommer
-enter-or-escape = Entrée / Échap
 export-title = { $n ->
     [one] Exporter 1 image
    *[other] Exporter { $n } images

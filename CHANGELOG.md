@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **No more "Enter / Esc" hint** (#472) next to the buttons of the export, rename,
+  copy / move and delete dialogs: it goes without saying.
 - **Offloading says what it is doing** (#471, #469, #470): the progress shows the step
   (preparing, copying, writing to the disk, verifying), the file, the throughput, and
   "Nothing has moved for n s" when it stalls, to tell a slow copy (a USB stick) from a

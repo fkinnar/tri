@@ -4,6 +4,8 @@
 
 ## Non publié
 
+- **Plus d'aide « Entrée / Échap »** (#472) à côté des boutons des boîtes d'export,
+  de renommage, de copie / déplacement et de suppression : ça coule de source.
 - **Le déchargement dit ce qu'il fait** (#471, #469, #470) : l'avancement montre
   l'étape (préparation, copie, écriture sur le disque, vérification), le fichier, le
   débit, et « Rien n'a bougé depuis n s » quand il s'arrête, pour distinguer une copie
