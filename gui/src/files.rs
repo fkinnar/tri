@@ -546,7 +546,6 @@ fn rename_dialog(
                     .clicked()
                     || (enter && ok);
                 cancel = ui.button(t!("cancel")).clicked();
-                ui.weak(t!("enter-or-escape"));
             });
         });
     if confirm && let Ok(plan) = plan {
@@ -744,7 +743,6 @@ fn delete_dialog(
             ui.horizontal(|ui| {
                 confirm = ui.add_enabled(ok, egui::Button::new(verb)).clicked();
                 cancel = ui.button(t!("cancel")).clicked();
-                ui.weak(t!("enter-or-escape"));
             });
         });
     // Entrée confirme (pas de champ de saisie ici).
@@ -809,7 +807,6 @@ fn name_dialog(
             let ok = error.is_none();
             confirm = ui.add_enabled(ok, egui::Button::new(button)).clicked() || (enter && ok);
             cancel = ui.button(t!("cancel")).clicked();
-            ui.weak(t!("enter-or-escape"));
         });
     });
     if confirm {
@@ -853,7 +850,6 @@ fn delete_folder_dialog(
                 };
                 confirm = ui.button(verb).clicked();
                 cancel = ui.button(t!("cancel")).clicked();
-                ui.weak(t!("enter-or-escape"));
             });
         });
     confirm |= ctx.input(|i| i.key_pressed(Key::Enter));
@@ -1007,7 +1003,6 @@ impl Transfer {
                     confirm =
                         ui.add_enabled(ok, egui::Button::new(label)).clicked() || (enter && ok);
                     cancel = ui.button(t!("cancel")).clicked();
-                    ui.weak(t!("enter-or-escape"));
                 });
             });
         if pairs != settings.pairs {

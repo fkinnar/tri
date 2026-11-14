@@ -398,7 +398,6 @@ impl ExportDialog {
                         .clicked()
                         || ((enter || enter_on_combo) && ok);
                     cancel = ui.button(t!("cancel")).clicked();
-                    ui.weak(t!("enter-or-escape"));
                 });
             });
         if confirm {

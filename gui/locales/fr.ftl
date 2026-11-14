@@ -804,7 +804,6 @@ rename-title = Renommer « { $name } »
 rename-becomes = { $from } devient { $to }
 rename-copied = { $from } copié en { $to } (partagé avec la paire)
 rename-button = Renommer
-enter-or-escape = Entrée / Échap
 export-title = { $n ->
     [one] Exporter 1 image
    *[other] Exporter { $n } images
@@ -1844,3 +1843,11 @@ summary-libraw-counts = { $only ->
     [one] { $only } RAW que seul LibRaw développe
    *[other] { $only } RAW que seul LibRaw développe
 } (aucun logiciel actif : ce qui reste à développer), sur { $n } RAW en tout (chacun a son rendu LibRaw)
+offload-activity = { $phase } · { $file } · { $rate } Mo/s
+offload-idle = Rien n'a bougé depuis { $s } s
+offload-phase-preparing = Préparation
+offload-phase-writing = Copie
+offload-phase-syncing = Écriture sur le disque
+offload-phase-verifying = Vérification
+offload-raw-only-grouped = Les paires sont regroupées : il faut leurs JPEG. Décochez « Regrouper RAW et JPEG » pour ne copier que les RAW
+offload-group-pairs-raw-only = « RAW seulement » ne copie aucun JPEG : rien à regrouper. Décochez-la pour regrouper les paires

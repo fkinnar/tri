@@ -374,6 +374,23 @@ pub struct Progress {
     pub bytes_total: u64,
     /// Fichier en cours.
     pub current: Option<PathBuf>,
+    /// Ce qui se fait (#470 : une copie vers une clé USB restée à 0 % ; dire où elle en
+    /// est permet de savoir si c'est lent ou bloqué, et où).
+    pub phase: Phase,
+}
+
+/// Étape en cours d'un déchargement ([`Progress::phase`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Phase {
+    /// Avant la copie : dossier de séance, cache gardé sur le disque de destination.
+    #[default]
+    Preparing,
+    /// Copie d'un fichier (lecture sur la carte, écriture).
+    Writing,
+    /// Écriture forcée sur le disque (`sync_all`) : longue sur une clé lente.
+    Syncing,
+    /// Relecture de la copie pour la vérifier.
+    Verifying,
 }
 
 /// Bilan d'un déchargement.
@@ -529,6 +546,7 @@ pub fn run(
             break;
         }
         p.current = Some(item.source.clone());
+        p.phase = Phase::Writing;
         progress(&p);
         if settings.skip_known && item.known {
             report.skipped.push(item.source.clone());
@@ -682,9 +700,15 @@ fn copy_one(
             p.bytes_done += n as u64;
             progress(p);
         }
+        p.phase = Phase::Syncing;
+        progress(p);
         output.sync_all()?;
         output.set_modified(item.modified)?;
         drop(output);
+        if verify {
+            p.phase = Phase::Verifying;
+            progress(p);
+        }
         if verify && hash_file(&tmp)? != hasher.finalize() {
             return Err(io::Error::other(crate::t!("offload-verify-failed")));
         }
@@ -802,6 +826,32 @@ mod tests {
         assert_eq!(asked[0], ("B.RAF".into(), 1, 2, 50));
         assert_eq!(report.copied.len(), 3, "tout copié après les essais");
         assert!(report.errors.is_empty() && !report.out_of_space);
+    }
+
+    #[test]
+    fn the_progress_says_what_each_file_goes_through() {
+        // #470 : une copie vers une clé USB restée à 0 % ; l'avancement dit l'étape
+        // (copie, écriture sur le disque, vérification) de chaque fichier.
+        let dir = tempfile::tempdir().unwrap();
+        let plan = card(dir.path());
+        let mut phases = Vec::new();
+        run(
+            &plan,
+            &dir.path().join("dest"),
+            &OffloadSettings::default(),
+            &mut History::in_memory(),
+            &AtomicBool::new(false),
+            |p| {
+                if phases.last() != Some(&p.phase) {
+                    phases.push(p.phase);
+                }
+            },
+            |_| {},
+            |_| false,
+        );
+        let one = [Phase::Writing, Phase::Syncing, Phase::Verifying];
+        assert_eq!(phases[..3], one, "{phases:?}");
+        assert_eq!(phases.len(), 9, "trois fichiers : {phases:?}");
     }
 
     #[test]

@@ -31711,6 +31711,15 @@ mod tests {
         );
         h.state_mut().offload.as_mut().unwrap().pairs_choice = Some(true);
         settle_dialog(&mut h);
+        // #469 : « RAW seulement » grisée tant que les paires sont regroupées.
+        {
+            use egui_kittest::kittest::NodeT;
+            let raw_only = t!("offload-raw-only");
+            assert!(
+                h.get_by_label(&raw_only).accesskit_node().is_disabled(),
+                "RAW seulement grisée"
+            );
+        }
         h.get_by_label("Décharger").click();
         while h
             .query_by_label_contains("2 fichiers copiés et vérifiés")

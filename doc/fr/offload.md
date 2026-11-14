@@ -68,7 +68,9 @@ besoins de tous, pas seulement les siens.
   choisir entre « ouvrir » et « éjecter » n'avait pas de sens) : cases à cocher, défauts
   dans `[offload]` :
   - **RAW seulement** (`raw_only`, non) : les images plates (JPEG du boîtier) restent sur
-    la carte (`Report::left`) ; elles ne sont pas « déjà déchargées » pour la suite ;
+    la carte (`Report::left`) ; elles ne sont pas « déjà déchargées » pour la suite.
+    Exclusive de « Regrouper RAW et JPEG » (#469) : les deux cases restent en place,
+    l'une grisée quand l'autre est cochée, une bulle dit pourquoi ;
   - **ouvrir le dossier à la fin** (`open_after`, oui) ;
   - **éjecter la carte à la fin** (`eject_after`, oui), sauf si la copie a été
     interrompue ;
@@ -157,7 +159,7 @@ histogrammes, netteté, regroupement, comme à l'ouverture d'un dossier.
   autres fichiers ; `Plan::to_copy`, `Plan::bytes` ;
 - `suggest_folder(&plan, &réglages)`, `destination(racine, nom)` ;
 - `run(&plan, destination, &réglages, &mut historique, &annulation, progression,
-  copie) -> Report` (`copie` : chaque copie dès qu'elle est faite, pour les aperçus) (copiés, ignorés, erreurs, interrompu, durée) ; `Progress` : fichiers (sans ceux laissés sur la carte) et octets (un fichier passé, déjà déchargé ou déjà présent, compte d'un coup : la barre suit les fichiers) ;
+  copie) -> Report` (`copie` : chaque copie dès qu'elle est faite, pour les aperçus) (copiés, ignorés, erreurs, interrompu, durée) ; `Progress` : fichiers (sans ceux laissés sur la carte) et octets (un fichier passé, déjà déchargé ou déjà présent, compte d'un coup : la barre suit les fichiers), et l'étape en cours (`Phase` : préparation, copie, écriture sur le disque `sync_all`, vérification ; #470, pour distinguer une copie lente d'une copie bloquée). La boîte montre l'étape, le fichier, le débit, et « Rien n'a bougé depuis n s » au-delà de 3 s sans avancement ;
 - `delete_sources(&report)`.
 
 ## Ligne de commande
