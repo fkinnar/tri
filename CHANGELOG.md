@@ -10,6 +10,10 @@
   the "Cover" render, a photo without a chosen cover shows `[gui.grid] cover_default`:
   its latest development (default), the camera JPEG or the LibRaw render. Also: the
   development reel of a thumbnail is no longer hidden under a landscape image.
+- **Grouped pairs: summary filter, offload and folder mark** (#466, #392, closes #388):
+  in a grouped folder the summary's "RAW+JPEG pairs" line is a filter (the pairs only);
+  offloading a card that has pairs offers "Group RAW and JPEG", kept for the session
+  folder; a grouped folder has a small mark in the folder panel.
 - **One "Shown render" list in full screen** (#465): the View section's list no longer
   turns into "Before / after" on a development while stepping through the images; it
   keeps its title and choices, says which render is on screen (camera JPEG, one entry

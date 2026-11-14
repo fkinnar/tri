@@ -11,6 +11,11 @@
   cover_default` : son dernier développement (par défaut), le JPEG boîtier ou le rendu
   LibRaw. Aussi : la bobine des développements d'une vignette n'est plus cachée sous une
   image en paysage.
+- **Paires regroupées : filtre du résumé, déchargement et marque du dossier** (#466,
+  #392, ferme #388) : dans un dossier regroupé, la ligne « Paires RAW+JPEG » du résumé
+  est un filtre (les paires seules) ; décharger une carte qui a des paires propose
+  « Regrouper RAW et JPEG », retenu pour le dossier de la séance ; un dossier regroupé a
+  une petite marque dans le panneau des dossiers.
 - **Une seule liste « Rendu affiché » en plein écran** (#465) : la liste de la section
   Vue ne devient plus « Avant / après » sur un développement quand on passe d'une image
   à l'autre ; elle garde son titre et ses choix, dit le rendu à l'écran (JPEG boîtier,

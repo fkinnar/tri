@@ -55,6 +55,14 @@ développement ; en « Couverture », la couverture choisie (signet de la liste 
 affiché »), sinon `[gui.grid] cover_default` (#391) : `latest` (le dernier développement,
 sinon LibRaw ; par défaut), `camera` (le JPEG boîtier) ou `libraw`.
 
-À venir (même issue et n° 391) : ligne « Paires RAW+JPEG » du résumé cliquable, case au déchargement, marque dans le
-panneau des dossiers, le JPEG en couverture au choix, et le JPEG en pleine résolution comme
-rendu boîtier.
+- **Résumé du dossier** : dans un dossier regroupé, la ligne « Paires RAW+JPEG » est un
+  filtre (la case RAW+JPEG seule) ; séparées, sa bulle dit comment regrouper.
+- **Déchargement** : une case « Regrouper RAW et JPEG (n paires) », montrée seulement si
+  ce qui sera copié a des paires (donc pas avec « RAW seulement »), cochée d'office avec
+  `group_pairs = "grouped"` ; sa réponse est retenue pour le dossier de la séance une fois
+  la copie faite (`Plan::pairs`). Avec « demander », la case non touchée laisse la
+  question pour l'ouverture.
+- **Panneau des dossiers** : une marque (deux feuilles décalées) après le nom d'un
+  dossier regroupé, lue une fois par dossier.
+
+Fermées avec ceci : n° 391 et n° 392.

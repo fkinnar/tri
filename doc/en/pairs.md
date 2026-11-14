@@ -52,6 +52,13 @@ with "Cover", the chosen cover (bookmark of the "Shown render" list), else `[gui
 cover_default` (#391): `latest` (the latest development, else LibRaw; default), `camera`
 (the camera JPEG) or `libraw`.
 
-Coming next (same issue and #391): the folder summary's "RAW+JPEG pairs" line as a filter, a checkbox when offloading, a
-mark in the folder panel, the JPEG as a cover on demand, and the full-resolution JPEG as
-the camera render.
+- **Folder summary**: in a grouped folder, the "RAW+JPEG pairs" line is a filter (the
+  RAW+JPEG checkbox alone); separate, its tooltip says how to group them.
+- **Offloading**: a "Group RAW and JPEG (n pairs)" checkbox, shown only when what will be
+  copied has pairs (so not with "RAW only"), checked by default with `group_pairs =
+  "grouped"`; its answer is kept for the session folder once copied (`Plan::pairs`). With
+  "ask", an untouched checkbox leaves the question for the opening.
+- **Folder panel**: a mark (two offset sheets) after the name of a grouped folder, read
+  once per folder.
+
+Closed with this: #391 and #392.

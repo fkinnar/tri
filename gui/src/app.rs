@@ -417,6 +417,8 @@ pub struct TriApp {
     pairs_dialog: Option<crate::pairs_dialog::PairsDialog>,
     /// Cases RAW / RAW+JPEG / JPEG d'un dossier regroupé (#392).
     pair_kinds: tri::pairs::PairKinds,
+    /// Dossiers du panneau regroupés par décision (#392 : leur marque), lus une fois.
+    pairs_marks: HashMap<PathBuf, bool>,
     /// Réinitialisation en cours : le dossier, et ce qu'elle a fait, à la fin.
     reset_job: Option<(PathBuf, Receiver<tri::reset::Outcome>)>,
     /// Message pour la barre d'état (texte, vrai si c'est une erreur).
@@ -1533,6 +1535,7 @@ impl TriApp {
             camera_raw: HashMap::new(),
             pairs_dialog: None,
             pair_kinds: tri::pairs::PairKinds::default(),
+            pairs_marks: HashMap::new(),
             reset_job: None,
             notice: None,
             settings: settings.engine(),
@@ -4036,8 +4039,18 @@ impl TriApp {
                         }
                     }
                 };
+                // Dossiers regroupés par décision (#392) : une marque après le nom.
+                let rows = self.tree.rows();
+                let data = self.settings.data_dir();
+                for row in &rows {
+                    if !self.pairs_marks.contains_key(&row.path) {
+                        let grouped = tri::pairs::decided(data.as_deref(), &row.path) == Some(true);
+                        self.pairs_marks.insert(row.path.clone(), grouped);
+                    }
+                }
+                let pairs_marks = &self.pairs_marks;
                 let mut section = None;
-                for (i, row) in self.tree.rows().into_iter().enumerate() {
+                for (i, row) in rows.into_iter().enumerate() {
                     if section != Some(row.section) {
                         section = Some(row.section);
                         title(ui, section);
@@ -4469,6 +4482,17 @@ impl TriApp {
                         if current && reveal {
                             reveal = false;
                             label.scroll_to_me(Some(egui::Align::Center));
+                        }
+                        if pairs_marks.get(&row.path) == Some(&true) {
+                            let (rect, response) =
+                                ui.allocate_exact_size(vec2(size, size), Sense::hover());
+                            let color = ui.visuals().weak_text_color();
+                            marks::pair_mark(ui.painter(), rect, color);
+                            let text = t!("folders-pairs-grouped");
+                            response.widget_info(|| {
+                                egui::WidgetInfo::labeled(egui::Role::Image, true, &text)
+                            });
+                            response.on_hover_text(&text);
                         }
                         if row.favorite {
                             let (rect, response) =
@@ -5070,6 +5094,7 @@ impl TriApp {
             .filter(|p| self.settings.places.ejectable(p))
             .map(|p| p.path.clone())
             .collect();
+        dialog.set_group_pairs(self.settings.files.group_pairs);
         dialog.set_keep(crate::offload::KeepData {
             cache: engine.cache.clone(),
             removable,
@@ -7527,6 +7552,7 @@ impl TriApp {
             return;
         }
         self.pairs_dirs.insert(dir.to_path_buf(), grouped);
+        self.pairs_marks.insert(dir.to_path_buf(), grouped);
         // Décidé ailleurs (menu, palette) pendant que la boîte demandait : plus la peine.
         if self.pairs_dialog.as_ref().is_some_and(|d| d.folder == dir) {
             self.pairs_dialog = None;
@@ -27803,6 +27829,22 @@ mod tests {
         h.state_mut()
             .set_grid_render(crate::grid_render::GridRender::Embedded);
         h.run_steps(3);
+        // Sa marque dans le panneau des dossiers (le dossier comme emplacement).
+        h.state_mut().tree = Tree::with_places(
+            vec![tri::places::Place {
+                name: "photos".into(),
+                path: photos.clone(),
+                kind: tri::places::PlaceKind::Home,
+            }],
+            false,
+        );
+        h.run_steps(3);
+        assert_eq!(h.state().pairs_marks.get(&photos), Some(&true));
+        assert!(
+            h.query_by_label(&t!("folders-pairs-grouped")).is_some(),
+            "marque du dossier regroupé"
+        );
+        assert_eq!(h.state().stacks.folded_count(jpeg), Some(2));
         assert_eq!(
             h.state().development_badge(&h.state().files[jpeg].path),
             Some("Boîtier".to_string())
@@ -27851,6 +27893,13 @@ mod tests {
         assert_eq!(h.state().files.len(), 2, "JPEG seuls : img1, img2");
         act(&mut h, Action::FilterCycle);
         assert_eq!(h.state().files.len(), 4, "tout");
+        // La ligne « Paires RAW+JPEG » du résumé (#388) : la case RAW+JPEG seule ; un
+        // second clic retire le filtre.
+        h.state_mut().summary_click(&summary::Line::Pairs);
+        assert_eq!(h.state().files.len(), 2, "la paire");
+        assert!(h.state().summary_line_on(&summary::Line::Pairs));
+        h.state_mut().summary_click(&summary::Line::Pairs);
+        assert_eq!(h.state().files.len(), 4, "plus de filtre");
         // Le menu du dossier (ou la palette) les sépare.
         act(&mut h, Action::PairsToggle);
         assert_eq!(h.state().stacks.photo_visible(jpeg), jpeg, "séparées");
@@ -31524,6 +31573,58 @@ mod tests {
         );
         assert_eq!(tri::store::holder(&opened), Some(opened.clone()));
         assert!(opened.join(".tri/keep").is_file());
+    }
+
+    #[test]
+    fn an_offload_can_group_the_pairs_of_the_session() {
+        // Issue n° 392 : une carte avec des paires RAW+JPEG ; la case « Regrouper RAW et
+        // JPEG » cochée, la séance s'ouvre regroupée, sans question.
+        let (mut h, dir) = harness();
+        h.state_mut().settings.files.group_pairs = tri::pairs::Grouping::Ask;
+        let card = dir.path().join("CARTE");
+        let shots = card.join("DCIM/100_TEST");
+        std::fs::create_dir_all(&shots).unwrap();
+        image::RgbImage::from_pixel(32, 24, image::Rgb([90, 90, 90]))
+            .save(shots.join("IMG0.jpg"))
+            .unwrap();
+        std::fs::write(shots.join("IMG0.RAF"), b"raw").unwrap();
+        h.state_mut().tree = Tree::with_places(
+            vec![tri::places::Place {
+                name: "CARTE".into(),
+                path: card.clone(),
+                kind: tri::places::PlaceKind::Volume,
+            }],
+            false,
+        );
+        h.run_steps(2);
+        h.get_by_label("Décharger la carte…").click();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.query_by_label("Décharger").is_none() {
+            assert!(Instant::now() < deadline, "boîte jamais prête");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            h.query_by_label("Regrouper RAW et JPEG (une paire)")
+                .is_some()
+        );
+        h.state_mut().offload.as_mut().unwrap().pairs_choice = Some(true);
+        settle_dialog(&mut h);
+        h.get_by_label("Décharger").click();
+        while h
+            .query_by_label_contains("2 fichiers copiés et vérifiés")
+            .is_none()
+        {
+            assert!(Instant::now() < deadline, "jamais copié");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        h.run_steps(3);
+        let opened = h.state().folder.dir.clone();
+        let data = h.state().settings.data_dir();
+        assert_eq!(tri::pairs::decided(data.as_deref(), &opened), Some(true));
+        assert!(h.state().pairs_view(), "la séance regroupée");
+        assert!(h.state().pairs_dialog.is_none(), "pas de question");
     }
 
     #[test]

@@ -7,8 +7,9 @@
 //! Chaque ligne est un filtre (12/11/2026) : un clic montre **ce filtre seul**, à la place
 //! des autres ; la ligne allumée a le fond du dossier ouvert ; un second clic sur elle les
 //! retire tous. Pas encore de
-//! Ctrl+clic pour combiner (avec les filtres complexes, #138). La ligne des paires n'est
-//! pas un filtre tant que les paires ne sont pas regroupées (#392).
+//! Ctrl+clic pour combiner (avec les filtres complexes, #138). La ligne des paires est un
+//! filtre dans un dossier regroupé (#392 : la case RAW+JPEG seule), sinon sa bulle dit
+//! comment regrouper.
 //!
 //! Deux comptages demandent de lire le disque, faits en fond (13/11/2026) : les photos
 //! qui ont des versions (leurs sidecars), refait quand une version change, et la taille
@@ -31,6 +32,8 @@ pub(super) enum Line {
     Photos,
     /// Les photos d'une extension.
     Extension(String),
+    /// Les paires RAW+JPEG regroupées (#392).
+    Pairs,
     /// Les développements, de tous les logiciels actifs (`None`) ou d'un seul.
     Developments(Option<Engine>),
     /// Sans aucune note.
@@ -76,6 +79,7 @@ struct Filters {
     extension: Option<String>,
     versions: bool,
     stack_only: bool,
+    pair_kinds: tri::pairs::PairKinds,
 }
 
 impl Filters {
@@ -93,6 +97,7 @@ impl Filters {
             extension: None,
             versions: false,
             stack_only: false,
+            pair_kinds: tri::pairs::PairKinds::default(),
         }
     }
 
@@ -102,6 +107,13 @@ impl Filters {
         match line {
             Line::Photos => {}
             Line::Extension(e) => f.extension = Some(e.clone()),
+            Line::Pairs => {
+                f.pair_kinds = tri::pairs::PairKinds {
+                    raw: false,
+                    pairs: true,
+                    jpeg: false,
+                }
+            }
             Line::Developments(engine) => {
                 f.developed = true;
                 f.developed_checked = engine.map(|e| vec![e]);
@@ -166,6 +178,7 @@ impl TriApp {
             extension: self.extension_only.clone(),
             versions: self.versions_only,
             stack_only: self.stack_only.is_some(),
+            pair_kinds: self.pair_kinds,
         }
     }
 
@@ -196,6 +209,7 @@ impl TriApp {
         self.conflicts_only = wanted.conflicts;
         self.extension_only = wanted.extension;
         self.versions_only = wanted.versions;
+        self.pair_kinds = wanted.pair_kinds;
         self.apply_filter();
     }
 
@@ -337,9 +351,16 @@ impl TriApp {
             });
         }
         if summary.pairs > 0 {
+            // Regroupées : un filtre (la case RAW+JPEG seule) ; séparées, la bulle dit
+            // comment les regrouper.
+            let grouped = self.pairs_view();
             rows.push(Row {
-                tip: Some(t!("summary-pairs-tip")),
-                ..row(t!("summary-pairs"), summary.pairs, None)
+                tip: (!grouped).then(|| t!("summary-pairs-tip")),
+                ..row(
+                    t!("summary-pairs"),
+                    summary.pairs,
+                    grouped.then_some(Line::Pairs),
+                )
             });
         }
         if !summary.developments.is_empty() {
