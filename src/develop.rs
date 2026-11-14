@@ -203,7 +203,10 @@ impl DevelopedRule {
 }
 
 /// Filtre sur les développements : un [`DevelopedRule`] appliqué avec les logiciels
-/// installés. Lit les sidecars ; les images plates n'ont pas de développement.
+/// installés. Lit les sidecars. Un JPEG peut avoir des développements (darktable en
+/// développe : retour du 14/11/2026, le filtre ne gardait que les RAW et la ligne du
+/// résumé en comptait un de plus) ; « aucun développement » (aucun logiciel coché) reste
+/// réservé aux RAW, qu'on développe.
 #[derive(Clone, Copy, Debug)]
 pub struct DevelopedFilter<'a> {
     /// Les logiciels cochés.
@@ -215,7 +218,8 @@ pub struct DevelopedFilter<'a> {
 impl crate::filter::Filter for DevelopedFilter<'_> {
     fn apply(&self, groups: crate::filter::Groups) -> crate::filter::Groups {
         crate::filter::retain(groups, |f| {
-            f.kind == crate::media::MediaKind::Raw && self.rule.accepts(&f.path, self.available)
+            (f.kind == crate::media::MediaKind::Raw || !self.rule.engines.is_empty())
+                && self.rule.accepts(&f.path, self.available)
         })
     }
 }
@@ -2493,11 +2497,13 @@ mod tests {
             MediaFile { path, kind }
         };
         // a : darktable ; b : RapidRAW puis darktable ; c : un sidecar de notes seulement ;
-        // d : JPEG.
+        // d : JPEG ; e : JPEG développé dans darktable (14/11/2026).
         let a = file("a.RAF", MediaKind::Raw);
         let b = file("b.RAF", MediaKind::Raw);
         let c = file("c.RAF", MediaKind::Raw);
         let d = file("d.JPG", MediaKind::Flat);
+        let e = file("e.JPG", MediaKind::Flat);
+        std::fs::write(dir.path().join("e.JPG.xmp"), sidecar(2, &[])).unwrap();
         std::fs::write(dir.path().join("a.RAF.xmp"), sidecar(2, &[])).unwrap();
         std::fs::write(
             dir.path().join("b.RAF.rrdata"),
@@ -2507,7 +2513,7 @@ mod tests {
         std::thread::sleep(Duration::from_millis(20));
         std::fs::write(dir.path().join("b.RAF.xmp"), sidecar(2, &[])).unwrap();
         std::fs::write(dir.path().join("c.RAF.xmp"), sidecar(0, &[])).unwrap();
-        let all = ungrouped(vec![a.clone(), b.clone(), c.clone(), d]);
+        let all = ungrouped(vec![a.clone(), b.clone(), c.clone(), d, e.clone()]);
         let both = [Engine::Darktable, Engine::RapidRaw];
         let rule = |engines: &[Engine]| DevelopedRule {
             engines: engines.to_vec(),
@@ -2518,10 +2524,11 @@ mod tests {
                 .concat()
         };
         let dt_rr = rule(&both);
-        assert_eq!(kept(&dt_rr, &both), [a.clone(), b.clone()]);
+        assert_eq!(kept(&dt_rr, &both), [a.clone(), b.clone(), e.clone()]);
         assert_eq!(
             kept(&rule(&[Engine::Darktable]), &both),
-            [a.clone(), b.clone()]
+            [a.clone(), b.clone(), e.clone()],
+            "le JPEG développé aussi"
         );
         assert_eq!(
             kept(&rule(&[Engine::RapidRaw]), &both),

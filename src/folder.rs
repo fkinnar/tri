@@ -188,8 +188,22 @@ pub struct Summary {
     pub types: Vec<TypeCount>,
     /// Paires RAW+JPEG (ou autre image plate) : même nom, même dossier.
     pub pairs: usize,
-    /// Développements par logiciel, dans l'ordre de [`Engine::ALL`] (ceux qui en ont).
-    pub developments: Vec<(Engine, usize)>,
+    /// Développements par logiciel, dans l'ordre de [`Engine::ALL`] (ceux qui en ont) :
+    /// les photos qu'ils développent (ce que montre le filtre « développées dans ») et leur
+    /// nombre (14/11/2026 : une photo et son JPEG regroupé, développés tous deux, font une
+    /// photo montrée et deux développements ; les deux comptes affichés).
+    pub developments: Vec<DevelopmentCount>,
+    /// Photos qui ont au moins un développement d'un logiciel actif.
+    pub developed: usize,
+    /// Développements des logiciels actifs.
+    pub developed_count: usize,
+    /// Photos RAW (une paire regroupée en est une).
+    pub raw_photos: usize,
+    /// Photos RAW qu'aucun logiciel actif ne développe : seul LibRaw les rend, ce qui reste
+    /// à développer (ligne « LibRaw » du résumé, 14/11/2026).
+    pub libraw_only: usize,
+    /// Images plates comptées comme photos (seules : sans le JPEG d'une paire regroupée).
+    pub flat_photos: usize,
     /// Photos sans aucune note (ni étoile, ni drapeau, ni couleur).
     pub untouched: usize,
     /// Photos avec des étoiles.
@@ -207,6 +221,17 @@ pub struct Summary {
     pub conflicts: usize,
 }
 
+/// Développements d'un logiciel ([`Summary::developments`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DevelopmentCount {
+    /// Logiciel.
+    pub engine: Engine,
+    /// Photos développées (montrées par le filtre, une vignette chacune).
+    pub photos: usize,
+    /// Développements (clones et copies compris).
+    pub count: usize,
+}
+
 /// Nombre de photos d'une extension.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeCount {
@@ -221,25 +246,46 @@ pub struct TypeCount {
 impl Summary {
     /// Résumé de `files` : `notes` donne les notes d'une image, `engine_of` le logiciel
     /// d'un développement (`None` : une photo), `in_conflict` si ses notes sont en
-    /// conflit.
+    /// conflit, `photo_of` la photo d'une image (elle-même ; la photo d'un développement ;
+    /// le RAW du JPEG d'une paire regroupée, #392 : une partie de la photo, pas une photo
+    /// de plus), `active` si un logiciel compte dans le total des développées.
     pub fn of<'a>(
         files: &[MediaFile],
         notes: impl Fn(&Path) -> &'a crate::xmp::Notes,
         engine_of: impl Fn(&Path) -> Option<Engine>,
         in_conflict: impl Fn(&Path) -> bool,
+        photo_of: impl Fn(&Path) -> PathBuf,
+        active: impl Fn(Engine) -> bool,
     ) -> Summary {
         use crate::xmp::Flag;
-        use std::collections::HashMap;
+        use std::collections::{HashMap, HashSet};
         let mut summary = Summary::default();
         let mut types: HashMap<(String, media::MediaKind), usize> = HashMap::new();
-        let mut developments: HashMap<Engine, usize> = HashMap::new();
+        let mut developments: HashMap<Engine, (HashSet<PathBuf>, usize)> = HashMap::new();
+        let mut developed: HashSet<PathBuf> = HashSet::new();
+        let mut raws: Vec<PathBuf> = Vec::new();
         let mut colors: HashMap<crate::xmp::Color, usize> = HashMap::new();
         for file in files {
             if let Some(engine) = engine_of(&file.path) {
-                *developments.entry(engine).or_default() += 1;
+                let photo = photo_of(&file.path);
+                if active(engine) {
+                    developed.insert(photo.clone());
+                    summary.developed_count += 1;
+                }
+                let entry = developments.entry(engine).or_default();
+                entry.0.insert(photo);
+                entry.1 += 1;
+                continue;
+            }
+            // Le JPEG d'une paire regroupée : compté avec sa photo (le RAW).
+            if photo_of(&file.path) != file.path {
                 continue;
             }
             summary.photos += 1;
+            match file.kind {
+                media::MediaKind::Raw => raws.push(file.path.clone()),
+                media::MediaKind::Flat => summary.flat_photos += 1,
+            }
             let extension = file
                 .path
                 .extension()
@@ -269,6 +315,8 @@ impl Summary {
             }
         }
         summary.pairs = crate::pairs::camera_jpegs(files).len();
+        summary.raw_photos = raws.len();
+        summary.libraw_only = raws.iter().filter(|r| !developed.contains(*r)).count();
         let mut types: Vec<TypeCount> = types
             .into_iter()
             .map(|((extension, kind), count)| TypeCount {
@@ -296,8 +344,17 @@ impl Summary {
             .collect();
         summary.developments = Engine::ALL
             .into_iter()
-            .filter_map(|e| developments.get(&e).map(|&n| (e, n)))
+            .filter_map(|e| {
+                developments
+                    .get(&e)
+                    .map(|(photos, count)| DevelopmentCount {
+                        engine: e,
+                        photos: photos.len(),
+                        count: *count,
+                    })
+            })
             .collect();
+        summary.developed = developed.len();
         summary
     }
 }
@@ -311,6 +368,8 @@ impl Folder {
             |p| self.notes.notes(p),
             |p| crate::developments::get(p).map(|d| d.engine),
             |p| self.notes.conflict(p).is_some(),
+            |p| media::source(p).into_owned(),
+            |_| true,
         )
     }
 }
@@ -394,7 +453,7 @@ mod tests {
             file("/s/D.jpg", Flat),
             file("/s/E.NEF", Raw),
             file("/s/A@dt.RAF", Raw),
-            file("/s/A_01@dt.RAF", Raw),
+            file("/s/A@dt-01.RAF", Raw),
             file("/s/B@rr.RAF", Raw),
         ];
         let accepted = Notes {
@@ -432,6 +491,15 @@ mod tests {
                 }
             },
             |p| p.ends_with("D.jpg"),
+            |p| {
+                // Les développements, d'après leur nom (`A@dt.RAF` → `A.RAF`).
+                let s = p.to_str().unwrap();
+                match s.find('@') {
+                    Some(at) => PathBuf::from(format!("{}.RAF", &s[..at])),
+                    None => p.to_path_buf(),
+                }
+            },
+            |e| e == Engine::Darktable,
         );
         assert_eq!(summary.photos, 6, "sans les développements");
         let types: Vec<(&str, usize)> = summary
@@ -441,10 +509,18 @@ mod tests {
             .collect();
         assert_eq!(types, [("RAF", 3), ("NEF", 1), ("JPG", 2)], "RAW d'abord");
         assert_eq!(summary.pairs, 1, "A.RAF + A.JPG");
+        // Les photos développées, pas les développements : A a deux développements
+        // darktable ; seul darktable compte au total (RapidRAW inactif ici).
+        let counts: Vec<(Engine, usize, usize)> = summary
+            .developments
+            .iter()
+            .map(|d| (d.engine, d.photos, d.count))
+            .collect();
         assert_eq!(
-            summary.developments,
-            [(Engine::Darktable, 2), (Engine::RapidRaw, 1)]
+            counts,
+            [(Engine::Darktable, 1, 2), (Engine::RapidRaw, 1, 1)]
         );
+        assert_eq!((summary.developed, summary.developed_count), (1, 2));
         assert_eq!(
             (summary.accepted, summary.rejected, summary.starred),
             (1, 1, 1)
@@ -453,6 +529,44 @@ mod tests {
         assert_eq!(summary.colored, 1);
         assert_eq!(summary.colors, [(Color::Red, 1)]);
         assert_eq!(summary.conflicts, 1);
+        // Paire regroupée (#392) : A.JPG fait partie de la photo A.RAF ; plus une photo de
+        // plus, ni un JPG, ni une photo sans note.
+        let grouped = Summary::of(
+            &files,
+            |_| &empty,
+            |p| {
+                p.to_str()
+                    .unwrap()
+                    .contains('@')
+                    .then_some(Engine::Darktable)
+            },
+            |_| false,
+            |p| match p.to_str().unwrap() {
+                "/s/A.JPG" => PathBuf::from("/s/A.RAF"),
+                s if s.contains('@') => {
+                    PathBuf::from(format!("{}.RAF", &s[..s.find('@').unwrap()]))
+                }
+                _ => p.to_path_buf(),
+            },
+            |_| true,
+        );
+        assert_eq!(grouped.photos, 5);
+        let types: Vec<(&str, usize)> = grouped
+            .types
+            .iter()
+            .map(|t| (t.extension.as_str(), t.count))
+            .collect();
+        assert_eq!(types, [("RAF", 3), ("NEF", 1), ("JPG", 1)], "D.jpg seul");
+        assert_eq!(grouped.pairs, 1);
+        assert_eq!(grouped.untouched, 5);
+        // A et B ont des développements (B@rr compté ici comme darktable).
+        assert_eq!(grouped.developed, 2);
+        // Photos RAW (A, B, C, E) ; seules C et E ne sont développées que par LibRaw ;
+        // D.jpg est la seule image plate.
+        assert_eq!(
+            (grouped.raw_photos, grouped.libraw_only, grouped.flat_photos),
+            (4, 2, 1)
+        );
     }
 
     #[test]

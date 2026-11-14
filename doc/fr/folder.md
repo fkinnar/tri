@@ -49,7 +49,13 @@ manipule quand on « ouvre un dossier ».
   (d'après le registre `developments`, à part des photos), photos sans note, avec des
   étoiles, acceptées, rejetées, avec un libellé couleur (et par couleur), et en conflit de
   notes. `Summary::of` prend des fonctions
-  pour les notes, le logiciel d'un développement et les conflits : testé sans fichiers.
+  pour les notes, le logiciel d'un développement, les conflits, la photo d'une image
+  (`photo_of`) et les logiciels actifs : testé sans fichiers. **Par photo** (14/11/2026) :
+  le JPEG d'une paire regroupée fait partie de sa photo (ni une photo de plus, ni un JPG,
+  ni des notes comptées deux fois) ; chaque logiciel compte les photos qu'il développe
+  et ses développements (`DevelopmentCount`), le total les photos développées par un
+  logiciel actif (`developed`, `developed_count`) ; aussi les photos RAW, celles que seul
+  LibRaw développe (`libraw_only`) et les images plates seules.
 
 Champs publics (`dir`, `files`, `notes`) : un dossier ouvert n'a pas d'invariant à
 protéger entre eux, et l'interface modifie les notes (`folder.notes.edit`).

@@ -34,6 +34,12 @@ pub(super) enum Line {
     Extension(String),
     /// Les paires RAW+JPEG regroupées (#392).
     Pairs,
+    /// Dossier regroupé : les RAW sans JPEG.
+    RawAlone,
+    /// Dossier regroupé : les JPEG (et autres images plates) sans RAW.
+    JpegAlone,
+    /// Les RAW qu'aucun logiciel actif ne développe (seul LibRaw les rend).
+    LibRaw,
     /// Les développements, de tous les logiciels actifs (`None`) ou d'un seul.
     Developments(Option<Engine>),
     /// Sans aucune note.
@@ -78,6 +84,7 @@ struct Filters {
     conflicts: bool,
     extension: Option<String>,
     versions: bool,
+    libraw: bool,
     stack_only: bool,
     pair_kinds: tri::pairs::PairKinds,
 }
@@ -96,6 +103,7 @@ impl Filters {
             conflicts: false,
             extension: None,
             versions: false,
+            libraw: false,
             stack_only: false,
             pair_kinds: tri::pairs::PairKinds::default(),
         }
@@ -114,6 +122,21 @@ impl Filters {
                     jpeg: false,
                 }
             }
+            Line::RawAlone => {
+                f.pair_kinds = tri::pairs::PairKinds {
+                    raw: true,
+                    pairs: false,
+                    jpeg: false,
+                }
+            }
+            Line::JpegAlone => {
+                f.pair_kinds = tri::pairs::PairKinds {
+                    raw: false,
+                    pairs: false,
+                    jpeg: true,
+                }
+            }
+            Line::LibRaw => f.libraw = true,
             Line::Developments(engine) => {
                 f.developed = true;
                 f.developed_checked = engine.map(|e| vec![e]);
@@ -161,6 +184,10 @@ struct Row {
     color: Option<Color32>,
     /// Bulle propre (sinon : celle du filtre).
     tip: Option<String>,
+    /// Second compte, entre parenthèses (les développements :
+    /// photos montrées, puis développements, 14/11/2026), et sa précision, en tête de
+    /// la bulle.
+    total: Option<(usize, String)>,
 }
 
 impl TriApp {
@@ -177,6 +204,7 @@ impl TriApp {
             conflicts: self.conflicts_only,
             extension: self.extension_only.clone(),
             versions: self.versions_only,
+            libraw: self.libraw_only,
             stack_only: self.stack_only.is_some(),
             pair_kinds: self.pair_kinds,
         }
@@ -209,6 +237,7 @@ impl TriApp {
         self.conflicts_only = wanted.conflicts;
         self.extension_only = wanted.extension;
         self.versions_only = wanted.versions;
+        self.libraw_only = wanted.libraw;
         self.pair_kinds = wanted.pair_kinds;
         self.apply_filter();
     }
@@ -239,7 +268,12 @@ impl TriApp {
                     // avec les titres).
                     let on = row.line.as_ref().is_some_and(|l| self.summary_line_on(l));
                     let mut text = egui::RichText::new(&row.label);
-                    let mut count = egui::RichText::new(row.count.to_string());
+                    // Les deux comptes, toujours (retour du 14/11/2026 : égaux, le second
+                    // manquait, et la ligne ne se lisait plus comme les autres).
+                    let mut count = egui::RichText::new(match &row.total {
+                        Some((total, _)) => format!("{} ({total})", row.count),
+                        None => row.count.to_string(),
+                    });
                     if let Some(c) = row.color {
                         text = text.color(c);
                         count = count.color(c);
@@ -278,6 +312,11 @@ impl TriApp {
                             }
                         })
                     });
+                    let tip = match (&row.total, tip) {
+                        (Some((_, detail)), Some(tip)) => Some(format!("{detail}\n{tip}")),
+                        (Some((_, detail)), None) => Some(detail.clone()),
+                        (None, tip) => tip,
+                    };
                     let (label, number) = match &tip {
                         Some(tip) => (label.on_hover_text(tip), number.on_hover_text(tip)),
                         None => (label, number),
@@ -326,8 +365,18 @@ impl TriApp {
     /// Les lignes du résumé. Peu coûteux (quelques milliers de recherches en mémoire) :
     /// refait à chaque image affichée, toujours à jour des notes et des développements.
     fn summary_rows(&self, visuals: &egui::Visuals) -> Vec<Row> {
-        let summary = self.folder.summary();
         let engines = self.developers.engines();
+        // Par photo (14/11/2026) : le JPEG d'une paire regroupée fait partie de sa photo,
+        // un développement compte pour la photo qu'il montre ; le total des développées,
+        // des seuls logiciels actifs (les autres ne sont pas dans la grille).
+        let summary = tri::folder::Summary::of(
+            &self.folder.files,
+            |p| self.folder.notes.notes(p),
+            |p| tri::developments::get(p).map(|d| d.engine),
+            |p| self.folder.notes.conflict(p).is_some(),
+            |p| super::camera_photo(&self.camera_raw, p),
+            |e| engines.contains(&e),
+        );
         let row = |label: String, count: usize, line: Option<Line>| Row {
             label,
             count,
@@ -335,39 +384,66 @@ impl TriApp {
             line,
             color: None,
             tip: None,
+            total: None,
         };
         let mut rows = vec![Row {
             tip: Some(t!("summary-photos-tip")),
             ..row(t!("summary-photos"), summary.photos, Some(Line::Photos))
         }];
-        for t in &summary.types {
-            rows.push(Row {
-                indent: true,
-                ..row(
-                    t.extension.clone(),
-                    t.count,
-                    Some(Line::Extension(t.extension.clone())),
-                )
-            });
+        let grouped = self.pairs_view();
+        if grouped {
+            // Dossier regroupé (14/11/2026) : les photos = paires + RAW seuls + JPEG seuls,
+            // chacune une case du filtre à trois cases.
+            let raw_alone = summary.raw_photos.saturating_sub(summary.pairs);
+            for (label, n, line) in [
+                (t!("summary-pairs"), summary.pairs, Line::Pairs),
+                (t!("summary-raw-alone"), raw_alone, Line::RawAlone),
+                (
+                    t!("summary-jpeg-alone"),
+                    summary.flat_photos,
+                    Line::JpegAlone,
+                ),
+            ] {
+                if n > 0 {
+                    rows.push(Row {
+                        indent: true,
+                        ..row(label, n, Some(line))
+                    });
+                }
+            }
+        } else {
+            for t in &summary.types {
+                rows.push(Row {
+                    indent: true,
+                    ..row(
+                        t.extension.clone(),
+                        t.count,
+                        Some(Line::Extension(t.extension.clone())),
+                    )
+                });
+            }
+            // Séparées : la bulle dit comment les regrouper.
+            if summary.pairs > 0 {
+                rows.push(Row {
+                    tip: Some(t!("summary-pairs-tip")),
+                    ..row(t!("summary-pairs"), summary.pairs, None)
+                });
+            }
         }
-        if summary.pairs > 0 {
-            // Regroupées : un filtre (la case RAW+JPEG seule) ; séparées, la bulle dit
-            // comment les regrouper.
-            let grouped = self.pairs_view();
-            rows.push(Row {
-                tip: (!grouped).then(|| t!("summary-pairs-tip")),
-                ..row(
-                    t!("summary-pairs"),
-                    summary.pairs,
-                    grouped.then_some(Line::Pairs),
-                )
-            });
-        }
-        if !summary.developments.is_empty() {
-            let total = summary.developments.iter().map(|(_, n)| n).sum();
+        if !summary.developments.is_empty() || summary.raw_photos > 0 {
             let line = (!engines.is_empty()).then_some(Line::Developments(None));
-            rows.push(row(t!("summary-developments"), total, line));
-            for &(engine, n) in &summary.developments {
+            let detail = |photos: usize, count: usize| {
+                t!("summary-developments-counts", photos = photos, n = count)
+            };
+            rows.push(Row {
+                total: Some((
+                    summary.developed_count,
+                    detail(summary.developed, summary.developed_count),
+                )),
+                ..row(t!("summary-developments"), summary.developed, line)
+            });
+            for d in &summary.developments {
+                let (engine, n) = (d.engine, d.photos);
                 // Logiciel absent ou désactivé : ses développements ne sont pas dans la
                 // grille (#386), grisés ici avec la raison, sans filtre.
                 let active = engines.contains(&engine);
@@ -375,10 +451,39 @@ impl TriApp {
                     indent: true,
                     color: (!active).then_some(visuals.weak_text_color()),
                     tip: (!active).then(|| t!("summary-engine-off", engine = engine.name())),
+                    total: Some((d.count, detail(d.photos, d.count))),
                     ..row(
                         engine.name().to_string(),
                         n,
                         active.then_some(Line::Developments(Some(engine))),
+                    )
+                });
+            }
+            // Le JPEG d'une paire regroupée est un développement du boîtier (#392).
+            if grouped && summary.pairs > 0 {
+                rows.push(Row {
+                    indent: true,
+                    tip: Some(t!("summary-camera-tip")),
+                    ..row(t!("summary-camera"), summary.pairs, Some(Line::Pairs))
+                });
+            }
+            // LibRaw : les RAW que lui seul développe (ce qui reste à développer), et tous
+            // les RAW (chacun a son rendu LibRaw).
+            if summary.raw_photos > 0 {
+                rows.push(Row {
+                    indent: true,
+                    total: Some((
+                        summary.raw_photos,
+                        t!(
+                            "summary-libraw-counts",
+                            only = summary.libraw_only,
+                            n = summary.raw_photos
+                        ),
+                    )),
+                    ..row(
+                        "LibRaw".to_string(),
+                        summary.libraw_only,
+                        Some(Line::LibRaw),
                     )
                 });
             }
