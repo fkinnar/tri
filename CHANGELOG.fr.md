@@ -10,6 +10,11 @@
   un logiciel de développement, LibRaw), et en choisir un montre ce rendu de la photo
   (son développement, le JPEG d'une paire regroupée, l'« avant » d'un développement) ou,
   si la photo n'en a pas, devient le rendu affiché de toutes les photos.
+- **Paires regroupées : filtre à trois cases** (#464, #392) : dans un dossier regroupé,
+  le filtre de type a trois cases, RAW (sans JPEG), RAW+JPEG (les paires) et JPEG (sans
+  RAW), combinables, parcourues par la touche du type. Aussi : un développement darktable
+  du JPEG rejoint lui aussi la pile du RAW, et la barre d'état compte les photos (les
+  JPEG regroupés avec les développements).
 - **Paires RAW+JPEG regroupées en une photo** (#463, première partie de #392) : dans un
   dossier regroupé, une paire n'est qu'une vignette, le JPEG du boîtier rangé avec les
   développements du RAW (puce « Boîtier », Maj+V pour déplier). Désactivé par défaut :
