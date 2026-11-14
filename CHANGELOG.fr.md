@@ -6,6 +6,11 @@
 
 - **Plus d'aide « Entrée / Échap »** (#472) à côté des boutons des boîtes d'export,
   de renommage, de copie / déplacement et de suppression : ça coule de source.
+- **Le déchargement dit ce qu'il fait** (#471, #469, #470) : l'avancement montre
+  l'étape (préparation, copie, écriture sur le disque, vérification), le fichier, le
+  débit, et « Rien n'a bougé depuis n s » quand il s'arrête, pour distinguer une copie
+  lente (une clé USB) d'une copie bloquée. « RAW seulement » et « Regrouper RAW et JPEG »
+  s'excluent : les deux restent en place, l'une grisée quand l'autre est cochée.
 - **Le résumé du dossier compte des photos** (#468) : dans un dossier regroupé, une paire
   est une photo (472 fichiers faisaient 236 photos, les notes étaient comptées deux
   fois) ; « Photos » = paires + RAW seuls + JPEG seuls, chacun un filtre ; les
