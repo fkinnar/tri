@@ -432,6 +432,10 @@ allow_actions = false
 # paires, "separate" les laisse séparées, "grouped" les regroupe. Chaque dossier retient sa
 # décision (menu du dossier, palette), qui l'emporte sur ce réglage.
 group_pairs = "ask"
+# Renommage par lot (plusieurs photos, <core.file.rename>) : gabarit proposé la première fois. Champs :
+# {date} (prise de vue, 2026-11-14), {time} (153012), {name} (nom d'origine), {n}
+# (compteur ; {n:3} = 001), {folder} (dossier sans la date en tête), {camera} (appareil).
+rename_template = "{date}_{folder}_{n:3}"
 
 [sharpness]
 # Carte de netteté (focus peaking, p en 1:1) : un pixel est marqué si le gradient de

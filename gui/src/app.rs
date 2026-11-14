@@ -603,8 +603,16 @@ pub struct TriApp {
     /// Profil d'export choisi la dernière fois (session) : pour un rendu (RAW), et pour un
     /// JPEG (boîtier ou d'origine), retenus à part.
     export_choice: [Option<String>; 2],
+    /// Dernier gabarit du renommage par lot (#439), pour la session.
+    rename_template: Option<String>,
     /// Export en cours (darktable, en fond), suivi dans la barre d'état.
     export_job: Option<crate::export::Job>,
+    /// Exports demandés pendant un autre (#400), lancés l'un après l'autre dans l'ordre
+    /// des demandes : une file plutôt que des exports en parallèle (darktable et LibRaw
+    /// occupent déjà tous les cœurs).
+    export_queue: std::collections::VecDeque<QueuedExport>,
+    /// Numéro du prochain export mis en file (pour en retirer un précis).
+    export_queue_next: u64,
     /// Journal des exports terminés (rapport d'export, `Ctrl+Maj+E`), gardé dans le dossier
     /// de données ([`tri::export_log`]).
     export_log: Vec<tri::export_log::Entry>,
@@ -1577,7 +1585,10 @@ impl TriApp {
             versions_pending: HashSet::new(),
             versions_read: mpsc::channel(),
             export_choice: [None, None],
+            rename_template: None,
             export_job: None,
+            export_queue: std::collections::VecDeque::new(),
+            export_queue_next: 0,
             export_log: data
                 .as_deref()
                 .map(tri::export_log::read)
@@ -9204,8 +9215,12 @@ impl TriApp {
             | Action::EmbedNotes
             | Action::ImportNotes
             | Action::Send(_) => {
-                // Renommer, afficher : l'image courante ; les autres : la sélection.
+                // Afficher : l'image courante ; renommer : la sélection marquée (par lot,
+                // #439), sinon l'image courante ; les autres : la sélection.
                 let paths = match action {
+                    Action::FileRename if self.selection.visible(&self.files) > 1 => {
+                        self.selection.targets(&self.files, self.selected)
+                    }
                     Action::FileDelete
                     | Action::FileEdit
                     | Action::FileCopy
@@ -13768,6 +13783,23 @@ impl TriApp {
                 cancel: Some((t!("export-cancel"), StatusClick::CancelExport)),
             });
         }
+        // Exports en attente (#400), chacun retirable.
+        for queued in &self.export_queue {
+            tasks.push(Task {
+                text: t!(
+                    "export-queued",
+                    profile = queued.profile.as_str(),
+                    total = queued.total
+                ),
+                fraction: 0.0,
+                tip: None,
+                click: None,
+                cancel: Some((
+                    t!("export-queued-cancel"),
+                    StatusClick::CancelQueuedExport(queued.id),
+                )),
+            });
+        }
         // Rendus développés d'un dossier (issue n° 69).
         if let Some(batch) = &self.develop_batch {
             let (done, total) = batch.progress();
@@ -14880,7 +14912,19 @@ impl TriApp {
         };
         let result = match action {
             Action::FileRename => {
-                self.file_dialog = Some(crate::files::FileDialog::rename(first, at));
+                // Plusieurs photos : renommage par lot, par un gabarit (#439).
+                let photos = tri::files::photos(&paths);
+                self.file_dialog = Some(if photos.len() > 1 {
+                    let template = self
+                        .rename_template
+                        .clone()
+                        .unwrap_or_else(|| settings.rename_template.clone());
+                    crate::files::FileDialog::RenameBatch(Box::new(
+                        crate::rename_batch::BatchDialog::new(photos, template, at),
+                    ))
+                } else {
+                    crate::files::FileDialog::rename(first, at)
+                });
                 Ok(())
             }
             Action::FileDelete => {
@@ -15160,6 +15204,15 @@ impl TriApp {
                 self.start_export(ctx, images, profile, folder, render, cut);
             }
             crate::files::Outcome::Done { select, step } => {
+                // Lot (#439) : toutes les photos marquées le restent ; gabarit retenu.
+                if let Some(crate::files::FileDialog::RenameBatch(batch)) = &self.file_dialog {
+                    self.rename_template = Some(batch.template.clone());
+                    if let Some(tri::history::Step::Rename(plan)) = &step {
+                        for (from, to) in &plan.moves {
+                            self.selection.renamed(from, to);
+                        }
+                    }
+                }
                 if let Some(step) = step {
                     self.history.push(step);
                 }
@@ -15175,7 +15228,9 @@ impl TriApp {
         }
     }
 
-    /// Lance l'export en fond (darktable) ; un seul à la fois.
+    /// Lance l'export en fond (darktable) ; un seul à la fois : pendant un autre, il
+    /// attend son tour dans la file (#400), avec tout ce qu'il exporte déjà décidé
+    /// (images, préréglage, dossier, rendu).
     fn start_export(
         &mut self,
         ctx: &egui::Context,
@@ -15185,10 +15240,6 @@ impl TriApp {
         render: crate::export::Render,
         cut: Option<tri::export::Cut>,
     ) {
-        if self.export_job.is_some() {
-            self.notice = Some((t!("export-busy"), true));
-            return;
-        }
         let Some(engine) = &self.engine else { return };
         // Configuration et fichiers de travail à part de ceux des rendus développés : un
         // rendu demandé par Maj+B pendant un export ne gêne pas. Les deux logiciels sont
@@ -15246,7 +15297,34 @@ impl TriApp {
             render: self.settings.render.options(),
             pair_suffix: self.settings.export.camera_suffix.clone(),
         };
-        self.export_job = Some(crate::export::Job::start(tools, order, ctx));
+        if self.export_job.is_none() {
+            self.export_job = Some(crate::export::Job::start(tools, order, ctx));
+            return;
+        }
+        let queued = QueuedExport {
+            id: self.export_queue_next,
+            profile: crate::export::profile_name(&order.profile),
+            total: order.images.len(),
+            tools,
+            order,
+            ctx: ctx.clone(),
+        };
+        self.export_queue_next += 1;
+        self.export_queue.push_back(queued);
+        self.notice = Some((
+            t!("export-queued-notice", n = self.export_queue.len()),
+            false,
+        ));
+    }
+
+    /// L'export suivant de la file, s'il y en a un et que rien ne tourne.
+    fn start_next_export(&mut self) {
+        if self.export_job.is_some() {
+            return;
+        }
+        if let Some(next) = self.export_queue.pop_front() {
+            self.export_job = Some(crate::export::Job::start(next.tools, next.order, &next.ctx));
+        }
     }
 
     /// Export fini : bilan dans la barre d'état.
@@ -15334,6 +15412,7 @@ impl TriApp {
             self.export_toasts.push(toast);
         }
         self.export_job = None;
+        self.start_next_export();
     }
 
     /// Bulles de fin d'export au milieu de la zone des images (#381), l'une sous l'autre :
@@ -15598,14 +15677,9 @@ impl TriApp {
                 .filter(|a| a.available())
                 {
                     // Actions sur les fichiers interdites : grisées, la bulle dit
-                    // pourquoi (30/10/2026). Renommer : une image à la fois (pas encore
-                    // de renommage par lot).
-                    let allowed = !action.changes_files() || self.settings.files.allow_actions;
-                    let one_only = on_all && action == Action::FileRename;
-                    let enabled = allowed && !one_only;
-                    let tip = if one_only {
-                        t!("rating-dialog-rename-one")
-                    } else if enabled {
+                    // pourquoi (30/10/2026). Renommer toute la sélection : par lot (#439).
+                    let enabled = !action.changes_files() || self.settings.files.allow_actions;
+                    let tip = if enabled {
                         self.action_tip(action)
                     } else {
                         t!("files-actions-off")
@@ -19783,6 +19857,9 @@ impl eframe::App for TriApp {
                     job.cancel();
                 }
             }
+            Some(StatusClick::CancelQueuedExport(id)) => {
+                self.export_queue.retain(|q| q.id != id);
+            }
             Some(StatusClick::CancelDevelop) => {
                 if let Some(batch) = &self.develop_batch {
                     batch.cancel();
@@ -20379,6 +20456,19 @@ pub(crate) fn folder_name(path: &Path) -> String {
 }
 
 /// Une tâche de fond, pour la barre globale (issue n° 36).
+/// Export qui attend son tour (#400) : tout est décidé à la demande, changer la
+/// sélection ensuite n'y change rien.
+struct QueuedExport {
+    id: u64,
+    /// Nom du préréglage, pour la barre d'état.
+    profile: String,
+    /// Nombre d'images.
+    total: usize,
+    tools: crate::export::Tools,
+    order: crate::export::Order,
+    ctx: egui::Context,
+}
+
 struct Task {
     text: String,
     fraction: f32,
@@ -20401,6 +20491,8 @@ enum StatusClick {
     ToggleTasks,
     /// Interrompre l'export en cours.
     CancelExport,
+    /// Retirer un export de la file d'attente (#400).
+    CancelQueuedExport(u64),
     /// Interrompre les rendus développés du dossier.
     CancelDevelop,
     /// Progression d'une copie en arrière-plan : réafficher sa boîte.
@@ -26165,6 +26257,73 @@ mod tests {
             "quai.png",
             "l'image renommée reste sélectionnée"
         );
+    }
+
+    #[test]
+    fn f2_on_a_selection_renames_the_batch_by_a_template() {
+        // #439 : plusieurs photos marquées, F2 = renommage par lot ; la paire suit, un pas
+        // d'historique, annulable.
+        let names = ["img0.jpg", "img0.png", "img1.jpg", "img2.jpg"];
+        let (mut h, dir) = harness_files(&names, 64, 48);
+        h.run_steps(3);
+        h.state_mut().settings.files.allow_actions = true;
+        let files: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        for name in ["img0.png", "img1.jpg", "img2.jpg"] {
+            let path = files.iter().find(|p| p.ends_with(name)).unwrap();
+            h.state_mut().selection.toggle(path);
+        }
+        press(&mut h, Key::F2, Modifiers::NONE);
+        assert!(matches!(
+            h.state().file_dialog,
+            Some(crate::files::FileDialog::RenameBatch(_))
+        ));
+        // Gabarit par défaut : des JPEG sans date de prise de vue, signalé en rouge.
+        run_until(
+            &mut h,
+            |app| matches!(&app.file_dialog, Some(crate::files::FileDialog::RenameBatch(b)) if b.is_read()),
+        );
+        h.run_steps(2);
+        assert_eq!(
+            h.query_all_by_label_contains("pas de date de prise de vue")
+                .count(),
+            3,
+            "une ligne par photo"
+        );
+        // Un autre gabarit (piloté directement) : les nouveaux noms en direct.
+        if let Some(crate::files::FileDialog::RenameBatch(b)) = &mut h.state_mut().file_dialog {
+            b.template = "{folder}_{n:2}".into();
+        }
+        h.run_steps(2);
+        assert!(h.query_by_label("img0.png devient photos_01.png").is_some());
+        assert!(h.query_by_label("img2.jpg devient photos_03.jpg").is_some());
+        assert!(
+            h.query_by_label_contains("1 autre fichier").is_some(),
+            "la paire suit"
+        );
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_none());
+        let photos = dir.path().join("photos");
+        for name in [
+            "photos_01.png",
+            "photos_01.jpg",
+            "photos_02.jpg",
+            "photos_03.jpg",
+        ] {
+            assert!(photos.join(name).exists(), "{name}");
+        }
+        assert_eq!(
+            h.state().selection.visible(&h.state().files),
+            3,
+            "marques suivies"
+        );
+        assert_eq!(h.state().rename_template.as_deref(), Some("{folder}_{n:2}"));
+        // Un seul pas d'historique, annulé d'un coup.
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::Undo);
+        h.run_steps(3);
+        for name in names {
+            assert!(photos.join(name).exists(), "{name} revenu");
+        }
     }
 
     #[test]
@@ -33152,6 +33311,52 @@ mod tests {
     }
 
     #[test]
+    fn an_export_asked_during_another_waits_its_turn() {
+        // #400 : un export demandé pendant un autre attend dans la file, puis part ; un
+        // export retiré de la file ne part pas.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let ctx = h.ctx.clone();
+        let profile = tri::export::Profile::defaults()
+            .into_iter()
+            .find(|p| p.id == "asis")
+            .unwrap();
+        let image = dir.path().join("photos/img0.jpg");
+        let out = |n: usize| dir.path().join(format!("out{n}"));
+        for n in 1..=3 {
+            h.state_mut().start_export(
+                &ctx,
+                vec![image.clone()],
+                profile.clone(),
+                out(n).to_string_lossy().into_owned(),
+                crate::export::Render::LibRaw,
+                None,
+            );
+        }
+        assert!(h.state().export_job.is_some(), "le premier part");
+        assert_eq!(h.state().export_queue.len(), 2, "les deux autres attendent");
+        assert!(
+            h.state()
+                .notice
+                .as_ref()
+                .unwrap()
+                .0
+                .contains("2 en attente")
+        );
+        // Le dernier est retiré de la file (le « × » de sa ligne dans la barre d'état
+        // fait exactement ceci), avant que les autres, instantanés ici, ne finissent.
+        let last = h.state().export_queue.back().unwrap().id;
+        h.state_mut().export_queue.retain(|q| q.id != last);
+        run_until(&mut h, |app| {
+            app.export_job.is_none() && app.export_queue.is_empty()
+        });
+        assert!(out(1).join("img0.jpg").is_file());
+        assert!(out(2).join("img0.jpg").is_file(), "parti après le premier");
+        assert!(!out(3).exists(), "retiré de la file");
+        assert_eq!(h.state().export_toasts.len(), 2, "une bulle par export");
+    }
+
+    #[test]
     fn ctrl_e_offers_the_export_profiles_and_remembers_the_choice() {
         let (mut h, dir) = harness();
         // La grille montre le rendu LibRaw : c'est lui qu'on exporte.
@@ -34160,7 +34365,7 @@ mod tests {
     fn a_right_click_in_a_selection_acts_on_the_whole_selection() {
         // Retour du 12/11/2026 : Suppr efface toute la sélection, le clic droit une image
         // seulement. La boîte du clic droit agit sur toute la sélection (case cochée),
-        // sauf renommer (une image à la fois).
+        // renommer compris (par lot depuis #439).
         use egui_kittest::kittest::NodeT;
         let (mut h, _dir) = harness();
         h.run_steps(3);
@@ -34189,9 +34394,9 @@ mod tests {
             0,
             "hors sélection"
         );
-        // Renommer : grisé sur la sélection.
+        // Renommer : permis sur la sélection (par lot, #439).
         assert!(
-            h.get_by_label(&Action::FileRename.label())
+            !h.get_by_label(&Action::FileRename.label())
                 .accesskit_node()
                 .is_disabled()
         );
