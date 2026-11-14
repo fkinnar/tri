@@ -423,6 +423,11 @@ recent = 9
 # d'ici casse sa bibliothèque. Autorisées, chaque boîte le rappelle. Aussi une case dans
 # le panneau de droite (Grille). Le déchargement d'une carte n'est pas concerné.
 allow_actions = false
+# Paires RAW+JPEG regroupées en une seule photo dans la grille, le JPEG rangé avec les
+# développements du RAW (« Boîtier ») : "ask" demande à l'ouverture d'un dossier qui a des
+# paires, "separate" les laisse séparées, "grouped" les regroupe. Chaque dossier retient sa
+# décision (menu du dossier, palette), qui l'emporte sur ce réglage.
+group_pairs = "ask"
 
 [sharpness]
 # Carte de netteté (focus peaking, p en 1:1) : un pixel est marqué si le gradient de

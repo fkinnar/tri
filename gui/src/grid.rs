@@ -177,6 +177,7 @@ pub fn navigate(
         | Action::DevNext
         | Action::DevPrev
         | Action::DevFoldAll
+        | Action::PairsToggle
         | Action::Sidecars
         | Action::EmbedNotes
         | Action::ImportNotes

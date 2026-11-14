@@ -4,6 +4,13 @@
 
 ## Non publié
 
+- **Paires RAW+JPEG regroupées en une photo** (#463, première partie de #392) : dans un
+  dossier regroupé, une paire n'est qu'une vignette, le JPEG du boîtier rangé avec les
+  développements du RAW (puce « Boîtier », Maj+V pour déplier). Désactivé par défaut :
+  l'ouverture d'un dossier qui a des paires pose la question une fois (« Ne plus
+  demander » en fait le réglage global, `[files] group_pairs` = `ask` / `separate` /
+  `grouped`) ; la décision est retenue par dossier et se change dans le menu du dossier
+  ou la palette (`core.dev.pairs`).
 - **CI : un test en échec est relancé une fois** (#461) : les tests passent par
   cargo-nextest sur GitHub ; un test qui ne passe qu'à la relance est marqué FLAKY (clics
   simulés perdus sur les machines de GitHub) au lieu de bloquer la PR ; un vrai bug

@@ -446,6 +446,7 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
         ("gui", "raw_previews") => &["on-demand", "background"],
         ("xmp", "sidecar") => &["darktable", "adobe", "both"],
         ("xmp", "embed") => &["never", "internal", "everywhere"],
+        ("files", "group_pairs") => &["ask", "separate", "grouped"],
         ("sidecars.rapidraw", "create") => &["auto", "always", "never"],
         ("i18n", "language") => &["auto", "fr", "en"],
         ("gui.view", "focus_marker") => &["square", "cross", "circle", "heart"],

@@ -408,6 +408,13 @@ pub struct TriApp {
     /// « Réinitialiser ce dossier… » (`core.folders.reset`, et `core.folders.cache_clear`
     /// avec le cache seul ; issue n° 411) : la boîte.
     reset: Option<crate::reset_dialog::ResetDialog>,
+    /// Paires RAW+JPEG regroupées (issue n° 392) : la décision de chaque dossier, lue une
+    /// fois par ouverture (dossier → regroupées).
+    pairs_dirs: HashMap<PathBuf, bool>,
+    /// JPEG des paires regroupées → leur RAW, recalculé avec les piles.
+    camera_raw: HashMap<PathBuf, PathBuf>,
+    /// Boîte « Regrouper RAW et JPEG ? » ouverte.
+    pairs_dialog: Option<crate::pairs_dialog::PairsDialog>,
     /// Réinitialisation en cours : le dossier, et ce qu'elle a fait, à la fin.
     reset_job: Option<(PathBuf, Receiver<tri::reset::Outcome>)>,
     /// Message pour la barre d'état (texte, vrai si c'est une erreur).
@@ -1479,6 +1486,9 @@ impl TriApp {
             remote_scanner: tri::remote::scan,
             cache_jobs: Vec::new(),
             reset: None,
+            pairs_dirs: HashMap::new(),
+            camera_raw: HashMap::new(),
+            pairs_dialog: None,
             reset_job: None,
             notice: None,
             settings: settings.engine(),
@@ -2349,6 +2359,9 @@ impl TriApp {
         self.expanded.clear();
         self.dev_unfolded.clear();
         self.dev_shown.clear();
+        self.pairs_dirs.clear();
+        self.camera_raw.clear();
+        self.pairs_dialog = None;
         self.selection.clear();
         self.scores.clear();
         self.signatures.clear();
@@ -2367,6 +2380,7 @@ impl TriApp {
         }
         self.apply_filter();
         self.restore_folder_position();
+        self.ask_pairs();
         if let Some(i) = self.start_select.take() {
             self.selected = i.min(self.files.len().saturating_sub(1));
         }
@@ -3790,6 +3804,9 @@ impl TriApp {
                         // Clic droit : les actions du clavier (retour du 18/10/2026), raccourci au
                         // survol.
                         let removable = row.kind == Some(PlaceKind::Volume) && row.ejectable;
+                        // Paires RAW+JPEG du dossier ouvert (#392) : regroupées ou non, s'il
+                        // en a.
+                        let pairs_here = self.pairs_dirs.get(&self.folder.dir).copied();
                         let mut open_in = None;
                         // Clics à l'intérieur sans fermer : un groupe passé au premier niveau
                         // ou replié garde le menu ouvert (issue n° 406) ; chaque entrée ferme
@@ -3889,6 +3906,19 @@ impl TriApp {
                                     }
                                 });
                                 groups.group(ui, "files", &t!("folder-group-files"), |ui| {
+                                    // Paires RAW+JPEG du dossier ouvert (#392), dont la
+                                    // liste est connue.
+                                    if row.path == self.folder.dir && pairs_here.is_some() {
+                                        entry(
+                                            ui,
+                                            Action::PairsToggle,
+                                            if pairs_here == Some(true) {
+                                                t!("folder-menu-pairs-separate")
+                                            } else {
+                                                t!("folder-menu-pairs-group")
+                                            },
+                                        );
+                                    }
                                     entry(ui, Action::FolderCreate, t!("folder-menu-new"));
                                     if row.depth > 0 {
                                         entry(ui, Action::FolderRename, t!("folder-menu-rename"));
@@ -4259,6 +4289,7 @@ impl TriApp {
                 // « Ajouter aux favoris » ouvrait la boîte de suppression (cas par défaut
                 // de `folder_edit_action`), corrigé le 20/10/2026.
                 Action::FolderFavorite => self.toggle_favorite(),
+                Action::PairsToggle => self.toggle_pairs(),
                 Action::FolderFavoriteName => self.name_favorite(&ctx),
                 Action::FolderForget => self.forget_server(&path),
                 Action::FolderCacheClear => self.ask_reset(path, true),
@@ -6627,8 +6658,17 @@ impl TriApp {
             }
             ranges
         };
+        // Paires regroupées (#392) : le JPEG va avec son RAW, comme un développement.
+        self.refresh_camera_raw();
         let files = &self.files;
-        let photo = |i: usize| tri::media::source(&files[i].path).into_owned();
+        let camera = &self.camera_raw;
+        let photo = |i: usize| {
+            let path = &files[i].path;
+            camera
+                .get(path)
+                .cloned()
+                .unwrap_or_else(|| tri::media::source(path).into_owned())
+        };
         let same_photo = |i: usize, j: usize| photo(i) == photo(j);
         // Une photo et ses développements ne se séparent jamais (31/10/2026) : un
         // développement n'a pas d'empreinte, la similarité coupait entre eux et la pile de
@@ -6697,7 +6737,10 @@ impl TriApp {
             }
             let the_photo = r
                 .clone()
-                .find(|&i| !tri::media::is_development(&files[i].path))
+                .find(|&i| {
+                    !tri::media::is_development(&files[i].path)
+                        && !camera.contains_key(&files[i].path)
+                })
                 .unwrap_or(r.start);
             match render {
                 GridRender::Embedded | GridRender::LibRaw => the_photo,
@@ -6868,8 +6911,8 @@ impl TriApp {
     /// repliée la montre à la place de sa couverture.
     fn show_development(&mut self, index: usize) {
         let path = self.files[index].path.clone();
-        self.dev_shown
-            .insert(tri::media::source(&path).into_owned(), path);
+        let photo = self.stack_photo(&path);
+        self.dev_shown.insert(photo, path);
         self.select(index);
         self.stacks_dirty = true;
     }
@@ -6878,6 +6921,10 @@ impl TriApp {
     /// clone ou de la copie, sans le mot : retour du 31/10/2026 ; le nom complet
     /// « Darktable · clone 1 » reste ailleurs) ; `None` pour une photo.
     fn development_badge(&self, path: &Path) -> Option<String> {
+        // Le JPEG d'une paire regroupée (#392) : le développement du boîtier.
+        if self.camera_raw.contains_key(path) {
+            return Some(t!("pairs-camera-chip"));
+        }
         let development = tri::developments::get(path)?;
         let siblings = tri::developments::of(&development.photo);
         let short = development.engine.short();
@@ -6917,7 +6964,149 @@ impl TriApp {
 
     /// Photo d'une pile de développements `range` (sa clé dans `dev_unfolded`).
     fn photo_of_range(&self, range: &std::ops::Range<usize>) -> PathBuf {
-        tri::media::source(&self.files[range.start].path).into_owned()
+        self.stack_photo(&self.files[range.start].path)
+    }
+
+    /// Photo de la pile de développements de `path` : la photo d'un développement, le RAW
+    /// du JPEG d'une paire regroupée (#392), sinon l'image elle-même.
+    fn stack_photo(&self, path: &Path) -> PathBuf {
+        self.camera_raw
+            .get(path)
+            .cloned()
+            .unwrap_or_else(|| tri::media::source(path).into_owned())
+    }
+
+    /// Vrai si les paires RAW+JPEG de `dir` sont regroupées (#392) : sa décision, sinon
+    /// `[files] group_pairs` ; lue une fois par ouverture du dossier.
+    fn pairs_grouped_in(&mut self, dir: &Path) -> bool {
+        if let Some(&grouped) = self.pairs_dirs.get(dir) {
+            return grouped;
+        }
+        let grouped = tri::pairs::grouped(
+            self.settings.files.group_pairs,
+            self.settings.data_dir().as_deref(),
+            dir,
+        );
+        self.pairs_dirs.insert(dir.to_path_buf(), grouped);
+        grouped
+    }
+
+    /// Demande s'il faut regrouper les paires RAW+JPEG du dossier qui vient de s'ouvrir
+    /// (#392) : `[files] group_pairs = "ask"`, pas de décision, et des paires.
+    fn ask_pairs(&mut self) {
+        if self.folder.is_none() || self.settings.files.group_pairs != tri::pairs::Grouping::Ask {
+            return;
+        }
+        let dir = self.folder.dir.clone();
+        let data = self.settings.data_dir();
+        if tri::pairs::decided(data.as_deref(), &dir).is_some() {
+            return;
+        }
+        let pairs = tri::pairs::camera_jpegs(&self.folder.files)
+            .keys()
+            .filter(|jpeg| jpeg.parent() == Some(dir.as_path()))
+            .count();
+        if pairs > 0 {
+            self.pairs_dialog = Some(crate::pairs_dialog::PairsDialog::new(dir, pairs));
+        }
+    }
+
+    /// Regroupe (`true`) ou sépare les paires RAW+JPEG de `dir` et le retient (#392).
+    fn set_pairs_grouped(&mut self, dir: &Path, grouped: bool) {
+        let data = self.settings.data_dir();
+        if let Err(e) = tri::pairs::decide(data.as_deref(), dir, Some(grouped)) {
+            self.notice = Some((format!("{} : {e}", dir.display()), true));
+            return;
+        }
+        self.pairs_dirs.insert(dir.to_path_buf(), grouped);
+        // Décidé ailleurs (menu, palette) pendant que la boîte demandait : plus la peine.
+        if self.pairs_dialog.as_ref().is_some_and(|d| d.folder == dir) {
+            self.pairs_dialog = None;
+        }
+        self.stacks_dirty = true;
+        self.notice = Some((
+            t!(if grouped {
+                "pairs-grouped-notice"
+            } else {
+                "pairs-separated-notice"
+            }),
+            false,
+        ));
+    }
+
+    /// Bascule les paires du dossier ouvert (`core.dev.pairs`).
+    fn toggle_pairs(&mut self) {
+        if self.folder.is_none() {
+            return;
+        }
+        let dir = self.folder.dir.clone();
+        let grouped = self.pairs_grouped_in(&dir);
+        self.set_pairs_grouped(&dir, !grouped);
+    }
+
+    fn pairs_dialog(&mut self, ctx: &egui::Context) {
+        let Some(dialog) = &mut self.pairs_dialog else {
+            return;
+        };
+        match dialog.show(ctx) {
+            Some(crate::pairs_dialog::Request::Decide {
+                folder,
+                grouped,
+                always,
+            }) => {
+                self.pairs_dialog = None;
+                self.set_pairs_grouped(&folder, grouped);
+                if always {
+                    self.set_group_pairs_setting(if grouped {
+                        tri::pairs::Grouping::Grouped
+                    } else {
+                        tri::pairs::Grouping::Separate
+                    });
+                }
+            }
+            Some(crate::pairs_dialog::Request::Close) => self.pairs_dialog = None,
+            None => {}
+        }
+    }
+
+    /// Écrit `[files] group_pairs` dans la configuration (« Ne plus demander »).
+    fn set_group_pairs_setting(&mut self, value: tri::pairs::Grouping) {
+        self.settings.files.group_pairs = value;
+        let Some(path) = self
+            .config_path
+            .clone()
+            .or_else(tri::settings::default_path)
+        else {
+            self.notice = Some((t!("settings-no-path"), true));
+            return;
+        };
+        let result = tri::config_edit::ConfigFile::open(&path).and_then(|mut file| {
+            file.set(
+                "files",
+                "group_pairs",
+                &tri::config_edit::Value::Str(value.id().to_string()),
+            )?;
+            tri::settings::parse::<AppSettings>(&file.text())?;
+            file.save().map_err(|e| format!("{} : {e}", path.display()))
+        });
+        if let Err(e) = result {
+            self.notice = Some((e, true));
+        }
+    }
+
+    /// Recalcule les JPEG des paires regroupées de la liste (`camera_raw`).
+    fn refresh_camera_raw(&mut self) {
+        // Sur tout le dossier (pas la liste filtrée) : le menu du dossier sait ainsi s'il a
+        // des paires même quand un filtre cache les JPEG.
+        let pairs = tri::pairs::camera_jpegs(&self.folder.files);
+        let mut grouped = HashMap::new();
+        for (jpeg, raw) in pairs {
+            let dir = jpeg.parent().unwrap_or(Path::new("")).to_path_buf();
+            if self.pairs_grouped_in(&dir) {
+                grouped.insert(jpeg, raw);
+            }
+        }
+        self.camera_raw = grouped;
     }
 
     /// Vrai si la pile de rafale `range` est dépliée.
@@ -7023,7 +7212,7 @@ impl TriApp {
             self.expanded = self.files.iter().map(|f| f.path.clone()).collect();
             self.dev_unfolded = (0..self.files.len())
                 .filter(|&i| self.stacks.developments_of(i).is_some())
-                .map(|i| tri::media::source(&self.files[i].path).into_owned())
+                .map(|i| self.stack_photo(&self.files[i].path))
                 .collect();
         } else {
             self.expanded.clear();
@@ -8655,6 +8844,7 @@ impl TriApp {
             Action::StacksAll => self.toggle_all_stacks(),
             Action::DevToggle => self.toggle_developments(),
             Action::DevFoldAll => self.fold_all_developments(),
+            Action::PairsToggle => self.toggle_pairs(),
             Action::DevNext => self.step_developments(1),
             Action::DevPrev => self.step_developments(-1),
             Action::GroupingWindow => {
@@ -9114,8 +9304,8 @@ impl TriApp {
             .is_some_and(|r| r.contains(&visible));
         if visible != self.selected && in_developments {
             let path = self.files[self.selected].path.clone();
-            self.dev_shown
-                .insert(tri::media::source(&path).into_owned(), path);
+            let photo = self.stack_photo(&path);
+            self.dev_shown.insert(photo, path);
             self.stacks_dirty = true;
         } else {
             self.selected = visible;
@@ -9186,7 +9376,7 @@ impl TriApp {
             }
             Action::FileDeletePhoto => {
                 let at = CENTRED;
-                let photo = tri::media::source(&path).into_owned();
+                let photo = self.stack_photo(&path);
                 self.file_action(Action::FileDelete, vec![photo], at);
             }
             _ => return false,
@@ -16218,14 +16408,18 @@ impl TriApp {
                 .galley(chip.center() - galley.size() / 2.0, galley, text_color);
             caption_left = chip.min.x;
             let rendered = matches!(shown, Some(Level::Developed(_)));
-            tips.push(t!(
-                if rendered {
-                    "dev-badge-tip"
-                } else {
-                    "dev-badge-tip-pending"
-                },
-                name = development_label(&file.path)
-            ));
+            if self.camera_raw.contains_key(&file.path) {
+                tips.push(t!("pairs-camera-tip"));
+            } else {
+                tips.push(t!(
+                    if rendered {
+                        "dev-badge-tip"
+                    } else {
+                        "dev-badge-tip-pending"
+                    },
+                    name = development_label(&file.path)
+                ));
+            }
         }
         if g.blur_badge && self.is_blurry(&file.path) {
             let side = badge_rect.height();
@@ -19201,6 +19395,7 @@ impl eframe::App for TriApp {
         self.poll_export();
         self.eject_dialog(&ctx);
         self.reset_dialog(&ctx);
+        self.pairs_dialog(&ctx);
         self.remote_dialog(&ctx);
         self.login_dialog(&ctx);
         self.update_dialog(&ctx);
@@ -21336,6 +21531,8 @@ mod tests {
         // Jamais la corbeille de l'utilisateur : suppression définitive, dans le dossier
         // temporaire.
         settings.files.trash = false;
+        // Paires RAW+JPEG séparées sans question (#392) : un test les regroupe pour lui.
+        settings.files.group_pairs = tri::pairs::Grouping::Separate;
         // Actions sur les fichiers autorisées (interdites par défaut) : les tests les
         // essaient ; un test vérifie le refus.
         settings.files.allow_actions = true;
@@ -26793,6 +26990,65 @@ mod tests {
         h.state_mut()
             .save_adjustments(vec![(path.clone(), Some(cold))]);
         assert!(h.state().adjust_stale.contains(&path), "refaite");
+    }
+
+    #[test]
+    fn raw_and_jpeg_pairs_are_grouped_on_request_and_remembered_per_folder() {
+        // Issue n° 392 : un dossier qui a des paires RAW+JPEG et pas de décision demande ;
+        // regroupée, la paire est une vignette, le JPEG rangé avec les développements du
+        // RAW (« Boîtier ») ; la décision est retenue pour le dossier, et se défait.
+        let (mut h, dir) = harness();
+        h.run_steps(2);
+        let photos = h.state().folder.dir.clone();
+        std::fs::write(photos.join("img0.RAF"), b"raw").unwrap();
+        h.state_mut().settings.files.group_pairs = tri::pairs::Grouping::Ask;
+        h.state_mut().open_folder(&photos);
+        run_until(&mut h, |app| app.files.len() == 4);
+        assert!(
+            h.state().pairs_dialog.is_some(),
+            "une paire, pas de décision : on demande"
+        );
+        h.run_steps(2);
+        h.get_by_label("Regrouper RAW et JPEG ?");
+        h.get_by_label("Regrouper");
+        // La réponse « Regrouper » de la boîte.
+        h.state_mut().pairs_dialog = None;
+        h.state_mut().set_pairs_grouped(&photos, true);
+        h.run_steps(3);
+        let index = |app: &TriApp, name: &str| {
+            app.files
+                .iter()
+                .position(|f| f.path.file_name().is_some_and(|n| n == name))
+                .unwrap()
+        };
+        let (raw, jpeg) = (index(h.state(), "img0.RAF"), index(h.state(), "img0.jpg"));
+        assert_eq!(
+            h.state().stacks.photo_visible(jpeg),
+            raw,
+            "le JPEG sous son RAW"
+        );
+        assert_eq!(h.state().stacks.folded_count(raw), Some(2));
+        assert_eq!(
+            h.state().development_badge(&h.state().files[jpeg].path),
+            Some("Boîtier".to_string())
+        );
+        let data = dir.path().join("data");
+        assert_eq!(
+            tri::pairs::decided(Some(&data), &photos),
+            Some(true),
+            "retenue"
+        );
+        // Rouvert : plus de question, toujours regroupées.
+        h.state_mut().open_folder(&photos);
+        run_until(&mut h, |app| app.files.len() == 4);
+        h.run_steps(3);
+        assert!(h.state().pairs_dialog.is_none(), "décidé : pas de question");
+        let (raw, jpeg) = (index(h.state(), "img0.RAF"), index(h.state(), "img0.jpg"));
+        assert_eq!(h.state().stacks.photo_visible(jpeg), raw);
+        // Le menu du dossier (ou la palette) les sépare.
+        act(&mut h, Action::PairsToggle);
+        assert_eq!(h.state().stacks.photo_visible(jpeg), jpeg, "séparées");
+        assert_eq!(tri::pairs::decided(Some(&data), &photos), Some(false));
     }
 
     #[test]
