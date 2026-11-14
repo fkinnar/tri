@@ -4,6 +4,8 @@
 
 ## Non publié
 
+- **Plus d'aide « Entrée / Échap »** (#472) à côté des boutons des boîtes d'export,
+  de renommage, de copie / déplacement et de suppression : ça coule de source.
 - **Le résumé du dossier compte des photos** (#468) : dans un dossier regroupé, une paire
   est une photo (472 fichiers faisaient 236 photos, les notes étaient comptées deux
   fois) ; « Photos » = paires + RAW seuls + JPEG seuls, chacun un filtre ; les

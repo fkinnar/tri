@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **No more "Enter / Esc" hint** (#472) next to the buttons of the export, rename,
+  copy / move and delete dialogs: it goes without saying.
 - **Folder summary counts photos** (#468): in a grouped folder a pair is one photo
   (472 files made 236 photos, ratings were counted twice); "Photos" = pairs + RAW alone
   + JPEG alone, each a filter; developments show the photos shown and the developments,
