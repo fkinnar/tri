@@ -184,7 +184,7 @@ struct Row {
     color: Option<Color32>,
     /// Bulle propre (sinon : celle du filtre).
     tip: Option<String>,
-    /// Second compte, entre parenthèses s'il diffère du premier (les développements :
+    /// Second compte, entre parenthèses (les développements :
     /// photos montrées, puis développements, 14/11/2026), et sa précision, en tête de
     /// la bulle.
     total: Option<(usize, String)>,
@@ -268,11 +268,11 @@ impl TriApp {
                     // avec les titres).
                     let on = row.line.as_ref().is_some_and(|l| self.summary_line_on(l));
                     let mut text = egui::RichText::new(&row.label);
+                    // Les deux comptes, toujours (retour du 14/11/2026 : égaux, le second
+                    // manquait, et la ligne ne se lisait plus comme les autres).
                     let mut count = egui::RichText::new(match &row.total {
-                        Some((total, _)) if *total != row.count => {
-                            format!("{} ({total})", row.count)
-                        }
-                        _ => row.count.to_string(),
+                        Some((total, _)) => format!("{} ({total})", row.count),
+                        None => row.count.to_string(),
                     });
                     if let Some(c) = row.color {
                         text = text.color(c);

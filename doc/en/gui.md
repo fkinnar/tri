@@ -70,8 +70,9 @@ system one ("cold" measurements, experiments).
   colour present, feedback from 2026-11-12): the ratings rule; conflicts: the "in
   conflict" filter. **Grouped folder** (#392, 2026-11-14): "Photos" = pairs + RAW alone +
   JPEG alone, each a line and a box of the three-way filter; under "Developments", also
-  "Camera JPEG" (the pairs' JPEG) and "LibRaw". Developments show two counts, "photos
-  shown (developments)", explained by the tooltip; LibRaw "RAWs only LibRaw develops (all
+  "Camera JPEG" (the pairs' JPEG) and "LibRaw". Developments always show two counts, "photos
+  shown (developments)", explained by the tooltip (the filter also keeps developed JPEGs,
+  2026-11-14); LibRaw "RAWs only LibRaw develops (all
   RAWs)", its click shows what is left to develop (`libraw_only`). Not clickable: the
   pairs of a separate folder (the tooltip says how to group) and inactive software. No Ctrl+click to combine yet (complex filters, #138). Read from the disk, in the
   background (2026-11-13, `summary::Jobs`): **with versions**

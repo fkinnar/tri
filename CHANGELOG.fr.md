@@ -9,7 +9,9 @@
   fois) ; « Photos » = paires + RAW seuls + JPEG seuls, chacun un filtre ; les
   développements montrent les photos montrées et les développements, « 2 (3) » ;
   dessous, « JPEG boîtier » et « LibRaw » (les RAW que seul LibRaw développe, sur tous
-  les RAW ; un clic montre ce qui reste à développer).
+  les RAW ; un clic montre ce qui reste à développer). Aussi : le filtre « développées »
+  garde les JPEG développés dans darktable (il ne gardait que les RAW, une photo de
+  moins que le compte).
 - **Paires regroupées : le vrai JPEG, et une couverture par défaut** (#467, ferme n° 391
   et n° 392) : en rendu JPEG boîtier, une paire regroupée montre le fichier JPEG lui-même,
   en vraie résolution (plein écran et 1:1 compris), plutôt que l'aperçu embarqué du RAW ;

@@ -8,7 +8,8 @@
   (472 files made 236 photos, ratings were counted twice); "Photos" = pairs + RAW alone
   + JPEG alone, each a filter; developments show the photos shown and the developments,
   "2 (3)"; under them, "Camera JPEG" and "LibRaw" (RAWs only LibRaw develops, out of all
-  RAWs; a click shows what is left to develop).
+  RAWs; a click shows what is left to develop). Also: the "developed" filter keeps the
+  JPEGs developed in darktable (it kept RAW files only, one photo less than counted).
 - **Grouped pairs: the real JPEG, and a default cover** (#467, closes #391 and #392):
   with the camera JPEG render, a grouped pair shows the JPEG file itself, at its true
   resolution (full screen and 1:1 included) instead of the RAW's embedded preview; with
