@@ -25,12 +25,21 @@ partagées avec le RAW ; copier, déplacer, renommer et supprimer emportent déj
 - Sous-dossiers affichés avec le dossier : chaque image suit la décision de son propre
   dossier.
 
+## Filtres
+
+Dans un dossier regroupé, les cases RAW et JPEG du panneau de droite deviennent
+**trois** : RAW (les RAW sans JPEG), RAW+JPEG (les paires regroupées), JPEG (les JPEG sans
+RAW). Combinables, une au moins cochée ; la touche du type (`core.filter.cycle`) passe de
+tout à chacune seule. Un développement suit sa photo ; retenues avec les filtres du
+dossier.
+
 ## Moteur
 
 - `Grouping` : les trois valeurs du réglage.
 - `decided(data, folder)` / `decide(data, folder, Some(bool) | None)` : la décision du
   dossier, rangée dans ses valeurs (`tuning.json`, clé `pairs_grouped`).
 - `grouped(setting, data, folder)` : la décision, sinon le réglage.
+- `PairKinds`, `PairFilter` : les trois cases et leur filtre (trait `Filter`).
 - `camera_jpegs(files)` : les images plates qui ont un RAW de même nom (sans tenir compte
   de la casse) dans le même dossier, avec ce RAW. Aussi utilisé par le résumé du dossier
   ([folder.md](folder.md)).
@@ -41,7 +50,6 @@ Les piles de développements regroupent les images qui ont la même photo : pour
 d'une paire regroupée, cette photo est son RAW (`TriApp::stack_photo`). La couverture de
 la pile reste le RAW.
 
-À venir (même issue et n° 391) : filtres RAW / RAW+JPEG / JPEG dans un dossier regroupé,
-ligne « Paires RAW+JPEG » du résumé cliquable, case au déchargement, marque dans le
+À venir (même issue et n° 391) : ligne « Paires RAW+JPEG » du résumé cliquable, case au déchargement, marque dans le
 panneau des dossiers, le JPEG en couverture au choix, et le JPEG en pleine résolution comme
 rendu boîtier.
