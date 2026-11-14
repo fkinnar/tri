@@ -12,7 +12,8 @@
   development, the JPEG of a grouped pair, the "before" of a development) or, if the
   photo has none, becomes the shown render of every photo. A bookmark in front of each
   render that can be the photo's cover (camera JPEG, each development, LibRaw render)
-  makes it the cover in one click and shows it; one cover per photo (filled), a
+  makes it the cover in one click and shows it; one cover per photo (filled, also in
+  front of the closed list when the render on screen is the cover), a
   development of the grouped JPEG is marked "· JPEG". Also: changing the grid's render
   now updates the thumbnail of the development just viewed in full screen too.
 - **Grouped pairs: three-way filter** (#464, #392): in a grouped folder the type filter

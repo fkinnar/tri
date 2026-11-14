@@ -1813,3 +1813,4 @@ pairs-filter-jpeg-tip = JPEGs (and other images) without a RAW
 dev-modified-format = %m/%d %H:%M
 view-render-cover = Cover
 view-render-cover-tip = Make it the photo's cover (the thumbnail of its stack); click again: no chosen cover, the latest one
+view-render-is-cover = This render is the photo's cover

@@ -3202,36 +3202,58 @@ impl TriApp {
             self.action_tip(Action::StackChoose)
         );
         let mut cover_click = None;
-        let response = egui::ComboBox::from_id_salt("view_render")
-            .selected_text(name(choice))
-            .show_ui(ui, |ui| {
-                for (c, text, key) in &rows {
-                    ui.horizontal(|ui| {
-                        match key {
-                            Some(key) => {
-                                let on = cover.as_ref() == Some(key);
-                                let (rect, response) = marks::clickable_named(
-                                    ui,
-                                    mark,
-                                    &t!("view-render-cover"),
-                                    &cover_tip,
-                                );
-                                let color = if on { accent } else { weak };
-                                marks::cover_mark(ui.painter(), rect, on, color);
-                                if response.clicked() {
-                                    cover_click = Some((*c, key.clone(), on));
+        // Liste fermée : le signet plein devant si le rendu à l'écran est la couverture
+        // (retour du 14/11/2026 : sinon il fallait déplier la liste pour le savoir).
+        let shown_is_cover = rows
+            .iter()
+            .find(|(c, _, _)| *c == shown)
+            .and_then(|(_, _, key)| key.as_ref())
+            .is_some_and(|key| cover.as_ref() == Some(key));
+        let mut response = None;
+        ui.horizontal(|ui| {
+            let (rect, mark_response) =
+                ui.allocate_exact_size(egui::vec2(mark, mark), egui::Sense::hover());
+            if shown_is_cover {
+                marks::cover_mark(ui.painter(), rect, true, accent);
+                let text = t!("view-render-is-cover");
+                mark_response
+                    .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, &text));
+                mark_response.on_hover_text(&text);
+            }
+            response = Some(
+                egui::ComboBox::from_id_salt("view_render")
+                    .selected_text(name(choice))
+                    .show_ui(ui, |ui| {
+                        for (c, text, key) in &rows {
+                            ui.horizontal(|ui| {
+                                match key {
+                                    Some(key) => {
+                                        let on = cover.as_ref() == Some(key);
+                                        let (rect, response) = marks::clickable_named(
+                                            ui,
+                                            mark,
+                                            &t!("view-render-cover"),
+                                            &cover_tip,
+                                        );
+                                        let color = if on { accent } else { weak };
+                                        marks::cover_mark(ui.painter(), rect, on, color);
+                                        if response.clicked() {
+                                            cover_click = Some((*c, key.clone(), on));
+                                        }
+                                    }
+                                    None => {
+                                        ui.add_space(mark);
+                                    }
                                 }
-                            }
-                            None => {
-                                ui.add_space(mark);
-                            }
+                                ui.selectable_value(&mut choice, *c, text.clone());
+                            });
                         }
-                        ui.selectable_value(&mut choice, *c, text.clone());
-                    });
-                }
-            })
-            .response
-            .on_hover_text(tip);
+                    })
+                    .response
+                    .on_hover_text(tip),
+            );
+        });
+        let response = response.expect("liste dessinée");
         self.side_end(ui, item, response.rect, response.clicked());
         if let Some((c, key, on)) = cover_click {
             // Déjà la couverture choisie : plus de choix (le plus récent) ; sinon elle, et
@@ -7202,7 +7224,16 @@ impl TriApp {
             self.dev_preferred.remove(k);
         }
         let photo = self.stack_photo(&self.files[index].path);
-        self.dev_shown.remove(&photo);
+        // Un développement (ou le JPEG) de la pile choisi : il reste montré (retour du
+        // 14/11/2026 : Maj+Entrée sur un clone ramenait la vue sur le rendu LibRaw).
+        match key.as_ref().filter(|k| keys.contains(k) && **k != photo) {
+            Some(k) => {
+                self.dev_shown.insert(photo.clone(), k.clone());
+            }
+            None => {
+                self.dev_shown.remove(&photo);
+            }
+        }
         self.grid_levels.remove(&photo);
         let forget: Vec<PathBuf> = keys
             .iter()
@@ -27106,6 +27137,25 @@ mod tests {
         h.state_mut()
             .show_render(GridRender::Engine(Engine::Darktable));
         assert!(!h.state().dev_before, "retour à l'après");
+        // Retour du 14/11/2026 : Maj+Entrée sur le clone affiché en fait la couverture et
+        // le laisse à l'écran (la vue revenait sur le rendu LibRaw) ; le signet le dit,
+        // liste fermée.
+        h.state_mut().set_cover(dev, Some(developed.clone()));
+        h.state_mut().show_development(clone);
+        h.run_steps(3);
+        assert!(
+            h.query_by_label(&t!("view-render-is-cover")).is_none(),
+            "le clone n'est pas la couverture"
+        );
+        press(&mut h, Key::Enter, Modifiers::SHIFT);
+        h.run_steps(3);
+        assert_eq!(h.state().selected, clone, "le clone reste à l'écran");
+        assert!(
+            h.state()
+                .dev_preferred
+                .contains(&photos.join("img0@dt-01.jpg"))
+        );
+        h.get_by_label(&t!("view-render-is-cover"));
         // Retour du 14/11/2026 : deux couvertures à la fois (choisies chacune pour son
         // fichier). Une seule après un choix.
         let (main_path, clone_path) = (developed.clone(), photos.join("img0@dt-01.jpg"));
