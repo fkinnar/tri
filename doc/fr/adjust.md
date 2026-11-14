@@ -122,6 +122,21 @@ lumière linéaire aux primaires sRGB (`colour::working_to_srgb_linear`, valeurs
 au-dessus de 1 hors du gamut sRGB), y est réglé, puis revient ; une balance, un mélange
 ou une lecture de la pipette donnent le même résultat qu'avant la gestion des couleurs.
 
+## Paires RAW+JPEG : chacun garde les siens (#481, 14/11/2026)
+
+Un RAW et son JPEG boîtier sont deux images différentes : +1 IL sur les données du
+capteur du RAW écrêterait le JPEG, déjà développé par le boîtier. Chaque fichier garde ses
+réglages :
+
+- dans le sidecar de chacun (`tri:Adjust`) ; quand le JPEG partage le sidecar du RAW
+  (convention Adobe, `IMG.xmp`), les siens vont sous `tri:AdjustJpeg` (`adjust::field`),
+  sans que l'un écrase l'autre (un JPEG seul garde `tri:Adjust`) ;
+- dans un dossier regroupé, la section Réglages agit sur le fichier montré (le JPEG en
+  rendu « JPEG boîtier », le RAW en LibRaw) ; synchroniser sur une sélection, « appliquer
+  à la sélection » et coller ne passent jamais d'un RAW à un JPEG regroupé ni l'inverse
+  (`adjust_same_side`) : depuis un RAW, les autres RAW et photos ; depuis un JPEG
+  regroupé, les autres JPEG regroupés.
+
 ## Mesures et harmonisation
 
 `measure` donne, sur l'image telle qu'elle est montrée (réglages compris) :

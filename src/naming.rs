@@ -108,6 +108,8 @@ pub enum TemplateError {
     Width(String),
     /// Champ sans valeur pour cette photo (pas de date de prise de vue…).
     Missing(String),
+    /// Champ qui n'a pas de sens ici (`{n}` dans un dossier d'export).
+    NotHere(String),
 }
 
 impl fmt::Display for TemplateError {
@@ -121,6 +123,7 @@ impl fmt::Display for TemplateError {
             ),
             TemplateError::Width(field) => crate::t!("naming-width", field = field.as_str()),
             TemplateError::Missing(field) => crate::t!("naming-missing", field = field.as_str()),
+            TemplateError::NotHere(field) => crate::t!("naming-not-here", field = field.as_str()),
         };
         f.write_str(&text)
     }
@@ -172,6 +175,11 @@ fn parts(template: &str) -> Result<Vec<Part<'_>>, TemplateError> {
 /// Erreur de forme du gabarit (accolade, champ inconnu), sans photo.
 pub fn check(template: &str) -> Result<(), TemplateError> {
     parts(template).map(|_| ())
+}
+
+/// Vrai si le gabarit cite le compteur `{n}`.
+pub fn uses_counter(template: &str) -> bool {
+    parts(template).is_ok_and(|parts| parts.iter().any(|p| matches!(p, Part::Field("n", _))))
 }
 
 /// Vrai si le gabarit cite un champ lu dans le fichier (date, heure, appareil).

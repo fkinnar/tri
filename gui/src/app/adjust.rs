@@ -408,15 +408,24 @@ impl TriApp {
 
     /// Images synchronisées avec l'image courante `current` (sans elle) : la sélection,
     /// si « Synchroniser » est coché et qu'elle a plusieurs images.
-    fn adjust_sync_targets(&self, current: &Path) -> Vec<PathBuf> {
+    pub(super) fn adjust_sync_targets(&self, current: &Path) -> Vec<PathBuf> {
         if !self.adjust_sync || self.selection.visible(&self.files) < 2 {
             return Vec::new();
         }
         self.selection
             .targets(&self.files, self.selected)
             .into_iter()
-            .filter(|p| p != current)
+            .filter(|p| p != current && self.adjust_same_side(current, p))
             .collect()
+    }
+
+    /// Vrai si les réglages de `current` peuvent passer à `other` : chaque fichier d'une
+    /// paire RAW+JPEG regroupée garde les siens (#481) ; depuis un RAW, on ne touche pas
+    /// aux JPEG regroupés (montrés comme « JPEG boîtier »), et depuis l'un d'eux, seulement
+    /// aux autres.
+    fn adjust_same_side(&self, current: &Path, other: &Path) -> bool {
+        let jpeg = |p: &Path| self.camera_raw.contains_key(tri::media::source(p).as_ref());
+        jpeg(current) == jpeg(other)
     }
 
     /// Un bouton (auto, préréglage, réinitialiser) : `compute` calcule les réglages de
@@ -617,7 +626,7 @@ impl TriApp {
             .selection
             .targets(&self.files, self.selected)
             .into_iter()
-            .filter(|p| *p != file.path)
+            .filter(|p| *p != file.path && self.adjust_same_side(&file.path, p))
             .collect();
         if targets.is_empty() {
             self.notice = Some((t!("adjust-apply-none"), false));

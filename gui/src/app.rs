@@ -368,6 +368,8 @@ pub struct TriApp {
     download: Option<DownloadState>,
     /// Dernier format de paquet choisi (« AppImage »…), proposé d'abord la fois suivante.
     download_format: Option<String>,
+    /// Dernier dossier d'export de chaque préréglage (gardé dans `gui-state.toml`).
+    export_folders: std::collections::BTreeMap<String, String>,
     /// Ce binaire : version distribuée ou build personnel (et son commit).
     build: tri::update::Build,
     /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
@@ -1529,6 +1531,7 @@ impl TriApp {
             update: None,
             download: None,
             download_format: None,
+            export_folders: Default::default(),
             build: tri::update::Build::current(),
             ejecting: None,
             mounting: None,
@@ -2016,6 +2019,7 @@ impl TriApp {
             histogram: Some(self.histogram),
             histogram_camera: Some(self.histogram_camera),
             download_format: self.download_format.clone(),
+            export_folders: (!self.export_folders.is_empty()).then(|| self.export_folders.clone()),
             folder_panel: Some(self.folder_panel),
             metadata_panel: Some(self.metadata_panel),
             filter_bar: Some(self.filter_bar),
@@ -2127,6 +2131,9 @@ impl TriApp {
         }
         if s.download_format.is_some() {
             self.download_format = s.download_format.clone();
+        }
+        if let Some(folders) = &s.export_folders {
+            self.export_folders = folders.clone();
         }
         self.window_kept = s.window;
         self.maximize_pending = s.window.is_some_and(|w| w.maximized);
@@ -14991,6 +14998,7 @@ impl TriApp {
                     render,
                     at,
                 )
+                .with_folders(self.export_folders.clone())
                 .with_cut(tri::export::Cut {
                     crop: version.crop,
                     name: version.name.clone(),
@@ -15031,7 +15039,8 @@ impl TriApp {
                     developer,
                     render,
                     at,
-                );
+                )
+                .with_folders(self.export_folders.clone());
                 self.file_dialog = Some(crate::files::FileDialog::Export(Box::new(dialog)));
                 Ok(())
             }
@@ -15195,10 +15204,18 @@ impl TriApp {
                 images,
                 profile,
                 folder,
+                remember,
                 render,
                 cut,
             } => {
                 self.file_dialog = None;
+                // Le dossier choisi est retenu pour ce préréglage (retour du 14/11/2026).
+                if remember.is_empty() {
+                    self.export_folders.remove(&profile.id);
+                } else {
+                    self.export_folders.insert(profile.id.clone(), remember);
+                }
+                self.save_display();
                 self.export_choice[usize::from(crate::export::exports_flat(render, &images))] =
                     Some(profile.id.clone());
                 self.start_export(ctx, images, profile, folder, render, cut);
@@ -27999,6 +28016,36 @@ mod tests {
     }
 
     #[test]
+    fn a_grouped_pair_does_not_pass_its_adjustments_between_raw_and_jpeg() {
+        // #481 : +1 IL posé sur le RAW d'une paire regroupée écrêtait son JPEG. Synchroniser
+        // sur une sélection qui contient les deux ne passe plus de l'un à l'autre.
+        let (mut h, _dir) = harness();
+        h.run_steps(2);
+        let photos = h.state().folder.dir.clone();
+        std::fs::write(photos.join("img0.RAF"), b"raw").unwrap();
+        h.state_mut().settings.files.group_pairs = tri::pairs::Grouping::Grouped;
+        h.state_mut().open_folder(&photos);
+        run_until(&mut h, |app| app.files.len() == 4);
+        h.run_steps(3);
+        let (raw, jpeg) = (photos.join("img0.RAF"), photos.join("img0.jpg"));
+        assert!(h.state().camera_raw.contains_key(&jpeg), "paire regroupée");
+        let files = h.state().files.clone();
+        h.state_mut().selection.select_all(&files);
+        h.state_mut().adjust_sync = true;
+        let from_raw = h.state().adjust_sync_targets(&raw);
+        assert!(!from_raw.contains(&jpeg), "pas son JPEG : {from_raw:?}");
+        assert!(
+            from_raw.contains(&photos.join("img1.jpg")),
+            "les autres photos"
+        );
+        let from_jpeg = h.state().adjust_sync_targets(&jpeg);
+        assert!(
+            from_jpeg.is_empty(),
+            "ni le RAW ni les autres : {from_jpeg:?}"
+        );
+    }
+
+    #[test]
     fn raw_and_jpeg_pairs_are_grouped_on_request_and_remembered_per_folder() {
         // Issue n° 392 : un dossier qui a des paires RAW+JPEG et pas de décision demande ;
         // regroupée, la paire est une vignette, le JPEG rangé avec les développements du
@@ -33308,6 +33355,60 @@ mod tests {
             h.state_mut().grid_render = grid;
             assert_eq!(h.state().grid_export_render(), expected, "{grid:?}");
         }
+    }
+
+    #[test]
+    fn the_export_folder_is_a_template_remembered_per_preset() {
+        // Retour du 14/11/2026 : tout est dans le champ (plus de ligne « Destination »
+        // dessous), un gabarit (#480) ; un dossier choisi est retenu pour son préréglage.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let dialog = |h: &Harness<'static, TriApp>| -> String {
+            match &h.state().file_dialog {
+                Some(crate::files::FileDialog::Export(d)) => d.input().to_string(),
+                _ => panic!("boîte d'export attendue"),
+            }
+        };
+        press(&mut h, Key::E, Modifiers::CTRL);
+        // Le gabarit du préréglage, explicite (#480) : `{source}/export`.
+        assert_eq!(dialog(&h), "{source}/export");
+        assert!(h.query_by_label_contains("Destination").is_none());
+        // Un autre dossier : l'export y va, et il est retenu.
+        let elsewhere = dir.path().join("ailleurs");
+        if let Some(crate::files::FileDialog::Export(d)) = &mut h.state_mut().file_dialog {
+            d.type_folder(&elsewhere.to_string_lossy());
+        }
+        h.run_steps(1);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.export_job.is_none() && app.notice.is_some()
+        });
+        assert!(elsewhere.join("img0.jpg").is_file());
+        assert_eq!(h.state().export_folders.len(), 1);
+        assert_eq!(
+            h.state().display().export_folders.unwrap().len(),
+            1,
+            "gardé dans gui-state.toml"
+        );
+        press(&mut h, Key::E, Modifiers::CTRL);
+        assert_eq!(dialog(&h), elsewhere.to_string_lossy(), "retenu");
+        // Un compteur n'a pas de sens dans un dossier : dit en rouge.
+        if let Some(crate::files::FileDialog::Export(d)) = &mut h.state_mut().file_dialog {
+            d.type_folder("{source}/{n}");
+        }
+        h.run_steps(2);
+        assert!(h.query_by_label_contains("n'a pas de sens ici").is_some());
+        // Un gabarit avec des champs : résolu pour l'image.
+        let template = format!("{}/{{folder}}", dir.path().join("par").display());
+        if let Some(crate::files::FileDialog::Export(d)) = &mut h.state_mut().file_dialog {
+            d.type_folder(&template);
+        }
+        h.run_steps(1);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.export_job.is_none() && app.file_dialog.is_none()
+        });
+        assert!(dir.path().join("par/photos/img0.jpg").is_file());
     }
 
     #[test]

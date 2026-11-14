@@ -130,17 +130,24 @@ disappear. Order: built-in profiles, then the user's ones by identifier.
 ### Profile folder
 
 User's idea (2026-10-19): the folder is part of the profile ("Web" in `~/Web`, "Editing"
-next to the images…), rather than remembered from one export to the next. Rule for
-`folder` (`folder_for`, `output_pattern`):
+next to the images…), rather than remembered from one export to the next. Since
+2026-11-14 (#480, owner's decision) `folder` is a **template** (`folder_template`,
+`folder_of`), nothing implicit any more:
 
-- `/…`: absolute;
-- `~/…`: from the home folder;
-- otherwise **relative to each image's folder**: `"export"` (default) creates a
-  subfolder next to the images; `""` or `"."` writes **next to the source**. Passed to
-  darktable as `$(FILE_FOLDER)/<folder>/$(FILE_NAME)`: a selection coming from several
-  folders is exported into each of them.
-- darktable variables are allowed (`$(YEAR)`…, see darktable's documentation), passed
-  as is.
+- `{source}`: the folder of each image — `{source}/export` (default) is a subfolder
+  next to the images, `{source}` writes **next to the source**; a selection coming from
+  several folders is exported into each of them;
+- `/…`: absolute; `~/…`: from the home folder;
+- the fields of the batch rename (`tri::naming`): `{date}`, `{time}`, `{name}`,
+  `{folder}` (folder name without its leading date), `{camera}`, resolved for each
+  image (date and camera read from the file only when cited);
+  `~/Images/Export/{date}_{folder}`. `{n}` makes no sense for a folder and is refused,
+  like an unknown field (`check_folder`);
+- an **old relative folder** keeps its meaning: `export` = `{source}/export`, `""` or
+  `"."` = `{source}`;
+- darktable is launched once per real folder (`$(FILE_NAME)` and the suffix in it); an
+  image whose template has no value (no capture date) fails alone, in the report;
+- darktable variables (`$(YEAR)`…) pass as is.
 
 Checked on 2026-10-19: subfolders created by darktable, accents and spaces included
 (`séance été/export/…`), and `"."` next to the RAF.
@@ -379,9 +386,14 @@ Crop presets are created the same way (see `versions.md`).
   - **Preset**: up / down arrows when the list has the keyboard (at first), or click;
     Tab moves to the folder, where the arrows no longer change the preset (feedback from
     2026-10-20). The last one chosen is remembered during the session.
-  - **Folder**: the profile's, which follows the choice of profile; can be changed for
-    this time only (Tab completion), with the rule recalled and the actual destination
-    of the first image.
+  - **Folder**: the full path, in the field itself (feedback of 2026-11-14: "export"
+    with a "Destination" line below did not say clearly where it went). It shows the
+    **template** as is (#480: images from several folders do not share one real
+    folder), its fields in the tooltip, an error in red under it (`{n}`, unknown field)
+    with Export greyed. It follows the choice of preset: the preset's last folder if one
+    was typed or picked with Browse (remembered per preset across sessions,
+    `export_folders` in `gui-state.toml`), otherwise the preset's own (explicit form,
+    `{source}/export`); set back to the preset's own: forgotten. Tab completion, Browse.
   - **Export**: Enter. It runs in the background, with a progress bar in the status bar
     (× button to stop it), then a summary. The summary also shows **in the middle of the
     screen** (#381, 2026-11-09: the end of an export went unnoticed in the status bar):

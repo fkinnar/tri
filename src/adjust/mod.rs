@@ -435,7 +435,41 @@ impl Layers {
 
 /// Réglages de `image`, lus dans son sidecar (aucun sans sidecar).
 pub fn read(image: &Path) -> Result<Option<Layers>, xmp::XmpError> {
-    Ok(Layers::from_items(&xmp::read_list_of(image, xmp::ADJUST)?))
+    let field = field(image, Convention::default());
+    Ok(Layers::from_items(&xmp::read_list_of(image, field)?))
+}
+
+/// Où sont rangés les réglages de `image` dans son sidecar (créé selon `default` s'il
+/// n'existe pas) : `tri:Adjust`, sauf pour une image plate qui partage le sidecar d'un
+/// RAW du même nom (`IMG.xmp`, convention Adobe), `tri:AdjustJpeg` : le RAW et son JPEG
+/// gardent chacun les leurs (#481 : +1 IL posé sur le RAW écrêtait le JPEG).
+pub fn field(image: &Path, default: Convention) -> xmp::ListField {
+    let flat = crate::media::kind_of(image) == Some(crate::media::MediaKind::Flat);
+    if !flat {
+        return xmp::ADJUST;
+    }
+    let lower = |s: &std::ffi::OsStr| s.to_string_lossy().to_lowercase();
+    let Some(stem) = image.file_stem().map(lower) else {
+        return xmp::ADJUST;
+    };
+    let sidecar = xmp::sidecar_path(image, default);
+    let shared = sidecar.file_name().map(lower) == Some(format!("{stem}.xmp"));
+    let raw_sibling = || {
+        std::fs::read_dir(image.parent().unwrap_or(Path::new(".")))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .any(|p| {
+                p.file_stem().map(lower).as_deref() == Some(stem.as_str())
+                    && crate::media::kind_of(&p) == Some(crate::media::MediaKind::Raw)
+            })
+    };
+    if shared && raw_sibling() {
+        xmp::ADJUST_JPEG
+    } else {
+        xmp::ADJUST
+    }
 }
 
 /// Écrit les réglages de `image` dans son sidecar (créé selon `default` s'il le faut ;
@@ -446,10 +480,11 @@ pub fn write(
     layers: Option<&Layers>,
     default: Convention,
 ) -> Result<crate::history::AdjustChange, xmp::XmpError> {
-    let before = xmp::read_list_of(image, xmp::ADJUST)?;
+    let field = field(image, default);
+    let before = xmp::read_list_of(image, field)?;
     let after = Layers::items(layers);
     if before != after {
-        xmp::write_list(image, xmp::ADJUST, &after, default)?;
+        xmp::write_list(image, field, &after, default)?;
     }
     Ok(crate::history::AdjustChange {
         image: PathBuf::from(image),
@@ -1156,6 +1191,41 @@ pub fn report(layers: &Layers, shot: [f32; 3]) -> Report {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_pair_sharing_one_sidecar_keeps_two_sets_of_settings() {
+        // #481 : convention Adobe, `A.xmp` pour `A.RAF` et `A.JPG` ; +1 IL sur le RAW ne
+        // doit pas passer au JPEG.
+        let dir = tempfile::tempdir().unwrap();
+        let (raw, jpeg) = (dir.path().join("A.RAF"), dir.path().join("A.JPG"));
+        std::fs::write(&raw, b"raw").unwrap();
+        std::fs::write(&jpeg, b"jpeg").unwrap();
+        let mut plus = Layers::default();
+        plus.correction.exposure = 1.0;
+        let mut minus = Layers::default();
+        minus.correction.exposure = -0.5;
+        write(&raw, Some(&plus), Convention::Adobe).unwrap();
+        assert!(dir.path().join("A.xmp").is_file());
+        assert_eq!(read(&jpeg).unwrap(), None, "rien sur le JPEG");
+        write(&jpeg, Some(&minus), Convention::Adobe).unwrap();
+        assert_eq!(read(&raw).unwrap(), Some(plus));
+        assert_eq!(read(&jpeg).unwrap(), Some(minus));
+        assert!(!dir.path().join("A.JPG.xmp").exists(), "un seul sidecar");
+        // Un JPEG seul garde `tri:Adjust` (rien ne change pour lui).
+        let lone = dir.path().join("B.JPG");
+        std::fs::write(&lone, b"jpeg").unwrap();
+        assert_eq!(field(&lone, Convention::Adobe), xmp::ADJUST);
+        assert_eq!(field(&jpeg, Convention::Adobe), xmp::ADJUST_JPEG);
+        // Convention darktable, sans sidecar : `C.JPG.xmp`, à lui seul.
+        let (c_raw, c_jpeg) = (dir.path().join("C.RAF"), dir.path().join("C.JPG"));
+        std::fs::write(&c_raw, b"raw").unwrap();
+        std::fs::write(&c_jpeg, b"jpeg").unwrap();
+        assert_eq!(
+            field(&c_jpeg, Convention::Darktable),
+            xmp::ADJUST,
+            "sidecar à lui"
+        );
+    }
 
     /// 16 bits, dans n'importe quel espace : le même calcul que l'affichage, sans perte.
     #[test]
