@@ -19401,6 +19401,7 @@ impl TriApp {
                             let text = match line {
                                 HelpLine::Action { label, .. } => Some((label.clone(), 0.0)),
                                 HelpLine::Command(c) => Some((c.description(), triangle)),
+                                HelpLine::Field(f) => Some((f.description.clone(), 0.0)),
                                 HelpLine::Group(_) | HelpLine::Example(_) => None,
                             };
                             let extra = text.map_or(0.0, |(text, before)| {
@@ -19591,6 +19592,36 @@ impl TriApp {
                                                         .on_hover_text(&example);
                                                     });
                                                 });
+                                        }
+                                        HelpLine::Field(field) => {
+                                            ui.scope_builder(
+                                                egui::UiBuilder::new().max_rect(left).layout(
+                                                    egui::Layout::left_to_right(
+                                                        egui::Align::Center,
+                                                    ),
+                                                ),
+                                                |ui| {
+                                                    ui.add(
+                                                        egui::Label::new(
+                                                            field.description.as_str(),
+                                                        )
+                                                        .wrap(),
+                                                    );
+                                                },
+                                            );
+                                            let ui = &mut ui.new_child(
+                                                egui::UiBuilder::new().max_rect(right).layout(
+                                                    egui::Layout::left_to_right(
+                                                        egui::Align::Center,
+                                                    ),
+                                                ),
+                                            );
+                                            let accent = crate::marks::accent_mark(ui.ctx());
+                                            ui.label(
+                                                egui::RichText::new(&field.token)
+                                                    .monospace()
+                                                    .color(accent),
+                                            );
                                         }
                                         HelpLine::Action { label, id, keys } => {
                                             // Identifiant technique au survol seulement (utile
@@ -21552,6 +21583,9 @@ enum HelpLine {
     Command(&'static tri::commands::Command),
     /// Son exemple, déplié dessous : rempli avec le dossier et la sélection, à copier.
     Example(&'static tri::commands::Command),
+    /// Champ des gabarits (renommage par lot, dossiers d'export) : ce qu'il donne, et le
+    /// champ tel qu'on l'écrit, à droite.
+    Field(tri::naming::FieldHelp),
 }
 
 /// Palette de commandes ouverte.
@@ -21991,6 +22025,15 @@ impl HelpLines {
                 }
             }
         }
+        // Les champs des gabarits (renommage par lot, dossiers d'export), cherchés de même :
+        // une seule liste pour les deux, tirée du moteur (`tri::naming::help`).
+        if keymap.actions_for_typed_keys(query).is_none() {
+            let fields = help_fields(query);
+            if !fields.is_empty() {
+                lines.push(HelpLine::Group(t!("help-fields")));
+                lines.extend(fields.into_iter().map(HelpLine::Field));
+            }
+        }
         HelpLines {
             query: query.to_string(),
             open: open.to_vec(),
@@ -22008,6 +22051,29 @@ fn command_tip(command: &tri::commands::Command) -> String {
         tip.push_str(&format!("\n{option}  {description}"));
     }
     tip
+}
+
+/// Champs des gabarits qui correspondent à `query` (tous sans recherche) : description,
+/// champ, titre du groupe et mots-clés (« gabarit », « placeholder »…).
+fn help_fields(query: &str) -> Vec<tri::naming::FieldHelp> {
+    let (group, words) = (t!("help-fields"), t!("help-fields-keywords"));
+    let found: Vec<(tri::naming::FieldHelp, tri::fuzzy::Match)> = tri::naming::help()
+        .into_iter()
+        .filter_map(|field| {
+            let fields = [
+                field.description.as_str(),
+                field.token.as_str(),
+                group.as_str(),
+                words.as_str(),
+            ];
+            let found = tri::fuzzy::find(query, &fields)?;
+            (query.trim().is_empty() || found.close).then_some((field, found))
+        })
+        .collect();
+    tri::fuzzy::relevant(found)
+        .into_iter()
+        .map(|(field, _)| field)
+        .collect()
 }
 
 /// Commandes de la ligne de commande qui correspondent à `query` (toutes sans recherche),
@@ -28732,7 +28798,10 @@ mod tests {
             .flat_map(|l| &l.lines)
             .filter_map(|l| match l {
                 HelpLine::Group(name) => Some(name.as_str()),
-                HelpLine::Action { .. } | HelpLine::Command(_) | HelpLine::Example(_) => None,
+                HelpLine::Action { .. }
+                | HelpLine::Command(_)
+                | HelpLine::Example(_)
+                | HelpLine::Field(_) => None,
             })
             .collect();
         assert!(groups.contains(&"Notation"), "{groups:?}");
@@ -35093,6 +35162,29 @@ mod tests {
         assert_eq!(s[0].thumbnail, Avail::Pending);
         assert_eq!(s[1].thumbnail, Avail::Ready);
         assert_eq!(s[1].standard, Avail::Failed("x".into()));
+    }
+
+    #[test]
+    fn the_help_lists_the_template_fields_and_finds_them() {
+        // Une seule aide pour les champs du renommage par lot et des dossiers d'export,
+        // tirée du moteur, cherchée comme le reste (« gabarit », un champ).
+        let keymap = Keymap::default();
+        let fields = |query: &str| -> Vec<String> {
+            HelpLines::new(&keymap, query, &[])
+                .lines
+                .iter()
+                .filter_map(|l| match l {
+                    HelpLine::Field(f) => Some(f.token.clone()),
+                    _ => None,
+                })
+                .collect()
+        };
+        let all = fields("");
+        assert_eq!(all.len(), tri::naming::FIELDS.len() + 1, "{all:?}");
+        assert!(all.contains(&"{source}".to_string()));
+        assert_eq!(fields("gabarit").len(), all.len(), "le mot du groupe");
+        assert!(fields("camera").contains(&"{camera}".to_string()));
+        assert!(fields("compteur").contains(&"{n}".to_string()));
     }
 
     #[test]
