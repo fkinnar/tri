@@ -136,6 +136,19 @@ impl Plan {
     pub fn bytes(&self, settings: &OffloadSettings) -> u64 {
         self.to_copy(settings).map(|i| i.size).sum()
     }
+
+    /// Paires RAW+JPEG parmi les images à copier ([`crate::pairs::camera_jpegs`]) : la
+    /// boîte propose de les regrouper dans la séance (#392).
+    pub fn pairs(&self, settings: &OffloadSettings) -> usize {
+        let files: Vec<media::MediaFile> = self
+            .to_copy(settings)
+            .map(|i| media::MediaFile {
+                path: i.source.clone(),
+                kind: i.kind,
+            })
+            .collect();
+        crate::pairs::camera_jpegs(&files).len()
+    }
 }
 
 /// Image retenue par les réglages (`raw_only`).

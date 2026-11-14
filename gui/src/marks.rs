@@ -1817,6 +1817,19 @@ fn corner_arrow(painter: &Painter, rect: Rect, dir: f32, color: Color32) {
     painter.line_segment([tip, tip - vec2(0.0, r * 0.6) * dir], stroke);
 }
 
+/// Marque d'un dossier dont les paires RAW+JPEG sont regroupées (#392) : deux feuilles
+/// décalées, l'une sur l'autre (deux fichiers, une photo).
+pub fn pair_mark(painter: &Painter, rect: Rect, color: Color32) {
+    let side = rect.width() * 0.45;
+    let back = Rect::from_min_size(
+        rect.center() - vec2(side * 0.75, side * 0.75),
+        vec2(side, side),
+    );
+    let front = back.translate(vec2(side * 0.5, side * 0.5));
+    painter.rect_stroke(back, 1.0, Stroke::new(1.0, color), egui::StrokeKind::Inside);
+    painter.rect_filled(front, 1.0, color);
+}
+
 /// Signet de la couverture d'une photo (liste « Rendu affiché », 14/11/2026 : ni étoile
 /// ni coche, déjà prises par les notes et le drapeau) : plein si `on`, en creux sinon.
 pub fn cover_mark(painter: &Painter, rect: Rect, on: bool, color: Color32) {
