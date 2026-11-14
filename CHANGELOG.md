@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **A grouped pair is filtered as one photo** (#474): under a content filter (well
+  exposed, sharp, ratings…) the JPEG of a grouped pair follows its RAW; judged on its
+  own while the analyses arrived, it left the filter, the pair's thumbnail switched
+  between the JPEG and the RAW and the grid flickered.
 - **Folder summary counts photos** (#468): in a grouped folder a pair is one photo
   (472 files made 236 photos, ratings were counted twice); "Photos" = pairs + RAW alone
   + JPEG alone, each a filter; developments show the photos shown and the developments,

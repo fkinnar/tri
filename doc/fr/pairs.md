@@ -31,7 +31,9 @@ Dans un dossier regroupé, les cases RAW et JPEG du panneau de droite deviennent
 **trois** : RAW (les RAW sans JPEG), RAW+JPEG (les paires regroupées), JPEG (les JPEG sans
 RAW). Combinables, une au moins cochée ; la touche du type (`core.filter.cycle`) passe de
 tout à chacune seule. Un développement suit sa photo ; retenues avec les filtres du
-dossier.
+dossier. Sous un filtre sur le contenu (bien exposées, nettes, notes…), le JPEG d'une
+paire suit le verdict de son RAW (14/11/2026 : jugé seul, il faisait clignoter la grille
+pendant les analyses).
 
 ## Moteur
 

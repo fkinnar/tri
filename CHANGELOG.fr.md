@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Une paire regroupée est filtrée comme une photo** (#474) : sous un filtre sur le
+  contenu (bien exposées, nettes, notes…), le JPEG d'une paire regroupée suit son RAW ;
+  jugé seul pendant l'arrivée des analyses, il sortait du filtre, la vignette de la
+  paire basculait du JPEG au RAW et la grille clignotait.
 - **Le résumé du dossier compte des photos** (#468) : dans un dossier regroupé, une paire
   est une photo (472 fichiers faisaient 236 photos, les notes étaient comptées deux
   fois) ; « Photos » = paires + RAW seuls + JPEG seuls, chacun un filtre ; les
