@@ -85,7 +85,10 @@ eject_lock_ms`, 5 s, then "volume in use" with the reason), dismount it, allow r
 eject the medium; a disk whose medium does not eject (USB hard drive) then goes through
 the "Eject" verb (**to be checked on Windows**). Blocking (from 0.4 s to a few seconds): the interface calls it in a
 separate thread. On refusal (internal disk, open file), the system's message is returned
-as is. A "fixed" USB disk (external hard drive) ejects like a card, as in the Finder.
+as is; refused because **busy** ("target is busy", `DeviceBusy`, "dissented"…), retried
+`[places] eject_retries` times (5) `eject_retry_ms` apart (1 s): on 2026-11-14, tri itself
+held a stick it had just moved a folder to (renders running); the interface also closes
+the open folder and stops the development batch when they are on it. A "fixed" USB disk (external hard drive) ejects like a card, as in the Finder.
 Checked on macOS with a disk image: ejected in 0.36 s; missing volume:
 "diskutil : Failed to find disk".
 

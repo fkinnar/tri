@@ -5049,6 +5049,14 @@ impl TriApp {
         if !self.folder.is_none() && self.folder.dir.starts_with(&volume) {
             self.close_folder();
         }
+        // Les rendus de fond sur ses fichiers s'arrêtent aussi (14/11/2026 : tri tenait
+        // une clé qu'on venait de remplir) ; ceux déjà en cours finissent pendant que
+        // l'éjection réessaie (`[places] eject_retries`).
+        if let Some(batch) = &self.develop_batch
+            && batch.folder.starts_with(&volume)
+        {
+            batch.cancel();
+        }
         let (tx, rx) = mpsc::channel();
         let repaint = ctx.clone();
         let target = volume.clone();
