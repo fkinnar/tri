@@ -156,6 +156,10 @@ auto_mount = true
 # Windows : attente maximale du verrouillage d'un volume avant de l'éjecter (ms), le temps
 # qu'un programme lâche ses fichiers ; au-delà, l'éjection est refusée avec la raison.
 eject_lock_ms = 5000
+# Éjection refusée parce que le volume est occupé (un calcul en cours sur ses fichiers) :
+# nouveaux essais, et attente entre deux (ms). 0 : un seul essai.
+eject_retries = 5
+eject_retry_ms = 1000
 
 [develop]
 # Voir ses développements dans tri (rendu affiché, <core.view.source> : JPEG boîtier,

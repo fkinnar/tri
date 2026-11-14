@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Ejecting waits for tri's own work** (#473): a USB stick tri was still busy with (a
+  folder just moved there, renders running) was refused "target is busy"; ejecting now
+  stops the development batch on it and retries a few times while the running
+  computations finish (`[places] eject_retries`, `eject_retry_ms`).
 - **Folder summary counts photos** (#468): in a grouped folder a pair is one photo
   (472 files made 236 photos, ratings were counted twice); "Photos" = pairs + RAW alone
   + JPEG alone, each a filter; developments show the photos shown and the developments,

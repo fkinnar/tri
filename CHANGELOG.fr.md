@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **L'éjection attend la fin du travail de tri** (#473) : une clé USB sur laquelle tri
+  travaillait encore (un dossier qu'on venait d'y déplacer, des rendus en cours) était
+  refusée, « target is busy » ; l'éjection arrête maintenant le lot de développements
+  qui la concerne et réessaie quelques fois, le temps que les calculs en cours se
+  terminent (`[places] eject_retries`, `eject_retry_ms`).
 - **Le résumé du dossier compte des photos** (#468) : dans un dossier regroupé, une paire
   est une photo (472 fichiers faisaient 236 photos, les notes étaient comptées deux
   fois) ; « Photos » = paires + RAW seuls + JPEG seuls, chacun un filtre ; les
