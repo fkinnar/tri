@@ -1838,3 +1838,11 @@ summary-libraw-counts = { $only ->
     [one] { $only } RAW only LibRaw develops
    *[other] { $only } RAWs only LibRaw develops
 } (no active software: what is left to develop), out of { $n } RAWs in all (each has its LibRaw render)
+offload-activity = { $phase } · { $file } · { $rate } MB/s
+offload-idle = Nothing has moved for { $s } s
+offload-phase-preparing = Preparing
+offload-phase-writing = Copying
+offload-phase-syncing = Writing to the disk
+offload-phase-verifying = Verifying
+offload-raw-only-grouped = The pairs are grouped: their JPEGs are needed. Uncheck "Group RAW and JPEG" to copy the RAW files only
+offload-group-pairs-raw-only = "RAW only" copies no JPEG: nothing to group. Uncheck it to group the pairs
