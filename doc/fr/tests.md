@@ -44,6 +44,20 @@ les rendait environ 50× plus lents (302 s au lieu de 5,7 s).
 Tout le workspace : `cargo test --workspace` (et `--no-default-features`). Les tests de
 l'interface sont décrits dans [gui.md](gui.md#tests).
 
+### En intégration continue : cargo-nextest
+
+Sur GitHub (`.github/workflows/ci.yml`), les tests passent par
+[cargo-nextest](https://nexte.st) (13/11/2026), avec le profil `ci` de
+`.config/nextest.toml` : un test en échec est **relancé une fois**. Les clics simulés des
+tests de l'interface se perdent parfois sur les machines de GitHub (Windows surtout ; cinq
+tests différents le même soir). Un test qui ne passe qu'à la relance est marqué **FLAKY**
+dans le journal : la CI reste verte, mais il est à fiabiliser (le vérifier, puis faire
+l'action directement : voir [gui.md](gui.md#tests)). Un vrai bug échoue deux fois et la
+CI reste rouge. nextest lance un processus par test : le verrou des tests sur vrai RAW ne
+joue plus entre eux, d'où le groupe `libraw` à un seul fil. Les exemples de la
+documentation passent à part (`cargo test -p tri --doc`). En local, `cargo test` reste la
+règle ; `cargo nextest run --profile ci` reproduit la CI.
+
 ### Couverture
 
 Mesurée avec [`cargo-llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov) (outil de

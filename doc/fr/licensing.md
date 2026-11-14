@@ -269,6 +269,9 @@ demande l'accord de tous les contributeurs.
       un programme à part qui monte le contenu ; il embarque libfuse (LGPL-2.1) et
       squashfuse (BSD-2-Clause), sans lien avec `tri` (simple juxtaposition), sources
       sur `github.com/AppImage/type2-runtime`.
+- [x] Tests de la CI (13/11/2026) : `cargo-nextest` (MIT ou Apache-2.0, maintenu
+      activement), outil de test seulement, installé par la CI (binaire précompilé) ;
+      rien n'entre dans `tri`.
 - [x] Décider du traitement de HEIF dans les binaires distribués (§3) : **sans HEIC**
       (décidé le 19/10/2026), builds sans la feature `heif` ; à rouvrir avec les décodeurs
       du système (ImageIO, WIC).

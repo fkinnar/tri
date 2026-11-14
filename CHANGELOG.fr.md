@@ -4,6 +4,18 @@
 
 ## Non publié
 
+- **CI : un test en échec est relancé une fois** (#461) : les tests passent par
+  cargo-nextest sur GitHub ; un test qui ne passe qu'à la relance est marqué FLAKY (clics
+  simulés perdus sur les machines de GitHub) au lieu de bloquer la PR ; un vrai bug
+  échoue toujours deux fois.
+- **Pas d'onglet « Base » sur un JPEG** (#458) : exposition et balance des réglages
+  valent pour les RAW ; sur un JPEG (ou une autre image déjà développée), l'onglet est
+  caché et « Style » s'ouvre à sa place, sauf si l'image a déjà une base, gardée pour la
+  retirer.
+- **Les coupes d'une version en morceaux se voient** (#460) : en plein écran, une
+  version en morceaux a ses coupes tracées sur l'image, en tirets alternés clair et
+  foncé, lisibles sur toute image (`[gui.crop] tile_dash`, `tile_line_width`,
+  `tile_opacity`).
 - **Versions en grille** (#459) : la partie « Morceaux » de la barre de la version est
   maintenant colonnes × lignes, pour une bande verticale (1 × 3) ou une grille (2 × 2,
   3 × 3) ; `g` / `Maj+G` une ligne de plus / de moins (`c` / `Maj+C` restent pour les

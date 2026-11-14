@@ -749,6 +749,16 @@ impl TriApp {
         });
         ui.add_space(6.0);
         let mut tab_reset = self.adjust_tab_reset.take();
+        // Pas d'onglet « Base » sur une image déjà développée (JPEG, TIFF… ; retour du
+        // 13/11/2026) : exposition et balance y valent pour un RAW. Gardé si l'image en a
+        // déjà une, pour la voir et la retirer. L'onglet choisi est retenu pour les RAW ;
+        // ici, « Style » à sa place.
+        let base = file.kind == MediaKind::Raw || !layers.correction.is_none();
+        let shown_tab = if !base && self.adjust_tab == AdjustTab::Base {
+            AdjustTab::Style
+        } else {
+            self.adjust_tab
+        };
         // Onglets ; un point sur ceux qui changent l'image (un réglage caché se voit).
         ui.horizontal_wrapped(|ui| {
             let tabs = [
@@ -766,7 +776,10 @@ impl TriApp {
                 (AdjustTab::Values, "adjust-tab-values", false),
             ];
             for (tab, key, active) in tabs {
-                let response = adjust_tab(ui, &t!(key), self.adjust_tab == tab, active);
+                if tab == AdjustTab::Base && !base {
+                    continue;
+                }
+                let response = adjust_tab(ui, &t!(key), shown_tab == tab, active);
                 if response.clicked() {
                     self.adjust_tab = tab;
                 }
@@ -779,7 +792,7 @@ impl TriApp {
         });
         ui.separator();
         ui.add_space(4.0);
-        match self.adjust_tab {
+        match shown_tab {
             AdjustTab::Base => {
                 let presets = self.settings.adjust.white_balance_presets();
                 base_tab(

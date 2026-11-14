@@ -158,7 +158,9 @@ try (feedback of 2026-11-10):
   soon as there are several. See below.
 - **Four tabs**, kept for the session, a dot "•" on those that change the image (a
   hidden adjustment shows); **double-click a tab: reset** (base: exposure and as-shot
-  balance; style; black and white: colour), on the synced selection too:
+  balance; style; black and white: colour), on the synced selection too. No "Base" tab on
+  an already developed image (JPEG, TIFF…; feedback of 2026-11-13), unless it already has
+  one (to remove it); "Style" opens instead:
   - **Base**: exposure and **"Auto"**; temperature (K), with the white balance list (as
     shot, auto on the whole image, presets with their kelvins) and the **"Eyedropper"**
     (in full screen, a click on a zone that should be grey, `[gui]
