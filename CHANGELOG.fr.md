@@ -7,7 +7,8 @@
 - **Une seule liste « Rendu affiché » en plein écran** (#465) : la liste de la section
   Vue ne devient plus « Avant / après » sur un développement quand on passe d'une image
   à l'autre ; elle garde son titre et ses choix, dit le rendu à l'écran (JPEG boîtier,
-  un logiciel de développement, LibRaw), et en choisir un montre ce rendu de la photo
+  une entrée par développement de la photo, par exemple « Darktable » et « Darktable ·
+  clone 1 », les autres logiciels, LibRaw), et en choisir un montre ce rendu de la photo
   (son développement, le JPEG d'une paire regroupée, l'« avant » d'un développement) ou,
   si la photo n'en a pas, devient le rendu affiché de toutes les photos.
 - **Paires RAW+JPEG regroupées en une photo** (#463, première partie de #392) : dans un

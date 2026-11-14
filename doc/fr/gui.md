@@ -1380,7 +1380,9 @@ part (la navigation), grisée en JPEG boîtier. Disparus : la rotation propre à
 **Plein écran, une liste stable** (retour du 14/11/2026, #465) : sur un développement,
 la liste devenait « Avant / après », sous la souris en passant d'une image à l'autre.
 Elle garde maintenant son titre et ses choix (sans « Couverture », un choix de grille) ;
-sa valeur est le rendu **à l'écran** (`TriApp::displayed_render`) ; en choisir un
+une entrée par **développement** de la photo (« Darktable », « Darktable · clone 1 »,
+logiciels actifs), puis les logiciels dont elle n'en a pas (`view_render_choices`) ; sa
+valeur est le rendu **à l'écran** (`TriApp::displayed_render`) ; en choisir un
 (`TriApp::show_render`) va au membre de la pile de la photo qui l'a (son développement
 principal, le JPEG d'une paire regroupée), prend l'« avant » d'un développement pour le
 JPEG boîtier, sinon change le rendu affiché de toutes les photos.

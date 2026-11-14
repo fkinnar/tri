@@ -1225,6 +1225,15 @@ pub fn shown_name(path: &Path) -> String {
     }
 }
 
+/// Une entrée de la liste « Rendu affiché » du plein écran : un rendu (pour toutes les
+/// photos, ou celui de la photo), ou un développement précis de la photo (index dans la
+/// liste des images).
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ViewRender {
+    Render(crate::grid_render::GridRender),
+    Development(usize),
+}
+
 /// Nom lisible d'un développement (« Darktable · clone 1 »), ou de la photo (son nom).
 pub fn development_label(path: &Path) -> String {
     match tri::developments::get(path) {
@@ -3051,30 +3060,100 @@ impl TriApp {
     /// pile de la photo (son développement principal, le JPEG d'une paire regroupée) y
     /// va ; sinon il devient le rendu affiché de toutes les photos, comme avant.
     fn view_render_control(&mut self, ui: &mut Ui) {
-        use crate::grid_render::GridRender;
         let Some(file) = self.files.get(self.selected).cloned() else {
             return;
         };
-        let engines = self.developers.engines();
-        let choices: Vec<GridRender> = GridRender::choices(&engines)
-            .into_iter()
-            .filter(|&c| c != GridRender::Cover)
-            .collect();
-        let shown = self.displayed_render(&file);
+        let choices = self.view_render_choices();
+        let shown = self.view_render_shown(&file, &choices);
         let mut choice = shown;
         let weak = ui.visuals().weak_text_color();
         let tip = self.render_tip();
+        let labels: Vec<(ViewRender, String)> = choices
+            .iter()
+            .filter_map(|&c| match c {
+                ViewRender::Development(i) => Some((c, development_label(&self.files[i].path))),
+                ViewRender::Render(_) => None,
+            })
+            .collect();
         self.side_combo(
             ui,
             "view_render",
             &mut choice,
             &choices,
-            |c| c.label(weak),
+            |c| match c {
+                ViewRender::Render(render) => render.label(weak),
+                ViewRender::Development(_) => labels
+                    .iter()
+                    .find(|(k, _)| *k == c)
+                    .map(|(_, l)| l.clone())
+                    .unwrap_or_default()
+                    .into(),
+            },
             Some(tip),
         );
         if choice != shown {
-            self.show_render(choice);
+            match choice {
+                ViewRender::Render(render) => self.show_render(render),
+                ViewRender::Development(i) => {
+                    self.dev_before = false;
+                    self.show_development(i);
+                    self.request_zoom();
+                }
+            }
         }
+    }
+
+    /// Choix de la liste « Rendu affiché » du plein écran (retour du 14/11/2026 : une
+    /// entrée par développement, pas par logiciel) : le JPEG boîtier, chaque
+    /// développement de la photo (logiciels actifs), les logiciels dont elle n'en a pas
+    /// (rendu de toutes les photos), LibRaw.
+    fn view_render_choices(&self) -> Vec<ViewRender> {
+        use crate::grid_render::GridRender;
+        let range = self
+            .stacks
+            .developments_of(self.selected)
+            .cloned()
+            .unwrap_or(self.selected..self.selected + 1);
+        let developments: Vec<(usize, tri::develop::Engine)> = range
+            .filter_map(|i| tri::developments::get(&self.files[i].path).map(|d| (i, d.engine)))
+            .collect();
+        let mut choices = vec![ViewRender::Render(GridRender::Embedded)];
+        choices.extend(
+            developments
+                .iter()
+                .map(|&(i, _)| ViewRender::Development(i)),
+        );
+        choices.extend(
+            self.developers
+                .engines()
+                .into_iter()
+                .filter(|e| developments.iter().all(|(_, d)| d != e))
+                .map(|e| ViewRender::Render(GridRender::Engine(e))),
+        );
+        choices.push(ViewRender::Render(GridRender::LibRaw));
+        choices
+    }
+
+    /// Valeur de la liste pour `file` : le développement à l'écran, sinon le rendu
+    /// ([`TriApp::displayed_render`]) ; un logiciel dont la photo a un développement : ce
+    /// développement.
+    fn view_render_shown(&self, file: &MediaFile, choices: &[ViewRender]) -> ViewRender {
+        use crate::grid_render::GridRender;
+        if tri::developments::get(&file.path).is_some() && !self.dev_before {
+            return ViewRender::Development(self.selected);
+        }
+        let render = self.displayed_render(file);
+        if let GridRender::Engine(engine) = render
+            && let Some(&dev) = choices.iter().find(|c| match c {
+                ViewRender::Development(i) => {
+                    tri::developments::get(&self.files[*i].path).is_some_and(|d| d.engine == engine)
+                }
+                ViewRender::Render(_) => false,
+            })
+        {
+            return dev;
+        }
+        ViewRender::Render(render)
     }
 
     /// Montre le rendu `choice` de la photo sélectionnée (plein écran) : un membre de sa
@@ -26645,9 +26724,16 @@ mod tests {
             r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
         )
         .unwrap();
+        // Et un clone : deux développements darktable (retour du 14/11/2026 : une seule
+        // entrée « Darktable » dans la liste).
+        std::fs::write(
+            photos.join("img0_01.jpg.xmp"),
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
+        )
+        .unwrap();
         h.state_mut().developers = fake_darktable();
         h.state_mut().reload_folder(None);
-        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 4);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
         let developed = photos.join("img0@dt.jpg");
         let index = |app: &TriApp, path: &Path| app.files.iter().position(|f| f.path == path);
         let photo = index(h.state(), &photos.join("img0.jpg")).unwrap();
@@ -26657,6 +26743,21 @@ mod tests {
         h.state_mut().open_view();
         h.run_steps(3);
         assert!(h.query_by_label(&t!("panel-grid-render")).is_some());
+        // Une entrée par développement, aucune « Darktable » pour tout le dossier.
+        let clone = index(h.state(), &photos.join("img0@dt-01.jpg")).unwrap();
+        let choices = h.state().view_render_choices();
+        assert!(
+            choices.contains(&ViewRender::Development(dev)),
+            "{choices:?}"
+        );
+        assert!(
+            choices.contains(&ViewRender::Development(clone)),
+            "{choices:?}"
+        );
+        assert!(
+            !choices.contains(&ViewRender::Render(GridRender::Engine(Engine::Darktable))),
+            "{choices:?}"
+        );
         // Darktable choisi sur la photo : son développement s'affiche.
         h.state_mut()
             .show_render(GridRender::Engine(Engine::Darktable));
