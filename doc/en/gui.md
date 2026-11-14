@@ -1299,6 +1299,14 @@ the same way). On a development under review, `r` stays before / after (camera J
 "Review the developments" stays separate (navigation), greyed out in camera JPEG. Gone:
 the per-photo rotation (`Source::next`), the "Development of each photo" list.
 
+**Full screen, one stable list** (feedback of 2026-11-14, #465): on a development the
+list used to become "Before / after", under the pointer while stepping through the
+images. It now keeps its title and choices (without "Cover", a grid choice); its value is
+the render **on screen** (`TriApp::displayed_render`); choosing one
+(`TriApp::show_render`) goes to the member of the photo's stack that has it (its main
+development, the JPEG of a grouped pair), takes the "before" of a development for the
+camera JPEG, else changes the shown render of every photo.
+
 ### Loupe from the keyboard (2026-11-06)
 
 The user's idea: with the loupe key held, the navigation keys of the chosen set (arrows,

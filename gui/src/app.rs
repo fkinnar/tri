@@ -3004,46 +3004,116 @@ impl TriApp {
     /// n'y avait pas de sens) : le rendu affiché (sur un développement, avant / après), la
     /// revue des développements, les piles et les actions sur les fichiers.
     fn view_settings(&mut self, ui: &mut Ui) {
-        let Some(file) = self.files.get(self.selected).cloned() else {
+        if self.files.get(self.selected).is_none() {
             return;
-        };
-        let tip = self.action_tip(Action::ToggleSource);
-        if let Some(development) = tri::developments::get(&file.path) {
-            // Un développement : avant / après (`r`), son rendu ou le JPEG boîtier.
-            self.subheading(ui, t!("panel-view-source"))
-                .on_hover_text(&tip);
-            // Une liste comme pour une photo (retour du 05/11/2026 : une case ici, une
-            // liste ailleurs) : le développement, ou le JPEG boîtier (« avant »).
-            use crate::grid_render::GridRender;
-            let shown = GridRender::Engine(development.engine);
-            let choices = [GridRender::Embedded, shown];
-            let mut choice = if self.dev_before {
-                GridRender::Embedded
-            } else {
-                shown
-            };
-            let weak = ui.visuals().weak_text_color();
-            if self.side_combo(
-                ui,
-                "view_source_development",
-                &mut choice,
-                &choices,
-                |c| c.label(weak),
-                Some(tip),
-            ) {
-                self.dev_before = choice == GridRender::Embedded;
-                self.request_zoom();
-            }
-        } else {
-            self.render_heading(ui);
-            self.control(ui, Control::Render, Host::Panel);
         }
+        // Une seule liste, toujours la même (retour du 14/11/2026 : « Rendu affiché » sur
+        // une photo devenait « Avant / après » sur un développement, sous la souris en
+        // passant d'une image à l'autre) : elle dit le rendu à l'écran et en montre un
+        // autre de la même photo.
+        self.render_heading(ui);
+        self.view_render_control(ui);
         if !self.developers.is_empty() {
             self.view_developments(ui);
         }
         self.subheading(ui, t!("panel-grid-stacks"));
         self.control(ui, Control::Stacks, Host::Panel);
         self.file_actions_switch(ui);
+    }
+
+    /// Rendu à l'écran pour `file`, en plein écran : le développement montré (ou le JPEG
+    /// boîtier en « avant »), le JPEG d'une paire ou une image plate, sinon la source de
+    /// la photo.
+    fn displayed_render(&self, file: &MediaFile) -> crate::grid_render::GridRender {
+        use crate::grid_render::GridRender;
+        if let Some(development) = tri::developments::get(&file.path) {
+            return if self.dev_before {
+                GridRender::Embedded
+            } else {
+                GridRender::Engine(development.engine)
+            };
+        }
+        if file.kind == MediaKind::Flat {
+            return GridRender::Embedded;
+        }
+        match self.source_for(file) {
+            Source::Embedded => GridRender::Embedded,
+            Source::Raw => GridRender::LibRaw,
+            Source::Developed => match self.developed_level(&file.path) {
+                Level::Developed(engine) => GridRender::Engine(engine),
+                _ => GridRender::LibRaw,
+            },
+        }
+    }
+
+    /// Liste « Rendu affiché » du plein écran : les rendus d'une photo (JPEG boîtier,
+    /// logiciels, LibRaw ; la couverture est un choix de grille). Choisir un rendu qu'a la
+    /// pile de la photo (son développement principal, le JPEG d'une paire regroupée) y
+    /// va ; sinon il devient le rendu affiché de toutes les photos, comme avant.
+    fn view_render_control(&mut self, ui: &mut Ui) {
+        use crate::grid_render::GridRender;
+        let Some(file) = self.files.get(self.selected).cloned() else {
+            return;
+        };
+        let engines = self.developers.engines();
+        let choices: Vec<GridRender> = GridRender::choices(&engines)
+            .into_iter()
+            .filter(|&c| c != GridRender::Cover)
+            .collect();
+        let shown = self.displayed_render(&file);
+        let mut choice = shown;
+        let weak = ui.visuals().weak_text_color();
+        let tip = self.render_tip();
+        self.side_combo(
+            ui,
+            "view_render",
+            &mut choice,
+            &choices,
+            |c| c.label(weak),
+            Some(tip),
+        );
+        if choice != shown {
+            self.show_render(choice);
+        }
+    }
+
+    /// Montre le rendu `choice` de la photo sélectionnée (plein écran) : un membre de sa
+    /// pile s'il en a un de ce rendu, l'« avant » d'un développement pour le JPEG boîtier,
+    /// sinon le rendu affiché de toutes les photos change.
+    fn show_render(&mut self, choice: crate::grid_render::GridRender) {
+        use crate::grid_render::GridRender;
+        let Some(file) = self.files.get(self.selected).cloned() else {
+            return;
+        };
+        let photo = self.stack_photo(&file.path);
+        let range = self
+            .stacks
+            .developments_of(self.selected)
+            .cloned()
+            .unwrap_or(self.selected..self.selected + 1);
+        let member = range.clone().find(|&i| {
+            let path = &self.files[i].path;
+            match choice {
+                GridRender::Embedded => self.camera_raw.contains_key(path),
+                GridRender::Engine(engine) => tri::developments::get(path)
+                    .is_some_and(|d| d.engine == engine && d.copy == tri::developments::Copy::Main),
+                _ => false,
+            }
+        });
+        let photo_index = range.clone().find(|&i| self.files[i].path == photo);
+        self.dev_before = false;
+        if let Some(i) = member {
+            self.show_development(i);
+        } else if choice == GridRender::Embedded && tri::developments::get(&file.path).is_some() {
+            // Pas de JPEG à part : l'« avant » du développement.
+            self.dev_before = true;
+        } else {
+            self.set_grid_render(choice);
+            if let Some(i) = photo_index.filter(|&i| i != self.selected) {
+                self.show_development(i);
+            }
+        }
+        self.request_zoom();
     }
 
     /// Section « Vue », « Développements » (retour du 04/11/2026) : de photo en photo, ou
@@ -26558,6 +26628,57 @@ mod tests {
         click_settled(&mut h, &t!("panel-view-review"));
         h.run_steps(2);
         assert!(h.state().review_developments);
+    }
+
+    #[test]
+    fn the_view_render_list_keeps_its_title_and_shows_what_is_on_screen() {
+        // Retour du 14/11/2026 (vidéo) : en passant d'une photo à son développement, la
+        // liste « Rendu affiché » devenait « Avant / après ». Une seule liste désormais :
+        // sa valeur est le rendu à l'écran, choisir un rendu de la photo y va.
+        use crate::grid_render::GridRender;
+        use tri::develop::Engine;
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        std::fs::write(
+            photos.join("img0.jpg.xmp"),
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
+        )
+        .unwrap();
+        h.state_mut().developers = fake_darktable();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 4);
+        let developed = photos.join("img0@dt.jpg");
+        let index = |app: &TriApp, path: &Path| app.files.iter().position(|f| f.path == path);
+        let photo = index(h.state(), &photos.join("img0.jpg")).unwrap();
+        let dev = index(h.state(), &developed).unwrap();
+        h.state_mut().review_developments = true;
+        h.state_mut().select(photo);
+        h.state_mut().open_view();
+        h.run_steps(3);
+        assert!(h.query_by_label(&t!("panel-grid-render")).is_some());
+        // Darktable choisi sur la photo : son développement s'affiche.
+        h.state_mut()
+            .show_render(GridRender::Engine(Engine::Darktable));
+        h.run_steps(3);
+        assert_eq!(h.state().selected, dev, "le développement de la photo");
+        assert!(
+            h.query_by_label(&t!("panel-grid-render")).is_some(),
+            "même titre"
+        );
+        assert!(h.query_by_label(&t!("panel-view-source")).is_none());
+        let file = h.state().files[dev].clone();
+        assert_eq!(
+            h.state().displayed_render(&file),
+            GridRender::Engine(Engine::Darktable)
+        );
+        // JPEG boîtier : l'« avant » du développement, la liste le dit.
+        h.state_mut().show_render(GridRender::Embedded);
+        assert!(h.state().dev_before);
+        assert_eq!(h.state().displayed_render(&file), GridRender::Embedded);
+        h.state_mut()
+            .show_render(GridRender::Engine(Engine::Darktable));
+        assert!(!h.state().dev_before, "retour à l'après");
     }
 
     #[test]

@@ -1377,6 +1377,14 @@ reste l'avant / après (JPEG boîtier). « Passer en revue les développements �
 part (la navigation), grisée en JPEG boîtier. Disparus : la rotation propre à une photo
 (`Source::next`), la liste « Développement de chaque photo ».
 
+**Plein écran, une liste stable** (retour du 14/11/2026, #465) : sur un développement,
+la liste devenait « Avant / après », sous la souris en passant d'une image à l'autre.
+Elle garde maintenant son titre et ses choix (sans « Couverture », un choix de grille) ;
+sa valeur est le rendu **à l'écran** (`TriApp::displayed_render`) ; en choisir un
+(`TriApp::show_render`) va au membre de la pile de la photo qui l'a (son développement
+principal, le JPEG d'une paire regroupée), prend l'« avant » d'un développement pour le
+JPEG boîtier, sinon change le rendu affiché de toutes les photos.
+
 ### Loupe au clavier (06/11/2026)
 
 Idée de l'utilisateur : la touche de loupe maintenue, les touches de navigation du jeu

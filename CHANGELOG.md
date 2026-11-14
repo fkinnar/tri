@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- **One "Shown render" list in full screen** (#465): the View section's list no longer
+  turns into "Before / after" on a development while stepping through the images; it
+  keeps its title and choices, says which render is on screen (camera JPEG, a
+  development software, LibRaw), and choosing one shows that render of the photo (its
+  development, the JPEG of a grouped pair, the "before" of a development) or, if the
+  photo has none, becomes the shown render of every photo.
 - **RAW+JPEG pairs grouped as one photo** (#463, first part of #392): in a grouped
   folder a pair is one thumbnail, the camera JPEG filed with the RAW's developments
   ("Camera" chip, Shift+V to unfold). Off by default: opening a folder that has pairs
