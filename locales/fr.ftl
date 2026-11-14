@@ -95,6 +95,7 @@ history-notes-one = { $what } : { $name }
 history-notes-many = { $what } : { $n } images
 history-rename = { $from } renommé en { $to }
 naming-unclosed = accolade { "{" } jamais fermée
+naming-not-here = { "{" }{ $field }{ "}" } n'a pas de sens ici
 naming-unknown = champ inconnu : { "{" }{ $field }{ "}" } (champs : { $fields })
 naming-width = largeur invalide : { "{" }{ $field }{ "}" } (seul le compteur en a une : { "{" }n:3{ "}" } = 001)
 naming-missing = pas de { $field ->

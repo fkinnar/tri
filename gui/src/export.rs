@@ -180,14 +180,6 @@ pub fn profile_summary(p: &Profile) -> String {
     format!("{format} · {color} · {size}{sharpen}")
 }
 
-/// `folder` (dossier d'un préréglage) en chemin complet pour `first`, écrit avec `~`.
-fn resolved(folder: &str, first: Option<&PathBuf>) -> String {
-    match first {
-        Some(first) => crate::files::tilde(&tri::export::folder_for(folder, first)),
-        None => folder.to_string(),
-    }
-}
-
 impl ExportDialog {
     /// Boîte pour `images`, profil `preferred` proposé (identifiant ; voir [`proposed`]),
     /// avec son dossier ; `render` : l'image exportée (voir [`Render::of`]).
@@ -217,7 +209,7 @@ impl ExportDialog {
             choice,
             input: profiles
                 .get(choice)
-                .map(|p| resolved(&p.folder, images.first()))
+                .map(|p| tri::export::folder_template(&p.folder))
                 .unwrap_or_default(),
             edited: false,
             folders: Default::default(),
@@ -351,13 +343,22 @@ impl ExportDialog {
                 }
                 ui.add_space(6.0);
                 ui.label(t!("export-destination"));
-                let field = self.field.show(ui, id, &mut self.input, 420.0);
+                // Le gabarit tel quel (#480) : des images de plusieurs dossiers n'ont pas le
+                // même dossier réel ; ses champs au survol.
+                let field = self
+                    .field
+                    .show(ui, id, &mut self.input, 420.0)
+                    .on_hover_text(t!("export-folder-tip"));
+                let folder_error = tri::export::check_folder(&self.input).err();
+                if let Some(e) = &folder_error {
+                    ui.colored_label(ui.visuals().error_fg_color, e.to_string());
+                }
                 if field.changed() {
                     self.edited = true;
                 }
                 let enter = field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-                // Le chemin complet est dans le champ : plus de ligne « Destination » dessous
-                // (retour du 14/11/2026 : on ne savait plus où ça allait).
+                // Tout est dans le champ : plus de ligne « Destination » dessous (retour du
+                // 14/11/2026 : on ne savait plus où ça allait).
                 ui.add_space(6.0);
                 // L'image exportée est celle qu'on regarde (retour du 19/10/2026 : pas de
                 // choix dans la boîte, Ctrl+E sur l'image voulue) ; dite ci-dessous.
@@ -399,7 +400,10 @@ impl ExportDialog {
                 }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
-                    let ok = n > 0 && !self.profiles.is_empty() && unsupported.is_none();
+                    let ok = n > 0
+                        && !self.profiles.is_empty()
+                        && unsupported.is_none()
+                        && tri::export::check_folder(&self.input).is_ok();
                     confirm = ui
                         .add_enabled(ok, egui::Button::new(t!("export-button")))
                         .clicked()
@@ -410,14 +414,15 @@ impl ExportDialog {
         if confirm {
             let profile = &self.profiles[self.choice];
             let typed = self.input.trim().to_string();
-            // Le dossier du préréglage tel quel, pas retenu : relatif, chaque image garde
-            // le sien (`export` à côté de chacune), même sur plusieurs dossiers.
-            let default = resolved(&profile.folder, self.images.first());
-            let (folder, remember) = if typed == default {
-                (profile.folder.clone(), String::new())
+            // Le gabarit du préréglage tel quel : rien à retenir ; un autre : retenu pour
+            // ce préréglage.
+            let default = tri::export::folder_template(&profile.folder);
+            let remember = if typed == default {
+                String::new()
             } else {
-                (typed.clone(), typed)
+                typed.clone()
             };
+            let folder = typed;
             return Outcome::Start {
                 images: std::mem::take(&mut self.images),
                 profile: Box::new(tri::export::Profile {
@@ -499,13 +504,13 @@ impl ExportDialog {
         self
     }
 
-    /// Dossier montré pour le préréglage `p` : le dernier retenu, sinon le sien, en
-    /// chemin complet (celui de la première image s'il est relatif).
+    /// Gabarit montré pour le préréglage `p` : le dernier retenu, sinon le sien (forme
+    /// explicite, `{source}/export`).
     fn shown(&self, p: &Profile) -> String {
         self.folders
             .get(&p.id)
             .cloned()
-            .unwrap_or_else(|| resolved(&p.folder, self.images.first()))
+            .unwrap_or_else(|| tri::export::folder_template(&p.folder))
     }
 
     /// Dossier dans le champ (tests).

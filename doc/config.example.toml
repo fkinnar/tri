@@ -232,9 +232,10 @@ print_threshold = 3.0
 #   développement) ;
 # max_side : côté long maximal en pixels, 0 : pleine définition ;
 # suffix : ajouté au nom du fichier ("-web" : DSCF0001-web.jpg) ;
-# folder : dossier des fichiers : "/…" absolu, "~/…" depuis le dossier personnel, sinon
-#   relatif au dossier de chaque image ("export" : un sous-dossier à côté des images,
-#   "" ou "." : à côté d'elles) ; variables de Darktable permises ($(YEAR)…).
+# folder : dossier des fichiers, un gabarit : {source} (le dossier de chaque image),
+#   "/…" absolu, "~/…" depuis le dossier personnel, et les champs {date}, {time}, {name},
+#   {folder}, {camera} ("~/Images/Export/{date}_{folder}") ; un ancien dossier relatif
+#   vaut {source}/… ("export" = "{source}/export") ; variables de Darktable permises.
 # passthrough : JPEG sans recompression si possible (JPEG d'origine copié tel quel, JPEG
 #   boîtier écrit tel quel ; défaut) ; une image à réduire est réencodée ; sans effet sur
 #   un rendu Darktable ou LibRaw, ni hors JPEG ;
@@ -253,7 +254,7 @@ color = "prophoto"
 intent = ""
 max_side = 0
 suffix = ""
-folder = "export"
+folder = "{source}/export"
 passthrough = true
 applies_to = "all"
 sharpen = "none"
@@ -270,7 +271,7 @@ color = ""
 intent = ""
 max_side = 0
 suffix = ""
-folder = "export"
+folder = "{source}/export"
 passthrough = true
 applies_to = "flat"
 sharpen = "none"
@@ -285,7 +286,7 @@ color = "srgb"
 intent = ""
 max_side = 2048
 suffix = ""
-folder = "export"
+folder = "{source}/export"
 passthrough = true
 applies_to = "all"
 sharpen = "screen"

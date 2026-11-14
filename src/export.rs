@@ -253,10 +253,12 @@ pub struct Profile {
     pub max_side: u32,
     /// Ajouté au nom du fichier (`DSCF0001-web.jpg`) ; vide : le nom de l'image.
     pub suffix: String,
-    /// Dossier des fichiers écrits (idée de l'utilisateur, 19/10/2026 : propre au profil) :
-    /// `/…` absolu, `~/…` depuis le dossier personnel, sinon **relatif au dossier de
-    /// chaque image** (`"export"` : un sous-dossier à côté des images ; `""` ou `"."` :
-    /// à côté d'elles). Les variables de darktable (`$(YEAR)`…) y sont permises.
+    /// Dossier des fichiers écrits (idée de l'utilisateur, 19/10/2026 : propre au profil),
+    /// un **gabarit** depuis le 14/11/2026 (#480) : `{source}` (le dossier de chaque
+    /// image), `/…` absolu, `~/…` depuis le dossier personnel, et les champs de
+    /// [`crate::naming`] sauf `{n}` (`~/Images/Export/{date}_{folder}`). Un ancien dossier
+    /// relatif vaut `{source}/…` ([`folder_template`]). Les variables de darktable
+    /// (`$(YEAR)`…) passent telles quelles.
     pub folder: String,
     /// JPEG **sans recompression** quand c'est possible (idée de l'utilisateur,
     /// 19/10/2026) : un JPEG d'origine copié tel quel, un JPEG boîtier écrit tel quel
@@ -283,7 +285,7 @@ impl Profile {
             intent: String::new(),
             max_side: 0,
             suffix: String::new(),
-            folder: "export".into(),
+            folder: "{source}/export".into(),
             // Retour de l'utilisateur (19/10/2026) : par défaut, ne jamais recompresser un
             // JPEG quand on peut l'éviter.
             passthrough: true,
@@ -624,36 +626,69 @@ impl ExportSettings {
     }
 }
 
-/// `"."` (ou `"./"`) : à côté de l'image, comme `""`.
-fn next_to(folder: &str) -> &str {
-    match folder.trim() {
-        "." | "./" | ".\\" => "",
-        other => other,
+/// Le gabarit de dossier `folder` (voir [`Profile::folder`]) sous sa forme explicite
+/// (#480, décidé le 14/11/2026 : plus de règle implicite « relatif = à côté de chaque
+/// image ») : `""` ou `"."` → `{source}`, `export` → `{source}/export` ; un dossier
+/// absolu, depuis `~` ou commençant par `{source}` reste tel quel.
+pub fn folder_template(folder: &str) -> String {
+    let f = folder.trim();
+    match f {
+        "" | "." | "./" | ".\\" => SOURCE.to_string(),
+        _ if f.starts_with(SOURCE) || f.starts_with('~') || Path::new(f).is_absolute() => {
+            f.to_string()
+        }
+        _ => format!("{SOURCE}/{}", f.trim_start_matches("./")),
     }
 }
 
-/// Dossier où `folder` (voir [`Profile::folder`]) envoie l'export de `image`.
-pub fn folder_for(folder: &str, image: &Path) -> PathBuf {
-    let path = crate::settings::expand_home(next_to(folder));
-    if path.is_absolute() {
+/// Le champ « dossier de l'image » d'un gabarit de dossier.
+pub const SOURCE: &str = "{source}";
+
+/// Erreur de forme du gabarit de dossier `folder` (champ inconnu, `{n}`), sans image.
+pub fn check_folder(folder: &str) -> Result<(), crate::naming::TemplateError> {
+    let template = folder_template(folder);
+    let rest = template.replace(SOURCE, "");
+    crate::naming::check(&rest)?;
+    if crate::naming::uses_counter(&rest) {
+        return Err(crate::naming::TemplateError::NotHere("n".into()));
+    }
+    Ok(())
+}
+
+/// Dossier où `folder` (gabarit, voir [`Profile::folder`]) envoie l'export de `image` :
+/// ses champs remplis pour elle (date et appareil lus dans le fichier s'il en cite).
+pub fn folder_of(folder: &str, image: &Path) -> Result<PathBuf, crate::naming::TemplateError> {
+    check_folder(folder)?;
+    let template = folder_template(folder);
+    let source = image.parent().unwrap_or(Path::new(""));
+    let fields = if crate::naming::needs_metadata(&template) {
+        crate::naming::Fields::read(image)
+    } else {
+        crate::naming::Fields::basic(image)
+    };
+    let parts = template
+        .split(SOURCE)
+        .map(|part| crate::naming::render(part, &fields, 0))
+        .collect::<Result<Vec<_>, _>>()?;
+    let path = crate::settings::expand_home(&parts.join(&source.to_string_lossy()));
+    Ok(if path.is_absolute() {
         path
     } else {
-        image.parent().unwrap_or(Path::new("")).join(path)
-    }
+        source.join(path)
+    })
 }
 
-/// Motif de sortie pour darktable : dossier absolu, ou relatif au dossier de chaque image
-/// (`$(FILE_FOLDER)`, vérifié le 19/10/2026 : darktable crée les sous-dossiers, accents
-/// et espaces compris), puis `$(FILE_NAME)` (nom de l'image sans extension) et le
-/// suffixe ; darktable ajoute l'extension.
-fn output_pattern(folder: &str, suffix: &str) -> PathBuf {
-    let name = format!("$(FILE_NAME){suffix}");
-    let path = crate::settings::expand_home(next_to(folder));
-    if path.is_absolute() {
-        path.join(name)
-    } else {
-        PathBuf::from("$(FILE_FOLDER)").join(path).join(name)
-    }
+/// Comme [`folder_of`], pour montrer un dossier : un gabarit sans valeur pour `image` donne
+/// le gabarit lui-même.
+pub fn folder_for(folder: &str, image: &Path) -> PathBuf {
+    folder_of(folder, image).unwrap_or_else(|_| PathBuf::from(folder_template(folder)))
+}
+
+/// Motif de sortie pour darktable dans le dossier `dir` déjà résolu : `$(FILE_NAME)`
+/// (nom de l'image sans extension) et le suffixe ; darktable ajoute l'extension et crée
+/// les sous-dossiers (vérifié le 19/10/2026, accents et espaces compris).
+fn output_pattern(dir: &Path, suffix: &str) -> PathBuf {
+    dir.join(format!("$(FILE_NAME){suffix}"))
 }
 
 /// Images à exporter parmi `images` : sans doublon, et sans le JPEG d'une paire RAW+JPEG
@@ -759,19 +794,38 @@ pub fn export(
         }
         Ok(())
     };
-    if !originals.is_empty() {
+    // Un lancement par dossier réel (#480 : le gabarit est résolu pour chaque image ;
+    // d'habitude un seul dossier) ; une image sans dossier (champ sans valeur) échoue seule.
+    let mut by_dir: Vec<(PathBuf, Vec<&PathBuf>)> = Vec::new();
+    for image in &originals {
+        match folder_of(folder, image) {
+            Ok(dir) => match by_dir.iter_mut().find(|(d, _)| *d == dir) {
+                Some((_, group)) => group.push(image),
+                None => by_dir.push((dir, vec![image])),
+            },
+            Err(e) => report.errors.push(failed_image(image, &e)),
+        }
+    }
+    for (dir, group) in by_dir {
         let mut cmd = dt.cli.command();
-        for image in &originals {
+        for image in group {
             cmd.arg("--import").arg(image);
         }
         // darktable ajoute `_01`… plutôt que d'écraser.
-        cmd.arg(output_pattern(folder, &profile.suffix));
+        cmd.arg(output_pattern(&dir, &profile.suffix));
         run(cmd, &mut report)?;
     }
     for clone in clones {
         // Nommé comme darktable nomme ses clones : `IMG_01-Web.jpg` ([`export_name`]).
         let name = export_name(&clone.path());
-        let out = folder_for(folder, &clone.photo).join(format!("{name}{}", profile.suffix));
+        let dir = match folder_of(folder, &clone.photo) {
+            Ok(dir) => dir,
+            Err(e) => {
+                report.errors.push(failed_image(&clone.path(), &e));
+                continue;
+            }
+        };
+        let out = dir.join(format!("{name}{}", profile.suffix));
         let mut cmd = dt.cli.command();
         cmd.arg(&clone.photo).arg(&clone.sidecar).arg(out);
         run(cmd, &mut report)?;
@@ -1957,7 +2011,7 @@ fn output_path(
     folder: &str,
     ext: &str,
 ) -> Result<PathBuf, DevelopError> {
-    let dir = folder_for(folder, image);
+    let dir = folder_of(folder, image).map_err(|e| DevelopError::Other(e.to_string()))?;
     std::fs::create_dir_all(&dir).map_err(|e| DevelopError::Other(e.to_string()))?;
     Ok(unique_path(
         &dir,
@@ -2609,29 +2663,40 @@ mod tests {
     }
 
     #[test]
-    fn the_folder_is_absolute_from_home_or_next_to_each_image() {
-        let image = Path::new("/photos/séance été/DSCF0001.RAF");
+    fn the_folder_is_a_template_with_the_source_folder() {
+        // #480 : `{source}` explicite ; un ancien dossier relatif vaut `{source}/…`.
+        let image = Path::new("/photos/2026-11-14_séance été/DSCF0001.RAF");
+        let source = Path::new("/photos/2026-11-14_séance été");
+        assert_eq!(folder_template("export"), "{source}/export");
+        assert_eq!(folder_template(""), "{source}");
+        assert_eq!(folder_template("."), "{source}");
+        assert_eq!(folder_template("{source}/web"), "{source}/web");
+        assert_eq!(folder_template("~/Web"), "~/Web");
+        assert_eq!(folder_for("export", image), source.join("export"));
+        assert_eq!(folder_for("{source}/export", image), source.join("export"));
+        assert_eq!(folder_for("", image), source);
         assert_eq!(
-            folder_for("export", image),
-            Path::new("/photos/séance été/export")
+            folder_for("{source}/{folder}", image),
+            source.join("séance_été"),
+            "champs de tri::naming"
         );
-        // À côté de la source : vide ou « . ».
-        assert_eq!(folder_for("", image), Path::new("/photos/séance été"));
-        assert_eq!(folder_for(".", image), Path::new("/photos/séance été"));
         assert_eq!(
-            output_pattern(".", ""),
-            Path::new("$(FILE_FOLDER)/$(FILE_NAME)")
+            output_pattern(&source.join("web"), "-web"),
+            source.join("web/$(FILE_NAME)-web")
         );
-        assert_eq!(
-            output_pattern("export/web", "-web"),
-            Path::new("$(FILE_FOLDER)/export/web/$(FILE_NAME)-web")
+        // Ni compteur, ni champ inconnu ; un champ sans valeur échoue pour l'image.
+        assert!(check_folder("{source}/{n}").is_err());
+        assert!(check_folder("~/{dat}").is_err());
+        assert!(
+            folder_of("~/{date}", image).is_err(),
+            "pas de date sans le fichier"
         );
         #[cfg(not(windows))]
         {
             assert_eq!(folder_for("/exports", image), Path::new("/exports"));
             assert_eq!(
-                output_pattern("/exports", ""),
-                Path::new("/exports/$(FILE_NAME)")
+                folder_for("/exports/{folder}", image),
+                Path::new("/exports/séance_été")
             );
             let home = crate::settings::expand_home("~");
             assert_eq!(folder_for("~/Exports", image), home.join("Exports"));
@@ -2643,7 +2708,10 @@ mod tests {
         }
         let s: S = toml::from_str("[export.profiles.web]\nfolder = \"~/Web\"\n").unwrap();
         assert_eq!(s.export.profiles.get("web").unwrap().folder, "~/Web");
-        assert_eq!(s.export.profiles.get("edit").unwrap().folder, "export");
+        assert_eq!(
+            s.export.profiles.get("edit").unwrap().folder,
+            "{source}/export"
+        );
     }
 
     #[test]

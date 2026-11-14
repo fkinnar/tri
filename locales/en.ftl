@@ -94,6 +94,7 @@ history-notes-one = { $what }: { $name }
 history-notes-many = { $what }: { $n } images
 history-rename = { $from } renamed to { $to }
 naming-unclosed = a { "{" } is never closed
+naming-not-here = { "{" }{ $field }{ "}" } makes no sense here
 naming-unknown = unknown field { "{" }{ $field }{ "}" } (fields: { $fields })
 naming-width = invalid width { "{" }{ $field }{ "}" } (only the counter has one: { "{" }n:3{ "}" } = 001)
 naming-missing = no { $field ->

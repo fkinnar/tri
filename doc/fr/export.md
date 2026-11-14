@@ -131,17 +131,25 @@ puis ceux de l'utilisateur par identifiant.
 ### Dossier du profil
 
 Idée de l'utilisateur (19/10/2026) : le dossier fait partie du profil (« Web » dans
-`~/Web`, « Retouche » à côté des images…), plutôt que retenu d'un export à l'autre. Règle
-de `folder` (`folder_for`, `output_pattern`) :
+`~/Web`, « Retouche » à côté des images…), plutôt que retenu d'un export à l'autre. Depuis
+le 14/11/2026 (#480, décision de l'utilisateur), `folder` est un **gabarit**
+(`folder_template`, `folder_of`), plus rien d'implicite :
 
-- `/…` : absolu ;
-- `~/…` : depuis le dossier personnel ;
-- sinon **relatif au dossier de chaque image** : `"export"` (défaut) crée un sous-dossier
-  à côté des images ; `""` ou `"."` écrit **à côté de la source**. Passé à darktable comme
-  `$(FILE_FOLDER)/<dossier>/$(FILE_NAME)` : une sélection venue de plusieurs dossiers
-  s'exporte dans chacun.
-- Les variables de darktable sont permises (`$(YEAR)`…, voir la documentation de
-  darktable), passées telles quelles.
+- `{source}` : le dossier de chaque image — `{source}/export` (défaut) est un
+  sous-dossier à côté des images, `{source}` écrit **à côté de la source** ; une
+  sélection venue de plusieurs dossiers s'exporte dans chacun ;
+- `/…` : absolu ; `~/…` : depuis le dossier personnel ;
+- les champs du renommage par lot (`tri::naming`) : `{date}`, `{time}`, `{name}`,
+  `{folder}` (nom du dossier sans la date en tête), `{camera}`, résolus pour chaque image
+  (date et appareil lus dans le fichier seulement s'ils sont cités) ;
+  `~/Images/Export/{date}_{folder}`. `{n}` n'a pas de sens pour un dossier et est refusé,
+  comme un champ inconnu (`check_folder`) ;
+- un **ancien dossier relatif** garde son sens : `export` = `{source}/export`, `""` ou
+  `"."` = `{source}` ;
+- darktable est lancé une fois par dossier réel (`$(FILE_NAME)` et le suffixe dedans) ;
+  une image dont le gabarit n'a pas de valeur (pas de date de prise de vue) échoue seule,
+  au rapport ;
+- les variables de darktable (`$(YEAR)`…) passent telles quelles.
 
 Vérifié le 19/10/2026 : sous-dossiers créés par darktable, accents et espaces compris
 (`séance été/export/…`), et `"."` à côté du RAF.
@@ -386,13 +394,13 @@ Les préréglages de recadrage se créent de la même façon (voir `versions.md`
     20/10/2026). Le dernier choisi est retenu pendant la session.
   - **Dossier** : le chemin complet, dans le champ lui-même (retour du 14/11/2026 :
     « export » avec une ligne « Destination » dessous ne disait pas clairement où ça
-    allait). Il suit le choix du préréglage : le dernier dossier de ce préréglage s'il a
-    été tapé ou choisi par Parcourir (retenu par préréglage d'une session à l'autre,
-    `export_folders` dans `gui-state.toml`), sinon le dossier du préréglage résolu pour
-    la première image. Laissé au dossier du préréglage, un dossier relatif (`export`) va
-    toujours à côté de **chaque** image, même sur plusieurs dossiers ; toute autre valeur
-    sert telle quelle et est retenue pour ce préréglage (remise au dossier du
-    préréglage : oubliée). Complétion par Tab, Parcourir.
+    allait). Il montre le **gabarit** tel quel (#480 : des images de plusieurs dossiers
+    n'ont pas un seul dossier réel), ses champs au survol, une erreur en rouge dessous
+    (`{n}`, champ inconnu) avec Exporter grisé. Il suit le choix du préréglage : le
+    dernier dossier de ce préréglage s'il a été tapé ou choisi par Parcourir (retenu par
+    préréglage d'une session à l'autre, `export_folders` dans `gui-state.toml`), sinon
+    celui du préréglage (forme explicite, `{source}/export`) ; remis à celui du
+    préréglage : oublié. Complétion par Tab, Parcourir.
   - **Export** : Entrée. Il se fait en fond, avec une barre de progression dans la barre
     d'état (bouton × pour l'arrêter), puis un bilan. Le bilan s'affiche aussi **au milieu
     de l'écran** (#381, 09/11/2026 : la fin d'un export passait inaperçue dans la barre

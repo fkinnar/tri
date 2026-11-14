@@ -33328,9 +33328,9 @@ mod tests {
     }
 
     #[test]
-    fn the_export_folder_is_shown_in_full_and_remembered_per_preset() {
-        // Retour du 14/11/2026 : le champ montre le chemin complet (plus de ligne
-        // « Destination » dessous) ; un dossier choisi est retenu pour son préréglage.
+    fn the_export_folder_is_a_template_remembered_per_preset() {
+        // Retour du 14/11/2026 : tout est dans le champ (plus de ligne « Destination »
+        // dessous), un gabarit (#480) ; un dossier choisi est retenu pour son préréglage.
         let (mut h, dir) = harness();
         h.run_steps(3);
         let dialog = |h: &Harness<'static, TriApp>| -> String {
@@ -33340,13 +33340,8 @@ mod tests {
             }
         };
         press(&mut h, Key::E, Modifiers::CTRL);
-        let shown = dialog(&h);
-        let photos = dir.path().join("photos");
-        assert_eq!(
-            tri::settings::expand_home(&shown),
-            photos.join("export"),
-            "« export » du préréglage, en chemin complet"
-        );
+        // Le gabarit du préréglage, explicite (#480) : `{source}/export`.
+        assert_eq!(dialog(&h), "{source}/export");
         assert!(h.query_by_label_contains("Destination").is_none());
         // Un autre dossier : l'export y va, et il est retenu.
         let elsewhere = dir.path().join("ailleurs");
@@ -33367,6 +33362,23 @@ mod tests {
         );
         press(&mut h, Key::E, Modifiers::CTRL);
         assert_eq!(dialog(&h), elsewhere.to_string_lossy(), "retenu");
+        // Un compteur n'a pas de sens dans un dossier : dit en rouge.
+        if let Some(crate::files::FileDialog::Export(d)) = &mut h.state_mut().file_dialog {
+            d.type_folder("{source}/{n}");
+        }
+        h.run_steps(2);
+        assert!(h.query_by_label_contains("n'a pas de sens ici").is_some());
+        // Un gabarit avec des champs : résolu pour l'image.
+        let template = format!("{}/{{folder}}", dir.path().join("par").display());
+        if let Some(crate::files::FileDialog::Export(d)) = &mut h.state_mut().file_dialog {
+            d.type_folder(&template);
+        }
+        h.run_steps(1);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.export_job.is_none() && app.file_dialog.is_none()
+        });
+        assert!(dir.path().join("par/photos/img0.jpg").is_file());
     }
 
     #[test]
