@@ -70,8 +70,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   étoiles, acceptées, rejetées, avec un libellé couleur (n'importe lequel, ou une ligne
   par couleur présente, retour du 12/11/2026) : la règle des notes ; conflits : le filtre
   « en conflit ».
-  Pas cliquables : les paires (pas de filtre avant le regroupement, #392) et les
-  logiciels inactifs. Pas encore de Ctrl+clic pour combiner (filtres complexes, #138).
+  **Dossier regroupé** (#392, 14/11/2026) : « Photos » = paires + RAW seuls + JPEG seuls,
+  chacun une ligne et une case du filtre à trois cases ; sous « Développements », aussi
+  « JPEG boîtier » (le JPEG des paires) et « LibRaw ». Les développements montrent deux
+  comptes, « photos montrées (développements) », la bulle les explique ; LibRaw « RAW que
+  seul LibRaw développe (tous les RAW) », son clic montre ce qui reste à développer
+  (`libraw_only`). Pas cliquables : les paires d'un dossier séparé (la bulle dit comment
+  regrouper) et les logiciels inactifs. Pas encore de Ctrl+clic pour combiner (filtres complexes, #138).
   Lus sur le disque, en fond (13/11/2026, `summary::Jobs`) : **avec des versions**
   (`tri::versions::with_versions`, une lecture de sidecar par photo ; recompté quand une
   version change, `versions_epoch`), un filtre comme les autres (`versions_only`) ; la

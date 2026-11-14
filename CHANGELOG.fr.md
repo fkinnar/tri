@@ -4,6 +4,12 @@
 
 ## Non publié
 
+- **Le résumé du dossier compte des photos** (#468) : dans un dossier regroupé, une paire
+  est une photo (472 fichiers faisaient 236 photos, les notes étaient comptées deux
+  fois) ; « Photos » = paires + RAW seuls + JPEG seuls, chacun un filtre ; les
+  développements montrent les photos montrées et les développements, « 2 (3) » ;
+  dessous, « JPEG boîtier » et « LibRaw » (les RAW que seul LibRaw développe, sur tous
+  les RAW ; un clic montre ce qui reste à développer).
 - **Paires regroupées : le vrai JPEG, et une couverture par défaut** (#467, ferme n° 391
   et n° 392) : en rendu JPEG boîtier, une paire regroupée montre le fichier JPEG lui-même,
   en vraie résolution (plein écran et 1:1 compris), plutôt que l'aperçu embarqué du RAW ;
