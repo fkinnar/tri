@@ -65,7 +65,9 @@ everyone's needs, not just his.
   to choose between "open" and "eject" made no sense): checkboxes, defaults in
   `[offload]`:
   - **RAW only** (`raw_only`, off): flat images (camera JPEGs) stay on the card
-    (`Report::left`); they do not count as "already offloaded" afterwards;
+    (`Report::left`); they do not count as "already offloaded" afterwards. Exclusive with
+    "Group RAW and JPEG" (#469): both checkboxes stay in place, one greyed while the
+    other is checked, a tooltip says why;
   - **open the folder when done** (`open_after`, on);
   - **eject the card when done** (`eject_after`, on), unless the copy was interrupted;
   - **delete copied and verified files from the card** (`delete_after`, off):
@@ -150,7 +152,7 @@ grouping, as when a folder is opened.
   other files; `Plan::to_copy`, `Plan::bytes`;
 - `suggest_folder(&plan, &settings)`, `destination(racine, nom)`;
 - `run(&plan, destination, &réglages, &mut historique, &annulation, progression,
-  copie) -> Report` (`copie`: each copy as soon as it is made, for the previews) (copied, skipped, errors, interrupted, duration); `Progress`: files (without those left on the card) and bytes (a skipped file, already offloaded or already there, counts at once: the bar follows the files);
+  copie) -> Report` (`copie`: each copy as soon as it is made, for the previews) (copied, skipped, errors, interrupted, duration); `Progress`: files (without those left on the card) and bytes (a skipped file, already offloaded or already there, counts at once: the bar follows the files), and the current step (`Phase`: preparing, copying, writing to the disk `sync_all`, verifying; #470, to tell a slow copy from a stuck one). The dialog shows the step, the file, the throughput, and "Nothing has moved for n s" after 3 s without progress;
 - `delete_sources(&report)`.
 
 ## Command line
