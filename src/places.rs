@@ -133,6 +133,12 @@ pub struct PlaceSettings {
     /// temps qu'un programme lâche ses fichiers ; au-delà, l'éjection est refusée avec la
     /// raison (issue n° 192).
     pub eject_lock_ms: u64,
+    /// Éjection refusée parce que le volume est occupé : nouveaux essais, le temps que des
+    /// calculs encore en cours sur ses fichiers se terminent (14/11/2026 : tri lui-même
+    /// tenait une clé USB juste après y avoir déplacé un dossier). 0 : un seul essai.
+    pub eject_retries: u32,
+    /// Attente entre deux essais (ms).
+    pub eject_retry_ms: u64,
 }
 
 impl Default for PlaceSettings {
@@ -144,6 +150,8 @@ impl Default for PlaceSettings {
             watch_ms: 2000,
             auto_mount: true,
             eject_lock_ms: 5000,
+            eject_retries: 5,
+            eject_retry_ms: 1000,
         }
     }
 }
@@ -772,6 +780,29 @@ impl Drop for Monitor {
 /// de refus (disque interne, fichier ouvert sur le volume), le message du système est
 /// renvoyé.
 pub fn eject(path: &Path, settings: &PlaceSettings) -> Result<(), String> {
+    let mut tries = 0;
+    loop {
+        match eject_once(path, settings) {
+            Err(e) if is_busy(&e) && tries < settings.eject_retries => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(settings.eject_retry_ms));
+            }
+            result => return result,
+        }
+    }
+}
+
+/// Vrai si le refus d'éjecter dit que le volume est occupé (fichiers ouverts) : `udisksctl`
+/// (« target is busy », `DeviceBusy`), `umount`, `diskutil` (« dissented »), Windows.
+fn is_busy(message: &str) -> bool {
+    let m = message.to_lowercase();
+    ["busy", "dissent", "in use", "being used"]
+        .iter()
+        .any(|w| m.contains(w))
+}
+
+/// Un essai d'éjection ([`eject`]).
+fn eject_once(path: &Path, settings: &PlaceSettings) -> Result<(), String> {
     // Seul Windows a un réglage d'éjection.
     #[cfg(not(windows))]
     let _ = settings;
@@ -1772,6 +1803,17 @@ impl Tree {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_busy_volume_is_told_apart_from_other_refusals() {
+        assert!(is_busy(
+            "udisksctl : Error unmounting /dev/sdb1: GDBus.Error:org.freedesktop.UDisks2.Error.DeviceBusy: Error unmounting /dev/sdb1: target is busy"
+        ));
+        assert!(is_busy(
+            "Volume CARTE on disk4s1 failed to unmount: dissented by PID 42"
+        ));
+        assert!(!is_busy("Error looking up object for device /dev/sdz1"));
+    }
 
     fn env<'a>(vars: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<OsString> + 'a {
         move |name| {

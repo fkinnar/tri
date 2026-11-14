@@ -8,6 +8,10 @@
   exposed, sharp, ratings…) the JPEG of a grouped pair follows its RAW; judged on its
   own while the analyses arrived, it left the filter, the pair's thumbnail switched
   between the JPEG and the RAW and the grid flickered.
+- **Ejecting waits for tri's own work** (#473): a USB stick tri was still busy with (a
+  folder just moved there, renders running) was refused "target is busy"; ejecting now
+  stops the development batch on it and retries a few times while the running
+  computations finish (`[places] eject_retries`, `eject_retry_ms`).
 - **No more "Enter / Esc" hint** (#472) next to the buttons of the export, rename,
   copy / move and delete dialogs: it goes without saying.
 - **Offloading says what it is doing** (#471, #469, #470): the progress shows the step

@@ -8,6 +8,11 @@
   contenu (bien exposées, nettes, notes…), le JPEG d'une paire regroupée suit son RAW ;
   jugé seul pendant l'arrivée des analyses, il sortait du filtre, la vignette de la
   paire basculait du JPEG au RAW et la grille clignotait.
+- **L'éjection attend la fin du travail de tri** (#473) : une clé USB sur laquelle tri
+  travaillait encore (un dossier qu'on venait d'y déplacer, des rendus en cours) était
+  refusée, « target is busy » ; l'éjection arrête maintenant le lot de développements
+  qui la concerne et réessaie quelques fois, le temps que les calculs en cours se
+  terminent (`[places] eject_retries`, `eject_retry_ms`).
 - **Plus d'aide « Entrée / Échap »** (#472) à côté des boutons des boîtes d'export,
   de renommage, de copie / déplacement et de suppression : ça coule de source.
 - **Le déchargement dit ce qu'il fait** (#471, #469, #470) : l'avancement montre

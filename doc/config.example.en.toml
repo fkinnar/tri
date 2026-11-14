@@ -153,6 +153,10 @@ auto_mount = true
 # Windows: longest wait for a volume's lock before ejecting it (ms), while a program lets
 # go of its files; beyond, the eject is refused with the reason.
 eject_lock_ms = 5000
+# Ejecting refused because the volume is busy (a computation still running on its files):
+# more tries, and the wait between two (ms). 0: a single try.
+eject_retries = 5
+eject_retry_ms = 1000
 
 [develop]
 # See your developments in tri (shown render, <core.view.source>: camera render, RAW
