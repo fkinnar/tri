@@ -804,6 +804,24 @@ rename-title = Renommer « { $name } »
 rename-becomes = { $from } devient { $to }
 rename-copied = { $from } copié en { $to } (partagé avec la paire)
 rename-button = Renommer
+batch-rename-title = Renommer { $n } photos
+batch-rename-template = Gabarit
+batch-rename-start = Premier numéro
+batch-rename-fields = Champs :
+batch-rename-field = { $field ->
+    [date] Date de prise de vue (2026-11-14)
+    [time] Heure de prise de vue (153012)
+    [name] Nom d'origine, sans extension
+    [n] Compteur, dans l'ordre de la grille ; { "{" }n:3{ "}" } = 001
+    [folder] Nom du dossier, sans la date en tête
+   *[camera] Modèle de l'appareil
+}
+batch-rename-reading = Lecture des dates et des appareils…
+batch-rename-row = { $from } devient { $to }
+batch-rename-others = { $n ->
+    [one] et 1 autre fichier qui suit (paire, sidecar)
+   *[other] et { $n } autres fichiers qui suivent (paires, sidecars)
+}
 export-title = { $n ->
     [one] Exporter 1 image
    *[other] Exporter { $n } images
@@ -1392,7 +1410,6 @@ files-actions-off = Actions sur les fichiers désactivées : cocher « Actions s
 rating-dialog-selection = { $n } images sélectionnées
 rating-dialog-all = Toute la sélection ({ $n } images)
 rating-dialog-all-tip = Notes et actions sur toutes les images sélectionnées, comme au clavier ; décochée : seulement l'image du clic droit.
-rating-dialog-rename-one = Renommer : une image à la fois (décochez « Toute la sélection »)
 files-library-warning = tri agit sur les fichiers eux-mêmes : un logiciel qui les range dans sa bibliothèque ou son catalogue (darktable, Lightroom, Capture One…) ne les y retrouvera plus.
 slider-lenient = plus souple
 slider-strict = plus strict

@@ -58,6 +58,7 @@ mod offload;
 mod pairs_dialog;
 mod palette;
 mod path_field;
+mod rename_batch;
 mod reset_dialog;
 mod settings;
 mod settings_window;

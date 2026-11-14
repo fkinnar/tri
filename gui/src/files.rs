@@ -20,6 +20,8 @@ pub enum FileDialog {
         /// Première image : le champ prend le focus, nom sélectionné.
         fresh: bool,
     },
+    /// Renommer plusieurs photos d'un coup, par un gabarit (#439).
+    RenameBatch(Box<crate::rename_batch::BatchDialog>),
     /// Confirmer la suppression de `images` (`plan` : avec leurs paires si `pairs`, case
     /// montrée quand `has_pairs` ; `chosen` : cases des développements, quand il y en a
     /// plusieurs).
@@ -316,6 +318,7 @@ impl FileDialog {
     ) -> Outcome {
         match self {
             FileDialog::Transfer(t) => t.show(ctx, settings, data),
+            FileDialog::RenameBatch(b) => b.show(ctx, settings),
             FileDialog::Export(e) => match e.show(ctx) {
                 crate::export::Outcome::Open => Outcome::Open,
                 crate::export::Outcome::Cancelled => Outcome::Cancelled,
@@ -670,7 +673,7 @@ fn deleting(
 /// Rappel, dans une boîte qui renomme, déplace ou supprime (actions autorisées par
 /// `[files] allow_actions`) : la bibliothèque d'un logiciel de développement ne
 /// retrouvera plus ces fichiers (demandé le 30/10/2026).
-fn library_warning(ui: &mut egui::Ui) {
+pub(crate) fn library_warning(ui: &mut egui::Ui) {
     ui.add_space(4.0);
     let text = egui::RichText::new(t!("files-library-warning")).color(ui.visuals().warn_fg_color);
     ui.add(egui::Label::new(text).wrap());

@@ -47,6 +47,8 @@ pub struct FileSettings {
     /// Paires RAW+JPEG regroupées en une photo (#392) dans un dossier sans décision :
     /// demander, séparées ou regroupées ([`crate::pairs`]).
     pub group_pairs: crate::pairs::Grouping,
+    /// Renommage par lot (#439) : gabarit proposé la première fois ([`crate::naming`]).
+    pub rename_template: String,
 }
 
 impl Default for FileSettings {
@@ -58,6 +60,7 @@ impl Default for FileSettings {
             recent: 9,
             allow_actions: false,
             group_pairs: crate::pairs::Grouping::Ask,
+            rename_template: "{date}_{folder}_{n:3}".into(),
         }
     }
 }
@@ -281,6 +284,137 @@ pub fn plan_rename(image: &Path, new_stem: &str, settings: &FileSettings) -> Res
     }
     plan.moves.retain(|(from, to)| from != to);
     Ok(plan)
+}
+
+/// Les photos de `images` (dans leur ordre) : un développement compte pour sa photo, une
+/// paire RAW+JPEG une seule fois (le premier de ses fichiers cité).
+pub fn photos(images: &[PathBuf]) -> Vec<PathBuf> {
+    let mut seen = HashSet::new();
+    images
+        .iter()
+        .map(|i| media::source(i).into_owned())
+        .filter(|p| {
+            let stem = p
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            seen.insert((p.parent().map(Path::to_path_buf), stem))
+        })
+        .collect()
+}
+
+/// Ce qui empêche de renommer une photo du lot.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BatchProblem {
+    /// Le gabarit ne donne pas de nom pour elle.
+    Template(crate::naming::TemplateError),
+    /// Nom invalide (vide, séparateur…).
+    Invalid,
+    /// Un fichier de ce nom existe déjà.
+    Taken(PathBuf),
+    /// Une autre photo du lot recevrait le même nom.
+    Twice,
+}
+
+impl fmt::Display for BatchProblem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BatchProblem::Template(e) => e.fmt(f),
+            BatchProblem::Invalid => f.write_str(&crate::t!("batch-rename-invalid")),
+            BatchProblem::Taken(path) => f.write_str(&crate::t!(
+                "batch-rename-taken",
+                name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            )),
+            BatchProblem::Twice => f.write_str(&crate::t!("batch-rename-twice")),
+        }
+    }
+}
+
+/// Une photo du lot : son nouveau nom (sans extension), ou ce qui l'empêche.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BatchRow {
+    /// La photo (un de ses fichiers).
+    pub image: PathBuf,
+    /// Nouveau nom sans extension.
+    pub stem: Option<String>,
+    /// Ce qui empêche de la renommer.
+    pub problem: Option<BatchProblem>,
+}
+
+/// Renommage par lot prévu ([`plan_batch`]) : une ligne par photo, et le renommage de
+/// toutes si aucune ne pose problème.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct BatchRename {
+    /// Les photos, dans l'ordre du lot.
+    pub rows: Vec<BatchRow>,
+    /// Tous les fichiers (paires, sidecars) : `None` si une photo pose problème (rien
+    /// n'est renommé à moitié).
+    pub plan: Option<Rename>,
+}
+
+/// Prépare le renommage des `photos` ([`photos`], dans l'ordre de la grille) en `stems`
+/// (un nom sans extension, ou l'erreur du gabarit, par photo). Chaque photo suit les
+/// règles de [`plan_rename`] (paire, sidecars, clones) ; un nom déjà pris, ou donné à deux
+/// photos, est signalé sur sa ligne et bloque tout le lot.
+pub fn plan_batch(
+    photos: &[PathBuf],
+    stems: Vec<std::result::Result<String, crate::naming::TemplateError>>,
+    settings: &FileSettings,
+) -> BatchRename {
+    let mut rows = Vec::new();
+    let mut plans = Vec::new();
+    for (image, stem) in photos.iter().zip(stems) {
+        let (stem, problem, plan) = match stem {
+            Err(e) => (None, Some(BatchProblem::Template(e)), None),
+            Ok(stem) => match plan_rename(image, &stem, settings) {
+                Ok(plan) => (Some(stem), None, Some(plan)),
+                Err(FileError::Exists(path)) => (Some(stem), Some(BatchProblem::Taken(path)), None),
+                Err(_) => (Some(stem), Some(BatchProblem::Invalid), None),
+            },
+        };
+        rows.push(BatchRow {
+            image: image.clone(),
+            stem,
+            problem,
+        });
+        plans.push(plan);
+    }
+    // Deux photos vers le même fichier (le disque ne le sait pas encore). Comparé sans
+    // la casse : macOS et Windows ne distinguent pas `A.RAF` de `a.raf`.
+    let mut owner: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut twice = HashSet::new();
+    for (i, plan) in plans.iter().enumerate() {
+        let Some(plan) = plan else { continue };
+        for (_, to) in plan.moves.iter().chain(&plan.copies) {
+            let key = to.to_string_lossy().to_lowercase();
+            match owner.get(&key) {
+                Some(&other) if other != i => {
+                    twice.insert(i);
+                    twice.insert(other);
+                }
+                _ => {
+                    owner.insert(key, i);
+                }
+            }
+        }
+    }
+    for i in twice {
+        rows[i].problem = Some(BatchProblem::Twice);
+    }
+    let plan = rows.iter().all(|r| r.problem.is_none()).then(|| {
+        plans
+            .into_iter()
+            .flatten()
+            .fold(Rename::default(), |mut all, p| {
+                all.moves.extend(p.moves);
+                all.copies.extend(p.copies);
+                all
+            })
+    });
+    BatchRename { rows, plan }
 }
 
 /// Erreur si `name` ne peut pas être un nom de fichier ou de dossier : vide, « . », « .. »,
@@ -1536,6 +1670,86 @@ mod tests {
             .iter()
             .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
             .collect()
+    }
+
+    #[test]
+    fn a_batch_renames_every_photo_or_none() {
+        use crate::naming::{Fields, render};
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path().join("2026-11-14_Bleu");
+        std::fs::create_dir(&d).unwrap();
+        touch(
+            &d,
+            &[
+                "A.RAF",
+                "A.JPG",
+                "A.RAF.xmp",
+                "B.RAF",
+                "C.JPG",
+                "Bleu_9.JPG",
+            ],
+        );
+        let settings = FileSettings::default();
+        // La paire compte une fois, dans l'ordre donné (celui de la grille).
+        let photos = photos(&[
+            d.join("B.RAF"),
+            d.join("A.JPG"),
+            d.join("A.RAF"),
+            d.join("C.JPG"),
+        ]);
+        assert_eq!(names(&photos), ["B.RAF", "A.JPG", "C.JPG"]);
+        let batch = |template: &str, start: usize| {
+            let stems = photos
+                .iter()
+                .enumerate()
+                .map(|(i, p)| render(template, &Fields::basic(p), start + i))
+                .collect();
+            plan_batch(&photos, stems, &settings)
+        };
+        // Un nom déjà pris (Bleu_9.JPG) : signalé sur sa ligne, rien à renommer.
+        let taken = batch("{folder}_{n}", 7);
+        assert_eq!(
+            taken.rows[2].problem,
+            Some(BatchProblem::Taken(d.join("Bleu_9.JPG")))
+        );
+        assert!(taken.plan.is_none());
+        // Deux photos vers le même nom : les deux signalées.
+        let twice = batch("{folder}", 1);
+        assert!(
+            twice
+                .rows
+                .iter()
+                .all(|r| r.problem == Some(BatchProblem::Twice)),
+            "{twice:?}"
+        );
+        // Champ sans valeur (pas de date sans lire le fichier).
+        let missing = batch("{date}", 1);
+        assert!(matches!(
+            missing.rows[0].problem,
+            Some(BatchProblem::Template(_))
+        ));
+        // Tout va bien : paire et sidecar suivent, en une fois.
+        let ok = batch("{folder}_{n:2}", 1);
+        let plan = ok.plan.expect("renommable");
+        rename(&plan).unwrap();
+        let mut left: Vec<String> = std::fs::read_dir(&d)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        left.sort();
+        assert_eq!(
+            left,
+            [
+                "Bleu_01.RAF",
+                "Bleu_02.JPG",
+                "Bleu_02.RAF",
+                "Bleu_02.RAF.xmp",
+                "Bleu_03.JPG",
+                "Bleu_9.JPG"
+            ]
+        );
+        let step = crate::history::Step::Rename(plan);
+        assert_eq!(step.describe(), "3 photos renommées");
     }
 
     #[test]
