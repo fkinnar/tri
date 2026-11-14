@@ -116,6 +116,20 @@ each pixel goes from the working space to linear light with sRGB primaries
 is adjusted there, then goes back; a balance, a mixer or an eyedropper reading gives the
 same result as before colour management.
 
+## RAW+JPEG pairs: each file keeps its own (#481, 2026-11-14)
+
+A RAW and its camera JPEG are two different images: +1 EV on the RAW's sensor data would
+clip the JPEG, already developed by the camera. Each file keeps its own settings:
+
+- in the sidecar of each file (`tri:Adjust`); when the JPEG shares the RAW's sidecar
+  (Adobe convention, `IMG.xmp`), its own go under `tri:AdjustJpeg` (`adjust::field`), so
+  neither overwrites the other (a lone JPEG keeps `tri:Adjust`);
+- in a grouped folder, the Adjust section acts on the file shown (the JPEG under the
+  "Camera JPEG" render, the RAW under LibRaw); syncing over a selection, "apply to the
+  selection" and paste never cross from a RAW to a grouped JPEG or back
+  (`adjust_same_side`): from a RAW, the other RAWs and photos; from a grouped JPEG, the
+  other grouped JPEGs.
+
 ## Measures and harmonisation
 
 `measure` gives, on the image as shown (adjustments included):
