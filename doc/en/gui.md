@@ -1299,6 +1299,27 @@ the same way). On a development under review, `r` stays before / after (camera J
 "Review the developments" stays separate (navigation), greyed out in camera JPEG. Gone:
 the per-photo rotation (`Source::next`), the "Development of each photo" list.
 
+**Full screen, one stable list** (feedback of 2026-11-14, #465): on a development the
+list used to become "Before / after", under the pointer while stepping through the
+images. It now keeps its title and choices (without "Cover", a grid choice); one entry
+per **development** of the photo ("Darktable", "Darktable · clone 1", active software),
+with the time of its sidecar (`dev-modified-format`) and a **bookmark** in front; bookmarks
+also on "Camera JPEG" and "RAW LibRaw": a photo's cover is **one** key (`cover_keys`,
+`set_cover`): a development, the JPEG (of a grouped pair, the flat image itself, else
+`IMG@camera.RAF` for the embedded JPEG) or the photo (its LibRaw render); the filled
+bookmark is the effective cover (`effective_cover`: chosen, else the latest); a click
+chooses and shows it, clicking again removes it; list closed, a filled bookmark (not
+clickable, text colour) between the name and its detail ("RAW ▮ LibRaw") when the render
+on screen is the cover; Shift+Enter on a
+development keeps it on screen; neither star nor tick, taken by the
+ratings. A development of the grouped JPEG is marked "· JPEG". Changing the render
+forgets the development viewed in full screen (`dev_shown`). Then the software it has none of
+(`view_render_choices`); its value is the render **on
+screen** (`TriApp::displayed_render`); choosing one
+(`TriApp::show_render`) goes to the member of the photo's stack that has it (its main
+development, the JPEG of a grouped pair), takes the "before" of a development for the
+camera JPEG, else changes the shown render of every photo.
+
 ### Loupe from the keyboard (2026-11-06)
 
 The user's idea: with the loupe key held, the navigation keys of the chosen set (arrows,

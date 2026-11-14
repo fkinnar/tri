@@ -1227,6 +1227,36 @@ pub fn shown_name(path: &Path) -> String {
     }
 }
 
+/// Clé du JPEG boîtier d'une photo comme couverture (retour du 14/11/2026) : un chemin
+/// propre, jamais sur le disque, à côté de ceux des développements (`IMG@camera.RAF`).
+fn camera_key(photo: &Path) -> PathBuf {
+    let stem = photo
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let mut name = format!("{stem}@camera");
+    if let Some(extension) = photo.extension() {
+        name.push('.');
+        name.push_str(&extension.to_string_lossy());
+    }
+    photo.with_file_name(name)
+}
+
+/// Vrai si `key` est une clé [`camera_key`].
+fn is_camera_key(key: &Path) -> bool {
+    key.file_stem()
+        .is_some_and(|s| s.to_string_lossy().ends_with("@camera"))
+}
+
+/// Une entrée de la liste « Rendu affiché » du plein écran : un rendu (pour toutes les
+/// photos, ou celui de la photo), ou un développement précis de la photo (index dans la
+/// liste des images).
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ViewRender {
+    Render(crate::grid_render::GridRender),
+    Development(usize),
+}
+
 /// Nom lisible d'un développement (« Darktable · clone 1 »), ou de la photo (son nom).
 /// Photo de la pile de développements de `path` : la photo d'un développement, puis le
 /// RAW si c'est le JPEG d'une paire regroupée (`camera` : JPEG → RAW, #392) ; un
@@ -3018,46 +3048,367 @@ impl TriApp {
     /// n'y avait pas de sens) : le rendu affiché (sur un développement, avant / après), la
     /// revue des développements, les piles et les actions sur les fichiers.
     fn view_settings(&mut self, ui: &mut Ui) {
-        let Some(file) = self.files.get(self.selected).cloned() else {
+        if self.files.get(self.selected).is_none() {
             return;
-        };
-        let tip = self.action_tip(Action::ToggleSource);
-        if let Some(development) = tri::developments::get(&file.path) {
-            // Un développement : avant / après (`r`), son rendu ou le JPEG boîtier.
-            self.subheading(ui, t!("panel-view-source"))
-                .on_hover_text(&tip);
-            // Une liste comme pour une photo (retour du 05/11/2026 : une case ici, une
-            // liste ailleurs) : le développement, ou le JPEG boîtier (« avant »).
-            use crate::grid_render::GridRender;
-            let shown = GridRender::Engine(development.engine);
-            let choices = [GridRender::Embedded, shown];
-            let mut choice = if self.dev_before {
-                GridRender::Embedded
-            } else {
-                shown
-            };
-            let weak = ui.visuals().weak_text_color();
-            if self.side_combo(
-                ui,
-                "view_source_development",
-                &mut choice,
-                &choices,
-                |c| c.label(weak),
-                Some(tip),
-            ) {
-                self.dev_before = choice == GridRender::Embedded;
-                self.request_zoom();
-            }
-        } else {
-            self.render_heading(ui);
-            self.control(ui, Control::Render, Host::Panel);
         }
+        // Une seule liste, toujours la même (retour du 14/11/2026 : « Rendu affiché » sur
+        // une photo devenait « Avant / après » sur un développement, sous la souris en
+        // passant d'une image à l'autre) : elle dit le rendu à l'écran et en montre un
+        // autre de la même photo.
+        self.render_heading(ui);
+        self.view_render_control(ui);
         if !self.developers.is_empty() {
             self.view_developments(ui);
         }
         self.subheading(ui, t!("panel-grid-stacks"));
         self.control(ui, Control::Stacks, Host::Panel);
         self.file_actions_switch(ui);
+    }
+
+    /// Rendu à l'écran pour `file`, en plein écran : le développement montré (ou le JPEG
+    /// boîtier en « avant »), le JPEG d'une paire ou une image plate, sinon la source de
+    /// la photo.
+    fn displayed_render(&self, file: &MediaFile) -> crate::grid_render::GridRender {
+        use crate::grid_render::GridRender;
+        if let Some(development) = tri::developments::get(&file.path) {
+            return if self.dev_before {
+                GridRender::Embedded
+            } else {
+                GridRender::Engine(development.engine)
+            };
+        }
+        if file.kind == MediaKind::Flat {
+            return GridRender::Embedded;
+        }
+        match self.source_for(file) {
+            Source::Embedded => GridRender::Embedded,
+            Source::Raw => GridRender::LibRaw,
+            Source::Developed => match self.developed_level(&file.path) {
+                Level::Developed(engine) => GridRender::Engine(engine),
+                _ => GridRender::LibRaw,
+            },
+        }
+    }
+
+    /// Liste « Rendu affiché » du plein écran : les rendus d'une photo (JPEG boîtier,
+    /// logiciels, LibRaw ; la couverture est un choix de grille). Choisir un rendu qu'a la
+    /// pile de la photo (son développement principal, le JPEG d'une paire regroupée) y
+    /// va ; sinon il devient le rendu affiché de toutes les photos, comme avant.
+    fn view_render_control(&mut self, ui: &mut Ui) {
+        let Some(file) = self.files.get(self.selected).cloned() else {
+            return;
+        };
+        let choices = self.view_render_choices();
+        let shown = self.view_render_shown(&file, &choices);
+        let mut choice = shown;
+        let weak = ui.visuals().weak_text_color();
+        let tip = self.render_tip();
+        // Chaque rendu : son nom (un développement : l'heure de son sidecar, retour du
+        // 14/11/2026 : deux développements d'un logiciel se distinguent ; « · JPEG » s'il
+        // est celui du JPEG d'une paire) et sa clé de couverture, s'il peut l'être.
+        let photo = self.stack_photo(&file.path);
+        let range = self
+            .stacks
+            .developments_of(self.selected)
+            .cloned()
+            .unwrap_or(self.selected..self.selected + 1);
+        // Le JPEG boîtier : le JPEG d'une paire regroupée, une image plate elle-même, sinon
+        // celui qu'embarque le RAW.
+        let photo_raw = self
+            .files
+            .iter()
+            .any(|f| f.path == photo && f.kind == MediaKind::Raw);
+        let camera = range
+            .clone()
+            .map(|i| self.files[i].path.clone())
+            .find(|p| self.camera_raw.contains_key(p))
+            .unwrap_or_else(|| {
+                if photo_raw {
+                    camera_key(&photo)
+                } else {
+                    photo.clone()
+                }
+            });
+        let cover = self.effective_cover(self.selected);
+        type Row = (ViewRender, egui::WidgetText, Option<PathBuf>);
+        let rows: Vec<Row> = choices
+            .iter()
+            .map(|&c| {
+                let key = match c {
+                    ViewRender::Render(crate::grid_render::GridRender::Embedded) => {
+                        Some(camera.clone())
+                    }
+                    ViewRender::Render(crate::grid_render::GridRender::LibRaw) if photo_raw => {
+                        Some(photo.clone())
+                    }
+                    ViewRender::Render(_) => None,
+                    ViewRender::Development(i) => Some(self.files[i].path.clone()),
+                };
+                let (main, note) = self.view_render_parts(c);
+                let mut job = egui::text::LayoutJob::default();
+                let style = egui::Style::default();
+                egui::RichText::new(main).append_to(
+                    &mut job,
+                    &style,
+                    egui::FontSelection::Default,
+                    egui::Align::Center,
+                );
+                if let Some(note) = note {
+                    egui::RichText::new(format!("  {note}"))
+                        .color(weak)
+                        .append_to(
+                            &mut job,
+                            &style,
+                            egui::FontSelection::Default,
+                            egui::Align::Center,
+                        );
+                }
+                (c, job.into(), key)
+            })
+            .collect();
+        let (item, key) = self.side_begin(false);
+        let at = choices.iter().position(|&c| c == choice).unwrap_or(0);
+        match key {
+            Some(SideKey::Left) => choice = choices[at.saturating_sub(1)],
+            Some(SideKey::Right) => choice = choices[(at + 1).min(choices.len() - 1)],
+            Some(SideKey::Activate) => choice = choices[(at + 1) % choices.len()],
+            None => {}
+        }
+        let mark = ui.text_style_height(&egui::TextStyle::Body);
+        let accent = marks::accent_mark(ui.ctx());
+        let cover_tip = format!(
+            "{}\n{}",
+            t!("view-render-cover-tip"),
+            self.action_tip(Action::StackChoose)
+        );
+        let mut cover_click = None;
+        // Liste fermée : le signet plein devant si le rendu à l'écran est la couverture
+        // (retour du 14/11/2026 : sinon il fallait déplier la liste pour le savoir).
+        let shown_is_cover = rows
+            .iter()
+            .find(|(c, _, _)| *c == shown)
+            .and_then(|(_, _, key)| key.as_ref())
+            .is_some_and(|key| cover.as_ref() == Some(key));
+        // Liste fermée : le signet, dans la couleur du texte, entre le nom et sa précision
+        // (« RAW ▮ LibRaw »), si le rendu à l'écran est la couverture (retours du
+        // 14/11/2026 : sinon il fallait déplier la liste pour le savoir ; un signet devant
+        // laissait un grand blanc quand il n'y en avait pas).
+        let (main, note) = self.view_render_parts(shown);
+        let gap = if shown_is_cover {
+            mark + ui.spacing().item_spacing.x
+        } else {
+            ui.spacing().item_spacing.x
+        };
+        let mut closed = egui::text::LayoutJob::default();
+        let style = ui.style().clone();
+        egui::RichText::new(main.clone()).append_to(
+            &mut closed,
+            &style,
+            egui::FontSelection::Default,
+            egui::Align::Center,
+        );
+        let body = egui::TextStyle::Body.resolve(&style);
+        closed.append(
+            note.as_deref().unwrap_or(" "),
+            gap,
+            egui::TextFormat::simple(body.clone(), weak),
+        );
+        let response = egui::ComboBox::from_id_salt("view_render")
+            .selected_text(closed)
+            .show_ui(ui, |ui| {
+                for (c, text, key) in &rows {
+                    ui.horizontal(|ui| {
+                        match key {
+                            Some(key) => {
+                                let on = cover.as_ref() == Some(key);
+                                let (rect, response) = marks::clickable_named(
+                                    ui,
+                                    mark,
+                                    &t!("view-render-cover"),
+                                    &cover_tip,
+                                );
+                                let color = if on { accent } else { weak };
+                                marks::cover_mark(ui.painter(), rect, on, color);
+                                if response.clicked() {
+                                    cover_click = Some((*c, key.clone(), on));
+                                }
+                            }
+                            None => {
+                                ui.add_space(mark);
+                            }
+                        }
+                        ui.selectable_value(&mut choice, *c, text.clone());
+                    });
+                }
+            })
+            .response
+            .on_hover_text(tip);
+        if shown_is_cover {
+            let width = ui
+                .fonts_mut(|f| f.layout_no_wrap(main, body, weak))
+                .size()
+                .x;
+            let left = response.rect.left() + ui.spacing().button_padding.x + width;
+            let rect = Rect::from_center_size(
+                egui::pos2(left + gap / 2.0, response.rect.center().y),
+                egui::vec2(mark, mark),
+            );
+            let color = ui.visuals().widgets.inactive.text_color();
+            marks::cover_mark(ui.painter(), rect, true, color);
+            let text = t!("view-render-is-cover");
+            let hover = ui.interact(
+                rect,
+                ui.scope_id().with("view_render_cover"),
+                egui::Sense::hover(),
+            );
+            hover.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, &text));
+            hover.on_hover_text(&text);
+        }
+        self.side_end(ui, item, response.rect, response.clicked());
+        if let Some((c, key, on)) = cover_click {
+            // Déjà la couverture choisie : plus de choix (le plus récent) ; sinon elle, et
+            // ce rendu à l'écran (retour du 14/11/2026).
+            let chosen = on && self.dev_preferred.contains(&key);
+            self.set_cover(self.selected, (!chosen).then_some(key));
+            if !chosen {
+                choice = c;
+            }
+        }
+        if choice != shown {
+            match choice {
+                ViewRender::Render(render) => self.show_render(render),
+                ViewRender::Development(i) => {
+                    self.dev_before = false;
+                    self.show_development(i);
+                    self.request_zoom();
+                }
+            }
+        }
+    }
+
+    /// Nom et précision (en gris) d'un choix de la liste « Rendu affiché » : « RAW »
+    /// « LibRaw », « JPEG » « boîtier », un développement et l'heure de son sidecar.
+    fn view_render_parts(&self, choice: ViewRender) -> (String, Option<String>) {
+        use crate::grid_render::GridRender;
+        match choice {
+            ViewRender::Render(GridRender::LibRaw) => {
+                (t!("grid-render-raw"), Some(t!("grid-render-libraw-short")))
+            }
+            ViewRender::Render(GridRender::Embedded) => {
+                (t!("grid-render-jpeg"), Some(t!("grid-render-camera")))
+            }
+            ViewRender::Render(render) => (render.name(), None),
+            ViewRender::Development(i) => {
+                let path = &self.files[i].path;
+                let development = tri::developments::get(path);
+                let when = development
+                    .as_ref()
+                    .and_then(|d| std::fs::metadata(&d.sidecar).ok())
+                    .and_then(|m| m.modified().ok())
+                    .map(|t| {
+                        chrono::DateTime::<chrono::Local>::from(t)
+                            .format(&t!("dev-modified-format"))
+                            .to_string()
+                    });
+                let mut name = development_label(path);
+                if development.is_some_and(|d| self.camera_raw.contains_key(&d.photo)) {
+                    name.push_str(" · JPEG");
+                }
+                (name, when)
+            }
+        }
+    }
+
+    /// Choix de la liste « Rendu affiché » du plein écran (retour du 14/11/2026 : une
+    /// entrée par développement, pas par logiciel) : le JPEG boîtier, chaque
+    /// développement de la photo (logiciels actifs), les logiciels dont elle n'en a pas
+    /// (rendu de toutes les photos), LibRaw.
+    fn view_render_choices(&self) -> Vec<ViewRender> {
+        use crate::grid_render::GridRender;
+        let range = self
+            .stacks
+            .developments_of(self.selected)
+            .cloned()
+            .unwrap_or(self.selected..self.selected + 1);
+        let developments: Vec<(usize, tri::develop::Engine)> = range
+            .filter_map(|i| tri::developments::get(&self.files[i].path).map(|d| (i, d.engine)))
+            .collect();
+        let mut choices = vec![ViewRender::Render(GridRender::Embedded)];
+        choices.extend(
+            developments
+                .iter()
+                .map(|&(i, _)| ViewRender::Development(i)),
+        );
+        choices.extend(
+            self.developers
+                .engines()
+                .into_iter()
+                .filter(|e| developments.iter().all(|(_, d)| d != e))
+                .map(|e| ViewRender::Render(GridRender::Engine(e))),
+        );
+        choices.push(ViewRender::Render(GridRender::LibRaw));
+        choices
+    }
+
+    /// Valeur de la liste pour `file` : le développement à l'écran, sinon le rendu
+    /// ([`TriApp::displayed_render`]) ; un logiciel dont la photo a un développement : ce
+    /// développement.
+    fn view_render_shown(&self, file: &MediaFile, choices: &[ViewRender]) -> ViewRender {
+        use crate::grid_render::GridRender;
+        if tri::developments::get(&file.path).is_some() && !self.dev_before {
+            return ViewRender::Development(self.selected);
+        }
+        let render = self.displayed_render(file);
+        if let GridRender::Engine(engine) = render
+            && let Some(&dev) = choices.iter().find(|c| match c {
+                ViewRender::Development(i) => {
+                    tri::developments::get(&self.files[*i].path).is_some_and(|d| d.engine == engine)
+                }
+                ViewRender::Render(_) => false,
+            })
+        {
+            return dev;
+        }
+        ViewRender::Render(render)
+    }
+
+    /// Montre le rendu `choice` de la photo sélectionnée (plein écran) : un membre de sa
+    /// pile s'il en a un de ce rendu, l'« avant » d'un développement pour le JPEG boîtier,
+    /// sinon le rendu affiché de toutes les photos change.
+    fn show_render(&mut self, choice: crate::grid_render::GridRender) {
+        use crate::grid_render::GridRender;
+        let Some(file) = self.files.get(self.selected).cloned() else {
+            return;
+        };
+        let photo = self.stack_photo(&file.path);
+        let range = self
+            .stacks
+            .developments_of(self.selected)
+            .cloned()
+            .unwrap_or(self.selected..self.selected + 1);
+        let member = range.clone().find(|&i| {
+            let path = &self.files[i].path;
+            match choice {
+                GridRender::Embedded => self.camera_raw.contains_key(path),
+                GridRender::Engine(engine) => tri::developments::get(path)
+                    .is_some_and(|d| d.engine == engine && d.copy == tri::developments::Copy::Main),
+                _ => false,
+            }
+        });
+        let photo_index = range.clone().find(|&i| self.files[i].path == photo);
+        self.dev_before = false;
+        if let Some(i) = member {
+            self.show_development(i);
+        } else if choice == GridRender::Embedded && tri::developments::get(&file.path).is_some() {
+            // Pas de JPEG à part : l'« avant » du développement.
+            self.dev_before = true;
+        } else {
+            self.set_grid_render(choice);
+            if let Some(i) = photo_index.filter(|&i| i != self.selected) {
+                self.show_development(i);
+            }
+        }
+        self.request_zoom();
     }
 
     /// Section « Vue », « Développements » (retour du 04/11/2026) : de photo en photo, ou
@@ -6783,6 +7134,10 @@ impl TriApp {
                     if let Some(i) = r.clone().find(|&i| dev_preferred.contains(&files[i].path)) {
                         return i;
                     }
+                    // Le JPEG boîtier de la photo choisi : la photo (montrée en JPEG).
+                    if dev_preferred.contains(&camera_key(&photo(r.start))) {
+                        return the_photo;
+                    }
                     let developments: Vec<tri::developments::Development> = r
                         .clone()
                         .filter_map(|i| tri::developments::get(&files[i].path))
@@ -6874,34 +7229,120 @@ impl TriApp {
     /// « mettre en couverture si ce n'est déjà fait ») : refaire ne retire rien.
     fn prefer_development(&mut self, index: usize) {
         let path = self.files[index].path.clone();
-        let Some(range) = self.stacks.developments_of(index).cloned() else {
-            return;
-        };
-        let on = tri::media::is_development(&path);
-        let others: Vec<PathBuf> = range.map(|i| self.files[i].path.clone()).collect();
-        for o in &others {
-            self.dev_preferred.remove(o);
-        }
-        if on {
-            self.dev_preferred.insert(path.clone());
-            self.notice = Some((t!("dev-preferred", name = development_label(&path)), false));
+        // Un développement ou le JPEG d'une paire : lui ; la photo : telle qu'elle est
+        // montrée (JPEG boîtier ou rendu LibRaw, retour du 14/11/2026).
+        let key = if tri::media::is_development(&path) || self.camera_raw.contains_key(&path) {
+            path
+        } else if self.files[index].kind == MediaKind::Raw
+            && self.source_for(&self.files[index]) == Source::Embedded
+        {
+            camera_key(&path)
         } else {
-            self.notice = Some((t!("dev-preferred-none"), false));
+            path
+        };
+        self.set_cover(index, Some(key));
+    }
+
+    /// Clés possibles de la couverture de la photo de l'image `index` (retour du
+    /// 14/11/2026 : une seule par photo, JPEG boîtier et LibRaw compris) : chaque image de
+    /// sa pile (développements, JPEG d'une paire, la photo elle-même = son rendu LibRaw),
+    /// et le JPEG boîtier de la photo ([`camera_key`]).
+    fn cover_keys(&self, index: usize) -> Vec<PathBuf> {
+        let range = self
+            .stacks
+            .developments_of(index)
+            .cloned()
+            .unwrap_or(index..index + 1);
+        let mut keys: Vec<PathBuf> = range.map(|i| self.files[i].path.clone()).collect();
+        keys.push(camera_key(&self.stack_photo(&self.files[index].path)));
+        keys
+    }
+
+    /// Couverture de la photo de l'image `index` : `key` (une de [`TriApp::cover_keys`]),
+    /// ou `None` : aucune choisie (le développement le plus récent). Les autres choix de
+    /// la photo sont oubliés, retenus dans les données de tri.
+    fn set_cover(&mut self, index: usize, key: Option<PathBuf>) {
+        let keys = self.cover_keys(index);
+        for k in &keys {
+            self.dev_preferred.remove(k);
+        }
+        let photo = self.stack_photo(&self.files[index].path);
+        // Un développement (ou le JPEG) de la pile choisi : il reste montré (retour du
+        // 14/11/2026 : Maj+Entrée sur un clone ramenait la vue sur le rendu LibRaw).
+        match key.as_ref().filter(|k| keys.contains(k) && **k != photo) {
+            Some(k) => {
+                self.dev_shown.insert(photo.clone(), k.clone());
+            }
+            None => {
+                self.dev_shown.remove(&photo);
+            }
+        }
+        self.grid_levels.remove(&photo);
+        let forget: Vec<PathBuf> = keys
+            .iter()
+            .filter(|k| Some(*k) != key.as_ref())
+            .cloned()
+            .collect();
+        match &key {
+            Some(k) => {
+                self.dev_preferred.insert(k.clone());
+                self.notice = Some((t!("dev-preferred", name = self.cover_name(k)), false));
+            }
+            None => self.notice = Some((t!("dev-preferred-none"), false)),
         }
         let data = self.settings.data_dir();
-        let result = if tri::media::is_development(&path) {
-            tri::developments::prefer(data.as_deref(), &path, on)
-        } else {
-            // La photo elle-même : plus de préféré.
-            others
-                .iter()
-                .filter(|p| tri::media::is_development(p))
-                .try_for_each(|p| tri::developments::prefer(data.as_deref(), p, false))
-        };
-        if let Err(e) = result {
+        if let Err(e) = tri::store::choose(
+            data.as_deref(),
+            tri::store::Choice::Development,
+            &forget,
+            key.as_deref(),
+        ) {
             self.notice = Some((e.to_string(), true));
         }
         self.stacks_dirty = true;
+    }
+
+    /// Nom d'une couverture (clé de [`TriApp::cover_keys`]) pour les messages.
+    fn cover_name(&self, key: &Path) -> String {
+        if tri::media::is_development(key) {
+            development_label(key)
+        } else if self.camera_raw.contains_key(key)
+            || is_camera_key(key)
+            || tri::media::kind_of(key) == Some(MediaKind::Flat)
+        {
+            t!("grid-render-jpeg")
+        } else {
+            t!("grid-render-raw")
+        }
+    }
+
+    /// Couverture effective de la photo de l'image `index`, en mode « Couverture » : la
+    /// choisie, sinon le développement le plus récent, sinon la photo (rendu LibRaw).
+    fn effective_cover(&self, index: usize) -> Option<PathBuf> {
+        let keys = self.cover_keys(index);
+        if let Some(k) = keys.iter().find(|k| self.dev_preferred.contains(*k)) {
+            return Some(k.clone());
+        }
+        let developments: Vec<tri::developments::Development> = keys
+            .iter()
+            .filter_map(|k| tri::developments::get(k))
+            .collect();
+        tri::developments::latest(&developments)
+            .map(|d| d.path())
+            .or_else(|| Some(self.stack_photo(&self.files.get(index)?.path)))
+    }
+
+    /// Choix de couverture de la photo `photo` qui change son propre rendu (mode
+    /// « Couverture ») : `Some(Level::Thumbnail)` pour le JPEG boîtier, `Some(Standard)`
+    /// pour le rendu LibRaw.
+    fn photo_cover_level(&self, photo: &Path) -> Option<Level> {
+        if self.dev_preferred.contains(&camera_key(photo)) {
+            Some(Level::Thumbnail)
+        } else if self.dev_preferred.contains(photo) {
+            Some(Level::Standard)
+        } else {
+            None
+        }
     }
 
     /// Replie toutes les piles de développements (Ctrl+Maj+V, 31/10/2026).
@@ -7340,6 +7781,12 @@ impl TriApp {
             self.apply_filter();
         }
         self.forced_view_change();
+        // Le dossier, ouvert avant que les logiciels soient cherchés, a écarté leurs
+        // développements (seuls ceux des logiciels actifs) : refiltré avec eux (retour du
+        // 14/11/2026 : les développements darktable absents de la liste du plein écran
+        // jusqu'au premier changement de rendu).
+        self.refresh_any_developed();
+        self.refilter(Reveal::Minimal);
     }
 
     /// Rendu des vignettes ramené à un choix possible : un logiciel retenu d'une session
@@ -10442,6 +10889,18 @@ impl TriApp {
         if development && self.dev_before {
             return Source::Embedded;
         }
+        // Mode « Couverture » : une photo dont la couverture choisie est elle-même, en JPEG
+        // boîtier ou en rendu LibRaw (14/11/2026).
+        if !development
+            && file.kind == MediaKind::Raw
+            && self.shown_render() == crate::grid_render::GridRender::Cover
+        {
+            match self.photo_cover_level(&file.path) {
+                Some(Level::Thumbnail) => return Source::Embedded,
+                Some(_) => return Source::Raw,
+                None => {}
+            }
+        }
         if self.source != Source::Developed && !development {
             return self.source;
         }
@@ -12907,6 +13366,14 @@ impl TriApp {
             Some(rule) if file.kind == MediaKind::Raw => rule
                 .engine_for(&file.path, &engines)
                 .map_or(Level::Standard, Level::Developed),
+            // Mode « Couverture », la photo choisie comme couverture en JPEG boîtier ou en
+            // rendu LibRaw (14/11/2026).
+            _ if file.kind == MediaKind::Raw
+                && self.shown_render() == crate::grid_render::GridRender::Cover
+                && let Some(level) = self.photo_cover_level(&file.path) =>
+            {
+                level
+            }
             _ => self.shown_render().level(file, &engines),
         };
         // Un sidecar encore en lecture (en fond) : niveau provisoire, pas retenu.
@@ -13060,6 +13527,9 @@ impl TriApp {
         // Un seul « rendu affiché », grille et plein écran (décidé le 06/11/2026) : le
         // choix d'un logiciel par photo cède la place au choix du dossier.
         self.develop_choice.clear();
+        // La vignette d'un développement regardé en grand suit aussi (retour du
+        // 14/11/2026 : elle restait sur lui, les autres changeaient).
+        self.dev_shown.clear();
         self.sync_source();
         if let Some(engine) = &self.engine {
             engine.scheduler.set_raw_previews(self.raw_policy());
@@ -21543,6 +22013,15 @@ mod tests {
     fn harness_images(
         images: Vec<(&str, image::RgbImage)>,
     ) -> (Harness<'static, TriApp>, tempfile::TempDir) {
+        harness_tuned(images, |_, _| {})
+    }
+
+    /// [`harness_images`], les réglages (et le dossier temporaire, photos dans
+    /// `photos/`) ajustés par `tune` avant le lancement de l'application.
+    fn harness_tuned(
+        images: Vec<(&str, image::RgbImage)>,
+        tune: impl FnOnce(&mut AppSettings, &Path),
+    ) -> (Harness<'static, TriApp>, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
         let photos = dir.path().join("photos");
         std::fs::create_dir(&photos).unwrap();
@@ -21596,6 +22075,7 @@ mod tests {
         settings.similarity.background = false;
         // Un réglage écrit pendant un test (bouton, case) : dans le dossier temporaire,
         // jamais la configuration de l'utilisateur (sans chemin, ce serait elle).
+        tune(&mut settings, dir.path());
         let config = dir.path().join("config.toml");
         let mut harness = Harness::builder()
             .with_size(vec2(1000.0, 700.0))
@@ -23200,15 +23680,18 @@ mod tests {
         );
         assert_eq!(h.state().selected, i);
         // Maj+Entrée sans bascule : sur le clone, il reste la couverture ; sur la photo,
-        // plus de préféré.
+        // la photo elle-même (14/11/2026 : JPEG et LibRaw peuvent être la couverture), une
+        // seule.
         press(&mut h, Key::Enter, Modifiers::SHIFT);
         assert!(h.state().dev_preferred.contains(&clone), "pas une bascule");
         act(&mut h, Action::DevNext);
         assert_eq!(h.state().selected, i - 1, "la photo");
         press(&mut h, Key::Enter, Modifiers::SHIFT);
+        let photo = h.state().files[i - 1].path.clone();
         assert!(
-            h.state().dev_preferred.is_empty(),
-            "la photo : plus de préféré"
+            h.state().dev_preferred.contains(&photo) && h.state().dev_preferred.len() == 1,
+            "la photo, seule couverture : {:?}",
+            h.state().dev_preferred
         );
         // Maj+S replie toutes les piles, développements compris (31/10/2026), puis les
         // redéplie toutes.
@@ -26616,6 +27099,156 @@ mod tests {
     }
 
     #[test]
+    fn the_view_render_list_keeps_its_title_and_shows_what_is_on_screen() {
+        // Retour du 14/11/2026 (vidéo) : en passant d'une photo à son développement, la
+        // liste « Rendu affiché » devenait « Avant / après ». Une seule liste désormais :
+        // sa valeur est le rendu à l'écran, choisir un rendu de la photo y va.
+        use crate::grid_render::GridRender;
+        use tri::develop::Engine;
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        std::fs::write(
+            photos.join("img0.jpg.xmp"),
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
+        )
+        .unwrap();
+        // Et un clone : deux développements darktable (retour du 14/11/2026 : une seule
+        // entrée « Darktable » dans la liste).
+        std::fs::write(
+            photos.join("img0_01.jpg.xmp"),
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
+        )
+        .unwrap();
+        h.state_mut().developers = fake_darktable();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
+        let developed = photos.join("img0@dt.jpg");
+        let index = |app: &TriApp, path: &Path| app.files.iter().position(|f| f.path == path);
+        let photo = index(h.state(), &photos.join("img0.jpg")).unwrap();
+        let dev = index(h.state(), &developed).unwrap();
+        h.state_mut().review_developments = true;
+        h.state_mut().select(photo);
+        h.state_mut().open_view();
+        h.run_steps(3);
+        assert!(h.query_by_label(&t!("panel-grid-render")).is_some());
+        // Une entrée par développement, aucune « Darktable » pour tout le dossier.
+        let clone = index(h.state(), &photos.join("img0@dt-01.jpg")).unwrap();
+        let choices = h.state().view_render_choices();
+        assert!(
+            choices.contains(&ViewRender::Development(dev)),
+            "{choices:?}"
+        );
+        assert!(
+            choices.contains(&ViewRender::Development(clone)),
+            "{choices:?}"
+        );
+        assert!(
+            !choices.contains(&ViewRender::Render(GridRender::Engine(Engine::Darktable))),
+            "{choices:?}"
+        );
+        // La liste ouverte : un signet par développement (couverture). Laquelle des listes
+        // du panneau : celle qui montre les signets une fois ouverte.
+        let combos = h.query_all_by_role(egui::accesskit::Role::ComboBox).count();
+        let mut marks = 0;
+        for n in 0..combos {
+            h.get_all_by_role(egui::accesskit::Role::ComboBox)
+                .nth(n)
+                .unwrap()
+                .click();
+            h.run_steps(3);
+            marks = h.query_all_by_label("Couverture").count();
+            h.key_press(egui::Key::Escape);
+            h.run_steps(2);
+            if marks > 0 {
+                break;
+            }
+        }
+        // Un signet par rendu qui peut être la couverture : le JPEG (la photo) et les
+        // deux développements.
+        assert_eq!(marks, 3, "un signet par couverture possible");
+        // Le clic du signet (règle des tests d'interface : l'action directement).
+        h.state_mut().prefer_development(clone);
+        assert!(
+            h.state()
+                .dev_preferred
+                .contains(&photos.join("img0@dt-01.jpg"))
+        );
+        // Darktable choisi sur la photo : son développement s'affiche.
+        h.state_mut()
+            .show_render(GridRender::Engine(Engine::Darktable));
+        h.run_steps(3);
+        assert_eq!(h.state().selected, dev, "le développement de la photo");
+        assert!(
+            h.query_by_label(&t!("panel-grid-render")).is_some(),
+            "même titre"
+        );
+        assert!(h.query_by_label(&t!("panel-view-source")).is_none());
+        let file = h.state().files[dev].clone();
+        assert_eq!(
+            h.state().displayed_render(&file),
+            GridRender::Engine(Engine::Darktable)
+        );
+        // JPEG boîtier : l'« avant » du développement, la liste le dit.
+        h.state_mut().show_render(GridRender::Embedded);
+        assert!(h.state().dev_before);
+        assert_eq!(h.state().displayed_render(&file), GridRender::Embedded);
+        h.state_mut()
+            .show_render(GridRender::Engine(Engine::Darktable));
+        assert!(!h.state().dev_before, "retour à l'après");
+        // Retour du 14/11/2026 : Maj+Entrée sur le clone affiché en fait la couverture et
+        // le laisse à l'écran (la vue revenait sur le rendu LibRaw) ; le signet le dit,
+        // liste fermée.
+        h.state_mut().set_cover(dev, Some(developed.clone()));
+        h.state_mut().show_development(clone);
+        h.run_steps(3);
+        assert!(
+            h.query_by_label(&t!("view-render-is-cover")).is_none(),
+            "le clone n'est pas la couverture"
+        );
+        press(&mut h, Key::Enter, Modifiers::SHIFT);
+        h.run_steps(3);
+        assert_eq!(h.state().selected, clone, "le clone reste à l'écran");
+        assert!(
+            h.state()
+                .dev_preferred
+                .contains(&photos.join("img0@dt-01.jpg"))
+        );
+        h.get_by_label(&t!("view-render-is-cover"));
+        // Retour du 14/11/2026 : deux couvertures à la fois (choisies chacune pour son
+        // fichier). Une seule après un choix.
+        let (main_path, clone_path) = (developed.clone(), photos.join("img0@dt-01.jpg"));
+        h.state_mut().dev_preferred.insert(main_path.clone());
+        h.state_mut().dev_preferred.insert(clone_path.clone());
+        h.state_mut().set_cover(dev, Some(clone_path.clone()));
+        assert_eq!(
+            h.state().dev_preferred.iter().collect::<Vec<_>>(),
+            [&clone_path],
+            "une seule couverture"
+        );
+        assert_eq!(h.state().effective_cover(dev), Some(clone_path));
+        // Le JPEG comme couverture (une image plate : elle-même) : la photo couvre sa pile
+        // en mode « Couverture ».
+        let camera = photos.join("img0.jpg");
+        h.state_mut().set_cover(dev, Some(camera.clone()));
+        assert_eq!(h.state().effective_cover(dev), Some(camera));
+        h.state_mut().set_grid_render(GridRender::Cover);
+        h.state_mut().mode = Mode::Grid;
+        h.run_steps(3);
+        assert_eq!(
+            h.state().stacks.photo_visible(dev),
+            photo,
+            "la photo en couverture"
+        );
+        // Changer de rendu oublie le développement regardé en grand (sa vignette suit).
+        h.state_mut()
+            .dev_shown
+            .insert(photos.join("img0.jpg"), developed.clone());
+        h.state_mut().set_grid_render(GridRender::LibRaw);
+        assert!(h.state().dev_shown.is_empty());
+    }
+
+    #[test]
     fn a_tip_without_shortcut_has_no_empty_parentheses() {
         // Retour du 08/11/2026 : « Relire les notes depuis les images (…) () ».
         let (mut h, _dir) = harness();
@@ -27135,6 +27768,92 @@ mod tests {
         act(&mut h, Action::PairsToggle);
         assert_eq!(h.state().stacks.photo_visible(jpeg), jpeg, "séparées");
         assert_eq!(tri::pairs::decided(Some(&data), &photos), Some(false));
+    }
+
+    #[test]
+    fn a_grouped_pair_lists_the_developments_of_both_files_from_the_grid() {
+        // Retour du 14/11/2026 : double-clic dans la grille sur une paire regroupée dont
+        // le RAW et le JPEG ont chacun un développement darktable : un seul dans la liste
+        // du rendu, le second n'apparaissant qu'après un changement.
+        use crate::grid_render::GridRender;
+        let (mut h, _dir) = harness();
+        h.run_steps(2);
+        let photos = h.state().folder.dir.clone();
+        std::fs::write(photos.join("img0.RAF"), b"raw").unwrap();
+        let xmp = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1" xmp:Rating="3"/></rdf:RDF></x:xmpmeta>"#;
+        std::fs::write(photos.join("img0.RAF.xmp"), xmp).unwrap();
+        std::fs::write(photos.join("img0.jpg.xmp"), xmp).unwrap();
+        h.state_mut().developers = fake_darktable();
+        let data = h.state().settings.data_dir();
+        tri::pairs::decide(data.as_deref(), &photos, Some(true)).unwrap();
+        h.state_mut().open_folder(&photos);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 6);
+        h.state_mut().set_grid_render(GridRender::Cover);
+        // Comme dans la vidéo : revue des développements, filtre « 3 étoiles et plus ».
+        h.state_mut().review_developments = true;
+        act(&mut h, Action::FilterStars(3));
+        h.run_steps(3);
+        let raw = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path == photos.join("img0.RAF"))
+            .unwrap();
+        let shown = h.state().stacks.photo_visible(raw);
+        h.state_mut().select(shown);
+        h.state_mut().open_view();
+        h.run_steps(3);
+        let names: Vec<String> = h
+            .state()
+            .files
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        // La liste change en plein écran (ordre inversé) : les piles suivent.
+        h.state_mut().order.descending = !h.state().order.descending;
+        h.state_mut().apply_sort();
+        h.state_mut().refilter(Reveal::Minimal);
+        h.run_steps(2);
+        let developments = h
+            .state()
+            .view_render_choices()
+            .into_iter()
+            .filter(|c| matches!(c, ViewRender::Development(_)))
+            .count();
+        assert_eq!(
+            developments,
+            2,
+            "les deux développements ; liste {names:?}, sélection {}, pile {:?}",
+            h.state().selected,
+            h.state().stacks.developments_of(h.state().selected)
+        );
+    }
+
+    #[test]
+    fn developments_found_at_startup_are_listed_without_a_change() {
+        // Retour du 14/11/2026 (vidéo) : au lancement, le dossier filtré avant que
+        // darktable soit trouvé écartait ses développements, et rien ne refiltrait : la
+        // liste du rendu n'en montrait aucun jusqu'au premier changement.
+        let pixel = image::RgbImage::from_pixel(64, 48, image::Rgb([30, 100, 160]));
+        let (mut h, dir) = harness_tuned(vec![("img0.jpg", pixel)], |settings, dir| {
+            // darktable « installé » : un fichier vide, jamais lancé par ce test.
+            let cli = dir.join("darktable-cli");
+            std::fs::write(&cli, "").unwrap();
+            settings.develop.darktable = cli.to_string_lossy().into_owned();
+            std::fs::write(
+                dir.join("photos").join("img0.jpg.xmp"),
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
+            )
+            .unwrap();
+        });
+        h.run_steps(3);
+        assert!(!h.state().developers.is_empty(), "darktable trouvé");
+        let developed = dir.path().join("photos").join("img0@dt.jpg");
+        assert!(
+            h.state().files.iter().any(|f| f.path == developed),
+            "le développement dans la liste : {:?}",
+            h.state().files.iter().map(|f| &f.path).collect::<Vec<_>>()
+        );
     }
 
     #[test]

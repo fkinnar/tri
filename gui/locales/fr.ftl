@@ -1816,3 +1816,7 @@ pairs-filter-jpeg = JPEG
 pairs-filter-raw-tip = Les RAW sans JPEG
 pairs-filter-pairs-tip = Les paires RAW+JPEG regroupées
 pairs-filter-jpeg-tip = Les JPEG (et autres images) sans RAW
+dev-modified-format = %d/%m %H:%M
+view-render-cover = Couverture
+view-render-cover-tip = En faire la couverture de la photo (la vignette de sa pile) ; recliquer : plus de couverture choisie, le plus récent
+view-render-is-cover = Ce rendu est la couverture de la photo

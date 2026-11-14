@@ -1817,6 +1817,34 @@ fn corner_arrow(painter: &Painter, rect: Rect, dir: f32, color: Color32) {
     painter.line_segment([tip, tip - vec2(0.0, r * 0.6) * dir], stroke);
 }
 
+/// Signet de la couverture d'une photo (liste « Rendu affiché », 14/11/2026 : ni étoile
+/// ni coche, déjà prises par les notes et le drapeau) : plein si `on`, en creux sinon.
+pub fn cover_mark(painter: &Painter, rect: Rect, on: bool, color: Color32) {
+    let r = Rect::from_center_size(rect.center(), vec2(rect.width() * 0.5, rect.height() * 0.7));
+    let notch = pos2(r.center().x, r.bottom() - r.height() * 0.3);
+    let top = pos2(r.center().x, r.top());
+    if on {
+        // Concave à l'encoche : deux moitiés convexes.
+        for half in [
+            vec![r.left_top(), top, notch, r.left_bottom()],
+            vec![top, r.right_top(), r.right_bottom(), notch],
+        ] {
+            painter.add(egui::Shape::convex_polygon(half, color, Stroke::NONE));
+        }
+    } else {
+        painter.add(egui::Shape::closed_line(
+            vec![
+                r.left_top(),
+                r.right_top(),
+                r.right_bottom(),
+                notch,
+                r.left_bottom(),
+            ],
+            Stroke::new(1.2, color),
+        ));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
