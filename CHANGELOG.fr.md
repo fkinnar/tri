@@ -16,7 +16,9 @@
   couverture par photo (pleine, aussi devant la liste fermée quand le rendu à l'écran est
   la couverture), un développement du JPEG regroupé est marqué « · JPEG ».
   Aussi : changer le rendu de la grille change aussi la vignette du développement qu'on
-  vient de regarder en plein écran.
+  vient de regarder en plein écran, et un dossier ouvert au lancement montre les
+  développements des logiciels trouvés au démarrage (écartés jusqu'au premier changement
+  de rendu).
 - **Paires regroupées : filtre à trois cases** (#464, #392) : dans un dossier regroupé,
   le filtre de type a trois cases, RAW (sans JPEG), RAW+JPEG (les paires) et JPEG (sans
   RAW), combinables, parcourues par la touche du type. Aussi : un développement darktable

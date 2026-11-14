@@ -15,7 +15,9 @@
   makes it the cover in one click and shows it; one cover per photo (filled, also in
   front of the closed list when the render on screen is the cover), a
   development of the grouped JPEG is marked "· JPEG". Also: changing the grid's render
-  now updates the thumbnail of the development just viewed in full screen too.
+  now updates the thumbnail of the development just viewed in full screen too, and a
+  folder opened at launch lists the developments of the software found at startup
+  (they were left out until the first render change).
 - **Grouped pairs: three-way filter** (#464, #392): in a grouped folder the type filter
   has three checkboxes, RAW (without a JPEG), RAW+JPEG (the pairs) and JPEG (without a
   RAW), combinable, stepped by the type key. Also: a darktable development of the JPEG

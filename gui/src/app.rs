@@ -7738,6 +7738,12 @@ impl TriApp {
             self.apply_filter();
         }
         self.forced_view_change();
+        // Le dossier, ouvert avant que les logiciels soient cherchés, a écarté leurs
+        // développements (seuls ceux des logiciels actifs) : refiltré avec eux (retour du
+        // 14/11/2026 : les développements darktable absents de la liste du plein écran
+        // jusqu'au premier changement de rendu).
+        self.refresh_any_developed();
+        self.refilter(Reveal::Minimal);
     }
 
     /// Rendu des vignettes ramené à un choix possible : un logiciel retenu d'une session
@@ -21964,6 +21970,15 @@ mod tests {
     fn harness_images(
         images: Vec<(&str, image::RgbImage)>,
     ) -> (Harness<'static, TriApp>, tempfile::TempDir) {
+        harness_tuned(images, |_, _| {})
+    }
+
+    /// [`harness_images`], les réglages (et le dossier temporaire, photos dans
+    /// `photos/`) ajustés par `tune` avant le lancement de l'application.
+    fn harness_tuned(
+        images: Vec<(&str, image::RgbImage)>,
+        tune: impl FnOnce(&mut AppSettings, &Path),
+    ) -> (Harness<'static, TriApp>, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
         let photos = dir.path().join("photos");
         std::fs::create_dir(&photos).unwrap();
@@ -22017,6 +22032,7 @@ mod tests {
         settings.similarity.background = false;
         // Un réglage écrit pendant un test (bouton, case) : dans le dossier temporaire,
         // jamais la configuration de l'utilisateur (sans chemin, ce serait elle).
+        tune(&mut settings, dir.path());
         let config = dir.path().join("config.toml");
         let mut harness = Harness::builder()
             .with_size(vec2(1000.0, 700.0))
@@ -27709,6 +27725,92 @@ mod tests {
         act(&mut h, Action::PairsToggle);
         assert_eq!(h.state().stacks.photo_visible(jpeg), jpeg, "séparées");
         assert_eq!(tri::pairs::decided(Some(&data), &photos), Some(false));
+    }
+
+    #[test]
+    fn a_grouped_pair_lists_the_developments_of_both_files_from_the_grid() {
+        // Retour du 14/11/2026 : double-clic dans la grille sur une paire regroupée dont
+        // le RAW et le JPEG ont chacun un développement darktable : un seul dans la liste
+        // du rendu, le second n'apparaissant qu'après un changement.
+        use crate::grid_render::GridRender;
+        let (mut h, _dir) = harness();
+        h.run_steps(2);
+        let photos = h.state().folder.dir.clone();
+        std::fs::write(photos.join("img0.RAF"), b"raw").unwrap();
+        let xmp = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1" xmp:Rating="3"/></rdf:RDF></x:xmpmeta>"#;
+        std::fs::write(photos.join("img0.RAF.xmp"), xmp).unwrap();
+        std::fs::write(photos.join("img0.jpg.xmp"), xmp).unwrap();
+        h.state_mut().developers = fake_darktable();
+        let data = h.state().settings.data_dir();
+        tri::pairs::decide(data.as_deref(), &photos, Some(true)).unwrap();
+        h.state_mut().open_folder(&photos);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 6);
+        h.state_mut().set_grid_render(GridRender::Cover);
+        // Comme dans la vidéo : revue des développements, filtre « 3 étoiles et plus ».
+        h.state_mut().review_developments = true;
+        act(&mut h, Action::FilterStars(3));
+        h.run_steps(3);
+        let raw = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path == photos.join("img0.RAF"))
+            .unwrap();
+        let shown = h.state().stacks.photo_visible(raw);
+        h.state_mut().select(shown);
+        h.state_mut().open_view();
+        h.run_steps(3);
+        let names: Vec<String> = h
+            .state()
+            .files
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        // La liste change en plein écran (ordre inversé) : les piles suivent.
+        h.state_mut().order.descending = !h.state().order.descending;
+        h.state_mut().apply_sort();
+        h.state_mut().refilter(Reveal::Minimal);
+        h.run_steps(2);
+        let developments = h
+            .state()
+            .view_render_choices()
+            .into_iter()
+            .filter(|c| matches!(c, ViewRender::Development(_)))
+            .count();
+        assert_eq!(
+            developments,
+            2,
+            "les deux développements ; liste {names:?}, sélection {}, pile {:?}",
+            h.state().selected,
+            h.state().stacks.developments_of(h.state().selected)
+        );
+    }
+
+    #[test]
+    fn developments_found_at_startup_are_listed_without_a_change() {
+        // Retour du 14/11/2026 (vidéo) : au lancement, le dossier filtré avant que
+        // darktable soit trouvé écartait ses développements, et rien ne refiltrait : la
+        // liste du rendu n'en montrait aucun jusqu'au premier changement.
+        let pixel = image::RgbImage::from_pixel(64, 48, image::Rgb([30, 100, 160]));
+        let (mut h, dir) = harness_tuned(vec![("img0.jpg", pixel)], |settings, dir| {
+            // darktable « installé » : un fichier vide, jamais lancé par ce test.
+            let cli = dir.join("darktable-cli");
+            std::fs::write(&cli, "").unwrap();
+            settings.develop.darktable = cli.to_string_lossy().into_owned();
+            std::fs::write(
+                dir.join("photos").join("img0.jpg.xmp"),
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
+            )
+            .unwrap();
+        });
+        h.run_steps(3);
+        assert!(!h.state().developers.is_empty(), "darktable trouvé");
+        let developed = dir.path().join("photos").join("img0@dt.jpg");
+        assert!(
+            h.state().files.iter().any(|f| f.path == developed),
+            "le développement dans la liste : {:?}",
+            h.state().files.iter().map(|f| &f.path).collect::<Vec<_>>()
+        );
     }
 
     #[test]
