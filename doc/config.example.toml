@@ -19,6 +19,8 @@ thumbnail = 400
 standard = "auto"
 # Taille "auto" quand l'écran est inconnu (ligne de commande).
 auto_fallback = 2560
+# Aperçu standard calculé en demi-résolution (bien plus rapide) quand elle suffit.
+#
 # Rendu RAW de l'aperçu standard en demi-résolution (≈ 0,35 s au lieu de ≈ 3,8 s sur un RAF
 # X-T4) si la moitié du côté long du RAW vaut au moins `half_size_margin` × `standard`.
 # 1.0 : dès qu'elle couvre la taille ; plus grand : marge de netteté.
@@ -40,6 +42,8 @@ bright = 1.0
 auto_bright = false
 
 [cache]
+# Dossier du cache et qualité JPEG de ses entrées.
+#
 # Dossier du cache. Absent : emplacement du système (~/.cache/tri, ~/Library/Caches/tri,
 # %LOCALAPPDATA%\tri). Exemple :
 # dir = "/mnt/ssd/cache-tri"
@@ -50,6 +54,9 @@ jpeg_quality = 90
 # les moins récemment utilisés sont supprimés au démarrage (~5 Mo par 1:1 de 26 Mpx).
 # 0 : pas de limite.
 zoom_max_mb = 2000
+# Où ranger le cache et les données de tri d'un dossier : cet ordinateur, son disque ou
+# le dossier lui-même.
+#
 # Où garder le cache et les données de tri (filtres et tri, curseurs, couvertures de
 # piles…) d'un dossier ouvert qui ne les garde pas encore : "user" (sur cet ordinateur :
 # photos qui ne bougent pas), "disk" (à la racine du disque amovible du dossier, dans
@@ -69,12 +76,16 @@ thumbnails_first = true
 exposure = true
 
 [xmp]
+# Nom des nouveaux sidecars : façon darktable, façon Adobe, ou les deux.
+#
 # Nom d'un NOUVEAU sidecar : "darktable" (IMAGE.RAF.xmp, un par fichier), "adobe"
 # (IMAGE.xmp, Lightroom, Capture One, Bridge ; partagé par le RAF et le JPG d'une paire) ou
 # "both" (les deux, pour passer d'un logiciel à l'autre). Un sidecar existant est toujours
 # réutilisé ; s'il y en a deux, les deux sont lus (fusionnés) et écrits. « Générer les
 # sidecars » crée ceux que la convention attend et qui manquent.
 sidecar = "darktable"
+# Inscrire aussi les notes dans les images elles-mêmes (JPEG, TIFF…, jamais un RAW).
+#
 # Notes inscrites aussi dans les images elles-mêmes (JPEG, PNG, WebP, TIFF, HEIC ; jamais
 # un RAW) à chaque note, et fusions venues d'autres logiciels propagées à toutes les
 # sources : "never" (sur demande seulement : « Inscrire les notes dans les images »,
@@ -82,6 +93,8 @@ sidecar = "darktable"
 # réseau), "everywhere". Un dossier peut avoir son propre réglage (clic droit sur le
 # dossier), prioritaire. Les notes vont toujours aussi dans les sidecars.
 embed = "never"
+# Plusieurs couleurs par image (comme darktable), ou une seule (comme Lightroom).
+#
 # Plusieurs couleurs par image (comme Darktable) ; false : une seule, une nouvelle couleur
 # remplace la précédente (comme Lightroom). Une seule : écrite dans xmp:Label (lu par
 # Lightroom, XnView, l'Explorateur Windows…), darktable:colorlabels et
@@ -89,6 +102,8 @@ embed = "never"
 # darktable:colorlabels ; xmp:Label et digiKam:ColorLabel ne sont plus touchés (ils ne
 # portent qu'une couleur).
 multiple_colors = false
+# Ordre de lecture des champs qui portent la couleur d'une image.
+#
 # Une seule couleur : ordre de lecture des champs qui en portent une, le premier trouvé
 # l'emporte : "darktable" (darktable:colorlabels, s'il n'a qu'une couleur), "label"
 # (xmp:Label) et "digikam" (digiKam:ColorLabel). darktable réécrit sa couleur à chaque
@@ -98,6 +113,8 @@ multiple_colors = false
 # départage que les autres (fichier sans liste darktable).
 color_sources = ["darktable", "label", "digikam"]
 
+# Champs XMP gérés, par logiciel : décocher ceux d'un logiciel qu'on n'utilise pas.
+#
 # Champs gérés par logiciel (lus et écrits), dans les sidecars et les images : décocher
 # ceux d'un logiciel qu'on n'utilise pas. Un champ décoché est ignoré : ni lu, ni écrit, ni
 # retiré (il reste tel quel), et il sort de color_sources. Les étoiles (xmp:Rating, le
@@ -114,6 +131,8 @@ digikam = true
 # xmpDM:pick et xmpDM:good : accepté / rejeté de Lightroom Classic.
 lightroom = true
 
+# Quand créer le sidecar d'un logiciel de développement qui manque.
+#
 # Sidecars des logiciels de développement (31/10/2026) : une sous-section par logiciel qui
 # a le sien. Un sidecar existant reçoit toujours les notes ; un sidecar manquant est créé
 # selon "create" : "auto" (le logiciel est installé, ou le dossier en contient déjà),
@@ -128,6 +147,8 @@ create = "auto"
 create = "auto"
 
 [sort]
+# Ordre des couleurs pour le tri par couleur.
+#
 # Tri par couleur (f s jusqu'à « Couleur ») : l'ordre des couleurs, de la première à la
 # dernière. La liste peut n'en citer que quelques-unes (ex. ["red", "yellow", "green"] :
 # ces trois ordonnées, bleu et violet gardés pour autre chose) ; une image est classée
@@ -162,6 +183,9 @@ eject_retries = 5
 eject_retry_ms = 1000
 
 [develop]
+# darktable, pour voir ses développements dans tri : trouvé tout seul, un chemin, ou
+# désactivé.
+#
 # Voir ses développements dans tri (rendu affiché, <core.view.source> : JPEG boîtier,
 # rendu RAW, développé ; développer : <core.develop.render>) : darktable-cli refait
 # l'image avec l'historique du sidecar .xmp, à la demande (quelques secondes par image), gardée en cache et refaite si le .xmp change.
@@ -175,23 +199,33 @@ eject_retry_ms = 1000
 darktable = "auto"
 # Haute qualité (--hq) : un peu plus fidèle, un peu plus lent.
 high_quality = false
+# RapidRAW, pour voir ses développements : trouvé tout seul, un chemin, ou désactivé.
+#
 # RapidRAW (version 1.6 ou plus, pour sa commande « export ») : "auto" (cherché dans le
 # PATH, aux emplacements habituels, puis sous Linux en AppImage et en Flatpak), un chemin
 # (l'exécutable de RapidRAW ou son AppImage), "flatpak", ou "" (pas de rendu RapidRAW).
 rapidraw = "auto"
+# RawTherapee, pour voir ses développements : trouvé tout seul, un chemin, ou désactivé.
+#
 # RawTherapee (rawtherapee-cli, profil .pp3 ; 31/10/2026) : "auto" (cherché dans le PATH,
 # aux emplacements habituels, puis sous Linux en AppImage et en Flatpak), un chemin
 # (rawtherapee-cli ou une AppImage), "flatpak" (com.rawtherapee.RawTherapee), ou "".
 rawtherapee = "auto"
+# ART, pour voir ses développements : trouvé tout seul, un chemin, ou désactivé.
+#
 # ART, dérivé de RawTherapee (ART-cli, profil .arp) : "auto" (PATH, emplacements
 # habituels, AppImage sous Linux), un chemin (ART-cli ou l'AppImage), ou "".
 art = "auto"
+# Logiciel montré quand une image a été développée dans plusieurs.
+#
 # Logiciel dont le rendu développé s'affiche quand une image a été développée dans
 # plusieurs : "auto" (le développement le plus récent) ou un logiciel ("darktable",
 # "rapidraw", "rawtherapee", "art"), gardé tant qu'il a développé l'image.
 default = "auto"
 
 [export]
+# Préréglage d'export proposé d'abord, pour un RAW et pour une image déjà développée.
+#
 # Export d'images développées par Darktable (<core.file.export>), avec un préréglage par usage. Rien
 # n'est écrasé (darktable ajoute _01…).
 # Préréglage proposé par défaut (identifiant) pour un rendu de RAW, et pour une image déjà
@@ -199,6 +233,8 @@ default = "auto"
 # ou qui ne s'applique pas : le premier de la liste.
 default_raw = "edit"
 default_flat = "asis"
+# Suffixe du JPEG de l'appareil quand une paire RAW+JPEG est exportée.
+#
 # Paire RAW + JPEG sélectionnée : les deux sont exportés (le RAW rendu par Darktable ou
 # LibRaw, le JPEG développé par l'appareil) ; le JPEG prend ce suffixe :
 # DSCF0001.jpg (rendu du RAW) et DSCF0001-camera.jpg (JPEG de l'appareil).
@@ -208,6 +244,8 @@ camera_suffix = "-camera"
 report_max = 500
 
 [export.sharpening]
+# Accentuation de sortie des exports, pour l'écran et pour le tirage.
+#
 # Accentuation de sortie (clé sharpen des préréglages), appliquée après la réduction, comme
 # Lightroom : masque flou de rayon radius (pixels de l'image écrite), de force amount
 # (1,0 : toute la différence avec l'image floue), au-delà d'un seuil threshold (niveaux
@@ -220,6 +258,9 @@ print_radius = 1.2
 print_amount = 0.9
 print_threshold = 3.0
 
+# Préréglages d'export, autant que voulu : « Nouveau… » en crée un sur le modèle de celui
+# montré.
+#
 # Préréglages d'export : [export.profiles.<identifiant>], autant que voulu. Une clé absente
 # vient du préréglage fourni de même identifiant (edit, asis, web), sinon d'un JPEG sRGB.
 # name : nom affiché (vide : nom fourni traduit, sinon l'identifiant) ;
@@ -244,9 +285,6 @@ print_threshold = 3.0
 #   préréglages qui conviennent ;
 # sharpen : accentuation de sortie, "none", "screen" (écran) ou "print" (tirage), réglée
 #   dans [export.sharpening] ; une copie sans recompression n'est pas accentuée.
-
-# Préréglages d'export, autant que voulu : « Nouveau… » en crée un sur le modèle de celui
-# montré.
 [export.profiles.edit]
 # Vers un éditeur externe : TIFF 16 bits, ProPhoto (linéaire), pleine définition.
 name = ""
@@ -299,6 +337,9 @@ sharpen = "screen"
 # personnalisé les écrit ici), après ceux fournis : "l:h" dans l'orientation voulue.
 ratios = []
 
+# Préréglages de version, choisis dans la barre des versions (ou p) : « Nouveau… » en
+# crée un sur le modèle de celui montré.
+#
 # Préréglages de version (v en plein écran) : [versions.presets.<identifiant>], autant que
 # voulu ; choisis dans la barre des versions (ou p), puis on ajuste le cadre.
 # Une clé absente vient du préréglage fourni de même identifiant (story, post, carousel).
@@ -308,9 +349,6 @@ ratios = []
 # tiles, rows : morceaux côte à côte (colonnes) et l'un sous l'autre (lignes), chacun au
 #   rapport ratio, un fichier par morceau à l'export (1 à 10 ; 1 et 1 : le cadre entier ;
 #   3 et 1 : un carrousel ; 3 et 3 : une grille).
-
-# Préréglages de version, choisis dans la barre des versions (ou p) : « Nouveau… » en
-# crée un sur le modèle de celui montré.
 [versions.presets.story]
 # Story (Instagram…) : 9:16, pour le web.
 name = ""
@@ -346,23 +384,32 @@ timeout_s = 10
 # Bouton « Signaler un problème » de l'aide : formulaire de GitHub, prérempli avec la
 # version et le système.
 issue_url = "https://github.com/fkinnar/tri/issues/new?template=bug.yml"
+# Formats de paquet proposés par les boutons « Télécharger » de l'aide.
+#
 # Boutons « Télécharger » de l'aide (build de nuit, dernière version) : formats de
 # paquet, dans l'ordre où ils sont proposés (plusieurs pour ce système : une boîte de
 # choix ; aucun : la page de la version).
 formats = ["dmg", "msi", "AppImage", "deb", "tar.gz", "zip"]
 
 [watch]
+# Surveillance du dossier ouvert : changements faits ailleurs pris en compte d'eux-
+# mêmes.
+#
 # Surveillance du dossier ouvert (ms) : images ajoutées, retirées ou modifiées, notes XMP
 # modifiées par un autre logiciel (darktable…) apparaissent d'elles-mêmes, une fois le
 # dossier stable pendant cet intervalle (une copie en cours ne recharge qu'une fois, à la
 # fin). 0 : pas de surveillance.
 interval_ms = 1000
+# Part du temps que la surveillance peut prendre sur un dossier lent (NAS, réseau).
+#
 # Part du temps (en %) que la surveillance peut passer à relever le dossier : un relevé
 # lent (NAS, partage GVFS sous Linux) espace les suivants d'autant (10 : un relevé de 3 s
 # attend 27 s avant le suivant). 100 : pas d'espacement.
 max_share = 10
 
 [exposure]
+# Seuil de saturation de l'histogramme et des alertes d'exposition.
+#
 # Histogramme et alertes d'exposition, calculés sur les données du capteur pour un RAW.
 # Seuil de saturation en IL sous le blanc du capteur (0 : seulement au blanc). -0.02 (1,4 %)
 # par défaut : un RAF X-T4 enregistre un rouge ou un bleu saturé un peu sous le blanc vers
@@ -382,21 +429,29 @@ mask_size = 1024
 mask_under_share = 0.5
 
 [offload]
+# Dossier où ranger les séances déchargées d'une carte.
+#
 # Déchargement d'une carte : dossier racine (~ accepté) du premier déchargement ; ensuite,
 # la racine du dernier déchargement est retenue. Le dossier de la séance y est créé
 # (proposé : AAAA-MM-JJ_, à compléter ou remplacer ; l'année va dans la racine).
 destination = "~/Pictures"
 # Relire chaque copie et comparer son empreinte à l'original.
 verify = true
+# Ignorer ce qui a déjà été déchargé, où que ce soit.
+#
 # Ignorer ce qui a déjà été déchargé n'importe où (historique global). false : les doublons
 # se jugent sur le dossier de destination seul (une copie identique déjà présente est
 # ignorée), pour décharger une même carte à deux endroits ; aussi la case « Décharger à
 # nouveau les images déjà déchargées » de la boîte, pour une fois.
 skip_known = true
+# Fichier de l'historique des déchargements.
+#
 # Fichier de l'historique des déchargements (~ accepté) ; vide : offload-history.tsv dans le
 # dossier de données (Linux ~/.local/share/tri, macOS ~/Library/Application Support/tri,
 # Windows %APPDATA%\tri).
 history = ""
+# Cases cochées par défaut dans la boîte de déchargement.
+#
 # Choix par défaut de la boîte de déchargement (cochés ou non) : ne copier que les RAW
 # (JPEG du boîtier laissés sur la carte) ; à la fin, ouvrir le dossier de la séance,
 # éjecter la carte, supprimer de la carte les fichiers copiés et vérifiés. En ligne de
@@ -408,6 +463,8 @@ eject_after = true
 delete_after = false
 # Avec raw_only et delete_after : supprimer aussi les JPEG laissés sur la carte (non copiés).
 delete_left = false
+# Préparer chaque photo pendant le déchargement : la séance est prête plus tôt.
+#
 # Calculer aperçus et analyses (vignettes, rendu boîtier, histogrammes, netteté,
 # regroupement) de chaque photo dès qu'elle est copiée, pendant la suite de la copie : la
 # séance est prête plus tôt. Case de la boîte de déchargement ; en ligne de commande,
@@ -420,6 +477,8 @@ previews = true
 pairs = true
 # Supprimer = mettre à la corbeille (récupérable) ; false : suppression définitive.
 trash = true
+# Éditeur externe : l'application du système, ou une autre.
+#
 # Éditeur externe (<core.file.edit>) : vide, l'application que le système choisit pour chaque type
 # d'image ; sinon le programme puis ses arguments, "{files}" (ou "{file}") remplacé par les
 # images (ajoutées à la fin sinon). Fenêtre de réglages : « Application du système » ou
@@ -428,23 +487,31 @@ trash = true
 editor = []
 # Copier / déplacer vers… : nombre de destinations récentes proposées (touches 1 à 9).
 recent = 9
+# Autoriser renommer, copier, déplacer et supprimer des fichiers depuis tri.
+#
 # Actions sur les fichiers dans l'interface : renommer, copier, déplacer, supprimer images
 # et dossiers. Interdites par défaut : un logiciel de développement (darktable,
 # Lightroom, Capture One…) attend ses images à leur place, les déplacer ou les supprimer
 # d'ici casse sa bibliothèque. Autorisées, chaque boîte le rappelle. Aussi une case dans
 # le panneau de droite (Grille). Le déchargement d'une carte n'est pas concerné.
 allow_actions = false
+# Regrouper les paires RAW+JPEG en une seule photo dans la grille.
+#
 # Paires RAW+JPEG regroupées en une seule photo dans la grille, le JPEG rangé avec les
 # développements du RAW (« Boîtier ») : "ask" demande à l'ouverture d'un dossier qui a des
 # paires, "separate" les laisse séparées, "grouped" les regroupe. Chaque dossier retient sa
 # décision (menu du dossier, palette), qui l'emporte sur ce réglage.
 group_pairs = "ask"
+# Gabarit proposé pour renommer plusieurs photos d'un coup.
+#
 # Renommage par lot (plusieurs photos, <core.file.rename>) : gabarit proposé la première fois. Champs :
 # {date} (prise de vue, 2026-11-14), {time} (153012), {name} (nom d'origine), {n}
 # (compteur ; {n:3} = 001), {folder} (dossier sans la date en tête), {camera} (appareil).
 rename_template = "{date}_{folder}_{n:3}"
 
 [sharpness]
+# Seuil de la carte de netteté : plus bas, plus de contours marqués.
+#
 # Carte de netteté (focus peaking, p en 1:1) : un pixel est marqué si le gradient de
 # luminance (Sobel, 0 à 510 ; un bord franc noir / blanc donne 255) dépasse ce seuil. Fixe,
 # pas relatif à l'image : dans une rafale, la photo la plus nette montre plus de contours.
@@ -458,12 +525,16 @@ spread = 1
 # une ligne (2 voisins au moins), le bruit à ISO élevé fait des points isolés. 0 : tout
 # garder.
 min_neighbours = 2
+# Mesure du score de netteté, qui repère les photos floues.
+#
 # Score de netteté (repérer les photos floues, filtre f b) : l'image est réduite à ce côté
 # long (pixels), découpée en cases (sur le côté long), et le score est le gradient moyen de
 # la part des cases les plus nettes (un fond flou volontaire ne pénalise pas un sujet net).
 score_side = 1536
 score_tiles = 16
 score_top_share = 0.05
+# Contraste étiré avant la mesure : une photo sombre mais nette ne passe pas pour floue.
+#
 # Luminance étirée entre ces centiles avant la mesure (0,01 : 1 % et 99 %) : une photo
 # sous-exposée mais nette ne passe pas pour floue. Écart minimal (0 à 255) entre eux ; en
 # dessous, l'image n'a pas de détail (toute blanche ou noire) et son score est nul.
@@ -472,11 +543,15 @@ score_min_range = 8
 # Photo jugée floue sous cette fraction de la médiane des scores du dossier : le score ne
 # se juge pas dans l'absolu (ISO, objectif, accentuation du boîtier).
 blur_ratio = 0.5
+# Juger une photo floue par rapport à ses voisines (même scène, même rafale).
+#
 # Ou sous cette fraction de la médiane de ses voisines (photos avant et après dans le
 # dossier : même scène, même rafale) : attrape une ratée isolée dans une série nette.
 # neighbours = 0 : pas de comparaison aux voisines.
 neighbours = 3
 neighbour_ratio = 0.8
+# Juger une photo floue par rapport aux autres images de sa pile.
+#
 # Piles d'images semblables connues ([similarity]) : une photo n'est plus comparée à ses
 # voisines (une autre pile est une autre scène) mais aux autres images de sa pile, si elle
 # en compte au moins group_min ; jugée floue sous group_ratio × leur médiane. Le dossier
@@ -485,6 +560,8 @@ neighbour_ratio = 0.8
 group_min = 3
 group_ratio = 0.8
 group_threshold = 0.45
+# Amplitude du curseur de sévérité du flou.
+#
 # Curseur de sévérité de la barre des filtres (à côté des gouttes) : au centre, les seuils
 # ci-dessus ; tout à droite (plus strict, plus de photos floues) ils sont multipliés par
 # strictness_span, tout à gauche (plus souple) divisés par lui (sans dépasser 1). Le
@@ -494,6 +571,8 @@ strictness_span = 2.0
 background = true
 
 [similarity]
+# Regrouper en fond les images semblables (rafales, séries) en piles.
+#
 # Regroupement des images semblables (rafales, séries d'une même scène) en piles.
 # Empreintes de tout le dossier calculées en fond (cache d'analyse, juste après les
 # vignettes) ; false : pas de regroupement.
@@ -504,6 +583,8 @@ side = 64
 # Poids de la composition dans la distance entre deux images (0 à 1) ; le reste : les
 # couleurs.
 shape_weight = 0.5
+# Seuil de ressemblance par défaut des piles.
+#
 # Seuil par défaut (distance de 0 à 1) : deux images voisines plus proches vont dans le
 # même groupe. Centre du curseur des piles quand il n'est pas calculé d'après le dossier
 # (auto), et repère des bornes de ce calcul.
@@ -522,6 +603,8 @@ auto_range = 2.0
 # distances : à fond à gauche, le seuil est multiplié par cette valeur ; à fond à
 # droite, divisé.
 strictness_span = 3.0
+# Progression du curseur des piles de part et d'autre de son centre.
+#
 # Progression du curseur des piles (lambda) : il suit le rang des distances du dossier,
 # du centre (calculé) jusqu'à tout regrouper à fond à gauche et ne plus faire aucune
 # pile à fond à droite. Vers la gauche, le nombre de piles suit une échelle
@@ -538,6 +621,8 @@ strictness_curve_max = 4.0
 # Écart de temps de prise de vue au-delà duquel deux images voisines ne sont jamais
 # groupées (secondes ; 0 : sans limite).
 max_gap_s = 60.0
+# Poids des pauses entre deux prises dans le regroupement en piles.
+#
 # Importance des pauses : une pause plus longue que la cadence du dossier (écart médian
 # entre deux images) éloigne les deux images, distance multipliée par
 # 1 + pause_weight × log2(pause / cadence). Deux images identiques restent ensemble ; 0 :
@@ -578,6 +663,8 @@ enabled = true
 # dir = "/chemin/vers/données"
 
 [log]
+# Journal de l'application (tri.log) : taille avant de passer à un nouveau fichier.
+#
 # Journal de l'application (tri.log, dans le dossier des données) : avertissements et
 # erreurs avec tout leur détail (image, logiciel, code de sortie, messages…), et les
 # plantages. Consultable dans tri (palette : « Journal »), joint au signalement d'un
@@ -591,6 +678,8 @@ keep = 3
 trace = false
 
 [adjust]
+# Exposition automatique : luminance visée.
+#
 # Réglages de visualisation (section « Réglages » du panneau de droite, tri --adjust).
 # Exposition automatique : luminance médiane visée, en lumière linéaire (0.18 : le gris
 # moyen des posemètres ; plus haut, des images plus claires).
@@ -599,12 +688,16 @@ auto_exposure_target = 0.18
 # niveau des hautes lumières (celui-ci jamais au-delà de 0.95, rien ne brûle). Négative :
 # plus sombre.
 auto_exposure_bias = 0.5
+# Exposition automatique : priorité aux hautes lumières.
+#
 # Priorité aux hautes lumières : en éclaircissant, on s'arrête quand ce centile de la
 # luminance (0.99 : le 1 % le plus clair) atteint auto_exposure_highlight_target ; en
 # assombrissant, quand il y descend (un portrait en low-key ne brûle pas, une scène de
 # neige ne devient pas grise).
 auto_exposure_highlights = 0.99
 auto_exposure_highlight_target = 0.6
+# Balance automatique : pixels presque neutres pris en compte.
+#
 # Balance auto, sur les pixels presque neutres (le « monde gris », la moyenne de toute
 # l'image, refroidit un portrait au visage chaud) : un pixel compte si l'écart entre ses
 # canaux reste sous cette part du plus fort (0.2 : 20 %) ; passes de la recherche (ce qui
@@ -626,11 +719,15 @@ flash = 5500
 # foncé, fond central gris neutre, qui ne fausse pas le jugement des images ; couleurs :
 # [gui.colors] neutral_*).
 theme = "dark"
+# Jeu de raccourcis : classique (flèches) ou vim (hjkl).
+#
 # Jeu de raccourcis : "classic" (flèches, Début / Fin, Suppr, comme la plupart des
 # logiciels) ou "vim" (hjkl, gg / G, x, y, u, comme nvim). Le reste (notation, filtres,
 # piles, zoom…) est commun. Tous les raccourcis par défaut : keys.toml, livré avec le
 # programme ; ceux en vigueur : section Raccourcis [keys].
 profile = "classic"
+# Touche leader, pour passer d'un panneau à l'autre au clavier comme dans tmux.
+#
 # Changer de panneau au clavier, comme tmux : le leader, puis une direction
 # (<core.panel.left>, <core.panel.right>), ou <core.panel.next> pour le suivant. Le
 # panneau qui a le clavier passe ses touches d'abord ; les autres gardent leur effet ;
@@ -644,6 +741,8 @@ key_sequence_timeout_ms = 1000
 # Touche qui est un raccourci et le début d'un autre (en vim, y copie, y ) la pile) : délai
 # d'attente de la suite (ms) avant d'agir seule.
 key_ambiguous_timeout_ms = 300
+# Menu des suites possibles après le début d'une séquence de touches.
+#
 # Menu des suites (comme which-key dans nvim) : après le début d'une séquence (le leader,
 # f, <leader> r…), la liste des touches possibles et de ce qu'elles font. Le menu affiché,
 # la séquence attend la suite sans délai ; Échap l'abandonne.
@@ -654,6 +753,8 @@ key_menu_delay_ms = 400
 # Diagnostic (TRI_GUI_TRACE=1) : une image de l'interface plus lente que ce délai (ms) est
 # tracée avec la durée de ses étapes. Avec [log] trace, aussi au journal.
 trace_slow_ms = 100
+# Profil ICC de l'écran, à la place de celui du système (Linux, Windows).
+#
 # Profil ICC de l'écran (fichier .icc ou .icm, ~/… accepté), à la place de celui du
 # système. Linux et Windows seulement : macOS convertit lui-même vers le profil de
 # l'écran. Vide : celui du système (Linux : publié par colord pour l'écran principal ;
@@ -668,6 +769,8 @@ adjust_eyedropper_size = 0.04
 # Curseurs : glisser avance par grands crans ; Maj + glisser règle finement, la valeur
 # bougeant de cette fraction du déplacement de la souris (0.1 : dix fois plus lentement).
 slider_fine_speed = 0.1
+# Police des symboles de flèches dans l'aide, les menus et la palette.
+#
 # Flèches et Entrée dans l'aide, les menus et la palette : en symboles, pris dans
 # une police du système qui les a (Apple Symbols, DejaVu Sans, Segoe UI Symbol ; celle de
 # l'interface n'en a pas). Vide : la première trouvée ; un chemin : cette police ;
@@ -711,6 +814,8 @@ reopen_last = true
 # Une image en argument (tri-gui <image>) : ouverte en mode concentration (<core.view.focus_mode>), comme dans
 # une visionneuse ; l'argument --focus le force dans tous les cas.
 image_focus = true
+# Ordre des images : nom, date, notes, couleur ou drapeau.
+#
 # Ordre des images : "name" (nom, l'ordre du boîtier), "captured" (date de prise de vue,
 # plusieurs boîtiers dans une séance), "modified" (date de modification), "stars"
 # (étoiles ; une rejetée sous 0), "color" (ordre de [sort] color_order) ou "flag"
@@ -718,16 +823,22 @@ image_focus = true
 # retenu (une paire RAW+JPEG reste ensemble).
 sort = "name"
 sort_descending = false
+# Retrouver d'un lancement à l'autre ce qui était affiché, et la fenêtre.
+#
 # Garder d'un lancement à l'autre ce qu'on affiche ou masque d'une touche (collimateur,
 # carte de netteté, zones, histogramme, panneaux, barres, avance automatique), dans
 # gui-state.toml du dossier de données ; les valeurs ci-dessous ne servent alors qu'au
 # premier lancement. false : toujours les valeurs de ce fichier. La fenêtre aussi : taille,
 # position et agrandissement à la fermeture (window ne sert alors qu'au premier lancement).
 remember_display = true
+# Garder les filtres et l'ordre de chaque dossier d'un lancement à l'autre.
+#
 # Garder les filtres (RAW / JPEG, étoiles, couleurs, drapeaux, netteté, exposition,
 # développées) et le tri de chaque dossier d'un lancement à l'autre, dans le dossier de
 # données. false : chaque dossier s'ouvre sans filtre, dans l'ordre retenu pour tous.
 remember_folder_view = true
+# Une seule section dépliée à la fois dans les panneaux latéraux.
+#
 # Panneaux latéraux (dossiers, droite) : une seule section dépliée à la fois ; en déplier
 # une replie les autres du même panneau ; allumée, chaque panneau n'en garde qu'une (la
 # dernière dépliée, sinon la plus haute).
@@ -735,6 +846,8 @@ one_section_open = false
 # Fenêtre déplacée ou redimensionnée : retenue une fois immobile depuis ce délai (ms), et
 # toujours à la fermeture.
 window_save_ms = 1000
+# Bandeau de notation à la souris affiché au démarrage.
+#
 # Bandeau de notation à la souris (drapeaux, étoiles, couleurs de l'image sélectionnée)
 # affiché au démarrage ; <core.view.rating_bar> l'affiche ou le masque. Le clic droit sur une image ouvre
 # une boîte avec les mêmes contrôles.
@@ -746,6 +859,8 @@ title_bar = true
 # l'indication pour en sortir en entrant en mode concentration (ms).
 title_bar_size = 26.0
 focus_mode_hint_ms = 3000
+# Passer à l'image suivante après une note.
+#
 # Après une note (clavier ou bandeau), passer à l'image suivante ; <core.rate.auto_advance> l'active ou le
 # désactive. Si la note fait sortir l'image d'un filtre, la suivante est déjà sélectionnée :
 # on ne saute pas une image. L'autre image d'une paire RAW+JPEG, notée en même temps, est
@@ -756,6 +871,8 @@ auto_advance = false
 history = 200
 
 [gui.grid]
+# Taille des vignettes et bornes de son curseur.
+#
 # Dimensions en points. cell : taille des vignettes au premier lancement et au double-clic
 # sur le curseur de taille (bas de la grille ; + / - au clavier, * pour tout voir à
 # l'écran) ; la taille choisie est ensuite retenue. cell_min / cell_max : bornes du curseur.
@@ -804,6 +921,8 @@ bar_label_scale = 0.85
 # Bulle du nombre d'images au milieu de l'écran après un changement de filtre : durée
 # (millisecondes ; 0 : jamais).
 filter_toast_ms = 1500
+# Durée du bandeau « n développements à refaire ».
+#
 # Bandeau « n développements à refaire » (développés modifiés ailleurs, rendus de nouveau
 # en fond) : durée à l'écran au départ, puis à la fin (millisecondes ; 0 : jamais). La
 # progression reste dans la barre d'état.
@@ -812,10 +931,14 @@ develop_toast_ms = 6000
 # (millisecondes ; 0 : jamais). Gardée tant que le pointeur est dessus ; une erreur reste
 # jusqu'à ce qu'on la ferme.
 export_toast_ms = 5000
+# Piles d'images semblables affichées au démarrage.
+#
 # Piles (images semblables regroupées) affichées au démarrage ; false : chaque image
 # seule, <core.stack.mode> ou le bouton pile les affichent (instantané : les empreintes se
 # calculent en fond, voir [similarity] background).
 stacks = false
+# Attente des piles à l'ouverture d'un dossier, avant de l'afficher déplié.
+#
 # Ouverture d'un dossier en piles : la grille attend ses piles au plus ce temps (ms) avant
 # de s'afficher dépliée (un dossier jamais analysé peut demander des minutes). Les piles
 # d'un dossier déjà vu, rien de changé depuis, s'affichent tout de suite.
@@ -823,6 +946,8 @@ stacks_wait_ms = 2000
 # Pendant cette attente, à partir de ce nombre d'images : une boîte « Regroupement des
 # piles… » au centre de la grille.
 stacks_overlay_from = 200
+# Attente à l'ouverture d'un dossier, pour ne pas changer d'image un instant après.
+#
 # Ouverture d'un dossier : la grille attend ses notes, et une vignette dont on ne sait pas
 # encore quoi montrer (sidecar d'un développement, réglages de visualisation en lecture)
 # reste vide, au plus ce temps (ms), plutôt que de changer d'image un instant après.
@@ -832,6 +957,9 @@ search_width = 200.0
 # Largeur minimale de ce champ quand la barre manque de place (fenêtre étroite : le tri et
 # le nombre d'images passent alors dans un menu « … »).
 search_min_width = 80.0
+# Rendu affiché d'un dossier jamais réglé : JPEG boîtier, couverture, un logiciel ou
+# LibRaw.
+#
 # Rendu affiché, le même en grille et en plein écran (<core.view.source> / <core.grid.render>), retenu par dossier
 # (ceci est la valeur d'un dossier jamais réglé) : "embedded" (JPEG boîtier, pour décharger
 # et trier ; une photo développée se replie sur son JPEG), "cover" (la couverture : le
@@ -839,10 +967,14 @@ search_min_width = 80.0
 # logiciel), "libraw" (rendu RAW). Une image sans le développement voulu montre son rendu
 # LibRaw, calculé en fond.
 render = "embedded"
+# Couverture d'une photo dont on n'a pas choisi la couverture.
+#
 # Couverture d'une photo dont on n'a pas choisi la couverture, en rendu « cover » :
 # "latest" (son dernier développement, sinon le rendu LibRaw), "camera" (le JPEG boîtier :
 # le fichier JPEG d'une paire regroupée, sinon l'aperçu embarqué du RAW) ou "libraw".
 cover_default = "latest"
+# Développer en fond les photos pour le rendu choisi, ou à la demande.
+#
 # Photos à développer pour le rendu choisi : "auto" (rendues en fond, une image après
 # l'autre) ou "manual" (<core.develop.folder> sur le dossier ; LibRaw en attendant). Les
 # développements (clones, copies) sont toujours rendus en fond : c'est leur vignette.
@@ -858,6 +990,8 @@ full_raw_dwell_ms = 400
 # Grandes textures (aperçus, 1:1) gardées en mémoire graphique ; un 1:1 de 26 Mpx occupe
 # ~100 Mo.
 textures = 8
+# Mémoire graphique des images affichées, au plus.
+#
 # Mémoire graphique de ces textures, au plus (Mo) : au-delà, les moins récentes non
 # affichées sortent ; si ça ne suffit pas (beaucoup d'images comparées à 1:1), une image
 # garde son aperçu au lieu de son 1:1. Une carte graphique intégrée en a peu.
@@ -867,6 +1001,8 @@ textures_mb = 1500
 pan_step = 0.2
 # Taille des notes (étoiles, couleurs, drapeau) en plein écran.
 marks = 18.0
+# Collimateur de mise au point affiché, sa forme et sa taille.
+#
 # Collimateur de mise au point (lu dans le RAW : Fujifilm pour l'instant), affiché au
 # démarrage en plein écran et en comparaison ; m l'affiche ou le masque. Forme : "square"
 # (comme dans le viseur), "cross", "circle" ou "heart". Taille et épaisseur en points.
@@ -877,31 +1013,45 @@ focus_marker_width = 2.0
 # Aide-mémoire de quelques touches en haut à droite du plein écran ; masqué par défaut : il
 # mord sur l'image, et <core.app.help> ouvre l'aide complète.
 key_hints = false
+# Infos et notes dessinées sur l'image en mode concentration.
+#
 # Mode concentration (<core.view.focus_mode>) : infos (numéro, source, taille) et notes
 # dessinées sur l'image, puisque la barre d'état et le bandeau sont masqués ;
 # <core.view.image_info> les masque ou les affiche.
 image_info = true
+# 1:1 centré sur le collimateur quand le boîtier l'a enregistré.
+#
 # 1:1 (<core.view.zoom> ou bouton « 1:1 ») centré sur le collimateur quand le boîtier l'a enregistré
 # (c'est là qu'on juge la netteté) ; sinon au milieu de l'image. Le double-clic, lui,
 # zoome sur le point cliqué.
 zoom_on_focus_point = true
+# Au bout d'une pile en plein écran : repartir de l'autre bout ou s'arrêter.
+#
 # Piles actives (<core.stack.mode>, bouton pile), en plein écran : flèches gauche / droite dans la
 # pile, haut / bas à la pile d'avant / d'après ; au bout de la pile, true : on repart de l'autre
 # bout ; false : on s'arrête.
 stack_wrap = false
+# Flèches du plein écran : de photo en photo, ou par chacun de ses développements.
+#
 # Plein écran, flèches gauche / droite : true : par chaque développement d'une photo
 # (darktable, ses clones, RapidRAW…) ; false : de photo en photo, chacune dans le rendu de
 # la grille (« Rendu affiché »), les autres avec « Développement suivant / précédent ». La
 # case « Passer en revue les développements » de la section Vue le change (retenu).
 review_developments = false
+# Avance automatique au bout d'une pile : passer à la pile suivante ou rester.
+#
 # Piles actives, en plein écran, avance automatique après une note (<core.rate.auto_advance>) : au bout de la
 # pile, true : la première photo de la pile suivante (prime alors sur stack_wrap) ; false :
 # on reste sur la dernière.
 stack_advance_next = false
+# En entrant dans une pile en plein écran : sa couverture ou sa première photo.
+#
 # Piles actives, en plein écran : en entrant dans une pile (haut / bas), "cover" : sa
 # couverture ; "first" : sa première photo. Le bouton du bandeau, en mode pile, change ce
 # choix (retenu d'un lancement à l'autre).
 stack_enter = "cover"
+# Superpositions (grilles, nombre d'or…) : épaisseur des traits et opacité.
+#
 # Superpositions (<core.view.overlay>, <core.view.overlay_orient> pour l'orientation, voir
 # overlay.md) : épaisseur des traits (points) ; opacité
 # des grilles intégrées (tiers, nombre d'or, diagonales), couleur : [gui.colors] overlay.
@@ -909,6 +1059,8 @@ overlay_line_width = 1.0
 overlay_opacity = 0.6
 
 [gui.zoom]
+# Paliers et bornes du zoom en plein écran.
+#
 # Zoom en plein écran, en pourcentages : paliers de + et - (100 : un pixel de l'image par
 # pixel de l'écran ; * passe à 100 %, / revient à l'ajusté, z bascule ajusté / 100 %). À la souris
 # et au pavé tactile, en continu : pincer, ou Ctrl / Cmd + molette (défiler déplace
@@ -917,6 +1069,8 @@ overlay_opacity = 0.6
 steps = [12.5, 25, 50, 100, 200, 400]
 max = 400
 min = 10
+# Loupe à 100 % sous le pointeur tant qu'une touche est maintenue.
+#
 # Loupe, en vue ajustée et en comparaison : tant que cette touche est maintenue (une
 # touche libre, écrite comme dans [keys] : "m", "F3"… ; ou "shift", "ctrl", "alt" ;
 # "none" : pas de loupe), l'image à 100 % (loupe_scale) sous le pointeur, dans un carré
@@ -927,12 +1081,16 @@ loupe_key = ""
 loupe_delay_ms = 150
 loupe_size = 320.0
 loupe_scale = 100
+# Déplacement de la loupe au clavier.
+#
 # Loupe au clavier, la touche maintenue : les touches de navigation (flèches, hjkl en vim)
 # la déplacent de loupe_step points, avec Maj (comme une image zoomée) de
 # loupe_step_large, mesurés dans la loupe (l'image à 100 %), pareils en grille et en plein
 # écran : un quart de loupe, une loupe entière ; bouger la souris la rend au pointeur.
 loupe_step = 80.0
 loupe_step_large = 320.0
+# Grossissement de la loupe tapé au clavier.
+#
 # Grossissement de la loupe tapé après <core.view.loupe_scale>, sans Entrée : trois chiffres
 # s'appliquent aussitôt (150 : 150 %) ; un ou deux chiffres après cette pause (ms), en
 # centaines ou en dizaines (2 : 200 %, 20 : 200 %, 01 : 10 %). <core.view.loupe_zoom_in> /
@@ -945,6 +1103,8 @@ loupe_digits_ms = 1000
 loupe_wheel_step = 50.0
 
 [gui.dialogs]
+# Marges et tailles des boîtes de dialogue.
+#
 # Boîtes ouvertes près du clic (notation, éjection, déchargement, renommage, corbeille) :
 # elles se déplacent en glissant leur fond. Marge intérieure, espace entre les éléments,
 # marge des boutons, largeurs minimale et maximale, taille des titres, en points.
@@ -985,6 +1145,8 @@ help_here_column = 420.0
 # (0 : toutes ; elle défile).
 palette_width = 640.0
 palette_max = 0
+# Nombre de commandes gardées dans l'historique de la palette.
+#
 # Historique de la palette : les commandes qu'on y a lancées, montrées quand le champ est
 # vide (la plus récente en haut ; flèches haut / bas et Entrée), gardées d'une session à
 # l'autre dans le dossier de données. Nombre gardé ; 0 : pas d'historique.
@@ -1005,6 +1167,8 @@ max_errors = 5
 completions = 12
 
 [gui.compare]
+# Nombre d'images comparées côte à côte, au plus.
+#
 # Comparaison côte à côte des images sélectionnées (<core.view.compare>). Images comparées au plus (au-delà,
 # les premières) : chacune garde un aperçu, et en 1:1 son 1:1 (~100 Mo de mémoire graphique
 # pour 26 Mpx ; 21 en 1:1 : ~2 Go). 21 : à peu près la taille des vignettes sur un écran.
@@ -1013,6 +1177,8 @@ max = 21
 gap = 4.0
 # Épaisseur du cadre de l'image active (celle que l'on note).
 frame = 3.0
+# Bulle « Comparaison limitée » : durée et place.
+#
 # Plus d'images que max : la bulle « Comparaison limitée à … images », durée d'affichage
 # en secondes (0 : jamais, la barre d'état le dit ; négatif : toujours) et place
 # ("center", "top-left", "top-right", "bottom-right" ou "bottom-left").
@@ -1020,6 +1186,8 @@ limit_seconds = 3.0
 limit_place = "center"
 
 [gui.position]
+# Repère « Photo 12 / 94 » à chaque changement d'image : durée d'affichage.
+#
 # Repère « où on en est » à chaque changement d'image, en grille et en plein écran :
 # « Photo 12 / 94 », avec les piles « Pile 3 / 20 · 2 / 5 » (la pile, puis la photo dans
 # la pile), et « Dév. 2 / 3 » en passant en revue les développements (review_developments) ;
@@ -1030,6 +1198,8 @@ seconds = 2.0
 place = "top-left"
 
 [gui.notes]
+# Notes posées sur l'image en plein écran : durée d'affichage.
+#
 # Notes (étoiles, drapeau, couleurs) posées sur l'image en plein écran, bandeau du bas
 # affiché ou non. Durée d'affichage en secondes après un changement d'image ou de notes (un
 # clic sur l'image ou Entrée les remontre) ; 0 : jamais ; -1 : toujours.
@@ -1063,6 +1233,8 @@ tile_line_width = 1.0
 tile_opacity = 0.7
 
 [gui.folders]
+# Panneau des dossiers : affiché, largeur, retrait, dossiers cachés.
+#
 # Panneau des dossiers, à gauche de la grille : affiché au démarrage (<core.view.folders>
 # l'affiche ou le masque), largeur initiale (points, le bord se tire à la souris), retrait par niveau,
 # dossiers cachés (.xxx) montrés ou non.
@@ -1093,10 +1265,14 @@ running_check_ms = 1000
 # Ouverture d'un dossier : délai (ms) pendant lequel l'interface attend sa liste d'images ;
 # au-delà (NAS, disque lent), elle la lit en fond, avec la progression et de quoi annuler.
 open_wait_ms = 150
+# Dossier lent (réseau) : se fier aux extensions des noms plutôt qu'au système.
+#
 # Lecture d'un dossier : une demande du type d'une entrée (fichier ou dossier) plus lente
 # que ce délai (ms ; partage monté par GVFS sous Linux, un aller-retour réseau par
 # fichier) fait se fier aux noms pour la suite : une image se reconnaît à son extension.
 type_check_ms = 20
+# Clic droit sur un dossier : groupes montrés au premier niveau du menu.
+#
 # Clic droit sur un dossier : groupes montrés au premier niveau du menu plutôt qu'en
 # sous-menu, entre deux traits (« open » Accès, « files » Dossier, « notes » Notes,
 # « develop » Développement, « preferences » Préférences). Le petit bouton en haut à
@@ -1104,6 +1280,8 @@ type_check_ms = 20
 menu_inline = ["open", "files"]
 
 [gui.histogram]
+# Histogramme : affiché, échelle, taille du grand histogramme.
+#
 # Histogramme (données du capteur pour un RAW), en haut du panneau des métadonnées :
 # affiché au démarrage (<core.view.histogram>), échelle "ev" (IL sous la saturation) ou
 # "linear" (<core.view.histogram_scale> bascule). Grand histogramme
@@ -1115,6 +1293,8 @@ large = 0.7
 # IL montrés en échelle IL : 0 = plage utile de l'image (~13,9 IL pour un RAW 14 bits,
 # ~11,7 pour un JPEG, valeurs sRGB ramenées en lumière linéaire) ; positif : plafond.
 ev_shown = 0.0
+# Zones saturées et bouchées superposées à l'image.
+#
 # Zones saturées et bouchées superposées à l'image au démarrage (<core.view.clipping>), et leur
 # opacité. Zones saturées colorées par canal (clip_red / clip_green / clip_blue, mélangées
 # si deux canaux, clip_over si les trois) ; false : clip_over pour toute saturation.
@@ -1125,6 +1305,8 @@ clipping_channels = true
 # au-delà de laquelle une vignette est signalée.
 badge_over = 0.005
 badge_under = 0.05
+# Amplitude des curseurs du filtre « bien exposées ».
+#
 # Curseurs « brûlé » / « bouché » du filtre « bien exposées » (barre des filtres) : au
 # centre, les seuils ci-dessus ; à fond à droite, divisés par strictness_span ; vers la
 # gauche, multipliés ; tout à gauche, ce côté n'exclut plus rien (fonds noirs, blancs
@@ -1143,6 +1325,8 @@ fill_strength = 0.55
 # Statistiques du grand histogramme (<core.view.histogram_large>) : plage des ombres aux hautes lumières, sans
 # les pixels isolés (0,01 : centiles 1 % et 99 %).
 stats_tail = 0.01
+# Grand histogramme : pastilles de canal et photo d'analyse.
+#
 # Grand histogramme : diamètre des pastilles de canal (rouge, vert, bleu, blanc = tous ;
 # <core.view.histogram_channel> les fait tourner) ; photo d'analyse (en gris, zones saturées / bouchées en
 # analysis_over / analysis_under, du canal choisi) affichée à l'ouverture, à droite de
@@ -1152,12 +1336,16 @@ stats_tail = 0.01
 channel_dot = 11.0
 analysis = false
 analysis_lighten = 0.06
+# Courbe du JPEG boîtier par-dessus l'histogramme d'un RAW.
+#
 # RAW : courbe du JPEG boîtier en trait fin par-dessus celle des données du capteur
 # (couleur [gui.colors] hist_camera), pour voir ce que le boîtier a fait des hautes
 # lumières et des ombres ; épaisseur du trait. Valeur au premier lancement : ensuite,
 # j ou le bouton du grand histogramme la montre ou la masque, et c'est retenu.
 camera_jpeg = true
 camera_width = 1.5
+# Histogramme après les réglages de visualisation, plutôt que sur les données réelles.
+#
 # Histogramme, indicateurs et zones : sur les données réelles par défaut ; true : ceux
 # d'une image réglée, après ses réglages de visualisation (le pourcentage saturé du
 # capteur reste affiché : ce qu'il a perdu est perdu). Le même réglage que la case
@@ -1186,6 +1374,8 @@ opacity = 1.0
 step = 0.1
 
 [gui.metadata]
+# Panneau des métadonnées : affiché, largeur, histogramme.
+#
 # Panneau des métadonnées, à droite : affiché au démarrage (<core.view.metadata> l'affiche ou
 # le masque),
 # largeur initiale (points, le bord se tire à la souris), histogramme de l'image
@@ -1214,6 +1404,8 @@ accent_light = "#90d1ff"
 # Titres (boîtes, sections des panneaux), soulignés d'une ligne de séparation ; à part de
 # l'accent.
 title = "#50bedc"
+# Couleurs de la sélection, des barres de progression et du survol.
+#
 # Couleurs "#rrggbb". Sélection (clic ou clavier) absente : couleur du thème. Exemple :
 # selection = "#1e6f7f"
 # Barres de progression de la barre d'état ; absent : gris discret du thème. Exemple :
@@ -1249,6 +1441,8 @@ neutral_stack_band = "#848484"
 neutral_stack_band_alt = "#6a6a6a"
 # Piles repliées : feuilles derrière la couverture et pastille du nombre d'images.
 stack_mark = "#8c8c8c"
+# Gris des marques de développements (nombre, repli, cadre des piles).
+#
 # Développements d'une photo : pastille du nombre (pile repliée), icône « replier » et
 # cadre fin des vignettes d'une pile dépliée ; un gris foncé, un peu plus sombre en thème
 # clair (le texte posé dessus s'adapte : blanc sur sombre, noir sur clair).
@@ -1295,6 +1489,8 @@ analysis_over = "#ffdc00"
 analysis_under = "#286eff"
 
 [keys]
+# Raccourcis clavier, par action : ceux cités remplacent ceux du jeu choisi.
+#
 # Raccourcis, par identifiant d'action (liste dans l'aide, <core.app.help> ou
 # <core.app.help_here>, au survol d'une
 # action ; toutes les actions et leurs raccourcis par défaut : keys.toml, livré avec le

@@ -397,7 +397,9 @@ Proposition : sortir cette étape du logiciel de développement.
   `gui/src/settings.rs` pour l'interface) **et** dans `doc/config.example.toml` (un test
   vérifie que l'exemple reste égal aux valeurs par défaut) **et** dans son pendant
   anglais `doc/config.example.en.toml` (mêmes clés et valeurs, commentaires traduits ;
-  un test vérifie la correspondance).
+  un test vérifie la correspondance). Commentaire long : **un court résumé d'abord**, puis
+  une ligne `#` vide et la référence ; la fenêtre de réglages ne montre que le résumé
+  (#486, 15/11/2026).
 - **Conventions de l'interface** (18/10/2026) : tout champ où l'on tape un **chemin
   existant** a la complétion par Tab (`gui/src/path_field.rs`, moteur
   `files::complete_dir`) ; dans les boîtes, la **main** apparaît sur tout ce qui se

@@ -18,9 +18,18 @@ dans le code :
   montre tels quels.
 
 Un commentaire au-dessus d'un groupe de clés (« Badges de la grille : … » au-dessus de
-`badge_over` et `badge_under`) décrit le groupe : `Group { doc, entries }`. Seul le
-dernier paragraphe d'un commentaire compte (l'en-tête du fichier, séparé par une ligne
-vide, n'est pas la description de `[preview]`). Une section sans clé (`[keys]`, dont
+`badge_over` et `badge_under`) décrit le groupe : `Group { doc, details, entries }`. Seul
+le dernier bloc d'un commentaire compte (l'en-tête du fichier, séparé par une ligne
+vide, n'est pas la description de `[preview]`).
+
+**Résumé d'abord** (#486, 15/11/2026) : un bloc commence par un court résumé de ce que
+fait le réglage, puis une ligne `#` vide, puis la référence pour qui modifie le fichier à
+la main (valeurs, ordre de recherche, détails). La fenêtre de réglages ne montre que le
+résumé (`doc`, le premier paragraphe) ; sa recherche porte aussi sur la référence
+(`details`). Un commentaire court n'a pas besoin de cette coupure : il est son propre
+résumé. Un test exige un résumé pour tout commentaire de plus de 250 caractères, dans les
+deux exemples, et la même coupure en français et en anglais ; la longueur du résumé est
+laissée à l'auteur du réglage. Une section sans clé (`[keys]`, dont
 les clés sont des identifiants d'action choisis par l'utilisateur) est listée sans
 réglage : l'interface lui donne son propre volet (son commentaire, sans clé dessous, se
 perd : toml_edit le range en fin de document). Les clés seulement citées en commentaire (`# selection = "#1e6f7f"`, réglage

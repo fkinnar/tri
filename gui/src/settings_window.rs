@@ -727,6 +727,7 @@ impl SettingsWindow {
                 let mut section = template.clone();
                 section.name = name;
                 section.doc = String::new();
+                section.details = String::new();
                 schema.sections.insert(at, section);
                 at += 1;
             }
@@ -1386,6 +1387,8 @@ impl SettingsWindow {
                         &id,
                         &section_kw,
                         &group.doc,
+                        // La référence aussi (#486) : cherchée, pas affichée.
+                        &group.details,
                         &crate::actions::keywords(&id),
                     ];
                     if let Some(m) = tri::fuzzy::find(query, &fields) {
