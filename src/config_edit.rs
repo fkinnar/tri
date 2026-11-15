@@ -108,8 +108,10 @@ pub struct Entry {
 /// `badge_over` et `badge_under`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Group {
-    /// Commentaire, en un paragraphe (vide s'il n'y en a pas).
+    /// Résumé : premier paragraphe du commentaire, en une ligne (vide s'il n'y en a pas).
     pub doc: String,
+    /// Suite du commentaire (la référence), en une ligne : cherchée, pas affichée.
+    pub details: String,
     /// Les réglages, dans l'ordre du fichier.
     pub entries: Vec<Entry>,
 }
@@ -119,8 +121,10 @@ pub struct Group {
 pub struct Section {
     /// Nom complet, avec les points (`gui.colors`).
     pub name: String,
-    /// Commentaire au-dessus de l'en-tête de section.
+    /// Résumé du commentaire au-dessus de l'en-tête de section.
     pub doc: String,
+    /// Suite de ce commentaire (la référence).
+    pub details: String,
     /// Les groupes de réglages.
     pub groups: Vec<Group>,
 }
@@ -133,20 +137,40 @@ pub struct Schema {
     pub sections: Vec<Section>,
 }
 
-/// Dernier paragraphe de commentaires d'un préfixe (lignes après la dernière ligne vide),
-/// sans les `#`, en une seule ligne.
-fn comment(prefix: Option<&str>) -> String {
+/// Commentaire d'un préfixe : son dernier bloc (lignes après la dernière ligne vide),
+/// sans les `#`, coupé en résumé et référence. Convention des fichiers d'exemple (#486) :
+/// un bloc commence par un court résumé, puis une ligne `#` vide, puis la référence pour
+/// qui modifie le fichier à la main. Renvoie (résumé, référence), chacun en une ligne.
+fn comment(prefix: Option<&str>) -> (String, String) {
     // Ligne par ligne (une ligne vide peut garder un `\r` : fichier extrait en CRLF sous
-    // Windows) ; le paragraphe repart à chaque ligne blanche.
-    let mut paragraph: Vec<&str> = Vec::new();
+    // Windows) ; le bloc repart à chaque ligne blanche.
+    let mut block: Vec<&str> = Vec::new();
     for line in prefix.unwrap_or_default().lines().map(str::trim) {
         if line.is_empty() {
-            paragraph.clear();
+            block.clear();
         } else if let Some(text) = line.strip_prefix('#') {
-            paragraph.push(text.trim());
+            block.push(text.trim());
         }
     }
-    paragraph.join(" ").trim().to_string()
+    let join = |lines: &[&str]| {
+        lines
+            .iter()
+            .filter(|l| !l.is_empty())
+            .copied()
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    // Premier paragraphe : jusqu'à la première ligne `#` vide (lignes vides de tête
+    // ignorées).
+    let first = block
+        .iter()
+        .position(|l| !l.is_empty())
+        .unwrap_or(block.len());
+    let end = block[first..]
+        .iter()
+        .position(|l| l.is_empty())
+        .map_or(block.len(), |n| first + n);
+    (join(&block[first..end]), join(&block[end..]))
 }
 
 impl Schema {
@@ -175,16 +199,18 @@ impl Schema {
 
 /// Sections de `table` (nommée `name`) et de ses sous-tables, dans l'ordre du fichier.
 fn collect(table: &Table, name: &str, out: &mut Vec<Section>) {
+    let (doc, details) = comment(table.decor().prefix().and_then(|p| p.as_str()));
     let mut section = Section {
         name: name.to_string(),
-        doc: comment(table.decor().prefix().and_then(|p| p.as_str())),
+        doc,
+        details,
         groups: Vec::new(),
     };
     let mut subtables = Vec::new();
     for (key, item) in table.iter() {
         match item {
             Item::Value(v) => {
-                let doc = table
+                let (doc, details) = table
                     .key(key)
                     .and_then(|k| k.leaf_decor().prefix())
                     .and_then(|p| p.as_str())
@@ -198,6 +224,7 @@ fn collect(table: &Table, name: &str, out: &mut Vec<Section>) {
                     Some(group) if doc.is_empty() => group.entries.push(entry),
                     _ => section.groups.push(Group {
                         doc,
+                        details,
                         entries: vec![entry],
                     }),
                 }
@@ -408,6 +435,28 @@ hover = \"#b4b4b4\"
     }
 
     #[test]
+    fn a_comment_shows_its_summary_and_keeps_the_reference_for_search() {
+        // #486 : un résumé, une ligne `#` vide, la référence ; la fenêtre montre le résumé.
+        let prefix = "# Ancien bloc, détaché.\n\n# Le résumé,\n# sur deux lignes.\n#\n# La référence.\n#\n# Et sa suite.\n";
+        assert_eq!(
+            comment(Some(prefix)),
+            (
+                "Le résumé, sur deux lignes.".to_string(),
+                "La référence. Et sa suite.".to_string()
+            )
+        );
+        // Sans ligne `#` vide : tout est le résumé ; en CRLF, pareil.
+        assert_eq!(
+            comment(Some("# Court.\r\n# Suite.\r\n")),
+            ("Court. Suite.".to_string(), String::new())
+        );
+        assert_eq!(
+            comment(Some(&prefix.replace('\n', "\r\n"))),
+            comment(Some(prefix))
+        );
+    }
+
+    #[test]
     fn editing_keeps_comments_and_unknown_keys() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
@@ -542,8 +591,41 @@ hover = \"#b4b4b4\"
         assert_eq!(shape(&en), shape(&fr));
         for (f, e) in fr.sections.iter().zip(&en.sections) {
             assert_eq!(f.doc.is_empty(), e.doc.is_empty(), "[{}]", f.name);
+            assert_eq!(f.details.is_empty(), e.details.is_empty(), "[{}]", f.name);
             for (fg, eg) in f.groups.iter().zip(&e.groups) {
                 assert_eq!(fg.doc.is_empty(), eg.doc.is_empty(), "[{}]", f.name);
+                // Résumé dans les deux langues, ou dans aucune (#486).
+                assert_eq!(
+                    fg.details.is_empty(),
+                    eg.details.is_empty(),
+                    "[{}] {}",
+                    f.name,
+                    fg.doc
+                );
+            }
+        }
+    }
+
+    /// Convention des fichiers d'exemple (#486) : un long commentaire commence par un
+    /// résumé (la fenêtre de réglages ne montre que lui), puis une ligne `#` vide et la
+    /// référence. Le résumé lui-même n'a pas de longueur imposée.
+    #[test]
+    fn long_comments_start_with_a_summary() {
+        for text in [
+            include_str!("../doc/config.example.toml"),
+            include_str!("../doc/config.example.en.toml"),
+        ] {
+            let s = Schema::parse(text).unwrap();
+            for section in &s.sections {
+                let docs = std::iter::once((&section.doc, &section.details))
+                    .chain(section.groups.iter().map(|g| (&g.doc, &g.details)));
+                for (doc, details) in docs {
+                    assert!(
+                        !details.is_empty() || doc.chars().count() <= 250,
+                        "[{}] sans résumé : {doc}",
+                        section.name
+                    );
+                }
             }
         }
     }

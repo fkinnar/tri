@@ -17,9 +17,17 @@ default values and **comments**. Why the example rather than a list written in t
   as they are.
 
 A comment above a group of keys ("Badges de la grille : …" above `badge_over` and
-`badge_under`) describes the group: `Group { doc, entries }`. Only the last paragraph of
-a comment counts (the file header, separated by a blank line, is not the description of
-`[preview]`). A section without keys (`[keys]`, whose keys are action identifiers chosen
+`badge_under`) describes the group: `Group { doc, details, entries }`. Only the last block
+of a comment counts (the file header, separated by a blank line, is not the description
+of `[preview]`).
+
+**Summary first** (#486, 2026-11-15): a block starts with a short summary of what the
+setting does, then an empty `#` line, then the reference for people editing the file by
+hand (values, search order, details). The settings window shows only the summary (`doc`,
+the first paragraph); its search also looks in the reference (`details`). A short comment
+needs no split: it is its own summary. A test requires a summary for every comment over
+250 characters, in both examples, and the same split in French and English; the length of
+the summary is up to the setting's author. A section without keys (`[keys]`, whose keys are action identifiers chosen
 by the user) is listed without settings: the interface gives it its own pane (its
 comment, with no key below it, gets lost: toml_edit puts it at the end of the document).
 Keys only mentioned in a comment (`# selection = "#1e6f7f"`, optional setting with no
