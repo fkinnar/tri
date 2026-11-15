@@ -3259,10 +3259,22 @@ impl TriApp {
                                 }
                             }
                             None => {
-                                ui.add_space(mark);
+                                // La même place qu'un signet, espacement compris
+                                // (`add_space` n'en ajoute pas : #487, noms décalés).
+                                ui.allocate_exact_size(
+                                    egui::vec2(mark, mark),
+                                    egui::Sense::hover(),
+                                );
                             }
                         }
-                        ui.selectable_value(&mut choice, *c, text.clone());
+                        // Toute la largeur restante : le surlignage commence au même
+                        // endroit sur chaque ligne et va jusqu'au bout (#487).
+                        let width = ui.available_width();
+                        let button = egui::Button::selectable(choice == *c, text.clone())
+                            .min_size(egui::vec2(width, 0.0));
+                        if ui.add(button).clicked() {
+                            choice = *c;
+                        }
                     });
                 }
             })
@@ -3431,6 +3443,12 @@ impl TriApp {
             self.set_grid_render(choice);
             if let Some(i) = photo_index.filter(|&i| i != self.selected) {
                 self.show_development(i);
+            }
+            // Pas encore développée dans ce logiciel : développée tout de suite, comme
+            // <leader> rr (#487 : sinon la photo restait sur son rendu RAW, le clic
+            // semblait ne rien faire).
+            if matches!(choice, GridRender::Engine(_)) {
+                self.develop_current();
             }
         }
         self.request_zoom();
@@ -22556,6 +22574,30 @@ mod tests {
     }
 
     #[test]
+    fn choosing_a_developer_develops_an_undeveloped_photo() {
+        // #487 : « Darktable » dans « Rendu affiché » sur une photo pas encore développée
+        // ne faisait rien de visible (rendu de toutes les photos changé, celle-ci restait
+        // sur son rendu RAW) ; elle est développée, comme avec <leader> rr.
+        use crate::grid_render::GridRender;
+        use tri::develop::Engine;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().developers = fake_darktable();
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.state_mut()
+            .show_render(GridRender::Engine(Engine::Darktable));
+        let state = h.state();
+        let path = state.files[state.selected].path.clone();
+        assert_eq!(state.source, Source::Developed);
+        assert!(
+            state
+                .requested
+                .contains(&(path, Level::Developed(Engine::Darktable))),
+            "développement demandé"
+        );
+    }
+
+    #[test]
     fn the_palette_switches_the_review_of_developments_itself() {
         // Retour du 06/11/2026 : « passer en revue » ne trouvait que la valeur par défaut
         // (la configuration), pas la case de l'interface.
@@ -27475,6 +27517,49 @@ mod tests {
         click_settled(&mut h, &t!("panel-view-review"));
         h.run_steps(2);
         assert!(h.state().review_developments);
+    }
+
+    #[test]
+    fn the_view_render_entries_line_up() {
+        // #487 : entrée sans signet (« Darktable ») décalée vers la gauche, surlignage du
+        // rendu choisi plus étroit que la liste. Toutes les entrées commencent au même
+        // endroit et vont jusqu'au bout.
+        use tri::develop::Engine;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().developers = fake_darktable();
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(3);
+        let jpeg = t!("grid-render-jpeg");
+        h.query_all_by_label_contains(&t!("grid-render-camera"))
+            .next()
+            .expect("la liste fermée")
+            .click();
+        h.run_steps(3);
+        let entry = |h: &Harness<'_, TriApp>, name: &str| {
+            h.query_all_by_label_contains(name)
+                .map(|n| n.rect())
+                .next_back()
+                .unwrap_or_else(|| panic!("entrée {name}"))
+        };
+        let names = [
+            jpeg,
+            Engine::Darktable.name().to_string(),
+            t!("grid-render-raw"),
+        ];
+        let rects: Vec<Rect> = names.iter().map(|n| entry(&h, n)).collect();
+        for (name, rect) in names.iter().zip(&rects) {
+            assert!(
+                (rect.left() - rects[0].left()).abs() < 0.5,
+                "{name} : {rect:?} / {:?}",
+                rects[0]
+            );
+            assert!(
+                (rect.right() - rects[0].right()).abs() < 0.5,
+                "{name} : {rect:?} / {:?}",
+                rects[0]
+            );
+        }
     }
 
     #[test]
