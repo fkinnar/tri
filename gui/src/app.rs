@@ -482,6 +482,9 @@ pub struct TriApp {
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
+    /// Ouvrir la liste « Rendu affiché » à son prochain dessin (étape de capture
+    /// `view_render`).
+    open_view_render: bool,
     /// Boîte du clic droit sur une image d'une sélection multiple : agir sur toute la
     /// sélection (case de la boîte, cochée à l'ouverture ; retour du 12/11/2026).
     rating_dialog_all: bool,
@@ -1576,6 +1579,7 @@ impl TriApp {
             cell_action: None,
             versions_clicked: false,
             rating_dialog: None,
+            open_view_render: false,
             rating_dialog_all: true,
             conflict_dialog: None,
             mark_picker: None,
@@ -3191,6 +3195,14 @@ impl TriApp {
                 (c, job.into(), key)
             })
             .collect();
+        let enabled: Vec<bool> = rows.iter().map(|(c, _, _)| !self.undeveloped(*c)).collect();
+        // Au clavier aussi, les entrées grisées sont sautées.
+        let choices: Vec<ViewRender> = choices
+            .iter()
+            .zip(&enabled)
+            .filter(|(_, on)| **on)
+            .map(|(c, _)| *c)
+            .collect();
         let (item, key) = self.side_begin(false);
         let at = choices.iter().position(|&c| c == choice).unwrap_or(0);
         match key {
@@ -3207,6 +3219,7 @@ impl TriApp {
             self.action_tip(Action::StackChoose)
         );
         let mut cover_click = None;
+        let undeveloped_tip = t!("view-render-undeveloped-tip");
         // Liste fermée : le signet plein devant si le rendu à l'écran est la couverture
         // (retour du 14/11/2026 : sinon il fallait déplier la liste pour le savoir).
         let shown_is_cover = rows
@@ -3241,7 +3254,7 @@ impl TriApp {
         let response = egui::ComboBox::from_id_salt("view_render")
             .selected_text(closed)
             .show_ui(ui, |ui| {
-                for (c, text, key) in &rows {
+                for ((c, text, key), on) in rows.iter().zip(&enabled) {
                     ui.horizontal(|ui| {
                         match key {
                             Some(key) => {
@@ -3259,15 +3272,37 @@ impl TriApp {
                                 }
                             }
                             None => {
-                                ui.add_space(mark);
+                                // La même place qu'un signet, espacement compris
+                                // (`add_space` n'en ajoute pas : #487, noms décalés).
+                                ui.allocate_exact_size(
+                                    egui::vec2(mark, mark),
+                                    egui::Sense::hover(),
+                                );
                             }
                         }
-                        ui.selectable_value(&mut choice, *c, text.clone());
+                        // Toute la largeur restante : le surlignage commence au même
+                        // endroit sur chaque ligne et va jusqu'au bout (#487).
+                        let width = ui.available_width();
+                        // Le texte à gauche : un bouton plus large que son texte le centre,
+                        // l'espace extensible qui suit le repousse (retour du 15/11/2026).
+                        let atoms = (text.clone(), egui::Atom::grow());
+                        let button = egui::Button::selectable(choice == *c, atoms)
+                            .min_size(egui::vec2(width, 0.0));
+                        let response = ui
+                            .add_enabled(*on, button)
+                            .on_disabled_hover_text(&undeveloped_tip);
+                        if response.clicked() {
+                            choice = *c;
+                        }
                     });
                 }
             })
             .response
             .on_hover_text(tip);
+        if std::mem::take(&mut self.open_view_render) {
+            // Même identifiant que celui du menu de `ComboBox` (`widget_to_popup_id`).
+            egui::Popup::open_id(ui.ctx(), response.id.with("popup"));
+        }
         if shown_is_cover {
             let width = ui
                 .fonts_mut(|f| f.layout_no_wrap(main, body, weak))
@@ -3311,6 +3346,19 @@ impl TriApp {
         }
     }
 
+    /// Choix de la liste « Rendu affiché » d'un logiciel qui n'a pas développé la photo
+    /// sélectionnée : rien à rendre (tri rend le développement fait dans le logiciel),
+    /// entrée grisée (#487, retour du 15/11/2026).
+    fn undeveloped(&self, choice: ViewRender) -> bool {
+        match choice {
+            ViewRender::Render(crate::grid_render::GridRender::Engine(engine)) => self
+                .files
+                .get(self.selected)
+                .is_some_and(|f| engine.sidecar(&f.path).is_none()),
+            _ => false,
+        }
+    }
+
     /// Nom et précision (en gris) d'un choix de la liste « Rendu affiché » : « RAW »
     /// « LibRaw », « JPEG » « boîtier », un développement et l'heure de son sidecar.
     fn view_render_parts(&self, choice: ViewRender) -> (String, Option<String>) {
@@ -3322,6 +3370,12 @@ impl TriApp {
             ViewRender::Render(GridRender::Embedded) => {
                 (t!("grid-render-jpeg"), Some(t!("grid-render-camera")))
             }
+            // Un logiciel sans développement de la photo : dit dans la liste (#487).
+            ViewRender::Render(GridRender::Engine(engine)) => (
+                engine.name().to_string(),
+                self.undeveloped(choice)
+                    .then(|| t!("view-render-undeveloped")),
+            ),
             ViewRender::Render(render) => (render.name(), None),
             ViewRender::Development(i) => {
                 let path = &self.files[i].path;
@@ -3431,6 +3485,25 @@ impl TriApp {
             self.set_grid_render(choice);
             if let Some(i) = photo_index.filter(|&i| i != self.selected) {
                 self.show_development(i);
+            }
+            // #487 : sans développement de ce logiciel, la photo restait sur son rendu
+            // RAW et le clic semblait ne rien faire. tri ne fait que rendre un
+            // développement fait dans le logiciel (son sidecar) : rendu tout de suite
+            // s'il existe, sinon dit.
+            if let GridRender::Engine(engine) = choice {
+                let path = self.files[self.selected].path.clone();
+                if engine.sidecar(&path).is_some() {
+                    self.develop_current();
+                } else {
+                    self.notice = Some((
+                        t!(
+                            "view-render-undeveloped-notice",
+                            name = file_name(&path),
+                            engine = engine.name()
+                        ),
+                        false,
+                    ));
+                }
             }
         }
         self.request_zoom();
@@ -13213,10 +13286,17 @@ impl TriApp {
             info.push_str(&match developed {
                 Avail::Failed(e) => format!(" · {e}"),
                 _ if asked => t!("view-info-developed-pending"),
-                _ => t!(
-                    "view-info-developed-none",
-                    keys = self.keys_text(Action::Develop)
-                ),
+                // Rien à rendre : pas de développement fait dans ce logiciel (#487 :
+                // « pas encore développé (<leader> rr) » laissait croire que tri le ferait).
+                _ => match self.developed_level(&file.path) {
+                    Level::Developed(engine) if engine.sidecar(&file.path).is_none() => {
+                        t!("view-info-developed-missing", engine = engine.name())
+                    }
+                    _ => t!(
+                        "view-info-developed-none",
+                        keys = self.keys_text(Action::Develop)
+                    ),
+                },
             });
         } else if raw_pending {
             info.push_str(&t!("view-info-raw-pending"));
@@ -17382,6 +17462,7 @@ impl TriApp {
                         self.export_toasts.push(toast);
                     }
                 }
+                Step::ViewRender => self.open_view_render = true,
                 Step::RatingDialog => {
                     if let Some(file) = self.files.get(self.selected) {
                         let at = CENTRED;
@@ -20223,6 +20304,8 @@ enum Step {
     /// Ouvrir la boîte du clic droit pour l'image sélectionnée (`rating_dialog`), qu'aucune
     /// action clavier n'ouvre.
     RatingDialog,
+    /// Ouvrir la liste « Rendu affiché » du plein écran, qu'aucune action n'ouvre.
+    ViewRender,
     /// Montrer la bulle de fin d'export (`export_toast`, #381) pour l'image sélectionnée,
     /// comme après un export réussi : pour la capture, sans rien exporter.
     ExportToast,
@@ -20255,6 +20338,7 @@ fn parse_actions(list: &str) -> Vec<Step> {
                     .map(|ms| Step::Wait(Duration::from_millis(ms))),
                 None if id == "shot" => Some(Step::Shot),
                 None if id == "rating_dialog" => Some(Step::RatingDialog),
+                None if id == "view_render" => Some(Step::ViewRender),
                 None if id == "export_toast" => Some(Step::ExportToast),
                 None if id.starts_with("settings:") => {
                     Some(Step::Settings(id["settings:".len()..].to_string()))
@@ -22553,6 +22637,55 @@ mod tests {
         h.state_mut().any_developed = false;
         act(&mut h, Action::FilterDeveloped);
         assert!(!h.state().developed_on);
+    }
+
+    #[test]
+    fn choosing_a_developer_without_its_development_says_so() {
+        // #487 : « Darktable » dans « Rendu affiché » sur une photo sans développement
+        // darktable ne faisait rien de visible (rendu de toutes les photos changé, celle-ci
+        // restait sur son rendu RAW). tri ne peut pas la développer (il rend le sidecar du
+        // logiciel) : la liste et la barre d'état le disent, et le choix aussi.
+        use crate::grid_render::GridRender;
+        use tri::develop::Engine;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().developers = fake_darktable();
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        let choice = ViewRender::Render(GridRender::Engine(Engine::Darktable));
+        // Retour du 15/11/2026 : l'entrée est grisée, rien à cliquer.
+        assert!(h.state().undeveloped(choice));
+        assert!(
+            !h.state()
+                .undeveloped(ViewRender::Render(GridRender::LibRaw))
+        );
+        assert_eq!(
+            h.state().view_render_parts(choice).1,
+            Some(t!("view-render-undeveloped"))
+        );
+        h.state_mut()
+            .show_render(GridRender::Engine(Engine::Darktable));
+        let state = h.state();
+        let path = state.files[state.selected].path.clone();
+        let notice = state.notice.as_ref().map(|(text, _)| text.clone());
+        assert!(
+            notice.is_some_and(|n| n.contains(&file_name(&path)) && n.contains("Darktable")),
+            "{:?}",
+            state.notice
+        );
+        assert!(
+            !state
+                .requested
+                .contains(&(path, Level::Developed(Engine::Darktable))),
+            "rien à rendre"
+        );
+        h.run_steps(2);
+        assert!(
+            h.state()
+                .view_info
+                .contains(&t!("view-info-developed-missing", engine = "Darktable")),
+            "{}",
+            h.state().view_info
+        );
     }
 
     #[test]
@@ -27475,6 +27608,49 @@ mod tests {
         click_settled(&mut h, &t!("panel-view-review"));
         h.run_steps(2);
         assert!(h.state().review_developments);
+    }
+
+    #[test]
+    fn the_view_render_entries_line_up() {
+        // #487 : entrée sans signet (« Darktable ») décalée vers la gauche, surlignage du
+        // rendu choisi plus étroit que la liste. Toutes les entrées commencent au même
+        // endroit et vont jusqu'au bout.
+        use tri::develop::Engine;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().developers = fake_darktable();
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(3);
+        let jpeg = t!("grid-render-jpeg");
+        h.query_all_by_label_contains(&t!("grid-render-camera"))
+            .next()
+            .expect("la liste fermée")
+            .click();
+        h.run_steps(3);
+        let entry = |h: &Harness<'_, TriApp>, name: &str| {
+            h.query_all_by_label_contains(name)
+                .map(|n| n.rect())
+                .next_back()
+                .unwrap_or_else(|| panic!("entrée {name}"))
+        };
+        let names = [
+            jpeg,
+            Engine::Darktable.name().to_string(),
+            t!("grid-render-raw"),
+        ];
+        let rects: Vec<Rect> = names.iter().map(|n| entry(&h, n)).collect();
+        for (name, rect) in names.iter().zip(&rects) {
+            assert!(
+                (rect.left() - rects[0].left()).abs() < 0.5,
+                "{name} : {rect:?} / {:?}",
+                rects[0]
+            );
+            assert!(
+                (rect.right() - rects[0].right()).abs() < 0.5,
+                "{name} : {rect:?} / {:?}",
+                rects[0]
+            );
+        }
     }
 
     #[test]

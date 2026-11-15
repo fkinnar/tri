@@ -1642,6 +1642,7 @@ during a window's opening fade showed it half transparent.
   identifier (`core.nav.next`, `core.app.help`…), `wait:<ms>` (pause, to let the engine
   work), `shot` (immediate capture, without waiting for everything to be ready: to see an
   intermediate state), `rating_dialog` (right-click dialog for the selected image),
+  `view_render` (the full-screen "Shown render" list, opened),
   `settings:<section>` (settings window opened on a section: `settings:keys`),
   `export_toast` (end-of-export bubble, as after an export of the selected image,
   without exporting anything), `search:<text>` (typed in the search of the open settings window or help:
