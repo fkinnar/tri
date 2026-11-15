@@ -98,7 +98,7 @@ naming-help = { $field ->
     [date] Date de prise de vue : 2026-11-14 · noms et dossiers
     [time] Heure de prise de vue : 153012 · noms et dossiers
     [name] Nom d'origine, sans extension : DSCF8158 · noms et dossiers
-    [n] Compteur, dans l'ordre de la grille ; { "{" }n:3{ "}" } = 001 · noms seulement (renommage par lot)
+    [n] Compteur, dans l'ordre de la grille ; { "{" }n:3{ "}" } = 001 · noms seulement (renommage par lot, noms d'export)
     [folder] Nom du dossier sans la date en tête : 2026-11-14_Bleu_Jaune donne Bleu_Jaune · noms et dossiers
     [camera] Modèle de l'appareil : X-T4 · noms et dossiers
    *[source] Dossier de chaque image, en entier : { "{" }source{ "}" }/export · dossiers d'export seulement
@@ -422,6 +422,7 @@ cli-theme-analysis = Analyses
 cli-theme-cache = Cache et données
 cli-theme-other = Divers
 cli-ph-folder = dossier
+cli-ph-template = gabarit
 cli-ph-image = image
 cli-ph-images = images
 cli-ph-name = nom
@@ -476,6 +477,7 @@ cli-opt-permanent = suppression définitive, sans corbeille
 cli-opt-to = dossier de destination
 cli-opt-offload-to = racine des séances (défaut : [offload] destination)
 cli-opt-export-to = dossier, à la place de celui du préréglage
+cli-opt-export-name = nom des fichiers, un gabarit ({"{"}name{"}"}, {"{"}date{"}"}, {"{"}n{"}"}…), à la place de celui du préréglage
 cli-opt-libraw = rendu LibRaw, même avec darktable installé
 cli-opt-embedded = le JPEG boîtier
 cli-opt-adjust-embedded = part du JPEG boîtier plutôt que du rendu RAW

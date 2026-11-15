@@ -70,8 +70,9 @@ X-T4, en JPEG 2048 px : 13,5 s en tout.
   Une image sans développement (pas de sidecar, ou sidecar écrit par `tri` seul) reçoit
   les réglages par défaut de darktable. Ce ne sont pas les préréglages automatiques de
   l'utilisateur (configuration propre à `tri`, `--apply-custom-presets false`).
-- **Nom des fichiers** : `$(FILE_NAME)` (nom de l'image sans extension), puis le suffixe
-  du profil, puis l'extension. darktable n'écrase jamais rien : il ajoute `_01`…
+- **Nom des fichiers** : le gabarit du profil (voir « Nom des fichiers »), puis
+  l'extension ; `{name}` seul passe à darktable comme `$(FILE_NAME)` (nom de l'image sans
+  extension). darktable n'écrase jamais rien : il ajoute `_01`…
 - **Progression** : darktable écrit une ligne `[export_job] exported to `…'` par fichier.
   Lue au fil de l'eau, elle donne la progression et les fichiers vraiment écrits
   (`Report::written`). Les images sans fichier écrit sont comptées (`Report::failed`).
@@ -119,7 +120,7 @@ quality = 90
 color = "srgb"
 intent = ""
 max_side = 2048
-suffix = ""
+file_name = "{name}"         # voir « Nom des fichiers »
 folder = "export"            # voir « Dossier du profil »
 ```
 
@@ -127,6 +128,31 @@ Chaque clé absente vient du profil fourni de même identifiant (`edit`, `web`),
 JPEG sRGB (`ProfileToml`, `Profiles::deserialize`). La fenêtre de réglages peut ainsi
 n'écrire qu'une valeur sans faire disparaître le reste du profil. Ordre : profils fournis,
 puis ceux de l'utilisateur par identifiant.
+
+### Nom des fichiers
+
+Depuis le 15/11/2026 (#485, décision de l'utilisateur), `file_name` est un **gabarit**,
+avec les champs du renommage par lot (`tri::naming`) : `{name}` (le nom d'export de
+l'image, `export_name` : clone darktable `IMG_01`, copie virtuelle `IMG_VC01`), `{date}`,
+`{time}`, `{folder}`, `{camera}`, et `{n}`, le rang de l'image dans l'export (l'ordre de
+la grille ; `{n:3}` = 001). `{name}` par défaut ; `{source}` (un dossier) est refusé,
+comme un champ inconnu (`check_name`, vérifié dès la lecture de la configuration). Un
+caractère interdit par les systèmes (`/ \ : * ? " < > |`) devient `_`. Ce qui s'ajoute
+après : version (`-Story`), morceau (`_2`), JPEG de paire (`-camera`), puis l'extension ;
+jamais d'écrasement (`_01`…).
+
+- **Ancienne clé `suffix`** : repliée dans le gabarit, `suffix = "-web"` vaut
+  `{name}-web` (lue par `ProfileToml`, plus écrite) ;
+- **darktable** : un gabarit qui ne cite que `{name}` passe tel quel dans le motif de
+  sortie (`$(FILE_NAME)-web`) ; un autre champ : darktable exporte sous le nom de l'image,
+  puis tri renomme chaque fichier écrit (`rename_written`, l'image retrouvée par son nom,
+  jamais d'écrasement) ; LibRaw, RapidRAW, RawTherapee, ART et les copies sans
+  recompression écrivent directement le bon nom (`output_path`) ;
+- **boîte d'export** : un champ « Nom des fichiers » sous le dossier, le gabarit tel quel,
+  en rouge s'il est invalide ; un autre que celui du préréglage est retenu pour lui d'une
+  session à l'autre (`gui-state.toml`, `export_names`), comme le dossier ;
+- **ligne de commande** : `--name <gabarit>`, à la place de celui du préréglage ; `{n}`
+  suit l'ordre des images données.
 
 ### Dossier du profil
 
@@ -146,7 +172,7 @@ le 14/11/2026 (#480, décision de l'utilisateur), `folder` est un **gabarit**
   comme un champ inconnu (`check_folder`) ;
 - un **ancien dossier relatif** garde son sens : `export` = `{source}/export`, `""` ou
   `"."` = `{source}` ;
-- darktable est lancé une fois par dossier réel (`$(FILE_NAME)` et le suffixe dedans) ;
+- darktable est lancé une fois par dossier réel (`$(FILE_NAME)` dedans) ;
   une image dont le gabarit n'a pas de valeur (pas de date de prise de vue) échoue seule,
   au rapport ;
 - les variables de darktable (`$(YEAR)`…) passent telles quelles.

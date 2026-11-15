@@ -272,7 +272,10 @@ print_threshold = 3.0
 # intent : "perceptual", "relative", "saturation", "absolute", ou "" (celle du
 #   développement) ;
 # max_side : côté long maximal en pixels, 0 : pleine définition ;
-# suffix : ajouté au nom du fichier ("-web" : DSCF0001-web.jpg) ;
+# file_name : nom des fichiers, un gabarit sans extension : {name} (le nom de l'image),
+#   {date}, {time}, {folder}, {camera}, {n} (rang dans l'export ; {n:3} = 001) ;
+#   "{name}-web" : DSCF0001-web.jpg ; version, morceau et JPEG de paire s'ajoutent après ;
+#   l'ancienne clé suffix ("-web") vaut "{name}-web" ;
 # folder : dossier des fichiers, un gabarit : {source} (le dossier de chaque image),
 #   "/…" absolu, "~/…" depuis le dossier personnel, et les champs {date}, {time}, {name},
 #   {folder}, {camera} ("~/Images/Export/{date}_{folder}") ; un ancien dossier relatif
@@ -294,7 +297,7 @@ quality = 90
 color = "prophoto"
 intent = ""
 max_side = 0
-suffix = ""
+file_name = "{name}"
 folder = "{source}/export"
 passthrough = true
 applies_to = "all"
@@ -311,7 +314,7 @@ quality = 100
 color = ""
 intent = ""
 max_side = 0
-suffix = ""
+file_name = "{name}"
 folder = "{source}/export"
 passthrough = true
 applies_to = "flat"
@@ -326,7 +329,7 @@ quality = 90
 color = "srgb"
 intent = ""
 max_side = 2048
-suffix = ""
+file_name = "{name}"
 folder = "{source}/export"
 passthrough = true
 applies_to = "all"

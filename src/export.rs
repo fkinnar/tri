@@ -251,8 +251,12 @@ pub struct Profile {
     pub intent: String,
     /// Côté long maximal en pixels ; 0 : pleine définition (jamais d'agrandissement).
     pub max_side: u32,
-    /// Ajouté au nom du fichier (`DSCF0001-web.jpg`) ; vide : le nom de l'image.
-    pub suffix: String,
+    /// Nom des fichiers écrits, un **gabarit** (#485, 15/11/2026) : les champs de
+    /// [`crate::naming`] (`{name}` : le nom de l'image, [`export_name`] ; `{date}`,
+    /// `{time}`, `{folder}`, `{camera}`, `{n}` : le rang dans l'ordre de l'export), sans
+    /// extension ; `{name}` par défaut. L'ancienne clé `suffix` s'y ajoute (`suffix =
+    /// "-web"` vaut `{name}-web`). Version, morceau et JPEG de paire s'ajoutent après.
+    pub file_name: String,
     /// Dossier des fichiers écrits (idée de l'utilisateur, 19/10/2026 : propre au profil),
     /// un **gabarit** depuis le 14/11/2026 (#480) : `{source}` (le dossier de chaque
     /// image), `/…` absolu, `~/…` depuis le dossier personnel, et les champs de
@@ -284,7 +288,7 @@ impl Profile {
             color: "srgb".into(),
             intent: String::new(),
             max_side: 0,
-            suffix: String::new(),
+            file_name: NAME.into(),
             folder: "{source}/export".into(),
             // Retour de l'utilisateur (19/10/2026) : par défaut, ne jamais recompresser un
             // JPEG quand on peut l'éviter.
@@ -342,7 +346,7 @@ impl Profile {
             ("color", Value::Str(self.color.clone())),
             ("intent", Value::Str(self.intent.clone())),
             ("max_side", Value::Int(i64::from(self.max_side))),
-            ("suffix", Value::Str(self.suffix.clone())),
+            ("file_name", Value::Str(self.file_name.clone())),
             ("folder", Value::Str(self.folder.clone())),
             ("passthrough", Value::Bool(self.passthrough)),
             ("applies_to", Value::Str(self.applies_to.key().into())),
@@ -352,6 +356,7 @@ impl Profile {
 
     /// Le profil est-il cohérent ? Sinon, la raison.
     pub fn check(&self) -> Result<(), String> {
+        check_name(&self.file_name).map_err(|e| format!("file_name : {e}"))?;
         let bits_ok = match self.format {
             Format::Jpeg => self.bits == 8,
             Format::Png => matches!(self.bits, 8 | 16),
@@ -480,6 +485,8 @@ struct ProfileToml {
     color: Option<String>,
     intent: Option<String>,
     max_side: Option<u32>,
+    file_name: Option<String>,
+    /// Ancienne clé, repliée dans `file_name` (#485).
     suffix: Option<String>,
     folder: Option<String>,
     passthrough: Option<bool>,
@@ -536,8 +543,12 @@ impl<'de> Deserialize<'de> for Profiles {
             if let Some(v) = t.max_side {
                 p.max_side = v;
             }
-            if let Some(v) = t.suffix {
-                p.suffix = v;
+            if let Some(v) = t.file_name {
+                p.file_name = v;
+            }
+            // L'ancien suffixe, à la suite du gabarit (`-web` : `{name}-web`).
+            if let Some(v) = t.suffix.filter(|v| !v.is_empty()) {
+                p.file_name = format!("{}{v}", name_template(&p.file_name));
             }
             if let Some(v) = t.folder {
                 p.folder = v;
@@ -684,11 +695,71 @@ pub fn folder_for(folder: &str, image: &Path) -> PathBuf {
     folder_of(folder, image).unwrap_or_else(|_| PathBuf::from(folder_template(folder)))
 }
 
-/// Motif de sortie pour darktable dans le dossier `dir` déjà résolu : `$(FILE_NAME)`
-/// (nom de l'image sans extension) et le suffixe ; darktable ajoute l'extension et crée
-/// les sous-dossiers (vérifié le 19/10/2026, accents et espaces compris).
-fn output_pattern(dir: &Path, suffix: &str) -> PathBuf {
-    dir.join(format!("$(FILE_NAME){suffix}"))
+/// Le gabarit de nom par défaut : le nom de l'image ([`export_name`]).
+pub const NAME: &str = "{name}";
+
+/// Le gabarit de nom `template` (voir [`Profile::file_name`]) : vide, `{name}`.
+pub fn name_template(template: &str) -> &str {
+    match template.trim() {
+        "" => NAME,
+        t => t,
+    }
+}
+
+/// Erreur de forme du gabarit de nom `template`, sans image : champ inconnu ou mal
+/// écrit, `{source}` (un dossier, pas un nom).
+pub fn check_name(template: &str) -> Result<(), crate::naming::TemplateError> {
+    let template = name_template(template);
+    if template.contains(SOURCE) {
+        return Err(crate::naming::TemplateError::NotHere("source".into()));
+    }
+    crate::naming::check(template)
+}
+
+/// Nom (sans extension) du fichier exporté de `image`, n° `n` dans l'ordre de l'export,
+/// d'après le gabarit `template` : ses champs remplis pour elle (`{name}` : son nom
+/// d'export, [`export_name`] ; date et appareil lus dans le fichier s'il en cite), les
+/// caractères interdits par les systèmes remplacés.
+pub fn name_of(
+    template: &str,
+    image: &Path,
+    n: usize,
+) -> Result<String, crate::naming::TemplateError> {
+    check_name(template)?;
+    let template = name_template(template);
+    let mut fields = if crate::naming::needs_metadata(template) {
+        crate::naming::Fields::read(image)
+    } else {
+        crate::naming::Fields::basic(image)
+    };
+    fields.name = export_name(image);
+    Ok(clean_name(&crate::naming::render(template, &fields, n)?))
+}
+
+/// `name` sans les caractères interdits par les systèmes (`/ \ : * ? " < > |`).
+fn clean_name(name: &str) -> String {
+    name.trim()
+        .chars()
+        .map(|c| {
+            if "/\\:*?\"<>|".contains(c) || c.is_control() {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
+/// Motif de sortie pour darktable dans le dossier `dir` déjà résolu, si le gabarit de nom
+/// `template` ne cite que `{name}` : `$(FILE_NAME)` (nom de l'image sans extension) à sa
+/// place ; darktable ajoute l'extension et crée les sous-dossiers (vérifié le 19/10/2026,
+/// accents et espaces compris). Un autre champ : `None` (exporté sous le nom de l'image,
+/// puis renommé).
+fn output_pattern(dir: &Path, template: &str) -> Option<PathBuf> {
+    let template = name_template(template);
+    let rest = template.replace(NAME, "");
+    (!rest.contains('{') && !rest.contains('}'))
+        .then(|| dir.join(clean_name(&template.replace(NAME, "$(FILE_NAME)"))))
 }
 
 /// Images à exporter parmi `images` : sans doublon, et sans le JPEG d'une paire RAW+JPEG
@@ -724,18 +795,20 @@ pub struct Report {
     pub passthrough: usize,
 }
 
-/// Exporte `images` (voir [`sources`]) avec `profile` dans `folder` (le dossier du
+/// Exporte `images` (voir [`sources`]) avec le profil de `req` dans son dossier (celui du
 /// profil, ou un autre choisi pour cette fois ; voir [`Profile::folder`]), en un
-/// lancement de darktable. `progress(fait, total, fichier)` à chaque fichier écrit ;
-/// `cancel` arrête darktable (les fichiers déjà écrits restent).
+/// lancement de darktable par dossier, sous les noms de son gabarit (un gabarit qui cite
+/// d'autres champs que `{name}` : exporté sous le nom de l'image, puis renommé, sans rien
+/// écraser). `progress(fait, total, fichier)` à chaque fichier écrit ; `cancel` arrête
+/// darktable (les fichiers déjà écrits restent).
 pub fn export(
     dt: &Darktable,
     images: &[PathBuf],
-    profile: &Profile,
-    folder: &str,
+    req: &Request<'_>,
     cancel: &AtomicBool,
     mut progress: impl FnMut(usize, usize, &Path),
 ) -> Result<Report, DevelopError> {
+    let (profile, folder) = (req.profile, req.folder);
     let images = sources(images);
     if images.is_empty() {
         return Ok(Report::default());
@@ -808,24 +881,34 @@ pub fn export(
     }
     for (dir, group) in by_dir {
         let mut cmd = dt.cli.command();
-        for image in group {
+        for image in &group {
             cmd.arg("--import").arg(image);
         }
         // darktable ajoute `_01`… plutôt que d'écraser.
-        cmd.arg(output_pattern(&dir, &profile.suffix));
+        let pattern = output_pattern(&dir, req.name);
+        cmd.arg(
+            pattern
+                .clone()
+                .unwrap_or_else(|| output_pattern(&dir, NAME).expect("{name}")),
+        );
+        let first = report.written.len();
         run(cmd, &mut report)?;
+        if pattern.is_none() {
+            rename_written(&mut report, first, &group, req);
+        }
     }
     for clone in clones {
-        // Nommé comme darktable nomme ses clones : `IMG_01-Web.jpg` ([`export_name`]).
-        let name = export_name(&clone.path());
-        let dir = match folder_of(folder, &clone.photo) {
-            Ok(dir) => dir,
+        // `{name}` : nommé comme darktable nomme ses clones, `IMG_01` ([`export_name`]).
+        let path = clone.path();
+        let named = folder_of(folder, &clone.photo)
+            .and_then(|dir| Ok(dir.join(name_of(req.name, &path, req.number(&path))?)));
+        let out = match named {
+            Ok(out) => out,
             Err(e) => {
-                report.errors.push(failed_image(&clone.path(), &e));
+                report.errors.push(failed_image(&path, &e));
                 continue;
             }
         };
-        let out = dir.join(format!("{name}{}", profile.suffix));
         let mut cmd = dt.cli.command();
         cmd.arg(&clone.photo).arg(&clone.sidecar).arg(out);
         run(cmd, &mut report)?;
@@ -843,6 +926,47 @@ pub fn export(
     }
     report.failed = total.saturating_sub(report.written.len());
     Ok(report)
+}
+
+/// Renomme les fichiers que darktable vient d'écrire (`report.written` depuis `first`,
+/// sous le nom de l'image) d'après le gabarit de `req` (#485) : l'image de chacun
+/// retrouvée dans `group` par son nom (darktable ajoute `_01` à un nom pris), jamais
+/// d'écrasement. Un renommage impossible laisse le fichier sous son nom, et le dit au
+/// journal.
+fn rename_written(report: &mut Report, first: usize, group: &[&PathBuf], req: &Request<'_>) {
+    let mut used = vec![false; group.len()];
+    for written in &mut report.written[first..] {
+        let stem = written
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let base = stem.rsplit_once('_').map_or(stem.as_str(), |(b, _)| b);
+        let Some(i) = (0..group.len()).find(|&i| {
+            let name = export_name(group[i]);
+            !used[i] && (name == stem || name == base)
+        }) else {
+            continue;
+        };
+        used[i] = true;
+        let image = group[i];
+        let Ok(name) = name_of(req.name, image, req.number(image)) else {
+            continue;
+        };
+        let (Some(dir), Some(ext)) = (written.parent(), written.extension()) else {
+            continue;
+        };
+        let target = unique_path(dir, &name, &ext.to_string_lossy());
+        match std::fs::rename(&*written, &target) {
+            Ok(()) => *written = target,
+            Err(e) => {
+                crate::log::error(
+                    "export",
+                    &format!("rename after export failed: {e}"),
+                    &format!("from: {}\nto: {}", written.display(), target.display()),
+                );
+            }
+        }
+    }
 }
 
 /// Une image qui n'a pas pu être exportée : au journal (issue n° 398), et la ligne du
@@ -1095,19 +1219,7 @@ impl Cut {
     /// Pour un nom de fichier : `-` puis le nom, sans les caractères interdits par les
     /// systèmes (`/ \ : * ? " < > |`).
     fn suffix(&self) -> String {
-        let clean: String = self
-            .name
-            .trim()
-            .chars()
-            .map(|c| {
-                if "/\\:*?\"<>|".contains(c) || c.is_control() {
-                    '_'
-                } else {
-                    c
-                }
-            })
-            .collect();
-        format!("-{clean}")
+        format!("-{}", clean_name(&self.name))
     }
 }
 
@@ -1118,6 +1230,11 @@ pub struct Request<'a> {
     pub profile: &'a Profile,
     /// Dossier (voir [`Profile::folder`]).
     pub folder: &'a str,
+    /// Gabarit des noms de fichiers (voir [`Profile::file_name`]).
+    pub name: &'a str,
+    /// Ordre de l'export, pour le compteur `{n}` des noms (le rang dans cette liste ;
+    /// absente : 1).
+    pub order: &'a [PathBuf],
     /// Version à exporter (recadrage), sinon l'image entière.
     pub cut: Option<&'a Cut>,
     /// Paramètres de l'accentuation de sortie.
@@ -1136,6 +1253,8 @@ impl<'a> Request<'a> {
         Request {
             profile,
             folder,
+            name: &profile.file_name,
+            order: &[],
             cut: None,
             sharpening: Sharpening::default(),
             paired: None,
@@ -1152,6 +1271,24 @@ impl<'a> Request<'a> {
             },
             ..self
         }
+    }
+
+    /// Noms d'après le gabarit `name` (un autre que celui du profil, pour cette fois).
+    pub fn name(self, name: &'a str) -> Request<'a> {
+        Request { name, ..self }
+    }
+
+    /// Ordre de l'export (compteur `{n}` des noms).
+    pub fn order(self, order: &'a [PathBuf]) -> Request<'a> {
+        Request { order, ..self }
+    }
+
+    /// Rang de `image` dans l'ordre de l'export, à partir de 1.
+    fn number(&self, image: &Path) -> usize {
+        self.order
+            .iter()
+            .position(|p| p == image)
+            .map_or(1, |i| i + 1)
     }
 
     /// Exporter la version `cut`.
@@ -1480,7 +1617,7 @@ fn render_raws(
         Renderer::Darktable(dt) if req.cut.is_some() || req.profile.sharpen != Sharpen::None => {
             export_via_tiff(dt, images, req, cancel, progress)
         }
-        Renderer::Darktable(dt) => export(dt, images, req.profile, req.folder, cancel, progress),
+        Renderer::Darktable(dt) => export(dt, images, req, cancel, progress),
         Renderer::RapidRaw(rr) => export_rapidraw(rr, images, req, cancel, progress),
         Renderer::Profile(tool) => export_profile_tool(tool, images, req, cancel, progress),
         Renderer::Local(local) => export_libraw(images, req, local, cancel, progress),
@@ -1891,7 +2028,7 @@ fn finish_one(
     req: &Request<'_>,
     tile: Option<usize>,
 ) -> Result<PathBuf, DevelopError> {
-    let (profile, folder, sharpening) = (req.profile, req.folder, &req.sharpening);
+    let (profile, sharpening) = (req.profile, &req.sharpening);
     let (w, h) = pixels.dimensions();
     let side = profile.max_side;
     if side > 0 && w.max(h) > side {
@@ -1907,7 +2044,7 @@ fn finish_one(
         pixels = unsharp(&pixels, u);
     }
     let extra = req.extra(image, tile);
-    let out = output_path(image, profile, &extra, folder, profile.format.extension())?;
+    let out = output_path(image, req, &extra, profile.format.extension())?;
     write_image(&out, &pixels, profile, icc).map_err(|e| {
         let _ = std::fs::remove_file(&out);
         DevelopError::Other(e.to_string())
@@ -1936,18 +2073,18 @@ pub fn export_via_tiff(
         format: Format::Tiff,
         bits: 16,
         max_side: 0,
-        suffix: String::new(),
+        file_name: NAME.into(),
         passthrough: false,
         applies_to: AppliesTo::All,
         sharpen: Sharpen::None,
         ..profile.clone()
     };
     let result = (|| {
+        let folder = tmp.display().to_string();
         let rendered = export(
             dt,
             &images,
-            &render,
-            &tmp.display().to_string(),
+            &Request::new(&render, &folder),
             cancel,
             |_, _, _| {},
         )?;
@@ -2003,21 +2140,19 @@ pub fn export_via_tiff(
     result
 }
 
-/// Fichier de sortie de `image` (dossier créé, jamais d'écrasement).
+/// Fichier de sortie de `image` (dossier créé, jamais d'écrasement) : nom d'après le
+/// gabarit de `req`, puis `extra` (version, morceau, JPEG de paire).
 fn output_path(
     image: &Path,
-    profile: &Profile,
+    req: &Request<'_>,
     extra: &str,
-    folder: &str,
     ext: &str,
 ) -> Result<PathBuf, DevelopError> {
-    let dir = folder_of(folder, image).map_err(|e| DevelopError::Other(e.to_string()))?;
+    let failed = |e: crate::naming::TemplateError| DevelopError::Other(e.to_string());
+    let dir = folder_of(req.folder, image).map_err(failed)?;
+    let name = name_of(req.name, image, req.number(image)).map_err(failed)?;
     std::fs::create_dir_all(&dir).map_err(|e| DevelopError::Other(e.to_string()))?;
-    Ok(unique_path(
-        &dir,
-        &format!("{}{}{extra}", export_name(image), profile.suffix),
-        ext,
-    ))
+    Ok(unique_path(&dir, &format!("{name}{extra}"), ext))
 }
 
 /// Nom (sans extension) du fichier exporté de `image` : celui de la photo. Un
@@ -2045,13 +2180,7 @@ pub fn export_name(image: &Path) -> String {
 
 /// Écrit `bytes` (JPEG sans recompression) à la place de l'export de `image`.
 fn write_bytes(image: &Path, req: &Request<'_>, bytes: &[u8]) -> Result<PathBuf, DevelopError> {
-    let out = output_path(
-        image,
-        req.profile,
-        &req.extra(image, None),
-        req.folder,
-        "jpg",
-    )?;
+    let out = output_path(image, req, &req.extra(image, None), "jpg")?;
     std::fs::write(&out, bytes).map_err(|e| DevelopError::Other(e.to_string()))?;
     Ok(out)
 }
@@ -2663,6 +2792,129 @@ mod tests {
     }
 
     #[test]
+    fn the_file_name_is_a_template() {
+        // #485 : les champs du renommage par lot ; `{name}` est le nom d'export.
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("séance_été/DSCF0001.RAF");
+        assert_eq!(name_of("{name}", &image, 1).unwrap(), "DSCF0001");
+        assert_eq!(
+            name_of("", &image, 1).unwrap(),
+            "DSCF0001",
+            "vide : {{name}}"
+        );
+        assert_eq!(name_of("{name}-web", &image, 1).unwrap(), "DSCF0001-web");
+        assert_eq!(
+            name_of("{folder}_{n:3}", &image, 7).unwrap(),
+            "séance_été_007"
+        );
+        // Un caractère interdit vient d'un champ ou du texte : remplacé.
+        assert_eq!(name_of("{name}:a/b", &image, 1).unwrap(), "DSCF0001_a_b");
+        // `{source}` est un dossier ; champ inconnu refusé ; date absente : l'image échoue.
+        assert!(check_name("{source}_{name}").is_err());
+        assert!(check_name("{nom}").is_err());
+        assert!(check_name("{date}_{n}").is_ok());
+        assert!(name_of("{date}", &image, 1).is_err(), "fichier illisible");
+    }
+
+    #[test]
+    fn the_former_suffix_folds_into_the_file_name() {
+        #[derive(Deserialize)]
+        struct S {
+            p: Profiles,
+        }
+        let read = |text: &str| toml::from_str::<S>(text).unwrap().p;
+        let p = read("[p.web]\nsuffix = \"-web\"\n");
+        assert_eq!(p.get("web").unwrap().file_name, "{name}-web");
+        let p = read("[p.web]\nfile_name = \"{date}\"\nsuffix = \"-x\"\n");
+        assert_eq!(p.get("web").unwrap().file_name, "{date}-x");
+        assert_eq!(Profiles::default().get("edit").unwrap().file_name, NAME);
+        // Un gabarit invalide est refusé à la lecture, comme toute valeur invalide.
+        assert!(toml::from_str::<S>("[p.web]\nfile_name = \"{source}\"\n").is_err());
+    }
+
+    #[test]
+    fn the_counter_follows_the_export_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut images = Vec::new();
+        for name in ["b.png", "a.png"] {
+            let path = dir.path().join(name);
+            image::RgbImage::from_pixel(8, 8, image::Rgb([9, 9, 9]))
+                .save(&path)
+                .unwrap();
+            images.push(path);
+        }
+        let profile = Profile {
+            file_name: "web_{n:2}".into(),
+            ..Profile::base("t")
+        };
+        let report = export_libraw(
+            &images,
+            &Request::new(&profile, "out").order(&images),
+            Local::LibRaw,
+            &AtomicBool::new(false),
+            |_, _, _| {},
+        )
+        .unwrap();
+        let names: Vec<String> = report
+            .written
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            names,
+            ["web_01.jpg", "web_02.jpg"],
+            "b puis a : l'ordre donné"
+        );
+        // Pour une fois, un autre gabarit que celui du profil.
+        let again = export_libraw(
+            &images[..1],
+            &Request::new(&profile, "out").name("{name}-{n}"),
+            Local::LibRaw,
+            &AtomicBool::new(false),
+            |_, _, _| {},
+        )
+        .unwrap();
+        assert!(
+            again.written[0].ends_with("out/b-1.jpg"),
+            "{:?}",
+            again.written
+        );
+    }
+
+    #[test]
+    fn darktable_files_are_renamed_after_the_export() {
+        // Un gabarit avec d'autres champs que `{name}` : darktable écrit sous le nom de
+        // l'image, tri renomme ensuite, sans écraser.
+        let dir = tempfile::tempdir().unwrap();
+        let images: Vec<PathBuf> = ["A.RAF", "B.RAF"]
+            .iter()
+            .map(|n| dir.path().join(n))
+            .collect();
+        let out = dir.path().join("export");
+        std::fs::create_dir_all(&out).unwrap();
+        std::fs::write(out.join("web_02.jpg"), b"pris").unwrap();
+        let mut report = Report::default();
+        for name in ["B.jpg", "A.jpg"] {
+            std::fs::write(out.join(name), name).unwrap();
+            report.written.push(out.join(name));
+        }
+        let profile = Profile {
+            file_name: "web_{n:2}".into(),
+            ..Profile::base("t")
+        };
+        let req = Request::new(&profile, "export").order(&images);
+        let group: Vec<&PathBuf> = images.iter().collect();
+        rename_written(&mut report, 0, &group, &req);
+        assert_eq!(
+            report.written,
+            [out.join("web_02_01.jpg"), out.join("web_01.jpg")],
+            "B est la 2e, son nom était pris"
+        );
+        assert_eq!(std::fs::read(out.join("web_01.jpg")).unwrap(), b"A.jpg");
+        assert_eq!(std::fs::read(out.join("web_02.jpg")).unwrap(), b"pris");
+    }
+
+    #[test]
     fn the_folder_is_a_template_with_the_source_folder() {
         // #480 : `{source}` explicite ; un ancien dossier relatif vaut `{source}/…`.
         let image = Path::new("/photos/2026-11-14_séance été/DSCF0001.RAF");
@@ -2681,8 +2933,17 @@ mod tests {
             "champs de tri::naming"
         );
         assert_eq!(
-            output_pattern(&source.join("web"), "-web"),
-            source.join("web/$(FILE_NAME)-web")
+            output_pattern(&source.join("web"), "{name}-web"),
+            Some(source.join("web/$(FILE_NAME)-web"))
+        );
+        assert_eq!(
+            output_pattern(&source.join("web"), ""),
+            Some(source.join("web/$(FILE_NAME)"))
+        );
+        assert_eq!(
+            output_pattern(&source.join("web"), "{date}_{name}"),
+            None,
+            "autre champ : renommé après darktable"
         );
         // Ni compteur, ni champ inconnu ; un champ sans valeur échoue pour l'image.
         assert!(check_folder("{source}/{n}").is_err());
@@ -2839,7 +3100,7 @@ mod tests {
                 format,
                 bits,
                 max_side: 150,
-                suffix: "-test".into(),
+                file_name: "{name}-test".into(),
                 ..Profile::base("t")
             };
             let report = export_libraw(
@@ -3177,8 +3438,7 @@ mod tests {
         let tiff = export(
             &dt,
             std::slice::from_ref(&raw),
-            profiles.get("edit").unwrap(),
-            "export",
+            &Request::new(profiles.get("edit").unwrap(), "export"),
             &cancel,
             |d, t, p| seen.push((d, t, p.to_path_buf())),
         )
@@ -3187,11 +3447,11 @@ mod tests {
         assert_eq!(seen.len(), 1, "progression : un fichier");
         assert_eq!(tiff.written[0].extension().unwrap(), "tif");
         assert_eq!(tiff.written[0].parent().unwrap(), out, "à côté de l'image");
+        let out_folder = out.display().to_string();
         let web = export(
             &dt,
             &[raw],
-            profiles.get("web").unwrap(),
-            &out.display().to_string(),
+            &Request::new(profiles.get("web").unwrap(), &out_folder),
             &cancel,
             |_, _, _| {},
         )

@@ -214,10 +214,11 @@ pub const COMMANDS: &[Command] = &[
     Command {
         id: "export",
         theme: Theme::Export,
-        syntax: "tri --export <preset> <image>… [--to <folder>] [--libraw|--embedded] [--passthrough] [--dry-run]",
+        syntax: "tri --export <preset> <image>… [--to <folder>] [--name <template>] [--libraw|--embedded] [--passthrough] [--dry-run]",
         main: &["--export"],
         options: opts![
             "--to",
+            "--name",
             "--libraw",
             "--embedded",
             "--passthrough",
