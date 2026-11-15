@@ -1735,7 +1735,8 @@ moitié transparente.
   identifiant d'action (`core.nav.next`, `core.app.help`…), `wait:<ms>` (pause, pour
   laisser le moteur travailler), `shot` (capture immédiate, sans attendre que tout soit
   prêt : pour voir un état intermédiaire), `rating_dialog` (boîte du clic droit pour
-  l'image sélectionnée), `settings:<section>` (fenêtre de réglages ouverte sur une
+  l'image sélectionnée), `view_render` (liste « Rendu affiché » du plein écran ouverte),
+  `settings:<section>` (fenêtre de réglages ouverte sur une
   section : `settings:keys`), `export_toast` (bulle de fin d'export, comme après l'export
   de l'image sélectionnée, sans rien exporter), `search:<texte>` (tapé dans la recherche de la fenêtre de
   réglages ou de l'aide ouverte : `search:vim`). Une étape inconnue est signalée et ignorée.
