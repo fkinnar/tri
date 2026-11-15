@@ -781,6 +781,8 @@ pub struct DialogSettings {
     pub help_width: f32,
     /// Largeur de sa colonne des libellés, points : au-delà, sur deux lignes.
     pub help_label_width: f32,
+    /// Largeur de la liste des thèmes, à gauche de l'aide (points).
+    pub help_topics_width: f32,
     /// Marge en haut et en bas de chaque ligne de l'aide, points.
     pub help_row_padding: f32,
     /// Marge autour d'un exemple de ligne de commande dans l'aide, points.
@@ -858,8 +860,9 @@ impl Default for DialogSettings {
             focus_line: ThemeColor::Accent,
             focus_line_width: 2.0,
             icon_size: 34.0,
-            help_width: 1000.0,
+            help_width: 1200.0,
             help_label_width: 480.0,
+            help_topics_width: 230.0,
             help_row_padding: 3.0,
             help_example_margin: 4.0,
             help_scroll_line: 40.0,

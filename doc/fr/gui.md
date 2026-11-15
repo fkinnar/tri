@@ -446,7 +446,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   partage dans la boîte du clic droit, sans touche par défaut ; macOS seulement (masquée
   ailleurs : `Action::available`).
 - **Au clavier dans l'aide et les réglages** (retours du 18/10/2026) : l'aide défile aux
-  flèches haut / bas (`[gui.dialogs] help_scroll_line`), Page préc. / suiv. et Ctrl+U /
+  flèches haut / bas pendant une recherche (`[gui.dialogs] help_scroll_line` ; sans
+  recherche, elles changent de thème, depuis le 15/11/2026), Page préc. / suiv. et Ctrl+U /
   Ctrl+D, la recherche gardant les lettres. Réglages : la liste des sections défile
   jusqu'à celle choisie aux flèches (et les réglages repartent du haut) ; depuis la
   recherche, → (recherche vide), Entrée ou Tab donnent le clavier au premier réglage
@@ -1044,6 +1045,23 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   triés par pertinence (`tri::fuzzy` : lettres consécutives et débuts de mots comptent
   plus, les trous pénalisent ; à égalité, le libellé le plus court). Pendant la saisie,
   `?` s'écrit dans le champ : on ferme par Échap ou `F1`.
+- **Catégories des réglages** (15/11/2026, pour découvrir les réglages sans rien
+  chercher) : la liste de gauche range les pages sous six titres repliables, Général,
+  Importer et fichiers, Trier et noter, Affichage, Développer et exporter, Avancé (aperçus,
+  rendu RAW, cache, calculs en fond : rarement à toucher). Table `CATEGORIES` de
+  `gui/src/settings_window.rs`, qui fixe aussi l'ordre des pages ; un test exige qu'une
+  nouvelle section y soit citée. La fenêtre s'ouvre sur la première page (Langue) ; les
+  flèches suivent l'ordre affiché. Pendant une recherche, la liste reste celle des
+  résultats, sans titres. **L'aide pareil** (même jour) : deux colonnes, ses thèmes à
+  gauche sous les mêmes titres (`gui/src/categories.rs`, commun aux deux fenêtres ;
+  `HelpTopic::ALL` range les thèmes : Navigation, Panneaux, Annuler, Application sous
+  Général, la ligne de commande sous Avancé), les lignes du thème choisi à droite ; sans
+  recherche, ↑ / ↓ changent de thème et les pages font défiler ; pendant une recherche,
+  les thèmes trouvés en tête avec leur nombre de résultats, un clic ouvre le thème et
+  efface la recherche. **Lien entre les deux** : au survol d'une ligne de l'aide,
+  « Modifier… » ouvre les réglages sur la page Raccourcis, la ligne de l'action en vue et
+  encadrée (`SettingsWindow::focus_action`). Largeur de la liste des thèmes :
+  `[gui.dialogs] help_topics_width`.
 - **Recherche, aide et réglages** (revue le 22/10/2026 : on ne sait souvent qu'« à peu
   près » ce qu'on cherche) : les **thèmes** de l'aide et les **sections** des réglages
   restent visibles pendant la recherche (dans les réglages, la liste de gauche met en
@@ -1735,7 +1753,8 @@ moitié transparente.
   identifiant d'action (`core.nav.next`, `core.app.help`…), `wait:<ms>` (pause, pour
   laisser le moteur travailler), `shot` (capture immédiate, sans attendre que tout soit
   prêt : pour voir un état intermédiaire), `rating_dialog` (boîte du clic droit pour
-  l'image sélectionnée), `settings:<section>` (fenêtre de réglages ouverte sur une
+  l'image sélectionnée), `view_render` (liste « Rendu affiché » du plein écran ouverte),
+  `settings:<section>` (fenêtre de réglages ouverte sur une
   section : `settings:keys`), `export_toast` (bulle de fin d'export, comme après l'export
   de l'image sélectionnée, sans rien exporter), `search:<texte>` (tapé dans la recherche de la fenêtre de
   réglages ou de l'aide ouverte : `search:vim`). Une étape inconnue est signalée et ignorée.
