@@ -152,10 +152,9 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
 
 - **Grille** : badge dans la légende des vignettes qui ont des versions, à gauche du
   format (icône de recadrage dessinée et leur nombre ; en haut à gauche jusqu'au
-  21/10/2026) ; un clic **rouvre le cadre** de la version s'il n'y en a qu'une, sinon
-  ouvre l'image en plein écran avec la première montrée, la liste « Version » du bandeau
-  pour en choisir une, la modifier ou la supprimer (13/11/2026 : il commençait une
-  nouvelle version, sa bulle disait « modifier » ; créer reste `r`). Versions lues dans les sidecars à la demande, puis
+  21/10/2026) ; un clic ouvre la **comparaison des versions** (#393, voir plus bas ;
+  avant : le cadre rouvert pour une seule version, sinon le plein écran sur la première).
+  Créer une version reste `v`. Versions lues dans les sidecars à la demande, puis
   gardées ; relues après une modification (enregistrement, annulation, surveillance du
   dossier).
 - La barre du recadrage ne propose que les profils d'export qui s'appliquent à l'image
@@ -167,6 +166,32 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   même.
 - Export d'une version sans profil : le profil choisi, sinon le premier profil JPEG (Web
   par défaut), plutôt qu'un TIFF de retouche.
+
+## Comparaison des versions (#393)
+
+Décidé le 09/11/2026 avec l'utilisateur, fait le 15/11/2026 (`gui/src/versions_compare.rs`
+pour l'état, `TriApp::versions_compare_view` pour le dessin) :
+
+- **Pas de versions dépliées dans la grille** : une version est un cadre pris dans la même
+  image, pas une autre photo ; dépliées, elles rempliraient la grille de morceaux d'une
+  même photo et brouilleraient les piles du tri. La grille garde le badge.
+- Le badge, `<core.version.compare>` (`<leader> v v`, aussi depuis le plein écran, sur la
+  version montrée) ou la palette ouvrent le **mode comparaison** avec un **volet par
+  version**, recadré, dans le rendu affiché de la photo ; les morceaux d'un carrousel ou
+  d'une grille sont tracés. Ce que fait la comparaison reste : zoom et position liés (au
+  même point relatif de chaque cadre), volet actif encadré, flèches, Échap qui ramène là
+  d'où on l'a ouverte (grille ou plein écran, #379).
+- **Original** (bouton du bandeau, `<core.version.original>` : `<leader> v o`) : l'image
+  entière en premier volet, comme référence ; par défaut, toute la place aux versions.
+- **Exporter** : `Ctrl+E`, la boîte d'export de la version active (son cadre, son
+  préréglage) ; plusieurs versions marquées (Espace, Ctrl / Cmd + clic, cadre de la
+  couleur des marques) partent ensemble, sans boîte, chacune avec son préréglage (le sien,
+  sinon le dernier choisi, sinon celui des réglages ; jamais « tel quel »), dans le
+  dossier et sous le nom retenus pour ce préréglage, l'une après l'autre dans la file
+  d'export ; **Exporter tout** (bouton du bandeau, `<core.version.export_all>`) : toutes.
+- **Modifier** : `v` sur la version active ouvre son cadre ; quitter l'éditeur
+  (enregistrer ou annuler) ramène à la comparaison, sur elle.
+- Entrée ou double-clic : la version active en plein écran ; les notes vont à l'image.
 
 ## Export d'une version
 

@@ -447,6 +447,13 @@ pub enum Action {
     VersionNext,
     /// Plein écran : version précédente (dans l'autre sens, 06/11/2026).
     VersionPrev,
+    /// Les versions de l'image côte à côte, dans la comparaison (#393).
+    VersionsCompare,
+    /// Comparaison des versions : l'image entière en premier volet, ou non (#393).
+    VersionsOriginal,
+    /// Comparaison des versions : exporter toutes les versions, chacune avec son
+    /// préréglage (#393).
+    VersionsExportAll,
     /// Rechercher : en grille, filtre par nom de fichier ; dans le panneau des dossiers,
     /// un dossier (aussi `/`, sauf en plein écran où il vaut « ajusté »).
     Search,
@@ -564,7 +571,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 245] = [
+    pub const ALL: [Action; 248] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -690,6 +697,9 @@ impl Action {
         Action::VersionReset,
         Action::VersionNext,
         Action::VersionPrev,
+        Action::VersionsCompare,
+        Action::VersionsOriginal,
+        Action::VersionsExportAll,
         Action::Send("plugin.airdrop.send"),
         Action::Undo,
         Action::Redo,
@@ -948,7 +958,8 @@ impl Action {
             | CropPreset | CropPresetPrev | VersionNext | VersionPrev | VersionRatioNext
             | VersionRatioPrev | VersionTilesNext | VersionTilesPrev | VersionRowsNext
             | VersionRowsPrev | VersionRatioCustom | VersionExportNext | VersionExportPrev
-            | VersionName | VersionSavePreset | VersionReset => Group::Crop,
+            | VersionName | VersionSavePreset | VersionReset | VersionsCompare
+            | VersionsOriginal | VersionsExportAll => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterColorsAll | FilterClear | FilterBlurry | FilterWellExposed | FilterStack
@@ -1137,6 +1148,9 @@ impl Action {
             Action::VersionReset => "core.version.reset",
             Action::VersionNext => "core.version.next",
             Action::VersionPrev => "core.version.prev",
+            Action::VersionsCompare => "core.version.compare",
+            Action::VersionsOriginal => "core.version.original",
+            Action::VersionsExportAll => "core.version.export_all",
             Action::Undo => "core.edit.undo",
             Action::Redo => "core.edit.redo",
             Action::History => "core.edit.history",

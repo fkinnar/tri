@@ -244,6 +244,8 @@ loupe = "m"
 "core.version.new" = ["v"]
 "core.version.next" = ["Shift+v"]
 "core.version.prev" = ["Ctrl+Shift+v"]
+# In the comparison of the versions (#393): export every version, each with its preset.
+"core.version.export_all" = []
 
 # --- External (e) and files ---
 # e: open in the external editor; Shift+E: reveal in the file manager (explorer);
@@ -501,6 +503,10 @@ loupe = "m"
 "core.rate.auto_advance" = ["Space"]
 # ?: report a problem (prefilled GitHub form), next to the help.
 "core.app.report_issue" = ["?", "Shift+?"]
+# v v: the image's versions side by side (comparison, #393); v o: there, the whole
+# image as the first pane, or not.
+"core.version.compare" = ["v v"]
+"core.version.original" = ["v o"]
 # r: develop. r again: with the image's software; Shift+R: the whole folder, in the
 # background; d, p, t, a: with darktable, RapidRAW, RawTherapee, ART. In the folder
 # panel, the same keys open the folder in that software.

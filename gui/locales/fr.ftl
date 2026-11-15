@@ -126,6 +126,14 @@ action-core-file-export-report = Rapport d'export
 action-core-file-export = Exporter…
 action-core-version-new = Nouvelle version (recadrer l'image, préréglage d'export facultatif)
 action-core-version-next = Version suivante de l'image (original, puis chaque version)
+action-core-version-compare = Comparer les versions de l'image, côte à côte
+action-core-version-original = Comparaison des versions : montrer l'image entière (l'original) ou non
+action-core-version-export_all = Exporter toutes les versions, chacune avec son préréglage
+versions-compare-none = Cette image n'a pas de version (v en crée une).
+versions-compare-original = L'original n'est pas une version : rien à modifier.
+versions-compare-original-label = Original
+versions-export-started = { $n } versions à exporter, l'une après l'autre.
+versions-export-all = Exporter tout
 action-core-version-prev = Version précédente de l'image
 action-core-version-move-left = Version : déplacer le cadre à gauche
 action-core-version-move-right = Version : déplacer le cadre à droite
@@ -756,8 +764,8 @@ filter-bar-count = { $shown }/{ $n }
 badge-over = { $percent } % de pixels saturés (brûlée) ; clic : grand histogramme
 badge-under = { $percent } % de pixels bouchés ; clic : grand histogramme
 badge-versions = { $n ->
-    [one] 1 version ; clic : la modifier
-   *[other] { $n } versions ; clic : les voir, en choisir une à modifier
+    [one] 1 version ; clic : la voir à côté des autres (comparaison des versions)
+   *[other] { $n } versions ; clic : les voir côte à côte (comparer, exporter, modifier)
 }
 help-title = Raccourcis
 help-search-hint = Rechercher (ex. « pnd », « etoile 3 »)…
