@@ -763,7 +763,7 @@ help-title = Raccourcis
 help-search-hint = Rechercher (ex. « pnd », « etoile 3 »)…
 help-commands = Ligne de commande
 help-commands-group = Ligne de commande : { $theme }
-help-fields = Champs des gabarits (renommage par lot, dossiers d'export)
+help-fields = Champs des gabarits (renommage par lot, dossiers et noms d'export)
 help-topic-commands = Ligne de commande
 help-topic-fields = Champs des gabarits
 help-edit-keys = Modifier…
@@ -858,6 +858,8 @@ export-profile = Préréglage d'export
 export-profile-tip = Flèches haut / bas : préréglage · Tab : dossier · Entrée : exporter
 export-destination = Dossier
 export-folder-tip = Un gabarit : { "{" }source{ "}" } (le dossier de chaque image), ~/… ou /…, et { "{" }date{ "}" } { "{" }time{ "}" } { "{" }name{ "}" } { "{" }folder{ "}" } { "{" }camera{ "}" }. Exemple : ~/Images/Export/{ "{" }date{ "}" }_{ "{" }folder{ "}" }
+export-name = Nom des fichiers
+export-name-tip = Un gabarit, sans extension : {"{"}name{"}"} (le nom de l'image), {"{"}date{"}"}, {"{"}time{"}"}, {"{"}folder{"}"}, {"{"}camera{"}"}, {"{"}n{"}"} (rang dans l'export ; {"{"}n:3{"}"} = 001). Version, morceau et JPEG de paire s'ajoutent après. Retenu pour ce préréglage.
 export-no-developer = Aucun logiciel de développement trouvé : rendu de base par LibRaw.
 export-rapidraw-srgb = RapidRAW rend en sRGB : l'espace « { $color } » est converti depuis sRGB.
 export-passthrough = Sans recompression

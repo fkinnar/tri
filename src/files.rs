@@ -60,7 +60,7 @@ impl Default for FileSettings {
             recent: 9,
             allow_actions: false,
             group_pairs: crate::pairs::Grouping::Ask,
-            rename_template: "{date}_{folder}_{n:3}".into(),
+            rename_template: "{date}_{folder_short}_{n:3}".into(),
         }
     }
 }
@@ -1707,14 +1707,14 @@ mod tests {
             plan_batch(&photos, stems, &settings)
         };
         // Un nom déjà pris (Bleu_9.JPG) : signalé sur sa ligne, rien à renommer.
-        let taken = batch("{folder}_{n}", 7);
+        let taken = batch("{folder_short}_{n}", 7);
         assert_eq!(
             taken.rows[2].problem,
             Some(BatchProblem::Taken(d.join("Bleu_9.JPG")))
         );
         assert!(taken.plan.is_none());
         // Deux photos vers le même nom : les deux signalées.
-        let twice = batch("{folder}", 1);
+        let twice = batch("{folder_short}", 1);
         assert!(
             twice
                 .rows
@@ -1729,7 +1729,7 @@ mod tests {
             Some(BatchProblem::Template(_))
         ));
         // Tout va bien : paire et sidecar suivent, en une fois.
-        let ok = batch("{folder}_{n:2}", 1);
+        let ok = batch("{folder_short}_{n:2}", 1);
         let plan = ok.plan.expect("renommable");
         rename(&plan).unwrap();
         let mut left: Vec<String> = std::fs::read_dir(&d)

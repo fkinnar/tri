@@ -1,11 +1,12 @@
 //! Gabarits de noms de fichiers (issue n° 439, décidé le 14/11/2026) : des champs entre
-//! accolades, `{date}_{folder}_{n:3}` → `2026-11-14_Bleu_Jaune_001`. Servent au
+//! accolades, `{date}_{folder_short}_{n:3}` → `2026-11-14_Bleu_Jaune_001`. Servent au
 //! renommage par lot ([`crate::files::plan_batch`]) ; le déchargement pourra s'en servir
 //! aussi. Voir `doc/en/files.md`.
 //!
 //! Champs : `{date}` (prise de vue, `2026-11-14`), `{time}` (`153012`), `{name}` (nom
 //! d'origine sans extension), `{n}` (compteur ; `{n:3}` = `001`), `{folder}` (nom du
-//! dossier sans la date en tête), `{camera}` (modèle de l'appareil).
+//! dossier en entier), `{folder_short}` (sans la date en tête ; retour du 15/11/2026 :
+//! `{folder}` gardait la date), `{camera}` (modèle de l'appareil).
 
 use std::fmt;
 use std::path::Path;
@@ -13,7 +14,15 @@ use std::path::Path;
 use crate::media::{MediaFile, MediaKind};
 
 /// Les champs connus, dans l'ordre de l'aide.
-pub const FIELDS: [&str; 6] = ["date", "time", "name", "n", "folder", "camera"];
+pub const FIELDS: [&str; 7] = [
+    "date",
+    "time",
+    "name",
+    "n",
+    "folder",
+    "folder_short",
+    "camera",
+];
 
 /// Un champ pour l'aide : comment l'écrire, et ce qu'il donne (exemple et usage compris),
 /// dans la langue de l'interface. Les noms des champs, eux, ne se traduisent jamais.
@@ -49,8 +58,10 @@ pub struct Fields {
     pub time: Option<String>,
     /// Nom d'origine, sans extension.
     pub name: String,
-    /// Nom du dossier, sans la date en tête (`2026-11-14_Bleu_Jaune` → `Bleu_Jaune`).
+    /// Nom du dossier, en entier (`2026-11-14_Bleu_Jaune`).
     pub folder: String,
+    /// Nom du dossier sans la date en tête (`2026-11-14_Bleu_Jaune` → `Bleu_Jaune`).
+    pub folder_short: String,
     /// Modèle de l'appareil.
     pub camera: Option<String>,
 }
@@ -58,16 +69,18 @@ pub struct Fields {
 impl Fields {
     /// Ce qui se lit sans ouvrir le fichier : nom et dossier.
     pub fn basic(image: &Path) -> Fields {
+        let folder = image
+            .parent()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
         Fields {
             name: image
                 .file_stem()
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_default(),
-            folder: image
-                .parent()
-                .and_then(|p| p.file_name())
-                .map(|n| folder_label(&n.to_string_lossy()))
-                .unwrap_or_default(),
+            folder: folder.clone(),
+            folder_short: folder_label(&folder),
             ..Fields::default()
         }
     }
@@ -238,6 +251,7 @@ pub fn render(template: &str, fields: &Fields, n: usize) -> Result<String, Templ
             Part::Field("n", width) => out.push_str(&format!("{n:0w$}", w = width.unwrap_or(1))),
             Part::Field("name", _) => out.push_str(&fields.name),
             Part::Field("folder", _) => out.push_str(&clean(&fields.folder)),
+            Part::Field("folder_short", _) => out.push_str(&clean(&fields.folder_short)),
             Part::Field("date", _) => out.push_str(fields.date.as_deref().ok_or(missing("date"))?),
             Part::Field("time", _) => out.push_str(fields.time.as_deref().ok_or(missing("time"))?),
             Part::Field("camera", _) => {
@@ -258,7 +272,8 @@ mod tests {
             date: Some("2026-11-14".into()),
             time: Some("153012".into()),
             name: "DSCF8158".into(),
-            folder: "Bleu Jaune".into(),
+            folder: "2026-11-14 Bleu Jaune".into(),
+            folder_short: "Bleu Jaune".into(),
             camera: Some("X-T4".into()),
         }
     }
@@ -267,8 +282,13 @@ mod tests {
     fn a_template_fills_its_fields() {
         let f = fields();
         assert_eq!(
-            render("{date}_{folder}_{n:3}", &f, 7).unwrap(),
+            render("{date}_{folder_short}_{n:3}", &f, 7).unwrap(),
             "2026-11-14_Bleu_Jaune_007"
+        );
+        assert_eq!(
+            render("{folder}_{n:2}", &f, 1).unwrap(),
+            "2026-11-14_Bleu_Jaune_01",
+            "le dossier en entier"
         );
         assert_eq!(render("{name}_{camera}", &f, 1).unwrap(), "DSCF8158_X-T4");
         assert_eq!(render("{time}-{n}", &f, 12).unwrap(), "153012-12");
@@ -329,8 +349,12 @@ mod tests {
         assert_eq!(folder_label("Vacances"), "Vacances");
         let basic = Fields::basic(Path::new("/p/2026-11-14_Bleu_Jaune/DSCF1.RAF"));
         assert_eq!(
-            (basic.name.as_str(), basic.folder.as_str()),
-            ("DSCF1", "Bleu_Jaune")
+            (
+                basic.name.as_str(),
+                basic.folder.as_str(),
+                basic.folder_short.as_str()
+            ),
+            ("DSCF1", "2026-11-14_Bleu_Jaune", "Bleu_Jaune")
         );
     }
 }

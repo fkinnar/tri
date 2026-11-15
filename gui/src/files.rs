@@ -190,6 +190,8 @@ pub enum Outcome {
         folder: String,
         /// Dossier à retenir pour ce préréglage (vide : l'oublier).
         remember: String,
+        /// Gabarit de nom à retenir pour ce préréglage (vide : l'oublier ; #485).
+        remember_name: String,
         render: crate::export::Render,
         cut: Option<tri::export::Cut>,
     },
@@ -331,11 +333,13 @@ impl FileDialog {
                     render,
                     cut,
                     remember,
+                    remember_name,
                 } => Outcome::Export {
                     images,
                     profile: *profile,
                     folder,
                     remember,
+                    remember_name,
                     render,
                     cut,
                 },

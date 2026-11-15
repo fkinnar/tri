@@ -240,8 +240,9 @@ droit ouvre le renommage par lot : un **gabarit** de champs entre accolades
 nouveau ». Décidé avec l'utilisateur :
 
 - champs : `{date}` (prise de vue, `2026-11-14`), `{time}` (`153012`), `{name}` (nom
-  d'origine), `{n}` compteur (`{n:3}` = `001`), `{folder}` (nom du dossier sans la date en
-  tête, `2026-11-14_Bleu_Jaune` → `Bleu_Jaune`), `{camera}` (modèle de l'appareil) ; dans
+  d'origine), `{n}` compteur (`{n:3}` = `001`), `{folder}` (nom du dossier en entier,
+  `2026-11-14_Bleu_Jaune`), `{folder_short}` (sans la date en tête : `Bleu_Jaune` ;
+  séparés le 15/11/2026 à la demande de l'utilisateur, `{folder}` perdait la date), `{camera}` (modèle de l'appareil) ; dans
   une valeur, `/`, `\` et `:` deviennent `-`, les blancs `_`. Les champs sous le gabarit
   sont des boutons qui l'y ajoutent au bout. `{date}`, `{time}` et `{camera}` sont lus
   dans les fichiers en fond à l'ouverture de la boîte (`naming::Fields::read`, ~10 ms par
@@ -257,7 +258,7 @@ nouveau ». Décidé avec l'utilisateur :
 - un seul pas d'historique (« 3 photos renommées »), annulé d'un coup ; les marques
   suivent les nouveaux noms ;
 - le gabarit proposé la première fois est `[files] rename_template`
-  (`{date}_{folder}_{n:3}`), puis le dernier utilisé dans la session.
+  (`{date}_{folder_short}_{n:3}`), puis le dernier utilisé dans la session.
 
 Donner à une photo le nom actuel d'une autre (décaler une numérotation d'un cran) est
 refusé comme tout nom pris : passer par un gabarit intermédiaire.

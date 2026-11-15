@@ -97,8 +97,9 @@ naming-help = { $field ->
     [date] Capture date: 2026-11-14 · names and folders
     [time] Capture time: 153012 · names and folders
     [name] Original name, without extension: DSCF8158 · names and folders
-    [n] Counter, in grid order; { "{" }n:3{ "}" } = 001 · names only (batch rename)
-    [folder] Folder name without its leading date: 2026-11-14_Bleu_Jaune gives Bleu_Jaune · names and folders
+    [n] Counter, in grid order; { "{" }n:3{ "}" } = 001 · names only (batch rename, export names)
+    [folder] Folder name, in full: 2026-11-14_Bleu_Jaune · names and folders
+    [folder_short] Folder name without its leading date: 2026-11-14_Bleu_Jaune gives Bleu_Jaune · names and folders
     [camera] Camera model: X-T4 · names and folders
    *[source] Each image's folder, in full: { "{" }source{ "}" }/export · export folders only
 }
@@ -421,6 +422,7 @@ cli-theme-analysis = Analyses
 cli-theme-cache = Cache and data
 cli-theme-other = Other
 cli-ph-folder = folder
+cli-ph-template = template
 cli-ph-image = image
 cli-ph-images = images
 cli-ph-name = name
@@ -475,6 +477,7 @@ cli-opt-permanent = permanent deletion, no trash
 cli-opt-to = destination folder
 cli-opt-offload-to = root of the sessions (default: [offload] destination)
 cli-opt-export-to = folder, instead of the preset's
+cli-opt-export-name = file names, a template ({"{"}name{"}"}, {"{"}date{"}"}, {"{"}n{"}"}…), instead of the preset's
 cli-opt-libraw = LibRaw rendering, even with darktable installed
 cli-opt-embedded = the camera JPEG
 cli-opt-adjust-embedded = starts from the camera JPEG rather than the RAW rendering

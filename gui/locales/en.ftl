@@ -760,7 +760,7 @@ help-title = Shortcuts
 help-search-hint = Search (e.g. "fpn", "star 3")…
 help-commands = Command line
 help-commands-group = Command line: { $theme }
-help-fields = Template fields (batch rename, export folders)
+help-fields = Template fields (batch rename, export folders and names)
 help-topic-commands = Command line
 help-topic-fields = Template fields
 help-edit-keys = Edit…
@@ -855,6 +855,8 @@ export-profile = Export preset
 export-profile-tip = Up / down arrows: preset · Tab: folder · Enter: export
 export-destination = Folder
 export-folder-tip = A template: { "{" }source{ "}" } (each image's folder), ~/… or /…, and { "{" }date{ "}" } { "{" }time{ "}" } { "{" }name{ "}" } { "{" }folder{ "}" } { "{" }camera{ "}" }. Example: ~/Images/Export/{ "{" }date{ "}" }_{ "{" }folder{ "}" }
+export-name = File names
+export-name-tip = A template, without extension: {"{"}name{"}"} (the image's name), {"{"}date{"}"}, {"{"}time{"}"}, {"{"}folder{"}"}, {"{"}camera{"}"}, {"{"}n{"}"} (rank in the export; {"{"}n:3{"}"} = 001). Version, tile and pair JPEG are appended after. Remembered for this preset.
 export-no-developer = No development software found: base render by LibRaw.
 export-rapidraw-srgb = RapidRAW renders in sRGB: the “{ $color }” space is converted from sRGB.
 export-passthrough = Without recompression

@@ -370,6 +370,9 @@ pub struct TriApp {
     download_format: Option<String>,
     /// Dernier dossier d'export de chaque préréglage (gardé dans `gui-state.toml`).
     export_folders: std::collections::BTreeMap<String, String>,
+    /// Dernier gabarit de nom de chaque préréglage d'export (#485), gardé comme les
+    /// dossiers (`gui-state.toml`).
+    export_names: std::collections::BTreeMap<String, String>,
     /// Ce binaire : version distribuée ou build personnel (et son commit).
     build: tri::update::Build,
     /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
@@ -1537,6 +1540,7 @@ impl TriApp {
             download: None,
             download_format: None,
             export_folders: Default::default(),
+            export_names: Default::default(),
             build: tri::update::Build::current(),
             ejecting: None,
             mounting: None,
@@ -2027,6 +2031,7 @@ impl TriApp {
             histogram_camera: Some(self.histogram_camera),
             download_format: self.download_format.clone(),
             export_folders: (!self.export_folders.is_empty()).then(|| self.export_folders.clone()),
+            export_names: (!self.export_names.is_empty()).then(|| self.export_names.clone()),
             folder_panel: Some(self.folder_panel),
             metadata_panel: Some(self.metadata_panel),
             filter_bar: Some(self.filter_bar),
@@ -2141,6 +2146,9 @@ impl TriApp {
         }
         if let Some(folders) = &s.export_folders {
             self.export_folders = folders.clone();
+        }
+        if let Some(names) = &s.export_names {
+            self.export_names = names.clone();
         }
         self.window_kept = s.window;
         self.maximize_pending = s.window.is_some_and(|w| w.maximized);
@@ -15082,6 +15090,7 @@ impl TriApp {
                     at,
                 )
                 .with_folders(self.export_folders.clone())
+                .with_names(self.export_names.clone())
                 .with_cut(tri::export::Cut {
                     crop: version.crop,
                     name: version.name.clone(),
@@ -15123,7 +15132,8 @@ impl TriApp {
                     render,
                     at,
                 )
-                .with_folders(self.export_folders.clone());
+                .with_folders(self.export_folders.clone())
+                .with_names(self.export_names.clone());
                 self.file_dialog = Some(crate::files::FileDialog::Export(Box::new(dialog)));
                 Ok(())
             }
@@ -15288,15 +15298,22 @@ impl TriApp {
                 profile,
                 folder,
                 remember,
+                remember_name,
                 render,
                 cut,
             } => {
                 self.file_dialog = None;
-                // Le dossier choisi est retenu pour ce préréglage (retour du 14/11/2026).
+                // Le dossier choisi est retenu pour ce préréglage (retour du 14/11/2026),
+                // et le gabarit de nom (#485).
                 if remember.is_empty() {
                     self.export_folders.remove(&profile.id);
                 } else {
                     self.export_folders.insert(profile.id.clone(), remember);
+                }
+                if remember_name.is_empty() {
+                    self.export_names.remove(&profile.id);
+                } else {
+                    self.export_names.insert(profile.id.clone(), remember_name);
                 }
                 self.save_display();
                 self.export_choice[usize::from(crate::export::exports_flat(render, &images))] =
@@ -33974,6 +33991,64 @@ mod tests {
             h.state_mut().grid_render = grid;
             assert_eq!(h.state().grid_export_render(), expected, "{grid:?}");
         }
+    }
+
+    #[test]
+    fn the_export_file_name_is_a_template_remembered_per_preset() {
+        // #485 : un champ « Nom » sous le dossier, le gabarit tel quel ; un autre que
+        // celui du préréglage est retenu pour lui ; le compteur suit l'ordre de la grille.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let name = |h: &Harness<'static, TriApp>| -> String {
+            match &h.state().file_dialog {
+                Some(crate::files::FileDialog::Export(d)) => d.name_input().to_string(),
+                _ => panic!("boîte d'export attendue"),
+            }
+        };
+        let out = dir.path().join("sortie");
+        let typed = |h: &mut Harness<'static, TriApp>, folder: &str, template: &str| {
+            if let Some(crate::files::FileDialog::Export(d)) = &mut h.state_mut().file_dialog {
+                d.type_folder(folder);
+                d.type_name(template);
+            }
+            h.run_steps(2);
+        };
+        // Toutes les images, dans l'ordre de la grille.
+        press(&mut h, Key::A, Modifiers::CTRL);
+        press(&mut h, Key::E, Modifiers::CTRL);
+        assert_eq!(name(&h), "{name}", "le gabarit du préréglage");
+        assert!(h.query_by_label(&t!("export-name")).is_some());
+        // `{source}` est un dossier : dit en rouge, l'export refusé.
+        typed(&mut h, &out.to_string_lossy(), "{source}");
+        assert!(h.query_by_label_contains("n'a pas de sens ici").is_some());
+        typed(&mut h, &out.to_string_lossy(), "serie_{n:2}");
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.export_job.is_none() && app.notice.is_some()
+        });
+        let mut written: Vec<String> = std::fs::read_dir(&out)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        written.sort();
+        assert_eq!(written, ["serie_01.jpg", "serie_02.jpg", "serie_03.jpg"]);
+        // img0 est la première de la grille (copiée telle quelle).
+        assert_eq!(
+            std::fs::read(out.join("serie_01.jpg")).unwrap(),
+            std::fs::read(dir.path().join("photos/img0.jpg")).unwrap()
+        );
+        assert_eq!(
+            std::fs::read(out.join("serie_03.jpg")).unwrap(),
+            std::fs::read(dir.path().join("photos/img2.jpg")).unwrap()
+        );
+        assert_eq!(h.state().export_names.len(), 1);
+        assert_eq!(
+            h.state().display().export_names.unwrap().len(),
+            1,
+            "gardé dans gui-state.toml"
+        );
+        press(&mut h, Key::E, Modifiers::CTRL);
+        assert_eq!(name(&h), "serie_{n:2}", "retenu");
     }
 
     #[test]
