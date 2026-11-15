@@ -602,6 +602,11 @@ pub struct TriApp {
     crop_from_grid: bool,
     /// Version montrée en plein écran : (image, place dans sa liste).
     version_shown: Option<(PathBuf, usize)>,
+    /// Comparaison des versions d'une image (#393), dans le mode comparaison.
+    versions_compare: Option<crate::versions_compare::VersionsCompare>,
+    /// Version modifiée depuis la comparaison des versions : on y revient en quittant
+    /// l'éditeur (#393).
+    crop_back_to_versions: Option<crate::versions_compare::VersionsCompare>,
     /// Versions lues dans les sidecars (à la demande ; vidé quand elles changent).
     versions: HashMap<PathBuf, tri::versions::Versions>,
     /// Versions lues en fond pour la grille ([`TriApp::grid_versions`]) : en cours, et
@@ -1594,6 +1599,8 @@ impl TriApp {
             crop: None,
             crop_from_grid: false,
             version_shown: None,
+            versions_compare: None,
+            crop_back_to_versions: None,
             versions: HashMap::new(),
             versions_pending: HashSet::new(),
             versions_read: mpsc::channel(),
@@ -8530,6 +8537,12 @@ impl TriApp {
     /// Exécute une action (clavier aujourd'hui, souris ou plugin demain).
     fn perform(&mut self, ctx: &egui::Context, action: Action) {
         self.hint = None;
+        if self.mode == Mode::Compare
+            && self.versions_compare.is_some()
+            && self.versions_perform(ctx, action)
+        {
+            return;
+        }
         if self.mode == Mode::Compare && self.compare_perform(action) {
             return;
         }
@@ -9012,6 +9025,32 @@ impl TriApp {
                     .is_some_and(|c| !c.name.trim().is_empty())
                 {
                     self.save_preset();
+                }
+            }
+            Action::VersionsCompare => self.open_versions_compare(),
+            // Hors de la comparaison des versions (grille, plein écran, palette) : elle
+            // s'ouvre, l'original en premier volet (retour du 15/11/2026 : <leader> v o ne
+            // marchait qu'une fois la comparaison ouverte).
+            Action::VersionsOriginal => {
+                self.open_versions_compare();
+                if self.mode == Mode::Compare
+                    && let Some(vc) = &self.versions_compare
+                {
+                    let count = self.versions.get(&vc.image).map_or(0, |v| v.list.len());
+                    if let Some(vc) = self.versions_compare.as_mut() {
+                        vc.toggle_original(count);
+                    }
+                }
+            }
+            // De même : toutes les versions de l'image courante.
+            Action::VersionsExportAll => {
+                if let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) {
+                    let all: Vec<usize> = (0..self.versions_of(&path).list.len()).collect();
+                    if all.is_empty() {
+                        self.hint = Some(t!("versions-compare-none"));
+                    } else {
+                        self.export_versions(ctx, &path, &all);
+                    }
                 }
             }
             Action::VersionNext | Action::VersionPrev => {
@@ -9986,6 +10025,7 @@ impl TriApp {
     /// l'image active, ou la grille.
     fn leave_compare(&mut self) {
         self.compare.clear();
+        self.versions_compare = None;
         if std::mem::take(&mut self.compare_from_view) && self.selected < self.files.len() {
             self.compare_from = None;
             self.mode = Mode::View;
@@ -11419,6 +11459,14 @@ impl TriApp {
 
     /// Version montrée en plein écran (image et version), s'il y en a une.
     fn shown_version(&self) -> Option<(PathBuf, tri::versions::Version)> {
+        // Comparaison des versions : la version du volet actif (#393).
+        if self.mode == Mode::Compare
+            && let Some(vc) = &self.versions_compare
+        {
+            let versions = self.versions.get(&vc.image)?;
+            let i = vc.active_pane(versions.list.len())?;
+            return Some((vc.image.clone(), versions.list.get(i)?.clone()));
+        }
         if self.mode != Mode::View {
             return None;
         }
@@ -11489,27 +11537,407 @@ impl TriApp {
         self.request_zoom();
     }
 
-    /// Badge des versions d'une vignette cliqué (retour du 13/11/2026 : il commençait une
-    /// nouvelle version, sa bulle disait « modifier ») : une seule version, son cadre
-    /// rouvert ; plusieurs, l'image en plein écran avec la première montrée, la liste
-    /// « Version » du bandeau pour en choisir une, la modifier ou la supprimer. Fermer
-    /// ramène à la grille. Créer une version reste `r`.
-    fn open_versions(&mut self) {
+    /// Ouvre la comparaison des versions de l'image courante (#393 : icône des versions
+    /// d'une vignette, <core.version.compare>, palette) : un volet par version ; depuis le
+    /// plein écran sur une version, elle est le volet actif.
+    fn open_versions_compare(&mut self) {
         let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) else {
             return;
         };
-        let count = self.versions_of(&path).list.len();
-        if count == 0 {
+        if self.versions_of(&path).list.is_empty() {
+            self.hint = Some(t!("versions-compare-none"));
             return;
         }
-        self.crop_from_grid = self.mode == Mode::Grid;
+        let mut vc = crate::versions_compare::VersionsCompare::new(path.clone());
+        if let Some((p, i)) = &self.version_shown
+            && *p == path
+            && self.mode == Mode::View
+        {
+            vc.active = *i;
+        }
+        // On revient là d'où on l'a ouverte (grille ou plein écran), comme la comparaison.
+        self.compare_from_view = self.mode == Mode::View;
+        self.compare_from = (self.mode == Mode::Grid).then_some((Some(path), self.cursor_hidden));
+        self.reopen_versions_compare(vc);
+    }
+
+    /// Montre la comparaison des versions `vc` (ouverte, ou retrouvée en quittant
+    /// l'éditeur d'une version).
+    fn reopen_versions_compare(&mut self, vc: crate::versions_compare::VersionsCompare) {
+        let index = self.files.iter().position(|f| f.path == vc.image);
+        self.compare = vec![vc.image.clone()];
+        self.versions_compare = Some(vc);
+        self.version_shown = None;
+        self.mode = Mode::Compare;
+        self.zoom = None;
+        self.zoom_anchor = None;
+        if let Some(index) = index {
+            self.select(index);
+        }
         self.sync_source();
-        self.mode = Mode::View;
-        if count == 1 {
-            self.edit_version(&path, 0);
-        } else {
-            self.zoom = None;
-            self.version_shown = Some((path, 0));
+        self.tell_shown();
+        self.request_zoom();
+    }
+
+    /// Actions propres à la comparaison des versions ; `false` : celles de la
+    /// comparaison, puis les ordinaires (notes, zoom…).
+    fn versions_perform(&mut self, ctx: &egui::Context, action: Action) -> bool {
+        let Some(vc) = self.versions_compare.clone() else {
+            return false;
+        };
+        let count = self.versions_of(&vc.image).list.len();
+        if count == 0 {
+            self.leave_compare();
+            return true;
+        }
+        let n = vc.panes(count).len();
+        let (active, cols) = (vc.active.min(n - 1), self.compare_cols);
+        let target = match action {
+            Action::NavPrev => Some(crate::compare::neighbour(active, n, cols, -1, 0)),
+            Action::NavNext | Action::VersionNext => {
+                Some(crate::compare::neighbour(active, n, cols, 1, 0))
+            }
+            Action::VersionPrev => Some(crate::compare::neighbour(active, n, cols, -1, 0)),
+            Action::NavUp => Some(crate::compare::neighbour(active, n, cols, 0, -1)),
+            Action::NavDown => Some(crate::compare::neighbour(active, n, cols, 0, 1)),
+            Action::NavFirst | Action::NavPageUp => Some(0),
+            Action::NavLast | Action::NavPageDown => Some(n - 1),
+            _ => None,
+        };
+        let state = self.versions_compare.as_mut().expect("vérifié");
+        if let Some(t) = target {
+            state.active = t;
+            return true;
+        }
+        match action {
+            Action::SelectToggle => state.toggle_mark(count),
+            Action::VersionsOriginal => state.toggle_original(count),
+            Action::VersionsCompare | Action::Compare => self.leave_compare(),
+            // En grand : la version active en plein écran (l'original : l'image entière).
+            Action::Open => {
+                let pane = vc.active_pane(count);
+                self.compare.clear();
+                self.versions_compare = None;
+                self.compare_from_view = false;
+                self.compare_from = None;
+                self.mode = Mode::View;
+                self.zoom = None;
+                self.version_shown = pane.map(|i| (vc.image.clone(), i));
+                self.tell_shown();
+                self.request_zoom();
+            }
+            // Plusieurs versions marquées : exportées ensemble, chacune avec son
+            // préréglage ; sinon la boîte d'export de la version active.
+            Action::FileExport if !vc.marked.is_empty() => {
+                self.export_versions(ctx, &vc.image, &vc.to_export(count));
+            }
+            Action::VersionsExportAll => {
+                let all: Vec<usize> = (0..count).collect();
+                self.export_versions(ctx, &vc.image, &all);
+            }
+            // Modifier la version active ; quitter l'éditeur ramène ici.
+            Action::Crop => match vc.active_pane(count) {
+                Some(i) => {
+                    self.compare.clear();
+                    self.versions_compare = None;
+                    self.crop_back_to_versions = Some(vc.clone());
+                    self.mode = Mode::View;
+                    self.edit_version(&vc.image, i);
+                }
+                None => self.hint = Some(t!("versions-compare-original")),
+            },
+            _ => return false,
+        }
+        true
+    }
+
+    /// Exporte les versions `indices` de `image` sans boîte (#393 : « Exporter tout »,
+    /// versions marquées), chacune avec son préréglage (le sien, sinon le dernier choisi,
+    /// sinon celui des réglages ; jamais « tel quel »), dans le dossier et sous le nom
+    /// retenus pour ce préréglage. Elles attendent leur tour dans la file d'export.
+    fn export_versions(&mut self, ctx: &egui::Context, image: &Path, indices: &[usize]) {
+        let versions = self.versions_of(image).list.clone();
+        let mut started = 0;
+        for &i in indices {
+            let Some(version) = versions.get(i) else {
+                continue;
+            };
+            let source = match version.source {
+                tri::versions::Source::Embedded => Source::Embedded,
+                tri::versions::Source::Raw => Source::Raw,
+                tri::versions::Source::Developed => Source::Developed,
+            };
+            let render = crate::export::Render::of(Some(source), self.export_engine(image));
+            let images = vec![image.to_path_buf()];
+            let kind = crate::export::export_kind(render, &images);
+            let flat = kind == tri::export::Kind::Flat;
+            let settings = &self.settings.export;
+            let fits = |p: &&tri::export::Profile| kind.allows(p) && !p.is_as_is();
+            let wanted = version
+                .profile
+                .clone()
+                .or_else(|| self.export_choice[usize::from(flat)].clone())
+                .unwrap_or_else(|| {
+                    if flat {
+                        settings.default_flat.clone()
+                    } else {
+                        settings.default_raw.clone()
+                    }
+                });
+            let Some(profile) = settings
+                .profiles
+                .get(&wanted)
+                .filter(fits)
+                .or_else(|| {
+                    settings
+                        .profiles
+                        .0
+                        .iter()
+                        .filter(fits)
+                        .find(|p| p.format == tri::export::Format::Jpeg)
+                })
+                .or_else(|| settings.profiles.0.iter().find(fits))
+                .cloned()
+            else {
+                continue;
+            };
+            let folder = self
+                .export_folders
+                .get(&profile.id)
+                .cloned()
+                .unwrap_or_else(|| tri::export::folder_template(&profile.folder));
+            let profile = tri::export::Profile {
+                file_name: self
+                    .export_names
+                    .get(&profile.id)
+                    .cloned()
+                    .unwrap_or_else(|| profile.file_name.clone()),
+                ..profile
+            };
+            let cut = tri::export::Cut {
+                crop: version.crop,
+                name: version.name.clone(),
+                tiles: version.tiles,
+            };
+            self.start_export(ctx, images, profile, folder, render, Some(cut));
+            started += 1;
+        }
+        if started > 1 {
+            self.notice = Some((t!("versions-export-started", n = started), false));
+        }
+    }
+
+    /// Comparaison des versions (#393) : un volet par version de la même image, recadré
+    /// (l'original en premier sur demande), dans le rendu affiché de la photo. Comme la
+    /// comparaison : zoom et position liés (au même point relatif de chaque cadre), volet
+    /// actif encadré ; clic : actif, Ctrl / Cmd + clic : marqué, double-clic : en grand.
+    fn versions_compare_view(&mut self, ui: &mut Ui) {
+        let ctx = ui.ctx().clone();
+        let Some(vc) = self.versions_compare.clone() else {
+            return;
+        };
+        let Some(index) = self.files.iter().position(|f| f.path == vc.image) else {
+            self.leave_compare();
+            return;
+        };
+        if self.selected != index {
+            self.select(index);
+        }
+        let versions = self.versions_of(&vc.image).list.clone();
+        let panes = vc.panes(versions.len());
+        if panes.is_empty() {
+            self.leave_compare();
+            return;
+        }
+        let active = vc.active.min(panes.len() - 1);
+        let area = ui.available_rect_before_wrap();
+        ui.allocate_rect(area, Sense::hover());
+        let settings = self.gui.compare;
+        let file = self.files[index].clone();
+        let whole = tri::versions::Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 1.0,
+            h: 1.0,
+        };
+        let crop_of = |pane: crate::versions_compare::Pane| {
+            pane.and_then(|i| versions.get(i)).map_or(whole, |v| v.crop)
+        };
+        let source = self.source_for(&file);
+        let developed = self.developed_level(&file.path);
+        let zoomed = self.zoom.is_some();
+        let zoom_level = view::zoom_level(file.kind, source, developed);
+        let desired = view::pick(file.kind, source, zoomed, developed, |l| {
+            self.ready(index, l)
+        });
+        let shown = view::pick(file.kind, source, zoomed, developed, |l| {
+            self.ready(index, l) && self.loaded(index, l)
+        });
+        let deadline = Instant::now() + self.gui.load_budget();
+        let drawable: Option<(TextureHandle, Vec2)> = match shown {
+            Some(Level::Thumbnail) => self
+                .thumbnail_texture(&ctx, index, deadline)
+                .map(|t| (t.clone(), t.size_vec2())),
+            Some(level) => self
+                .big
+                .get(&(file.path.clone(), level))
+                .map(|b| (b.texture.clone(), b.original)),
+            None => None,
+        };
+        self.view_waiting =
+            shown != desired || shown.is_none() || (zoomed && shown != Some(zoom_level));
+        // Proportions de la disposition : celles du premier cadre.
+        let aspect = drawable
+            .as_ref()
+            .map(|(_, original)| {
+                let c = crop_of(panes[0]);
+                (original.x * c.w as f32) / (original.y * c.h as f32).max(1.0)
+            })
+            .unwrap_or(1.5);
+        let (cols, rects) = crate::compare::layout(panes.len(), area, aspect, settings.gap);
+        self.compare_cols = cols;
+        // 1:1 : la taille de l'image entière en pixels (connue, ou estimée).
+        let full = drawable.as_ref().map(|(_, original)| {
+            if zoomed && shown == Some(zoom_level) {
+                let full = match zoom_level {
+                    Level::Developed(_) => self
+                        .developed_full_size(&ctx, &file, original.x / original.y)
+                        .unwrap_or(*original),
+                    _ => *original,
+                };
+                self.last_zoom_size.insert(zoom_level, full);
+                full
+            } else {
+                self.last_zoom_size
+                    .get(&zoom_level)
+                    .map(|&last| view::estimate_zoom_size(last, original.x / original.y))
+                    .unwrap_or(*original)
+            }
+        });
+        let pan = std::mem::take(&mut self.pan);
+        let mut new_center = None;
+        let mut clicked: Option<(usize, bool)> = None;
+        let mut open = None;
+        let mark_color = Color32::from(self.gui.colors.marked);
+        for (k, (&pane, &rect)) in panes.iter().zip(&rects).enumerate() {
+            let id = ui.scope_id().with(("versions_compare", k));
+            let response = ui.interact(rect, id, Sense::click_and_drag());
+            let painter = ui.painter_at(rect);
+            painter.rect_filled(rect, 0.0, self.view_background());
+            let c = crop_of(pane);
+            if let (Some((texture, original)), Some(full)) = (&drawable, full) {
+                let image_rect = match self.zoom {
+                    // Au même point relatif de chaque cadre, à la même échelle.
+                    Some(center) => {
+                        let size = vec2(full.x * c.w as f32, full.y * c.h as f32) * self.zoom_scale
+                            / ctx.pixels_per_point();
+                        let mut point = new_center.unwrap_or(center);
+                        if new_center.is_none() {
+                            if response.dragged() {
+                                let d = response.drag_delta();
+                                point -= vec2(d.x / size.x, d.y / size.y);
+                            }
+                            point += vec2(
+                                pan.x * rect.width() / size.x,
+                                pan.y * rect.height() / size.y,
+                            );
+                            if point != center {
+                                new_center = Some(point);
+                            }
+                        }
+                        let point = view::clamp_center(rect.size(), size, point);
+                        view::zoom_rect(rect, size, point)
+                    }
+                    None => {
+                        view::fit_rect(rect, vec2(original.x * c.w as f32, original.y * c.h as f32))
+                    }
+                };
+                let uv =
+                    Rect::from_min_size(pos2(c.x as f32, c.y as f32), vec2(c.w as f32, c.h as f32));
+                painter.image(texture.id(), image_rect, uv, Color32::WHITE);
+                // Les morceaux d'une version (carrousel, grille) : leurs limites.
+                if let Some(version) = pane.and_then(|i| versions.get(i))
+                    && !version.tiles.is_one()
+                {
+                    let stroke = egui::Stroke::new(1.0, Color32::from_white_alpha(160));
+                    for cell in version.tiles.cells(whole) {
+                        let r = Rect::from_min_size(
+                            image_rect.min
+                                + vec2(
+                                    cell.x as f32 * image_rect.width(),
+                                    cell.y as f32 * image_rect.height(),
+                                ),
+                            vec2(
+                                cell.w as f32 * image_rect.width(),
+                                cell.h as f32 * image_rect.height(),
+                            ),
+                        );
+                        painter.rect_stroke(r, 0.0, stroke, egui::StrokeKind::Inside);
+                    }
+                }
+            }
+            // Nom de la version (ou « Original ») et ce qui est affiché.
+            let mut label = match pane.and_then(|i| versions.get(i)) {
+                Some(v) => v.name.clone(),
+                None => t!("versions-compare-original-label"),
+            };
+            if let Some(level) = shown {
+                label.push_str(" · ");
+                label.push_str(&view::label(file.kind, level));
+            }
+            let font = egui::FontId::proportional(13.0);
+            let galley = painter.layout_no_wrap(label.clone(), font, Color32::WHITE);
+            let text_pos = rect.left_bottom() + vec2(8.0, -8.0 - galley.size().y);
+            painter.rect_filled(
+                Rect::from_min_size(text_pos - vec2(4.0, 2.0), galley.size() + vec2(8.0, 4.0)),
+                3.0,
+                Color32::from_black_alpha(160),
+            );
+            painter.galley(text_pos, galley, Color32::WHITE);
+            response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, &label));
+            // Marquée : un cadre de la couleur des images marquées, à l'intérieur.
+            if pane.is_some_and(|i| vc.marked.contains(&i)) {
+                painter.rect_stroke(
+                    rect.shrink(settings.frame + 2.0),
+                    0.0,
+                    egui::Stroke::new(settings.frame, mark_color),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            if k == active {
+                let color = self.gui.theme.selection(&self.gui.colors, ui.visuals());
+                painter.rect_stroke(
+                    rect,
+                    0.0,
+                    egui::Stroke::new(settings.frame, color),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            if response.clicked() || response.drag_started() {
+                let mark = response.clicked() && ui.input(|i| i.modifiers.command);
+                clicked = Some((k, mark));
+            }
+            if response.double_clicked() {
+                open = Some(k);
+            }
+        }
+        if let Some(c) = new_center {
+            self.zoom = Some(c);
+        }
+        let count = versions.len();
+        if let Some((k, mark)) = clicked
+            && let Some(state) = self.versions_compare.as_mut()
+        {
+            state.active = k;
+            if mark {
+                state.toggle_mark(count);
+            }
+        }
+        if let Some(k) = open {
+            if let Some(state) = self.versions_compare.as_mut() {
+                state.active = k;
+            }
+            self.perform(&ctx, Action::Open);
         }
     }
 
@@ -11572,6 +12000,11 @@ impl TriApp {
     /// écran (issue n° 5).
     fn close_crop(&mut self) {
         self.crop = None;
+        if let Some(vc) = self.crop_back_to_versions.take() {
+            self.crop_from_grid = false;
+            self.reopen_versions_compare(vc);
+            return;
+        }
         if std::mem::take(&mut self.crop_from_grid) && self.mode == Mode::View {
             self.mode = Mode::Grid;
             self.zoom = None;
@@ -11790,8 +12223,15 @@ impl TriApp {
                     change,
                 });
                 self.notice = Some((t!("crop-saved", name = name), false));
-                // Enregistrée : montrée en plein écran (issue n° 5), même depuis la grille.
+                // Enregistrée : montrée en plein écran (issue n° 5), même depuis la grille ;
+                // modifiée depuis la comparaison des versions : on y revient, sur elle.
                 self.crop_from_grid = false;
+                if let Some(mut vc) = self.crop_back_to_versions.take() {
+                    let count = self.versions_of(&image).list.len();
+                    vc.activate(index, count);
+                    self.version_shown = None;
+                    self.reopen_versions_compare(vc);
+                }
             }
             Err(e) => {
                 self.notice = Some((t!("crop-failed", error = e.to_string()), true));
@@ -12080,6 +12520,10 @@ impl TriApp {
     /// Comparaison : les images comparées côte à côte, ajustées ou à 1:1 au même endroit
     /// (zoom et déplacement liés), l'image active encadrée.
     fn compare_view(&mut self, ui: &mut Ui) {
+        if self.versions_compare.is_some() {
+            self.versions_compare_view(ui);
+            return;
+        }
         let ctx = ui.ctx().clone();
         let panes = self.compare_indices();
         if panes.is_empty() {
@@ -16012,6 +16456,28 @@ impl TriApp {
                     t!("rating-bar-applies", n = marked),
                 );
             }
+            // Comparaison des versions (#393) : l'original en premier volet ou non, et tout
+            // exporter (chaque version avec son préréglage).
+            if self.mode == Mode::Compare
+                && let Some(vc) = &self.versions_compare
+            {
+                ui.separator();
+                let original = vc.original;
+                if ui
+                    .selectable_label(original, t!("versions-compare-original-label"))
+                    .on_hover_text(self.action_tip(Action::VersionsOriginal))
+                    .clicked()
+                {
+                    clicked = Some(Action::VersionsOriginal);
+                }
+                if ui
+                    .button(t!("versions-export-all"))
+                    .on_hover_text(self.action_tip(Action::VersionsExportAll))
+                    .clicked()
+                {
+                    clicked = Some(Action::VersionsExportAll);
+                }
+            }
             // À droite (posés de droite à gauche) : avance automatique, puis image suivante
             // et précédente, des icônes (retour du 17/10/2026).
             // Passée à la ligne, elle y reste tant que sa largeur ne change pas : sinon,
@@ -16878,7 +17344,7 @@ impl TriApp {
                 }
             }
             if std::mem::take(&mut self.versions_clicked) {
-                self.open_versions();
+                self.open_versions_compare();
             }
         }
         // Clic dans le vide (entre ou après les vignettes) : curseur masqué et sélection
@@ -23894,54 +24360,153 @@ mod tests {
     }
 
     #[test]
-    fn clicking_the_versions_badge_edits_or_shows_the_versions() {
+    fn the_versions_badge_opens_the_versions_side_by_side() {
+        // #393 : pas de versions dépliées dans la grille ; l'icône ouvre la comparaison,
+        // un volet par version (l'original sur demande), et on y travaille : marques,
+        // modification (retour ici), plein écran, retour à la grille.
         let (mut h, dir) = harness();
         h.run_steps(3);
         let image = dir.path().join("photos").join("img1.jpg");
+        let story = tri::versions::Version {
+            name: "Story".into(),
+            crop: [0.0, 0.0, 0.5, 1.0].into(),
+            ratio: tri::versions::Ratio::Free,
+            source: tri::versions::Source::Embedded,
+            profile: None,
+            tiles: tri::versions::Tiles::ONE,
+        };
         let versions = tri::versions::Versions {
-            list: vec![tri::versions::Version {
-                name: "Story".into(),
-                crop: [0.0, 0.0, 0.5, 1.0].into(),
-                ratio: tri::versions::Ratio::Free,
-                source: tri::versions::Source::Embedded,
-                profile: None,
-                tiles: tri::versions::Tiles::ONE,
-            }],
+            list: vec![
+                story.clone(),
+                tri::versions::Version {
+                    name: "Post".into(),
+                    crop: [0.25, 0.0, 0.5, 0.5].into(),
+                    ..story
+                },
+            ],
             unknown: Vec::new(),
         };
         tri::versions::write(&image, &versions, tri::xmp::Convention::Darktable).unwrap();
         h.state_mut().versions.clear();
         h.run_steps(3);
         // Le badge une fois dessiné, à sa place (CI Windows lente, 07/11/2026).
-        let badge = t!("badge-versions", n = 1);
-        wait_for_label(&mut h, &badge);
-        click_settled(&mut h, &badge);
-        h.run_steps(3);
-        let app = h.state();
-        assert_eq!(app.files[app.selected].path, image, "l'image du badge");
-        assert_eq!(app.mode, Mode::View);
-        // Une seule version : son cadre rouvert pour la modifier (retour du 13/11/2026 :
-        // le clic en commençait une nouvelle).
-        assert_eq!(app.crop.as_ref().and_then(|c| c.editing), Some(0));
-        // Plusieurs : l'image en plein écran, la première montrée, rien de commencé.
-        let mut two = versions.clone();
-        two.list.push(tri::versions::Version {
-            name: "Post".into(),
-            ..versions.list[0].clone()
-        });
-        tri::versions::write(&image, &two, tri::xmp::Convention::Darktable).unwrap();
-        h.state_mut().crop = None;
-        h.state_mut().mode = Mode::Grid;
-        h.state_mut().versions.clear();
-        h.run_steps(3);
         let badge = t!("badge-versions", n = 2);
         wait_for_label(&mut h, &badge);
         click_settled(&mut h, &badge);
         h.run_steps(3);
         let app = h.state();
-        assert_eq!(app.mode, Mode::View);
-        assert!(app.crop.is_none());
-        assert_eq!(app.version_shown, Some((image.clone(), 0)));
+        assert_eq!(app.files[app.selected].path, image, "l'image du badge");
+        assert_eq!(app.mode, Mode::Compare);
+        assert!(app.crop.is_none(), "rien de commencé");
+        assert!(
+            h.query_by_label_contains("Story").is_some()
+                && h.query_by_label_contains("Post").is_some()
+        );
+        // « Original » : le bouton du bandeau seul, pas de volet.
+        let original = |h: &Harness<'_, TriApp>| {
+            h.query_all_by_label_contains(&t!("versions-compare-original-label"))
+                .count()
+        };
+        assert_eq!(original(&h), 1);
+        // L'original en premier volet, sur demande ; la version active reste la même.
+        act(&mut h, Action::VersionsOriginal);
+        assert_eq!(original(&h), 2, "le volet en plus du bouton");
+        let active = |h: &Harness<'_, TriApp>| {
+            let vc = h.state().versions_compare.clone().unwrap();
+            vc.active_pane(2)
+        };
+        assert_eq!(active(&h), Some(0));
+        // Flèche droite : la version suivante ; Espace la marque.
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(active(&h), Some(1));
+        act(&mut h, Action::SelectToggle);
+        let marked = h.state().versions_compare.clone().unwrap().marked;
+        assert_eq!(marked.into_iter().collect::<Vec<_>>(), [1]);
+        // Ctrl+E sans marque : la boîte d'export de la version active (son cadre).
+        h.state_mut()
+            .versions_compare
+            .as_mut()
+            .unwrap()
+            .marked
+            .clear();
+        act(&mut h, Action::FileExport);
+        assert!(matches!(
+            h.state().file_dialog,
+            Some(crate::files::FileDialog::Export(_))
+        ));
+        h.state_mut().file_dialog = None;
+        // v : modifier la version active ; quitter l'éditeur ramène à la comparaison.
+        act(&mut h, Action::Crop);
+        assert_eq!(h.state().mode, Mode::View);
+        assert_eq!(h.state().crop.as_ref().and_then(|c| c.editing), Some(1));
+        let ctx = h.ctx.clone();
+        h.state_mut().close_crop();
+        h.run_steps(2);
+        assert_eq!(h.state().mode, Mode::Compare);
+        assert_eq!(active(&h), Some(1), "sur la version modifiée");
+        // Entrée : la version active en plein écran.
+        h.state_mut().perform(&ctx, Action::Open);
+        assert_eq!(h.state().mode, Mode::View);
+        assert_eq!(h.state().version_shown, Some((image.clone(), 1)));
+        // Depuis le plein écran : <core.version.compare>, sur cette version ; Échap y
+        // ramène.
+        act(&mut h, Action::VersionsCompare);
+        assert_eq!(h.state().mode, Mode::Compare);
+        assert_eq!(active(&h), Some(1));
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        assert!(h.state().versions_compare.is_none());
+        // <core.version.original> hors de la comparaison : elle s'ouvre, l'original
+        // montré (retour du 15/11/2026).
+        act(&mut h, Action::VersionsOriginal);
+        assert_eq!(h.state().mode, Mode::Compare);
+        assert!(h.state().versions_compare.as_ref().unwrap().original);
+    }
+
+    #[test]
+    fn versions_are_exported_together_each_with_its_preset() {
+        // #393 : « Exporter tout » sans boîte, chaque version avec son préréglage ; elles
+        // passent l'une après l'autre (file d'export, #400).
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let image = dir.path().join("photos").join("img1.jpg");
+        let version = |name: &str| tri::versions::Version {
+            name: name.into(),
+            crop: [0.0, 0.0, 0.5, 0.5].into(),
+            ratio: tri::versions::Ratio::Free,
+            source: tri::versions::Source::Embedded,
+            profile: Some("web".into()),
+            tiles: tri::versions::Tiles::ONE,
+        };
+        let versions = tri::versions::Versions {
+            list: vec![version("Story"), version("Post")],
+            unknown: Vec::new(),
+        };
+        tri::versions::write(&image, &versions, tri::xmp::Convention::Darktable).unwrap();
+        let out = dir.path().join("web");
+        h.state_mut()
+            .export_folders
+            .insert("web".into(), out.to_string_lossy().into_owned());
+        h.state_mut().versions.clear();
+        let index = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path == image)
+            .unwrap();
+        h.state_mut().select(index);
+        act(&mut h, Action::VersionsCompare);
+        assert_eq!(h.state().mode, Mode::Compare);
+        act(&mut h, Action::VersionsExportAll);
+        run_until(&mut h, |app| {
+            app.export_job.is_none() && app.export_queue.is_empty()
+        });
+        let mut written: Vec<String> = std::fs::read_dir(&out)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        written.sort();
+        assert_eq!(written, ["img1-Post.jpg", "img1-Story.jpg"]);
     }
 
     #[test]

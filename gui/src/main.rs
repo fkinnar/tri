@@ -67,6 +67,7 @@ mod stacks;
 mod state;
 mod textures;
 mod trace;
+mod versions_compare;
 mod view;
 
 use std::path::PathBuf;

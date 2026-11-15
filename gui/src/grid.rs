@@ -163,6 +163,9 @@ pub fn navigate(
         | Action::VersionReset
         | Action::VersionNext
         | Action::VersionPrev
+        | Action::VersionsCompare
+        | Action::VersionsOriginal
+        | Action::VersionsExportAll
         | Action::Send(_)
         | Action::Undo
         | Action::Redo

@@ -145,11 +145,9 @@ The interface only draws; all the computation is here.
   `handle_grab`.
 
 - **Grid**: badge in the caption of thumbnails that have versions, left of the format
-  (drawn crop icon and their number; at the top left until 2026-10-21); a click **reopens the
-  frame** of the version when there is only one, otherwise opens the image full screen
-  with the first one shown, the bar's "Version" list to pick one, edit or delete it
-  (2026-11-13: it started a new version while its tooltip said "edit"; creating stays
-  `r`). Versions read from the sidecars on demand, then kept; read again after a
+  (drawn crop icon and their number; at the top left until 2026-10-21); a click opens the
+  **versions comparison** (#393, see below; before: the frame reopened for a single
+  version, otherwise full screen on the first one). Creating a version stays `v`. Versions read from the sidecars on demand, then kept; read again after a
   modification (save, undo, folder watching).
 - The crop bar only offers the export presets that apply to the cropped image
   (`applies_to`), and **never an "as is" preset**, whatever the image. A crop changes the
@@ -159,6 +157,34 @@ The interface only draws; all the computation is here.
   way is treated the same.
 - Export of a version without a preset: the chosen preset, otherwise the first JPEG preset
   (Web by default), rather than a retouching TIFF.
+
+## Versions comparison (#393)
+
+Decided on 2026-11-09 with the user, done on 2026-11-15 (`gui/src/versions_compare.rs`
+for the state, `TriApp::versions_compare_view` for the drawing):
+
+- **No versions unfolded in the grid**: a version is a frame taken from the same image,
+  not another photo; unfolded, they would fill the grid with pieces of one photo and blur
+  the stacks used for culling. The grid keeps the badge.
+- The badge, `<core.version.compare>` (`<leader> v v`, also from full screen, on the
+  version shown) or the palette open the **comparison mode** with **one pane per
+  version**, cropped, in the photo's shown render; the tiles of a carousel or grid are
+  drawn. What the comparison does stays: linked zoom and position (at the same relative
+  point of each frame), framed active pane, arrows, Escape back to where it was opened
+  (grid or full screen, #379).
+- **Original** (bar button, `<core.version.original>`: `<leader> v o`): the whole image
+  as the first pane, as a reference; by default all the room goes to the versions. From
+  the grid or full screen, the same key opens the comparison with the original already
+  shown ("Export all" likewise, from the palette: the image's versions).
+- **Export**: `Ctrl+E`, the export dialog of the active version (its frame, its preset);
+  several marked versions (Space, Ctrl / Cmd + click, framed in the marks colour) go
+  together, without a dialog, each with its preset (its own, else the last chosen, else
+  the settings' one; never "as is"), in the folder and under the name remembered for
+  that preset, one after the other in the export queue; **Export all** (bar button,
+  `<core.version.export_all>`): all of them.
+- **Edit**: `v` on the active version opens its frame; leaving the editor (save or
+  cancel) comes back to the comparison, on it.
+- Enter or double-click: the active version full screen; ratings go to the image.
 
 ## Exporting a version
 

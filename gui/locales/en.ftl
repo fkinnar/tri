@@ -126,6 +126,14 @@ action-core-file-export-report = Export report
 action-core-file-export = Export…
 action-core-version-new = New version (crop the image, optional export preset)
 action-core-version-next = Next version of the image (original, then each version)
+action-core-version-compare = Compare the image's versions, side by side
+action-core-version-original = Versions side by side, with the whole image (the original) first; in the comparison: show it or not
+action-core-version-export_all = Export every version, each with its preset
+versions-compare-none = This image has no version (v creates one).
+versions-compare-original = The original is not a version: nothing to edit.
+versions-compare-original-label = Original
+versions-export-started = { $n } versions to export, one after the other.
+versions-export-all = Export all
 action-core-version-prev = Previous version of the image
 action-core-version-move-left = Version: move the frame left
 action-core-version-move-right = Version: move the frame right
@@ -753,8 +761,8 @@ filter-bar-count = { $shown }/{ $n }
 badge-over = { $percent } % of pixels clipped (blown); click: large histogram
 badge-under = { $percent } % of pixels crushed; click: large histogram
 badge-versions = { $n ->
-    [one] 1 version; click: edit it
-   *[other] { $n } versions; click: see them, pick one to edit
+    [one] 1 version; click: see it (versions comparison)
+   *[other] { $n } versions; click: see them side by side (compare, export, edit)
 }
 help-title = Shortcuts
 help-search-hint = Search (e.g. "fpn", "star 3")…
