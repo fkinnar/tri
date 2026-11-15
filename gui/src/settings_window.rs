@@ -34,9 +34,20 @@ fn schema() -> &'static Schema {
     static FR: OnceLock<Schema> = OnceLock::new();
     static EN: OnceLock<Schema> = OnceLock::new();
     match tri::i18n::language() {
-        tri::i18n::Language::Fr => FR.get_or_init(|| Schema::parse(EXAMPLE).unwrap_or_default()),
-        tri::i18n::Language::En => EN.get_or_init(|| Schema::parse(EXAMPLE_EN).unwrap_or_default()),
+        tri::i18n::Language::Fr => FR.get_or_init(|| parse_shown(EXAMPLE)),
+        tri::i18n::Language::En => EN.get_or_init(|| parse_shown(EXAMPLE_EN)),
     }
+}
+
+/// Réglages de l'exemple `text` montrés dans la fenêtre : une section sans clé n'y a rien
+/// à montrer (`[data]`, dont le seul réglage, `dir`, n'est que cité en commentaire : page
+/// vide, retour du 15/11/2026), sauf `[keys]`, qui a son propre volet.
+fn parse_shown(text: &str) -> Schema {
+    let mut schema = Schema::parse(text).unwrap_or_default();
+    schema
+        .sections
+        .retain(|s| !s.groups.is_empty() || s.name == "keys");
+    schema
 }
 
 /// Les logiciels de développement que `tri` sait utiliser, à la suite (« darktable,
@@ -2646,6 +2657,22 @@ fn color_order_of(value: &Value) -> Vec<tri::xmp::Color> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn sections_without_settings_are_not_listed() {
+        // Retour du 15/11/2026 : « Données [data] » ouvrait une page vide.
+        for text in [EXAMPLE, EXAMPLE_EN] {
+            let schema = parse_shown(text);
+            assert!(schema.sections.iter().all(|s| s.name != "data"));
+            assert!(schema.sections.iter().any(|s| s.name == "keys"));
+            assert!(
+                schema
+                    .sections
+                    .iter()
+                    .all(|s| !s.groups.is_empty() || s.name == "keys")
+            );
+        }
+    }
     use super::*;
 
     #[test]
