@@ -3195,6 +3195,14 @@ impl TriApp {
                 (c, job.into(), key)
             })
             .collect();
+        let enabled: Vec<bool> = rows.iter().map(|(c, _, _)| !self.undeveloped(*c)).collect();
+        // Au clavier aussi, les entrées grisées sont sautées.
+        let choices: Vec<ViewRender> = choices
+            .iter()
+            .zip(&enabled)
+            .filter(|(_, on)| **on)
+            .map(|(c, _)| *c)
+            .collect();
         let (item, key) = self.side_begin(false);
         let at = choices.iter().position(|&c| c == choice).unwrap_or(0);
         match key {
@@ -3211,6 +3219,7 @@ impl TriApp {
             self.action_tip(Action::StackChoose)
         );
         let mut cover_click = None;
+        let undeveloped_tip = t!("view-render-undeveloped-tip");
         // Liste fermée : le signet plein devant si le rendu à l'écran est la couverture
         // (retour du 14/11/2026 : sinon il fallait déplier la liste pour le savoir).
         let shown_is_cover = rows
@@ -3245,7 +3254,7 @@ impl TriApp {
         let response = egui::ComboBox::from_id_salt("view_render")
             .selected_text(closed)
             .show_ui(ui, |ui| {
-                for (c, text, key) in &rows {
+                for ((c, text, key), on) in rows.iter().zip(&enabled) {
                     ui.horizontal(|ui| {
                         match key {
                             Some(key) => {
@@ -3279,7 +3288,10 @@ impl TriApp {
                         let atoms = (text.clone(), egui::Atom::grow());
                         let button = egui::Button::selectable(choice == *c, atoms)
                             .min_size(egui::vec2(width, 0.0));
-                        if ui.add(button).clicked() {
+                        let response = ui
+                            .add_enabled(*on, button)
+                            .on_disabled_hover_text(&undeveloped_tip);
+                        if response.clicked() {
                             choice = *c;
                         }
                     });
@@ -3334,6 +3346,19 @@ impl TriApp {
         }
     }
 
+    /// Choix de la liste « Rendu affiché » d'un logiciel qui n'a pas développé la photo
+    /// sélectionnée : rien à rendre (tri rend le développement fait dans le logiciel),
+    /// entrée grisée (#487, retour du 15/11/2026).
+    fn undeveloped(&self, choice: ViewRender) -> bool {
+        match choice {
+            ViewRender::Render(crate::grid_render::GridRender::Engine(engine)) => self
+                .files
+                .get(self.selected)
+                .is_some_and(|f| engine.sidecar(&f.path).is_none()),
+            _ => false,
+        }
+    }
+
     /// Nom et précision (en gris) d'un choix de la liste « Rendu affiché » : « RAW »
     /// « LibRaw », « JPEG » « boîtier », un développement et l'heure de son sidecar.
     fn view_render_parts(&self, choice: ViewRender) -> (String, Option<String>) {
@@ -3346,16 +3371,11 @@ impl TriApp {
                 (t!("grid-render-jpeg"), Some(t!("grid-render-camera")))
             }
             // Un logiciel sans développement de la photo : dit dans la liste (#487).
-            ViewRender::Render(GridRender::Engine(engine)) => {
-                let undeveloped = self
-                    .files
-                    .get(self.selected)
-                    .is_some_and(|f| engine.sidecar(&f.path).is_none());
-                (
-                    engine.name().to_string(),
-                    undeveloped.then(|| t!("view-render-undeveloped")),
-                )
-            }
+            ViewRender::Render(GridRender::Engine(engine)) => (
+                engine.name().to_string(),
+                self.undeveloped(choice)
+                    .then(|| t!("view-render-undeveloped")),
+            ),
             ViewRender::Render(render) => (render.name(), None),
             ViewRender::Development(i) => {
                 let path = &self.files[i].path;
@@ -22632,6 +22652,12 @@ mod tests {
         h.state_mut().developers = fake_darktable();
         press(&mut h, Key::Enter, Modifiers::NONE);
         let choice = ViewRender::Render(GridRender::Engine(Engine::Darktable));
+        // Retour du 15/11/2026 : l'entrée est grisée, rien à cliquer.
+        assert!(h.state().undeveloped(choice));
+        assert!(
+            !h.state()
+                .undeveloped(ViewRender::Render(GridRender::LibRaw))
+        );
         assert_eq!(
             h.state().view_render_parts(choice).1,
             Some(t!("view-render-undeveloped"))

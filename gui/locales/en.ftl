@@ -1847,6 +1847,7 @@ view-render-cover = Cover
 view-render-cover-tip = Make it the photo's cover (the thumbnail of its stack); click again: no chosen cover, the latest one
 view-render-is-cover = This render is the photo's cover
 view-render-undeveloped = not developed
+view-render-undeveloped-tip = No development of this software for this photo: tri shows a development made in the software, it cannot create one.
 view-render-undeveloped-notice = { $name } has no { $engine } development: it stays in its RAW render. Photos developed in { $engine } show in that render.
 settings-choice-gui-grid-cover-default-latest = Latest development
 settings-choice-gui-grid-cover-default-camera = Camera JPEG

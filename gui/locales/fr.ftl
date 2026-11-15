@@ -1853,6 +1853,7 @@ view-render-cover = Couverture
 view-render-cover-tip = En faire la couverture de la photo (la vignette de sa pile) ; recliquer : plus de couverture choisie, le plus récent
 view-render-is-cover = Ce rendu est la couverture de la photo
 view-render-undeveloped = pas développée
+view-render-undeveloped-tip = Pas de développement de ce logiciel pour cette photo : tri affiche un développement fait dans le logiciel, il ne peut pas en créer un.
 view-render-undeveloped-notice = { $name } n'a pas de développement { $engine } : elle reste dans son rendu RAW. Les photos développées dans { $engine } s'affichent dans ce rendu.
 settings-choice-gui-grid-cover-default-latest = Dernier développement
 settings-choice-gui-grid-cover-default-camera = JPEG boîtier
