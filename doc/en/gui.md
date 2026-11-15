@@ -429,7 +429,8 @@ system one ("cold" measurements, experiments).
   the right-click dialog, no default key; macOS only (hidden elsewhere:
   `Action::available`).
 - **Keyboard in the help and settings** (feedback of 2026-10-18): the help scrolls with the
-  up / down arrows (`[gui.dialogs] help_scroll_line`), Page up / down and Ctrl+U /
+  up / down arrows while searching (`[gui.dialogs] help_scroll_line`; without a search
+  they change topic, since 2026-11-15), Page up / down and Ctrl+U /
   Ctrl+D, the search keeping the letters. Settings: the section list scrolls to the
   chosen one with the arrows (and the settings start again from the top); from the
   search, → (empty search), Enter or Tab give the keyboard to the first setting shown,
@@ -979,7 +980,16 @@ system one ("cold" measurements, experiments).
   background work: rarely touched). Table `CATEGORIES` in `gui/src/settings_window.rs`,
   which also sets the order of the pages; a test requires every new section to be listed
   there. The window opens on the first page (Language); the arrows follow the displayed
-  order. While searching, the list stays the list of results, without headings.
+  order. While searching, the list stays the list of results, without headings. **The
+  help likewise** (same day): two columns, its topics on the left under the same headings
+  (`gui/src/categories.rs`, shared by both windows; `HelpTopic::ALL` files the topics:
+  Navigation, Panels, Undo, Application under General, the command line under Advanced),
+  the lines of the chosen topic on the right; without a search, ↑ / ↓ change topic and
+  the page keys scroll; while searching, the topics found first with their number of
+  results, a click opens the topic and clears the search. **Link between the two**:
+  hovering a help line shows "Edit…", which opens the settings on the Shortcuts page,
+  with the action's line in view and framed (`SettingsWindow::focus_action`). Width of the
+  topic list: `[gui.dialogs] help_topics_width`.
 - **Search, help and settings** (reworked on 2026-10-22: you often know only roughly
   what you are looking for): the help's **topics** and the settings' **sections** stay
   visible while searching (in the settings, the left list puts the sections found first,

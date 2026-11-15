@@ -34,6 +34,7 @@ mod actions;
 mod adjust_view;
 mod app;
 mod cache_panel;
+mod categories;
 mod cheatsheet;
 mod compare;
 mod crash;

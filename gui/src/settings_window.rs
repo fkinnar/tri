@@ -190,77 +190,61 @@ fn family(section: &str) -> Option<((&'static str, &'static str, &'static str), 
     })
 }
 
-/// Catégories de la liste de gauche, dans leur ordre, chacune avec ses pages dans l'ordre
-/// voulu (retour du 15/11/2026 : 40 pages à plat, dans l'ordre du fichier, sans fil
+/// Pages de chaque catégorie ([`crate::categories`], même ordre), dans l'ordre voulu (retour du 15/11/2026 : 40 pages à plat, dans l'ordre du fichier, sans fil
 /// conducteur pour qui découvre tri). Une famille par sa racine (`export.profiles`) ;
 /// un nom fini par un point : toutes les sections qui commencent ainsi (`sidecars.`).
-const CATEGORIES: [(&str, &[&str]); 6] = [
-    (
-        "general",
-        &[
-            "i18n",
-            "gui",
-            "keys",
-            "gui.colors",
-            "gui.dialogs",
-            "update",
-            "log",
-            "data",
-        ],
-    ),
-    (
-        "import",
-        &[
-            "offload",
-            "places",
-            "watch",
-            "remote",
-            "neighbourhood",
-            "files",
-        ],
-    ),
-    (
+const CATEGORIES: [&[&str]; 6] = [
+    &[
+        "i18n",
+        "gui",
+        "keys",
+        "gui.colors",
+        "gui.dialogs",
+        "update",
+        "log",
+        "data",
+    ],
+    &[
+        "offload",
+        "places",
+        "watch",
+        "remote",
+        "neighbourhood",
+        "files",
+    ],
+    &[
+        "xmp",
+        "xmp.fields",
+        "sidecars.",
         "sort",
-        &[
-            "xmp",
-            "xmp.fields",
-            "sidecars.",
-            "sort",
-            "similarity",
-            "sharpness",
-            "exposure",
-        ],
-    ),
-    (
-        "display",
-        &[
-            "gui.grid",
-            "gui.view",
-            "gui.zoom",
-            "gui.compare",
-            "gui.position",
-            "gui.notes",
-            "gui.end",
-            "gui.folders",
-            "gui.metadata",
-            "gui.histogram",
-            "gui.sharpness",
-            "adjust",
-        ],
-    ),
-    (
+        "similarity",
+        "sharpness",
+        "exposure",
+    ],
+    &[
+        "gui.grid",
+        "gui.view",
+        "gui.zoom",
+        "gui.compare",
+        "gui.position",
+        "gui.notes",
+        "gui.end",
+        "gui.folders",
+        "gui.metadata",
+        "gui.histogram",
+        "gui.sharpness",
+        "adjust",
+    ],
+    &[
         "develop",
-        &[
-            "develop",
-            "export",
-            "export.profiles",
-            "export.sharpening",
-            "versions",
-            "versions.presets",
-            "gui.crop",
-        ],
-    ),
-    ("advanced", &["preview", "render", "cache", "scheduler"]),
+        "export",
+        "export.profiles",
+        "export.sharpening",
+        "versions",
+        "versions.presets",
+        "gui.crop",
+    ],
+    &["preview", "render", "cache", "scheduler"],
 ];
 
 /// Place de la section `name` dans la liste : (catégorie, rang dans la catégorie). Une
@@ -270,18 +254,13 @@ fn category_of(name: &str) -> (usize, usize) {
     CATEGORIES
         .iter()
         .enumerate()
-        .find_map(|(c, (_, pages))| {
+        .find_map(|(c, pages)| {
             pages
                 .iter()
                 .position(|p| *p == root || (p.ends_with('.') && root.starts_with(p)))
                 .map(|r| (c, r))
         })
         .unwrap_or((0, usize::MAX))
-}
-
-/// Titre traduit de la catégorie `c` de [`CATEGORIES`].
-fn category_label(c: usize) -> String {
-    t!(&format!("settings-category-{}", CATEGORIES[c].0))
 }
 
 /// Réglages sans objet sans aucun logiciel de développement installé (voir
@@ -652,6 +631,10 @@ pub struct SettingsWindow {
     /// Raccourci en cours d'enregistrement : l'action, les combinaisons déjà tapées, et
     /// l'instant de la dernière (fini après le délai des séquences sans nouvelle touche).
     recording: Option<(Action, Vec<Chord>, Instant)>,
+    /// Action venue de l'aide, encadrée dans la page des raccourcis.
+    highlight: Option<Action>,
+    /// Faire défiler jusqu'à elle au prochain dessin.
+    highlight_scroll: bool,
     sequence_timeout: Duration,
     /// Section changée au clavier : la liste défile jusqu'à elle, les réglages repartent
     /// du haut (retour du 18/10/2026 : la section choisie sortait de la vue).
@@ -756,6 +739,8 @@ impl SettingsWindow {
             keymap,
             key_warnings,
             recording: None,
+            highlight: None,
+            highlight_scroll: false,
             section_moved: false,
             focus_first: false,
             #[cfg(test)]
@@ -792,6 +777,27 @@ impl SettingsWindow {
     /// Recherche `text` (script de capture : `search:vim`).
     pub fn search(&mut self, text: &str) {
         self.query = text.to_string();
+    }
+
+    /// Ouvre la page des raccourcis sur `action`, sa ligne en vue et encadrée (bouton
+    /// « Modifier… » de l'aide, 15/11/2026).
+    pub fn focus_action(&mut self, action: Action) {
+        self.query.clear();
+        self.show_section("keys");
+        self.highlight = Some(action);
+        self.highlight_scroll = true;
+    }
+
+    /// Action encadrée dans la page des raccourcis ([`SettingsWindow::focus_action`]).
+    #[cfg(test)]
+    pub fn focused_action(&self) -> Option<Action> {
+        self.highlight
+    }
+
+    /// Nom de la section montrée.
+    #[cfg(test)]
+    pub fn section_name(&self) -> String {
+        self.schema().sections[self.section].name.clone()
     }
 
     /// Affiche la section `name` (`keys`, `gui.zoom`), si elle existe.
@@ -1261,15 +1267,13 @@ impl SettingsWindow {
                         }
                     }
                     for (c, pages) in groups {
-                        let title = RichText::new(category_label(c).to_uppercase())
-                            .color(crate::marks::accent_bright(ui.visuals()));
-                        let mut header = egui::CollapsingHeader::new(title)
-                            .id_salt(("settings_category", c))
-                            .default_open(true);
                         // La page choisie au clavier : sa catégorie s'ouvre.
-                        if self.section_moved && pages.contains(&at) {
-                            header = header.open(Some(true));
-                        }
+                        let header = crate::categories::header(
+                            ui,
+                            c,
+                            "settings_category",
+                            self.section_moved && pages.contains(&at),
+                        );
                         let first = pages.first() == Some(&at);
                         let shown = header.show(ui, |ui| {
                             for i in pages {
@@ -1699,7 +1703,7 @@ impl SettingsWindow {
         let mut new: Option<Vec<String>> = None;
         let mut typed = None;
         let mut reset = false;
-        ui.horizontal(|ui| {
+        let row = ui.horizontal(|ui| {
             let name = RichText::new(action.label());
             let name = if in_file { name.strong() } else { name };
             ui.allocate_ui_with_layout(
@@ -1772,6 +1776,16 @@ impl SettingsWindow {
                 reset = true;
             }
         });
+        // Venue de l'aide (« Modifier… ») : la ligne en vue, encadrée (15/11/2026).
+        if self.highlight == Some(action) {
+            let rect = row.response.rect.expand(3.0);
+            let stroke = egui::Stroke::new(1.5, crate::marks::accent_bright(ui.visuals()));
+            ui.painter()
+                .rect_stroke(rect, 4.0, stroke, egui::StrokeKind::Outside);
+            if std::mem::take(&mut self.highlight_scroll) {
+                row.response.scroll_to_me(Some(egui::Align::Center));
+            }
+        }
         for warning in self.key_warnings.iter().filter(|w| w.contains(action.id())) {
             ui.colored_label(ui.visuals().warn_fg_color, warning);
         }
