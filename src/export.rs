@@ -2928,7 +2928,7 @@ mod tests {
         assert_eq!(folder_for("{source}/export", image), source.join("export"));
         assert_eq!(folder_for("", image), source);
         assert_eq!(
-            folder_for("{source}/{folder}", image),
+            folder_for("{source}/{folder_short}", image),
             source.join("séance_été"),
             "champs de tri::naming"
         );
@@ -2956,8 +2956,13 @@ mod tests {
         {
             assert_eq!(folder_for("/exports", image), Path::new("/exports"));
             assert_eq!(
-                folder_for("/exports/{folder}", image),
+                folder_for("/exports/{folder_short}", image),
                 Path::new("/exports/séance_été")
+            );
+            assert_eq!(
+                folder_for("/{folder}", image),
+                Path::new("/2026-11-14_séance_été"),
+                "le dossier en entier"
             );
             let home = crate::settings::expand_home("~");
             assert_eq!(folder_for("~/Exports", image), home.join("Exports"));

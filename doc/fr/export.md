@@ -134,7 +134,7 @@ puis ceux de l'utilisateur par identifiant.
 Depuis le 15/11/2026 (#485, décision de l'utilisateur), `file_name` est un **gabarit**,
 avec les champs du renommage par lot (`tri::naming`) : `{name}` (le nom d'export de
 l'image, `export_name` : clone darktable `IMG_01`, copie virtuelle `IMG_VC01`), `{date}`,
-`{time}`, `{folder}`, `{camera}`, et `{n}`, le rang de l'image dans l'export (l'ordre de
+`{time}`, `{folder}`, `{folder_short}`, `{camera}`, et `{n}`, le rang de l'image dans l'export (l'ordre de
 la grille ; `{n:3}` = 001). `{name}` par défaut ; `{source}` (un dossier) est refusé,
 comme un champ inconnu (`check_name`, vérifié dès la lecture de la configuration). Un
 caractère interdit par les systèmes (`/ \ : * ? " < > |`) devient `_`. Ce qui s'ajoute
@@ -166,9 +166,9 @@ le 14/11/2026 (#480, décision de l'utilisateur), `folder` est un **gabarit**
   sélection venue de plusieurs dossiers s'exporte dans chacun ;
 - `/…` : absolu ; `~/…` : depuis le dossier personnel ;
 - les champs du renommage par lot (`tri::naming`) : `{date}`, `{time}`, `{name}`,
-  `{folder}` (nom du dossier sans la date en tête), `{camera}`, résolus pour chaque image
+  `{folder}` (nom du dossier en entier), `{folder_short}` (sans la date en tête), `{camera}`, résolus pour chaque image
   (date et appareil lus dans le fichier seulement s'ils sont cités) ;
-  `~/Images/Export/{date}_{folder}`. `{n}` n'a pas de sens pour un dossier et est refusé,
+  `~/Images/Export/{folder}`. `{n}` n'a pas de sens pour un dossier et est refusé,
   comme un champ inconnu (`check_folder`) ;
 - un **ancien dossier relatif** garde son sens : `export` = `{source}/export`, `""` ou
   `"."` = `{source}` ;

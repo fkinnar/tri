@@ -1185,7 +1185,7 @@ the most frequent theme of its actions. Screenshot: step `keys:Ctrl+b r` of
 ### Template fields in the help (F1, 2026-11-14)
 
 After the command line, one group "Template fields (batch rename, export folders)":
-each field of `tri::naming::help` (`{date}`, `{time}`, `{name}`, `{n}`, `{folder}`,
+each field of `tri::naming::help` (`{date}`, `{time}`, `{name}`, `{n}`, `{folder}`, `{folder_short}`,
 `{camera}`, then `{source}`), what it gives with an example and where it is used (names,
 folders, or only one of them) on the left, the field as written on the right, in the
 accent colour. One list for both uses, taken from the engine, so it follows the code;

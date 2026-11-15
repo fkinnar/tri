@@ -273,12 +273,13 @@ print_threshold = 3.0
 #   développement) ;
 # max_side : côté long maximal en pixels, 0 : pleine définition ;
 # file_name : nom des fichiers, un gabarit sans extension : {name} (le nom de l'image),
-#   {date}, {time}, {folder}, {camera}, {n} (rang dans l'export ; {n:3} = 001) ;
+#   {date}, {time}, {folder}, {folder_short}, {camera}, {n} (rang dans l'export ;
+#   {n:3} = 001) ;
 #   "{name}-web" : DSCF0001-web.jpg ; version, morceau et JPEG de paire s'ajoutent après ;
 #   l'ancienne clé suffix ("-web") vaut "{name}-web" ;
 # folder : dossier des fichiers, un gabarit : {source} (le dossier de chaque image),
 #   "/…" absolu, "~/…" depuis le dossier personnel, et les champs {date}, {time}, {name},
-#   {folder}, {camera} ("~/Images/Export/{date}_{folder}") ; un ancien dossier relatif
+#   {folder}, {folder_short}, {camera} ("~/Images/Export/{folder}") ; un ancien dossier relatif
 #   vaut {source}/… ("export" = "{source}/export") ; variables de Darktable permises.
 # passthrough : JPEG sans recompression si possible (JPEG d'origine copié tel quel, JPEG
 #   boîtier écrit tel quel ; défaut) ; une image à réduire est réencodée ; sans effet sur
@@ -509,8 +510,9 @@ group_pairs = "ask"
 #
 # Renommage par lot (plusieurs photos, <core.file.rename>) : gabarit proposé la première fois. Champs :
 # {date} (prise de vue, 2026-11-14), {time} (153012), {name} (nom d'origine), {n}
-# (compteur ; {n:3} = 001), {folder} (dossier sans la date en tête), {camera} (appareil).
-rename_template = "{date}_{folder}_{n:3}"
+# (compteur ; {n:3} = 001), {folder} (dossier en entier), {folder_short} (sans la date
+# en tête), {camera} (appareil).
+rename_template = "{date}_{folder_short}_{n:3}"
 
 [sharpness]
 # Seuil de la carte de netteté : plus bas, plus de contours marqués.

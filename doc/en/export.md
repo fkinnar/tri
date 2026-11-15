@@ -132,7 +132,7 @@ disappear. Order: built-in profiles, then the user's ones by identifier.
 
 Since 2026-11-15 (#485, the user's decision), `file_name` is a **template**, with the
 batch rename fields (`tri::naming`): `{name}` (the image's export name, `export_name`:
-darktable clone `IMG_01`, virtual copy `IMG_VC01`), `{date}`, `{time}`, `{folder}`,
+darktable clone `IMG_01`, virtual copy `IMG_VC01`), `{date}`, `{time}`, `{folder}`, `{folder_short}`,
 `{camera}`, and `{n}`, the image's rank in the export (grid order; `{n:3}` = 001).
 `{name}` by default; `{source}` (a folder) is refused, like an unknown field
 (`check_name`, checked as soon as the configuration is read). A character forbidden by
@@ -164,9 +164,9 @@ next to the images…), rather than remembered from one export to the next. Sinc
   several folders is exported into each of them;
 - `/…`: absolute; `~/…`: from the home folder;
 - the fields of the batch rename (`tri::naming`): `{date}`, `{time}`, `{name}`,
-  `{folder}` (folder name without its leading date), `{camera}`, resolved for each
+  `{folder}` (folder name in full), `{folder_short}` (without its leading date), `{camera}`, resolved for each
   image (date and camera read from the file only when cited);
-  `~/Images/Export/{date}_{folder}`. `{n}` makes no sense for a folder and is refused,
+  `~/Images/Export/{folder}`. `{n}` makes no sense for a folder and is refused,
   like an unknown field (`check_folder`);
 - an **old relative folder** keeps its meaning: `export` = `{source}/export`, `""` or
   `"."` = `{source}`;

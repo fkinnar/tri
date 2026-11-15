@@ -98,7 +98,8 @@ naming-help = { $field ->
     [time] Capture time: 153012 · names and folders
     [name] Original name, without extension: DSCF8158 · names and folders
     [n] Counter, in grid order; { "{" }n:3{ "}" } = 001 · names only (batch rename, export names)
-    [folder] Folder name without its leading date: 2026-11-14_Bleu_Jaune gives Bleu_Jaune · names and folders
+    [folder] Folder name, in full: 2026-11-14_Bleu_Jaune · names and folders
+    [folder_short] Folder name without its leading date: 2026-11-14_Bleu_Jaune gives Bleu_Jaune · names and folders
     [camera] Camera model: X-T4 · names and folders
    *[source] Each image's folder, in full: { "{" }source{ "}" }/export · export folders only
 }
