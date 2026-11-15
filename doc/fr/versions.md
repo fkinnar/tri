@@ -183,6 +183,8 @@ pour l'état, `TriApp::versions_compare_view` pour le dessin) :
   d'où on l'a ouverte (grille ou plein écran, #379).
 - **Original** (bouton du bandeau, `<core.version.original>` : `<leader> v o`) : l'image
   entière en premier volet, comme référence ; par défaut, toute la place aux versions.
+  Depuis la grille ou le plein écran, la même touche ouvre la comparaison, l'original
+  déjà montré (« Exporter tout » de même, depuis la palette : les versions de l'image).
 - **Exporter** : `Ctrl+E`, la boîte d'export de la version active (son cadre, son
   préréglage) ; plusieurs versions marquées (Espace, Ctrl / Cmd + clic, cadre de la
   couleur des marques) partent ensemble, sans boîte, chacune avec son préréglage (le sien,

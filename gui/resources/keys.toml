@@ -503,8 +503,8 @@ loupe = "m"
 "core.rate.auto_advance" = ["Space"]
 # ?: report a problem (prefilled GitHub form), next to the help.
 "core.app.report_issue" = ["?", "Shift+?"]
-# v v: the image's versions side by side (comparison, #393); v o: there, the whole
-# image as the first pane, or not.
+# v v: the image's versions side by side (comparison, #393); v o: the same with the
+# whole image as the first pane (there: show it or not).
 "core.version.compare" = ["v v"]
 "core.version.original" = ["v o"]
 # r: develop. r again: with the image's software; Shift+R: the whole folder, in the

@@ -173,7 +173,9 @@ for the state, `TriApp::versions_compare_view` for the drawing):
   point of each frame), framed active pane, arrows, Escape back to where it was opened
   (grid or full screen, #379).
 - **Original** (bar button, `<core.version.original>`: `<leader> v o`): the whole image
-  as the first pane, as a reference; by default all the room goes to the versions.
+  as the first pane, as a reference; by default all the room goes to the versions. From
+  the grid or full screen, the same key opens the comparison with the original already
+  shown ("Export all" likewise, from the palette: the image's versions).
 - **Export**: `Ctrl+E`, the export dialog of the active version (its frame, its preset);
   several marked versions (Space, Ctrl / Cmd + click, framed in the marks colour) go
   together, without a dialog, each with its preset (its own, else the last chosen, else

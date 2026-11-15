@@ -9028,8 +9028,31 @@ impl TriApp {
                 }
             }
             Action::VersionsCompare => self.open_versions_compare(),
-            // Seulement dans la comparaison des versions (`versions_perform`).
-            Action::VersionsOriginal | Action::VersionsExportAll => {}
+            // Hors de la comparaison des versions (grille, plein écran, palette) : elle
+            // s'ouvre, l'original en premier volet (retour du 15/11/2026 : <leader> v o ne
+            // marchait qu'une fois la comparaison ouverte).
+            Action::VersionsOriginal => {
+                self.open_versions_compare();
+                if self.mode == Mode::Compare
+                    && let Some(vc) = &self.versions_compare
+                {
+                    let count = self.versions.get(&vc.image).map_or(0, |v| v.list.len());
+                    if let Some(vc) = self.versions_compare.as_mut() {
+                        vc.toggle_original(count);
+                    }
+                }
+            }
+            // De même : toutes les versions de l'image courante.
+            Action::VersionsExportAll => {
+                if let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) {
+                    let all: Vec<usize> = (0..self.versions_of(&path).list.len()).collect();
+                    if all.is_empty() {
+                        self.hint = Some(t!("versions-compare-none"));
+                    } else {
+                        self.export_versions(ctx, &path, &all);
+                    }
+                }
+            }
             Action::VersionNext | Action::VersionPrev => {
                 if self.mode == Mode::View
                     && let Some(path) = self.files.get(self.selected).map(|f| f.path.clone())
@@ -24433,6 +24456,11 @@ mod tests {
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().versions_compare.is_none());
+        // <core.version.original> hors de la comparaison : elle s'ouvre, l'original
+        // montré (retour du 15/11/2026).
+        act(&mut h, Action::VersionsOriginal);
+        assert_eq!(h.state().mode, Mode::Compare);
+        assert!(h.state().versions_compare.as_ref().unwrap().original);
     }
 
     #[test]

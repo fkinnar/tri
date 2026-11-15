@@ -118,11 +118,9 @@ pub fn applies(action: Action, place: Place) -> bool {
             | SortNext
             | SortReverse
     );
-    // Seulement dans la comparaison des versions (#393).
-    let versions = matches!(action, VersionsOriginal | VersionsExportAll);
     match place {
-        Place::Grid => !image && !single && !versions,
-        Place::View => !grid && !versions,
+        Place::Grid => !image && !single,
+        Place::View => !grid,
         Place::Compare => !grid && !single && !matches!(action, Compare | Open),
         _ => false,
     }
