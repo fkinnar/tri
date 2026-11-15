@@ -967,15 +967,17 @@ focus_line_width = 2.0
 # Côté des boutons à icône (actions sur le fichier, dans la boîte du clic droit), en points.
 icon_size = 34.0
 # Largeur de l'aide (<core.app.help>), en points (au plus 90 % de la fenêtre).
-help_width = 1000.0
+help_width = 1200.0
 # Largeur de sa colonne des libellés, en points : un libellé plus long passe à la ligne.
 help_label_width = 480.0
+# Largeur de la liste des thèmes, à gauche de l'aide, en points.
+help_topics_width = 230.0
 # Marge en haut et en bas de chaque ligne de l'aide, en points.
 help_row_padding = 3.0
 # Marge autour d'un exemple de ligne de commande dans l'aide, en points.
 help_example_margin = 4.0
-# Défilement de l'aide au clavier : par flèche haut / bas, en points (pages :
-# <core.nav.page_up> / <core.nav.page_down>).
+# Défilement de l'aide au clavier, en points : par flèche haut / bas pendant une recherche
+# (sinon les flèches changent de thème ; pages : <core.nav.page_up> / <core.nav.page_down>).
 help_scroll_line = 40.0
 # Aide « ici » (<core.app.help_here>, les raccourcis de l'endroit où l'on est, par-dessus l'écran) : taille
 # du texte et largeur d'une colonne de cartes, en points.
