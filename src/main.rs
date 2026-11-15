@@ -55,7 +55,7 @@
 //!       montre l'image dans le gestionnaire de fichiers ;
 //!   tri --edit <image>...
 //!       ouvre les images dans l'éditeur externe (`[files] editor`), voir `tri::files` ;
-//!   tri --export <profil> <image>... [--to <dossier>] [--libraw|--embedded] [--passthrough] [--dry-run]
+//!   tri --export <profil> <image>... [--to <dossier>] [--name <gabarit>] [--libraw|--embedded] [--passthrough] [--dry-run]
 //!       exporte les images développées par darktable avec un profil d'export
 //!       (`[export.profiles.<profil>]`) ; dossier : `--to`, sinon celui du profil ; sans
 //!       darktable (ou `--libraw`) : rendu de base par LibRaw ; `--embedded` : le JPEG
@@ -152,6 +152,8 @@ struct Args {
     offload: Option<PathBuf>,
     to: Option<PathBuf>,
     folder: Option<String>,
+    /// Gabarit des noms d'export (`--name`), à la place de celui du préréglage.
+    name: Option<String>,
     raw_only: bool,
     eject: bool,
     delete_copied: bool,
@@ -481,6 +483,7 @@ fn parse() -> AnyResult<Args> {
             "--offload" => args.offload = Some(value()?.into()),
             "--to" => args.to = Some(value()?.into()),
             "--folder" => args.folder = Some(value()?),
+            "--name" => args.name = Some(value()?),
             "--raw-only" => args.raw_only = true,
             "--eject" => args.eject = true,
             "--delete-copied" => args.delete_copied = true,
@@ -1849,7 +1852,16 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
     if args.dry_run {
         return Ok(());
     }
+    // `--name`, sinon le gabarit du préréglage ; le compteur `{n}` suit l'ordre donné.
+    let name = args
+        .name
+        .clone()
+        .unwrap_or_else(|| profile.file_name.clone());
+    tri::export::check_name(&name).map_err(|e| format!("--name : {e}"))?;
+    let order: Vec<PathBuf> = images.to_vec();
     let request = tri::export::Request::new(profile, &folder)
+        .name(&name)
+        .order(&order)
         .sharpening(settings.export.sharpening)
         .render(settings.render.options());
     let cancel = std::sync::atomic::AtomicBool::new(false);

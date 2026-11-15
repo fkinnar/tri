@@ -87,6 +87,13 @@ pub struct ExportDialog {
     /// Dernier dossier de chaque préréglage (identifiant → chemin tel que tapé ou choisi),
     /// gardé d'une session à l'autre (retour du 14/11/2026).
     folders: std::collections::BTreeMap<String, String>,
+    /// Gabarit des noms (#485), en cours de saisie : celui du profil, suivi tant qu'on ne
+    /// l'a pas modifié à la main.
+    name: String,
+    /// Gabarit de nom modifié à la main.
+    name_edited: bool,
+    /// Dernier gabarit de nom de chaque préréglage, gardé comme les dossiers.
+    names: std::collections::BTreeMap<String, String>,
     /// JPEG sans recompression (case de la boîte) et le profil dont elle vient : elle
     /// reprend la valeur du profil quand on en change (voir [`Profile::passthrough`]).
     passthrough: (bool, usize),
@@ -115,12 +122,15 @@ pub enum Outcome {
     /// Annulée.
     Cancelled,
     /// Export demandé ; `folder` : celui du profil, ou un autre pour cette fois ;
-    /// `remember` : le dossier à retenir pour ce préréglage (vide : l'oublier).
+    /// `remember` : le dossier à retenir pour ce préréglage (vide : l'oublier) ;
+    /// `remember_name` : de même pour le gabarit de nom, déjà dans `profile.file_name`
+    /// (#485). `images` : dans l'ordre de la grille (compteur `{n}`).
     Start {
         images: Vec<PathBuf>,
         profile: Box<Profile>,
         folder: String,
         remember: String,
+        remember_name: String,
         render: Render,
         cut: Option<tri::export::Cut>,
     },
@@ -129,6 +139,11 @@ pub enum Outcome {
 /// Identifiant du champ du dossier.
 pub fn destination_field_id() -> egui::Id {
     egui::Id::unique("export_destination")
+}
+
+/// Identifiant du champ du nom des fichiers (#485).
+pub fn name_field_id() -> egui::Id {
+    egui::Id::unique("export_file_name")
 }
 
 /// Nom affiché d'un profil : le sien, sinon le nom traduit des profils fournis, sinon
@@ -204,7 +219,15 @@ impl ExportDialog {
             .cloned()
             .collect();
         let choice = proposed(&profiles, preferred, settings, kind);
-        let images: Vec<PathBuf> = batch.raws.iter().chain(&batch.flats).cloned().collect();
+        // Dans l'ordre reçu (celui de la grille) : le compteur `{n}` des noms le suit.
+        let kept: std::collections::HashSet<&PathBuf> =
+            batch.raws.iter().chain(&batch.flats).collect();
+        let mut seen = std::collections::HashSet::new();
+        let images: Vec<PathBuf> = images
+            .iter()
+            .filter(|p| kept.contains(p) && seen.insert(*p))
+            .cloned()
+            .collect();
         ExportDialog {
             choice,
             input: profiles
@@ -213,6 +236,12 @@ impl ExportDialog {
                 .unwrap_or_default(),
             edited: false,
             folders: Default::default(),
+            name: profiles
+                .get(choice)
+                .map(|p| tri::export::name_template(&p.file_name).to_string())
+                .unwrap_or_default(),
+            name_edited: false,
+            names: Default::default(),
             passthrough: (profiles.get(choice).is_some_and(|p| p.passthrough), choice),
             developer,
             render,
@@ -341,6 +370,11 @@ impl ExportDialog {
                     self.input = wanted;
                     self.field.replaced();
                 }
+                if !self.name_edited
+                    && let Some(wanted) = self.profiles.get(self.choice).map(|p| self.shown_name(p))
+                {
+                    self.name = wanted;
+                }
                 ui.add_space(6.0);
                 ui.label(t!("export-destination"));
                 // Le gabarit tel quel (#480) : des images de plusieurs dossiers n'ont pas le
@@ -356,7 +390,24 @@ impl ExportDialog {
                 if field.changed() {
                     self.edited = true;
                 }
-                let enter = field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+                let mut enter = field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+                // Le nom des fichiers, un gabarit tel quel comme le dossier (#485).
+                ui.add_space(6.0);
+                ui.label(t!("export-name"));
+                let name = ui
+                    .add(
+                        egui::TextEdit::singleline(&mut self.name)
+                            .id(name_field_id())
+                            .desired_width(420.0),
+                    )
+                    .on_hover_text(t!("export-name-tip"));
+                if let Err(e) = tri::export::check_name(&self.name) {
+                    ui.colored_label(ui.visuals().error_fg_color, e.to_string());
+                }
+                if name.changed() {
+                    self.name_edited = true;
+                }
+                enter |= name.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
                 // Tout est dans le champ : plus de ligne « Destination » dessous (retour du
                 // 14/11/2026 : on ne savait plus où ça allait).
                 ui.add_space(6.0);
@@ -403,7 +454,8 @@ impl ExportDialog {
                     let ok = n > 0
                         && !self.profiles.is_empty()
                         && unsupported.is_none()
-                        && tri::export::check_folder(&self.input).is_ok();
+                        && tri::export::check_folder(&self.input).is_ok()
+                        && tri::export::check_name(&self.name).is_ok();
                     confirm = ui
                         .add_enabled(ok, egui::Button::new(t!("export-button")))
                         .clicked()
@@ -423,14 +475,23 @@ impl ExportDialog {
                 typed.clone()
             };
             let folder = typed;
+            // Le gabarit de nom de même (#485), et c'est lui qui part dans le profil.
+            let name = tri::export::name_template(&self.name).to_string();
+            let remember_name = if name == tri::export::name_template(&profile.file_name) {
+                String::new()
+            } else {
+                name.clone()
+            };
             return Outcome::Start {
                 images: std::mem::take(&mut self.images),
                 profile: Box::new(tri::export::Profile {
                     passthrough: self.passthrough.0,
+                    file_name: name,
                     ..profile.clone()
                 }),
                 folder,
                 remember,
+                remember_name,
                 render: self.render,
                 cut: self.cut.clone(),
             };
@@ -487,6 +548,7 @@ impl ExportDialog {
             .unwrap_or(0);
         if let Some(p) = self.profiles.get(self.choice) {
             self.input = self.shown(p);
+            self.name = self.shown_name(p);
             self.passthrough = (p.passthrough, self.choice);
         }
         self
@@ -502,6 +564,37 @@ impl ExportDialog {
         // Curseur au bout : d'un long chemin, on voit le dossier final.
         self.field.replaced();
         self
+    }
+
+    /// Les derniers gabarits de nom des préréglages (identifiant → gabarit), gardés comme
+    /// les dossiers (#485).
+    pub fn with_names(mut self, names: std::collections::BTreeMap<String, String>) -> Self {
+        self.names = names;
+        if let Some(p) = self.profiles.get(self.choice) {
+            self.name = self.shown_name(p);
+        }
+        self
+    }
+
+    /// Gabarit de nom montré pour le préréglage `p` : le dernier retenu, sinon le sien.
+    fn shown_name(&self, p: &Profile) -> String {
+        self.names
+            .get(&p.id)
+            .cloned()
+            .unwrap_or_else(|| tri::export::name_template(&p.file_name).to_string())
+    }
+
+    /// Gabarit de nom dans le champ (tests).
+    #[cfg(test)]
+    pub fn name_input(&self) -> &str {
+        &self.name
+    }
+
+    /// Gabarit de nom tapé dans le champ (tests).
+    #[cfg(test)]
+    pub fn type_name(&mut self, name: &str) {
+        self.name = name.to_string();
+        self.name_edited = true;
     }
 
     /// Gabarit montré pour le préréglage `p` : le dernier retenu, sinon le sien (forme
@@ -623,7 +716,9 @@ impl Job {
                     done.store(n, Ordering::Relaxed);
                     ctx.request_repaint();
                 };
+                // Le compteur `{n}` des noms suit l'ordre de la grille (#485).
                 let req = tri::export::Request::new(&profile, &folder)
+                    .order(&images)
                     .cut(cut.as_ref())
                     .sharpening(sharpening)
                     .render(render);

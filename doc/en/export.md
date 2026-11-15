@@ -69,8 +69,9 @@ image): its startup (~6 s) is paid only once. Measured on 2026-10-19 on two X-T4
   An image without development (no sidecar, or a sidecar written by `tri` alone) gets
   darktable's default settings. These are not the user's automatic presets
   (configuration specific to `tri`, `--apply-custom-presets false`).
-- **File names**: `$(FILE_NAME)` (image name without extension), then the profile
-  suffix, then the extension. darktable never overwrites anything: it appends `_01`…
+- **File names**: the profile's template (see "File names"), then the extension; `{name}`
+  alone goes to darktable as `$(FILE_NAME)` (image name without extension). darktable
+  never overwrites anything: it appends `_01`…
 - **Progress**: darktable writes an `[export_job] exported to `…'` line per file. Read
   as it comes, it gives the progress and the files actually written
   (`Report::written`). Images with no file written are counted (`Report::failed`).
@@ -118,7 +119,7 @@ quality = 90
 color = "srgb"
 intent = ""
 max_side = 2048
-suffix = ""
+file_name = "{name}"         # see "File names"
 folder = "export"            # voir « Dossier du profil »
 ```
 
@@ -126,6 +127,30 @@ Each missing key comes from the built-in profile with the same identifier (`edit
 `web`), otherwise from an sRGB JPEG (`ProfileToml`, `Profiles::deserialize`). The
 settings window can thus write a single value without making the rest of the profile
 disappear. Order: built-in profiles, then the user's ones by identifier.
+
+### File names
+
+Since 2026-11-15 (#485, the user's decision), `file_name` is a **template**, with the
+batch rename fields (`tri::naming`): `{name}` (the image's export name, `export_name`:
+darktable clone `IMG_01`, virtual copy `IMG_VC01`), `{date}`, `{time}`, `{folder}`, `{folder_short}`,
+`{camera}`, and `{n}`, the image's rank in the export (grid order; `{n:3}` = 001).
+`{name}` by default; `{source}` (a folder) is refused, like an unknown field
+(`check_name`, checked as soon as the configuration is read). A character forbidden by
+the systems (`/ \ : * ? " < > |`) becomes `_`. Appended after: version (`-Story`), tile
+(`_2`), pair JPEG (`-camera`), then the extension; never overwritten (`_01`…).
+
+- **Former key `suffix`**: folded into the template, `suffix = "-web"` reads
+  `{name}-web` (read by `ProfileToml`, no longer written);
+- **darktable**: a template that only cites `{name}` goes as is into the output pattern
+  (`$(FILE_NAME)-web`); another field: darktable exports under the image's name, then
+  tri renames each written file (`rename_written`, the image found by its name, never
+  overwriting); LibRaw, RapidRAW, RawTherapee, ART and the copies without recompression
+  write the right name directly (`output_path`);
+- **export dialog**: a "File names" field under the folder, the template as is, in red
+  when invalid; another than the preset's is remembered for it from one session to the
+  next (`gui-state.toml`, `export_names`), like the folder;
+- **command line**: `--name <template>`, instead of the preset's; `{n}` follows the
+  order of the given images.
 
 ### Profile folder
 
@@ -139,13 +164,13 @@ next to the images…), rather than remembered from one export to the next. Sinc
   several folders is exported into each of them;
 - `/…`: absolute; `~/…`: from the home folder;
 - the fields of the batch rename (`tri::naming`): `{date}`, `{time}`, `{name}`,
-  `{folder}` (folder name without its leading date), `{camera}`, resolved for each
+  `{folder}` (folder name in full), `{folder_short}` (without its leading date), `{camera}`, resolved for each
   image (date and camera read from the file only when cited);
-  `~/Images/Export/{date}_{folder}`. `{n}` makes no sense for a folder and is refused,
+  `~/Images/Export/{folder}`. `{n}` makes no sense for a folder and is refused,
   like an unknown field (`check_folder`);
 - an **old relative folder** keeps its meaning: `export` = `{source}/export`, `""` or
   `"."` = `{source}`;
-- darktable is launched once per real folder (`$(FILE_NAME)` and the suffix in it); an
+- darktable is launched once per real folder (`$(FILE_NAME)` in it); an
   image whose template has no value (no capture date) fails alone, in the report;
 - darktable variables (`$(YEAR)`…) pass as is.
 

@@ -1261,7 +1261,7 @@ le plus fréquent de ses actions. Capture : étape `keys:Ctrl+b r` de `TRI_GUI_A
 
 Après la ligne de commande, un groupe « Champs des gabarits (renommage par lot, dossiers
 d'export) » : chaque champ de `tri::naming::help` (`{date}`, `{time}`, `{name}`, `{n}`,
-`{folder}`, `{camera}`, puis `{source}`), ce qu'il donne avec un exemple et où il sert
+`{folder}`, `{folder_short}`, `{camera}`, puis `{source}`), ce qu'il donne avec un exemple et où il sert
 (noms, dossiers, ou l'un des deux seulement) à gauche, le champ tel qu'on l'écrit à
 droite, en couleur d'accent. Une seule liste pour les deux usages, tirée du moteur : elle
 suit le code ; cherchée comme le reste (`help_fields` : description, champ, titre du

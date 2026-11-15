@@ -269,10 +269,14 @@ print_threshold = 3.0
 # intent: "perceptual", "relative", "saturation", "absolute", or "" (the one of the
 #   development);
 # max_side: maximum long side in pixels, 0: full resolution;
-# suffix: appended to the file name ("-web": DSCF0001-web.jpg);
+# file_name: name of the files, a template without extension: {name} (the image's name),
+#   {date}, {time}, {folder}, {folder_short}, {camera}, {n} (rank in the export;
+#   {n:3} = 001);
+#   "{name}-web": DSCF0001-web.jpg; version, tile and pair JPEG are appended after;
+#   the former key suffix ("-web") reads "{name}-web";
 # folder: folder of the files, a template: {source} (each image's folder), "/…"
 #   absolute, "~/…" from the home folder, and the fields {date}, {time}, {name},
-#   {folder}, {camera} ("~/Images/Export/{date}_{folder}"); an old relative folder
+#   {folder}, {folder_short}, {camera} ("~/Images/Export/{folder}"); an old relative folder
 #   means {source}/… ("export" = "{source}/export"); Darktable variables allowed.
 # passthrough: JPEG without recompression when possible (original JPEG copied as is, camera
 #   render written as is; default); an image to downsize is re-encoded; no effect on
@@ -291,7 +295,7 @@ quality = 90
 color = "prophoto"
 intent = ""
 max_side = 0
-suffix = ""
+file_name = "{name}"
 folder = "{source}/export"
 passthrough = true
 applies_to = "all"
@@ -308,7 +312,7 @@ quality = 100
 color = ""
 intent = ""
 max_side = 0
-suffix = ""
+file_name = "{name}"
 folder = "{source}/export"
 passthrough = true
 applies_to = "flat"
@@ -323,7 +327,7 @@ quality = 90
 color = "srgb"
 intent = ""
 max_side = 2048
-suffix = ""
+file_name = "{name}"
 folder = "{source}/export"
 passthrough = true
 applies_to = "all"
@@ -503,8 +507,9 @@ group_pairs = "ask"
 #
 # Batch rename (several photos, <core.file.rename>): template offered the first time. Fields: {date}
 # (capture, 2026-11-14), {time} (153012), {name} (original name), {n} (counter; {n:3} =
-# 001), {folder} (folder without its leading date), {camera} (camera model).
-rename_template = "{date}_{folder}_{n:3}"
+# 001), {folder} (folder in full), {folder_short} (without its
+# leading date), {camera} (camera model).
+rename_template = "{date}_{folder_short}_{n:3}"
 
 [sharpness]
 # Threshold of the sharpness map: lower marks more edges.
