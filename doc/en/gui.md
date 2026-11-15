@@ -973,6 +973,13 @@ system one ("cold" measurements, experiments).
   any order. Results sorted by relevance (`tri::fuzzy`: consecutive letters and word
   starts count more, gaps are penalized; on a tie, the shortest label). While typing, `?`
   is written into the field: close with Esc or `F1`.
+- **Settings categories** (2026-11-15, to discover the settings without searching): the
+  left list files the pages under six collapsible headings, General, Import and files,
+  Sort and rate, Display, Develop and export, Advanced (previews, RAW render, cache,
+  background work: rarely touched). Table `CATEGORIES` in `gui/src/settings_window.rs`,
+  which also sets the order of the pages; a test requires every new section to be listed
+  there. The window opens on the first page (Language); the arrows follow the displayed
+  order. While searching, the list stays the list of results, without headings.
 - **Search, help and settings** (reworked on 2026-10-22: you often know only roughly
   what you are looking for): the help's **topics** and the settings' **sections** stay
   visible while searching (in the settings, the left list puts the sections found first,

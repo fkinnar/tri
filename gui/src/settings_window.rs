@@ -190,6 +190,100 @@ fn family(section: &str) -> Option<((&'static str, &'static str, &'static str), 
     })
 }
 
+/// Catégories de la liste de gauche, dans leur ordre, chacune avec ses pages dans l'ordre
+/// voulu (retour du 15/11/2026 : 40 pages à plat, dans l'ordre du fichier, sans fil
+/// conducteur pour qui découvre tri). Une famille par sa racine (`export.profiles`) ;
+/// un nom fini par un point : toutes les sections qui commencent ainsi (`sidecars.`).
+const CATEGORIES: [(&str, &[&str]); 6] = [
+    (
+        "general",
+        &[
+            "i18n",
+            "gui",
+            "keys",
+            "gui.colors",
+            "gui.dialogs",
+            "update",
+            "log",
+            "data",
+        ],
+    ),
+    (
+        "import",
+        &[
+            "offload",
+            "places",
+            "watch",
+            "remote",
+            "neighbourhood",
+            "files",
+        ],
+    ),
+    (
+        "sort",
+        &[
+            "xmp",
+            "xmp.fields",
+            "sidecars.",
+            "sort",
+            "similarity",
+            "sharpness",
+            "exposure",
+        ],
+    ),
+    (
+        "display",
+        &[
+            "gui.grid",
+            "gui.view",
+            "gui.zoom",
+            "gui.compare",
+            "gui.position",
+            "gui.notes",
+            "gui.end",
+            "gui.folders",
+            "gui.metadata",
+            "gui.histogram",
+            "gui.sharpness",
+            "adjust",
+        ],
+    ),
+    (
+        "develop",
+        &[
+            "develop",
+            "export",
+            "export.profiles",
+            "export.sharpening",
+            "versions",
+            "versions.presets",
+            "gui.crop",
+        ],
+    ),
+    ("advanced", &["preview", "render", "cache", "scheduler"]),
+];
+
+/// Place de la section `name` dans la liste : (catégorie, rang dans la catégorie). Une
+/// section que [`CATEGORIES`] ne cite pas (un test l'interdit) : à la fin de la première.
+fn category_of(name: &str) -> (usize, usize) {
+    let root = family(name).map_or(name, |(f, _)| f.0);
+    CATEGORIES
+        .iter()
+        .enumerate()
+        .find_map(|(c, (_, pages))| {
+            pages
+                .iter()
+                .position(|p| *p == root || (p.ends_with('.') && root.starts_with(p)))
+                .map(|r| (c, r))
+        })
+        .unwrap_or((0, usize::MAX))
+}
+
+/// Titre traduit de la catégorie `c` de [`CATEGORIES`].
+fn category_label(c: usize) -> String {
+    t!(&format!("settings-category-{}", CATEGORIES[c].0))
+}
+
 /// Réglages sans objet sans aucun logiciel de développement installé (voir
 /// `SettingsWindow::hidden`).
 const NEED_A_DEVELOPER: [(&str, &str); 5] = [
@@ -655,7 +749,7 @@ impl SettingsWindow {
         let file = ConfigFile::open(path)?;
         let settings = tri::settings::parse::<AppSettings>(&file.text()).unwrap_or_default();
         let (keymap, key_warnings) = settings.keymap();
-        Ok(SettingsWindow {
+        let mut window = SettingsWindow {
             engines: Vec::new(),
             found: Vec::new(),
             colors: Colors::default(),
@@ -681,7 +775,11 @@ impl SettingsWindow {
             dirty: false,
             save_error: None,
             cache: None,
-        })
+        };
+        // La première page de la liste (« Langue »), pas la première du fichier.
+        let schema = window.schema();
+        window.section = window.shown_sections(&schema).first().copied().unwrap_or(0);
+        Ok(window)
     }
 
     /// Le cache de l'application : sa place et de quoi le vider, en tête de la section
@@ -823,9 +921,12 @@ impl SettingsWindow {
     }
 
     /// Sections de la liste de gauche ([`listed`]), sans celles dont tout est masqué.
+    /// Rangées par catégorie ([`CATEGORIES`]), l'ordre des flèches comme à l'écran.
     fn shown_sections(&self, schema: &Schema) -> Vec<usize> {
         let mut list = listed(schema);
         list.retain(|&i| !self.section_hidden(&schema.sections[i]));
+        // Tri stable : à rang égal (sections non citées), l'ordre du fichier.
+        list.sort_by_key(|&i| category_of(&schema.sections[i].name));
         list
     }
 
@@ -1048,6 +1149,31 @@ impl SettingsWindow {
     /// Liste des sections, à gauche ; pendant une recherche (`hits`), le nombre de
     /// résultats de chacune, les autres grisées ; un clic quitte la recherche et ouvre la
     /// section.
+    /// Une page de la liste de gauche, sans recherche : son titre, sélectionnable.
+    fn section_entry(&mut self, ui: &mut Ui, schema: &Schema, i: usize, at: usize) {
+        let name = &schema.sections[i].name;
+        // Une famille : son nom (« Profils d'export [export.profiles] »).
+        let name = family(name).map_or(name.as_str(), |(f, _)| f.0);
+        let mut job = section_title(ui, name, false);
+        if at == i {
+            // Texte de la sélection sur le fond d'accent : les gris du thème
+            // disparaissaient sur un accent clair (accent réglable, 05/11/2026).
+            let on = ui.visuals().selection.stroke.color;
+            for (n, part) in job.sections.iter_mut().enumerate() {
+                part.format.color = if n == 0 { on } else { on.gamma_multiply(0.7) };
+            }
+        }
+        let label = ui.selectable_label(at == i, job);
+        if at == i && self.section_moved {
+            label.scroll_to_me(None);
+        }
+        if label.clicked() && at != i {
+            self.section = i;
+            self.section_moved = true;
+            self.naming = None;
+        }
+    }
+
     fn section_list(
         &mut self,
         ui: &mut Ui,
@@ -1080,7 +1206,7 @@ impl SettingsWindow {
                         found.append(&mut order);
                         order = found;
                     }
-                    for i in order {
+                    for &i in order.iter().filter(|_| hits.is_some()) {
                         if first_other == Some(i) {
                             ui.add_space(14.0);
                         }
@@ -1120,24 +1246,39 @@ impl SettingsWindow {
                             }
                             continue;
                         }
-                        let mut job = section_title(ui, name, false);
-                        if at == i {
-                            // Texte de la sélection sur le fond d'accent : les gris du thème
-                            // disparaissaient sur un accent clair (accent réglable, 05/11/2026).
-                            let on = ui.visuals().selection.stroke.color;
-                            for (n, part) in job.sections.iter_mut().enumerate() {
-                                part.format.color =
-                                    if n == 0 { on } else { on.gamma_multiply(0.7) };
+                    }
+                    if hits.is_some() {
+                        return;
+                    }
+                    // Sans recherche : les pages sous le titre de leur catégorie, repliable
+                    // (retour du 15/11/2026, pour découvrir les réglages sans rien chercher).
+                    let mut groups: Vec<(usize, Vec<usize>)> = Vec::new();
+                    for i in order {
+                        let (c, _) = category_of(&schema.sections[i].name);
+                        match groups.last_mut() {
+                            Some((last, pages)) if *last == c => pages.push(i),
+                            _ => groups.push((c, vec![i])),
+                        }
+                    }
+                    for (c, pages) in groups {
+                        let title = RichText::new(category_label(c).to_uppercase())
+                            .color(crate::marks::accent_bright(ui.visuals()));
+                        let mut header = egui::CollapsingHeader::new(title)
+                            .id_salt(("settings_category", c))
+                            .default_open(true);
+                        // La page choisie au clavier : sa catégorie s'ouvre.
+                        if self.section_moved && pages.contains(&at) {
+                            header = header.open(Some(true));
+                        }
+                        let first = pages.first() == Some(&at);
+                        let shown = header.show(ui, |ui| {
+                            for i in pages {
+                                self.section_entry(ui, schema, i, at);
                             }
-                        }
-                        let label = ui.selectable_label(at == i, job);
-                        if at == i && self.section_moved {
-                            label.scroll_to_me(None);
-                        }
-                        if label.clicked() && at != i {
-                            self.section = i;
-                            self.section_moved = true;
-                            self.naming = None;
+                        });
+                        // Première page de sa catégorie : son titre aussi en vue.
+                        if first && self.section_moved {
+                            shown.header_response.scroll_to_me(None);
                         }
                     }
                 });
@@ -3083,7 +3224,7 @@ mod tests {
         // sautées).
         let shown = h.state().shown_sections(schema());
         let last = *shown.last().unwrap();
-        for _ in 0..last {
+        for _ in 1..shown.len() {
             h.key_press(Key::ArrowDown);
             h.run_steps(1);
         }
@@ -3091,7 +3232,7 @@ mod tests {
         assert_eq!(h.state().section, last);
         assert!(h.state().sections_offset > 0.0, "liste défilée");
         // Retour à la première, puis → : le premier réglage prend le clavier.
-        for _ in 0..last {
+        for _ in 1..shown.len() {
             h.key_press(Key::ArrowUp);
             h.run_steps(1);
         }
@@ -3104,6 +3245,37 @@ mod tests {
             focused.is_some() && focused != Some(search_id()),
             "{focused:?}"
         );
+    }
+
+    #[test]
+    fn every_page_has_a_category() {
+        // Retour du 15/11/2026 : pages rangées par catégorie. Une nouvelle section doit y
+        // être citée, sinon elle tomberait au bout de « Général ».
+        for text in [EXAMPLE, EXAMPLE_EN] {
+            let schema = Schema::parse(text).unwrap();
+            for section in &schema.sections {
+                assert_ne!(
+                    category_of(&section.name).1,
+                    usize::MAX,
+                    "[{}] sans catégorie (CATEGORIES)",
+                    section.name
+                );
+            }
+        }
+        // Les familles par leur racine, les sidecars par leur préfixe.
+        assert_eq!(
+            category_of("export.profiles.web"),
+            category_of("export.profiles")
+        );
+        assert_eq!(category_of("sidecars.art").0, category_of("xmp").0);
+        assert_eq!(category_of("cache").0, CATEGORIES.len() - 1, "Avancé");
+    }
+
+    #[test]
+    fn the_window_opens_on_the_first_page_of_the_first_category() {
+        let dir = tempfile::tempdir().unwrap();
+        let w = SettingsWindow::open(&dir.path().join("config.toml")).unwrap();
+        assert_eq!(w.schema().sections[w.section].name, "i18n");
     }
 
     #[test]

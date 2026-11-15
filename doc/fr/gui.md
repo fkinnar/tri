@@ -1044,6 +1044,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   triés par pertinence (`tri::fuzzy` : lettres consécutives et débuts de mots comptent
   plus, les trous pénalisent ; à égalité, le libellé le plus court). Pendant la saisie,
   `?` s'écrit dans le champ : on ferme par Échap ou `F1`.
+- **Catégories des réglages** (15/11/2026, pour découvrir les réglages sans rien
+  chercher) : la liste de gauche range les pages sous six titres repliables, Général,
+  Importer et fichiers, Trier et noter, Affichage, Développer et exporter, Avancé (aperçus,
+  rendu RAW, cache, calculs en fond : rarement à toucher). Table `CATEGORIES` de
+  `gui/src/settings_window.rs`, qui fixe aussi l'ordre des pages ; un test exige qu'une
+  nouvelle section y soit citée. La fenêtre s'ouvre sur la première page (Langue) ; les
+  flèches suivent l'ordre affiché. Pendant une recherche, la liste reste celle des
+  résultats, sans titres.
 - **Recherche, aide et réglages** (revue le 22/10/2026 : on ne sait souvent qu'« à peu
   près » ce qu'on cherche) : les **thèmes** de l'aide et les **sections** des réglages
   restent visibles pendant la recherche (dans les réglages, la liste de gauche met en
