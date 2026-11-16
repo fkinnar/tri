@@ -20888,8 +20888,6 @@ impl TriApp {
                     columns.response.rect.y_range(),
                     ui.visuals().widgets.noninteractive.bg_stroke,
                 );
-                ui.add_space(6.0);
-                ui.weak(self.keymap.with_keys(&t!("help-close-hint")));
             });
         // Main « saisir » sur la barre de titre, comme sur le fond des autres boîtes (retour
         // du 31/10/2026) ; la barre d'egui ne la met pas d'elle-même.
@@ -22901,7 +22899,6 @@ fn key_menu_area(
                         if let Some(theme) = theme {
                             ui.label(egui::RichText::new(theme).strong());
                         }
-                        ui.weak(t!("key-menu-cancel"));
                     });
                     ui.separator();
                     if rows.is_empty() {
@@ -27935,7 +27932,7 @@ mod tests {
         assert!(h.state().folder_query.is_empty(), "second clic : refermée");
         h.get_by_label(&connect).click();
         h.run_steps(2);
-        h.get_by_label("Fermer la recherche (Échap)").click();
+        h.get_by_label("Fermer la recherche").click();
         h.run_steps(2);
         assert!(h.state().folder_query.is_empty(), "la croix : refermée");
         assert!(h.state().folder_search.is_none());
