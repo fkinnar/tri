@@ -869,6 +869,20 @@ export-no-developer = No development software found: base render by LibRaw.
 export-rapidraw-srgb = RapidRAW renders in sRGB: the “{ $color }” space is converted from sRGB.
 export-passthrough = Without recompression
 export-passthrough-tip = Original JPEG copied as is, camera render written as is (orientation in the EXIF). An image to shrink (preset size) is re-encoded.
+export-versions = { $n ->
+    [one] Export the version
+   *[other] Export the { $n } versions
+}
+export-versions-tip = The versions instead of the whole images. Each version goes with its own export preset, folder and file name; a version without a preset takes the one chosen here. Images without a version are left out.
+export-versions-forced = This preset for every version
+export-versions-forced-tip = The preset, folder and name chosen here replace those of each version.
+export-contents-versions = { $n ->
+    [one] 1 version
+   *[other] { $n } versions
+} ({ $images ->
+    [one] 1 image
+   *[other] { $images } images
+})
 export-button = Export
 export-profile-edit = Editing
 export-profile-asis = JPEG as is

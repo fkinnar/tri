@@ -188,6 +188,12 @@ for the state, `TriApp::versions_compare_view` for the drawing):
 
 ## Exporting a version
 
+- **From the grid** (2026-11-16): `Ctrl+E` on images that have versions offers **Export
+  the versions** in the dialog: the versions go instead of the whole images, each with its
+  own preset, folder and name (the dialog's preset for a version without one; images
+  without versions are left out). **This preset for every version** applies the dialog's
+  preset, folder and name to all of them instead (if it suits the version: never "as
+  is").
 - `Ctrl+E` on a version shown exports it, and it alone, on the image it was cropped on
   (its `source`); the dialog is titled "Export the "Story" version" and pre-filled with its
   preset if it has one (otherwise the last one chosen, otherwise the default preset).
