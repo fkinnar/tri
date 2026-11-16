@@ -288,6 +288,9 @@ pub struct GuiSettings {
     /// Après une note au clavier ou au bandeau, passer à l'image suivante (Maj+A l'active
     /// ou le désactive).
     pub auto_advance: bool,
+    /// Après un changement de filtre, repartir de la première image plutôt que de rester
+    /// sur l'image (<core.filter.restart> l'active ou le désactive, retenu).
+    pub filter_restart: bool,
     /// Annuler : nombre de pas gardés dans l'historique de la session (les plus anciens
     /// sont oubliés).
     pub history: usize,
@@ -363,6 +366,7 @@ impl Default for GuiSettings {
             title_bar_size: 26.0,
             focus_mode_hint_ms: 3000,
             auto_advance: false,
+            filter_restart: false,
             history: 200,
             grid: GridSettings::default(),
             view: ViewSettings::default(),
@@ -1278,6 +1282,10 @@ pub struct ViewSettings {
     /// Mode pile (plein écran) : en entrant dans une pile (↑ / ↓ de pile en pile), sa
     /// couverture ou sa première image (issue n° 62 ; bouton du bandeau, retenu).
     pub stack_enter: StackEnter,
+    /// Plein écran ajusté : la roulette passe à l'image suivante (vers le bas) ou
+    /// précédente, une tous les `wheel_step` points de défilement (un cran : un pas). 0 :
+    /// la roulette ne fait rien.
+    pub wheel_step: f32,
     /// Superpositions (o) : épaisseur des traits (points).
     pub overlay_line_width: f32,
     /// Grilles intégrées (tiers, nombre d'or, diagonales) : opacité des lignes.
@@ -1303,6 +1311,7 @@ impl Default for ViewSettings {
             review_developments: false,
             stack_advance_next: false,
             stack_enter: StackEnter::Cover,
+            wheel_step: 50.0,
             overlay_line_width: 1.0,
             overlay_opacity: 0.6,
         }

@@ -813,6 +813,19 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   renommée reste sélectionnée, après une suppression la suivante prend sa place. Erreurs
   dans la barre d'état. Code : `gui/src/files.rs` (boîtes), `TriApp::file_action`,
   `reload_folder`.
+- **Repartir du début après un filtre** (`[gui] filter_restart`, désactivé par défaut ;
+  16/11/2026, retour de l'utilisateur : après avoir posé N étoiles puis `f N`, toujours
+  `g g` pour revenir au début) : allumé, tout changement de filtre (étoiles, couleurs,
+  drapeau, type, « nettes »…, pas l'ordre) ramène à la première image, en grille comme
+  en plein écran (`TriApp::perform` enchaîne `core.nav.first` après une action
+  `Action::changes_filter`). `f g` (`core.filter.restart`) ou le bouton de la barre du
+  bas (entonnoir et « |‹ », à côté de l'entrée dans les piles) l'allume ou l'éteint,
+  retenu d'un lancement à l'autre ; un message dit lequel est actif.
+- **La roulette en plein écran** (`[gui.view] wheel_step`, 16/11/2026, pour ceux qui
+  trient à la souris) : image ajustée, un cran vers le bas passe à l'image suivante, vers
+  le haut à la précédente (`wheel_step` points de défilement par image au pavé tactile ;
+  0 : rien) ; zoomée, la roulette déplace l'image, comme avant
+  (`TriApp::view_wheel_input`).
 - **Avance automatique après une note** (`[gui] auto_advance`, désactivée par défaut ;
   `Maj+A` ou le bouton « avance auto » du bandeau) : après une note au clavier ou au
   bandeau, l'image suivante est sélectionnée (pas depuis la boîte du clic droit, qui note
@@ -1597,6 +1610,7 @@ Idée notée pour plus tard : un nombre après une séquence (`<leader> m 200` :
 | `core.stack.first` / `core.stack.last` | Maj+Début / Maj+Fin | ( / ) |
 | `core.stack.open` / `core.stack.close` | ( ( / ) ) | ( ( / ) ) |
 | `core.stack.enter` | Ctrl+Maj+S | Ctrl+Maj+S |
+| `core.filter.restart` | f g | f g |
 | `core.dev.next` / `core.dev.prev` | Maj+W / Maj+Q | Maj+W / Maj+Q |
 | `core.dev.toggle` / `core.dev.fold_all` | — (`s`, `Maj+S` le font) | — |
 | `core.file.delete` | Suppr, Backspace | x, Suppr, Backspace |

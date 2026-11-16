@@ -865,6 +865,12 @@ focus_mode_hint_ms = 3000
 # no image is skipped. The other image of a RAW+JPEG pair, rated at the same time, is
 # skipped.
 auto_advance = false
+# After a filter change, start again from the first image.
+#
+# After a filter change (stars, colours, flag…), start again from the first image
+# rather than staying on the selected one; <core.filter.restart> or the bottom bar button
+# turns it on or off (remembered from one launch to the next).
+filter_restart = false
 # Undo (<core.edit.undo>): number of steps kept in the session history
 # (<core.edit.history> shows it). Nothing is kept from one launch to the next.
 history = 200
@@ -1046,6 +1052,12 @@ stack_advance_next = false
 # its first photo. The rating bar button, in stack mode, changes this choice (remembered
 # from one launch to the next).
 stack_enter = "cover"
+# Fitted full screen: the wheel goes from one image to the next.
+#
+# Full screen, fitted image: the wheel goes to the next image (down) or the previous one,
+# one every wheel_step points of scrolling (one wheel notch: one image). Zoomed in, it
+# moves the image. 0: the wheel does nothing.
+wheel_step = 50.0
 # Overlays (grids, golden ratio…): line width and opacity.
 #
 # Overlays (<core.view.overlay>, <core.view.overlay_orient> for the orientation, see

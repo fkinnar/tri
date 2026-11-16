@@ -874,6 +874,12 @@ focus_mode_hint_ms = 3000
 # on ne saute pas une image. L'autre image d'une paire RAW+JPEG, notée en même temps, est
 # sautée.
 auto_advance = false
+# Après un changement de filtre, repartir de la première image.
+#
+# Après un changement de filtre (étoiles, couleurs, drapeau…), repartir de la première
+# image plutôt que de rester sur l'image sélectionnée ; <core.filter.restart> ou le bouton
+# de la barre du bas l'active ou le désactive (retenu d'un lancement à l'autre).
+filter_restart = false
 # Annuler (<core.edit.undo>) : nombre de pas gardés dans l'historique de la session
 # (<core.edit.history> le montre). Rien n'est gardé d'un lancement à l'autre.
 history = 200
@@ -1058,6 +1064,12 @@ stack_advance_next = false
 # couverture ; "first" : sa première photo. Le bouton du bandeau, en mode pile, change ce
 # choix (retenu d'un lancement à l'autre).
 stack_enter = "cover"
+# Plein écran ajusté : la roulette passe d'une image à l'autre.
+#
+# Plein écran, image ajustée : la roulette passe à l'image suivante (vers le bas) ou
+# précédente, une tous les wheel_step points de défilement (un cran de roulette : une
+# image). Zoomée, elle déplace l'image. 0 : la roulette ne fait rien.
+wheel_step = 50.0
 # Superpositions (grilles, nombre d'or…) : épaisseur des traits et opacité.
 #
 # Superpositions (<core.view.overlay>, <core.view.overlay_orient> pour l'orientation, voir

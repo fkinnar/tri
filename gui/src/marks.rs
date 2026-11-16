@@ -851,6 +851,22 @@ pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32) {
             painter.line_segment([p(0.24, 0.22), p(0.24, 0.78)], stroke);
             chevron(0.5, 0.78);
         }
+        Action::FilterRestart => {
+            // Repartir du début après un filtre : un entonnoir, et à sa gauche une flèche
+            // vers une barre (« ⇤ », au début).
+            let thin = Stroke::new(stroke.width * 0.75, color);
+            painter.line_segment([p(0.04, 0.3), p(0.04, 0.7)], thin);
+            painter.line_segment([p(0.08, 0.5), p(0.4, 0.5)], thin);
+            painter.add(Shape::line(
+                vec![p(0.2, 0.36), p(0.08, 0.5), p(0.2, 0.64)],
+                thin,
+            ));
+            painter.add(Shape::closed_line(
+                vec![p(0.52, 0.22), p(0.98, 0.22), p(0.8, 0.5), p(0.7, 0.5)],
+                thin,
+            ));
+            painter.line_segment([p(0.75, 0.5), p(0.75, 0.8)], thin);
+        }
         Action::DevPrev | Action::DevNext => {
             // Développement précédent / suivant : deux chevrons, comme ‹ › doublés.
             // Symétriques (#240) : chaque chevron large de 0,26, la paire centrée.
