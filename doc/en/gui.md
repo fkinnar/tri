@@ -313,7 +313,9 @@ system one ("cold" measurements, experiments).
   from one row to another), clicking too. Ratings go to the active image only
   (auto-advance: to the next compared image); `Space` **eliminates it** (it leaves the
   comparison and the selection: you keep the best of a burst by elimination); `Enter` or
-  double-click opens it in full screen; Esc or `c` goes back to the grid. `z`: **linked
+  double-click opens it in full screen, and Esc from there comes back to the comparison
+  (2026-11-16: Esc always goes back to where you came from); Esc or `c` goes back to the
+  grid. `z`: **linked
   1:1**, at the same relative point of each image, moved together (drag any of them,
   Shift + arrows); `b` changes the source of all of them; `w` overlays the zones. The
   engine serves all compared images (`Scheduler::set_shown`), not just the current image

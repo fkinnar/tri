@@ -86,6 +86,37 @@ fn version_source(source: tri::versions::Source) -> Source {
     }
 }
 
+/// Comparaison des versions quittée pour le plein écran d'une version (Entrée) : elle,
+/// et d'où elle avait été ouverte (`compare_from`, `compare_from_view`), pour que les
+/// Échap suivants ramènent à la comparaison puis à son origine.
+#[derive(Clone, Debug)]
+struct VersionsBack {
+    compare: crate::versions_compare::VersionsCompare,
+    from: Option<(Option<PathBuf>, bool)>,
+    from_view: bool,
+}
+
+/// Comparaison d'images quittée pour le plein écran : ses images et son origine.
+#[derive(Clone, Debug)]
+struct CompareBack {
+    images: Vec<PathBuf>,
+    from: Option<(Option<PathBuf>, bool)>,
+    from_view: bool,
+}
+
+/// Versions à supprimer, en attente de confirmation.
+#[derive(Clone, Debug)]
+struct VersionDelete {
+    /// L'image.
+    image: PathBuf,
+    /// Les versions (rangs dans sa liste).
+    indices: Vec<usize>,
+    /// Leurs noms, pour la question.
+    names: Vec<String>,
+    /// Supprimée depuis l'éditeur : il se ferme ensuite.
+    close_crop: bool,
+}
+
 /// Préréglage des versions exportées ensemble.
 enum VersionsPreset {
     /// Celui de chaque version, sinon celui-ci (identifiant), sinon le dernier choisi.
@@ -394,6 +425,8 @@ pub struct TriApp {
     eject_failed: Option<PathBuf>,
     /// Volume dont l'éjection attend confirmation.
     eject_dialog: Option<(PathBuf, egui::Pos2)>,
+    /// Suppression de versions à confirmer (retour du 16/11/2026 : partout).
+    version_delete: Option<VersionDelete>,
     /// Recherche d'une mise à jour (sur demande) : en cours, ou son résultat affiché.
     update: Option<UpdateCheck>,
     /// Téléchargement depuis l'aide : recherche des paquets, puis choix du format.
@@ -639,6 +672,12 @@ pub struct TriApp {
     /// Version modifiée depuis la comparaison des versions : on y revient en quittant
     /// l'éditeur (#393).
     crop_back_to_versions: Option<crate::versions_compare::VersionsCompare>,
+    /// Comparaison des versions d'où vient le plein écran (Entrée) : Échap y ramène
+    /// (retour du 16/11/2026 : on retombait dans la grille).
+    view_back_to_versions: Option<VersionsBack>,
+    /// Comparaison d'images quittée pour le plein écran (Entrée, double-clic) : Échap y
+    /// ramène, comme pour les versions.
+    view_back_to_compare: Option<CompareBack>,
     /// Versions lues dans les sidecars (à la demande ; vidé quand elles changent).
     versions: HashMap<PathBuf, tri::versions::Versions>,
     /// Versions lues en fond pour la grille ([`TriApp::grid_versions`]) : en cours, et
@@ -1573,6 +1612,7 @@ impl TriApp {
             start_focus: false,
             eject_failed: None,
             eject_dialog: None,
+            version_delete: None,
             update: None,
             download: None,
             download_format: None,
@@ -1633,6 +1673,8 @@ impl TriApp {
             version_shown: None,
             versions_compare: None,
             crop_back_to_versions: None,
+            view_back_to_versions: None,
+            view_back_to_compare: None,
             versions: HashMap::new(),
             versions_pending: HashSet::new(),
             versions_read: mpsc::channel(),
@@ -8467,6 +8509,16 @@ impl TriApp {
                 }
                 continue;
             }
+            // Suppression de versions à confirmer : Entrée confirme, Échap annule.
+            if self.version_delete.is_some() {
+                match action {
+                    Action::Back => self.version_delete = None,
+                    // Entrée : « ouvrir », ou « enregistrer » dans l'éditeur.
+                    Action::Open | Action::CropSave => self.confirm_delete_versions(),
+                    _ => {}
+                }
+                continue;
+            }
             // Confirmation d'éjection : seule la fermeture.
             if self.eject_dialog.is_some() {
                 if action == Action::Back {
@@ -8885,6 +8937,42 @@ impl TriApp {
                     self.selection.end_visual(false);
                 } else if self.mode == Mode::Compare {
                     self.leave_compare();
+                // Venu d'une comparaison : y revenir d'abord (Échap ramène d'où l'on vient,
+                // avant d'effacer la sélection qui l'avait formée ; retour du 16/11/2026).
+                } else if self.mode == Mode::View
+                    && let Some(back) = self.view_back_to_versions.take()
+                    && self
+                        .files
+                        .get(self.selected)
+                        .is_some_and(|f| f.path == back.compare.image)
+                {
+                    // Venu de la comparaison des versions : on y revient, sur la version
+                    // regardée, avec son origine (un Échap de plus y ramène).
+                    let mut vc = back.compare;
+                    if let Some((_, i)) = self.version_shown.clone() {
+                        let sources = self.version_renders(&vc.image);
+                        vc.activate(Some(i), &sources);
+                    }
+                    self.compare_from = back.from;
+                    self.compare_from_view = back.from_view;
+                    self.reopen_versions_compare(vc);
+                } else if self.mode == Mode::View
+                    && let Some(back) = self.view_back_to_compare.take()
+                    && self
+                        .files
+                        .get(self.selected)
+                        .is_some_and(|f| back.images.contains(&f.path))
+                {
+                    // Venu de la comparaison d'images : on y revient, l'image regardée
+                    // active.
+                    self.compare = back.images;
+                    self.compare_from = back.from;
+                    self.compare_from_view = back.from_view;
+                    self.mode = Mode::Compare;
+                    self.zoom = None;
+                    self.zoom_anchor = None;
+                    self.tell_shown();
+                    self.request_zoom();
                 } else if self.selection.visible(&self.files) > 0 {
                     self.selection.clear();
                 } else if self.mode == Mode::View {
@@ -10136,6 +10224,18 @@ impl TriApp {
         developments.or(burst)
     }
 
+    /// Plein écran sur l'image active de la comparaison (Entrée, double-clic), la
+    /// comparaison retenue : Échap y ramène (retour du 16/11/2026).
+    fn leave_compare_for_view(&mut self) {
+        self.view_back_to_compare = Some(CompareBack {
+            images: std::mem::take(&mut self.compare),
+            from: self.compare_from.take(),
+            from_view: std::mem::take(&mut self.compare_from_view),
+        });
+        self.mode = Mode::View;
+        self.tell_shown();
+    }
+
     /// Quitte la comparaison vers là d'où on l'a ouverte (#376) : le plein écran sur
     /// l'image active, ou la grille.
     fn leave_compare(&mut self) {
@@ -10219,9 +10319,7 @@ impl TriApp {
         let path = self.files[self.selected].path.clone();
         match action {
             Action::Open => {
-                self.compare.clear();
-                self.mode = Mode::View;
-                self.tell_shown();
+                self.leave_compare_for_view();
                 self.request_zoom();
             }
             // Éliminer : l'image active quitte la comparaison (et la sélection).
@@ -11826,10 +11924,13 @@ impl TriApp {
             // En grand : la version active en plein écran (l'original : l'image entière).
             Action::Open => {
                 let pane = vc.active_pane(&sources);
+                self.view_back_to_versions = Some(VersionsBack {
+                    compare: vc.clone(),
+                    from: self.compare_from.take(),
+                    from_view: std::mem::take(&mut self.compare_from_view),
+                });
                 self.compare.clear();
                 self.versions_compare = None;
-                self.compare_from_view = false;
-                self.compare_from = None;
                 self.mode = Mode::View;
                 self.zoom = None;
                 self.version_shown = pane.map(|i| (vc.image.clone(), i));
@@ -11858,10 +11959,7 @@ impl TriApp {
                 if indices.is_empty() {
                     self.hint = Some(t!("versions-delete-original"));
                 } else {
-                    self.delete_versions(&vc.image, &indices);
-                    if let Some(state) = self.versions_compare.as_mut() {
-                        state.marked.clear();
-                    }
+                    self.ask_delete_versions(&vc.image, indices, false);
                 }
             }
             // Modifier la version active ; quitter l'éditeur ramène ici.
@@ -12194,6 +12292,23 @@ impl TriApp {
                     ui.visuals().weak_text_color(),
                 );
             }
+            // Son préréglage d'export, ou qu'elle n'en a pas (retour du 16/11/2026).
+            if let Some(v) = pane.and_then(|i| versions.get(i)) {
+                label.push_str(" · ");
+                label.push_str(&match &v.profile {
+                    Some(id) => t!(
+                        "versions-pane-export",
+                        name = self
+                            .settings
+                            .export
+                            .profiles
+                            .get(id)
+                            .map_or_else(|| id.clone(), crate::export::profile_name)
+                            .as_str()
+                    ),
+                    None => t!("versions-pane-no-export"),
+                });
+            }
             let font = egui::FontId::proportional(13.0);
             let galley = painter.layout_no_wrap(label.clone(), font, Color32::WHITE);
             let text_pos = rect.left_bottom() + vec2(8.0, -8.0 - galley.size().y);
@@ -12249,9 +12364,72 @@ impl TriApp {
         }
     }
 
-    /// Supprime la version `index` de `path` (annulable).
-    fn delete_version(&mut self, path: &Path, index: usize) {
-        self.delete_versions(path, &[index]);
+    /// Demande confirmation avant de supprimer les versions `indices` de `path` (retour du
+    /// 16/11/2026 : partout) ; `close_crop` : depuis l'éditeur, refermé ensuite.
+    fn ask_delete_versions(&mut self, path: &Path, indices: Vec<usize>, close_crop: bool) {
+        let list = &self.versions_of(path).list;
+        let names: Vec<String> = indices
+            .iter()
+            .filter_map(|&i| list.get(i).map(|v| v.name.clone()))
+            .collect();
+        if names.is_empty() {
+            return;
+        }
+        self.version_delete = Some(VersionDelete {
+            image: path.to_path_buf(),
+            indices,
+            names,
+            close_crop,
+        });
+    }
+
+    /// Supprime les versions confirmées ; marques de la comparaison oubliées, éditeur
+    /// refermé s'il le faut.
+    fn confirm_delete_versions(&mut self) {
+        let Some(request) = self.version_delete.take() else {
+            return;
+        };
+        self.delete_versions(&request.image, &request.indices);
+        if let Some(state) = self.versions_compare.as_mut() {
+            state.marked.clear();
+        }
+        if request.close_crop {
+            self.close_crop();
+        }
+    }
+
+    /// Boîte de confirmation de la suppression de versions.
+    fn version_delete_dialog(&mut self, ctx: &egui::Context) {
+        let Some(request) = self.version_delete.clone() else {
+            return;
+        };
+        let names = request
+            .names
+            .iter()
+            .map(|n| t!("versions-delete-name", name = n.as_str()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let title = t!(
+            "versions-delete-question",
+            n = request.names.len(),
+            names = names.as_str()
+        );
+        let (mut confirm, mut cancel) = (false, false);
+        let modal = modal_at("version_delete", CENTRED)
+            .title(title)
+            .show(ctx, |ui| {
+                ui.label(t!("versions-delete-undo"));
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    confirm = ui.button(t!("versions-delete")).clicked();
+                    cancel = ui.button(t!("cancel")).clicked();
+                });
+            });
+        if confirm {
+            self.confirm_delete_versions();
+        } else if cancel || modal.should_close() {
+            self.version_delete = None;
+        }
     }
 
     /// Supprime les versions `indices` de `path`, en un seul pas d'annulation.
@@ -12346,8 +12524,7 @@ impl TriApp {
             self.hint = Some(t!("crop-delete-new"));
             return;
         };
-        self.delete_version(&image, index);
-        self.close_crop();
+        self.ask_delete_versions(&image, vec![index], true);
     }
 
     /// Applique le préréglage n° `index` au recadrage en cours.
@@ -13055,9 +13232,7 @@ impl TriApp {
             }
             if response.double_clicked() {
                 self.select(index);
-                self.compare.clear();
-                self.mode = Mode::View;
-                self.tell_shown();
+                self.leave_compare_for_view();
             }
             self.open_rating_dialog(&response, index);
         }
@@ -17064,7 +17239,7 @@ impl TriApp {
                 self.zoom = None;
             }
             Some(VersionAction::Edit(i)) => self.edit_version(&path, i),
-            Some(VersionAction::Delete(i)) => self.delete_version(&path, i),
+            Some(VersionAction::Delete(i)) => self.ask_delete_versions(&path, vec![i], false),
             None => {}
         }
     }
@@ -20786,8 +20961,6 @@ impl TriApp {
                     columns.response.rect.y_range(),
                     ui.visuals().widgets.noninteractive.bg_stroke,
                 );
-                ui.add_space(6.0);
-                ui.weak(self.keymap.with_keys(&t!("help-close-hint")));
             });
         // Main « saisir » sur la barre de titre, comme sur le fond des autres boîtes (retour
         // du 31/10/2026) ; la barre d'egui ne la met pas d'elle-même.
@@ -21322,6 +21495,7 @@ impl eframe::App for TriApp {
         self.file_dialog(&ctx);
         self.poll_export();
         self.eject_dialog(&ctx);
+        self.version_delete_dialog(&ctx);
         self.reset_dialog(&ctx);
         self.pairs_dialog(&ctx);
         self.remote_dialog(&ctx);
@@ -22798,7 +22972,6 @@ fn key_menu_area(
                         if let Some(theme) = theme {
                             ui.label(egui::RichText::new(theme).strong());
                         }
-                        ui.weak(t!("key-menu-cancel"));
                     });
                     ui.separator();
                     if rows.is_empty() {
@@ -24753,7 +24926,7 @@ mod tests {
             crop: [0.0, 0.0, 0.5, 0.5].into(),
             ratio: tri::versions::Ratio::Free,
             source: tri::versions::Source::Embedded,
-            profile: None,
+            profile: (name == "A").then(|| "web".to_string()),
             tiles: tri::versions::Tiles::ONE,
         };
         let versions = tri::versions::Versions {
@@ -24783,7 +24956,33 @@ mod tests {
         act(&mut h, Action::SelectToggle);
         h.state_mut().versions_compare.as_mut().unwrap().active = 2;
         act(&mut h, Action::SelectToggle);
+        // Le volet dit son préréglage d'export, ou qu'il n'en a pas.
+        let web = t!(
+            "versions-pane-export",
+            name = t!("export-profile-web").as_str()
+        );
+        assert!(h.query_all_by_label_contains("A · ").count() > 0);
+        assert!(h.query_all_by_label_contains(&web).count() > 0, "{web}");
+        assert!(
+            h.query_all_by_label_contains(&t!("versions-pane-no-export"))
+                .count()
+                > 0
+        );
+        // Confirmation d'abord (retour du 16/11/2026) : rien de supprimé ; Échap garde.
         press(&mut h, Key::Delete, Modifiers::NONE);
+        assert!(h.state().version_delete.is_some(), "confirmation demandée");
+        assert_eq!(names().len(), 4);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().version_delete.is_none());
+        assert_eq!(names().len(), 4, "gardées");
+        assert_eq!(
+            h.state().mode,
+            Mode::Compare,
+            "Échap n'a fermé que la boîte"
+        );
+        // Entrée : supprimées.
+        press(&mut h, Key::Delete, Modifiers::NONE);
+        press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(names(), ["B", "D"]);
         assert!(
             h.state()
@@ -24806,6 +25005,7 @@ mod tests {
         // Sans marque : l'active (D).
         h.state_mut().versions_compare.as_mut().unwrap().active = 3;
         press(&mut h, Key::Delete, Modifiers::NONE);
+        press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(names(), ["A", "B", "C"]);
         // Dans l'éditeur : la version modifiée, puis retour à la comparaison.
         h.state_mut().versions_compare.as_mut().unwrap().active = 1;
@@ -24813,6 +25013,10 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().crop.as_ref().and_then(|c| c.editing), Some(1));
         press(&mut h, Key::Delete, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().crop.is_some(), "l'éditeur attend la réponse");
+        assert_eq!(names().len(), 3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
         h.run_steps(2);
         assert!(h.state().crop.is_none());
         assert_eq!(names(), ["A", "C"]);
@@ -24870,6 +25074,99 @@ mod tests {
         assert_eq!(panes(&h), [Some(1)]);
         assert!(h.query_all_by_label_contains("B").count() > 0);
         assert_eq!(h.state().mode, Mode::Compare);
+    }
+
+    #[test]
+    fn escape_from_an_image_opened_in_the_comparison_goes_back_to_it() {
+        // Retour du 16/11/2026 : Échap ramène d'où l'on vient, partout ; la comparaison
+        // d'images → Entrée → Échap ramenait à la grille.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        let paths: Vec<PathBuf> = h
+            .state()
+            .files
+            .iter()
+            .take(2)
+            .map(|f| f.path.clone())
+            .collect();
+        for p in &paths {
+            h.state_mut().selection.toggle(p);
+        }
+        act(&mut h, Action::Compare);
+        assert_eq!(h.state().mode, Mode::Compare);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Compare, "de retour à la comparaison");
+        assert_eq!(h.state().compare, paths);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(
+            h.state().mode,
+            Mode::Grid,
+            "puis la grille d'où elle venait"
+        );
+    }
+
+    #[test]
+    fn escape_from_a_version_opened_in_the_comparison_goes_back_to_it() {
+        // Retour du 16/11/2026 : comparaison → Entrée → Échap ramenait à la grille.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let image = dir.path().join("photos").join("img1.jpg");
+        let version = |name: &str| tri::versions::Version {
+            name: name.into(),
+            crop: [0.0, 0.0, 0.5, 0.5].into(),
+            ratio: tri::versions::Ratio::Free,
+            source: tri::versions::Source::Embedded,
+            profile: None,
+            tiles: tri::versions::Tiles::ONE,
+        };
+        let versions = tri::versions::Versions {
+            list: vec![version("A"), version("B")],
+            unknown: Vec::new(),
+        };
+        tri::versions::write(&image, &versions, tri::xmp::Convention::Darktable).unwrap();
+        h.state_mut().versions.clear();
+        let index = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path == image)
+            .unwrap();
+        h.state_mut().select(index);
+        act(&mut h, Action::VersionsCompare);
+        h.state_mut().versions_compare.as_mut().unwrap().active = 1;
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        assert_eq!(h.state().version_shown, Some((image.clone(), 1)));
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Compare, "de retour à la comparaison");
+        assert_eq!(h.state().versions_compare.as_ref().unwrap().active, 1);
+        // Et son origine reste : Échap encore, la grille d'où elle avait été ouverte ;
+        // rouverte de là.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid, "l'origine de la comparaison");
+        act(&mut h, Action::VersionsCompare);
+        assert_eq!(h.state().mode, Mode::Compare);
+        h.state_mut().versions_compare.as_mut().unwrap().active = 1;
+        // Par l'éditeur : Échap le referme (plein écran), Échap encore : la comparaison.
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        act(&mut h, Action::Crop);
+        assert!(h.state().crop.is_some());
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().crop.is_none());
+        assert_eq!(h.state().mode, Mode::View);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Compare);
+        // Hors de la comparaison, rien ne change : de la grille, plein écran → Échap →
+        // grille.
+        act(&mut h, Action::VersionsCompare);
+        assert_eq!(h.state().mode, Mode::Grid);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid);
     }
 
     #[test]
@@ -25067,9 +25364,18 @@ mod tests {
             Some(vec![Source::Embedded, Source::Developed])
         );
         // Story s'affiche (son rendu), Post n'emprunte pas celui de Story.
-        assert!(h.query_all_by_label_contains("Story · ").count() > 0);
-        assert_eq!(h.query_all_by_label_contains("Post · ").count(), 0);
-        assert!(h.query_by_label("Post").is_some());
+        let embedded = view::label(MediaKind::Flat, Level::Standard);
+        assert!(
+            h.query_all_by_label_contains(&format!("Story · {embedded}"))
+                .count()
+                > 0
+        );
+        assert_eq!(
+            h.query_all_by_label_contains(&format!("Post · {embedded}"))
+                .count(),
+            0
+        );
+        assert!(h.query_all_by_label_contains("Post · ").count() > 0);
         act(&mut h, Action::VersionsExportAll);
         run_until(&mut h, |app| {
             app.export_job.is_none() && app.export_queue.is_empty()
@@ -27792,7 +28098,7 @@ mod tests {
         assert!(h.state().folder_query.is_empty(), "second clic : refermée");
         h.get_by_label(&connect).click();
         h.run_steps(2);
-        h.get_by_label("Fermer la recherche (Échap)").click();
+        h.get_by_label("Fermer la recherche").click();
         h.run_steps(2);
         assert!(h.state().folder_query.is_empty(), "la croix : refermée");
         assert!(h.state().folder_search.is_none());
@@ -35663,6 +35969,11 @@ mod tests {
         versions_list(&h);
         h.run_steps(2);
         h.get_by_label("Supprimer").click();
+        h.run_steps(2);
+        // Confirmation (retour du 16/11/2026), puis supprimée.
+        assert!(h.state().version_delete.is_some());
+        assert_eq!(tri::versions::read(&image).unwrap().list.len(), 1);
+        press(&mut h, Key::Enter, Modifiers::NONE);
         h.run_steps(2);
         assert!(tri::versions::read(&image).unwrap().list.is_empty());
         press(&mut h, Key::Z, Modifiers::CTRL);

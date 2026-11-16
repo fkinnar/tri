@@ -327,8 +327,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   flèches / hjkl la changent (haut / bas d'une ligne à l'autre), clic aussi. Les notes
   vont à l'image active seule (avance automatique : vers l'image comparée suivante) ;
   `Espace` **l'élimine** (elle quitte la comparaison et la sélection : on garde la
-  meilleure d'une rafale par élimination) ; `Entrée` ou double-clic l'ouvre en plein écran ;
-  Échap ou `c` revient à la grille. `z` : **1:1 lié**, au même point relatif de chaque
+  meilleure d'une rafale par élimination) ; `Entrée` ou double-clic l'ouvre en plein écran,
+  et Échap de là revient à la comparaison (16/11/2026 : Échap ramène toujours d'où l'on
+  vient) ; Échap ou `c` revient à la grille. `z` : **1:1 lié**, au même point relatif de chaque
   image, déplacé ensemble (glisser n'importe laquelle, Maj + flèches) ; `b` change la
   source de toutes ; `w` superpose les zones. Le moteur sert toutes les images comparées
   (`Scheduler::set_shown`), pas seulement l'image courante et ses voisines.

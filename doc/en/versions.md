@@ -173,7 +173,8 @@ for the state, `TriApp::versions_compare_view` for the drawing):
   the stacks used for culling. The grid keeps the badge.
 - The badge, `<core.version.compare>` (`<leader> v v`, also from full screen, on the
   version shown) or the palette open the **comparison mode** with **one pane per
-  version**, cropped, in **its own render**; the tiles of a carousel or grid are
+  version**, cropped, in **its own render**, its label giving its export preset (or "no
+  export preset"); the tiles of a carousel or grid are
   drawn. What the comparison does stays: linked zoom and position (at the same relative
   point of each frame), framed active pane, arrows, Escape back to where it was opened
   (grid or full screen, #379).
@@ -188,7 +189,8 @@ for the state, `TriApp::versions_compare_view` for the drawing):
   that preset, one after the other in the export queue; **Export all** (bar button,
   `<core.version.export_all>`): all of them.
 - **Delete** (2026-11-16): `<core.file.delete>` deletes the marked versions, otherwise the
-  active one (one undo step); never the image (the original is not a version). In the
+  active one (one undo step), **after a confirmation** (everywhere a version is deleted:
+  comparison, editor, full-screen list; Enter deletes, Escape keeps); never the image (the original is not a version). In the
   frame editor of an existing version, **Delete the version** (button or the same key,
   not while typing the name) deletes it and goes back to where you came from.
 - **Filter by render** (2026-11-16): in the right panel, section **Versions**, one box per
@@ -197,7 +199,8 @@ for the state, `TriApp::versions_compare_view` for the drawing):
   original is shown; hiding the original brings the renders back if none is left.
 - **Edit**: `v` on the active version opens its frame; leaving the editor (save or
   cancel) comes back to the comparison, on it.
-- Enter or double-click: the active version full screen; ratings go to the image.
+- Enter or double-click: the active version full screen; ratings go to the image; Esc
+  from there comes back to the comparison, on that version (2026-11-16).
 - **A version belongs to its render** (2026-11-16): it is framed on the render being looked
   at (camera JPEG, RAW render, a development) and keeps it. The comparison shows each pane
   in it, never in another while waiting (a cropped development would not frame the same
