@@ -697,6 +697,14 @@ pub struct TriApp {
     export_queue: std::collections::VecDeque<QueuedExport>,
     /// Numéro du prochain export mis en file (pour en retirer un précis).
     export_queue_next: u64,
+    /// Lot des exports lancés en ce moment (les versions d'une même demande) : une seule
+    /// bulle de fin, quand le dernier finit (retour du 16/11/2026 : N bulles pour N
+    /// versions).
+    export_batch: Option<u64>,
+    /// Lot de l'export en cours.
+    export_running_batch: Option<u64>,
+    /// Bilans des lots pas encore finis.
+    export_batches: HashMap<u64, BatchToast>,
     /// Journal des exports terminés (rapport d'export, `Ctrl+Maj+E`), gardé dans le dossier
     /// de données ([`tri::export_log`]).
     export_log: Vec<tri::export_log::Entry>,
@@ -1305,6 +1313,28 @@ impl ExportToast {
     }
 }
 
+/// Issue d'un export, pour le bilan de son lot.
+enum ResultKind {
+    Done,
+    /// Images ratées.
+    Partial(usize),
+    /// Tout l'export en échec (ses images).
+    Failed(usize),
+}
+
+/// Bilan d'un lot d'exports (les versions d'une même demande), pour sa bulle de fin.
+#[derive(Default)]
+struct BatchToast {
+    /// Fichiers écrits par les exports finis du lot.
+    written: Vec<PathBuf>,
+    /// Images ratées (un export en échec compte pour toutes les siennes).
+    failed: usize,
+    /// Dossiers de destination, dans l'ordre (sans doublon).
+    dests: Vec<String>,
+    /// Message du dernier échec d'un export entier.
+    error: Option<String>,
+}
+
 /// Lien ou bouton cliqué dans la bulle de fin d'export.
 enum ToastAction {
     Reveal,
@@ -1683,6 +1713,9 @@ impl TriApp {
             export_job: None,
             export_queue: std::collections::VecDeque::new(),
             export_queue_next: 0,
+            export_batch: None,
+            export_running_batch: None,
+            export_batches: HashMap::new(),
             export_log: data
                 .as_deref()
                 .map(tri::export_log::read)
@@ -11987,7 +12020,9 @@ impl TriApp {
     /// sinon celui des réglages ; jamais « tel quel »), dans le dossier et sous le nom
     /// retenus pour ce préréglage. Elles attendent leur tour dans la file d'export.
     fn export_versions(&mut self, ctx: &egui::Context, image: &Path, indices: &[usize]) {
+        self.begin_export_batch();
         let started = self.export_versions_as(ctx, image, indices, &VersionsPreset::Own(None));
+        self.export_batch = None;
         if started > 1 {
             self.notice = Some((t!("versions-export-started", n = started), false));
         }
@@ -16294,6 +16329,8 @@ impl TriApp {
                     Some(profile.id.clone());
                 // Les versions des images plutôt qu'elles (retour du 16/11/2026).
                 if let Some(choice) = versions {
+                    // Un seul lot : une seule bulle à la fin.
+                    self.begin_export_batch();
                     // Les images entières aussi, avec le préréglage de la boîte, d'abord.
                     let mut started = 0;
                     if choice.original {
@@ -16315,6 +16352,7 @@ impl TriApp {
                         let all: Vec<usize> = (0..self.versions_of(image).list.len()).collect();
                         started += self.export_versions_as(ctx, image, &all, &preset);
                     }
+                    self.export_batch = None;
                     if started > 1 {
                         self.notice = Some((t!("versions-export-started", n = started), false));
                     }
@@ -16418,9 +16456,11 @@ impl TriApp {
         };
         if self.export_job.is_none() {
             self.export_job = Some(crate::export::Job::start(tools, order, ctx));
+            self.export_running_batch = self.export_batch;
             return;
         }
         let queued = QueuedExport {
+            batch: self.export_batch,
             id: self.export_queue_next,
             profile: crate::export::profile_name(&order.profile),
             total: order.images.len(),
@@ -16443,7 +16483,47 @@ impl TriApp {
         }
         if let Some(next) = self.export_queue.pop_front() {
             self.export_job = Some(crate::export::Job::start(next.tools, next.order, &next.ctx));
+            self.export_running_batch = next.batch;
         }
+    }
+
+    /// Les exports lancés jusqu'à `export_batch = None` forment un lot : une seule bulle
+    /// de fin, à la fin du dernier.
+    fn begin_export_batch(&mut self) {
+        let id = self.export_queue_next;
+        self.export_queue_next += 1;
+        self.export_batch = Some(id);
+    }
+
+    /// Lot `batch` fini (plus rien en cours ni en file) : sa bulle, avec le bilan de tous
+    /// ses exports. Rien si tous ont été arrêtés à la main.
+    fn finish_export_batch(&mut self, batch: u64) {
+        let pending = self.export_running_batch == Some(batch)
+            || self.export_queue.iter().any(|q| q.batch == Some(batch));
+        if pending {
+            return;
+        }
+        let Some(summary) = self.export_batches.remove(&batch) else {
+            return;
+        };
+        if self.gui.grid.export_toast_ms == 0 {
+            return;
+        }
+        let error = summary.failed > 0 || summary.error.is_some();
+        let title = match (&summary.error, summary.written.is_empty()) {
+            (Some(e), true) => e.clone(),
+            _ if summary.failed == 0 => t!("export-toast-done", n = summary.written.len()),
+            _ => t!(
+                "export-toast-partial",
+                n = summary.written.len(),
+                failed = summary.failed
+            ),
+        };
+        let mut toast = ExportToast::new(title, error, &summary.written);
+        if let [dest] = summary.dests.as_slice() {
+            toast.dest = dest.clone();
+        }
+        self.export_toasts.push(toast);
     }
 
     /// Export fini : bilan dans la barre d'état.
@@ -16461,6 +16541,12 @@ impl TriApp {
             Ok(report) => Some(report.written.clone()),
             Err(tri::develop::DevelopError::Cancelled) => None,
             Err(_) => Some(Vec::new()),
+        };
+        // Pour le bilan d'un lot : réussi, ratées, ou tout l'export en échec.
+        let result_kind = match &result {
+            Ok(report) if report.failed == 0 => ResultKind::Done,
+            Ok(report) => ResultKind::Partial(report.failed),
+            Err(_) => ResultKind::Failed(job.total),
         };
         let toast_title = match &result {
             Ok(report) if report.failed == 0 => {
@@ -16513,7 +16599,25 @@ impl TriApp {
         self.export_notice = self.notice.as_ref().map(|(text, _)| text.clone());
         // Bulle au milieu de l'écran (#381 : la fin de l'export passait inaperçue dans la
         // barre d'état). Pas pour un export arrêté à la main : on le sait déjà.
-        if let (Some(written), Some((_, error))) = (written, &self.notice)
+        // Export d'un lot : son bilan s'ajoute à celui du lot, une bulle à la fin.
+        let batch = self.export_running_batch.take();
+        if let Some(batch) = batch {
+            if let Some(written) = written {
+                let summary = self.export_batches.entry(batch).or_default();
+                summary.written.extend(written);
+                if !summary.dests.contains(&dest) {
+                    summary.dests.push(dest.clone());
+                }
+                match &result_kind {
+                    ResultKind::Partial(failed) => summary.failed += failed,
+                    ResultKind::Failed(total) => {
+                        summary.failed += total;
+                        summary.error = self.notice.as_ref().map(|(t, _)| t.clone());
+                    }
+                    ResultKind::Done => {}
+                }
+            }
+        } else if let (Some(written), Some((_, error))) = (written, &self.notice)
             && self.gui.grid.export_toast_ms > 0
         {
             // Le bilan en titre, le dossier dessous en plus petit (un long chemin coupé
@@ -16532,6 +16636,9 @@ impl TriApp {
         }
         self.export_job = None;
         self.start_next_export();
+        if let Some(batch) = batch {
+            self.finish_export_batch(batch);
+        }
     }
 
     /// Bulles de fin d'export au milieu de la zone des images (#381), l'une sous l'autre :
@@ -21227,7 +21334,16 @@ impl eframe::App for TriApp {
                 }
             }
             Some(StatusClick::CancelQueuedExport(id)) => {
+                let batch = self
+                    .export_queue
+                    .iter()
+                    .find(|q| q.id == id)
+                    .and_then(|q| q.batch);
                 self.export_queue.retain(|q| q.id != id);
+                // Le dernier d'un lot retiré : la bulle des autres, déjà finis.
+                if let Some(batch) = batch {
+                    self.finish_export_batch(batch);
+                }
             }
             Some(StatusClick::CancelDevelop) => {
                 if let Some(batch) = &self.develop_batch {
@@ -21834,6 +21950,8 @@ pub(crate) fn folder_name(path: &Path) -> String {
 /// sélection ensuite n'y change rien.
 struct QueuedExport {
     id: u64,
+    /// Lot de la demande (versions d'une même demande : une seule bulle de fin).
+    batch: Option<u64>,
     /// Nom du préréglage, pour la barre d'état.
     profile: String,
     /// Nombre d'images.
@@ -25325,6 +25443,13 @@ mod tests {
             .collect();
         written.sort();
         assert_eq!(written, ["img1-Post.jpg", "img1-Story.jpg"]);
+        // Une seule bulle de fin pour le lot, avec le bilan des deux (retour du
+        // 16/11/2026 : une par version).
+        let toasts = &h.state().export_toasts;
+        assert_eq!(toasts.len(), 1, "une bulle");
+        assert_eq!(toasts[0].text, t!("export-toast-done", n = 2));
+        assert!(!toasts[0].error && toasts[0].reveal.is_some());
+        assert!(h.state().export_batches.is_empty());
     }
 
     #[test]

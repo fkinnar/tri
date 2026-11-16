@@ -436,7 +436,10 @@ Les préréglages de recadrage se créent de la même façon (voir `versions.md`
     `[gui.grid] export_toast_ms` (5 s ; 0 : jamais montré), attend tant que le pointeur est
     dessus, et une erreur reste jusqu'à « Fermer ». Une bulle par export, l'une sous
     l'autre (`TriApp::export_toasts`) : une erreur n'est jamais remplacée par le bilan
-    d'un export suivant. Rien pour un export arrêté à la main.
+    d'un export suivant. Rien pour un export arrêté à la main. Les versions d'une même
+    demande (« Exporter les N versions », « Exporter tout ») partent en exports séparés
+    mais forment un **lot** : une seule bulle, à la fin du dernier, avec le bilan de tous
+    (16/11/2026 : une bulle par version ; `begin_export_batch`, `finish_export_batch`).
   - **File d'attente** (#400, 14/11/2026) : `Ctrl+E` pendant un export est accepté ; le
     nouvel export attend son tour et part à la fin du précédent, dans l'ordre des
     demandes (une file plutôt que des exports en parallèle : darktable et LibRaw occupent
