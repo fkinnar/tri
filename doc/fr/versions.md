@@ -183,7 +183,7 @@ pour l'état, `TriApp::versions_compare_view` pour le dessin) :
   même photo et brouilleraient les piles du tri. La grille garde le badge.
 - Le badge, `<core.version.compare>` (`<leader> v v`, aussi depuis le plein écran, sur la
   version montrée) ou la palette ouvrent le **mode comparaison** avec un **volet par
-  version**, recadré, dans le rendu affiché de la photo ; les morceaux d'un carrousel ou
+  version**, recadré, dans **son propre rendu** ; les morceaux d'un carrousel ou
   d'une grille sont tracés. Ce que fait la comparaison reste : zoom et position liés (au
   même point relatif de chaque cadre), volet actif encadré, flèches, Échap qui ramène là
   d'où on l'a ouverte (grille ou plein écran, #379).
@@ -200,6 +200,13 @@ pour l'état, `TriApp::versions_compare_view` pour le dessin) :
 - **Modifier** : `v` sur la version active ouvre son cadre ; quitter l'éditeur
   (enregistrer ou annuler) ramène à la comparaison, sur elle.
 - Entrée ou double-clic : la version active en plein écran ; les notes vont à l'image.
+- **Une version appartient à son rendu** (16/11/2026) : elle est cadrée sur le rendu
+  regardé (JPEG boîtier, rendu RAW, un développement) et le garde. La comparaison montre
+  chaque volet dans ce rendu, jamais dans un autre en attendant (un développement recadré
+  ne cadrerait pas la même zone) : changer le rendu de la grille n'y change rien. Le volet
+  « Original » prend le rendu de la version active. Un développement dont le logiciel
+  manque : le volet le dit, et l'export le refuse au lieu d'exporter un autre rendu. Pour
+  un autre rendu, recréer la version dessus.
 
 ## Export d'une version
 

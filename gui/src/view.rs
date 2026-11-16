@@ -62,6 +62,37 @@ pub fn pick(
     order.iter().copied().find(|&l| have(l))
 }
 
+/// Niveaux d'un rendu, sans repli sur un autre : l'ajusté de la source, puis la vignette
+/// si c'est le même rendu (JPEG boîtier d'un RAW, image plate). Pour une version (#393,
+/// retour du 16/11/2026) : cadrée sur ce rendu, elle ne se montre jamais dans un autre (un
+/// développement recadré ne cadrerait pas la même zone).
+pub fn own_levels(kind: MediaKind, source: Source, developed: Level) -> Vec<Level> {
+    match (kind, source) {
+        (_, Source::Developed) => vec![developed],
+        (MediaKind::Raw, Source::Embedded) => vec![Level::Embedded, Level::Thumbnail],
+        (MediaKind::Raw, Source::Raw) => vec![Level::Standard],
+        (MediaKind::Flat, _) => vec![Level::Standard, Level::Thumbnail],
+    }
+}
+
+/// Niveau à afficher pour un rendu, sans repli sur un autre ([`own_levels`]) : en 1:1
+/// (`zoomed`), son 1:1 s'il est prêt, sinon son ajusté.
+pub fn pick_own(
+    kind: MediaKind,
+    source: Source,
+    zoomed: bool,
+    developed: Level,
+    have: impl Fn(Level) -> bool,
+) -> Option<Level> {
+    let zoom = zoom_level(kind, source, developed);
+    if zoomed && have(zoom) {
+        return Some(zoom);
+    }
+    own_levels(kind, source, developed)
+        .into_iter()
+        .find(|&l| have(l))
+}
+
 /// Ce qui est affiché, en clair.
 pub fn label(kind: MediaKind, level: Level) -> String {
     match (kind, level) {
@@ -223,6 +254,45 @@ mod tests {
 
     fn have(levels: &[Level]) -> impl Fn(Level) -> bool + '_ {
         move |l| levels.contains(&l)
+    }
+
+    #[test]
+    fn a_version_is_never_shown_in_another_render() {
+        use Level::*;
+        let raw = MediaKind::Raw;
+        // Rendu RAW pas encore là : rien (pas le JPEG boîtier à sa place).
+        assert_eq!(
+            pick_own(raw, Source::Raw, false, DT, have(&[Thumbnail, Embedded])),
+            None
+        );
+        assert_eq!(
+            pick_own(raw, Source::Raw, false, DT, have(&[Standard])),
+            Some(Standard)
+        );
+        // Développé : lui seul.
+        assert_eq!(
+            pick_own(raw, Source::Developed, false, DT, have(&[Standard])),
+            None
+        );
+        assert_eq!(
+            pick_own(raw, Source::Developed, true, DT, have(&[DT])),
+            Some(DT)
+        );
+        // JPEG boîtier : la vignette en attendant (même rendu) ; son 1:1 zoomé.
+        assert_eq!(
+            pick_own(raw, Source::Embedded, false, DT, have(&[Thumbnail])),
+            Some(Thumbnail)
+        );
+        assert_eq!(
+            pick_own(
+                raw,
+                Source::Embedded,
+                true,
+                DT,
+                have(&[Embedded, EmbeddedFull])
+            ),
+            Some(EmbeddedFull)
+        );
     }
 
     #[test]
