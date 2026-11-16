@@ -186,6 +186,9 @@ pub enum Action {
     FilterDeveloped,
     /// Filtre « en conflit » : les images dont les notes sont à trancher (issue n° 368).
     FilterConflicts,
+    /// Après un changement de filtre, repartir de la première image (`[gui]
+    /// filter_restart`, bouton de la barre du bas ; retour du 16/11/2026).
+    FilterRestart,
     /// Ordre suivant : nom, date de prise de vue, date de modification.
     SortNext,
     /// Inverser le sens de l'ordre.
@@ -571,7 +574,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 248] = [
+    pub const ALL: [Action; 249] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -604,6 +607,7 @@ impl Action {
         Action::FilterInvert,
         Action::FilterDeveloped,
         Action::FilterConflicts,
+        Action::FilterRestart,
         Action::SortNext,
         Action::SortReverse,
         Action::SortBy(tri::sort::SortKey::Name),
@@ -963,8 +967,10 @@ impl Action {
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterColorsAll | FilterClear | FilterBlurry | FilterWellExposed | FilterStack
-            | FilterInvert | FilterDeveloped | FilterConflicts | SortNext | SortReverse
-            | SortBy(_) | FilterKind(_) | GridRenderNext | Render(_) => Group::Filters,
+            | FilterInvert | FilterDeveloped | FilterConflicts | FilterRestart | SortNext
+            | SortReverse | SortBy(_) | FilterKind(_) | GridRenderNext | Render(_) => {
+                Group::Filters
+            }
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileActionsAllow | FileRename | FileDelete | FileReveal | FileEdit | FileCopy
@@ -1032,6 +1038,30 @@ impl Action {
     }
 
     /// Identifiant stable, utilisé par le fichier de raccourcis.
+    /// Vrai pour les actions qui changent les filtres (pas l'ordre, ni le réglage
+    /// « repartir du début » lui-même) : après elles, `[gui] filter_restart` ramène à la
+    /// première image.
+    pub fn changes_filter(self) -> bool {
+        use Action::*;
+        matches!(
+            self,
+            FilterCycle
+                | FilterStars(_)
+                | FilterStarsOp
+                | FilterFlag(_)
+                | FilterColor(_)
+                | FilterColorsAll
+                | FilterClear
+                | FilterBlurry
+                | FilterWellExposed
+                | FilterStack
+                | FilterInvert
+                | FilterDeveloped
+                | FilterConflicts
+                | FilterKind(_)
+        )
+    }
+
     pub fn id(self) -> &'static str {
         match self {
             Action::NavPrev => "core.nav.prev",
@@ -1066,6 +1096,7 @@ impl Action {
             Action::FilterInvert => "core.filter.invert",
             Action::FilterDeveloped => "core.filter.developed",
             Action::FilterConflicts => "core.filter.conflicts",
+            Action::FilterRestart => "core.filter.restart",
             Action::SortNext => "core.filter.sort",
             Action::GridRenderNext => "core.grid.render",
             Action::Render(r) => {

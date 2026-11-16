@@ -525,6 +525,8 @@ pub struct TriApp {
     view_info: String,
     /// Avance automatique après une note (`[gui] auto_advance`, Maj+A).
     auto_advance: bool,
+    /// Après un changement de filtre, la première image (`[gui] filter_restart`).
+    filter_restart: bool,
     /// Plein écran : ← / → par chaque développement (`[gui.view] review_developments`,
     /// case de la section « Vue »), sinon de photo en photo dans le rendu de la grille.
     review_developments: bool,
@@ -1228,6 +1230,8 @@ pub struct TriApp {
     scale_edit: Option<ScaleEdit>,
     /// Défilement de la roulette accumulé, la loupe tenue (un palier par cran).
     loupe_wheel: f32,
+    /// Défilement de la roulette accumulé en plein écran ajusté (une image par pas).
+    view_wheel: f32,
     /// Saisie close par la pause, avec ses chiffres et l'instant de clôture : un chiffre
     /// tapé peu après la complète encore (07/11/2026 : avec Maj sur un clavier AZERTY, plus
     /// lent, le chiffre suivant changeait la note).
@@ -1682,6 +1686,7 @@ impl TriApp {
             background: None,
             view_info: String::new(),
             auto_advance: gui.auto_advance,
+            filter_restart: gui.filter_restart,
             review_developments: gui.view.review_developments,
             stack_enter: gui.view.stack_enter,
             grid_info: gui.grid.info,
@@ -1986,6 +1991,7 @@ impl TriApp {
             entry_menu_held: false,
             scale_edit: None,
             loupe_wheel: 0.0,
+            view_wheel: 0.0,
             loupe_entry_done: None,
             loupe_index: 0,
             zoom_anchor: None,
@@ -2154,6 +2160,7 @@ impl TriApp {
             background: self.background,
             sort: Some(self.order),
             auto_advance: Some(self.auto_advance),
+            filter_restart: Some(self.filter_restart),
             review_developments: Some(self.review_developments),
             stack_enter: Some(self.stack_enter),
             grid_info: Some(self.grid_info),
@@ -2240,6 +2247,7 @@ impl TriApp {
             (&mut self.rating_bar, s.rating_bar),
             (&mut self.image_info, s.image_info),
             (&mut self.auto_advance, s.auto_advance),
+            (&mut self.filter_restart, s.filter_restart),
             (&mut self.review_developments, s.review_developments),
             (&mut self.grid_info, s.grid_info),
         ];
@@ -8673,6 +8681,23 @@ impl TriApp {
 
     /// Exécute une action (clavier aujourd'hui, souris ou plugin demain).
     fn perform(&mut self, ctx: &egui::Context, action: Action) {
+        self.perform_action(ctx, action);
+        // Filtre changé, option allumée : la première image (retour du 16/11/2026 : après
+        // `f 3`, toujours `g g` pour revenir au début). Pas en comparaison, où la liste
+        // est celle des volets.
+        if self.filter_restart
+            && action.changes_filter()
+            && matches!(self.mode, Mode::Grid | Mode::View)
+            && !self.files.is_empty()
+        {
+            let hint = self.hint.take();
+            self.perform_action(ctx, Action::NavFirst);
+            self.hint = hint;
+        }
+    }
+
+    /// Fait l'action `action` (voir [`TriApp::perform`]).
+    fn perform_action(&mut self, ctx: &egui::Context, action: Action) {
         self.hint = None;
         if self.mode == Mode::Compare
             && self.versions_compare.is_some()
@@ -9469,6 +9494,15 @@ impl TriApp {
                 if self.mode == Mode::View => {}
             Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
             Action::ToggleAutoAdvance => self.auto_advance = !self.auto_advance,
+            Action::FilterRestart => {
+                self.filter_restart = !self.filter_restart;
+                // Rien ne change à l'écran avant le prochain filtre : le dire.
+                self.hint = Some(if self.filter_restart {
+                    t!("filter-restart-on")
+                } else {
+                    t!("filter-restart-off")
+                });
+            }
             Action::FileDeleteStack | Action::FileCopyStack => {
                 // Toute la pile de l'image (images cachées dans une pile repliée comprises),
                 // ou la photo et ses développements (31/10/2026).
@@ -13334,6 +13368,50 @@ impl TriApp {
             let c = center - vec2(scroll.x / size.x, scroll.y / size.y);
             self.zoom = Some(view::clamp_center(view_rect.size(), size, c));
             ctx.request_repaint();
+        } else if self.zoom.is_none() && self.mode == Mode::View {
+            self.view_wheel_input(ctx);
+        }
+    }
+
+    /// Plein écran ajusté : la roulette passe à l'image suivante (vers le bas) ou
+    /// précédente, une tous les `[gui.view] wheel_step` points (un cran : une image ;
+    /// demandé le 16/11/2026, pour ceux qui trient à la souris).
+    fn view_wheel_input(&mut self, ctx: &egui::Context) {
+        let step = self.gui.view.wheel_step;
+        if step <= 0.0 {
+            self.view_wheel = 0.0;
+            return;
+        }
+        let dy = ctx.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::MouseWheel { unit, delta, .. } => Some(match unit {
+                        egui::MouseWheelUnit::Point => delta.y,
+                        egui::MouseWheelUnit::Line => delta.y * step,
+                        egui::MouseWheelUnit::Page => delta.y * step * 10.0,
+                    }),
+                    _ => None,
+                })
+                .sum::<f32>()
+        });
+        if dy == 0.0 {
+            return;
+        }
+        // Changement de sens : on repart de zéro (pas de reste de l'autre sens).
+        if self.view_wheel * dy < 0.0 {
+            self.view_wheel = 0.0;
+        }
+        self.view_wheel += dy;
+        while self.view_wheel.abs() >= step {
+            let down = self.view_wheel < 0.0;
+            self.view_wheel -= step.copysign(self.view_wheel);
+            let action = if down {
+                Action::NavNext
+            } else {
+                Action::NavPrev
+            };
+            self.perform(ctx, action);
         }
     }
 
@@ -17178,8 +17256,15 @@ impl TriApp {
                     // Entrer dans une pile par sa couverture ou sa première photo (#62) :
                     // toujours là, à côté de l'interrupteur des piles (retour du 25/10/2026 :
                     // caché sans les piles, on ne le trouvait pas).
-                    actions.extend([Action::StackEnterToggle, Action::StackMode]);
+                    actions.extend([
+                        Action::FilterRestart,
+                        Action::StackEnterToggle,
+                        Action::StackMode,
+                    ]);
                 } else {
+                    // Repartir du début après un filtre (16/11/2026), à côté de l'entrée
+                    // dans les piles.
+                    actions.push(Action::FilterRestart);
                     // En grille, piles actives : au même endroit, pour voir l'état du
                     // réglage (retour du 26/10/2026). L'interrupteur des piles, parti de
                     // la barre des filtres avec sa réorganisation (#199), revient ici
@@ -17249,6 +17334,7 @@ impl TriApp {
                         Action::StackEnterToggle => {
                             self.stack_enter == crate::settings::StackEnter::First
                         }
+                        Action::FilterRestart => self.filter_restart,
                         Action::Develop => self.source == Source::Developed,
                         _ => false,
                     };
@@ -27406,6 +27492,76 @@ mod tests {
         h.run_steps(3);
         assert_eq!(h.state().loupe_scale, 2.0);
         assert_eq!(h.state().scroll_offset, offset);
+    }
+
+    #[test]
+    fn a_filter_change_can_start_again_from_the_first_image() {
+        // Retour du 16/11/2026 : après `f 3`, toujours `g g` pour revenir au début.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().select(2);
+        // Éteint (défaut) : on reste sur l'image.
+        act(&mut h, Action::FilterClear);
+        assert_eq!(h.state().selected, 2);
+        // Allumé (f g) : la première image, en grille comme en plein écran.
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::G, Modifiers::NONE);
+        assert!(h.state().filter_restart);
+        assert_eq!(
+            h.state().hint.as_deref(),
+            Some(t!("filter-restart-on").as_str())
+        );
+        act(&mut h, Action::FilterClear);
+        assert_eq!(h.state().selected, 0);
+        h.state_mut().select(2);
+        act(&mut h, Action::Open);
+        assert_eq!(h.state().mode, Mode::View);
+        act(&mut h, Action::FilterStarsOp);
+        act(&mut h, Action::FilterClear);
+        assert_eq!(h.state().selected, 0);
+        // Une note, l'ordre : pas un changement de filtre.
+        h.state_mut().select(2);
+        act(&mut h, Action::SortReverse);
+        act(&mut h, Action::SortReverse);
+        act(&mut h, Action::Stars(2));
+        assert_eq!(h.state().selected, 2);
+        // Retenu d'un lancement à l'autre.
+        assert_eq!(h.state().display().filter_restart, Some(true));
+    }
+
+    #[test]
+    fn the_wheel_goes_from_image_to_image_in_fitted_full_screen() {
+        // Demandé le 16/11/2026, pour ceux qui trient à la souris.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().select(0);
+        act(&mut h, Action::Open);
+        assert_eq!(h.state().mode, Mode::View);
+        let center = h.ctx.content_rect().center();
+        h.event(UiEvent::PointerMoved(center));
+        h.run_steps(2);
+        let wheel = |h: &mut Harness<'_, TriApp>, y: f32| {
+            h.event(UiEvent::MouseWheel {
+                unit: egui::MouseWheelUnit::Line,
+                delta: vec2(0.0, y),
+                modifiers: Modifiers::NONE,
+                phase: egui::TouchPhase::Move,
+                source: egui::MouseWheelSource::Wheel,
+            });
+            h.run_steps(3);
+        };
+        // Vers le bas : la suivante, un cran par image.
+        wheel(&mut h, -1.0);
+        assert_eq!(h.state().selected, 1);
+        wheel(&mut h, -1.0);
+        assert_eq!(h.state().selected, 2);
+        // Vers le haut : la précédente.
+        wheel(&mut h, 1.0);
+        assert_eq!(h.state().selected, 1);
+        // 0 : la roulette ne fait rien.
+        h.state_mut().gui.view.wheel_step = 0.0;
+        wheel(&mut h, -1.0);
+        assert_eq!(h.state().selected, 1);
     }
 
     #[test]

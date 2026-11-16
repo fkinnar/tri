@@ -51,6 +51,8 @@ pub struct DisplayState {
     pub background: Option<crate::settings::Color>,
     /// Avance automatique après une note (`Maj+A`).
     pub auto_advance: Option<bool>,
+    /// Après un changement de filtre, la première image (<core.filter.restart>).
+    pub filter_restart: Option<bool>,
     /// Plein écran : passer en revue les développements (case de la section « Vue »).
     pub review_developments: Option<bool>,
     /// En entrant dans une pile : couverture ou première image (bouton du mode pile).
