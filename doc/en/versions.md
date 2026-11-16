@@ -191,6 +191,10 @@ for the state, `TriApp::versions_compare_view` for the drawing):
   active one (one undo step); never the image (the original is not a version). In the
   frame editor of an existing version, **Delete the version** (button or the same key,
   not while typing the name) deletes it and goes back to where you came from.
+- **Filter by render** (2026-11-16): in the right panel, section **Versions**, one box per
+  render the versions were framed on, with their count ("Camera render (2)"); unchecked,
+  their panes go (and their marks). The last render shown cannot be unchecked, unless the
+  original is shown; hiding the original brings the renders back if none is left.
 - **Edit**: `v` on the active version opens its frame; leaving the editor (save or
   cancel) comes back to the comparison, on it.
 - Enter or double-click: the active version full screen; ratings go to the image.
