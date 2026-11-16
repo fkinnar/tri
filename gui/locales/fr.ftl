@@ -132,6 +132,8 @@ action-core-version-export_all = Exporter toutes les versions, chacune avec son 
 versions-compare-none = Cette image n'a pas de version (v en crée une).
 versions-compare-original = L'original n'est pas une version : rien à modifier.
 versions-compare-original-label = Original
+versions-pane-export = export « { $name } »
+versions-pane-no-export = sans préréglage d'export
 versions-export-started = { $n } versions à exporter, l'une après l'autre.
 versions-export-all = Exporter tout
 versions-render-unavailable-export = Version « { $name } » non exportée : elle a été cadrée sur un rendu développé, et son logiciel n'est pas disponible.
@@ -440,6 +442,12 @@ versions-current = Versions : { $name }
 versions-original = Original
 versions-edit = Modifier
 versions-delete = Supprimer
+versions-delete-question = { $n ->
+    [one] Supprimer la version { $names } ?
+   *[other] Supprimer les { $n } versions { $names } ?
+}
+versions-delete-undo = La suppression peut être annulée. Entrée : supprimer, Échap : garder.
+versions-delete-name = « { $name } »
 versions-deleted = Version « { $name } » supprimée
 
 ## Panneaux, éjection, notes

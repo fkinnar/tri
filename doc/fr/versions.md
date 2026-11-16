@@ -183,7 +183,8 @@ pour l'état, `TriApp::versions_compare_view` pour le dessin) :
   même photo et brouilleraient les piles du tri. La grille garde le badge.
 - Le badge, `<core.version.compare>` (`<leader> v v`, aussi depuis le plein écran, sur la
   version montrée) ou la palette ouvrent le **mode comparaison** avec un **volet par
-  version**, recadré, dans **son propre rendu** ; les morceaux d'un carrousel ou
+  version**, recadré, dans **son propre rendu**, son étiquette donnant son préréglage
+  d'export (ou « sans préréglage d'export ») ; les morceaux d'un carrousel ou
   d'une grille sont tracés. Ce que fait la comparaison reste : zoom et position liés (au
   même point relatif de chaque cadre), volet actif encadré, flèches, Échap qui ramène là
   d'où on l'a ouverte (grille ou plein écran, #379).
@@ -198,7 +199,9 @@ pour l'état, `TriApp::versions_compare_view` pour le dessin) :
   dossier et sous le nom retenus pour ce préréglage, l'une après l'autre dans la file
   d'export ; **Exporter tout** (bouton du bandeau, `<core.version.export_all>`) : toutes.
 - **Supprimer** (16/11/2026) : `<core.file.delete>` supprime les versions marquées, sinon
-  l'active (un seul pas d'annulation) ; jamais l'image (l'original n'est pas une
+  l'active (un seul pas d'annulation), **après confirmation** (partout où l'on supprime
+  une version : comparaison, éditeur, liste du plein écran ; Entrée supprime, Échap
+  garde) ; jamais l'image (l'original n'est pas une
   version). Dans l'éditeur d'une version existante, **Supprimer la version** (bouton ou la
   même touche, pas pendant qu'on tape le nom) la supprime et ramène là d'où on venait.
 - **Filtre par rendu** (16/11/2026) : dans le panneau de droite, section **Versions**,

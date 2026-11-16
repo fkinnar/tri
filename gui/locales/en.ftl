@@ -132,6 +132,8 @@ action-core-version-export_all = Export every version, each with its preset
 versions-compare-none = This image has no version (v creates one).
 versions-compare-original = The original is not a version: nothing to edit.
 versions-compare-original-label = Original
+versions-pane-export = export "{ $name }"
+versions-pane-no-export = no export preset
 versions-export-started = { $n } versions to export, one after the other.
 versions-export-all = Export all
 versions-render-unavailable-export = Version "{ $name }" not exported: it was framed on a developed render, and its software is not available.
@@ -440,6 +442,12 @@ versions-current = Versions: { $name }
 versions-original = Original
 versions-edit = Edit
 versions-delete = Delete
+versions-delete-question = { $n ->
+    [one] Delete the version { $names }?
+   *[other] Delete the { $n } versions { $names }?
+}
+versions-delete-undo = The deletion can be undone. Enter: delete, Escape: keep.
+versions-delete-name = "{ $name }"
 versions-deleted = Version "{ $name }" deleted
 
 ## Panels, ejection, ratings
