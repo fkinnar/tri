@@ -197,6 +197,10 @@ pour l'état, `TriApp::versions_compare_view` pour le dessin) :
   sinon le dernier choisi, sinon celui des réglages ; jamais « tel quel »), dans le
   dossier et sous le nom retenus pour ce préréglage, l'une après l'autre dans la file
   d'export ; **Exporter tout** (bouton du bandeau, `<core.version.export_all>`) : toutes.
+- **Supprimer** (16/11/2026) : `<core.file.delete>` supprime les versions marquées, sinon
+  l'active (un seul pas d'annulation) ; jamais l'image (l'original n'est pas une
+  version). Dans l'éditeur d'une version existante, **Supprimer la version** (bouton ou la
+  même touche, pas pendant qu'on tape le nom) la supprime et ramène là d'où on venait.
 - **Modifier** : `v` sur la version active ouvre son cadre ; quitter l'éditeur
   (enregistrer ou annuler) ramène à la comparaison, sur elle.
 - Entrée ou double-clic : la version active en plein écran ; les notes vont à l'image.

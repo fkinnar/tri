@@ -187,6 +187,10 @@ for the state, `TriApp::versions_compare_view` for the drawing):
   the settings' one; never "as is"), in the folder and under the name remembered for
   that preset, one after the other in the export queue; **Export all** (bar button,
   `<core.version.export_all>`): all of them.
+- **Delete** (2026-11-16): `<core.file.delete>` deletes the marked versions, otherwise the
+  active one (one undo step); never the image (the original is not a version). In the
+  frame editor of an existing version, **Delete the version** (button or the same key,
+  not while typing the name) deletes it and goes back to where you came from.
 - **Edit**: `v` on the active version opens its frame; leaving the editor (save or
   cancel) comes back to the comparison, on it.
 - Enter or double-click: the active version full screen; ratings go to the image.
