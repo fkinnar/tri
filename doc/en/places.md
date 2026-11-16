@@ -127,8 +127,17 @@ folders followed; error if `dir` is unreadable.
 
 - nothing is walked ahead of time: a folder is read when it is **expanded** (`expand`,
   `toggle`), then kept; instant even on a NAS;
-- `rows()`: visible rows, flattened (`Row { path, name, depth, expanded, error, kind,
-  ejectable, favorite, section }`), in display order; an unreadable expanded folder
+- **background reads** (2026-11-16: an iCloud mount on Linux froze the window, "not
+  responding", up to closing it): with `Tree::new`, the subfolders of an expanded folder,
+  reread folders (`reload`) and present favourites are read in threads, waited for
+  `[places] read_wait_ms` (150 ms: a local disk answers before, as if read in place);
+  beyond it, the row carries `Row::loading` (the interface shows a spinner), the previous
+  list stays shown during a reread, and `poll()` takes the results (`set_wake`: called
+  when they arrive, to repaint). A read overtaken by a newer one of the same folder is
+  ignored. `Tree::with_places` (tests) reads in place; `set_reader` replaces the reader
+  (fake slow disk), `settle_for` waits for the reads in progress;
+- `rows()`: visible rows, flattened (`Row { path, name, depth, expanded, error, loading,
+  kind, ejectable, favorite, section }`), in display order; an unreadable expanded folder
   carries its error;
 - **sections** (requested on 2026-10-20: sorted, and going through the root as little as
   possible): `Section::Devices` (removable media, mounted or not, #113), `Drives` (fixed

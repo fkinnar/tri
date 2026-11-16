@@ -35,8 +35,10 @@ filled after the rating that created them; without it the stack only saw them wh
 folder was reopened). A ratings-only sidecar stays a plain sidecar change.
 
 `FolderWatch::sync()` takes the current state as reference without signalling anything:
-after a change made by `tri` itself (rename, trash, folder reread), already taken into
-account.
+after a change made by `tri` itself (rating, rename, trash, folder reread), already taken
+into account. The scan is made by the watch thread, right away, and `sync()` returns
+without waiting (2026-11-16: scanned in place, every rating set on an iCloud mount froze
+the interface); a scan started before the request is made again.
 
 ## In the interface
 

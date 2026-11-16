@@ -37,8 +37,10 @@ créés ; sans ça, la pile ne les voyait qu'à la réouverture du dossier). Un 
 aux notes reste un simple changement de sidecar.
 
 `FolderWatch::sync()` reprend l'état actuel pour référence sans rien signaler : après un
-changement fait par `tri` lui-même (renommage, corbeille, dossier relu), déjà pris en
-compte.
+changement fait par `tri` lui-même (note, renommage, corbeille, dossier relu), déjà pris
+en compte. Le relevé est fait par le fil de la surveillance, tout de suite, et `sync()`
+rend la main sans attendre (16/11/2026 : relevé sur place, chaque note posée sur un
+montage iCloud figeait l'interface) ; un relevé commencé avant la demande est refait.
 
 ## Dans l'interface
 

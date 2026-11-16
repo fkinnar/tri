@@ -9,6 +9,8 @@ use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
 
 /// Nature d'un emplacement.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -139,6 +141,9 @@ pub struct PlaceSettings {
     pub eject_retries: u32,
     /// Attente entre deux essais (ms).
     pub eject_retry_ms: u64,
+    /// Dossier déplié dans le panneau : attente de sa liste (ms) ; au-delà (iCloud, NAS),
+    /// elle est lue en fond et l'interface ne se fige pas (retour du 16/11/2026).
+    pub read_wait_ms: u64,
 }
 
 impl Default for PlaceSettings {
@@ -152,6 +157,7 @@ impl Default for PlaceSettings {
             eject_lock_ms: 5000,
             eject_retries: 5,
             eject_retry_ms: 1000,
+            read_wait_ms: 150,
         }
     }
 }
@@ -1334,6 +1340,8 @@ pub struct Row {
     pub expanded: bool,
     /// Dossier illisible (droits...), une fois déplié.
     pub error: Option<String>,
+    /// Dossier déplié dont la liste est encore lue en fond (montage lent).
+    pub loading: bool,
     /// Nature de l'emplacement, pour une ligne de profondeur 0 (un volume peut être
     /// éjecté).
     pub kind: Option<PlaceKind>,
@@ -1343,6 +1351,46 @@ pub struct Row {
     pub favorite: bool,
     /// Section du panneau où est la ligne (celle de son emplacement).
     pub section: Section,
+}
+
+/// Lecteur des sous-dossiers d'un dossier : [`subfolders`], ou un faux disque lent
+/// dans les tests ([`Tree::set_reader`]).
+pub type Reader = Arc<dyn Fn(&Path, bool) -> io::Result<Vec<PathBuf>> + Send + Sync>;
+
+/// Résultat d'une lecture faite en fond pour l'arborescence.
+enum Read {
+    /// Sous-dossiers d'un dossier, pour la lecture numéro `u64`.
+    Children(PathBuf, u64, Result<Vec<PathBuf>, String>),
+    /// Favoris présents, pour la vérification numéro `u64`.
+    Present(u64, Vec<PathBuf>),
+}
+
+/// Lectures du disque de l'arborescence faites dans des fils : un montage lent (iCloud,
+/// NAS) ne doit jamais figer l'interface (retour du 16/11/2026 : fenêtre « ne répond
+/// pas », jusqu'à la fermeture). Les résultats sont déposés ici, repris par
+/// [`Tree::poll`].
+#[derive(Clone)]
+struct Reads {
+    done: Arc<(Mutex<Vec<Read>>, Condvar)>,
+    reader: Reader,
+    /// Appelé à l'arrivée d'un résultat (redessiner l'interface).
+    wake: Option<Arc<dyn Fn() + Send + Sync>>,
+}
+
+impl Default for Reads {
+    fn default() -> Self {
+        Reads {
+            done: Arc::default(),
+            reader: Arc::new(subfolders),
+            wake: None,
+        }
+    }
+}
+
+impl std::fmt::Debug for Reads {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Reads")
+    }
 }
 
 /// Arborescence des dossiers à partir des emplacements, indépendante de l'interface : ce
@@ -1377,6 +1425,16 @@ pub struct Tree {
     /// Serveurs annoncés sur le réseau local ([`crate::neighbourhood`]), ajoutés aux
     /// emplacements.
     neighbours: Vec<Place>,
+    /// Attente d'une lecture faite en fond avant de rendre la main ; `None` : lectures
+    /// faites sur place ([`Tree::with_places`], tests).
+    wait: Option<Duration>,
+    reads: Reads,
+    /// Lectures en cours : dossier et numéro de la dernière demandée (seule retenue).
+    pending: HashMap<PathBuf, u64>,
+    /// Vérification des favoris en cours (son numéro).
+    present_pending: Option<u64>,
+    /// Dernier numéro de lecture donné.
+    serial: u64,
 }
 
 impl Tree {
@@ -1384,13 +1442,118 @@ impl Tree {
     /// dossiers cachés seulement si `hidden`.
     pub fn new(filter: PlaceSettings, hidden: bool) -> Tree {
         let mut tree = Tree::with_places(places_filtered(&filter), hidden);
-        tree.filter = filter;
+        tree.set_filter(filter);
         tree
     }
 
-    /// Remplace les réglages des emplacements (volumes fixés, masqués).
+    /// Remplace les réglages des emplacements (volumes fixés, masqués) ; les lectures du
+    /// disque se font désormais en fond, attendues `read_wait_ms`.
     pub fn set_filter(&mut self, filter: PlaceSettings) {
+        self.wait = Some(Duration::from_millis(filter.read_wait_ms));
         self.filter = filter;
+    }
+
+    /// Fonction appelée à l'arrivée d'une lecture faite en fond (redessiner).
+    pub fn set_wake(&mut self, wake: impl Fn() + Send + Sync + 'static) {
+        self.reads.wake = Some(Arc::new(wake));
+    }
+
+    /// Remplace le lecteur des sous-dossiers (tests : faux disque lent).
+    pub fn set_reader(&mut self, reader: Reader) {
+        self.reads.reader = reader;
+    }
+
+    /// Reprend les lectures arrivées ; vrai si l'arborescence a changé.
+    pub fn poll(&mut self) -> bool {
+        let reads =
+            std::mem::take(&mut *self.reads.done.0.lock().unwrap_or_else(|e| e.into_inner()));
+        let mut changed = false;
+        for read in reads {
+            match read {
+                Read::Children(path, serial, result) => {
+                    // Une lecture plus récente du même dossier est demandée : celle-ci
+                    // est dépassée.
+                    if self.pending.get(&path) == Some(&serial) {
+                        self.pending.remove(&path);
+                        self.children.insert(path, result);
+                        changed = true;
+                    }
+                }
+                Read::Present(serial, present) => {
+                    if self.present_pending == Some(serial) {
+                        self.present_pending = None;
+                        self.present = present;
+                        changed = true;
+                    }
+                }
+            }
+        }
+        changed
+    }
+
+    /// Vrai si des lectures sont encore en cours.
+    pub fn is_loading(&self) -> bool {
+        !self.pending.is_empty() || self.present_pending.is_some()
+    }
+
+    /// Attend la fin des lectures en cours, `timeout` au plus.
+    pub fn settle_for(&mut self, timeout: Duration) {
+        let deadline = Instant::now() + timeout;
+        let done = self.reads.done.clone();
+        loop {
+            self.poll();
+            let now = Instant::now();
+            if !self.is_loading() || now >= deadline {
+                return;
+            }
+            let (lock, ready) = &*done;
+            let list = lock.lock().unwrap_or_else(|e| e.into_inner());
+            if list.is_empty() {
+                let _ = ready.wait_timeout(list, deadline - now);
+            }
+        }
+    }
+
+    /// Attend un instant les lectures en cours (disque local : comme sur place).
+    fn settle(&mut self) {
+        if let Some(wait) = self.wait {
+            self.settle_for(wait);
+        }
+    }
+
+    /// Lance `job` dans un fil ; son résultat est déposé pour [`Tree::poll`].
+    fn spawn(&mut self, job: impl FnOnce() -> Read + Send + 'static) -> u64 {
+        self.serial += 1;
+        let reads = self.reads.clone();
+        let _ = std::thread::Builder::new()
+            .name("tri-tree".into())
+            .spawn(move || {
+                let read = job();
+                let (lock, ready) = &*reads.done;
+                lock.lock().unwrap_or_else(|e| e.into_inner()).push(read);
+                ready.notify_all();
+                if let Some(wake) = &reads.wake {
+                    wake();
+                }
+            });
+        self.serial
+    }
+
+    /// Lit les sous-dossiers de `path` : sur place, ou en fond (sans attendre).
+    fn read_children(&mut self, path: &Path) {
+        if self.wait.is_none() {
+            let read = (self.reads.reader)(path, self.hidden).map_err(|e| e.to_string());
+            self.children.insert(path.to_path_buf(), read);
+            return;
+        }
+        let (reader, hidden, dir) = (self.reads.reader.clone(), self.hidden, path.to_path_buf());
+        // Numéro de cette lecture : celui que `spawn` va donner.
+        let serial = self.serial + 1;
+        self.pending.insert(path.to_path_buf(), serial);
+        self.spawn(move || {
+            let read = reader(&dir, hidden).map_err(|e| e.to_string());
+            Read::Children(dir, serial, read)
+        });
     }
 
     /// Arborescence à partir d'emplacements donnés (tests, emplacements choisis).
@@ -1408,6 +1571,11 @@ impl Tree {
             folded: HashSet::new(),
             servers: Vec::new(),
             neighbours: Vec::new(),
+            wait: None,
+            reads: Reads::default(),
+            pending: HashMap::new(),
+            present_pending: None,
+            serial: 0,
         }
     }
 
@@ -1496,14 +1664,20 @@ impl Tree {
         self.favorites.iter().any(|p| p == path)
     }
 
-    /// Favoris présents : vérifié une fois, pas à chaque dessin (un NAS peut être lent).
+    /// Favoris présents : vérifié une fois, pas à chaque dessin, et en fond (un NAS, un
+    /// montage iCloud peuvent être lents) ; la liste d'avant reste en attendant.
     fn check_favorites(&mut self) {
-        self.present = self
-            .favorites
-            .iter()
-            .filter(|p| p.is_dir())
-            .cloned()
-            .collect();
+        let favorites = self.favorites.clone();
+        let present =
+            move || -> Vec<PathBuf> { favorites.into_iter().filter(|p| p.is_dir()).collect() };
+        if self.wait.is_none() {
+            self.present = present();
+            return;
+        }
+        let serial = self.serial + 1;
+        self.present_pending = Some(serial);
+        self.spawn(move || Read::Present(serial, present()));
+        self.settle();
     }
 
     /// Emplacements.
@@ -1551,11 +1725,17 @@ impl Tree {
         }
     }
 
-    /// Déplie `path` dans la section des favoris (`favorites`) ou ailleurs.
+    /// Déplie `path` dans la section des favoris (`favorites`) ou ailleurs ; ses
+    /// sous-dossiers sont lus la première fois, attendus un instant.
     fn expand_in(&mut self, favorites: bool, path: &Path) {
-        if !self.children.contains_key(path) {
-            let read = subfolders(path, self.hidden).map_err(|e| e.to_string());
-            self.children.insert(path.to_path_buf(), read);
+        self.open_in(favorites, path);
+        self.settle();
+    }
+
+    /// [`Tree::expand_in`], sans attendre la lecture.
+    fn open_in(&mut self, favorites: bool, path: &Path) {
+        if !self.children.contains_key(path) && !self.pending.contains_key(path) {
+            self.read_children(path);
         }
         self.expanded.insert((favorites, path.to_path_buf()));
     }
@@ -1574,11 +1754,13 @@ impl Tree {
             return false;
         };
         let chain = ancestors_from(&root, path).unwrap_or_default();
-        self.expand(&root);
-        // Tous sauf le dossier lui-même : on le montre, sans forcément le déplier.
+        self.open_in(false, &root);
+        // Tous sauf le dossier lui-même : on le montre, sans forcément le déplier. Lus
+        // ensemble, attendus une seule fois.
         for dir in chain.iter().take(chain.len().saturating_sub(1)) {
-            self.expand(dir);
+            self.open_in(false, dir);
         }
+        self.settle();
         true
     }
 
@@ -1608,13 +1790,19 @@ impl Tree {
         self.reload();
     }
 
-    /// Relit les dossiers dépliés (dossier créé ou supprimé entre-temps).
+    /// Relit les dossiers dépliés (dossier créé ou supprimé entre-temps). En fond, leur
+    /// liste d'avant reste affichée jusqu'à l'arrivée de la nouvelle.
     pub fn reload(&mut self) {
-        self.children.clear();
-        let expanded: Vec<(bool, PathBuf)> = self.expanded.iter().cloned().collect();
-        for (favorites, path) in expanded {
-            self.expand_in(favorites, &path);
+        let expanded: HashSet<PathBuf> = self.expanded.iter().map(|(_, p)| p.clone()).collect();
+        if self.wait.is_none() {
+            self.children.clear();
+        } else {
+            self.children.retain(|p, _| expanded.contains(p));
         }
+        for path in &expanded {
+            self.read_children(path);
+        }
+        self.settle();
     }
 
     /// Rang de la ligne pointée au clavier dans [`Tree::rows`] (`None` : aucune).
@@ -1787,6 +1975,7 @@ impl Tree {
                 Some(Err(e)) => Some(e.clone()),
                 _ => None,
             },
+            loading: expanded && !self.children.contains_key(path),
             kind: None,
             ejectable: false,
             favorite: self.is_favorite(path),
@@ -1821,6 +2010,104 @@ mod tests {
                 .find(|(k, _)| *k == name)
                 .map(|(_, v)| OsString::from(v))
         }
+    }
+
+    /// Faux disque lent : chaque lecture prend `delay`, puis lit le vrai dossier.
+    fn slow_reader(delay: Duration) -> Reader {
+        Arc::new(move |dir: &Path, hidden: bool| {
+            std::thread::sleep(delay);
+            subfolders(dir, hidden)
+        })
+    }
+
+    #[test]
+    fn a_slow_folder_is_read_in_the_background() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("Photos")).unwrap();
+        let place = Place {
+            name: "iCloud".into(),
+            path: dir.path().to_path_buf(),
+            kind: PlaceKind::Network,
+        };
+        let mut tree = Tree::with_places(vec![place], false);
+        tree.set_filter(PlaceSettings {
+            read_wait_ms: 20,
+            ..PlaceSettings::default()
+        });
+        tree.set_reader(slow_reader(Duration::from_millis(500)));
+        let woken = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = woken.clone();
+        tree.set_wake(move || flag.store(true, std::sync::atomic::Ordering::Relaxed));
+        // Déplié : la main revient sans attendre la lecture, la ligne le dit.
+        let started = Instant::now();
+        tree.expand(dir.path());
+        assert!(started.elapsed() < Duration::from_millis(400), "pas figé");
+        let rows = tree.rows();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].expanded && rows[0].loading && tree.is_loading());
+        // La liste arrive en fond.
+        tree.settle_for(Duration::from_secs(10));
+        assert!(woken.load(std::sync::atomic::Ordering::Relaxed), "réveil");
+        let rows = tree.rows();
+        assert!(!rows[0].loading && !tree.is_loading());
+        assert_eq!(rows[1].path, dir.path().join("Photos"));
+        // Relu : la liste d'avant reste affichée en attendant la nouvelle.
+        std::fs::create_dir(dir.path().join("Vidéos")).unwrap();
+        tree.reload();
+        let rows = tree.rows();
+        assert_eq!(rows.len(), 2, "liste d'avant");
+        assert!(!rows[0].loading && tree.is_loading());
+        tree.settle_for(Duration::from_secs(10));
+        assert_eq!(tree.rows().len(), 3, "nouvelle liste");
+    }
+
+    #[test]
+    fn a_read_overtaken_by_a_newer_one_is_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        let place = Place {
+            name: "NAS".into(),
+            path: dir.path().to_path_buf(),
+            kind: PlaceKind::Network,
+        };
+        let mut tree = Tree::with_places(vec![place], false);
+        tree.set_filter(PlaceSettings {
+            read_wait_ms: 0,
+            ..PlaceSettings::default()
+        });
+        // Première lecture lente (dossier vide), seconde rapide (un dossier créé).
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let count = calls.clone();
+        tree.set_reader(Arc::new(move |dir: &Path, hidden: bool| {
+            if count.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                let empty = subfolders(dir, hidden);
+                std::thread::sleep(Duration::from_millis(300));
+                return empty;
+            }
+            subfolders(dir, hidden)
+        }));
+        tree.expand(dir.path());
+        std::fs::create_dir(dir.path().join("Nouveau")).unwrap();
+        tree.reload();
+        tree.settle_for(Duration::from_secs(10));
+        // La lecture lente arrive en dernier : ignorée.
+        std::thread::sleep(Duration::from_millis(400));
+        tree.poll();
+        assert_eq!(tree.rows().len(), 2);
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn favourites_are_checked_in_the_background() {
+        let dir = tempfile::tempdir().unwrap();
+        let (here, gone) = (dir.path().join("Là"), dir.path().join("Parti"));
+        std::fs::create_dir(&here).unwrap();
+        let mut tree = Tree::with_places(Vec::new(), false);
+        tree.set_filter(PlaceSettings::default());
+        tree.set_favorites(vec![here.clone(), gone]);
+        tree.settle_for(Duration::from_secs(10));
+        let rows = tree.rows();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].path, here);
     }
 
     #[test]
