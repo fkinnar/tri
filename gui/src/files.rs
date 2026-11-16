@@ -194,6 +194,9 @@ pub enum Outcome {
         remember_name: String,
         render: crate::export::Render,
         cut: Option<tri::export::Cut>,
+        /// Les versions des images plutôt qu'elles : `Some(true)` avec ce préréglage pour
+        /// toutes, `Some(false)` avec celui de chacune.
+        versions: Option<bool>,
     },
 }
 
@@ -334,6 +337,7 @@ impl FileDialog {
                     cut,
                     remember,
                     remember_name,
+                    versions,
                 } => Outcome::Export {
                     images,
                     profile: *profile,
@@ -342,6 +346,7 @@ impl FileDialog {
                     remember_name,
                     render,
                     cut,
+                    versions,
                 },
             },
             FileDialog::NewFolder {

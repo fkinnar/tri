@@ -872,6 +872,20 @@ export-no-developer = Aucun logiciel de développement trouvé : rendu de base p
 export-rapidraw-srgb = RapidRAW rend en sRGB : l'espace « { $color } » est converti depuis sRGB.
 export-passthrough = Sans recompression
 export-passthrough-tip = JPEG d'origine copié tel quel, rendu boîtier écrit tel quel (orientation dans l'EXIF). Une image à réduire (taille du préréglage) est réencodée.
+export-versions = { $n ->
+    [one] Exporter la version
+   *[other] Exporter les { $n } versions
+}
+export-versions-tip = Les versions plutôt que les images entières. Chaque version part avec son propre préréglage d'export, son dossier et son nom de fichier ; une version sans préréglage prend celui choisi ici. Les images sans version ne partent pas.
+export-versions-forced = Ce préréglage pour toutes les versions
+export-versions-forced-tip = Le préréglage, le dossier et le nom choisis ici remplacent ceux de chaque version.
+export-contents-versions = { $n ->
+    [one] 1 version
+   *[other] { $n } versions
+} ({ $images ->
+    [one] 1 image
+   *[other] { $images } images
+})
 export-button = Exporter
 export-profile-edit = Retouche
 export-profile-asis = JPEG tel quel

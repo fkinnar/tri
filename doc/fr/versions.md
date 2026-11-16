@@ -203,6 +203,12 @@ pour l'état, `TriApp::versions_compare_view` pour le dessin) :
 
 ## Export d'une version
 
+- **Depuis la grille** (16/11/2026) : `Ctrl+E` sur des images qui ont des versions propose
+  **Exporter les versions** dans la boîte : les versions partent à la place des images
+  entières, chacune avec son préréglage, son dossier et son nom (celui de la boîte pour
+  une version qui n'en a pas ; les images sans version ne partent pas). **Ce préréglage
+  pour toutes les versions** leur applique plutôt le préréglage, le dossier et le nom de
+  la boîte (s'il convient à la version : jamais « tel quel »).
 - `Ctrl+E` sur une version montrée l'exporte, elle seule, sur l'image où elle a été
   recadrée (sa `source`) ; la boîte est titrée « Exporter la version « Story » » et
   pré-remplie avec son profil s'il en a un (sinon le dernier choisi, sinon le profil par

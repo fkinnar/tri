@@ -65,6 +65,17 @@ fn merge_split_photos(
     merged
 }
 
+/// Préréglage des versions exportées ensemble.
+enum VersionsPreset {
+    /// Celui de chaque version, sinon celui-ci (identifiant), sinon le dernier choisi.
+    Own(Option<String>),
+    /// Celui de la boîte d'export pour toutes (dossier et nom compris), quand il convient.
+    Forced {
+        profile: tri::export::Profile,
+        folder: String,
+    },
+}
+
 /// Pile visée par un raccourci des piles ([`TriApp::applicable_stack`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum StackKind {
@@ -11679,6 +11690,21 @@ impl TriApp {
     /// sinon celui des réglages ; jamais « tel quel »), dans le dossier et sous le nom
     /// retenus pour ce préréglage. Elles attendent leur tour dans la file d'export.
     fn export_versions(&mut self, ctx: &egui::Context, image: &Path, indices: &[usize]) {
+        let started = self.export_versions_as(ctx, image, indices, &VersionsPreset::Own(None));
+        if started > 1 {
+            self.notice = Some((t!("versions-export-started", n = started), false));
+        }
+    }
+
+    /// Exporte les versions `indices` de `image` comme [`TriApp::export_versions`], avec
+    /// `preset` ; renvoie le nombre d'exports lancés.
+    fn export_versions_as(
+        &mut self,
+        ctx: &egui::Context,
+        image: &Path,
+        indices: &[usize],
+        preset: &VersionsPreset,
+    ) -> usize {
         let versions = self.versions_of(image).list.clone();
         let mut started = 0;
         for &i in indices {
@@ -11696,9 +11722,35 @@ impl TriApp {
             let flat = kind == tri::export::Kind::Flat;
             let settings = &self.settings.export;
             let fits = |p: &&tri::export::Profile| kind.allows(p) && !p.is_as_is();
+            // Préréglage de la boîte d'export imposé à toutes : tel quel (dossier et nom
+            // compris), s'il convient à cette version.
+            if let VersionsPreset::Forced { profile, folder } = preset
+                && fits(&profile)
+            {
+                let cut = tri::export::Cut {
+                    crop: version.crop,
+                    name: version.name.clone(),
+                    tiles: version.tiles,
+                };
+                self.start_export(
+                    ctx,
+                    images,
+                    profile.clone(),
+                    folder.clone(),
+                    render,
+                    Some(cut),
+                );
+                started += 1;
+                continue;
+            }
+            let fallback = match preset {
+                VersionsPreset::Own(fallback) => fallback.clone(),
+                VersionsPreset::Forced { profile, .. } => Some(profile.id.clone()),
+            };
             let wanted = version
                 .profile
                 .clone()
+                .or(fallback)
                 .or_else(|| self.export_choice[usize::from(flat)].clone())
                 .unwrap_or_else(|| {
                     if flat {
@@ -11745,9 +11797,7 @@ impl TriApp {
             self.start_export(ctx, images, profile, folder, render, Some(cut));
             started += 1;
         }
-        if started > 1 {
-            self.notice = Some((t!("versions-export-started", n = started), false));
-        }
+        started
     }
 
     /// Comparaison des versions (#393) : un volet par version de la même image, recadré
@@ -15591,6 +15641,12 @@ impl TriApp {
                 // Le dernier choisi dans la séance, sinon celui des réglages
                 // (`default_raw`, `default_flat`).
                 let preferred = self.export_choice[usize::from(jpeg)].clone();
+                // Des images ont des versions : les exporter, elles, proposé (retour du
+                // 16/11/2026 : Ctrl+E réexportait l'image entière).
+                let counts: Vec<usize> = paths
+                    .iter()
+                    .map(|p| self.versions_of(p).list.len())
+                    .collect();
                 let dialog = crate::export::ExportDialog::new(
                     &paths,
                     &self.settings.export,
@@ -15600,7 +15656,11 @@ impl TriApp {
                     at,
                 )
                 .with_folders(self.export_folders.clone())
-                .with_names(self.export_names.clone());
+                .with_names(self.export_names.clone())
+                .with_versions(
+                    counts.iter().sum(),
+                    counts.iter().filter(|&&n| n > 0).count(),
+                );
                 self.file_dialog = Some(crate::files::FileDialog::Export(Box::new(dialog)));
                 Ok(())
             }
@@ -15768,6 +15828,7 @@ impl TriApp {
                 remember_name,
                 render,
                 cut,
+                versions,
             } => {
                 self.file_dialog = None;
                 // Le dossier choisi est retenu pour ce préréglage (retour du 14/11/2026),
@@ -15785,6 +15846,23 @@ impl TriApp {
                 self.save_display();
                 self.export_choice[usize::from(crate::export::exports_flat(render, &images))] =
                     Some(profile.id.clone());
+                // Les versions des images plutôt qu'elles (retour du 16/11/2026).
+                if let Some(forced) = versions {
+                    let preset = if forced {
+                        VersionsPreset::Forced { profile, folder }
+                    } else {
+                        VersionsPreset::Own(Some(profile.id))
+                    };
+                    let mut started = 0;
+                    for image in &images {
+                        let all: Vec<usize> = (0..self.versions_of(image).list.len()).collect();
+                        started += self.export_versions_as(ctx, image, &all, &preset);
+                    }
+                    if started > 1 {
+                        self.notice = Some((t!("versions-export-started", n = started), false));
+                    }
+                    return;
+                }
                 self.start_export(ctx, images, profile, folder, render, cut);
             }
             crate::files::Outcome::Done { select, step } => {
@@ -24532,6 +24610,82 @@ mod tests {
             .collect();
         written.sort();
         assert_eq!(written, ["img1-Post.jpg", "img1-Story.jpg"]);
+    }
+
+    #[test]
+    fn the_export_dialog_can_export_the_versions_instead() {
+        // Retour du 16/11/2026 : Ctrl+E sur des images à versions réexportait les images
+        // entières. Case « Exporter les versions » : chacune avec son préréglage (la boîte
+        // pour celles qui n'en ont pas), ou celui de la boîte pour toutes.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let (one, two) = (photos.join("img1.jpg"), photos.join("img2.jpg"));
+        let version = |name: &str, profile: Option<&str>| tri::versions::Version {
+            name: name.into(),
+            crop: [0.0, 0.0, 0.5, 0.5].into(),
+            ratio: tri::versions::Ratio::Free,
+            source: tri::versions::Source::Embedded,
+            profile: profile.map(Into::into),
+            tiles: tri::versions::Tiles::ONE,
+        };
+        let versions = tri::versions::Versions {
+            list: vec![version("Story", Some("edit")), version("Post", None)],
+            unknown: Vec::new(),
+        };
+        tri::versions::write(&one, &versions, tri::xmp::Convention::Darktable).unwrap();
+        let (edit, web) = (dir.path().join("edit"), dir.path().join("web"));
+        for (id, folder) in [("edit", &edit), ("web", &web)] {
+            h.state_mut()
+                .export_folders
+                .insert(id.into(), folder.to_string_lossy().into_owned());
+        }
+        h.state_mut().export_choice[1] = Some("web".into());
+        h.state_mut().versions.clear();
+        let ctx = h.ctx.clone();
+        let listed = |dir: &Path| {
+            let mut names: Vec<String> = std::fs::read_dir(dir)
+                .map(|r| {
+                    r.map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+                        .collect()
+                })
+                .unwrap_or_default();
+            names.sort();
+            names
+        };
+        for forced in [false, true] {
+            h.state_mut().selection.clear();
+            for p in [&one, &two] {
+                h.state_mut().selection.toggle(p);
+            }
+            h.state_mut().perform(&ctx, Action::FileExport);
+            h.run_steps(2);
+            let Some(crate::files::FileDialog::Export(dialog)) = &mut h.state_mut().file_dialog
+            else {
+                panic!("boîte d'export");
+            };
+            assert!(dialog.check_versions(forced), "case proposée");
+            press(&mut h, Key::Enter, Modifiers::NONE);
+            run_until(&mut h, |app| {
+                app.file_dialog.is_none() && app.export_job.is_none() && app.export_queue.is_empty()
+            });
+            if forced {
+                // La boîte pour toutes : Story aussi en JPEG, dans le dossier de « Web »
+                // (Post, déjà là, reçoit un nouveau nom).
+                assert_eq!(
+                    listed(&web),
+                    ["img1-Post.jpg", "img1-Post_01.jpg", "img1-Story.jpg"]
+                );
+            } else {
+                assert_eq!(listed(&edit), ["img1-Story.tif"], "son préréglage");
+                assert_eq!(listed(&web), ["img1-Post.jpg"], "celui de la boîte");
+            }
+        }
+        assert_eq!(
+            listed(&edit).len(),
+            1,
+            "img2, sans version, n'est pas parti"
+        );
     }
 
     #[test]

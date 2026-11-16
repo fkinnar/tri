@@ -113,6 +113,23 @@ pub struct ExportDialog {
     /// Identifiant de la liste des profils (image précédente) : focus au départ, Entrée y
     /// exporte.
     combo: Option<egui::Id>,
+    /// Images qui ont des versions : la case « Exporter les versions » (retour du
+    /// 16/11/2026).
+    versions: Option<VersionsChoice>,
+}
+
+/// Case « Exporter les versions » de la boîte, quand des images en ont.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct VersionsChoice {
+    /// Nombre de versions.
+    count: usize,
+    /// Nombre d'images qui en ont.
+    images: usize,
+    /// Exporter les versions plutôt que les images.
+    on: bool,
+    /// Le préréglage, le dossier et le nom de la boîte pour toutes les versions (sinon
+    /// ceux de chaque version, la boîte pour celles qui n'en ont pas).
+    forced: bool,
 }
 
 /// Résultat d'une image de la boîte.
@@ -133,6 +150,9 @@ pub enum Outcome {
         remember_name: String,
         render: Render,
         cut: Option<tri::export::Cut>,
+        /// Exporter les versions des images plutôt qu'elles (`Some`), avec le préréglage
+        /// de la boîte pour toutes (`Some(true)`) ou celui de chacune.
+        versions: Option<bool>,
     },
 }
 
@@ -248,6 +268,7 @@ impl ExportDialog {
             cut: None,
             batch,
             combo: None,
+            versions: None,
             images,
             profiles,
             field: Default::default(),
@@ -442,9 +463,22 @@ impl ExportDialog {
                     .profiles
                     .get(self.choice)
                     .is_some_and(|p| p.format == tri::export::Format::Jpeg);
-                if jpeg && local.is_some() {
+                let versions_on = self.versions.is_some_and(|v| v.on);
+                if jpeg && local.is_some() && !versions_on {
                     ui.checkbox(&mut self.passthrough.0, t!("export-passthrough"))
                         .on_hover_text(t!("export-passthrough-tip"));
+                }
+                // Les versions plutôt que les images (retour du 16/11/2026) ; le préréglage
+                // de la boîte pour toutes, en option.
+                if let Some(v) = &mut self.versions {
+                    ui.checkbox(&mut v.on, t!("export-versions", n = v.count))
+                        .on_hover_text(t!("export-versions-tip"));
+                    if v.on {
+                        ui.indent("export_versions_forced", |ui| {
+                            ui.checkbox(&mut v.forced, t!("export-versions-forced"))
+                                .on_hover_text(t!("export-versions-forced-tip"));
+                        });
+                    }
                 }
                 if let Some(reason) = &unsupported {
                     ui.colored_label(ui.visuals().error_fg_color, reason);
@@ -494,6 +528,7 @@ impl ExportDialog {
                 remember_name,
                 render: self.render,
                 cut: self.cut.clone(),
+                versions: self.versions.filter(|v| v.on).map(|v| v.forced),
             };
         }
         if cancel || modal.should_close() {
@@ -506,6 +541,9 @@ impl ExportDialog {
     /// Ce qui part, en clair : « 1 RAW, développé par darktable · 1 JPEG de l'appareil
     /// (nom suivi de -camera) ».
     fn contents(&self) -> String {
+        if let Some(v) = self.versions.filter(|v| v.on) {
+            return t!("export-contents-versions", n = v.count, images = v.images);
+        }
         let b = &self.batch;
         let mut parts = Vec::new();
         if !b.raws.is_empty() {
@@ -527,6 +565,32 @@ impl ExportDialog {
             parts.push(t!("export-contents-tiles", n = cut.tiles.count()));
         }
         parts.join(" · ")
+    }
+
+    /// Des images ont des versions (`count` en tout, sur `images` images) : la case
+    /// « Exporter les versions » est proposée, décochée.
+    pub fn with_versions(mut self, count: usize, images: usize) -> ExportDialog {
+        self.versions = (count > 0 && self.cut.is_none()).then_some(VersionsChoice {
+            count,
+            images,
+            on: false,
+            forced: false,
+        });
+        self
+    }
+
+    /// Tests : coche « Exporter les versions » (et `forced`) ; faux si la case n'est pas
+    /// proposée.
+    #[cfg(test)]
+    pub fn check_versions(&mut self, forced: bool) -> bool {
+        match &mut self.versions {
+            Some(v) => {
+                v.on = true;
+                v.forced = forced;
+                true
+            }
+            None => false,
+        }
     }
 
     /// Exporter la version `cut` (recadrage) plutôt que l'image entière.
