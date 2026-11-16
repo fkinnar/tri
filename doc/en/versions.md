@@ -199,7 +199,8 @@ for the state, `TriApp::versions_compare_view` for the drawing):
   original is shown; hiding the original brings the renders back if none is left.
 - **Edit**: `v` on the active version opens its frame; leaving the editor (save or
   cancel) comes back to the comparison, on it.
-- Enter or double-click: the active version full screen; ratings go to the image.
+- Enter or double-click: the active version full screen; ratings go to the image; Esc
+  from there comes back to the comparison, on that version (2026-11-16).
 - **A version belongs to its render** (2026-11-16): it is framed on the render being looked
   at (camera JPEG, RAW render, a development) and keeps it. The comparison shows each pane
   in it, never in another while waiting (a cropped development would not frame the same

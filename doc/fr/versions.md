@@ -211,7 +211,8 @@ pour l'état, `TriApp::versions_compare_view` pour le dessin) :
   revenir les rendus s'il n'en reste aucun.
 - **Modifier** : `v` sur la version active ouvre son cadre ; quitter l'éditeur
   (enregistrer ou annuler) ramène à la comparaison, sur elle.
-- Entrée ou double-clic : la version active en plein écran ; les notes vont à l'image.
+- Entrée ou double-clic : la version active en plein écran ; les notes vont à l'image ;
+  Échap de là revient à la comparaison, sur cette version (16/11/2026).
 - **Une version appartient à son rendu** (16/11/2026) : elle est cadrée sur le rendu
   regardé (JPEG boîtier, rendu RAW, un développement) et le garde. La comparaison montre
   chaque volet dans ce rendu, jamais dans un autre en attendant (un développement recadré
