@@ -215,7 +215,9 @@ pour l'état, `TriApp::versions_compare_view` pour le dessin) :
   entières, chacune avec son préréglage, son dossier et son nom (celui de la boîte pour
   une version qui n'en a pas ; les images sans version ne partent pas). **Ce préréglage
   pour toutes les versions** leur applique plutôt le préréglage, le dossier et le nom de
-  la boîte (s'il convient à la version : jamais « tel quel »).
+  la boîte (s'il convient à la version : jamais « tel quel »). **Les images entières
+  aussi** ajoute chaque image entière (toutes, celles sans version comprises), avec le
+  préréglage, le dossier et le nom de la boîte.
 - `Ctrl+E` sur une version montrée l'exporte, elle seule, sur l'image où elle a été
   recadrée (sa `source`) ; la boîte est titrée « Exporter la version « Story » » et
   pré-remplie avec son profil s'il en a un (sinon le dernier choisi, sinon le profil par
