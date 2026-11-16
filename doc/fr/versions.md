@@ -201,6 +201,11 @@ pour l'état, `TriApp::versions_compare_view` pour le dessin) :
   l'active (un seul pas d'annulation) ; jamais l'image (l'original n'est pas une
   version). Dans l'éditeur d'une version existante, **Supprimer la version** (bouton ou la
   même touche, pas pendant qu'on tape le nom) la supprime et ramène là d'où on venait.
+- **Filtre par rendu** (16/11/2026) : dans le panneau de droite, section **Versions**,
+  une case par rendu sur lequel des versions ont été cadrées, avec leur nombre (« Rendu
+  boîtier (2) ») ; décoché, ses volets s'en vont (et leurs marques). Le dernier rendu
+  montré ne se décoche pas, sauf si l'original est montré ; cacher l'original fait
+  revenir les rendus s'il n'en reste aucun.
 - **Modifier** : `v` sur la version active ouvre son cadre ; quitter l'éditeur
   (enregistrer ou annuler) ramène à la comparaison, sur elle.
 - Entrée ou double-clic : la version active en plein écran ; les notes vont à l'image.

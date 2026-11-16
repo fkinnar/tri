@@ -2552,6 +2552,14 @@ impl TriApp {
                 ui.separator();
             }
         }
+        // Comparaison des versions : le filtre par rendu (retour du 16/11/2026 : le bandeau
+        // du bas est déjà plein).
+        if self.mode == Mode::Compare && self.versions_compare.is_some() {
+            if self.panel_section(ui, "versions", t!("panel-section-versions")) {
+                self.versions_filter(ui);
+            }
+            ui.separator();
+        }
         if self.panel_section(ui, "exif", t!("panel-section-exif")) {
             if !self.files.is_empty() {
                 self.meta_select_all_icon(ui);
@@ -2813,6 +2821,7 @@ impl TriApp {
             .filter(|&s| match s {
                 "grid" => self.mode != Mode::View,
                 "view" => self.mode == Mode::View,
+                "versions" => self.mode == Mode::Compare && self.versions_compare.is_some(),
                 _ => true,
             })
             .collect();
@@ -9075,9 +9084,9 @@ impl TriApp {
                 if self.mode == Mode::Compare
                     && let Some(vc) = &self.versions_compare
                 {
-                    let count = self.versions.get(&vc.image).map_or(0, |v| v.list.len());
+                    let sources = self.version_renders(&vc.image.clone());
                     if let Some(vc) = self.versions_compare.as_mut() {
-                        vc.toggle_original(count);
+                        vc.toggle_original(&sources);
                     }
                 }
             }
@@ -9930,11 +9939,13 @@ impl TriApp {
             .get(&file.path)
             .map(|v| &v.list[..])
             .unwrap_or(&[]);
+        // Les volets montrés seulement (filtre par rendu).
+        let renders: Vec<tri::versions::Source> = list.iter().map(|v| v.source).collect();
         let mut sources: Vec<Source> = Vec::new();
-        for source in list.iter().map(|v| version_source(v.source)).chain(
-            vc.original
-                .then(|| self.versions_original_source(file, list, vc)),
-        ) {
+        for source in vc.panes(&renders).into_iter().map(|pane| match pane {
+            Some(i) => version_source(list[i].source),
+            None => self.versions_original_source(file, list, vc),
+        }) {
             if !sources.contains(&source) {
                 sources.push(source);
             }
@@ -9950,8 +9961,9 @@ impl TriApp {
         list: &[tri::versions::Version],
         vc: &crate::versions_compare::VersionsCompare,
     ) -> Source {
+        let sources: Vec<tri::versions::Source> = list.iter().map(|v| v.source).collect();
         let active = vc
-            .active_pane(list.len())
+            .active_pane(&sources)
             .or_else(|| (!list.is_empty()).then_some(0));
         active
             .and_then(|i| list.get(i))
@@ -11614,7 +11626,9 @@ impl TriApp {
             && let Some(vc) = &self.versions_compare
         {
             let versions = self.versions.get(&vc.image)?;
-            let i = vc.active_pane(versions.list.len())?;
+            let sources: Vec<tri::versions::Source> =
+                versions.list.iter().map(|v| v.source).collect();
+            let i = vc.active_pane(&sources)?;
             return Some((vc.image.clone(), versions.list.get(i)?.clone()));
         }
         if self.mode != Mode::View {
@@ -11663,6 +11677,55 @@ impl TriApp {
         self.versions
             .entry(path.to_path_buf())
             .or_insert_with(|| tri::versions::read(path).unwrap_or_default())
+    }
+
+    /// Filtre de la comparaison des versions par rendu : une case par rendu présent, avec
+    /// son nombre de versions. Le dernier rendu montré ne se décoche pas (sans l'original).
+    fn versions_filter(&mut self, ui: &mut Ui) {
+        let Some(vc) = self.versions_compare.clone() else {
+            return;
+        };
+        let Some(file) = self.files.iter().find(|f| f.path == vc.image).cloned() else {
+            return;
+        };
+        let sources = self.version_renders(&vc.image);
+        let developed = self.developed_level(&file.path);
+        let mut renders: Vec<(tri::versions::Source, usize)> = Vec::new();
+        for s in &sources {
+            match renders.iter_mut().find(|(r, _)| r == s) {
+                Some((_, n)) => *n += 1,
+                None => renders.push((*s, 1)),
+            }
+        }
+        ui.label(egui::RichText::new(t!("versions-filter-title")).weak());
+        let mut toggled = None;
+        for (render, n) in renders {
+            let level = match version_source(render) {
+                Source::Embedded => Level::Embedded,
+                Source::Raw => Level::Standard,
+                Source::Developed => developed,
+            };
+            let mut on = !vc.hidden.contains(&render);
+            let label = format!("{} ({n})", view::label(file.kind, level));
+            if ui.checkbox(&mut on, label).changed() {
+                toggled = Some(render);
+            }
+        }
+        if let Some(render) = toggled
+            && let Some(state) = self.versions_compare.as_mut()
+            && !state.toggle_render(render, &sources)
+        {
+            self.hint = Some(t!("versions-filter-last"));
+        }
+    }
+
+    /// Rendus des versions de `path`, dans l'ordre (filtre de la comparaison).
+    fn version_renders(&mut self, path: &Path) -> Vec<tri::versions::Source> {
+        self.versions_of(path)
+            .list
+            .iter()
+            .map(|v| v.source)
+            .collect()
     }
 
     /// Rouvre le cadre de la version `index` de `path`, sur l'image où elle a été faite.
@@ -11731,12 +11794,13 @@ impl TriApp {
         let Some(vc) = self.versions_compare.clone() else {
             return false;
         };
-        let count = self.versions_of(&vc.image).list.len();
+        let sources = self.version_renders(&vc.image);
+        let count = sources.len();
         if count == 0 {
             self.leave_compare();
             return true;
         }
-        let n = vc.panes(count).len();
+        let n = vc.panes(&sources).len();
         let (active, cols) = (vc.active.min(n - 1), self.compare_cols);
         let target = match action {
             Action::NavPrev => Some(crate::compare::neighbour(active, n, cols, -1, 0)),
@@ -11756,12 +11820,12 @@ impl TriApp {
             return true;
         }
         match action {
-            Action::SelectToggle => state.toggle_mark(count),
-            Action::VersionsOriginal => state.toggle_original(count),
+            Action::SelectToggle => state.toggle_mark(&sources),
+            Action::VersionsOriginal => state.toggle_original(&sources),
             Action::VersionsCompare | Action::Compare => self.leave_compare(),
             // En grand : la version active en plein écran (l'original : l'image entière).
             Action::Open => {
-                let pane = vc.active_pane(count);
+                let pane = vc.active_pane(&sources);
                 self.compare.clear();
                 self.versions_compare = None;
                 self.compare_from_view = false;
@@ -11775,7 +11839,7 @@ impl TriApp {
             // Plusieurs versions marquées : exportées ensemble, chacune avec son
             // préréglage ; sinon la boîte d'export de la version active.
             Action::FileExport if !vc.marked.is_empty() => {
-                self.export_versions(ctx, &vc.image, &vc.to_export(count));
+                self.export_versions(ctx, &vc.image, &vc.to_export(&sources));
             }
             Action::VersionsExportAll => {
                 let all: Vec<usize> = (0..count).collect();
@@ -11787,7 +11851,7 @@ impl TriApp {
             Action::FileDelete => {
                 let marked: Vec<usize> = vc.marked.iter().copied().filter(|&i| i < count).collect();
                 let indices = if marked.is_empty() {
-                    vc.active_pane(count).into_iter().collect()
+                    vc.active_pane(&sources).into_iter().collect()
                 } else {
                     marked
                 };
@@ -11801,7 +11865,7 @@ impl TriApp {
                 }
             }
             // Modifier la version active ; quitter l'éditeur ramène ici.
-            Action::Crop => match vc.active_pane(count) {
+            Action::Crop => match vc.active_pane(&sources) {
                 Some(i) => {
                     self.compare.clear();
                     self.versions_compare = None;
@@ -11953,7 +12017,8 @@ impl TriApp {
             self.select(index);
         }
         let versions = self.versions_of(&vc.image).list.clone();
-        let panes = vc.panes(versions.len());
+        let sources: Vec<tri::versions::Source> = versions.iter().map(|v| v.source).collect();
+        let panes = vc.panes(&sources);
         if panes.is_empty() {
             self.leave_compare();
             return;
@@ -12168,13 +12233,12 @@ impl TriApp {
         if let Some(c) = new_center {
             self.zoom = Some(c);
         }
-        let count = versions.len();
         if let Some((k, mark)) = clicked
             && let Some(state) = self.versions_compare.as_mut()
         {
             state.active = k;
             if mark {
-                state.toggle_mark(count);
+                state.toggle_mark(&sources);
             }
         }
         if let Some(k) = open {
@@ -12500,8 +12564,8 @@ impl TriApp {
                 // modifiée depuis la comparaison des versions : on y revient, sur elle.
                 self.crop_from_grid = false;
                 if let Some(mut vc) = self.crop_back_to_versions.take() {
-                    let count = self.versions_of(&image).list.len();
-                    vc.activate(index, count);
+                    let sources = self.version_renders(&image);
+                    vc.activate(index, &sources);
                     self.version_shown = None;
                     self.reopen_versions_compare(vc);
                 }
@@ -21986,7 +22050,7 @@ fn section_title(
 
 /// Sections repliables du panneau de droite (identifiants de [`TriApp::panel_section`]) :
 /// celles que `[gui] one_section_open` replie quand une autre se déplie.
-const SIDE_SECTIONS: [&str; 5] = ["filters", "view", "grid", "exif", "adjust"];
+const SIDE_SECTIONS: [&str; 6] = ["filters", "view", "grid", "versions", "exif", "adjust"];
 
 /// Titre d'une section qui ne se replie pas (l'histogramme du panneau de droite) : comme
 /// [`section_title`], aligné sur les autres, sans triangle ni clic.
@@ -24756,6 +24820,59 @@ mod tests {
     }
 
     #[test]
+    fn the_versions_comparison_is_filtered_by_render_in_the_side_panel() {
+        // Retour du 16/11/2026 : un filtre par rendu, dans le panneau de droite.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let image = dir.path().join("photos").join("img1.jpg");
+        let version = |name: &str, source| tri::versions::Version {
+            name: name.into(),
+            crop: [0.0, 0.0, 0.5, 0.5].into(),
+            ratio: tri::versions::Ratio::Free,
+            source,
+            profile: None,
+            tiles: tri::versions::Tiles::ONE,
+        };
+        use tri::versions::Source as S;
+        let versions = tri::versions::Versions {
+            list: vec![
+                version("A", S::Embedded),
+                version("B", S::Raw),
+                version("C", S::Embedded),
+            ],
+            unknown: Vec::new(),
+        };
+        tri::versions::write(&image, &versions, tri::xmp::Convention::Darktable).unwrap();
+        h.state_mut().versions.clear();
+        h.state_mut().metadata_panel = true;
+        let index = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path == image)
+            .unwrap();
+        h.state_mut().select(index);
+        act(&mut h, Action::VersionsCompare);
+        h.run_steps(3);
+        // Une case par rendu, avec son nombre de versions.
+        assert_eq!(h.query_all_by_label_contains("(2)").count(), 1);
+        assert_eq!(h.query_all_by_label_contains("(1)").count(), 1);
+        let sources = [S::Embedded, S::Raw, S::Embedded];
+        let panes =
+            |h: &Harness<'_, TriApp>| h.state().versions_compare.as_ref().unwrap().panes(&sources);
+        assert_eq!(panes(&h).len(), 3);
+        h.state_mut()
+            .versions_compare
+            .as_mut()
+            .unwrap()
+            .toggle_render(S::Embedded, &sources);
+        h.run_steps(3);
+        assert_eq!(panes(&h), [Some(1)]);
+        assert!(h.query_all_by_label_contains("B").count() > 0);
+        assert_eq!(h.state().mode, Mode::Compare);
+    }
+
+    #[test]
     fn the_versions_badge_opens_the_versions_side_by_side() {
         // #393 : pas de versions dépliées dans la grille ; l'icône ouvre la comparaison,
         // un volet par version (l'original sur demande), et on y travaille : marques,
@@ -24809,7 +24926,7 @@ mod tests {
         assert_eq!(original(&h), 2, "le volet en plus du bouton");
         let active = |h: &Harness<'_, TriApp>| {
             let vc = h.state().versions_compare.clone().unwrap();
-            vc.active_pane(2)
+            vc.active_pane(&[tri::versions::Source::Embedded; 2])
         };
         assert_eq!(active(&h), Some(0));
         // Flèche droite : la version suivante ; Espace la marque.
