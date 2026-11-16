@@ -62,6 +62,8 @@ pub enum BarAction {
     Save,
     /// Abandonner.
     Cancel,
+    /// Supprimer la version modifiée (retour du 16/11/2026).
+    Delete,
     /// Appliquer le préréglage n°.
     Preset(usize),
     /// Enregistrer le cadre en cours comme préréglage.
@@ -550,6 +552,17 @@ impl Crop {
                 .clicked()
             {
                 action = Some(BarAction::Save);
+            }
+            // Une version existante : la supprimer d'ici aussi.
+            if self.editing.is_some() {
+                ui.add_space(ui.spacing().item_spacing.x * 2.0);
+                if ui
+                    .button(t!("crop-delete"))
+                    .on_hover_text(t!("crop-delete-tip"))
+                    .clicked()
+                {
+                    action = Some(BarAction::Delete);
+                }
             }
             ui.add_space(ui.spacing().item_spacing.x * 4.0);
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {

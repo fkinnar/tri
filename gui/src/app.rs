@@ -8471,6 +8471,13 @@ impl TriApp {
             if self.crop.is_some() {
                 match action {
                     Action::Back => self.close_crop(),
+                    // La version modifiée (retour du 16/11/2026) : supprimée, puis retour
+                    // là d'où on venait. Pas pendant qu'on tape le nom : Suppr y efface
+                    // un caractère.
+                    Action::FileDelete if !ctx.egui_wants_keyboard_input() => {
+                        self.delete_edited_version()
+                    }
+                    Action::FileDelete => {}
                     Action::CropMove(_)
                     | Action::CropSize(_)
                     | Action::CropRatio(_)
@@ -11774,6 +11781,25 @@ impl TriApp {
                 let all: Vec<usize> = (0..count).collect();
                 self.export_versions(ctx, &vc.image, &all);
             }
+            // Supprimer (Suppr, `x` en vim ; retour du 16/11/2026) : les versions
+            // marquées, sinon l'active ; annulable. Jamais l'image : l'original n'est pas
+            // une version.
+            Action::FileDelete => {
+                let marked: Vec<usize> = vc.marked.iter().copied().filter(|&i| i < count).collect();
+                let indices = if marked.is_empty() {
+                    vc.active_pane(count).into_iter().collect()
+                } else {
+                    marked
+                };
+                if indices.is_empty() {
+                    self.hint = Some(t!("versions-delete-original"));
+                } else {
+                    self.delete_versions(&vc.image, &indices);
+                    if let Some(state) = self.versions_compare.as_mut() {
+                        state.marked.clear();
+                    }
+                }
+            }
             // Modifier la version active ; quitter l'éditeur ramène ici.
             Action::Crop => match vc.active_pane(count) {
                 Some(i) => {
@@ -12161,15 +12187,32 @@ impl TriApp {
 
     /// Supprime la version `index` de `path` (annulable).
     fn delete_version(&mut self, path: &Path, index: usize) {
+        self.delete_versions(path, &[index]);
+    }
+
+    /// Supprime les versions `indices` de `path`, en un seul pas d'annulation.
+    fn delete_versions(&mut self, path: &Path, indices: &[usize]) {
         let convention = self.settings.xmp.sidecar;
         let result = tri::versions::read(path).and_then(|mut versions| {
             let before = versions.items();
-            if index >= versions.list.len() {
+            let mut gone: Vec<usize> = indices
+                .iter()
+                .copied()
+                .filter(|&i| i < versions.list.len())
+                .collect();
+            gone.sort_unstable();
+            gone.dedup();
+            if gone.is_empty() {
                 return Ok(None);
             }
-            let removed = versions.list.remove(index);
+            // De la fin vers le début (les rangs restent justes), puis dans l'ordre.
+            let mut names: Vec<String> = Vec::new();
+            for &i in gone.iter().rev() {
+                names.push(versions.list.remove(i).name);
+            }
+            names.reverse();
             tri::versions::write(path, &versions, convention)?;
-            Ok(Some((before, versions.items(), removed.name)))
+            Ok(Some((before, versions.items(), names.join(", "))))
         });
         self.versions.remove(path);
         self.versions_epoch += 1;
@@ -12229,6 +12272,18 @@ impl TriApp {
             self.zoom_anchor = None;
             self.reveal = Some(Reveal::Minimal);
         }
+    }
+
+    /// Supprime la version en cours de modification et quitte l'éditeur (une nouvelle
+    /// version : rien à supprimer, l'abandonner suffit).
+    fn delete_edited_version(&mut self) {
+        let Some((image, Some(index))) = self.crop.as_ref().map(|c| (c.image.clone(), c.editing))
+        else {
+            self.hint = Some(t!("crop-delete-new"));
+            return;
+        };
+        self.delete_version(&image, index);
+        self.close_crop();
     }
 
     /// Applique le préréglage n° `index` au recadrage en cours.
@@ -21055,6 +21110,7 @@ impl eframe::App for TriApp {
             match action {
                 Some(crate::crop::BarAction::Save) => self.save_crop(),
                 Some(crate::crop::BarAction::Cancel) => self.close_crop(),
+                Some(crate::crop::BarAction::Delete) => self.delete_edited_version(),
                 Some(crate::crop::BarAction::Preset(i)) => self.apply_preset(i),
                 Some(crate::crop::BarAction::SavePreset) => self.save_preset(),
                 Some(crate::crop::BarAction::AddRatio(ratio)) => self.add_ratio(ratio),
@@ -24608,6 +24664,84 @@ mod tests {
         h.event(UiEvent::Zoom(0.001));
         h.run_steps(3);
         assert_eq!(h.state().grid_cell, h.state().gui.grid.cell_min, "plancher");
+    }
+
+    #[test]
+    fn versions_are_deleted_from_the_comparison_and_the_editor() {
+        // Retour du 16/11/2026 : supprimer une version depuis la comparaison passait par un
+        // chemin « tordu ». Suppr : les marquées, sinon l'active ; et dans l'éditeur.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let image = dir.path().join("photos").join("img1.jpg");
+        let version = |name: &str| tri::versions::Version {
+            name: name.into(),
+            crop: [0.0, 0.0, 0.5, 0.5].into(),
+            ratio: tri::versions::Ratio::Free,
+            source: tri::versions::Source::Embedded,
+            profile: None,
+            tiles: tri::versions::Tiles::ONE,
+        };
+        let versions = tri::versions::Versions {
+            list: vec![version("A"), version("B"), version("C"), version("D")],
+            unknown: Vec::new(),
+        };
+        tri::versions::write(&image, &versions, tri::xmp::Convention::Darktable).unwrap();
+        h.state_mut().versions.clear();
+        let names = || -> Vec<String> {
+            tri::versions::read(&image)
+                .unwrap()
+                .list
+                .into_iter()
+                .map(|v| v.name)
+                .collect()
+        };
+        let index = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path == image)
+            .unwrap();
+        h.state_mut().select(index);
+        act(&mut h, Action::VersionsCompare);
+        assert_eq!(h.state().mode, Mode::Compare);
+        // A et C marquées : supprimées ensemble, un seul pas d'annulation.
+        act(&mut h, Action::SelectToggle);
+        h.state_mut().versions_compare.as_mut().unwrap().active = 2;
+        act(&mut h, Action::SelectToggle);
+        press(&mut h, Key::Delete, Modifiers::NONE);
+        assert_eq!(names(), ["B", "D"]);
+        assert!(
+            h.state()
+                .versions_compare
+                .as_ref()
+                .unwrap()
+                .marked
+                .is_empty()
+        );
+        act(&mut h, Action::Undo);
+        assert_eq!(names(), ["A", "B", "C", "D"]);
+        // L'original n'est pas une version : rien.
+        h.state_mut().versions.clear();
+        act(&mut h, Action::VersionsOriginal);
+        h.state_mut().versions_compare.as_mut().unwrap().active = 0;
+        press(&mut h, Key::Delete, Modifiers::NONE);
+        assert_eq!(names().len(), 4);
+        assert!(h.state().hint.is_some());
+        act(&mut h, Action::VersionsOriginal);
+        // Sans marque : l'active (D).
+        h.state_mut().versions_compare.as_mut().unwrap().active = 3;
+        press(&mut h, Key::Delete, Modifiers::NONE);
+        assert_eq!(names(), ["A", "B", "C"]);
+        // Dans l'éditeur : la version modifiée, puis retour à la comparaison.
+        h.state_mut().versions_compare.as_mut().unwrap().active = 1;
+        act(&mut h, Action::Crop);
+        h.run_steps(2);
+        assert_eq!(h.state().crop.as_ref().and_then(|c| c.editing), Some(1));
+        press(&mut h, Key::Delete, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().crop.is_none());
+        assert_eq!(names(), ["A", "C"]);
+        assert_eq!(h.state().mode, Mode::Compare, "de retour à la comparaison");
     }
 
     #[test]
