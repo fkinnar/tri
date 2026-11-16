@@ -65,6 +65,27 @@ fn merge_split_photos(
     merged
 }
 
+/// Ce que montre un volet de la comparaison des versions.
+struct Sight {
+    /// Niveau affiché.
+    shown: Option<Level>,
+    /// Texture et taille d'origine.
+    drawable: Option<(TextureHandle, Vec2)>,
+    /// Taille de l'image entière en pixels (1:1).
+    full: Option<Vec2>,
+    /// Son rendu peut venir (un développé : son logiciel est là).
+    available: bool,
+}
+
+/// Rendu d'affichage d'une version : celui sur lequel elle a été cadrée.
+fn version_source(source: tri::versions::Source) -> Source {
+    match source {
+        tri::versions::Source::Embedded => Source::Embedded,
+        tri::versions::Source::Raw => Source::Raw,
+        tri::versions::Source::Developed => Source::Developed,
+    }
+}
+
 /// Préréglage des versions exportées ensemble.
 enum VersionsPreset {
     /// Celui de chaque version, sinon celui-ci (identifiant), sinon le dernier choisi.
@@ -9889,6 +9910,47 @@ impl TriApp {
         }
     }
 
+    /// Comparaison des versions de l'image `index` en cours : les rendus de ses volets
+    /// (celui de chaque version, et celui de l'original), sans doublon ; `None` sinon.
+    fn versions_sources(&self, index: usize) -> Option<Vec<Source>> {
+        let vc = self.versions_compare.as_ref()?;
+        let file = self.files.get(index)?;
+        if self.mode != Mode::Compare || vc.image != file.path {
+            return None;
+        }
+        let list = self
+            .versions
+            .get(&file.path)
+            .map(|v| &v.list[..])
+            .unwrap_or(&[]);
+        let mut sources: Vec<Source> = Vec::new();
+        for source in list.iter().map(|v| version_source(v.source)).chain(
+            vc.original
+                .then(|| self.versions_original_source(file, list, vc)),
+        ) {
+            if !sources.contains(&source) {
+                sources.push(source);
+            }
+        }
+        Some(sources)
+    }
+
+    /// Rendu du volet « Original » : celui de la version active (comparer à image égale),
+    /// sinon le rendu affiché de la photo.
+    fn versions_original_source(
+        &self,
+        file: &MediaFile,
+        list: &[tri::versions::Version],
+        vc: &crate::versions_compare::VersionsCompare,
+    ) -> Source {
+        let active = vc
+            .active_pane(list.len())
+            .or_else(|| (!list.is_empty()).then_some(0));
+        active
+            .and_then(|i| list.get(i))
+            .map_or_else(|| self.source_for(file), |v| version_source(v.source))
+    }
+
     /// Images affichées, la principale d'abord : en plein écran l'image et ses voisines
     /// (préchargement), en comparaison les images comparées (l'active d'abord).
     fn displayed(&self) -> Vec<usize> {
@@ -10191,6 +10253,32 @@ impl TriApp {
         let mut wanted = Vec::new();
         for (rank, &i) in images.iter().enumerate() {
             let kind = self.files[i].kind;
+            // Comparaison des versions : le rendu de chacune (retour du 16/11/2026), le
+            // développé calculé s'il le faut (la version a été cadrée dessus).
+            if let Some(sources) = self.versions_sources(i) {
+                let developed = self.developed_level(&self.files[i].path);
+                for source in sources {
+                    match source {
+                        Source::Raw if kind == MediaKind::Raw => {
+                            wanted.push((rank == 0, i, Level::Standard));
+                        }
+                        Source::Developed if self.export_engine(&self.files[i].path).is_some() => {
+                            wanted.push((rank == 0, i, developed));
+                        }
+                        _ => {}
+                    }
+                    if self.zoom.is_some() {
+                        let level = view::zoom_level(kind, source, developed);
+                        let expensive = level == Level::Full && kind == MediaKind::Raw;
+                        if !expensive
+                            || self.focus_since.elapsed() >= self.gui.view.full_raw_dwell()
+                        {
+                            wanted.push((rank == 0, i, level));
+                        }
+                    }
+                }
+                continue;
+            }
             // Ajusté : en mode RAW, le rendu RAW (le JPEG boîtier est calculé en fond).
             if self.source_for(&self.files[i]) == Source::Raw && kind == MediaKind::Raw {
                 wanted.push((rank == 0, i, Level::Standard));
@@ -10459,6 +10547,27 @@ impl TriApp {
         }
         for index in displayed {
             let kind = self.files[index].kind;
+            // Comparaison des versions : chaque rendu, sans repli sur un autre.
+            if let Some(sources) = self.versions_sources(index) {
+                let developed = self.developed_level(&self.files[index].path);
+                for source in sources {
+                    let level =
+                        view::pick_own(kind, source, zoomed, developed, |l| self.ready(index, l));
+                    if let Some(level) = level.filter(|&l| l != Level::Thumbnail) {
+                        let key = (self.files[index].path.clone(), level);
+                        if (!self.loaded(index, level) || self.big_stale.contains_key(&key))
+                            && !self.missing.contains(&key)
+                            && !self.over_budget.contains(&key)
+                            && !wanted
+                                .iter()
+                                .any(|(f, l): &(MediaFile, Level)| f.path == key.0 && *l == level)
+                        {
+                            wanted.push((self.files[index].clone(), level));
+                        }
+                    }
+                }
+                continue;
+            }
             let source = self.source_for(&self.files[index]);
             let developed = self.developed_level(&self.files[index].path);
             let level = view::pick(kind, source, zoomed, developed, |l| self.ready(index, l));
@@ -11554,11 +11663,7 @@ impl TriApp {
         let Some(version) = self.versions_of(path).list.get(index).cloned() else {
             return;
         };
-        self.set_source(match version.source {
-            tri::versions::Source::Embedded => Source::Embedded,
-            tri::versions::Source::Raw => Source::Raw,
-            tri::versions::Source::Developed => Source::Developed,
-        });
+        self.set_source(version_source(version.source));
         self.zoom = None;
         self.version_shown = None;
         let others = self.versions_of(path).without(Some(index));
@@ -11711,11 +11816,16 @@ impl TriApp {
             let Some(version) = versions.get(i) else {
                 continue;
             };
-            let source = match version.source {
-                tri::versions::Source::Embedded => Source::Embedded,
-                tri::versions::Source::Raw => Source::Raw,
-                tri::versions::Source::Developed => Source::Developed,
-            };
+            let source = version_source(version.source);
+            // Son rendu seulement (retour du 16/11/2026) : sans son logiciel, refusée plutôt
+            // qu'exportée dans un autre rendu.
+            if source == Source::Developed && self.export_engine(image).is_none() {
+                self.file_error = Some(t!(
+                    "versions-render-unavailable-export",
+                    name = version.name.as_str()
+                ));
+                continue;
+            }
             let render = crate::export::Render::of(Some(source), self.export_engine(image));
             let images = vec![image.to_path_buf()];
             let kind = crate::export::export_kind(render, &images);
@@ -11836,31 +11946,69 @@ impl TriApp {
         let crop_of = |pane: crate::versions_compare::Pane| {
             pane.and_then(|i| versions.get(i)).map_or(whole, |v| v.crop)
         };
-        let source = self.source_for(&file);
+        // Chaque volet dans le rendu de sa version (retour du 16/11/2026 : ils suivaient le
+        // rendu de la grille, et l'export partait d'un autre) ; l'original dans celui de la
+        // version active. Jamais de repli sur un autre rendu : un développement recadré ne
+        // cadrerait pas la même zone.
+        let original_source = self.versions_original_source(&file, &versions, &vc);
         let developed = self.developed_level(&file.path);
         let zoomed = self.zoom.is_some();
-        let zoom_level = view::zoom_level(file.kind, source, developed);
-        let desired = view::pick(file.kind, source, zoomed, developed, |l| {
-            self.ready(index, l)
-        });
-        let shown = view::pick(file.kind, source, zoomed, developed, |l| {
-            self.ready(index, l) && self.loaded(index, l)
-        });
         let deadline = Instant::now() + self.gui.load_budget();
-        let drawable: Option<(TextureHandle, Vec2)> = match shown {
-            Some(Level::Thumbnail) => self
-                .thumbnail_texture(&ctx, index, deadline)
-                .map(|t| (t.clone(), t.size_vec2())),
-            Some(level) => self
-                .big
-                .get(&(file.path.clone(), level))
-                .map(|b| (b.texture.clone(), b.original)),
-            None => None,
-        };
-        self.view_waiting =
-            shown != desired || shown.is_none() || (zoomed && shown != Some(zoom_level));
+        let mut waiting = false;
+        let mut sights: Vec<Sight> = Vec::with_capacity(panes.len());
+        for &pane in &panes {
+            let source = pane
+                .and_then(|i| versions.get(i))
+                .map_or(original_source, |v| version_source(v.source));
+            let available = source != Source::Developed || self.export_engine(&file.path).is_some();
+            let zoom_level = view::zoom_level(file.kind, source, developed);
+            let desired = view::pick_own(file.kind, source, zoomed, developed, |l| {
+                self.ready(index, l)
+            });
+            let shown = view::pick_own(file.kind, source, zoomed, developed, |l| {
+                self.ready(index, l) && self.loaded(index, l)
+            });
+            let drawable: Option<(TextureHandle, Vec2)> = match shown {
+                Some(Level::Thumbnail) => self
+                    .thumbnail_texture(&ctx, index, deadline)
+                    .map(|t| (t.clone(), t.size_vec2())),
+                Some(level) => self
+                    .big
+                    .get(&(file.path.clone(), level))
+                    .map(|b| (b.texture.clone(), b.original)),
+                None => None,
+            };
+            waiting |= available
+                && (shown != desired || shown.is_none() || (zoomed && shown != Some(zoom_level)));
+            // 1:1 : la taille de l'image entière en pixels (connue, ou estimée).
+            let full = drawable.as_ref().map(|(_, original)| {
+                if zoomed && shown == Some(zoom_level) {
+                    let full = match zoom_level {
+                        Level::Developed(_) => self
+                            .developed_full_size(&ctx, &file, original.x / original.y)
+                            .unwrap_or(*original),
+                        _ => *original,
+                    };
+                    self.last_zoom_size.insert(zoom_level, full);
+                    full
+                } else {
+                    self.last_zoom_size
+                        .get(&zoom_level)
+                        .map(|&last| view::estimate_zoom_size(last, original.x / original.y))
+                        .unwrap_or(*original)
+                }
+            });
+            sights.push(Sight {
+                shown,
+                drawable,
+                full,
+                available,
+            });
+        }
+        self.view_waiting = waiting;
         // Proportions de la disposition : celles du premier cadre.
-        let aspect = drawable
+        let aspect = sights[0]
+            .drawable
             .as_ref()
             .map(|(_, original)| {
                 let c = crop_of(panes[0]);
@@ -11869,36 +12017,19 @@ impl TriApp {
             .unwrap_or(1.5);
         let (cols, rects) = crate::compare::layout(panes.len(), area, aspect, settings.gap);
         self.compare_cols = cols;
-        // 1:1 : la taille de l'image entière en pixels (connue, ou estimée).
-        let full = drawable.as_ref().map(|(_, original)| {
-            if zoomed && shown == Some(zoom_level) {
-                let full = match zoom_level {
-                    Level::Developed(_) => self
-                        .developed_full_size(&ctx, &file, original.x / original.y)
-                        .unwrap_or(*original),
-                    _ => *original,
-                };
-                self.last_zoom_size.insert(zoom_level, full);
-                full
-            } else {
-                self.last_zoom_size
-                    .get(&zoom_level)
-                    .map(|&last| view::estimate_zoom_size(last, original.x / original.y))
-                    .unwrap_or(*original)
-            }
-        });
         let pan = std::mem::take(&mut self.pan);
         let mut new_center = None;
         let mut clicked: Option<(usize, bool)> = None;
         let mut open = None;
         let mark_color = Color32::from(self.gui.colors.marked);
-        for (k, (&pane, &rect)) in panes.iter().zip(&rects).enumerate() {
+        for (k, ((&pane, &rect), sight)) in panes.iter().zip(&rects).zip(&sights).enumerate() {
+            let (drawable, full, shown) = (&sight.drawable, sight.full, sight.shown);
             let id = ui.scope_id().with(("versions_compare", k));
             let response = ui.interact(rect, id, Sense::click_and_drag());
             let painter = ui.painter_at(rect);
             painter.rect_filled(rect, 0.0, self.view_background());
             let c = crop_of(pane);
-            if let (Some((texture, original)), Some(full)) = (&drawable, full) {
+            if let (Some((texture, original)), Some(full)) = (drawable, full) {
                 let image_rect = match self.zoom {
                     // Au même point relatif de chaque cadre, à la même échelle.
                     Some(center) => {
@@ -11957,6 +12088,20 @@ impl TriApp {
             if let Some(level) = shown {
                 label.push_str(" · ");
                 label.push_str(&view::label(file.kind, level));
+            } else {
+                // Son rendu pas là : dit au milieu du volet, jamais un autre à sa place.
+                let text = if sight.available {
+                    t!("versions-render-waiting")
+                } else {
+                    t!("versions-render-unavailable")
+                };
+                painter.text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    text,
+                    egui::FontId::proportional(14.0),
+                    ui.visuals().weak_text_color(),
+                );
             }
             let font = egui::FontId::proportional(13.0);
             let galley = painter.layout_no_wrap(label.clone(), font, Color32::WHITE);
@@ -15585,11 +15730,14 @@ impl TriApp {
                     return;
                 };
                 let developer = !self.developers.is_empty();
-                let source = match version.source {
-                    tri::versions::Source::Embedded => Source::Embedded,
-                    tri::versions::Source::Raw => Source::Raw,
-                    tri::versions::Source::Developed => Source::Developed,
-                };
+                let source = version_source(version.source);
+                if source == Source::Developed && self.export_engine(&path).is_none() {
+                    self.file_error = Some(t!(
+                        "versions-render-unavailable-export",
+                        name = version.name.as_str()
+                    ));
+                    return;
+                }
                 let render = crate::export::Render::of(Some(source), self.export_engine(&path));
                 let images = vec![path];
                 let flat = crate::export::exports_flat(render, &images);
@@ -24610,6 +24758,67 @@ mod tests {
             .collect();
         written.sort();
         assert_eq!(written, ["img1-Post.jpg", "img1-Story.jpg"]);
+    }
+
+    #[test]
+    fn each_version_is_shown_and_exported_in_its_own_render() {
+        // Retour du 16/11/2026 : les volets suivaient le rendu de la grille, l'export celui
+        // de la version. Une version cadrée sur un développé, sans son logiciel : dite
+        // indisponible, jamais montrée ni exportée dans un autre rendu.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let image = dir.path().join("photos").join("img1.jpg");
+        let version = |name: &str, source| tri::versions::Version {
+            name: name.into(),
+            crop: [0.0, 0.0, 0.5, 0.5].into(),
+            ratio: tri::versions::Ratio::Free,
+            source,
+            profile: Some("web".into()),
+            tiles: tri::versions::Tiles::ONE,
+        };
+        let versions = tri::versions::Versions {
+            list: vec![
+                version("Story", tri::versions::Source::Embedded),
+                version("Post", tri::versions::Source::Developed),
+            ],
+            unknown: Vec::new(),
+        };
+        tri::versions::write(&image, &versions, tri::xmp::Convention::Darktable).unwrap();
+        h.state_mut().developers = Default::default();
+        let out = dir.path().join("web");
+        h.state_mut()
+            .export_folders
+            .insert("web".into(), out.to_string_lossy().into_owned());
+        h.state_mut().versions.clear();
+        let index = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path == image)
+            .unwrap();
+        h.state_mut().select(index);
+        act(&mut h, Action::VersionsCompare);
+        assert_eq!(h.state().mode, Mode::Compare);
+        h.run_steps(10);
+        assert_eq!(
+            h.state().versions_sources(index),
+            Some(vec![Source::Embedded, Source::Developed])
+        );
+        // Story s'affiche (son rendu), Post n'emprunte pas celui de Story.
+        assert!(h.query_all_by_label_contains("Story · ").count() > 0);
+        assert_eq!(h.query_all_by_label_contains("Post · ").count(), 0);
+        assert!(h.query_by_label("Post").is_some());
+        act(&mut h, Action::VersionsExportAll);
+        run_until(&mut h, |app| {
+            app.export_job.is_none() && app.export_queue.is_empty()
+        });
+        let written: Vec<String> = std::fs::read_dir(&out)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(written, ["img1-Story.jpg"], "Post refusée");
+        let error = h.state().file_error.clone().unwrap_or_default();
+        assert!(error.contains("Post"), "{error}");
     }
 
     #[test]
