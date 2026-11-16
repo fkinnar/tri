@@ -478,6 +478,7 @@ folders-subfolders-tip = Also show the images of subfolders ({ $n } levels at mo
 folders-collapse = Collapse
 folders-expand = Expand
 folders-unreadable = unreadable
+folders-reading = Reading the folder (slow disk)…
 folders-fixed-drive = Fixed drive ([places] fixed): no ejection from tri
 folders-offload = Offload the card…
 eject = Eject

@@ -478,6 +478,7 @@ folders-subfolders-tip = Afficher aussi les images des sous-dossiers ({ $n } niv
 folders-collapse = Replier
 folders-expand = Déplier
 folders-unreadable = illisible
+folders-reading = Lecture du dossier (disque lent)…
 folders-fixed-drive = Disque fixé ([places] fixed) : pas d'éjection depuis tri
 folders-offload = Décharger la carte…
 eject = Éjecter

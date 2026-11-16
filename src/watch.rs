@@ -9,8 +9,8 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime};
 
@@ -284,8 +284,8 @@ impl Changes {
 /// lâche.
 pub struct FolderWatch {
     stop: Arc<AtomicBool>,
-    /// Dernier état signalé (ou resynchronisé), auquel on compare.
-    known: Arc<Mutex<Snapshot>>,
+    /// Resynchronisations demandées ([`FolderWatch::sync`]), faites par le fil.
+    resync: Arc<AtomicU64>,
     dir: PathBuf,
     depth: usize,
     thread: Option<JoinHandle<()>>,
@@ -326,38 +326,54 @@ impl FolderWatch {
     ) -> FolderWatch {
         let pace = interval.into();
         let stop = Arc::new(AtomicBool::new(false));
-        let known = Arc::new(Mutex::new(known));
+        let resync = Arc::new(AtomicU64::new(0));
         let thread = {
-            let (stop, known, dir) = (stop.clone(), known.clone(), dir.to_path_buf());
+            let (stop, resync, dir) = (stop.clone(), resync.clone(), dir.to_path_buf());
+            let mut known = known;
             std::thread::Builder::new()
                 .name("tri-watch".into())
                 .spawn(move || {
                     // Dernier état vu, pour juger de la stabilité.
                     let mut last: Option<Snapshot> = None;
                     let mut wait = pace.interval;
+                    // Dernière resynchronisation faite.
+                    let mut synced = 0;
                     while !stop.load(Ordering::Relaxed) {
                         std::thread::park_timeout(wait);
                         if stop.load(Ordering::Relaxed) {
                             break;
                         }
+                        let asked = resync.load(Ordering::Acquire);
                         let started = std::time::Instant::now();
                         let read = Snapshot::of_depth(&dir, depth);
                         wait = pace.wait_after(started.elapsed());
+                        // Resynchronisation demandée pendant ce relevé : il a pu voir la
+                        // moitié d'un changement fait par tri, relevé refait tout de suite.
+                        if resync.load(Ordering::Acquire) != asked {
+                            last = None;
+                            wait = Duration::ZERO;
+                            continue;
+                        }
                         let Ok(now) = read else {
                             last = None;
                             continue;
                         };
+                        // Relevé commencé après les changements faits par tri : il devient
+                        // la référence, sans rien signaler.
+                        if asked != synced {
+                            synced = asked;
+                            known = now.clone();
+                            last = Some(now);
+                            wait = pace.interval;
+                            continue;
+                        }
                         let stable = last.as_ref() == Some(&now);
                         last = Some(now.clone());
                         if !stable {
                             continue;
                         }
-                        let changes = {
-                            let mut known = known.lock().unwrap();
-                            let changes = known.changes(&now);
-                            *known = now;
-                            changes
-                        };
+                        let changes = known.changes(&now);
+                        known = now;
                         if !changes.is_empty() {
                             // Relevés retenus des fichiers changés : à refaire (les rendus
                             // d'une image développée ailleurs se recalculent).
@@ -376,7 +392,7 @@ impl FolderWatch {
         };
         FolderWatch {
             stop,
-            known,
+            resync,
             dir: dir.to_path_buf(),
             depth,
             thread,
@@ -394,10 +410,14 @@ impl FolderWatch {
     }
 
     /// Prend l'état actuel pour référence, sans rien signaler : après un changement fait
-    /// par `tri` lui-même (renommage, corbeille, dossier relu), déjà pris en compte.
+    /// par `tri` lui-même (note, renommage, corbeille, dossier relu), déjà pris en compte.
+    /// Le relevé est fait par le fil de la surveillance, tout de suite, sans attendre
+    /// (16/11/2026 : relevé sur place, chaque note posée sur un montage iCloud figeait
+    /// l'interface).
     pub fn sync(&self) {
-        if let Ok(now) = Snapshot::of_depth(&self.dir, self.depth) {
-            *self.known.lock().unwrap() = now;
+        self.resync.fetch_add(1, Ordering::AcqRel);
+        if let Some(thread) = &self.thread {
+            thread.thread().unpark();
         }
     }
 }

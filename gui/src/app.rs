@@ -4705,6 +4705,10 @@ impl TriApp {
                             ui.colored_label(self.gui.colors.error, t!("folders-unreadable"))
                                 .on_hover_text(error);
                         }
+                        if row.loading {
+                            ui.add(egui::Spinner::new().size(size))
+                                .on_hover_text(t!("folders-reading"));
+                        }
                         if row.kind == Some(PlaceKind::Volume) || device {
                             let color = ui.visuals().text_color();
                             if !row.ejectable {
@@ -21094,6 +21098,9 @@ impl eframe::App for TriApp {
             self.repaint = Some(ctx.clone());
             let repaint = ctx.clone();
             tri::cache::on_stamps_read(move || repaint.request_repaint());
+            // Dossiers du panneau lus en fond (montage lent) : redessiné à leur arrivée.
+            let repaint = ctx.clone();
+            self.tree.set_wake(move || repaint.request_repaint());
         }
         if ctx.input(|i| i.viewport().close_requested()) {
             self.save_folder_position();
@@ -21147,6 +21154,7 @@ impl eframe::App for TriApp {
         steps.mark("piles");
         self.watch_volumes(&ctx);
         self.watch_neighbourhood(&ctx);
+        self.tree.poll();
         self.poll_opening();
         self.poll_loading(&ctx);
         if self.engine_backlog {

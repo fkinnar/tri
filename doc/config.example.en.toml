@@ -178,6 +178,9 @@ eject_lock_ms = 5000
 # more tries, and the wait between two (ms). 0: a single try.
 eject_retries = 5
 eject_retry_ms = 1000
+# Folder unfolded in the panel: wait for its list (ms); beyond it (iCloud, NAS), it is
+# read in the background, without freezing the interface.
+read_wait_ms = 150
 
 [develop]
 # darktable, to see its developments in tri: found automatically, a path, or off.

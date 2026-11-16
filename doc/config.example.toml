@@ -181,6 +181,9 @@ eject_lock_ms = 5000
 # nouveaux essais, et attente entre deux (ms). 0 : un seul essai.
 eject_retries = 5
 eject_retry_ms = 1000
+# Dossier déplié dans le panneau : attente de sa liste (ms) ; au-delà (iCloud, NAS), elle
+# est lue en fond, sans figer l'interface.
+read_wait_ms = 150
 
 [develop]
 # darktable, pour voir ses développements dans tri : trouvé tout seul, un chemin, ou

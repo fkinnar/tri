@@ -132,8 +132,17 @@ Triés par nom sans tenir compte de la casse ; dossiers cachés (`.xxx`) seuleme
 
 - rien n'est parcouru d'avance : un dossier est lu quand on le **déplie** (`expand`,
   `toggle`), puis gardé ; instantané même sur un NAS ;
-- `rows()` : lignes visibles à plat (`Row { path, name, depth, expanded, error, kind,
-  ejectable, favorite, section }`), dans l'ordre d'affichage ; un dossier illisible
+- **lectures en fond** (16/11/2026 : un montage iCloud sous Linux figeait la fenêtre,
+  « ne répond pas », jusqu'à la fermeture) : avec `Tree::new`, sous-dossiers d'un dossier
+  déplié, dossiers relus (`reload`) et favoris présents sont lus dans des fils, attendus
+  `[places] read_wait_ms` (150 ms : un disque local répond avant, comme sur place) ; au-delà,
+  la ligne porte `Row::loading` (l'interface montre une roue), la liste d'avant reste
+  affichée pendant une relecture, et `poll()` reprend les résultats (`set_wake` : appelé à
+  leur arrivée, pour redessiner). Une lecture dépassée par une plus récente du même dossier
+  est ignorée. `Tree::with_places` (tests) lit sur place ; `set_reader` remplace le lecteur
+  (faux disque lent), `settle_for` attend les lectures en cours ;
+- `rows()` : lignes visibles à plat (`Row { path, name, depth, expanded, error, loading,
+  kind, ejectable, favorite, section }`), dans l'ordre d'affichage ; un dossier illisible
   déplié porte son erreur ;
 - **sections** (demandé le 20/10/2026 : trié, et passer le moins possible par la
   racine) : `Section::Devices` (supports amovibles, montés ou non, #113), `Drives`
