@@ -135,6 +135,20 @@ rotation de `b`, même d'une séance à l'autre), par le worker lourd (darktable
 machine), jamais tout le dossier en fond. Mesuré le 19/10/2026 (RAF X-T4, Mac Apple
 Silicon) : 8 à 10 s par image, dont ~6 s de démarrage de darktable.
 
+## Quand darktable échoue (16/11/2026)
+
+Tout va au journal (#398) : commande, code de sortie, et les deux sorties de
+`darktable-cli` (sa sortie standard aussi depuis le 16/11/2026 : il y écrit certaines
+erreurs). Un sidecar développé avec un **darktable plus récent** échoue avec un plus
+ancien (retour : AgX, darktable 5.x, refusé sans un mot par la 4.6 de Linux Mint 22). À
+l'échec, `tri` relève les modules de l'historique (`darktable:operation`) et cherche
+chacun dans le **dossier des plugins** du darktable installé (`lib<module>.so`, à côté du
+programme : `Contents/Resources/lib/darktable/plugins` sur macOS,
+`/usr/lib/<arch>/darktable/plugins` d'un paquet Linux) ; ceux qui manquent sont nommés
+dans l'erreur, avec la version (`darktable-cli --version`) et le conseil d'installer un
+darktable à jour. Pas de table des versions des modules à tenir à jour. Flatpak : plugins
+non cherchés (rien n'est dit).
+
 ## Taille du développé (21/10/2026)
 
 `developed_size(xmp, taille)` : la taille de l'image que darktable produirait à pleine

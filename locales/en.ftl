@@ -374,6 +374,7 @@ develop-unavailable = { $engine } not found ([develop] { $id } setting)
 develop-rapidraw-open = interface open: the command line export does not run at the same time, close it and try again
 develop-rapidraw-black = all-black image: RapidRAW's interface is probably open, close it and try again
 develop-failed = { $engine }: { $error }
+develop-darktable-unknown-modules = this development uses modules this darktable ({ $version }) does not know: { $modules }. It was made with a newer darktable; install an up-to-date version (Flatpak, AppImage) or set it in the settings (Develop).
 export-no-profile = no development to apply (no profile, or a profile holding only ratings)
 export-bad-bits = export preset “{ $profile }”: { $bits } bits not possible in { $format }
 export-bad-quality = export preset “{ $profile }”: quality { $quality } outside 1 to 100

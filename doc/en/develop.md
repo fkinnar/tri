@@ -132,6 +132,19 @@ even from one session to the next), by the heavy worker (darktable occupies the 
 machine), never the whole folder in the background. Measured on 2026-10-19 (X-T4 RAF,
 Apple Silicon Mac): 8 to 10 s per image, of which ~6 s is darktable's startup.
 
+## When darktable fails (2026-11-16)
+
+Everything goes to the log (#398): command, exit code, and both outputs of `darktable-cli`
+(its standard output too since 2026-11-16: it writes some errors there). A sidecar
+developed with a **newer darktable** fails with an older one (feedback: AgX, darktable 5.x,
+refused by the 4.6 of Linux Mint 22, without a word). On failure, `tri` lists the modules
+of the history (`darktable:operation`) and looks for each one in the **plugins folder** of
+the installed darktable (`lib<module>.so`, next to the program: `Contents/Resources/lib/
+darktable/plugins` on macOS, `/usr/lib/<arch>/darktable/plugins` for a Linux package);
+the unknown ones are named in the error, with the version (`darktable-cli --version`) and
+the advice to install an up-to-date darktable. No table of module versions to keep up to
+date. Flatpak: plugins not looked for (nothing said).
+
 ## Size of the developed image (2026-10-21)
 
 `developed_size(xmp, size)`: the size of the image darktable would produce at full
