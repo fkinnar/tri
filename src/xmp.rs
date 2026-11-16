@@ -2092,7 +2092,18 @@ pub fn write_list(
     if original.is_none() && items.is_empty() {
         return Ok(path);
     }
-    let base = original.as_deref().unwrap_or(NEW_PACKET);
+    // Un sidecar créé pour une liste (une version, des réglages) porte aussi les notes que
+    // `tri` retient de l'image : vide, il contredirait les notes portées par l'image
+    // elle-même ou un autre sidecar, et la synchronisation y verrait un conflit (retour
+    // du 16/11/2026).
+    let fresh;
+    let base = match original.as_deref() {
+        Some(text) => text,
+        None => {
+            fresh = apply(NEW_PACKET, &remembered_notes(image))?;
+            &fresh
+        }
+    };
     let updated = apply_list(base, field, items)?;
     // Relu avant d'écrire : une liste qui ne se relit pas est une erreur, jamais un succès
     // silencieux (un sidecar inattendu laissait la liste de côté sans rien dire).
@@ -2112,6 +2123,20 @@ pub fn write_list(
         return Err(e.into());
     }
     Ok(path)
+}
+
+/// Les notes que `tri` retient de `image` (mémoire du dossier,
+/// [`crate::reconcile::Memory`]) ; aucune si rien n'est retenu.
+fn remembered_notes(image: &Path) -> Notes {
+    let dir = image.parent().unwrap_or(Path::new("."));
+    let name = image
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    crate::reconcile::Memory::open(dir)
+        .get(&name)
+        .map(crate::reconcile::Remembered::notes)
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

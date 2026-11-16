@@ -1433,6 +1433,32 @@ mod tests {
     }
 
     #[test]
+    fn a_sidecar_created_for_a_version_is_not_a_conflict() {
+        // Retour du 16/11/2026 : JPEG noté dans l'image, sans sidecar ; enregistrer une
+        // version créait un sidecar sans notes, vu comme une source en désaccord.
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir.path().join("A.jpg");
+        std::fs::write(&a, jpeg()).unwrap();
+        let mut three = Notes::default();
+        three.set_stars(3);
+        crate::embedded::write(&a, &three).unwrap();
+        let mut book = NoteBook::load([a.as_path()], Convention::Darktable);
+        assert_eq!(book.notes(&a).stars, 3);
+        let sidecar = xmp::write_list(
+            &a,
+            xmp::VERSIONS,
+            &["story".to_string()],
+            Convention::Darktable,
+        )
+        .unwrap();
+        assert_eq!(xmp::read(&a).unwrap().stars, 3, "notes reprises");
+        assert!(sidecar.exists());
+        book.reload();
+        assert!(book.conflict(&a).is_none(), "pas de conflit");
+        assert_eq!(book.notes(&a).stars, 3);
+    }
+
+    #[test]
     fn notes_inside_an_image_are_read_when_it_has_no_sidecar() {
         // Issue n° 276 : étoiles posées ailleurs (Explorateur Windows, Lightroom…).
         let dir = tempfile::tempdir().unwrap();
