@@ -194,9 +194,8 @@ pub enum Outcome {
         remember_name: String,
         render: crate::export::Render,
         cut: Option<tri::export::Cut>,
-        /// Les versions des images plutôt qu'elles : `Some(true)` avec ce préréglage pour
-        /// toutes, `Some(false)` avec celui de chacune.
-        versions: Option<bool>,
+        /// Les versions des images plutôt qu'elles, voir [`crate::export::VersionsExport`].
+        versions: Option<crate::export::VersionsExport>,
     },
 }
 

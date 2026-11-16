@@ -130,6 +130,17 @@ struct VersionsChoice {
     /// Le préréglage, le dossier et le nom de la boîte pour toutes les versions (sinon
     /// ceux de chaque version, la boîte pour celles qui n'en ont pas).
     forced: bool,
+    /// Les images entières aussi, avec le préréglage de la boîte (retour du 16/11/2026).
+    original: bool,
+}
+
+/// Export des versions demandé par la boîte.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VersionsExport {
+    /// Le préréglage, le dossier et le nom de la boîte pour toutes les versions.
+    pub forced: bool,
+    /// Les images entières aussi, avec le préréglage de la boîte.
+    pub original: bool,
 }
 
 /// Résultat d'une image de la boîte.
@@ -150,9 +161,9 @@ pub enum Outcome {
         remember_name: String,
         render: Render,
         cut: Option<tri::export::Cut>,
-        /// Exporter les versions des images plutôt qu'elles (`Some`), avec le préréglage
-        /// de la boîte pour toutes (`Some(true)`) ou celui de chacune.
-        versions: Option<bool>,
+        /// Exporter les versions des images plutôt qu'elles (`Some`), voir
+        /// [`VersionsExport`].
+        versions: Option<VersionsExport>,
     },
 }
 
@@ -477,6 +488,8 @@ impl ExportDialog {
                         ui.indent("export_versions_forced", |ui| {
                             ui.checkbox(&mut v.forced, t!("export-versions-forced"))
                                 .on_hover_text(t!("export-versions-forced-tip"));
+                            ui.checkbox(&mut v.original, t!("export-versions-original"))
+                                .on_hover_text(t!("export-versions-original-tip"));
                         });
                     }
                 }
@@ -528,7 +541,10 @@ impl ExportDialog {
                 remember_name,
                 render: self.render,
                 cut: self.cut.clone(),
-                versions: self.versions.filter(|v| v.on).map(|v| v.forced),
+                versions: self.versions.filter(|v| v.on).map(|v| VersionsExport {
+                    forced: v.forced,
+                    original: v.original,
+                }),
             };
         }
         if cancel || modal.should_close() {
@@ -542,7 +558,15 @@ impl ExportDialog {
     /// (nom suivi de -camera) ».
     fn contents(&self) -> String {
         if let Some(v) = self.versions.filter(|v| v.on) {
-            return t!("export-contents-versions", n = v.count, images = v.images);
+            let versions = t!("export-contents-versions", n = v.count, images = v.images);
+            return if v.original {
+                format!(
+                    "{versions} · {}",
+                    t!("export-contents-whole", n = self.images.len())
+                )
+            } else {
+                versions
+            };
         }
         let b = &self.batch;
         let mut parts = Vec::new();
@@ -575,6 +599,7 @@ impl ExportDialog {
             images,
             on: false,
             forced: false,
+            original: false,
         });
         self
     }
@@ -582,11 +607,12 @@ impl ExportDialog {
     /// Tests : coche « Exporter les versions » (et `forced`) ; faux si la case n'est pas
     /// proposée.
     #[cfg(test)]
-    pub fn check_versions(&mut self, forced: bool) -> bool {
+    pub fn check_versions(&mut self, forced: bool, original: bool) -> bool {
         match &mut self.versions {
             Some(v) => {
                 v.on = true;
                 v.forced = forced;
+                v.original = original;
                 true
             }
             None => false,

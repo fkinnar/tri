@@ -15847,13 +15847,24 @@ impl TriApp {
                 self.export_choice[usize::from(crate::export::exports_flat(render, &images))] =
                     Some(profile.id.clone());
                 // Les versions des images plutôt qu'elles (retour du 16/11/2026).
-                if let Some(forced) = versions {
-                    let preset = if forced {
+                if let Some(choice) = versions {
+                    // Les images entières aussi, avec le préréglage de la boîte, d'abord.
+                    let mut started = 0;
+                    if choice.original {
+                        self.start_export(
+                            ctx,
+                            images.clone(),
+                            profile.clone(),
+                            folder.clone(),
+                            render,
+                            None,
+                        );
+                    }
+                    let preset = if choice.forced {
                         VersionsPreset::Forced { profile, folder }
                     } else {
                         VersionsPreset::Own(Some(profile.id))
                     };
-                    let mut started = 0;
                     for image in &images {
                         let all: Vec<usize> = (0..self.versions_of(image).list.len()).collect();
                         started += self.export_versions_as(ctx, image, &all, &preset);
@@ -24664,7 +24675,7 @@ mod tests {
             else {
                 panic!("boîte d'export");
             };
-            assert!(dialog.check_versions(forced), "case proposée");
+            assert!(dialog.check_versions(forced, false), "case proposée");
             press(&mut h, Key::Enter, Modifiers::NONE);
             run_until(&mut h, |app| {
                 app.file_dialog.is_none() && app.export_job.is_none() && app.export_queue.is_empty()
@@ -24685,6 +24696,33 @@ mod tests {
             listed(&edit).len(),
             1,
             "img2, sans version, n'est pas parti"
+        );
+        // Les images entières aussi (retour du 16/11/2026) : toutes, img2 comprise, avec
+        // le préréglage de la boîte.
+        h.state_mut().selection.clear();
+        for p in [&one, &two] {
+            h.state_mut().selection.toggle(p);
+        }
+        h.state_mut().perform(&ctx, Action::FileExport);
+        h.run_steps(2);
+        let Some(crate::files::FileDialog::Export(dialog)) = &mut h.state_mut().file_dialog else {
+            panic!("boîte d'export");
+        };
+        assert!(dialog.check_versions(false, true));
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.file_dialog.is_none() && app.export_job.is_none() && app.export_queue.is_empty()
+        });
+        let web_files = listed(&web);
+        assert!(
+            web_files.contains(&"img1.jpg".to_string())
+                && web_files.contains(&"img2.jpg".to_string()),
+            "{web_files:?}"
+        );
+        assert_eq!(
+            listed(&edit).len(),
+            2,
+            "Story de nouveau, avec son préréglage"
         );
     }
 

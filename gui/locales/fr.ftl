@@ -879,6 +879,12 @@ export-versions = { $n ->
 export-versions-tip = Les versions plutôt que les images entières. Chaque version part avec son propre préréglage d'export, son dossier et son nom de fichier ; une version sans préréglage prend celui choisi ici. Les images sans version ne partent pas.
 export-versions-forced = Ce préréglage pour toutes les versions
 export-versions-forced-tip = Le préréglage, le dossier et le nom choisis ici remplacent ceux de chaque version.
+export-versions-original = Les images entières aussi
+export-versions-original-tip = En plus des versions, chaque image entière, avec le préréglage, le dossier et le nom choisis ici.
+export-contents-whole = { $n ->
+    [one] l'image entière
+   *[other] les { $n } images entières
+}
 export-contents-versions = { $n ->
     [one] 1 version
    *[other] { $n } versions

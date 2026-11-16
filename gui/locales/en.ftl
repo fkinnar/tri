@@ -876,6 +876,12 @@ export-versions = { $n ->
 export-versions-tip = The versions instead of the whole images. Each version goes with its own export preset, folder and file name; a version without a preset takes the one chosen here. Images without a version are left out.
 export-versions-forced = This preset for every version
 export-versions-forced-tip = The preset, folder and name chosen here replace those of each version.
+export-versions-original = The whole images too
+export-versions-original-tip = Besides the versions, each whole image, with the preset, folder and name chosen here.
+export-contents-whole = { $n ->
+    [one] the whole image
+   *[other] the { $n } whole images
+}
 export-contents-versions = { $n ->
     [one] 1 version
    *[other] { $n } versions
