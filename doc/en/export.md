@@ -427,7 +427,10 @@ Crop presets are created the same way (see `versions.md`).
     instead). It fades after `[gui.grid] export_toast_ms` (5 s; 0: never shown), waits
     while the pointer is on it, and an error stays until "Close". One bubble per export,
     one under the other (`TriApp::export_toasts`): an error is never replaced by the
-    summary of a later export. Not shown for an export stopped by hand.
+    summary of a later export. Not shown for an export stopped by hand. The versions of
+    one request ("Export the N versions", "Export all") go as separate exports but form a
+    **batch**: a single bubble, when the last one ends, with the summary of them all
+    (2026-11-16: one bubble per version; `begin_export_batch`, `finish_export_batch`).
   - **Export queue** (#400, 2026-11-14): `Ctrl+E` during an export is accepted; the
     new export waits its turn and starts when the previous one ends, in the order they
     were asked for (a queue rather than exports in parallel: darktable and LibRaw
