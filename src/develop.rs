@@ -1378,6 +1378,33 @@ fn render_darktable(
     std::fs::create_dir_all(&dt.config_dir)
         .map_err(|e| DevelopError::Failed(Engine::Darktable, e.to_string()))?;
     let _ = std::fs::remove_file(out);
+    // Ce que darktable écrit sur sa sortie standard : gardé dans un fichier (un tube
+    // plein le bloquerait), joint au message s'il échoue (il y écrit certaines erreurs).
+    let stdout_path = dt.config_dir.join(format!(
+        "cli-{}-{:?}.log",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    let stdout = std::fs::File::create(&stdout_path)
+        .map_err(|e| DevelopError::Failed(Engine::Darktable, e.to_string()))?;
+    let result = run_darktable(dt, image, sidecar, out, side, cancel, stdout, &stdout_path);
+    let _ = std::fs::remove_file(&stdout_path);
+    result
+}
+
+/// Lance darktable-cli (voir [`render_darktable`]), sa sortie standard dans `stdout`
+/// (`stdout_path`).
+#[allow(clippy::too_many_arguments)]
+fn run_darktable(
+    dt: &Darktable,
+    image: &Path,
+    sidecar: &Path,
+    out: &Path,
+    side: u32,
+    cancel: &AtomicBool,
+    stdout: std::fs::File,
+    stdout_path: &Path,
+) -> Result<(), DevelopError> {
     let side = side.to_string();
     let mut command = dt.cli.command();
     command
@@ -1394,7 +1421,7 @@ fn render_darktable(
         // Jamais de sidecar écrit, quelle que soit la configuration de darktable.
         .args(["--conf", "write_sidecar_files=never"])
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
+        .stdout(stdout)
         .stderr(Stdio::piped());
     let mut child = crate::process::spawn(&mut command).map_err(|e| {
         tool_failed(
@@ -1417,13 +1444,18 @@ fn render_darktable(
                 if status.success() && out.is_file() {
                     return Ok(());
                 }
-                let mut message = String::new();
+                let mut message = std::fs::read_to_string(stdout_path).unwrap_or_default();
                 if let Some(mut err) = child.stderr.take() {
                     use std::io::Read;
                     let _ = err.read_to_string(&mut message);
                 }
                 if status.success() {
                     message.push_str("\n(no output file written)");
+                }
+                // L'explication de `tri`, en dernière ligne (celle que montre l'erreur) :
+                // retour du 16/11/2026, un darktable 4.6 ne connaissait pas AgX (5.x).
+                if let Some(hint) = darktable_hint(&dt.cli, sidecar) {
+                    message.push_str(&format!("\ntri: {hint}"));
                 }
                 return Err(tool_failed(
                     Engine::Darktable,
@@ -1438,6 +1470,133 @@ fn render_darktable(
             Err(e) => return Err(DevelopError::Failed(Engine::Darktable, e.to_string())),
         }
     }
+}
+
+// --- Diagnostic d'un échec de darktable (retour du 16/11/2026) ------------------------
+//
+// Un sidecar développé avec un darktable plus récent (module AgX de la 5.x) échouait sous
+// Mint avec le darktable 4.6 du système, sans un mot. Plutôt qu'une table des versions
+// d'apparition des modules (à tenir à jour), on demande au darktable installé : chaque
+// module est un fichier `lib<module>.so` (`.dll`) de son dossier de plugins.
+
+/// Pourquoi darktable `cli` a pu échouer sur `sidecar` : les modules du développement
+/// qu'il ne connaît pas (un darktable plus ancien que celui qui a développé), s'il y en
+/// a et si son dossier de plugins est trouvé.
+fn darktable_hint(cli: &Cli, sidecar: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(sidecar).ok()?;
+    let plugins = darktable_plugins(cli)?;
+    let unknown = unknown_modules(&plugins, &sidecar_operations(&text));
+    if unknown.is_empty() {
+        return None;
+    }
+    let version = darktable_version(cli).unwrap_or_else(|| "?".to_string());
+    Some(crate::t!(
+        "develop-darktable-unknown-modules",
+        version = version.as_str(),
+        modules = unknown.join(", ").as_str()
+    ))
+}
+
+/// Les modules (`darktable:operation`) de l'historique d'un sidecar darktable, sans
+/// doublon, dans l'ordre (attribut ou élément).
+fn sidecar_operations(xmp: &str) -> Vec<String> {
+    let mut found: Vec<String> = Vec::new();
+    for (open, close) in [
+        ("darktable:operation=\"", "\""),
+        ("<darktable:operation>", "</darktable:operation>"),
+    ] {
+        let mut rest = xmp;
+        while let Some(at) = rest.find(open) {
+            rest = &rest[at + open.len()..];
+            let Some(end) = rest.find(close) else { break };
+            let name = rest[..end].trim();
+            if !name.is_empty() && !found.iter().any(|f| f == name) {
+                found.push(name.to_string());
+            }
+            rest = &rest[end..];
+        }
+    }
+    found
+}
+
+/// Les modules de `operations` sans fichier dans le dossier de plugins `plugins`.
+fn unknown_modules(plugins: &Path, operations: &[String]) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(plugins) else {
+        return Vec::new();
+    };
+    let known: std::collections::HashSet<String> = entries
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            let stem = name.split('.').next()?.to_string();
+            Some(stem.strip_prefix("lib").unwrap_or(&stem).to_string())
+        })
+        .collect();
+    // Dossier vide ou illisible : rien n'est sûr, rien n'est dit.
+    if known.is_empty() {
+        return Vec::new();
+    }
+    operations
+        .iter()
+        .filter(|op| !known.contains(op.as_str()))
+        .cloned()
+        .collect()
+}
+
+/// Dossier des modules d'un darktable installé normalement (pas Flatpak) : à côté du
+/// programme (`Contents/Resources/lib/darktable/plugins` sur macOS,
+/// `/usr/lib/<arch>/darktable/plugins` d'un paquet Linux, `lib/darktable/plugins`).
+fn darktable_plugins(cli: &Cli) -> Option<PathBuf> {
+    if !cli.args.is_empty() {
+        return None;
+    }
+    let program = std::fs::canonicalize(&cli.program).ok()?;
+    let prefix = program.parent()?.parent()?;
+    let mut candidates = vec![
+        prefix.join("Resources/lib/darktable/plugins"),
+        prefix.join("lib/darktable/plugins"),
+        prefix.join("lib64/darktable/plugins"),
+    ];
+    if let Ok(entries) = std::fs::read_dir(prefix.join("lib")) {
+        candidates.extend(
+            entries
+                .flatten()
+                .map(|e| e.path().join("darktable/plugins")),
+        );
+    }
+    candidates.into_iter().find(|p| p.is_dir())
+}
+
+/// Version de darktable `cli` (« 5.6.2 »), demandée une fois par programme.
+fn darktable_version(cli: &Cli) -> Option<String> {
+    use std::sync::{Mutex, OnceLock};
+    static KNOWN: OnceLock<Mutex<std::collections::HashMap<String, Option<String>>>> =
+        OnceLock::new();
+    let key = cli.to_string();
+    let known = KNOWN.get_or_init(Default::default);
+    if let Some(v) = known.lock().ok()?.get(&key) {
+        return v.clone();
+    }
+    let output = cli
+        .command()
+        .arg("--version")
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok();
+    let version = output.and_then(|o| parse_darktable_version(&String::from_utf8_lossy(&o.stdout)));
+    known.lock().ok()?.insert(key, version.clone());
+    version
+}
+
+/// Version lue dans la sortie de `darktable-cli --version` : le premier mot qui commence
+/// par un chiffre sur la première ligne qui parle de darktable.
+fn parse_darktable_version(text: &str) -> Option<String> {
+    text.lines()
+        .find(|l| l.to_lowercase().contains("darktable"))?
+        .split_whitespace()
+        .find(|w| w.starts_with(|c: char| c.is_ascii_digit()))
+        .map(|w| w.trim_end_matches([',', '.']).to_string())
 }
 
 /// RapidRAW, prêt à développer.
@@ -2167,6 +2326,156 @@ mod tests {
             Some(Engine::Darktable),
             "RapidRAW pas installé"
         );
+    }
+
+    #[test]
+    fn the_modules_of_a_darktable_history_are_read() {
+        let xmp = r#"<rdf:li darktable:operation="rawprepare" darktable:enabled="1"/>
+            <rdf:li darktable:operation="agx"/><rdf:li darktable:operation="agx"/>
+            <rdf:li><darktable:operation>sigmoid</darktable:operation></rdf:li>"#;
+        assert_eq!(sidecar_operations(xmp), ["rawprepare", "agx", "sigmoid"]);
+        assert_eq!(
+            parse_darktable_version("darktable 5.6.2\nCopyright (C) 2012-2026"),
+            Some("5.6.2".into())
+        );
+        assert_eq!(
+            parse_darktable_version("this is darktable-cli 4.6.1\n"),
+            Some("4.6.1".into())
+        );
+        assert_eq!(parse_darktable_version("rien"), None);
+    }
+
+    /// Un faux darktable installé comme un paquet Linux : `bin/darktable-cli` (script qui
+    /// dit sa version, sinon échoue sans un mot), et ses plugins `modules`.
+    #[cfg(unix)]
+    fn fake_darktable_package(dir: &Path, modules: &[&str]) -> Darktable {
+        use std::os::unix::fs::PermissionsExt;
+        let plugins = dir.join("usr/lib/x86_64-linux-gnu/darktable/plugins");
+        std::fs::create_dir_all(&plugins).unwrap();
+        for m in modules {
+            std::fs::write(plugins.join(format!("lib{m}.so")), "").unwrap();
+        }
+        std::fs::create_dir_all(dir.join("usr/bin")).unwrap();
+        let script = dir.join("usr/bin/darktable-cli");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\n[ \"$1\" = --version ] && { echo 'this is darktable-cli 4.6.1'; exit 0; }\nexit 1\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        Darktable {
+            cli: Cli::native(script),
+            config_dir: dir.join("config"),
+            high_quality: false,
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn a_darktable_too_old_for_the_development_is_explained() {
+        // Retour du 16/11/2026 : sidecar développé en 5.6 (AgX), darktable 4.6 du système
+        // sous Mint ; l'erreur était vide.
+        let dir = tempfile::tempdir().unwrap();
+        let dt = fake_darktable_package(dir.path(), &["rawprepare", "exposure"]);
+        let image = dir.path().join("A.RAF");
+        std::fs::write(&image, "").unwrap();
+        let sidecar = dir.path().join("A.RAF.xmp");
+        std::fs::write(
+            &sidecar,
+            r#"<rdf:li darktable:operation="rawprepare"/><rdf:li darktable:operation="agx"/>"#,
+        )
+        .unwrap();
+        let out = dir.path().join("out.jpg");
+        let cancel = AtomicBool::new(false);
+        let error = render_darktable(&dt, &image, &sidecar, &out, 512, &cancel)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("agx"), "{error}");
+        assert!(error.contains("4.6.1"), "{error}");
+        assert!(
+            !error.contains("exposure") && !error.contains("rawprepare"),
+            "{error}"
+        );
+        // Les modules connus : rien à expliquer (l'échec a une autre cause).
+        assert_eq!(darktable_hint(&dt.cli, &out), None, "sidecar absent");
+        std::fs::write(&sidecar, r#"<rdf:li darktable:operation="exposure"/>"#).unwrap();
+        assert_eq!(darktable_hint(&dt.cli, &sidecar), None);
+        // Le fichier de la sortie standard ne reste pas.
+        let left: Vec<_> = std::fs::read_dir(&dt.config_dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name())
+            .collect();
+        assert!(left.is_empty(), "{left:?}");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn a_failed_render_is_made_once_a_working_darktable_is_there() {
+        // Retour du 16/11/2026 : darktable 4.6 refusait les rendus ; l'AppImage 5.x
+        // installée et choisie, tri les a refaits sans rien vider. Un échec ne laisse rien
+        // dans le cache, et les logiciels remplacés servent au calcul suivant.
+        use crate::scheduler::{CachedPreviews, Failure, Producer};
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let photos = dir.path().join("photos");
+        std::fs::create_dir_all(&photos).unwrap();
+        let image = photos.join("A.RAF");
+        std::fs::write(&image, "raw").unwrap();
+        std::fs::write(
+            photos.join("A.RAF.xmp"),
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"><darktable:history><rdf:Seq><rdf:li darktable:operation="agx"/></rdf:Seq></darktable:history></rdf:Description></rdf:RDF></x:xmpmeta>"#,
+        )
+        .unwrap();
+        let file = crate::media::MediaFile {
+            path: image.clone(),
+            kind: crate::media::MediaKind::Raw,
+        };
+        let work = dir.path().join("work");
+        // Trop ancien : sans le module agx, échoue sans un mot.
+        let old = fake_darktable_package(&dir.path().join("old"), &["rawprepare"]);
+        let developers = SharedDevelopers::from(
+            Developers {
+                work_dir: work.clone(),
+                ..Developers::none()
+            }
+            .with(Arc::new(old)),
+        );
+        let producer = CachedPreviews {
+            cache: crate::cache::Cache::open(dir.path().join("cache")).unwrap(),
+            settings: crate::preview::Settings::default(),
+            developers: developers.clone(),
+        };
+        let level = crate::cache::Level::Developed(Engine::Darktable);
+        let cancel = AtomicBool::new(false);
+        match producer.produce(&file, level, &cancel) {
+            Err(Failure::Error(e)) => assert!(e.contains("agx"), "{e}"),
+            other => panic!("{other:?}"),
+        }
+        assert!(!producer.is_done(&file, level), "rien en cache");
+        // Un darktable à jour (l'AppImage) : le même rendu, refait tel quel.
+        let jpeg = dir.path().join("rendu.jpg");
+        std::fs::write(&jpeg, b"\xff\xd8 rendu").unwrap();
+        let script = dir.path().join("darktable-cli");
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\ncp '{}' \"$3\"\n", jpeg.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        developers.replace(
+            Developers {
+                work_dir: work,
+                ..Developers::none()
+            }
+            .with(Arc::new(Darktable {
+                cli: Cli::native(script),
+                config_dir: dir.path().join("config"),
+                high_quality: false,
+            })),
+        );
+        producer.produce(&file, level, &cancel).unwrap();
+        assert!(producer.is_done(&file, level), "en cache");
     }
 
     /// Un faux RapidRAW (script) : il copie `jpeg` vers `--output`, ou écrit `message` et
