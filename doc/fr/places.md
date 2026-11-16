@@ -15,7 +15,9 @@ TUI ou un autre affichage pourra faire de même.
 Pourquoi pas seulement le dossier personnel : une carte SD est montée dans `/Volumes`
 (macOS) ou `/media/<utilisateur>` (Linux), pas dans `~` (retour du 17/10/2026). La racine
 donne l'arborescence complète. Les liens symboliques de `/Volumes` sont écartés
-(`Macintosh HD` pointe vers `/`). L'OS et l'environnement sont injectés dans les fonctions
+(`Macintosh HD` pointe vers `/`). Sous Linux, seuls les vrais points de montage
+(`/proc/mounts`, `mounted_only`) sont des volumes : le dossier de montage d'un disque
+éjecté peut rester dans `/media` (16/11/2026 : « disk » restait dans le panneau). L'OS et l'environnement sont injectés dans les fonctions
 internes (`volume_dirs`, `home_dir`) pour être testés sur toutes les plateformes, comme
 `settings::default_path`.
 

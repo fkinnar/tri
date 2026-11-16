@@ -258,6 +258,12 @@ pub fn places() -> Vec<Place> {
     let os = std::env::consts::OS;
     let env = |name: &str| std::env::var_os(name);
     let mut places = volumes_in(&volume_dirs(os, env));
+    // Linux : seuls les vrais points de montage (retour du 16/11/2026 : un disque éjecté
+    // restait dans le panneau, son dossier de montage vide encore dans `/media`).
+    if os != "macos" && os != "windows" {
+        let mounts = fs::read_to_string("/proc/mounts").unwrap_or_default();
+        places = mounted_only(places, &mounts);
+    }
     if os == "windows" {
         places.extend(windows_drives());
     }
@@ -1152,6 +1158,24 @@ fn run(program: &str, args: &[&std::ffi::OsStr]) -> Result<(), String> {
     Err(format!("{program} : {message}"))
 }
 
+/// Volumes de `places` qui sont des points de montage d'après le contenu de
+/// `/proc/mounts` : un dossier de `/media/<utilisateur>` ou de `/mnt` resté après un
+/// démontage n'est plus un volume. `/proc/mounts` illisible (autre Unix) : tous gardés.
+fn mounted_only(places: Vec<Place>, mounts: &str) -> Vec<Place> {
+    let points: HashSet<PathBuf> = mounts
+        .lines()
+        .filter_map(|line| line.split_whitespace().nth(1))
+        .map(|point| PathBuf::from(point.replace("\\040", " ")))
+        .collect();
+    if points.is_empty() {
+        return places;
+    }
+    places
+        .into_iter()
+        .filter(|p| points.contains(&p.path))
+        .collect()
+}
+
 /// Périphérique monté en `path` d'après le contenu de `/proc/mounts` (espaces des chemins
 /// écrits `\040`).
 fn device_of(mounts: &str, path: &Path) -> Option<String> {
@@ -2010,6 +2034,29 @@ mod tests {
                 .find(|(k, _)| *k == name)
                 .map(|(_, v)| OsString::from(v))
         }
+    }
+
+    #[test]
+    fn a_leftover_mount_folder_is_not_a_volume() {
+        let place = |path: &str| Place {
+            name: folder_name(Path::new(path)),
+            path: PathBuf::from(path),
+            kind: PlaceKind::Volume,
+        };
+        let places = vec![
+            place("/media/moi/disk"),
+            place("/media/moi/CARTE SD"),
+            place("/mnt/vide"),
+        ];
+        let mounts = "/dev/sda2 / ext4 rw 0 0\n\
+                      /dev/sdc1 /media/moi/CARTE\\040SD vfat rw 0 0\n";
+        let kept: Vec<PathBuf> = mounted_only(places.clone(), mounts)
+            .into_iter()
+            .map(|p| p.path)
+            .collect();
+        assert_eq!(kept, [PathBuf::from("/media/moi/CARTE SD")]);
+        // Rien de lisible : tous gardés.
+        assert_eq!(mounted_only(places, "").len(), 3);
     }
 
     /// Faux disque lent : chaque lecture prend `delay`, puis lit le vrai dossier.
