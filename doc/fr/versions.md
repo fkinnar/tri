@@ -76,6 +76,12 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   Seuls `&`, `<` et `>` sont échappés, pour que le JSON reste lisible.
 - Vérifié le 19/10/2026 sur une copie du sidecar darktable de l'utilisateur : seul ajout,
   l'élément `tri:Versions`, et `darktable-cli` rend l'image normalement.
+- Un **développement darktable** (`IMG@dt.RAF`, un clone `IMG@dt-01.RAF`) garde ses
+  versions dans son propre sidecar darktable (`IMG.RAF.xmp`, `IMG_01.RAF.xmp`), à côté de
+  ses notes. Jusqu'au 16/11/2026, elles allaient dans un fichier au nom du chemin interne du
+  développement (`IMG@dt.RAF.xmp`, jamais destiné au disque) : un tel fichier est encore lu,
+  et repris à la prochaine écriture (versions ajoutées, fichier supprimé ; des réglages
+  différents y restent).
 - Une version illisible (écrite par une version plus récente de `tri` ?) est gardée telle
   quelle (`Versions::unknown`).
 - **Annulable** : `history::Step::Versions` garde la liste avant et après. Si le sidecar a
