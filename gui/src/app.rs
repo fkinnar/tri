@@ -9379,7 +9379,8 @@ impl TriApp {
                 if self.selection.is_visual() {
                     self.selection.end_visual(true);
                 } else {
-                    self.selection.start_visual(&self.files, self.selected);
+                    let (list, at) = self.selectable(self.selected);
+                    self.selection.start_visual(&list, at);
                 }
             }
             // Panneau des métadonnées au clavier : toutes ses lignes (#384).
@@ -9389,7 +9390,7 @@ impl TriApp {
             {
                 self.select_all_metadata();
             }
-            Action::SelectAll => self.selection.select_all(&self.files),
+            Action::SelectAll => self.selection.select_all(&self.selectable(0).0),
             Action::SelectClear => self.selection.clear(),
             Action::FilterCycle if self.pairs_view() => {
                 self.pair_kinds = self.pair_kinds.next();
@@ -9823,6 +9824,25 @@ impl TriApp {
         self.select_with(index, true);
     }
 
+    /// Images qu'une plage, le mode visuel ou « tout » peuvent marquer : toutes sauf
+    /// celles cachées dans une pile de développements repliée (même photo une seule
+    /// fois), et le rang de `index` parmi elles (une image cachée : sa couverture).
+    fn selectable(&self, index: usize) -> (Vec<MediaFile>, usize) {
+        let shown = self.stacks.photo_visible(index);
+        let mut at = 0;
+        let mut list = Vec::with_capacity(self.files.len());
+        for (i, file) in self.files.iter().enumerate() {
+            if self.stacks.hidden_development(i) {
+                continue;
+            }
+            if i < shown {
+                at += 1;
+            }
+            list.push(file.clone());
+        }
+        (list, at)
+    }
+
     /// Sélectionne `index` ; `reveal` : faire défiler la grille pour qu'il soit visible
     /// (pas pour le survol de la souris : la grille bougerait sous le pointeur, et la
     /// sélection avec elle).
@@ -9832,7 +9852,10 @@ impl TriApp {
             return;
         }
         self.selected = index;
-        self.selection.update_visual(&self.files, index);
+        if self.selection.is_visual() {
+            let (list, at) = self.selectable(index);
+            self.selection.update_visual(&list, at);
+        }
         self.focus_since = Instant::now();
         self.tell_shown();
         if reveal {
@@ -17422,7 +17445,9 @@ impl TriApp {
             let modifiers = ctx.input(|i| i.modifiers);
             let path = self.files[index].path.clone();
             if modifiers.shift {
-                self.selection.add_range(&self.files, self.selected, index);
+                let (list, from) = self.selectable(self.selected);
+                let to = self.selectable(index).1;
+                self.selection.add_range(&list, from, to);
             } else if modifiers.command || modifiers.ctrl {
                 // L'image courante, en surbrillance, compte comme choisie : le premier
                 // Cmd / Ctrl+clic sur une autre les prend toutes les deux (retour du
@@ -24671,6 +24696,54 @@ mod tests {
         assert_eq!(selected_name(&h), "img0@dt-02.jpg");
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         assert_eq!(selected_name(&h), "img0@dt-01.jpg");
+    }
+
+    #[test]
+    fn marking_a_range_skips_developments_hidden_in_their_stack() {
+        // Retour du 16/11/2026 : 4 vignettes marquées par Maj+clic, « 7 images
+        // sélectionnées » ; la photo derrière son développement partait aussi à l'export.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp"] {
+            std::fs::write(
+                photos.join(name),
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
+            )
+            .unwrap();
+        }
+        h.state_mut().developers = fake_darktable();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 3, "une pile repliée");
+        let ctx = h.ctx.clone();
+        let marked = |h: &Harness<'_, TriApp>| h.state().selection.visible(&h.state().files);
+        // Tout : une fois chaque vignette.
+        h.state_mut().perform(&ctx, Action::SelectAll);
+        assert_eq!(marked(&h), 3);
+        // Maj+clic : de la première vignette à la dernière.
+        h.state_mut().selection.clear();
+        let shown = h.state().stacks.shown.clone();
+        h.state_mut().select(shown[0]);
+        let (list, from) = h.state().selectable(shown[0]);
+        let to = h.state().selectable(shown[2]).1;
+        h.state_mut().selection.add_range(&list, from, to);
+        assert_eq!(marked(&h), 3);
+        // Mode visuel jusqu'au bout.
+        h.state_mut().selection.clear();
+        h.state_mut().perform(&ctx, Action::SelectVisual);
+        h.state_mut().select(shown[2]);
+        assert_eq!(marked(&h), 3);
+        let targets = h.state().selection.targets(&h.state().files, shown[2]);
+        assert!(
+            targets
+                .iter()
+                .all(|p| !h.state().stacks.hidden_development(
+                    h.state().files.iter().position(|f| &f.path == p).unwrap()
+                )),
+            "{targets:?}"
+        );
     }
 
     #[test]

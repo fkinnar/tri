@@ -152,6 +152,14 @@ impl Stacks {
         }
     }
 
+    /// Vrai si l'image `index` est cachée dans une pile de développements repliée (la
+    /// photo ou un développement derrière la couverture) : une plage ou « tout » ne la
+    /// marque pas, sans quoi la même photo partait plusieurs fois (retour du 16/11/2026 :
+    /// 7 images marquées pour 4 vignettes, exportées en double).
+    pub fn hidden_development(&self, index: usize) -> bool {
+        self.photo_visible(index) != index
+    }
+
     /// Pile de développements de l'image `index` (elle et ses développements), si elle en a.
     pub fn developments_of(&self, index: usize) -> Option<&Range<usize>> {
         let r = self.photos.get(*self.photo_of.get(index)?)?;
@@ -422,6 +430,11 @@ mod tests {
         assert_eq!(s.folded_count(1), Some(2));
         assert_eq!(s.visible(0), 1);
         assert_eq!(s.count(), 0, "pas de pile de rafale");
+        assert!(
+            s.hidden_development(0),
+            "la photo, derrière son développement"
+        );
+        assert!(!s.hidden_development(1) && !s.hidden_development(2));
     }
 
     #[test]
