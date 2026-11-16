@@ -14,7 +14,9 @@ do the same.
 
 Why not just the home folder: an SD card is mounted in `/Volumes` (macOS) or
 `/media/<user>` (Linux), not in `~` (user feedback, 2026-10-17). The root gives the full
-tree. Symbolic links in `/Volumes` are skipped (`Macintosh HD` points to `/`). The OS and
+tree. Symbolic links in `/Volumes` are skipped (`Macintosh HD` points to `/`). On Linux, only real mount points
+(`/proc/mounts`, `mounted_only`) are volumes: the mount folder of an ejected disk can stay
+in `/media` (2026-11-16: "disk" stayed in the panel). The OS and
 the environment are injected into the internal functions (`volume_dirs`, `home_dir`) so
 they can be tested on every platform, like `settings::default_path`.
 
