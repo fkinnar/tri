@@ -2409,6 +2409,75 @@ mod tests {
         assert!(left.is_empty(), "{left:?}");
     }
 
+    #[test]
+    #[cfg(unix)]
+    fn a_failed_render_is_made_once_a_working_darktable_is_there() {
+        // Retour du 16/11/2026 : darktable 4.6 refusait les rendus ; l'AppImage 5.x
+        // installée et choisie, tri les a refaits sans rien vider. Un échec ne laisse rien
+        // dans le cache, et les logiciels remplacés servent au calcul suivant.
+        use crate::scheduler::{CachedPreviews, Failure, Producer};
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let photos = dir.path().join("photos");
+        std::fs::create_dir_all(&photos).unwrap();
+        let image = photos.join("A.RAF");
+        std::fs::write(&image, "raw").unwrap();
+        std::fs::write(
+            photos.join("A.RAF.xmp"),
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"><darktable:history><rdf:Seq><rdf:li darktable:operation="agx"/></rdf:Seq></darktable:history></rdf:Description></rdf:RDF></x:xmpmeta>"#,
+        )
+        .unwrap();
+        let file = crate::media::MediaFile {
+            path: image.clone(),
+            kind: crate::media::MediaKind::Raw,
+        };
+        let work = dir.path().join("work");
+        // Trop ancien : sans le module agx, échoue sans un mot.
+        let old = fake_darktable_package(&dir.path().join("old"), &["rawprepare"]);
+        let developers = SharedDevelopers::from(
+            Developers {
+                work_dir: work.clone(),
+                ..Developers::none()
+            }
+            .with(Arc::new(old)),
+        );
+        let producer = CachedPreviews {
+            cache: crate::cache::Cache::open(dir.path().join("cache")).unwrap(),
+            settings: crate::preview::Settings::default(),
+            developers: developers.clone(),
+        };
+        let level = crate::cache::Level::Developed(Engine::Darktable);
+        let cancel = AtomicBool::new(false);
+        match producer.produce(&file, level, &cancel) {
+            Err(Failure::Error(e)) => assert!(e.contains("agx"), "{e}"),
+            other => panic!("{other:?}"),
+        }
+        assert!(!producer.is_done(&file, level), "rien en cache");
+        // Un darktable à jour (l'AppImage) : le même rendu, refait tel quel.
+        let jpeg = dir.path().join("rendu.jpg");
+        std::fs::write(&jpeg, b"\xff\xd8 rendu").unwrap();
+        let script = dir.path().join("darktable-cli");
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\ncp '{}' \"$3\"\n", jpeg.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        developers.replace(
+            Developers {
+                work_dir: work,
+                ..Developers::none()
+            }
+            .with(Arc::new(Darktable {
+                cli: Cli::native(script),
+                config_dir: dir.path().join("config"),
+                high_quality: false,
+            })),
+        );
+        producer.produce(&file, level, &cancel).unwrap();
+        assert!(producer.is_done(&file, level), "en cache");
+    }
+
     /// Un faux RapidRAW (script) : il copie `jpeg` vers `--output`, ou écrit `message` et
     /// échoue.
     #[cfg(unix)]
