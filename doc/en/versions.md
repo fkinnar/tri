@@ -75,6 +75,11 @@ The interface only draws; all the computation is here.
   and `>` are escaped, so that the JSON stays readable.
 - Checked on 2026-10-19 on a copy of the user's darktable sidecar: the only addition is the
   `tri:Versions` element, and `darktable-cli` renders the image normally.
+- A **darktable development** (`IMG@dt.RAF`, a clone `IMG@dt-01.RAF`) keeps its versions in
+  its own darktable sidecar (`IMG.RAF.xmp`, `IMG_01.RAF.xmp`), next to its ratings. Until
+  2026-11-16 they went to a file named after the development's internal path
+  (`IMG@dt.RAF.xmp`, never meant for the disk): such a file is still read, and taken over at
+  the next write (versions added, the file deleted; differing adjustments stay in it).
 - An unreadable version (written by a newer version of `tri`?) is kept as is
   (`Versions::unknown`).
 - **Undoable**: `history::Step::Versions` keeps the list before and after. If the sidecar

@@ -2067,11 +2067,112 @@ pub fn apply_list(xml: &str, field: ListField, items: &[String]) -> Result<Strin
 
 /// Liste `field` de `image`, lue dans son sidecar le plus récent ; vide sans sidecar.
 pub fn read_list_of(image: &Path, field: ListField) -> Result<Vec<String>> {
-    match fs::read_to_string(sidecar_path(image, Convention::default())) {
+    let (path, former) = list_sidecar(image, Convention::default());
+    let mut list = read_list_in(&path, field)?;
+    // Pas encore repris : comme le fera [`take_over`], les versions de l'ancien fichier
+    // s'ajoutent, ses autres listes ne servent que si le sidecar n'en a pas.
+    if let Some(former) = former {
+        let old = read_list_in(&former, field)?;
+        if list.is_empty() {
+            list = old;
+        } else if field == VERSIONS {
+            let missing: Vec<String> = old.into_iter().filter(|i| !list.contains(i)).collect();
+            list.extend(missing);
+        }
+    }
+    Ok(list)
+}
+
+/// Liste `field` du sidecar `path` ; vide s'il n'existe pas.
+fn read_list_in(path: &Path, field: ListField) -> Result<Vec<String>> {
+    match fs::read_to_string(path) {
         Ok(text) => read_list(&text, field),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
         Err(e) => Err(e.into()),
     }
+}
+
+/// Listes propres à `tri`, reprises toutes ensemble d'un ancien fichier.
+const LISTS: [ListField; 3] = [VERSIONS, ADJUST, ADJUST_JPEG];
+
+/// Sidecar des listes de `image` : celui de son développement darktable (`IMG@dt.RAF` :
+/// `IMG.RAF.xmp`, `IMG_01.RAF.xmp` pour un clone), à côté des notes, sinon le sien. Et
+/// l'ancien fichier à reprendre, s'il existe : jusqu'au 16/11/2026, les listes d'un
+/// développement allaient dans un fichier au nom de son chemin propre
+/// (`IMG@dt.RAF.xmp`), qui ne devait jamais aller sur le disque.
+fn list_sidecar(image: &Path, default: Convention) -> (PathBuf, Option<PathBuf>) {
+    match crate::developments::get(image) {
+        Some(d) if d.engine == crate::develop::Engine::Darktable => {
+            let mut former = image.as_os_str().to_owned();
+            former.push(".xmp");
+            let former = PathBuf::from(former);
+            (d.sidecar, former.is_file().then_some(former))
+        }
+        _ => (sidecar_path(image, default), None),
+    }
+}
+
+/// Reprend dans `path` les listes de l'ancien fichier `former`, puis supprime `former`
+/// (créé par `tri` seul : rien d'autre ne s'y trouve à garder). Rien ne se perd : les
+/// versions s'ajoutent à celles de `path` ; des réglages différents des siens laissent
+/// `former` en place.
+fn take_over(path: &Path, former: &Path) -> Result<()> {
+    let old = fs::read_to_string(former)?;
+    let original = fs::read_to_string(path)?;
+    let mut text = original.clone();
+    let mut keep = false;
+    // Ce qui reste à reprendre dans `former` (le reste en est retiré).
+    let mut rest = old.clone();
+    for field in LISTS {
+        let items = read_list(&old, field)?;
+        let current = read_list(&text, field)?;
+        if items.is_empty() {
+            continue;
+        }
+        if items == current {
+            rest = apply_list(&rest, field, &[])?;
+            continue;
+        }
+        let wanted: Vec<String> = if current.is_empty() {
+            items
+        } else if field == VERSIONS {
+            let mut all = current;
+            all.extend(
+                items
+                    .into_iter()
+                    .filter(|i| !all.contains(i))
+                    .collect::<Vec<_>>(),
+            );
+            all
+        } else {
+            keep = true;
+            continue;
+        };
+        text = apply_list(&text, field, &wanted)?;
+        if read_list(&text, field)? != wanted {
+            return Err(XmpError::Malformed(format!(
+                "{} : liste non reprise",
+                path.display()
+            )));
+        }
+        rest = apply_list(&rest, field, &[])?;
+    }
+    if text != original {
+        let tmp = path.with_extension(format!("xmp.{}.tmp", std::process::id()));
+        fs::write(&tmp, &text)?;
+        if let Err(e) = fs::rename(&tmp, path) {
+            let _ = fs::remove_file(&tmp);
+            return Err(e.into());
+        }
+    }
+    if keep {
+        if rest != old {
+            fs::write(former, rest)?;
+        }
+    } else {
+        fs::remove_file(former)?;
+    }
+    Ok(())
 }
 
 /// Écrit la liste `field` de `image` dans son sidecar le plus récent (créé selon `default`
@@ -2083,7 +2184,10 @@ pub fn write_list(
     items: &[String],
     default: Convention,
 ) -> Result<PathBuf> {
-    let path = sidecar_path(image, default);
+    let (path, former) = list_sidecar(image, default);
+    if let Some(former) = &former {
+        take_over(&path, former)?;
+    }
     let original = match fs::read_to_string(&path) {
         Ok(text) => Some(text),
         Err(e) if e.kind() == io::ErrorKind::NotFound => None,
@@ -2117,6 +2221,102 @@ pub fn write_list(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lists_of_a_darktable_development_live_in_its_sidecar() {
+        // Retour du 16/11/2026 : les versions d'un développement allaient dans
+        // `IMG@dt.RAF.xmp`, au nom de son chemin propre. Reprises, puis dans `IMG.RAF.xmp`.
+        let dir = tempfile::tempdir().unwrap();
+        let photo = dir.path().join("A.RAF");
+        let sidecar = dir.path().join("A.RAF.xmp");
+        let darktable = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1" xmp:Rating="3"/></rdf:RDF></x:xmpmeta>"#;
+        fs::write(&sidecar, darktable).unwrap();
+        let development = crate::developments::Development {
+            engine: crate::develop::Engine::Darktable,
+            copy: crate::developments::Copy::Main,
+            photo: photo.clone(),
+            sidecar: sidecar.clone(),
+        };
+        crate::developments::register(&development);
+        let dev = development.path();
+        let former = dir.path().join("A@dt.RAF.xmp");
+        let story = vec!["story".to_string()];
+        let adjust = vec!["{}".to_string()];
+        let old = apply_list(
+            &apply_list(NEW_PACKET, VERSIONS, &story).unwrap(),
+            ADJUST,
+            &adjust,
+        )
+        .unwrap();
+        fs::write(&former, old).unwrap();
+        // Lues dans l'ancien fichier tant qu'il n'est pas repris.
+        assert_eq!(read_list_of(&dev, VERSIONS).unwrap(), story);
+        // Écrites : dans le sidecar de darktable, avec ce qu'il y avait d'autre ; l'ancien
+        // fichier supprimé.
+        let both = vec!["story".to_string(), "post".to_string()];
+        let written = write_list(&dev, VERSIONS, &both, Convention::Darktable).unwrap();
+        assert_eq!(written, sidecar);
+        assert!(!former.exists());
+        let text = fs::read_to_string(&sidecar).unwrap();
+        assert_eq!(read_list(&text, VERSIONS).unwrap(), both);
+        assert_eq!(read_list(&text, ADJUST).unwrap(), adjust, "repris aussi");
+        assert!(
+            text.contains("darktable:history_end=\"1\""),
+            "darktable intact"
+        );
+        assert_eq!(read(&photo).unwrap().stars, 3);
+        assert_eq!(read_list_of(&dev, VERSIONS).unwrap(), both);
+        // La photo elle-même (rendu LibRaw) : son sidecar, inchangé dans son principe.
+        assert_eq!(
+            read_list_of(&photo, VERSIONS).unwrap(),
+            both,
+            "même fichier"
+        );
+    }
+
+    #[test]
+    fn taking_over_a_former_file_loses_nothing() {
+        // Le sidecar a déjà des versions (cadrées sur la photo) et d'autres réglages :
+        // versions ajoutées, réglages différents gardés dans l'ancien fichier.
+        let dir = tempfile::tempdir().unwrap();
+        let photo = dir.path().join("B.RAF");
+        let sidecar = dir.path().join("B.RAF.xmp");
+        let mine = |v: &[&str], a: &[&str]| {
+            let v: Vec<String> = v.iter().map(|s| s.to_string()).collect();
+            let a: Vec<String> = a.iter().map(|s| s.to_string()).collect();
+            apply_list(&apply_list(NEW_PACKET, VERSIONS, &v).unwrap(), ADJUST, &a).unwrap()
+        };
+        fs::write(&sidecar, mine(&["photo"], &["{\"a\":1}"])).unwrap();
+        let development = crate::developments::Development {
+            engine: crate::develop::Engine::Darktable,
+            copy: crate::developments::Copy::Main,
+            photo: photo.clone(),
+            sidecar: sidecar.clone(),
+        };
+        crate::developments::register(&development);
+        let dev = development.path();
+        let former = dir.path().join("B@dt.RAF.xmp");
+        fs::write(&former, mine(&["dev"], &["{\"a\":2}"])).unwrap();
+        let mut list = read_list_of(&dev, VERSIONS).unwrap();
+        assert_eq!(list, ["photo", "dev"], "les deux, le sidecar d'abord");
+        list.push("new".to_string());
+        write_list(&dev, VERSIONS, &list, Convention::Darktable).unwrap();
+        let text = fs::read_to_string(&sidecar).unwrap();
+        assert_eq!(read_list(&text, VERSIONS).unwrap(), ["photo", "dev", "new"]);
+        assert_eq!(read_list(&text, ADJUST).unwrap(), ["{\"a\":1}"]);
+        let kept = fs::read_to_string(&former).unwrap();
+        assert!(read_list(&kept, VERSIONS).unwrap().is_empty(), "reprises");
+        assert_eq!(read_list(&kept, ADJUST).unwrap(), ["{\"a\":2}"], "gardé");
+        // Une version supprimée ne revient pas.
+        write_list(
+            &dev,
+            VERSIONS,
+            &["photo".to_string()],
+            Convention::Darktable,
+        )
+        .unwrap();
+        assert_eq!(read_list_of(&dev, VERSIONS).unwrap(), ["photo"]);
+    }
 
     /// Sidecar créé par darktable à l'import (structure réelle, auteur anonymisé).
     const DARKTABLE: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
