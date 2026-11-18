@@ -41,6 +41,8 @@ action-core-filter-well_exposed = Filter: well exposed (neither blown nor blocke
 action-core-filter-stack = Filter: only the current stack, fully expanded (again: everything)
 action-core-filter-invert = Filter: invert (what the filters remove)
 action-core-filter-conflicts = Filter: in conflict (ratings that disagree from one program to another)
+action-core-filter-count = Filters in use and number of photos, large
+kw-core-filter-count = count number how many summary filters left total
 action-core-filter-restart = After a filter change: start again from the first image (on) or stay on the image
 kw-core-filter-conflicts = conflict disagree ratings programs settle
 action-core-filter-developed = Filter: developed (on / off; software to check in the list)
@@ -808,6 +810,12 @@ filter-toast = { $n ->
    *[other] { $n } images
 }
 filter-toast-none = No images
+filter-count-title = Filters
+filter-count-of = { $n ->
+    [one] photo
+   *[other] photos
+} out of { $total }
+filter-count-none = No filter
 develop-toast = { $n ->
     [one] 1 changed development to redo ({ $done }/1)
    *[other] { $n } changed developments to redo ({ $done }/{ $n })

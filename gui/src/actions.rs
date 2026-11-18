@@ -189,6 +189,9 @@ pub enum Action {
     /// Après un changement de filtre, repartir de la première image (`[gui]
     /// filter_restart`, bouton de la barre du bas ; retour du 16/11/2026).
     FilterRestart,
+    /// Les filtres en cours et le nombre de photos qui restent, en grand au milieu de
+    /// l'écran (`f k`, idée de l'utilisateur, 18/11/2026).
+    FilterCount,
     /// Ordre suivant : nom, date de prise de vue, date de modification.
     SortNext,
     /// Inverser le sens de l'ordre.
@@ -574,7 +577,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 249] = [
+    pub const ALL: [Action; 250] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -608,6 +611,7 @@ impl Action {
         Action::FilterDeveloped,
         Action::FilterConflicts,
         Action::FilterRestart,
+        Action::FilterCount,
         Action::SortNext,
         Action::SortReverse,
         Action::SortBy(tri::sort::SortKey::Name),
@@ -967,8 +971,8 @@ impl Action {
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterColorsAll | FilterClear | FilterBlurry | FilterWellExposed | FilterStack
-            | FilterInvert | FilterDeveloped | FilterConflicts | FilterRestart | SortNext
-            | SortReverse | SortBy(_) | FilterKind(_) | GridRenderNext | Render(_) => {
+            | FilterInvert | FilterDeveloped | FilterConflicts | FilterRestart | FilterCount
+            | SortNext | SortReverse | SortBy(_) | FilterKind(_) | GridRenderNext | Render(_) => {
                 Group::Filters
             }
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
@@ -1097,6 +1101,7 @@ impl Action {
             Action::FilterDeveloped => "core.filter.developed",
             Action::FilterConflicts => "core.filter.conflicts",
             Action::FilterRestart => "core.filter.restart",
+            Action::FilterCount => "core.filter.count",
             Action::SortNext => "core.filter.sort",
             Action::GridRenderNext => "core.grid.render",
             Action::Render(r) => {

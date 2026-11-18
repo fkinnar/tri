@@ -770,6 +770,13 @@ system one ("cold" measurements, experiments).
   `f g` (`core.filter.restart`) or the bottom bar button (funnel and "|‹", next to the
   stack entry) turns it on or off, remembered from one launch to the next; a message
   says which one is on.
+- **The filters in use, large** (`f k`, "kount", `core.filter.count`, the user's idea,
+  2026-11-18): a box in the middle of the image area, the filters one per line ("No
+  filter" otherwise), then the number of photos left, large (`[gui.grid]
+  filter_count_size`), and "out of N" (the folder). It stays open while the filters
+  change (the number follows; the count bubble is not shown on top); Esc or `f k` close
+  it, a click on it too, any other action closes it and is done
+  (`TriApp::filter_count_box`).
 - **The wheel in full screen** (`[gui.view] wheel_step`, 2026-11-16, for those who sort
   with the mouse): fitted image, one notch down goes to the next image, up to the
   previous one (`wheel_step` points of scrolling per image on a touchpad; 0: nothing);
@@ -1529,6 +1536,7 @@ Idea noted for later: a number after a sequence (`<leader> m 200`: loupe at 200 
 | `core.stack.open` / `core.stack.close` | ( ( / ) ) | ( ( / ) ) |
 | `core.stack.enter` | Ctrl+Shift+S | Ctrl+Shift+S |
 | `core.filter.restart` | f g | f g |
+| `core.filter.count` | f k | f k |
 | `core.dev.next` / `core.dev.prev` | Shift+W / Shift+Q | Shift+W / Shift+Q |
 | `core.dev.toggle` / `core.dev.fold_all` | — (`s`, `Shift+S` do it) | — |
 | `core.file.delete` | Delete, Backspace | x, Delete, Backspace |

@@ -662,6 +662,9 @@ pub struct GridSettings {
     /// Bulle du nombre d'images au milieu de l'écran après un changement de filtre :
     /// durée (millisecondes ; 0 : jamais).
     pub filter_toast_ms: u64,
+    /// Encadré des filtres en cours (<core.filter.count>) : taille du nombre de photos
+    /// (points).
+    pub filter_count_size: f32,
     /// Bandeau « n développements à refaire » (développés modifiés ailleurs, rendus de
     /// nouveau en fond) : durée à l'écran au départ, puis à la fin (millisecondes ; 0 :
     /// jamais). La progression reste dans la barre d'état.
@@ -730,6 +733,7 @@ impl Default for GridSettings {
             size_slider: 90.0,
             bar_label_scale: 0.85,
             filter_toast_ms: 1500,
+            filter_count_size: 72.0,
             develop_toast_ms: 6000,
             export_toast_ms: 5000,
             stacks: false,

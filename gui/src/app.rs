@@ -529,6 +529,8 @@ pub struct TriApp {
     auto_advance: bool,
     /// Après un changement de filtre, la première image (`[gui] filter_restart`).
     filter_restart: bool,
+    /// Encadré des filtres en cours et du nombre de photos (`f k`), ouvert.
+    filter_count: bool,
     /// Plein écran : ← / → par chaque développement (`[gui.view] review_developments`,
     /// case de la section « Vue »), sinon de photo en photo dans le rendu de la grille.
     review_developments: bool,
@@ -1694,6 +1696,7 @@ impl TriApp {
             view_info: String::new(),
             auto_advance: gui.auto_advance,
             filter_restart: gui.filter_restart,
+            filter_count: false,
             review_developments: gui.view.review_developments,
             stack_enter: gui.view.stack_enter,
             grid_info: gui.grid.info,
@@ -8691,6 +8694,14 @@ impl TriApp {
 
     /// Exécute une action (clavier aujourd'hui, souris ou plugin demain).
     fn perform(&mut self, ctx: &egui::Context, action: Action) {
+        // Encadré des filtres ouvert : il suit les changements de filtre ; Échap le ferme
+        // seulement, toute autre action aussi, puis se fait.
+        if self.filter_count && action != Action::FilterCount && !action.changes_filter() {
+            self.filter_count = false;
+            if action == Action::Back {
+                return;
+            }
+        }
         self.perform_action(ctx, action);
         // Filtre changé, option allumée : la première image (retour du 16/11/2026 : après
         // `f 3`, toujours `g g` pour revenir au début). Pas en comparaison, où la liste
@@ -9515,6 +9526,7 @@ impl TriApp {
                 if self.mode == Mode::View => {}
             Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
             Action::ToggleAutoAdvance => self.auto_advance = !self.auto_advance,
+            Action::FilterCount => self.filter_count = !self.filter_count,
             Action::FilterRestart => {
                 self.filter_restart = !self.filter_restart;
                 // Rien ne change à l'écran avant le prochain filtre : le dire.
@@ -17536,6 +17548,70 @@ impl TriApp {
         }
     }
 
+    /// Encadré des filtres en cours (`f k`, idée de l'utilisateur, 18/11/2026) : au milieu
+    /// de la zone des images, les filtres un par ligne, puis le nombre de photos qui
+    /// restent, en grand, et le total du dossier. Un clic le ferme.
+    /// `area` : toute la zone des images (retour du 18/11/2026 : centré sur la place
+    /// restante, l'encadré descendait sous le message « aucune image »).
+    fn filter_count_box(&mut self, ui: &mut Ui, area: Rect) {
+        if !self.filter_count {
+            return;
+        }
+        let summary = self.filter_parts(true);
+        let lines: Vec<String> = if summary == t!("filter-all") {
+            vec![t!("filter-count-none")]
+        } else {
+            summary.split(" · ").map(str::to_string).collect()
+        };
+        let n = self.shown_count();
+        let total = self.folder_total;
+        // Au milieu de la zone des images en largeur, de la fenêtre en hauteur : sans
+        // résultat, la barre de notation disparaît et la zone s'allonge, l'encadré
+        // descendait (retour du 18/11/2026).
+        let window = ui.ctx().content_rect();
+        let spacing = self.gui.dialogs.spacing;
+        let size = self.gui.grid.filter_count_size;
+        let response = egui::Area::new(egui::Id::unique("filter_count_box"))
+            .order(egui::Order::Foreground)
+            .pivot(egui::Align2::CENTER_CENTER)
+            .fixed_pos(pos2(area.center().x, window.center().y))
+            .show(ui.ctx(), |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(spacing * 3.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(size * 4.0);
+                        ui.vertical_centered(|ui| {
+                            ui.label(
+                                egui::RichText::new(t!("filter-count-title"))
+                                    .size(self.gui.dialogs.title_size)
+                                    .color(marks::accent_mark(ui.ctx())),
+                            );
+                            ui.add_space(spacing);
+                            for line in &lines {
+                                ui.label(
+                                    egui::RichText::new(line).size(self.gui.dialogs.title_size),
+                                );
+                            }
+                            ui.add_space(spacing * 2.0);
+                            ui.label(egui::RichText::new(n.to_string()).size(size).strong());
+                            ui.label(
+                                egui::RichText::new(t!("filter-count-of", n = n, total = total))
+                                    .size(self.gui.dialogs.title_size)
+                                    .weak(),
+                            );
+                        });
+                    })
+                    .response
+            })
+            .inner;
+        let response = response.interact(Sense::click());
+        // Un clic dessus le ferme ; ailleurs (la barre des filtres), il reste ouvert pour
+        // suivre le nombre.
+        if response.clicked() {
+            self.filter_count = false;
+        }
+    }
+
     fn filter_toast(&mut self, ui: &mut Ui) {
         // Les curseurs de sévérité des filtres actifs comptent aussi (#304 : les bouger
         // changeait le nombre sans le montrer).
@@ -17554,6 +17630,10 @@ impl TriApp {
                 self.filter_toast_at = Some(Instant::now());
             }
             self.filter_seen = seen;
+        }
+        // L'encadré des filtres ouvert montre déjà le nombre, en plus grand.
+        if self.filter_count {
+            self.filter_toast_at = None;
         }
         let Some(at) = self.filter_toast_at else {
             return;
@@ -21687,6 +21767,8 @@ impl eframe::App for TriApp {
             central = central.frame(egui::Frame::central_panel(ui.style()).fill(fill));
         }
         let center = central.show(ui, |ui| {
+            // Toute la zone des images, avant ce qu'on y pose (message « aucune image »…).
+            let whole = ui.max_rect();
             if let Some(error) = &self.error {
                 ui.colored_label(self.gui.colors.error, error);
             } else if self.folder.is_none() && self.opening.is_some() {
@@ -21733,6 +21815,7 @@ impl eframe::App for TriApp {
                 self.grid(ui);
             }
             self.filter_toast(ui);
+            self.filter_count_box(ui, whole);
             self.develop_toast(ui);
             self.export_toasts(ui);
         });
@@ -28440,6 +28523,36 @@ mod tests {
         );
         h.run_steps(5);
         assert_eq!(h.state().scroll_offset, 0.0, "and it stays there");
+    }
+
+    #[test]
+    fn f_k_shows_the_filters_and_the_count_until_escape() {
+        // Idée de l'utilisateur, 18/11/2026 : les filtres en cours et le nombre de photos,
+        // lisibles, au milieu de l'écran.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::K, Modifiers::NONE);
+        assert!(h.state().filter_count);
+        assert!(h.query_by_label(&t!("filter-count-none")).is_some());
+        assert!(h.query_by_label("3").is_some());
+        // Un filtre changé : l'encadré reste et suit.
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::U, Modifiers::NONE);
+        assert!(h.state().filter_count);
+        assert!(h.query_by_label("sans les rejetées").is_some());
+        // Échap le ferme seulement : on reste dans la grille.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(!h.state().filter_count);
+        assert_eq!(h.state().mode, Mode::Grid);
+        // Une autre action le ferme et se fait.
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::K, Modifiers::NONE);
+        assert!(h.state().filter_count);
+        let before = h.state().selected;
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert!(!h.state().filter_count);
+        assert_ne!(h.state().selected, before);
     }
 
     #[test]

@@ -941,6 +941,8 @@ bar_label_scale = 0.85
 # Bulle du nombre d'images au milieu de l'écran après un changement de filtre : durée
 # (millisecondes ; 0 : jamais).
 filter_toast_ms = 1500
+# Encadré des filtres en cours (f k) : taille du nombre de photos (points).
+filter_count_size = 72.0
 # Durée du bandeau « n développements à refaire ».
 #
 # Bandeau « n développements à refaire » (développés modifiés ailleurs, rendus de nouveau
