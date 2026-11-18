@@ -80,7 +80,7 @@ system one ("cold" measurements, experiments).
   version changes, `versions_epoch`), a filter like the others (`versions_only`); the
   **folder's room in the cache** (`Cache::folder_usage`, measured again as the
   computations go on) and **"Clear"**, which opens the "Reset" dialog on the cache only
-  (confirmation, measures). `f Esc` also removes the summary's filters
+  (confirmation, measures). `f d` also removes the summary's filters
   (`gui/src/app/summary.rs`).
 - **Folders panel** (2026-10-17), to the left of the grid: places expandable as a tree,
   arranged in titled sections separated by a line (2026-10-20); titles in bold, larger than the
@@ -138,7 +138,8 @@ system one ("cold" measurements, experiments).
     ≥ / = / ≤ button before the stars of the bar, 2026-10-26, #165), `f 0` any stars,
     `f p` picked,
     `f u` without rejected, `f x` rejected (the same sequence removes the filter),
-    `f 6`…`f 9`, `f °`, `f ,`, `f .` colours (add / remove), `f Esc` clear everything.
+    `f 6`…`f 9`, `f °`, `f ,`, `f .` colours (add / remove), `f d` clear everything (Esc only closes the
+    menu). After the leader too (`<leader> f 3`): its menu lists them under "f".
     Digits and letters with or without Shift.
   - Mouse: **filter bar** at the top of the grid (`Shift+F` shows or hides it,
     `[gui] filter_bar`): each click triggers the same action as the keyboard (clicking the
@@ -1188,7 +1189,8 @@ what they do at the bottom of the screen, in columns; a known sequence typed in 
 does not show it. While the menu is shown, the sequence **no longer expires**
 (`Sequencer::hold`): there is time to read; a sub-menu follows at once (`<leader> r`).
 **Esc** abandons (`Sequencer::cancel`) without going back, unless it is itself a
-continuation (`f Esc` clears the filters). No menu after an ambiguous key (`y` before
+continuation (none in the defaults since 2026-11-18: `f d` used to clear the filters,
+now `f d`, so that Esc always just closes the menu). No menu after an ambiguous key (`y` before
 `y )`): it acts alone after a short delay. `[gui] key_menu = false` turns it off.
 
 Everything comes from the keymap in force (`Keymap::continuations`): `keys.toml`,
@@ -1563,7 +1565,7 @@ reports Ctrl as `command`: only `mac_cmd`, or `command` without Ctrl, means Cmd.
 Ctrl + arrows shortcut (on macOS, it switches desktop), hence Shift for panning.
 
 Filters, common to both profiles: see "Filters" above (`core.filter.*`: `f f`,
-`f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f .`, `f Esc`);
+`f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f .`, `f d`);
 `core.view.filter_bar`: Shift+F; `core.view.rating_bar`: Shift+N; `core.view.folders`:
 Shift+D; `core.view.refresh_folders`: F5; `core.view.histogram`: i;
 `core.view.histogram_scale`: Shift+I; `core.view.histogram_channel`: Shift+C;
@@ -1921,7 +1923,7 @@ grouping into columns without losing pixels, placement in EV (white in the last 
 black in the first), mask colours, numbers in French format.
 
 Filters (2026-10-17): `f Shift+2`, `f 0`, `f u` (twice: removed), `f 9`, `f °`,
-`f Esc`; rejecting under "without rejected" selects the next image; bar hidden / shown by
+`f d`; rejecting under "without rejected" selects the next image; bar hidden / shown by
 Shift+F, clicks on the JPEG and RAW toggles, Clear.
 
 Rating (2026-10-17): Shift+3, Shift+X, 8 then "°" (`Text` event) write the sidecar of the

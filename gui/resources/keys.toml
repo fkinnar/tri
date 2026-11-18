@@ -165,7 +165,8 @@ loupe = "m"
 
 # --- Filters (f) ---
 # Prefix "f", followed by the matching rating key. "f f" changes the file type,
-# "f Escape" clears everything.
+# "f d" clears everything (Escape only closes the menu, as after the leader). After the
+# leader too: "<leader> f 3".
 "core.filter.cycle" = ["f f"]
 # Show all, RAW only or JPEG only directly (the RAW / JPEG switches of the panel; no
 # default shortcut: from the command palette, or yours).
@@ -189,7 +190,7 @@ loupe = "m"
 "core.filter.color.blue" = ["f 9", "f Shift+9"]
 "core.filter.color.purple" = ["f °", "f ,", "f ."]
 "core.filter.colors.all" = []
-"core.filter.clear" = ["f Escape"]
+"core.filter.clear" = ["f d"]
 "core.filter.blurry" = ["f b"]
 # Well exposed: "w" like the exposure warnings.
 "core.filter.well_exposed" = ["f w"]
