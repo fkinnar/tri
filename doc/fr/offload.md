@@ -58,7 +58,10 @@ besoins de tous, pas seulement les siens.
   et la place libre, et y reste sans limite de temps (Échap ne la ferme pas) jusqu'à
   « Réessayer » (après avoir fait de la place) ou « Abandonner ». Avant la copie, la boîte
   compare la taille des fichiers à copier à la place libre et prévient si elle ne suffit
-  pas ; le bouton devient alors « Décharger quand même » (en connaissance de cause). En
+  pas ; le bouton devient alors « Décharger quand même » (en connaissance de cause). Les
+  messages restent courts, tailles en Go (retour du 18/11/2026 : long et confus) :
+  « Pas assez de place : 12,4 Go à copier, 7,8 Go libres. », la suite dans la bulle du
+  bouton. En
   ligne de commande, pas de question : un message, l'arrêt, pas d'éjection, et un code
   de sortie d'erreur.
 - **Vérification** (`[offload] verify`) : empreinte BLAKE3 calculée pendant la copie,

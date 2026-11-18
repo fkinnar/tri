@@ -56,7 +56,9 @@ everyone's needs, not just his.
   and stays, without a time limit (Escape does not close it), until "Retry" (after making
   room) or "Give up". Before the copy, the dialog compares the size of the files to copy
   with the free room and warns if it is not enough; the button then reads "Offload
-  anyway" (knowingly). On the command line, no question: a message, the stop, no eject,
+  anyway" (knowingly). The messages stay short, sizes in GB (feedback from 2026-11-18:
+  long and confusing): "Not enough room: 12.4 GB to copy, 7.8 GB free.", the rest in
+  the button's tooltip. On the command line, no question: a message, the stop, no eject,
   and an error exit code.
 - **Verification** (`[offload] verify`): BLAKE3 hash computed during the copy, then the
   copy is read back and compared; original modification date preserved; atomic write
