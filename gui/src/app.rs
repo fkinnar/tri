@@ -17321,6 +17321,21 @@ impl TriApp {
                         };
                         let tip = format!("{name} ({keys})");
                         (name, tip)
+                    } else if matches!(action, Action::NavUp | Action::NavDown) {
+                        // En plein écran, ↑ / ↓ vont de pile en pile, pas de ligne en ligne
+                        // (retour du 18/11/2026 : la bulle disait « Ligne du dessus »).
+                        let name = if action == Action::NavUp {
+                            t!("view-stack-prev")
+                        } else {
+                            t!("view-stack-next")
+                        };
+                        let keys = self.keymap.keys_for(action);
+                        let tip = if keys.is_empty() {
+                            name.clone()
+                        } else {
+                            format!("{name} ({})", keys.join(" / "))
+                        };
+                        (name, tip)
                     } else {
                         (action.label(), self.action_tip(action))
                     };
@@ -28316,6 +28331,19 @@ mod tests {
         h.get_by_label(&label).click();
         h.run_steps(3);
         assert_ne!(h.state().stack_enter, before);
+    }
+
+    #[test]
+    fn in_full_screen_the_up_and_down_buttons_name_the_stacks() {
+        // Retour du 18/11/2026 : la bulle disait « Ligne du dessus » / « du dessous ».
+        let (mut h, _dir) = harness();
+        h.state_mut().rating_bar = true;
+        h.run_steps(3);
+        act(&mut h, Action::Open);
+        h.run_steps(2);
+        assert!(h.query_by_label("Pile précédente").is_some());
+        assert!(h.query_by_label("Pile suivante").is_some());
+        assert!(h.query_by_label(&Action::NavUp.label()).is_none());
     }
 
     #[test]
