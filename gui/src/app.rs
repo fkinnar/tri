@@ -34344,17 +34344,13 @@ mod tests {
         let dialog = h.state().offload.as_ref().expect("toujours là");
         assert!(!dialog.is_hidden(), "revenue au premier plan");
         assert!(dialog.asks_full());
+        assert!(h.query_by_label("Destination pleine").is_some());
+        // Court, en une ligne (retour du 18/11/2026).
         assert!(
-            h.query_by_label("Plus de place dans la destination")
-                .is_some()
-        );
-        assert!(
-            h.query_by_label_contains("12 fichiers déjà copiés")
-                .is_some()
-                && h.query_by_label_contains(
-                    "30 fichiers restent à copier (900,0 Mo) ; 4,0 Mo libres"
-                )
-                .is_some()
+            h.query_by_label_contains(
+                "12 fichiers copiés et vérifiés, 30 restent à copier (858 Mo), 3,8 Mo libres"
+            )
+            .is_some()
         );
         // Échap ne la ferme pas : il faut choisir.
         press(&mut h, Key::Escape, Modifiers::NONE);

@@ -2,6 +2,7 @@
 //! Inventaire et copie tournent dans des fils à part ; la boîte ne fait qu'afficher et
 //! transmettre les choix.
 
+use crate::cache_panel::size_text;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -745,12 +746,14 @@ impl OffloadDialog {
                                 && needed > *room
                             {
                                 short = true;
+                                // Court, en Go (retour du 18/11/2026 : long et confus) ;
+                                // la suite est dans la bulle du bouton.
                                 ui.colored_label(
                                     ui.visuals().warn_fg_color,
                                     t!(
                                         "offload-not-enough-room",
-                                        free = megabytes(*room),
-                                        mb = megabytes(needed)
+                                        size = size_text(needed),
+                                        free = size_text(*room)
                                     ),
                                 );
                             }
@@ -859,9 +862,13 @@ impl OffloadDialog {
                             } else {
                                 t!("offload-start")
                             };
-                            start = ui
-                                .add_enabled(count > 0, egui::Button::new(label))
-                                .clicked();
+                            let button = ui.add_enabled(count > 0, egui::Button::new(label));
+                            let button = if short {
+                                button.on_hover_text(t!("offload-start-anyway-tip"))
+                            } else {
+                                button
+                            };
+                            start = button.clicked();
                             if ui.button(t!("cancel")).clicked() {
                                 request = Some(Request::Close);
                             }
@@ -876,15 +883,11 @@ impl OffloadDialog {
                         // ce qui est fait, ce qui reste, et le choix, sans limite de temps.
                         ui.colored_label(ui.visuals().error_fg_color, t!("offload-full-title"));
                         ui.label(t!(
-                            "offload-full-done",
-                            n = stop.copied,
-                            path = stop.destination.display().to_string()
-                        ));
-                        ui.label(t!(
-                            "offload-full-left",
+                            "offload-full-status",
+                            done = stop.copied,
                             n = stop.left,
-                            mb = megabytes(stop.needed),
-                            free = stop.free.map_or_else(|| "?".to_string(), megabytes)
+                            size = size_text(stop.needed),
+                            free = stop.free.map_or_else(|| "?".to_string(), size_text)
                         ));
                         ui.weak(t!("offload-full-what"));
                         ui.add_space(6.0);

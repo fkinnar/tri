@@ -1557,15 +1557,15 @@ offload-done = { $verified ->
    *[no] { $copied } files copied
 }, { $skipped } skipped (already offloaded), { $errors } errors.
 offload-done-cancelled = { " " }— interrupted
-offload-not-enough-room = Not enough room: { $free } MB free in the destination, { $mb } MB to copy. "Offload anyway" starts the copy; when the room runs out, it will stop and ask what to do.
+offload-not-enough-room = Not enough room: { $size } to copy, { $free } free.
 offload-start-anyway = Offload anyway
-offload-full-title = No space left in the destination
-offload-full-done = { $n } files already copied and verified, kept in { $path }.
-offload-full-left = { $n } files still to copy ({ $mb } MB); { $free } MB free.
-offload-full-what = Make some room (or plug another disk), then Retry: the copy resumes on the file that did not fit. Give up stops here: the rest stays on the card, nothing is deleted from the card nor ejected.
+offload-start-anyway-tip = The copy will stop when the room runs out, and ask what to do.
+offload-full-title = Destination full
+offload-full-status = { $done } files copied and verified, { $n } still to copy ({ $size }), { $free } free.
+offload-full-what = Make some room, then Retry. Give up leaves the rest on the card.
 offload-full-retry = Retry
 offload-full-give-up = Give up
-offload-done-full = Stopped: no space left in the destination. The rest is still on the card (neither deleted nor ejected).
+offload-done-full = Stopped: destination full. The rest is on the card.
 offload-summary-full = , stopped: destination full
 offload-left = { $n } JPEGs left on the card.
 offload-deleted = Copied files deleted from the card.

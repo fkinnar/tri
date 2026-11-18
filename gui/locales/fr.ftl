@@ -1563,15 +1563,15 @@ offload-done = { $verified ->
    *[no] { $copied } fichiers copiés
 }, { $skipped } ignorés (déjà déchargés), { $errors } erreurs.
 offload-done-cancelled = { " " }— interrompu
-offload-not-enough-room = Pas assez de place : { $free } Mo libres dans la destination, { $mb } Mo à copier. « Décharger quand même » lance la copie ; quand la place manquera, elle s'arrêtera et demandera quoi faire.
+offload-not-enough-room = Pas assez de place : { $size } à copier, { $free } libres.
 offload-start-anyway = Décharger quand même
-offload-full-title = Plus de place dans la destination
-offload-full-done = { $n } fichiers déjà copiés et vérifiés, gardés dans { $path }.
-offload-full-left = { $n } fichiers restent à copier ({ $mb } Mo) ; { $free } Mo libres.
-offload-full-what = Faites de la place (ou branchez un autre disque), puis Réessayer : la copie reprend sur le fichier qui n'a pas tenu. Abandonner arrête là : ce qui reste demeure sur la carte, rien n'est supprimé de la carte ni éjecté.
+offload-start-anyway-tip = La copie s'arrêtera quand la place manquera, et demandera quoi faire.
+offload-full-title = Destination pleine
+offload-full-status = { $done } fichiers copiés et vérifiés, { $n } restent à copier ({ $size }), { $free } libres.
+offload-full-what = Faites de la place puis Réessayer. Abandonner laisse le reste sur la carte.
 offload-full-retry = Réessayer
 offload-full-give-up = Abandonner
-offload-done-full = Arrêté : plus de place dans la destination. Le reste est toujours sur la carte (ni supprimé, ni éjecté).
+offload-done-full = Arrêté : destination pleine. Le reste est sur la carte.
 offload-summary-full = , arrêté : destination pleine
 offload-left = { $n } JPEG laissés sur la carte.
 offload-deleted = Fichiers copiés supprimés de la carte.
