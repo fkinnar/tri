@@ -1742,6 +1742,9 @@ analyses qui arrivent) alors que la sélection est hors de la vue — on a défi
 molette sans la déplacer — garde la **région affichée** (`Reveal::Anchor`,
 `TriApp::grid_anchor`) : la première image visible, ou la suivante restée dans la liste,
 reste en haut, au même décalage (issue n° 100 : la grille repartait au début).
+Sauf **« effacer les filtres »** (retour du 18/11/2026) : la grille repart du début, sur la
+première image, d'un seul saut (`Reveal::Start`) ; l'image gardée en haut se retrouvait au
+milieu de la liste complète, et la grille se recalait en plusieurs fois avec les piles.
 
 ### Réglages (`settings.rs`)
 

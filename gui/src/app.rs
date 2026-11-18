@@ -247,6 +247,8 @@ enum Reveal {
     /// avant un refiltrage, ou la suivante restée dans la liste) en haut de la vue, au
     /// même décalage (issue n° 100 : la grille repartait au début à chaque réglage).
     Anchor,
+    /// Le début de la grille, d'un coup (filtres effacés).
+    Start,
 }
 
 /// Disponibilité d'un niveau d'image pour un fichier.
@@ -9697,6 +9699,16 @@ impl TriApp {
                 self.leave_stack_only();
                 self.filter_inverted = false;
                 self.apply_filter();
+                // Tout effacé : la grille repart du début, en un saut (retour du 18/11/2026 :
+                // elle gardait la première image visible, au milieu de la liste complète,
+                // puis se recalait en plusieurs fois avec les piles).
+                if self.mode == Mode::Grid && !self.files.is_empty() {
+                    let hint = self.hint.take();
+                    self.perform_action(ctx, Action::NavFirst);
+                    self.hint = hint;
+                    self.scroll_anchor = None;
+                    self.reveal = Some(Reveal::Start);
+                }
             }
             // « Floues seulement » : « nettes » inversé (retour du 21/10/2026).
             Action::FilterBlurry => {
@@ -18082,6 +18094,7 @@ impl TriApp {
         let row = shown.iter().position(|&i| i == self.selected).unwrap_or(0) / self.layout.columns;
         let offset = match self.reveal.take() {
             Some(Reveal::Top) => Some(row as f32 * self.layout.row_pitch()),
+            Some(Reveal::Start) => Some(0.0),
             Some(Reveal::Anchor) => self.scroll_anchor.take().and_then(|(path, shift)| {
                 let index = self.files.iter().position(|f| f.path == path)?;
                 let index = self.stacks.visible(index);
@@ -27584,8 +27597,9 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         h.state_mut().select(2);
-        // Éteint (défaut) : on reste sur l'image.
-        act(&mut h, Action::FilterClear);
+        // Éteint (défaut) : on reste sur l'image (sauf « effacer les filtres », qui repart
+        // toujours du début de la grille, 18/11/2026).
+        act(&mut h, Action::FilterStarsOp);
         assert_eq!(h.state().selected, 2);
         // Allumé (f g) : la première image, en grille comme en plein écran.
         press(&mut h, Key::F, Modifiers::NONE);
@@ -27595,7 +27609,7 @@ mod tests {
             h.state().hint.as_deref(),
             Some(t!("filter-restart-on").as_str())
         );
-        act(&mut h, Action::FilterClear);
+        act(&mut h, Action::FilterStarsOp);
         assert_eq!(h.state().selected, 0);
         h.state_mut().select(2);
         act(&mut h, Action::Open);
@@ -28396,6 +28410,36 @@ mod tests {
         assert!(h.query_by_label("Pile précédente").is_some());
         assert!(h.query_by_label("Pile suivante").is_some());
         assert!(h.query_by_label(&Action::NavUp.label()).is_none());
+    }
+
+    #[test]
+    fn clearing_the_filters_goes_back_to_the_start_of_the_grid_at_once() {
+        // Retour du 18/11/2026 : la grille gardait en haut la première image visible sous
+        // le filtre (au milieu de la liste complète), puis se recalait en plusieurs fois.
+        let names: Vec<String> = (0..120).map(|i| format!("img{i:03}.jpg")).collect();
+        let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+        let (mut h, _dir) = harness_files(&refs, 32, 24);
+        run_until(&mut h, |app| app.files.len() == 120);
+        h.state_mut().name_query = "img1".into();
+        h.state_mut().apply_filter();
+        h.run_steps(3);
+        assert!(h.state().files.len() < 120);
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::NavLast);
+        h.run_steps(3);
+        let filtered_offset = h.state().scroll_offset;
+        assert!(filtered_offset > 0.0, "scrolled down under the filter");
+        h.state_mut().perform(&ctx, Action::FilterClear);
+        assert_eq!(h.state().files.len(), 120);
+        assert_eq!(h.state().selected, 0, "the first image");
+        h.run_steps(1);
+        assert_eq!(
+            h.state().scroll_offset,
+            0.0,
+            "at once (was {filtered_offset})"
+        );
+        h.run_steps(5);
+        assert_eq!(h.state().scroll_offset, 0.0, "and it stays there");
     }
 
     #[test]

@@ -1647,7 +1647,10 @@ screenshot). A refilter (a filter slider, ratings, analyses coming in) while the
 is out of view (scrolled with the wheel without moving it) keeps the **region shown**
 (`Reveal::Anchor`, `TriApp::grid_anchor`): the first visible image, or the next one still
 in the list, stays at the top, at the same offset (issue #100: the grid went back to the
-start).
+start). Except **"clear the filters"** (feedback from 2026-11-18): the grid goes back to
+the start, on the first image, in a single jump (`Reveal::Start`); the image kept at the
+top ended up in the middle of the full list, and the grid settled in several steps with
+the stacks.
 
 ### Settings (`settings.rs`)
 
