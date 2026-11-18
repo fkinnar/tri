@@ -253,6 +253,15 @@ another folder: exposure and balance **matched** to the copied image, style and 
 and white copied (`apply_to` default modes). No default shortcut: Ctrl+Shift+C and
 Ctrl+Shift+V are taken (copy a stack, previous version).
 
+**Many images** (feedback from 2026-11-18: pasting on 250 images froze the interface for
+2-3 s): from `[gui] adjust_background_from` images on (20), the work goes **to the
+background**. Paste and harmonise read the thumbnails, compute and write the sidecars in a
+thread; the section is greyed out and the status bar shows "Adjustments: n / N" until the
+end, then the thumbnails follow. For an adjustment already computed (slider, button, auto
+on the folder), the image changes at once and only the writing waits. Jobs run one after
+the other, undo waits for the end (one step for all), and closing `tri` finishes writing
+before leaving.
+
 Sliders show the change at once (thumbnail and large image); the sidecar is written on
 release, one history step per gesture (`u` / Ctrl+Z undoes it). Adjustments are read in
 the background from the sidecars (never waiting on a slow disk) and applied to the pixels

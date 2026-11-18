@@ -215,6 +215,9 @@ pub struct GuiSettings {
     pub report_log_entries: usize,
     /// Réglages : côté de la zone mesurée par la pipette, en fraction de l'image.
     pub adjust_eyedropper_size: f32,
+    /// Réglages : à partir de ce nombre d'images, calculés et enregistrés en fond, avec
+    /// une barre de progression (en dessous : sur place, sans attendre).
+    pub adjust_background_from: usize,
     /// Curseurs : vitesse du réglage fin (Maj + glisser), en fraction du déplacement de
     /// la souris.
     pub slider_fine_speed: f32,
@@ -339,6 +342,7 @@ impl Default for GuiSettings {
             display_profile: String::new(),
             report_log_entries: 20,
             adjust_eyedropper_size: 0.04,
+            adjust_background_from: 20,
             slider_fine_speed: 0.1,
             arrow_font: String::new(),
             arrow_font_scale: 1.0,
