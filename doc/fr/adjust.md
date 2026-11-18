@@ -264,6 +264,15 @@ même dans un autre dossier : exposition et balance **harmonisées** sur l'image
 style et noir et blanc copiés (modes par défaut de `apply_to`). Pas de raccourci par
 défaut : Ctrl+Maj+C et Ctrl+Maj+V sont déjà pris (copier une pile, version précédente).
 
+**Beaucoup d'images** (retour du 18/11/2026 : coller sur 250 images figeait l'interface
+2-3 s) : à partir de `[gui] adjust_background_from` images (20), le travail part **en
+fond**. Coller et harmoniser lisent les vignettes, calculent et écrivent les sidecars dans
+un fil ; la section est grisée et la barre d'état montre « Réglages : n / N » jusqu'à la
+fin, puis les vignettes suivent. Pour un réglage déjà calculé (curseur, bouton, auto sur le
+dossier), l'image change tout de suite et seule l'écriture attend. Les travaux passent
+l'un après l'autre, l'annulation attend la fin (un pas pour tous), et fermer `tri` finit
+d'écrire avant de partir.
+
 Les curseurs montrent le changement tout de suite (vignette et grande image) ; le sidecar
 est écrit quand on lâche, un pas de l'historique par geste (`u` / Ctrl+Z l'annule). Les
 réglages sont lus en fond dans les sidecars (jamais d'attente sur un disque lent) et

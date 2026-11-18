@@ -766,6 +766,12 @@ report_log_entries = 20
 # Viewing adjustments: side of the zone the eyedropper measures (fraction of the image,
 # 0.04 = 4 %).
 adjust_eyedropper_size = 0.04
+# Adjustments: from this number of images on, computed and saved in the background.
+#
+# Pasting, harmonising or adjusting a whole selection: a progress bar in the status bar,
+# the interface stays free (feedback from 2026-11-18: 2-3 s frozen for 250 images).
+# Below it, done on the spot: nothing waits.
+adjust_background_from = 20
 # Sliders: dragging moves by large steps; Shift + drag adjusts finely, the value moving
 # by this fraction of the mouse movement (0.1: ten times slower).
 slider_fine_speed = 0.1

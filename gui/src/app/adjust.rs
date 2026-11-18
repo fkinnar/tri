@@ -282,6 +282,23 @@ impl TriApp {
 
     /// Écrit les réglages de plusieurs images (un pas de l'historique), et les montre.
     pub(super) fn save_adjustments(&mut self, changes: Vec<(PathBuf, Option<Layers>)>) {
+        // Beaucoup d'images : montrées tout de suite, écrites en fond (retour du
+        // 18/11/2026 : 250 sidecars écrits interface figée).
+        if self.adjust_in_background(changes.len()) {
+            for (path, layers) in &changes {
+                self.adjust_show(path, *layers);
+            }
+            let items = changes
+                .into_iter()
+                .map(|(path, layers)| Item::Set(path, layers))
+                .collect();
+            self.adjust_enqueue(Work {
+                items,
+                harmonise: None,
+                notice: false,
+            });
+            return;
+        }
         let convention = self.settings.xmp.sidecar;
         let mut done = Vec::new();
         for (path, layers) in &changes {
@@ -296,23 +313,161 @@ impl TriApp {
                     ));
                 }
             }
-            {
-                let mut shared = self.adjust_map.write().unwrap_or_else(|e| e.into_inner());
-                match layers {
-                    Some(l) if !l.is_none() => {
-                        shared.layers.insert(path.clone(), *l);
-                    }
-                    _ => {
-                        shared.layers.remove(path);
-                    }
-                }
-            }
-            self.adjust_known.insert(path.clone());
-            self.drop_adjusted_textures(path);
+            self.adjust_show(path, *layers);
         }
         if !done.is_empty() {
             self.history.push(tri::history::Step::Adjust(done));
         }
+    }
+
+    /// Les réglages `layers` de `path` montrés (enregistrés à part).
+    fn adjust_show(&mut self, path: &Path, layers: Option<Layers>) {
+        {
+            let mut shared = self.adjust_map.write().unwrap_or_else(|e| e.into_inner());
+            match layers {
+                Some(l) if !l.is_none() => {
+                    shared.layers.insert(path.to_path_buf(), l);
+                }
+                _ => {
+                    shared.layers.remove(path);
+                }
+            }
+        }
+        self.adjust_known.insert(path.to_path_buf());
+        self.drop_adjusted_textures(path);
+    }
+
+    /// Vrai si un travail sur `n` images part en fond (`[gui] adjust_background_from`).
+    fn adjust_in_background(&self, n: usize) -> bool {
+        self.adjust_waker.is_some() && n >= self.gui.adjust_background_from.max(1)
+    }
+
+    /// Vrai pendant un collage ou une harmonisation en fond : les réglages des images
+    /// touchées ne sont pas encore connus, rien d'autre ne part avant.
+    pub(super) fn adjust_harmonising(&self) -> bool {
+        self.adjust_jobs.iter().any(|j| j.harmonise)
+    }
+
+    /// Vrai tant que des réglages s'enregistrent en fond.
+    pub(super) fn adjust_saving(&self) -> bool {
+        !self.adjust_jobs.is_empty()
+    }
+
+    /// Ajoute un travail à la file ; un seul tourne à la fois, dans l'ordre (les écritures
+    /// d'une même image ne se croisent pas).
+    fn adjust_enqueue(&mut self, work: Work) {
+        let harmonise = work.harmonise.is_some();
+        let total = work.items.len();
+        self.adjust_jobs.push_back(Job {
+            work: Some(work),
+            rx: None,
+            total,
+            done: Arc::new(AtomicUsize::new(0)),
+            harmonise,
+        });
+        self.adjust_start_next();
+    }
+
+    /// Lance le premier travail de la file, s'il n'est pas déjà parti.
+    fn adjust_start_next(&mut self) {
+        let Some(job) = self.adjust_jobs.front_mut() else {
+            return;
+        };
+        let Some(work) = job.work.take() else {
+            return;
+        };
+        let (tx, rx) = mpsc::channel();
+        job.rx = Some(rx);
+        let done = job.done.clone();
+        let convention = self.settings.xmp.sidecar;
+        let cache = self.engine.as_ref().map(|e| e.cache.clone());
+        let waker = self.adjust_waker.clone();
+        std::thread::spawn(move || {
+            let result = work.run(convention, cache.as_ref(), &done, waker.as_ref());
+            let _ = tx.send(result);
+            if let Some(waker) = waker {
+                waker.request_repaint();
+            }
+        });
+    }
+
+    /// Travail fini en tête de file : réglages montrés, un pas de l'historique, bilan ;
+    /// puis le suivant.
+    pub(super) fn adjust_jobs_poll(&mut self) {
+        let Some(result) = self
+            .adjust_jobs
+            .front()
+            .and_then(|j| j.rx.as_ref())
+            .and_then(|rx| rx.try_recv().ok())
+        else {
+            return;
+        };
+        self.adjust_job_done(result);
+    }
+
+    /// À la fermeture : la file finie avant de partir (des réglages montrés ne doivent pas
+    /// manquer dans les sidecars).
+    pub(super) fn adjust_jobs_finish(&mut self) {
+        while let Some(job) = self.adjust_jobs.front() {
+            if job.rx.is_none() {
+                self.adjust_start_next();
+            }
+            let result = self
+                .adjust_jobs
+                .front()
+                .and_then(|j| j.rx.as_ref())
+                .and_then(|rx| rx.recv().ok());
+            match result {
+                Some(result) => self.adjust_job_done(result),
+                None => {
+                    self.adjust_jobs.pop_front();
+                }
+            }
+        }
+    }
+
+    /// Le travail en tête de file est fini : `result` pris en compte, le suivant lancé.
+    fn adjust_job_done(&mut self, result: WorkResult) {
+        self.adjust_jobs.pop_front();
+        for (path, layers) in result.computed {
+            self.adjust_show(&path, layers);
+        }
+        if let Some((path, error)) = result.errors.last() {
+            self.note_error = Some(t!(
+                "adjust-write-failed",
+                name = shown_name(path),
+                error = error.as_str()
+            ));
+        }
+        if !result.changes.is_empty() {
+            self.history
+                .push(tri::history::Step::Adjust(result.changes));
+        }
+        if let Some(n) = result.notice {
+            self.notice = Some((
+                if result.missing > 0 {
+                    t!("adjust-applied-missing", n = n, missing = result.missing)
+                } else {
+                    t!("adjust-applied", n = n)
+                },
+                false,
+            ));
+        }
+        self.adjust_start_next();
+    }
+
+    /// Avancement des réglages en fond, pour la barre d'état : (fait, total).
+    pub(super) fn adjust_progress(&self) -> Option<(usize, usize)> {
+        if self.adjust_jobs.is_empty() {
+            return None;
+        }
+        let total = self.adjust_jobs.iter().map(|j| j.total).sum();
+        let done = self
+            .adjust_jobs
+            .iter()
+            .map(|j| j.done.load(Ordering::Relaxed))
+            .sum();
+        Some((done, total))
     }
 
     /// Après avoir défait ou refait un pas : les réglages des images touchées sont relus.
@@ -357,15 +512,34 @@ impl TriApp {
     /// dossier ouvert, même masquée par un filtre.
     pub(super) fn adjust_base(&self, path: &Path) -> Option<tri::adjust::Base> {
         let engine = self.engine.as_ref()?;
+        let key = self.adjust_base_key(path)?;
+        Some(tri::adjust::Base {
+            bitmap: engine.cache.get(&key)?,
+            transfer: tri::adjust::Transfer::Srgb,
+        })
+    }
+
+    /// Clé de la vignette de `path` dans le cache (base de [`TriApp::adjust_base`]).
+    fn adjust_base_key(&self, path: &Path) -> Option<tri::cache::Key> {
+        let engine = self.engine.as_ref()?;
         let file = self
             .files
             .iter()
             .chain(self.folder.files.iter())
             .find(|f| f.path == path)?;
-        let key = preview::key(file, Level::Thumbnail, &engine.preview).ok()?;
-        Some(tri::adjust::Base {
-            bitmap: engine.cache.get(&key)?,
-            transfer: tri::adjust::Transfer::Srgb,
+        preview::key(file, Level::Thumbnail, &engine.preview).ok()
+    }
+
+    /// Réglages de `path` connus de la session (`None` : à lire dans son sidecar).
+    fn adjust_layers_known(&self, path: &Path) -> Option<Layers> {
+        self.adjust_known.contains(path).then(|| {
+            self.adjust_map
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .layers
+                .get(path)
+                .copied()
+                .unwrap_or_default()
         })
     }
 
@@ -573,6 +747,10 @@ impl TriApp {
     /// sur la vignette sans réglage. Images synchronisées : leur balance est harmonisée
     /// sur l'image courante (la zone n'existe que dans celle-ci).
     pub(super) fn adjust_pick(&mut self, path: &Path, zone: tri::adjust::Zone) {
+        if self.adjust_harmonising() {
+            self.notice = Some((t!("adjust-busy"), false));
+            return;
+        }
         let Some(base) = self.adjust_base(path) else {
             self.notice = Some((t!("adjust-apply-wait"), false));
             return;
@@ -655,6 +833,23 @@ impl TriApp {
         targets: Vec<PathBuf>,
         modes: Modes,
     ) {
+        if self.adjust_in_background(targets.len()) {
+            // Les vignettes lues, comparées et les sidecars écrits en fond.
+            let items = targets
+                .into_iter()
+                .map(|target| {
+                    let key = self.adjust_base_key(&target);
+                    let current = self.adjust_layers_known(&target);
+                    Item::Harmonise(target, key, current)
+                })
+                .collect();
+            self.adjust_enqueue(Work {
+                items,
+                harmonise: Some((*reference, reference_base.clone(), modes)),
+                notice: true,
+            });
+            return;
+        }
         let mut changes = Vec::new();
         let mut missing = 0;
         for target in targets {
@@ -713,6 +908,15 @@ impl TriApp {
     /// « Synchroniser », quatre onglets (base, style, noir et blanc, valeurs), puis les
     /// boutons communs.
     pub(super) fn adjust_section(&mut self, ui: &mut Ui) {
+        // Collage en fond : grisée jusqu'à la fin (les réglages des images touchées ne
+        // sont pas encore connus).
+        let busy = self.adjust_harmonising();
+        ui.add_enabled_ui(!busy, |ui| self.adjust_section_inner(ui))
+            .response
+            .on_disabled_hover_text(t!("adjust-busy"));
+    }
+
+    fn adjust_section_inner(&mut self, ui: &mut Ui) {
         let Some(file) = self.files.get(self.selected).cloned() else {
             ui.weak(t!("panel-no-image"));
             return;
@@ -1110,8 +1314,13 @@ fn setting_slider(
             let field = ui
                 .add_sized(
                     [FIELD_WIDTH, ui.spacing().interact_size.y],
+                    // Une valeur hors de la plage (balance harmonisée au-delà de 12 000 K…)
+                    // n'est pas ramenée dedans au seul affichage : c'était un
+                    // changement, réécrit dans le sidecar, et un pas de l'historique
+                    // sans rien toucher (trouvé le 18/11/2026).
                     egui::DragValue::new(value)
                         .range(range)
+                        .clamp_existing_to_range(false)
                         .speed(steps.1)
                         .fixed_decimals(decimals)
                         .suffix(suffix),
@@ -1530,4 +1739,112 @@ fn mixer_name(preset: &str) -> String {
         "blue" => "adjust-mono-blue",
         _ => "adjust-mono-custom",
     })
+}
+
+/// Une image d'un travail en fond.
+pub(super) enum Item {
+    /// Réglages déjà calculés (et montrés), à écrire.
+    Set(PathBuf, Option<Layers>),
+    /// À harmoniser sur la référence du travail : la clé de sa vignette, et ses réglages
+    /// s'ils sont connus (sinon lus dans son sidecar).
+    Harmonise(PathBuf, Option<tri::cache::Key>, Option<Layers>),
+}
+
+/// Réglages de plusieurs images, calculés et écrits en fond (`[gui] adjust_background_from`).
+pub(super) struct Work {
+    items: Vec<Item>,
+    /// Référence des images à harmoniser : ses réglages, sa vignette, les modes.
+    harmonise: Option<(Layers, tri::adjust::Base, Modes)>,
+    /// Bilan dans la barre d'état à la fin (« N images réglées »).
+    notice: bool,
+}
+
+/// Ce qu'un travail en fond a fait.
+pub(super) struct WorkResult {
+    /// Réglages calculés en fond, à montrer.
+    computed: Vec<(PathBuf, Option<Layers>)>,
+    /// Pour l'historique (un pas).
+    changes: Vec<tri::history::AdjustChange>,
+    /// Écritures ratées.
+    errors: Vec<(PathBuf, String)>,
+    /// Images sans vignette prête, laissées de côté.
+    missing: usize,
+    /// Nombre d'images réglées, si le bilan est demandé.
+    notice: Option<usize>,
+}
+
+impl Work {
+    fn run(
+        self,
+        convention: tri::xmp::Convention,
+        cache: Option<&tri::cache::Cache>,
+        done: &AtomicUsize,
+        waker: Option<&egui::Context>,
+    ) -> WorkResult {
+        let mut result = WorkResult {
+            computed: Vec::new(),
+            changes: Vec::new(),
+            errors: Vec::new(),
+            missing: 0,
+            notice: None,
+        };
+        let mut written = 0;
+        for item in self.items {
+            let (path, layers) = match item {
+                Item::Set(path, layers) => (path, layers),
+                Item::Harmonise(path, key, current) => {
+                    let base = key
+                        .and_then(|k| cache.and_then(|c| c.get(&k)))
+                        .map(|bitmap| tri::adjust::Base {
+                            bitmap,
+                            transfer: tri::adjust::Transfer::Srgb,
+                        });
+                    let (Some(base), Some((reference, reference_base, modes))) =
+                        (base, self.harmonise.as_ref())
+                    else {
+                        result.missing += 1;
+                        done.fetch_add(1, Ordering::Relaxed);
+                        continue;
+                    };
+                    let current = current.unwrap_or_else(|| {
+                        tri::adjust::read(&path).ok().flatten().unwrap_or_default()
+                    });
+                    let layers =
+                        tri::adjust::apply_to(reference, reference_base, &current, &base, *modes);
+                    result.computed.push((path.clone(), Some(layers)));
+                    (path, Some(layers))
+                }
+            };
+            match tri::adjust::write(&path, layers.as_ref(), convention) {
+                Ok(change) => {
+                    written += 1;
+                    if change.before != change.after {
+                        result.changes.push(change);
+                    }
+                }
+                Err(e) => result.errors.push((path, e.to_string())),
+            }
+            done.fetch_add(1, Ordering::Relaxed);
+            // La barre avance (egui regroupe les demandes).
+            if let Some(waker) = waker {
+                waker.request_repaint();
+            }
+        }
+        if self.notice {
+            result.notice = Some(written);
+        }
+        result
+    }
+}
+
+/// Un travail de la file, en attente ou en cours.
+pub(super) struct Job {
+    /// Pas encore lancé.
+    work: Option<Work>,
+    /// Lancé : son résultat.
+    rx: Option<Receiver<WorkResult>>,
+    total: usize,
+    done: Arc<AtomicUsize>,
+    /// Collage ou harmonisation (réglages pas encore connus).
+    harmonise: bool,
 }

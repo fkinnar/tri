@@ -771,6 +771,11 @@ pub struct TriApp {
     /// Réglages automatiques d'un dossier en cours (tâche de fond) : les réglages calculés
     /// et le nombre d'images sans vignette prête.
     adjust_folder_job: Option<Receiver<adjust::FolderResult>>,
+    /// Réglages de beaucoup d'images calculés et écrits en fond, dans l'ordre (retour du
+    /// 18/11/2026 : coller sur 250 images figeait l'interface 2-3 s).
+    adjust_jobs: std::collections::VecDeque<adjust::Job>,
+    /// Pour réveiller l'interface depuis ces travaux (posé à la première image).
+    adjust_waker: Option<egui::Context>,
     /// Fenêtre du journal de l'application (issue n° 398).
     log_view: Option<crate::log_view::LogView>,
     /// Image (passe d'egui) où elle s'est ouverte (même raison que `export_report_since`).
@@ -1749,6 +1754,8 @@ impl TriApp {
             adjust_bases: HashMap::new(),
             adjust_clipboard: None,
             adjust_folder_job: None,
+            adjust_jobs: std::collections::VecDeque::new(),
+            adjust_waker: None,
             log_view: None,
             log_view_since: 0,
             logged_errors: Vec::new(),
@@ -2083,6 +2090,7 @@ impl TriApp {
     /// Fermeture : les calculs en fond s'arrêtent sans être attendus (retour du
     /// 29/10/2026 : sur un NAS, quitter attendait la fin de chaque vignette en cours).
     fn stop_background(&mut self) {
+        self.adjust_jobs_finish();
         if let Some(engine) = &mut self.engine {
             engine.scheduler.detach();
             engine.loader.detach();
@@ -8801,6 +8809,12 @@ impl TriApp {
             Action::CheckUpdate => self.check_update(ctx),
             Action::ReportIssue => self.prepare_report(ctx),
             Action::AdjustBeforeAfter => self.toggle_before_after(),
+            // Un collage en fond : ses réglages ne sont pas encore connus, on attend.
+            Action::AdjustApply | Action::AdjustCopy | Action::AdjustPaste
+                if self.adjust_harmonising() =>
+            {
+                self.notice = Some((t!("adjust-busy"), false));
+            }
             Action::AdjustApply => {
                 self.adjust_commit(ctx);
                 self.adjust_apply_to_selection();
@@ -8812,6 +8826,11 @@ impl TriApp {
             Action::AdjustPaste => {
                 self.adjust_commit(ctx);
                 self.adjust_paste();
+            }
+            // Pas d'annulation pendant que des réglages s'écrivent : leur pas n'est pas
+            // encore dans l'historique.
+            Action::Undo | Action::Redo if self.adjust_saving() => {
+                self.notice = Some((t!("adjust-busy"), false));
             }
             Action::Log => {
                 if self.log_view.take().is_none() {
@@ -15000,6 +15019,16 @@ impl TriApp {
                 cancel: None,
             });
         }
+        // Réglages de beaucoup d'images, calculés et écrits en fond.
+        if let Some((done, total)) = self.adjust_progress() {
+            tasks.push(Task {
+                text: t!("adjust-saving", done = done, total = total),
+                fraction: done as f32 / total.max(1) as f32,
+                tip: None,
+                click: None,
+                cancel: None,
+            });
+        }
         if let Some((text, fraction)) = self
             .offload
             .as_ref()
@@ -19593,6 +19622,10 @@ impl TriApp {
                 });
             });
         let convention = self.settings.xmp.sidecar;
+        if self.adjust_saving() && (target.is_some() || undo || redo) {
+            self.notice = Some((t!("adjust-busy"), false));
+            return;
+        }
         if let Some(target) = target {
             let (applied, error) = self.history.go_to(target, convention);
             self.after_applied(applied, error);
@@ -21321,6 +21354,7 @@ impl eframe::App for TriApp {
             // Dossiers du panneau lus en fond (montage lent) : redessiné à leur arrivée.
             let repaint = ctx.clone();
             self.tree.set_wake(move || repaint.request_repaint());
+            self.adjust_waker = Some(ctx.clone());
         }
         if ctx.input(|i| i.viewport().close_requested()) {
             self.save_folder_position();
@@ -21375,6 +21409,7 @@ impl eframe::App for TriApp {
         self.watch_volumes(&ctx);
         self.watch_neighbourhood(&ctx);
         self.tree.poll();
+        self.adjust_jobs_poll();
         self.poll_opening();
         self.poll_loading(&ctx);
         if self.engine_backlog {
@@ -35650,6 +35685,63 @@ mod tests {
         // Avant / après : montré sans réglages, le sidecar ne change pas.
         h.state_mut().perform(&ctx, Action::AdjustBeforeAfter);
         assert!(h.state().showing_original());
+        assert_eq!(tri::adjust::read(&paths[0]).unwrap(), Some(layers));
+    }
+
+    #[test]
+    fn pasting_on_many_images_runs_in_the_background_in_one_step() {
+        // Retour du 18/11/2026 : coller sur 250 images figeait l'interface 2-3 s. À partir
+        // de `[gui] adjust_background_from` images, calculé et écrit en fond, barre de
+        // progression, section grisée et annulation refusée pendant ce temps ; un pas.
+        let (mut h, _dir) = harness();
+        run_until(&mut h, |app| {
+            app.files.len() == 3 && app.files.iter().all(|f| app.adjust_base(&f.path).is_some())
+        });
+        h.state_mut().gui.adjust_background_from = 2;
+        let paths: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        let mut layers = tri::adjust::Layers::default();
+        layers.correction.exposure = 0.5;
+        layers.mono = tri::adjust::Mixer::preset("orange");
+        h.state_mut()
+            .save_adjustments(vec![(paths[0].clone(), Some(layers))]);
+        assert_eq!(
+            tri::adjust::read(&paths[0]).unwrap(),
+            Some(layers),
+            "one: on the spot"
+        );
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::AdjustCopy);
+        let files = h.state().files.clone();
+        h.state_mut().selection.select_all(&files);
+        h.state_mut().selected = 1;
+        h.state_mut().adjust_sync = true;
+        h.state_mut().perform(&ctx, Action::AdjustPaste);
+        assert!(h.state().adjust_harmonising(), "in the background");
+        assert!(
+            h.state()
+                .adjust_progress()
+                .is_some_and(|(_, total)| total == 3)
+        );
+        h.state_mut().perform(&ctx, Action::Undo);
+        run_until(&mut h, |app| !app.adjust_saving());
+        for path in &paths[1..] {
+            let got = tri::adjust::read(path).unwrap().expect("pasted");
+            assert_eq!(got.mono, layers.mono, "style copied");
+            assert_eq!(h.state_mut().adjust_layers(path), Some(got), "shown");
+        }
+        // Le panneau des réglages, redessiné sur une balance hors de la plage du curseur,
+        // n'ajoute pas de pas (il la ramenait dans la plage et l'écrivait).
+        h.run_steps(4);
+        assert_eq!(
+            h.state().history.entries().len(),
+            2,
+            "copy's source + paste"
+        );
+        // L'annulation pendant l'écriture n'a rien fait ; maintenant, un seul pas.
+        h.state_mut().perform(&ctx, Action::Undo);
+        for path in &paths[1..] {
+            assert_eq!(tri::adjust::read(path).unwrap(), None, "one step for all");
+        }
         assert_eq!(tri::adjust::read(&paths[0]).unwrap(), Some(layers));
     }
 

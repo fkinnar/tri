@@ -774,6 +774,12 @@ report_log_entries = 20
 # Réglages de visualisation : côté de la zone mesurée par la pipette (fraction de l'image,
 # 0.04 = 4 %).
 adjust_eyedropper_size = 0.04
+# Réglages : à partir de ce nombre d'images, calculés et enregistrés en fond.
+#
+# Coller, harmoniser ou régler toute une sélection : une barre de progression dans la
+# barre d'état, l'interface reste libre (retour du 18/11/2026 : 2-3 s figées pour 250
+# images). En dessous, sur place : rien n'attend.
+adjust_background_from = 20
 # Curseurs : glisser avance par grands crans ; Maj + glisser règle finement, la valeur
 # bougeant de cette fraction du déplacement de la souris (0.1 : dix fois plus lentement).
 slider_fine_speed = 0.1
