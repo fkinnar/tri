@@ -316,9 +316,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   de sa couverture, comme `Maj+W` ; pour une
   pile plus grande que la limite, `f c` montre toute la pile, dépliée, dans la grille (une
   seule pile, sans regroupement à part : #163),
-  `f c` encore ou « Effacer » rend tout, et une pile qui était repliée se replie ; en
-  mode pile, un bouton pile dans la barre des filtres fait de même, allumé à l'accent
-  quand on regarde une pile (06/11/2026), grisé hors d'une pile ; piles actives, une photo seule est une pile d'une image et se compare
+  `f c` encore ou « Effacer » rend tout, et une pile qui était repliée se replie ; un
+  bouton pile dans la barre des filtres fait de même (une petite pile entre des coins de
+  cadrage), allumé à l'accent quand on regarde une pile (06/11/2026), grisé hors d'une
+  pile ou sans les piles ; piles actives, une photo seule est une pile d'une image et se compare
   aussi, 26/10/2026, #167) (au moins 2, au plus `[gui.compare] max`, 21 par défaut depuis le 06/11/2026 (6 avant) : chacune
   garde son aperçu et son 1:1 en mémoire graphique), disposées pour être vues le plus
   grand possible (nombre de colonnes choisi d'après les proportions des images et de la
@@ -845,8 +846,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   "first"`, sur sa première photo : bouton « |‹ » du bandeau du plein écran, près de
   l'interrupteur des piles (toujours là depuis le 25/10/2026, en grille comme en plein
   écran : parti de la barre des filtres avec sa réorganisation du 27/10/2026, revenu
-  dans le bandeau le 31/10/2026 ; « |‹ » en grille aussi, piles actives, pour en voir
-  l'état, depuis le 26/10/2026), ou Ctrl+Maj+S, retenu
+  dans le bandeau le 31/10/2026 ; « |‹ » en grille aussi, pour en voir l'état, depuis
+  le 26/10/2026 ; grisé sans les piles), ou Ctrl+Maj+S, retenu
   d'un lancement à l'autre (issue n° 62) ; un message dit lequel est actif (rien ne
   bouge à l'écran).
   Échec d'écriture du sidecar : on reste sur l'image (l'erreur est dans la barre d'état).
@@ -855,7 +856,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   - **bandeau de notation** en bas (au-dessus de la barre d'état), dans la grille et en
     plein écran : drapeaux, étoiles et couleurs de l'image sélectionnée, cliquables,
     estompés quand ils ne sont pas posés, leurs raccourcis dans la bulle (22/10/2026) ; `Maj+N` l'affiche ou le masque
-    (`[gui] rating_bar`) ; à droite, le bouton « avance auto » (voir ci-dessous). En
+    (`[gui] rating_bar`) ; à droite, le bouton « avance auto » (voir ci-dessous). Ses
+    boutons, comme ceux de la barre des filtres, n'apparaissent ni ne disparaissent selon
+    l'état (piles actives ou non, photo avec ou sans développements) : celui qui ne sert
+    pas reste à sa place, grisé plus sombre, sans effet ; rien ne bouge sous le pointeur
+    (18/11/2026). En
     plein écran, les notes sont aussi posées sur l'image, quelques secondes
     (`[gui.notes]`, voir plus haut ; issue n° 8 : elles y restaient en permanence en
     double). En plein écran aussi,
