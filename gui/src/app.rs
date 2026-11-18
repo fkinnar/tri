@@ -17551,7 +17551,9 @@ impl TriApp {
     /// Encadré des filtres en cours (`f k`, idée de l'utilisateur, 18/11/2026) : au milieu
     /// de la zone des images, les filtres un par ligne, puis le nombre de photos qui
     /// restent, en grand, et le total du dossier. Un clic le ferme.
-    fn filter_count_box(&mut self, ui: &mut Ui) {
+    /// `area` : toute la zone des images (retour du 18/11/2026 : centré sur la place
+    /// restante, l'encadré descendait sous le message « aucune image »).
+    fn filter_count_box(&mut self, ui: &mut Ui, area: Rect) {
         if !self.filter_count {
             return;
         }
@@ -17563,15 +17565,16 @@ impl TriApp {
         };
         let n = self.shown_count();
         let total = self.folder_total;
-        let area = ui.max_rect();
+        // Au milieu de la zone des images en largeur, de la fenêtre en hauteur : sans
+        // résultat, la barre de notation disparaît et la zone s'allonge, l'encadré
+        // descendait (retour du 18/11/2026).
+        let window = ui.ctx().content_rect();
         let spacing = self.gui.dialogs.spacing;
         let size = self.gui.grid.filter_count_size;
         let response = egui::Area::new(egui::Id::unique("filter_count_box"))
             .order(egui::Order::Foreground)
-            .anchor(
-                egui::Align2::CENTER_CENTER,
-                area.center() - ui.ctx().content_rect().center(),
-            )
+            .pivot(egui::Align2::CENTER_CENTER)
+            .fixed_pos(pos2(area.center().x, window.center().y))
             .show(ui.ctx(), |ui| {
                 egui::Frame::popup(ui.style())
                     .inner_margin(spacing * 3.0)
@@ -21764,6 +21767,8 @@ impl eframe::App for TriApp {
             central = central.frame(egui::Frame::central_panel(ui.style()).fill(fill));
         }
         let center = central.show(ui, |ui| {
+            // Toute la zone des images, avant ce qu'on y pose (message « aucune image »…).
+            let whole = ui.max_rect();
             if let Some(error) = &self.error {
                 ui.colored_label(self.gui.colors.error, error);
             } else if self.folder.is_none() && self.opening.is_some() {
@@ -21810,7 +21815,7 @@ impl eframe::App for TriApp {
                 self.grid(ui);
             }
             self.filter_toast(ui);
-            self.filter_count_box(ui);
+            self.filter_count_box(ui, whole);
             self.develop_toast(ui);
             self.export_toasts(ui);
         });
