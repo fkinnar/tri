@@ -203,6 +203,8 @@ loupe = "m"
 "core.filter.conflicts" = ["f c"]
 # After a filter change, start again from the first image (on / off): "g", like "g g".
 "core.filter.restart" = ["f g"]
+# f k ("count"): the filters in use and the number of photos left, large, in the middle.
+"core.filter.count" = ["f k"]
 
 # --- Order (n) ---
 # n: the next sort; Shift+N: reverse it.

@@ -929,6 +929,8 @@ bar_label_scale = 0.85
 # Bubble with the number of images in the middle of the screen after a filter change:
 # duration (milliseconds; 0: never).
 filter_toast_ms = 1500
+# Box of the filters in use (f k): size of the number of photos (points).
+filter_count_size = 72.0
 # How long the "n developments to redo" banner stays.
 #
 # "n developments to redo" banner (developed images changed elsewhere, rendered again in

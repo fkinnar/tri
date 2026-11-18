@@ -107,6 +107,7 @@ pub fn navigate(
         | Action::FilterDeveloped
         | Action::FilterConflicts
         | Action::FilterRestart
+        | Action::FilterCount
         | Action::SortNext
         | Action::SortReverse
         | Action::SortBy(_)

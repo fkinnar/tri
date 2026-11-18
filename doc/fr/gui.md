@@ -823,6 +823,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `Action::changes_filter`). `f g` (`core.filter.restart`) ou le bouton de la barre du
   bas (entonnoir et « |‹ », à côté de l'entrée dans les piles) l'allume ou l'éteint,
   retenu d'un lancement à l'autre ; un message dit lequel est actif.
+- **Les filtres en cours, en grand** (`f k`, « kount », `core.filter.count`, idée de
+  l'utilisateur, 18/11/2026) : un encadré au milieu de la zone des images, les filtres un
+  par ligne (« Aucun filtre » sinon), puis le nombre de photos qui restent, en grand
+  (`[gui.grid] filter_count_size`), et « sur N » (le dossier). Il reste ouvert pendant
+  qu'on change les filtres (le nombre suit ; la bulle du nombre ne s'affiche pas en
+  plus) ; Échap ou `f k` le ferment, un clic dessus aussi, toute autre action le ferme
+  et se fait (`TriApp::filter_count_box`).
 - **La roulette en plein écran** (`[gui.view] wheel_step`, 16/11/2026, pour ceux qui
   trient à la souris) : image ajustée, un cran vers le bas passe à l'image suivante, vers
   le haut à la précédente (`wheel_step` points de défilement par image au pavé tactile ;
@@ -1618,6 +1625,7 @@ Idée notée pour plus tard : un nombre après une séquence (`<leader> m 200` :
 | `core.stack.open` / `core.stack.close` | ( ( / ) ) | ( ( / ) ) |
 | `core.stack.enter` | Ctrl+Maj+S | Ctrl+Maj+S |
 | `core.filter.restart` | f g | f g |
+| `core.filter.count` | f k | f k |
 | `core.dev.next` / `core.dev.prev` | Maj+W / Maj+Q | Maj+W / Maj+Q |
 | `core.dev.toggle` / `core.dev.fold_all` | — (`s`, `Maj+S` le font) | — |
 | `core.file.delete` | Suppr, Backspace | x, Suppr, Backspace |
