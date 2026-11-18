@@ -8387,7 +8387,7 @@ impl TriApp {
         let hover = self.meta_hover.filter(|_| self.metadata_panel_shown());
         for (chord, repeated) in chords {
             // Échap dans le menu des suites : abandonne la séquence, sans revenir en arrière
-            // (comme dans which-key), sauf s'il en est une suite (`f Échap`).
+            // (comme dans which-key), sauf s'il en est une suite.
             let escape = crate::actions::Chord::key(egui::Key::Escape);
             if chord == escape
                 && self.sequencer.is_held()
@@ -24754,7 +24754,7 @@ mod tests {
         assert!(!h.state().developed_on);
         f_shift_d(&mut h);
         press(&mut h, Key::F, Modifiers::NONE);
-        press(&mut h, Key::Escape, Modifiers::NONE);
+        press(&mut h, Key::D, Modifiers::NONE);
         assert!(!h.state().developed_on);
         assert_eq!(h.state().files.len(), all);
     }
@@ -26665,15 +26665,32 @@ mod tests {
         h.event(UiEvent::Text("°".into()));
         h.run_steps(3);
         assert_eq!(h.state().filter_summary(), "bleu ou violet");
+        // f Échap ferme seulement le menu, comme après le leader (retour du 18/11/2026) ;
+        // f d efface tout, et <leader> f mène aux mêmes filtres.
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::Escape, Modifiers::NONE);
-        assert_eq!(names(&h).len(), 3, "f Échap : tout effacé");
-        assert_eq!(h.state().filter_summary(), "tout");
+        assert_eq!(
+            h.state().filter_summary(),
+            "bleu ou violet",
+            "f Échap : rien effacé"
+        );
         assert_eq!(
             h.state().mode,
             Mode::Grid,
             "Échap de la séquence ne fait rien d'autre"
         );
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::D, Modifiers::NONE);
+        assert_eq!(names(&h).len(), 3, "f d : tout effacé");
+        assert_eq!(h.state().filter_summary(), "tout");
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::Num9, Modifiers::NONE);
+        assert_eq!(names(&h), ["img2.jpg"], "<leader> f 9 : bleues");
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::D, Modifiers::NONE);
+        assert_eq!(names(&h).len(), 3, "<leader> f d : tout effacé");
     }
 
     #[test]

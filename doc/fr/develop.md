@@ -261,7 +261,7 @@ logiciels du filtre n'est actif (aucun du tout, ou aucun des cochés), le filtre
 retenu allumé). Moteur : `develop::DevelopedRule` (logiciels cochés) et
 `DevelopedFilter` (trait `Filter`), qui lisent les sidecars (`Engine::sidecar` :
 historique darktable non vide, `.rrdata` de RapidRAW) ; une image plate n'a pas de
-développement. Filtre sur le contenu : effacé par `f Échap`, inversible (`f i`).
+développement. Filtre sur le contenu : effacé par `f d`, inversible (`f i`).
 
 Sous le filtre, les vignettes montrent le développement des logiciels cochés, quel que
 soit le rendu choisi pour la grille (retours du 27/10/2026) : le plus récent s'ils sont

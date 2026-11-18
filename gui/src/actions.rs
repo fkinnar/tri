@@ -2116,6 +2116,36 @@ impl Keymap {
             sequence.extend(keys.iter().copied());
             self.menus.push((sequence, name.clone()));
         }
+        // Les filtres aussi après le leader, comme les autres thèmes (retour du
+        // 18/11/2026 : « f » manquait dans son menu) : chaque séquence du sous-menu des
+        // filtres (« f 3 »), précédée du leader. Le menu sans leader reste le plus court.
+        let filters: Vec<Vec<Chord>> = Defaults::get()
+            .menus
+            .iter()
+            .filter(|(l, _, name)| !*l && name == "filters")
+            .map(|(_, keys, _)| keys.clone())
+            .collect();
+        let mirrored: Vec<(Vec<Chord>, Action)> = self
+            .bindings
+            .iter()
+            .filter(|(k, a)| {
+                a.group() == Group::Filters
+                    && filters
+                        .iter()
+                        .any(|p| k.len() > p.len() && k.starts_with(p))
+            })
+            .map(|(k, a)| {
+                let mut sequence = vec![lead];
+                sequence.extend(k.iter().copied());
+                (sequence, *a)
+            })
+            .collect();
+        self.bindings.extend(mirrored);
+        for keys in filters {
+            let mut sequence = vec![lead];
+            sequence.extend(keys);
+            self.menus.push((sequence, "filters".to_string()));
+        }
         Ok(self)
     }
 
@@ -2213,6 +2243,11 @@ impl Keymap {
             .filter(|(k, a)| *a == action && (!has_own || own(k)))
             .map(|(k, _)| k)
             .collect();
+        // Un filtre aussi après le leader (`<leader> f 3`) : l'aide n'écrit que `f 3`.
+        if let Some(lead) = self.leader {
+            let short: Vec<Vec<Chord>> = mine.iter().map(|k| (*k).clone()).collect();
+            mine.retain(|k| !(k.first() == Some(&lead) && short.iter().any(|s| s[..] == k[1..])));
+        }
         // Flèches et hjkl pour la même action (`<leader> h` / `<leader> Flèche gauche`) :
         // celles du jeu choisi seulement (retour du 06/11/2026).
         if mine.iter().any(|k| !self.other_set_variant(k)) {

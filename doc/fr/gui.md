@@ -83,7 +83,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   version change, `versions_epoch`), un filtre comme les autres (`versions_only`) ; la
   **place du dossier dans le cache** (`Cache::folder_usage`, remesurée quand les calculs
   avancent) et **« Vider »**, qui ouvre la boîte « Réinitialiser » sur le cache seul
-  (confirmation, mesures). `f Échap` retire aussi les filtres du résumé
+  (confirmation, mesures). `f d` retire aussi les filtres du résumé
   (`gui/src/app/summary.rs`).
 - **Panneau des dossiers** (17/10/2026), à gauche de la grille : emplacements dépliables
   en arborescence, rangés par sections titrées et séparées d'un trait (20/10/2026) ; titres en gras, plus grands que
@@ -146,7 +146,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     #165), `f 0` étoiles
     indifférentes, `f p` acceptées, `f u` sans les rejetées, `f x` rejetées (la même
     séquence retire le filtre), `f 6`…`f 9`, `f °`, `f ,`, `f .` couleurs (ajouter / retirer),
-    `f Échap` tout effacer. Chiffres et lettres avec ou sans Maj.
+    `f d` tout effacer (Échap ne fait que fermer le menu). Aussi après le leader
+    (`<leader> f 3`) : son menu les range sous « f ». Chiffres et lettres avec ou sans Maj.
   - Souris : **barre de filtres** en haut de la grille (`Maj+F` l'affiche ou la masque,
     `[gui] filter_bar`) : chaque clic déclenche la même action que le clavier (recliquer
     l'étoile active efface le filtre d'étoiles). Des filtres plus complexes (fenêtre ou
@@ -1265,7 +1266,8 @@ possibles et ce qu'elles font, en colonnes ; une séquence connue, tapée d'un t
 l'affiche pas. Le menu affiché, la séquence **n'expire plus** (`Sequencer::hold`) : on a le
 temps de lire ; un sous-menu suit tout de suite (`<leader> r`). **Échap** abandonne
 (`Sequencer::cancel`), sans revenir en arrière, sauf s'il est lui-même une suite
-(`f Échap` efface les filtres). Pas de menu après une touche ambiguë (`y` avant `y )`) :
+(aucune par défaut depuis le 18/11/2026 : `f d` effaçait les filtres, c'est
+maintenant `f d`, pour qu'Échap ne fasse toujours que fermer le menu). Pas de menu après une touche ambiguë (`y` avant `y )`) :
 elle agit seule après un court délai. `[gui] key_menu = false` le désactive.
 
 Tout vient de la table en vigueur (`Keymap::continuations`) : `keys.toml`, `[keys]`, jeu
@@ -1653,7 +1655,7 @@ Ctrl comme `command` : seul `mac_cmd`, ou `command` sans Ctrl, désigne Cmd. Pas
 Ctrl + flèches (sur macOS, cela change de bureau), d'où Maj pour le déplacement.
 
 Filtres, communs aux deux profils : voir « Filtres » plus haut (`core.filter.*` : `f f`,
-`f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f .`, `f Échap`) ;
+`f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f .`, `f d`) ;
 `core.view.filter_bar` : Maj+F ; `core.view.rating_bar` : Maj+N ; `core.view.folders` :
 Maj+D ; `core.view.refresh_folders` : F5 ; `core.view.histogram` : i ;
 `core.view.histogram_scale` : Maj+I ; `core.view.histogram_channel` : Maj+C ;
@@ -2027,7 +2029,7 @@ regroupement en colonnes sans perte de pixel, placement en IL (blanc dans la der
 colonne, noir dans la première), couleurs du masque, nombres à la française.
 
 Filtres (17/10/2026) : `f Maj+2`, `f 0`, `f u` (deux fois : retiré), `f 9`, `f °`,
-`f Échap` ; rejeter sous « sans les rejetées » sélectionne l'image suivante ; barre
+`f d` ; rejeter sous « sans les rejetées » sélectionne l'image suivante ; barre
 masquée / affichée par Maj+F, clics sur les interrupteurs JPEG et RAW, Effacer.
 
 Notation (17/10/2026) : Maj+3, Maj+X, 8 puis « ° » (événement `Text`) écrivent le sidecar

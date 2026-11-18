@@ -252,7 +252,7 @@ a folder whose filter was kept on).
 Engine: `develop::DevelopedRule` (checked software) and `DevelopedFilter` (`Filter`
 trait), which read the sidecars (`Engine::sidecar`: non-empty darktable history,
 RapidRAW's `.rrdata`); a flat image has no development. A content filter: cleared by
-`f Esc`, invertible (`f i`).
+`f d`, invertible (`f i`).
 
 Under the filter, the thumbnails show the checked software's development, whatever the
 render chosen for the grid (feedback of 2026-10-27): the most recent one when several are
