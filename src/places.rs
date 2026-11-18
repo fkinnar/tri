@@ -1555,10 +1555,12 @@ impl Tree {
                 let read = job();
                 let (lock, ready) = &*reads.done;
                 lock.lock().unwrap_or_else(|e| e.into_inner()).push(read);
-                ready.notify_all();
+                // Le réveil avant le signal : qui attend ([`Tree::settle_for`]) trouve
+                // l'interface déjà prévenue (sinon, course vue en CI le 18/11/2026).
                 if let Some(wake) = &reads.wake {
                     wake();
                 }
+                ready.notify_all();
             });
         self.serial
     }
