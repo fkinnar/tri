@@ -302,9 +302,10 @@ system one ("cold" measurements, experiments).
   `Shift+W`; for a stack larger
   than the limit, `f c` shows the whole stack, expanded, in the grid (a single stack, not
   regrouped apart: #163), `f c` again or
-  "Clear" gives everything back, and a stack that was collapsed collapses again; with
-  stacks on, a stack button in the filter bar does the same, lit in the accent colour
-  while looking at a stack (2026-11-06), greyed out outside a stack; with stacks on, a single photo is a one-image stack and compares
+  "Clear" gives everything back, and a stack that was collapsed collapses again; a
+  stack button in the filter bar does the same (a small stack between framing corners),
+  lit in the accent colour while looking at a stack (2026-11-06), greyed out outside a
+  stack or without stacks; with stacks on, a single photo is a one-image stack and compares
   too, 2026-10-26, #167) (at least 2, at most `[gui.compare] max`, 21 by default since 2026-11-06 (6 before): each keeps
   its preview and its 1:1 in graphics memory), laid out to be seen as large as possible
   (number of columns chosen from the proportions of the images and of the window, last
@@ -791,8 +792,8 @@ system one ("cold" measurements, experiments).
   "first"`, on its first photo: "|‹" button of the full screen bar, next to the stacks
   switch (always there since 2026-10-25, in the grid as in full screen: it left the
   filter bar with its reorganisation of 2026-10-27 and came back to the bottom bar on
-  2026-10-31; "|‹" in the grid too, with stacks on, to see its state, since
-  2026-10-26), or Ctrl+Shift+S, remembered from one launch
+  2026-10-31; "|‹" in the grid too, to see its state, since 2026-10-26; greyed out
+  without stacks), or Ctrl+Shift+S, remembered from one launch
   to the next (issue #62); a message says which one is on (nothing moves on screen).
   Sidecar write failure: we stay on the image (the error is in the status bar).
 - **Rating with the mouse** (2026-10-17, requested by the user: not everyone wants to do
@@ -801,7 +802,10 @@ system one ("cold" measurements, experiments).
     flags, stars and colours of the selected image, clickable, faded when not set, their
     shortcuts in the tooltip (2026-10-22);
     `Shift+N` shows or hides it (`[gui] rating_bar`); on the right, the "auto-advance"
-    button (see below). In full screen, the ratings are also drawn on the image, for a
+    button (see below). Its buttons, like those of the filter bar, never appear or
+    disappear with the state (stacks on or off, a photo with or without developments):
+    one that does not apply stays in place, greyed out darker, without effect, so nothing
+    moves under the pointer (2026-11-18). In full screen, the ratings are also drawn on the image, for a
     few seconds (`[gui.notes]`, see above; issue #8: they stayed there for good, twice). In full screen too, after the
     ratings: the grid's badges, blown / blocked (click: large histogram) and blurry
     (click: sharpness map; issue #9);

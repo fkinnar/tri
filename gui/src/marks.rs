@@ -952,6 +952,32 @@ pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32) {
     }
 }
 
+/// Pile courante seulement (`f c`, barre des filtres) : une petite pile dans des coins de
+/// cadrage, « rien que celle-ci ». Distincte de l'interrupteur des piles (retour du
+/// 18/11/2026 : les deux icônes de piles se ressemblaient trop).
+pub fn stack_only_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let stroke = Stroke::new((s * 0.08).max(1.2), color);
+    let r = Rect::from_center_size(rect.center(), vec2(s, s) * 0.96);
+    let k = s * 0.24;
+    for (corner, dx, dy) in [
+        (r.left_top(), 1.0, 1.0),
+        (r.right_top(), -1.0, 1.0),
+        (r.right_bottom(), -1.0, -1.0),
+        (r.left_bottom(), 1.0, -1.0),
+    ] {
+        painter.add(Shape::line(
+            vec![
+                corner + vec2(0.0, dy * k),
+                corner,
+                corner + vec2(dx * k, 0.0),
+            ],
+            stroke,
+        ));
+    }
+    bar_icon(painter, r.shrink(s * 0.16), Action::StackMode, color);
+}
+
 /// Avertissement : triangle plein et point d'exclamation évidé (vignette impossible à
 /// calculer). Dessiné, pas de glyphe « ⚠ » : la police de l'interface ne l'a pas.
 pub fn warning(painter: &Painter, rect: Rect, color: Color32) {

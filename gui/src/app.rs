@@ -17248,11 +17248,12 @@ impl TriApp {
                 if self.mode == Mode::Compare {
                     actions.insert(0, Action::Back);
                 }
+                // Plus rien n'apparaît ni ne disparaît selon l'état (retour du 18/11/2026 :
+                // les icônes qui partaient faisaient bouger toutes les autres) : ce qui ne
+                // sert pas est là, grisé plus sombre, sans effet (`usable`, plus bas).
                 if self.mode == Mode::View {
                     actions.insert(0, Action::Back);
-                    if self.stacking {
-                        actions.extend([Action::NavDown, Action::NavUp]);
-                    }
+                    actions.extend([Action::NavDown, Action::NavUp]);
                     // Entrer dans une pile par sa couverture ou sa première photo (#62) :
                     // toujours là, à côté de l'interrupteur des piles (retour du 25/10/2026 :
                     // caché sans les piles, on ne le trouvait pas).
@@ -17265,14 +17266,11 @@ impl TriApp {
                     // Repartir du début après un filtre (16/11/2026), à côté de l'entrée
                     // dans les piles.
                     actions.push(Action::FilterRestart);
-                    // En grille, piles actives : au même endroit, pour voir l'état du
-                    // réglage (retour du 26/10/2026). L'interrupteur des piles, parti de
-                    // la barre des filtres avec sa réorganisation (#199), revient ici
-                    // (retour du 31/10/2026 : « disparu de la barre » en grille).
-                    if self.stacking {
-                        actions.push(Action::StackEnterToggle);
-                    }
-                    actions.push(Action::StackMode);
+                    // En grille aussi, au même endroit, pour voir l'état du réglage (retour
+                    // du 26/10/2026). L'interrupteur des piles, parti de la barre des
+                    // filtres avec sa réorganisation (#199), revient ici (retour du
+                    // 31/10/2026 : « disparu de la barre » en grille).
+                    actions.extend([Action::StackEnterToggle, Action::StackMode]);
                 }
                 // Comparer (retour du 07/11/2026) : la sélection, sinon la pile, sinon tout ;
                 // allumé en comparaison, où il la quitte.
@@ -17281,9 +17279,10 @@ impl TriApp {
                 if self.mode == Mode::View && !self.developers.is_empty() {
                     actions.push(Action::Develop);
                 }
-                // Développements de la photo (30/10/2026) : précédent / suivant, quand elle
-                // en a.
-                if self.mode == Mode::View && self.stacks.developments_of(self.selected).is_some() {
+                // Développements de la photo (30/10/2026) : précédent / suivant, grisés
+                // quand elle n'en a pas.
+                let developments = self.stacks.developments_of(self.selected).is_some();
+                if self.mode == Mode::View {
                     // De droite à gauche dans la barre : le suivant d'abord, pour que le
                     // précédent soit à gauche (retour du 31/10/2026).
                     actions.extend([Action::DevNext, Action::DevPrev]);
@@ -17325,7 +17324,14 @@ impl TriApp {
                     } else {
                         (action.label(), self.action_tip(action))
                     };
-                    let (rect, response) = marks::icon_button(ui, icon, &name, &tip);
+                    let usable = match action {
+                        Action::NavDown | Action::NavUp | Action::StackEnterToggle => self.stacking,
+                        Action::DevNext | Action::DevPrev => developments,
+                        _ => true,
+                    };
+                    let (rect, response) = ui
+                        .add_enabled_ui(usable, |ui| marks::icon_button(ui, icon, &name, &tip))
+                        .inner;
                     let active = match action {
                         Action::ToggleAutoAdvance => self.auto_advance,
                         Action::ToggleZoom => zoomed,
@@ -17341,13 +17347,17 @@ impl TriApp {
                     // Allumé = icône à l'accent, sans fond (retour du 05/11/2026 : comme
                     // les interrupteurs de la barre des filtres ; le fond d'accent rendait
                     // l'icône illisible sur un accent clair).
-                    let color = if active {
+                    // Inutilisable : gris plus sombre, comme les filtres sans objet de la
+                    // barre du haut.
+                    let color = if !usable {
+                        ui.visuals().weak_text_color().gamma_multiply(0.4)
+                    } else if active {
                         marks::accent_mark(ui.ctx())
                     } else {
                         ui.style().interact(&response).fg_stroke.color
                     };
                     marks::bar_icon(ui.painter(), rect.shrink(icon * 0.2), action, color);
-                    if response.clicked() {
+                    if usable && response.clicked() {
                         clicked = Some(action);
                     }
                     // Plein écran : le réglage du zoom et de la loupe, à gauche du 1:1.
@@ -17775,16 +17785,18 @@ impl TriApp {
                     clicked.push(action);
                 }
             }
-            // Pile courante seulement (`f c`), en mode pile : allumé à l'accent quand on
-            // regarde une pile (retour du 06/11/2026 : rien ne le disait), grisé si
-            // l'image n'est pas dans une pile.
-            if self.stacking {
+            // Pile courante seulement (`f c`) : allumé à l'accent quand on regarde une
+            // pile (retour du 06/11/2026 : rien ne le disait), grisé si l'image n'est pas
+            // dans une pile ou sans les piles (toujours là : retour du 18/11/2026, il
+            // faisait bouger la suite de la barre en apparaissant).
+            {
                 let on = self.stack_only.is_some();
                 let enabled = on
-                    || self
-                        .stacks
-                        .range_of(self.selected)
-                        .is_some_and(|r| r.len() > 1);
+                    || self.stacking
+                        && self
+                            .stacks
+                            .range_of(self.selected)
+                            .is_some_and(|r| r.len() > 1);
                 let tip = self.action_tip(Action::FilterStack);
                 let (rect, response) = marks::clickable(ui, size, &tip);
                 let response = if enabled {
@@ -22141,7 +22153,7 @@ fn filter_icon(painter: &egui::Painter, rect: Rect, action: Action, color: Color
         Action::FilterBlurry => marks::sharp_triangle(painter, rect, color),
         Action::FilterWellExposed => marks::sun(painter, rect, color),
         Action::FilterDeveloped => marks::film_reel(painter, rect, color),
-        Action::FilterStack => marks::bar_icon(painter, rect, Action::StackMode, color),
+        Action::FilterStack => marks::stack_only_icon(painter, rect, color),
         _ => {}
     }
 }
@@ -26097,9 +26109,14 @@ mod tests {
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         h.run_steps(2);
+        use egui_kittest::kittest::NodeT;
+        // Sans développement : le bouton reste là, grisé (retour du 18/11/2026 : rien ne
+        // bouge dans la barre).
         assert!(
-            h.query_by_label(&Action::DevNext.label()).is_none(),
-            "sans développement : pas de bouton"
+            h.get_by_label(&Action::DevNext.label())
+                .accesskit_node()
+                .is_disabled(),
+            "sans développement : grisé"
         );
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         assert_eq!(selected_name(&h), "img0.jpg");
@@ -28277,13 +28294,18 @@ mod tests {
     }
 
     #[test]
-    fn in_the_grid_the_stack_entry_button_shows_with_stacks() {
-        // Retour du 26/10/2026 (#62) : en grille aussi, piles actives, pour voir l'état.
+    fn in_the_grid_the_stack_entry_button_works_with_stacks() {
+        use egui_kittest::kittest::NodeT;
+        // Retour du 26/10/2026 (#62) : en grille aussi, pour voir l'état. Sans les piles,
+        // il reste là, grisé (retour du 18/11/2026 : rien ne bouge dans la barre).
         let (mut h, _dir) = harness();
         h.state_mut().rating_bar = true;
         h.run_steps(3);
         let label = Action::StackEnterToggle.label();
-        assert!(h.query_by_label(&label).is_none(), "sans les piles");
+        assert!(
+            h.get_by_label(&label).accesskit_node().is_disabled(),
+            "sans les piles : grisé"
+        );
         // L'interrupteur des piles, lui, est toujours dans le bandeau (retour du
         // 31/10/2026 : parti de la barre des filtres avec #199, il manquait en grille).
         assert!(!h.state().stacking);
@@ -33173,10 +33195,11 @@ mod tests {
         assert_eq!(h.state().files.len(), 6, "bouton encore : tout");
         h.state_mut().stacking = false;
         h.run_steps(2);
-        assert!(
-            h.query_by_label(&tip).is_none(),
-            "sans piles, pas de bouton"
-        );
+        // Sans piles : toujours là (rien ne bouge dans la barre, retour du 18/11/2026),
+        // grisé, sans effet.
+        h.get_by_label(&tip).click();
+        h.run_steps(2);
+        assert_eq!(h.state().files.len(), 6, "sans piles : sans effet");
         h.state_mut().stacking = true;
         h.state_mut().stacks_dirty = true;
         h.run_steps(2);
