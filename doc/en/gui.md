@@ -194,7 +194,9 @@ system one ("cold" measurements, experiments).
   (`[gui.grid] stacks` for a folder never set), the developed-filter engines, the
   **"Subfolders"** checkbox (`[gui.folders] subfolders` for a folder never set), the
   **current image** and the **unfolded stacks** (#414; these two written when leaving
-  the folder or closing `tri`, not at every image) are kept in the folder's data (`view.json`, written when
+  the folder or closing `tri`, not at every image; the image found again is put at the
+  top of the grid and stays there while the stacks form, until the first click, scroll or
+  shortcut) are kept in the folder's data (`view.json`, written when
   they change; [store.md](store.md)) and restored when it opens, at launch too;
   a software disabled or uninstalled since gives way to the cover, or to the camera JPEG
   without any software (2026-11-05); a folder with nothing kept opens without filters, in the order kept for all. The name

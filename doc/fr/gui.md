@@ -204,7 +204,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   logiciels du filtre « développées », la case **« Sous-dossiers »** (`[gui.folders]
   subfolders` pour un dossier jamais réglé), l'**image courante** et les **piles
   dépliées** (#414 ; ces deux-là écrites en quittant le dossier ou en fermant `tri`, pas à
-  chaque image) de chaque dossier sont retenus
+  chaque image ; l'image retrouvée est mise en haut de la grille et y reste pendant que
+  les piles se forment, jusqu'au premier clic, défilement ou raccourci) de chaque dossier
+  sont retenus
   dans les données du dossier (`view.json`, écrit quand ils changent ;
   [store.md](store.md)) et repris à son ouverture, au lancement compris ; un logiciel désactivé ou désinstallé depuis
   cède la place à la couverture, ou au JPEG boîtier sans aucun logiciel (05/11/2026) ;
