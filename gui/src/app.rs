@@ -15049,9 +15049,9 @@ impl TriApp {
         texture
     }
 
-    /// La vignette `index` au niveau `level`, sans réglage (tirée du cache).
-    /// Lue ici même (réglages de visualisation changés : sa base sans réglage) ; la grille,
-    /// elle, les lit en fond ([`crate::grid_read`]).
+    /// La vignette `index` au niveau `level`, sans réglage (tirée du cache), lue ici même :
+    /// pour les tests ; l'application les lit en fond ([`crate::grid_read`]).
+    #[cfg(test)]
     fn grid_bitmap(&self, index: usize, level: Level) -> Option<tri::bitmap::Bitmap> {
         let engine = self.engine.as_ref()?;
         let request = grid_request(engine, &self.files[index], level)?;
