@@ -235,6 +235,12 @@ pub struct GuiSettings {
     /// par image affichée (ms) : au-delà, on reprend à l'image suivante pour ne pas figer
     /// l'interface.
     pub load_budget_ms: u64,
+    /// Fils qui lisent les vignettes de la grille dans le cache, hors de l'interface : une
+    /// lecture lente (cache dans iCloud, sur un NAS) ne la fige plus.
+    pub grid_read_threads: usize,
+    /// Vignettes lues gardées au plus en attendant la grille (~0,5 Mo chacune) : celles
+    /// d'images dépassées en défilant sont jetées au-delà.
+    pub grid_read_keep: usize,
     /// Largeur des barres de progression de la barre d'état (points).
     pub progress_width: f32,
     /// Masquer les barres de progression terminées (la barre d'état reste courte).
@@ -350,6 +356,8 @@ impl Default for GuiSettings {
             // En mode JPEG boîtier, la machine reste libre.
             raw_previews: RawPreviews::OnDemand,
             load_budget_ms: 8,
+            grid_read_threads: 4,
+            grid_read_keep: 256,
             progress_width: 160.0,
             progress_hide_done: true,
             tasks_folded_height: 4.0,

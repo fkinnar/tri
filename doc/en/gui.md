@@ -38,7 +38,10 @@ system one ("cold" measurements, experiments).
   results are taken within one frame's budget (`[gui] load_budget_ms`, like thumbnails;
   thousands arrive at once on an already computed folder), and those already known
   (announced again after each refilter) are not reread. The remembered order is applied
-  at startup (issue #30).
+  at startup (issue #30). Thumbnails are read from the cache by a few threads
+  (`grid_read`, `[gui] grid_read_threads`): the grid waits for them at most until the end
+  of the frame's budget, then takes them in a later frame (2026-11-19: a cache kept in
+  iCloud froze the window at every slow read).
 - **Selection** with the keyboard or the mouse; the scheduler is notified (`set_focus`), so
   the preview of the selected image and of its neighbours moves to the head of the queue.
 - **Selection on click, framed hover** (2026-10-17, second version): the selection

@@ -794,6 +794,12 @@ raw_previews = "on-demand"
 # displayed frame (ms): beyond it, the rest waits for the next frame, so as not to
 # freeze the interface.
 load_budget_ms = 8
+# Threads reading the grid's thumbnails from the cache, outside the interface: a slow
+# read (cache in iCloud, on a NAS) no longer freezes it.
+grid_read_threads = 4
+# Thumbnails read and kept at most while waiting for the grid (~0.5 MB each): those of
+# images scrolled past are dropped beyond it.
+grid_read_keep = 256
 # Progress bars of the status bar: width (points), and hidden once
 # finished (false: always shown).
 progress_width = 160.0
