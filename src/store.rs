@@ -89,20 +89,30 @@ static MEMO: Mutex<Option<Memo>> = Mutex::new(None);
 /// en mémoire par dossier (un accès disque par parent, lent sur un NAS).
 pub fn holder(folder: &Path) -> Option<PathBuf> {
     let generation = GENERATION.load(Ordering::Relaxed);
+    {
+        let mut memo = MEMO.lock().unwrap_or_else(|e| e.into_inner());
+        let memo = memo.get_or_insert_with(|| (generation, HashMap::new()));
+        if memo.0 != generation {
+            *memo = (generation, HashMap::new());
+        }
+        if let Some(known) = memo.1.get(folder) {
+            return known.clone();
+        }
+    }
+    // Cherchée hors du verrou : sur un montage lent (iCloud sous Linux, retour du
+    // 19/11/2026), un seul accès peut prendre des secondes, et tous les autres fils (le
+    // cache, l'interface) attendaient derrière, même pour un dossier déjà connu.
+    let found = folder
+        .ancestors()
+        .find(|a| a.join(DIR).join(KEEP).is_file())
+        .map(Path::to_path_buf);
     let mut memo = MEMO.lock().unwrap_or_else(|e| e.into_inner());
     let memo = memo.get_or_insert_with(|| (generation, HashMap::new()));
-    if memo.0 != generation {
-        *memo = (generation, HashMap::new());
+    // Un interrupteur posé ou retiré entre-temps : la réponse vaut pour cette fois.
+    if memo.0 == generation {
+        memo.1.insert(folder.to_path_buf(), found.clone());
     }
-    memo.1
-        .entry(folder.to_path_buf())
-        .or_insert_with(|| {
-            folder
-                .ancestors()
-                .find(|a| a.join(DIR).join(KEEP).is_file())
-                .map(Path::to_path_buf)
-        })
-        .clone()
+    found
 }
 
 /// Vrai si l'interrupteur couvre `folder` ([`holder`]).
