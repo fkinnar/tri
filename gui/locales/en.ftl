@@ -617,6 +617,8 @@ folder-opening-found = { $count ->
    *[other] { $count } images found
 }
 folder-opening-why = Slow folder (network, disk): its list is read in the background.
+folder-opening-notes = Reading the ratings (stars, colours…)
+folder-opening-data = Reading the folder's settings (stacks, sliders…)
 stacks-waiting = Grouping stacks…
 stacks-waiting-count = { $done } / { $total }
 folder-open-cancelled = Opening "{ $name }" cancelled.
