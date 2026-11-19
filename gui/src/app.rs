@@ -16460,9 +16460,10 @@ impl TriApp {
                     point,
                     renamed,
                     cache_follows,
+                    keep_here,
                 } => {
                     self.notice = Some((t!("transfer-done"), false));
-                    self.folder_outcome(step, point, renamed, cache_follows);
+                    self.folder_outcome(step, point, renamed, cache_follows, keep_here);
                 }
                 crate::files::Outcome::Failed(e) => {
                     self.file_error = Some(e);
@@ -16481,6 +16482,7 @@ impl TriApp {
         point: Option<PathBuf>,
         renamed: Option<(PathBuf, PathBuf)>,
         cache_follows: bool,
+        keep_here: bool,
     ) {
         if let Some(step) = step {
             self.history.push(step);
@@ -16493,8 +16495,18 @@ impl TriApp {
                 if let Some(data) = &data {
                     tri::store::relocate(data, &from, &to);
                 }
+                // Cache gardé avec les photos, vers une destination qui ne garde pas le
+                // sien : gardé avec le dossier à sa nouvelle place, pour qu'il le suive
+                // aussi sur les autres ordinateurs (retour du 19/11/2026 : déplacé d'une
+                // clé vers iCloud, il était resté dans le cache du Mac).
                 cache
                     .relocate(&from, &to)
+                    .and_then(|_| {
+                        if keep_here {
+                            cache.use_disk(&to)?;
+                        }
+                        Ok(())
+                    })
                     .err()
                     .map(|e| (t!("cache-move-failed", error = e.to_string()), true))
             });
@@ -16523,9 +16535,10 @@ impl TriApp {
                 point,
                 renamed,
                 cache_follows,
+                keep_here,
             } => {
                 self.file_dialog = None;
-                self.folder_outcome(step, point, renamed, cache_follows);
+                self.folder_outcome(step, point, renamed, cache_follows, keep_here);
             }
             crate::files::Outcome::FavoriteNamed { path, name } => {
                 self.file_dialog = None;
@@ -32806,6 +32819,57 @@ mod tests {
         h.run_steps(3);
         let long = h.get_by_label_contains(&t!("folder-embed-default")).rect();
         assert!(long.height() <= one_line + 0.5, "{long:?} vs {one_line}");
+    }
+
+    #[test]
+    fn a_folder_moved_off_a_drive_that_keeps_its_cache_keeps_it_with_it() {
+        // Retour du 19/11/2026 : séance déplacée d'une clé (cache gardé sur la clé) vers
+        // iCloud avec « Emporter le cache » ; il était allé dans le cache du Mac, que
+        // l'autre ordinateur ne voit pas. Il est désormais gardé avec le dossier.
+        use crate::files::{CacheGoes, cache_goes};
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let (key_root, cloud) = (dir.path().join("clé"), dir.path().join("icloud"));
+        let seance = key_root.join("séance");
+        std::fs::create_dir_all(&seance).unwrap();
+        std::fs::create_dir(&cloud).unwrap();
+        let photo = seance.join("DSCF0001.RAF");
+        std::fs::write(&photo, b"RAW").unwrap();
+        let cache = h.state().engine.as_ref().unwrap().cache.clone();
+        cache.use_disk(&key_root).unwrap();
+        let key = tri::cache::Key::new(&photo, tri::cache::Level::Exposure, "v").unwrap();
+        cache.put_bytes(&key, b"histo").unwrap();
+        // Les trois cas que dit la boîte.
+        let to = cloud.join("séance");
+        assert_eq!(cache_goes(&seance, &to), CacheGoes::WithFolder);
+        assert_eq!(
+            cache_goes(&seance, &key_root.join("autre").join("séance")),
+            CacheGoes::Kept(key_root.clone())
+        );
+        assert_eq!(
+            cache_goes(&cloud.join("x"), &dir.path().join("y")),
+            CacheGoes::Computer
+        );
+        std::fs::rename(&seance, &to).unwrap();
+        h.state_mut()
+            .folder_outcome(None, None, Some((seance.clone(), to.clone())), true, true);
+        for _ in 0..400 {
+            h.run_steps(1);
+            if h.state().cache_jobs.is_empty() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        tri::cache::forget_stamps_under(&to);
+        let moved = to.join("DSCF0001.RAF");
+        let key = tri::cache::Key::new(&moved, tri::cache::Level::Exposure, "v").unwrap();
+        assert_eq!(cache.get_bytes(&key).as_deref(), Some(&b"histo"[..]));
+        assert_eq!(
+            tri::store::holder(&to),
+            Some(to.clone()),
+            "gardé avec le dossier"
+        );
+        assert!(tri::cache::disk_dir(&to).is_dir());
     }
 
     #[test]

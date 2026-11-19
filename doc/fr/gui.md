@@ -770,7 +770,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   sur ce disque » (cochée d'office quand la destination est sur un disque amovible) ou
   « …dans le dossier de la séance » (non cochée), absente là où elles sont déjà gardées. À l'ouverture d'un dossier, `location` (`disk`, `folder`) s'applique s'il
   est encore chez l'utilisateur. Déplacement d'un dossier : case « Emporter le cache »
-  (cochée) ; renommage : le cache suit toujours. Le travail se fait en fond
+  (cochée), avec en dessous où il ira (19/11/2026) : dans le cache de cet ordinateur
+  (que les autres ne voient pas), dans celui gardé avec les photos de la destination, ou,
+  s'il était gardé avec les photos et que la destination ne garde pas le sien (clé vers
+  iCloud), gardé avec le dossier déplacé (« Garder les données de tri dans ce dossier »
+  activé, `Cache::use_disk`), pour qu'il le suive sur les autres ordinateurs ; renommage :
+  le cache suit toujours. Le travail se fait en fond
   (`TriApp::cache_job`), message dans la barre d'état. Là où il est gardé, « Vider le
   cache de ce dossier… » (« de ce disque » ; groupe Préférences, 10/11/2026), une action
   (`core.folders.cache_clear`, sans raccourci par défaut, sur le dossier pointé au

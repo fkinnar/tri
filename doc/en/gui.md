@@ -722,8 +722,12 @@ system one ("cold" measurements, experiments).
   drive" (ticked by default when the destination is on a removable drive) or "…in the
   session folder" (not ticked), not shown where the data are already kept.
   When a folder is opened, `location` (`disk`, `folder`) applies if its cache is still
-  the user's. Moving a folder: "Bring the cache along" checkbox (ticked); renaming: the
-  cache always follows. The work is done in the background (`TriApp::cache_job`), message
+  the user's. Moving a folder: "Bring the cache along" checkbox (ticked), with below it
+  where it will go (2026-11-19): into this computer's cache (other computers do not see
+  it), into the one kept with the destination's photos, or, when it was kept with the
+  photos and the destination does not keep its own (stick to iCloud), kept with the moved
+  folder ("Keep tri's data in this folder" turned on, `Cache::use_disk`) so that it
+  follows it on other computers; renaming: the cache always follows. The work is done in the background (`TriApp::cache_job`), message
   in the status bar. Where it is kept, "Clear the cache of this folder…" ("of this drive"; Preferences
   group, 2026-11-10), an action (`core.folders.cache_clear`, no default key, on the
   folder under the keyboard cursor): since 2026-11-11 (#411) it opens the "Reset" dialog
