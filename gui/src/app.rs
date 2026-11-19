@@ -998,6 +998,10 @@ pub struct TriApp {
     scroll_offset: f32,
     view_height: f32,
     reveal: Option<Reveal>,
+    /// Dossier rouvert sur l'image où l'on en était (#414) : la grille la garde en haut de
+    /// la vue pendant que les piles se forment, jusqu'à ce qu'on y touche (retour du
+    /// 19/11/2026 : elle défilait d'elle-même et s'arrêtait sur des vignettes grises).
+    hold_selection: bool,
     /// Image gardée en haut de la vue après un refiltrage, et son décalage sous le haut
     /// de sa rangée ([`Reveal::Anchor`]).
     scroll_anchor: Option<(PathBuf, f32)>,
@@ -1900,6 +1904,7 @@ impl TriApp {
             selected,
             layout: Layout::fit(0.0, gui.grid.cell, gui.grid.gap),
             scroll_offset: 0.0,
+            hold_selection: false,
             view_height: 0.0,
             reveal: None,
             scroll_anchor: None,
@@ -6972,7 +6977,8 @@ impl TriApp {
             let path = abs(current);
             if let Some(i) = self.files.iter().position(|f| f.path == path) {
                 self.selected = i;
-                self.reveal = Some(Reveal::Minimal);
+                self.reveal = Some(Reveal::Top);
+                self.hold_selection = i > 0;
             }
         }
     }
@@ -7524,6 +7530,10 @@ impl TriApp {
                 self.selected = visible;
                 self.tell_shown();
             }
+        }
+        // Piles changées sous les yeux : l'image retenue reste en place.
+        if self.hold_selection {
+            self.reveal = Some(Reveal::Top);
         }
         self.stacks_dirty = false;
     }
@@ -8694,6 +8704,7 @@ impl TriApp {
 
     /// Exécute une action (clavier aujourd'hui, souris ou plugin demain).
     fn perform(&mut self, ctx: &egui::Context, action: Action) {
+        self.hold_selection = false;
         // Encadré des filtres ouvert : il suit les changements de filtre ; Échap le ferme
         // seulement, toute autre action aussi, puis se fait.
         if self.filter_count && action != Action::FilterCount && !action.changes_filter() {
@@ -18172,6 +18183,17 @@ impl TriApp {
         ui.spacing_mut().item_spacing = vec2(g.gap, g.gap);
         let mut area = ScrollArea::vertical().auto_shrink(false);
         let row = shown.iter().position(|&i| i == self.selected).unwrap_or(0) / self.layout.columns;
+        // Image retenue gardée en haut (`hold_selection`) : ni la région affichée
+        // (refiltrage) ni le défilement minimal ne la déplacent ; un clic ou la molette
+        // rendent la main.
+        if self.hold_selection {
+            if ctx.input(|i| i.pointer.any_pressed() || i.smooth_scroll_delta.y != 0.0) {
+                self.hold_selection = false;
+            } else if self.reveal.is_some() {
+                self.scroll_anchor = None;
+                self.reveal = Some(Reveal::Top);
+            }
+        }
         let offset = match self.reveal.take() {
             Some(Reveal::Top) => Some(row as f32 * self.layout.row_pitch()),
             Some(Reveal::Start) => Some(0.0),
@@ -28523,6 +28545,41 @@ mod tests {
         );
         h.run_steps(5);
         assert_eq!(h.state().scroll_offset, 0.0, "and it stays there");
+    }
+
+    #[test]
+    fn the_image_one_was_on_stays_at_the_top_while_the_grid_settles() {
+        // Retour du 19/11/2026 : dossier rouvert sur l'image où l'on en était (#414), sans
+        // cache ; les piles se formant, la grille défilait d'elle-même et s'arrêtait sur
+        // des vignettes grises.
+        let names: Vec<String> = (0..120).map(|i| format!("img{i:03}.jpg")).collect();
+        let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+        let (mut h, _dir) = harness_files(&refs, 32, 24);
+        run_until(&mut h, |app| app.files.len() == 120);
+        h.run_steps(3);
+        let held = 80;
+        let top = |h: &Harness<'_, TriApp>| {
+            let app = h.state();
+            (held / app.layout.columns) as f32 * app.layout.row_pitch()
+        };
+        h.state_mut().selected = held;
+        h.state_mut().hold_selection = true;
+        h.state_mut().reveal = Some(Reveal::Top);
+        h.run_steps(2);
+        assert_eq!(h.state().scroll_offset, top(&h));
+        // Piles regroupées, liste refiltrée : la région affichée ne l'emporte pas.
+        h.state_mut().stacks_dirty = true;
+        h.state_mut().refilter(Reveal::Minimal);
+        h.state_mut().reveal = Some(Reveal::Start);
+        h.run_steps(2);
+        assert_eq!(h.state().selected, held);
+        assert_eq!(h.state().scroll_offset, top(&h), "still at the top");
+        // Une action rend la main.
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::NavFirst);
+        assert!(!h.state().hold_selection);
+        h.run_steps(2);
+        assert_eq!(h.state().scroll_offset, 0.0);
     }
 
     #[test]
