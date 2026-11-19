@@ -41,7 +41,10 @@ system one ("cold" measurements, experiments).
   at startup (issue #30). Thumbnails are read from the cache by a few threads
   (`grid_read`, `[gui] grid_read_threads`): the grid waits for them at most until the end
   of the frame's budget, then takes them in a later frame (2026-11-19: a cache kept in
-  iCloud froze the window at every slow read).
+  iCloud froze the window at every slow read). Announced analyses (similarity signatures, sharpness scores,
+  clipped / blocked fractions of the badges) are read back from the cache by one thread
+  each (`bg_read`) and taken in a later frame (2026-11-19: with a cache kept in iCloud,
+  these reads froze the interface for up to 5 s).
 - **Selection** with the keyboard or the mouse; the scheduler is notified (`set_focus`), so
   the preview of the selected image and of its neighbours moves to the head of the queue.
 - **Selection on click, framed hover** (2026-10-17, second version): the selection
