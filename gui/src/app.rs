@@ -595,6 +595,9 @@ pub struct TriApp {
     /// Couvertures choisies et développements préférés relus après les notes, en fond
     /// ([`TriApp::load_choices`]).
     choice_reads: Option<crate::bg_read::BgReads<PathBuf, ChoicesRead>>,
+    /// Réglage des notes dans les images de chaque dossier du panneau ([`embed_mark`]).
+    embed_marks: HashMap<PathBuf, Option<bool>>,
+    embed_reads: Option<crate::bg_read::BgReads<PathBuf, Option<bool>>>,
     /// Réinitialisation en cours : le dossier, et ce qu'elle a fait, à la fin.
     reset_job: Option<(PathBuf, Receiver<tri::reset::Outcome>)>,
     /// Message pour la barre d'état (texte, vrai si c'est une erreur).
@@ -952,6 +955,10 @@ pub struct TriApp {
     /// « Développées » est grisé (#305). Revu à l'ouverture, à la relecture des notes et
     /// quand les logiciels changent.
     any_developed: bool,
+    /// Recherche des développements en fond ([`TriApp::refresh_any_developed`]), et le
+    /// numéro de la dernière demandée.
+    developed_reads: Option<crate::bg_read::BgReads<u64, Vec<tri::develop::Engine>>>,
+    developed_epoch: u64,
     /// Logiciels installés dont le dossier a au moins un développement : les autres sont
     /// grisés dans le filtre « Développées » (retour du 05/11/2026).
     developed_in: Vec<tri::develop::Engine>,
@@ -1686,23 +1693,70 @@ impl TriApp {
     /// Vrai s'il y a au moins un développement dans le dossier (#305) : une image de
     /// développement (clone, copie), ou une photo développée dans un logiciel installé.
     /// Aussi, logiciel par logiciel, ceux qui ont un développement dans le dossier.
+    ///
+    /// Cherché en fond (`TRI_IO_WATCH`, 19/11/2026 : un relevé et souvent une lecture de
+    /// sidecar par photo, 39 s de fenêtre figée à l'ouverture d'un dossier de 1 811 photos
+    /// sur iCloud) ; pris par [`TriApp::poll_developed`]. Les tests le font sur place.
     fn refresh_any_developed(&mut self) {
-        let files = &self.folder.files;
-        let developable =
-            |f: &&MediaFile| f.kind == MediaKind::Raw || tri::media::is_development(&f.path);
-        self.developed_in = self
-            .developers
-            .engines()
-            .into_iter()
-            .filter(|e| {
-                files
-                    .iter()
-                    .filter(developable)
-                    .any(|f| e.sidecar(&f.path).is_some())
-            })
+        let developable: Vec<PathBuf> = self
+            .folder
+            .files
+            .iter()
+            .filter(|f| f.kind == MediaKind::Raw || tri::media::is_development(&f.path))
+            .map(|f| f.path.clone())
             .collect();
+        let engines = self.developers.engines();
+        let find = move || {
+            engines
+                .into_iter()
+                .filter(|e| developable.iter().any(|p| e.sidecar(p).is_some()))
+                .collect::<Vec<_>>()
+        };
+        if cfg!(test) {
+            let found = find();
+            self.set_developed_in(found);
+            return;
+        }
+        self.developed_epoch += 1;
+        let repaint = self.repaint.clone();
+        self.developed_reads
+            .get_or_insert_with(|| crate::bg_read::BgReads::new("tri-developed", repaint))
+            .request(self.developed_epoch, move || Some(find()));
+        // En attendant : les développements reconnus à leur nom (clones, copies).
         self.any_developed = !self.developed_in.is_empty()
-            || files.iter().any(|f| tri::media::is_development(&f.path));
+            || self
+                .folder
+                .files
+                .iter()
+                .any(|f| tri::media::is_development(&f.path));
+    }
+
+    /// Logiciels qui ont un développement dans le dossier ouvert, trouvés.
+    fn set_developed_in(&mut self, found: Vec<tri::develop::Engine>) {
+        self.developed_in = found;
+        self.any_developed = !self.developed_in.is_empty()
+            || self
+                .folder
+                .files
+                .iter()
+                .any(|f| tri::media::is_development(&f.path));
+    }
+
+    /// Recherche des développements faite en fond ([`TriApp::refresh_any_developed`]) :
+    /// la dernière demandée seulement.
+    fn poll_developed(&mut self) {
+        let Some(reads) = &mut self.developed_reads else {
+            return;
+        };
+        let latest = self.developed_epoch;
+        let found = reads
+            .take()
+            .into_iter()
+            .filter(|(epoch, _)| *epoch == latest)
+            .find_map(|(_, found)| found);
+        if let Some(found) = found {
+            self.set_developed_in(found);
+        }
     }
 
     /// Application sur le dossier `dir` (parcouru tout de suite, calculs lancés à la première
@@ -1798,6 +1852,8 @@ impl TriApp {
             pairs_marks: HashMap::new(),
             pairs_reads: None,
             choice_reads: None,
+            embed_marks: HashMap::new(),
+            embed_reads: None,
             reset_job: None,
             notice: None,
             settings: settings.engine(),
@@ -1952,6 +2008,8 @@ impl TriApp {
             develop_batch: None,
             develop_batch_auto: false,
             any_developed: false,
+            developed_reads: None,
+            developed_epoch: 0,
             developed_in: Vec::new(),
             end_notice: None,
             compare_limit: None,
@@ -4510,6 +4568,20 @@ impl TriApp {
                         });
                     }
                 }
+                // Réglage des notes dans les images, lu en fond ([`embed_mark`]).
+                let embed_marks: HashMap<PathBuf, Option<bool>> = rows
+                    .iter()
+                    .filter(|r| r.depth > 0)
+                    .map(|r| {
+                        let mark = embed_mark(
+                            &mut self.embed_reads,
+                            &mut self.embed_marks,
+                            self.repaint.clone(),
+                            &r.path,
+                        );
+                        (r.path.clone(), mark)
+                    })
+                    .collect();
                 let pairs_marks = &self.pairs_marks;
                 let mut section = None;
                 for (i, row) in rows.into_iter().enumerate() {
@@ -4575,7 +4647,7 @@ impl TriApp {
                         // Dossier à son propre réglage des notes dans les images : un repère
                         // (à l'accent : toujours ; gris : jamais).
                         if row.depth > 0
-                            && let Some(on) = self.folder.notes.folder_embed(&row.path)
+                            && let Some(on) = embed_marks.get(&row.path).copied().flatten()
                         {
                             let side = ui.spacing().interact_size.y * 0.6;
                             let (rect, mark) =
@@ -5092,6 +5164,7 @@ impl TriApp {
             ui.ctx().request_repaint();
             match self.folder.notes.set_folder_embed(&path, value) {
                 Ok(()) => {
+                    self.embed_marks.insert(path.clone(), value);
                     let name = folder_name(&path);
                     self.notice = Some((
                         match value {
@@ -7298,9 +7371,6 @@ impl TriApp {
         self.folder.notes.set_embed(embed, outside);
     }
 
-    /// Après des écritures de `tri` dans les images (notes inscrites d'office, fusion
-    /// propagée) : la surveillance repart de cet état, sans relire tout le dossier comme
-    /// si un autre logiciel les avait changées.
     /// Envoie une note préparée au fil des écritures ([`crate::note_writes`]).
     fn submit_notes(&mut self, job: tri::notes::PendingEdit) {
         if self.notes_inline {
@@ -7362,6 +7432,9 @@ impl TriApp {
         self.note_writes.as_ref().is_some_and(|w| w.waiting() > 0)
     }
 
+    /// Après des écritures de `tri` dans les images (notes inscrites d'office, fusion
+    /// propagée) : la surveillance repart de cet état, sans relire tout le dossier comme
+    /// si un autre logiciel les avait changées.
     fn own_writes_done(&mut self) {
         if let Some((watch, rx, _)) = &self.watch {
             watch.sync();
@@ -21948,6 +22021,7 @@ impl eframe::App for TriApp {
         self.poll_opening();
         self.poll_loading(&ctx);
         self.poll_choices();
+        self.poll_developed();
         if self.engine_backlog {
             ctx.request_repaint();
         }
@@ -23150,6 +23224,31 @@ fn io_watch_report() {
     for (place, what, n) in report {
         eprintln!("[io-watch] {n:>6} × {what} ← {place}");
     }
+}
+
+/// Réglage propre au dossier `dir` des notes dans les images (repère du panneau des
+/// dossiers), lu en fond la première fois par `reads` et gardé dans `marks`
+/// (`TRI_IO_WATCH`, 19/11/2026 : une lecture des données de chaque dossier affiché, sur
+/// le fil de l'interface). Fonction libre : appelée pendant le dessin du panneau.
+fn embed_mark(
+    reads: &mut Option<crate::bg_read::BgReads<PathBuf, Option<bool>>>,
+    marks: &mut HashMap<PathBuf, Option<bool>>,
+    repaint: Option<egui::Context>,
+    dir: &Path,
+) -> Option<bool> {
+    let reads =
+        reads.get_or_insert_with(|| crate::bg_read::BgReads::new("tri-embed-marks", repaint));
+    for (read, value) in reads.take() {
+        marks.insert(read, value.flatten());
+    }
+    if let Some(&known) = marks.get(dir) {
+        return known;
+    }
+    let target = dir.to_path_buf();
+    reads.request(target.clone(), move || {
+        Some(tri::reconcile::Memory::open(&target).embed())
+    });
+    None
 }
 
 fn folder_depth(subfolders: bool, gui: &GuiSettings) -> usize {
