@@ -136,6 +136,9 @@ pub struct Transfer {
     has_pairs: Option<bool>,
     /// Dossier déplacé : son cache le suit (coché d'office).
     bring_cache: bool,
+    /// Et il sera gardé avec le dossier à sa nouvelle place ([`CacheGoes::WithFolder`]),
+    /// décidé dans la boîte (avant le déplacement).
+    keep_here: bool,
     /// Copie en cours mise en arrière-plan (issue n° 72) : plus de boîte, la progression
     /// est dans la barre d'état.
     hidden: bool,
@@ -178,6 +181,8 @@ pub enum Outcome {
         renamed: Option<(PathBuf, PathBuf)>,
         /// Renommé ou déplacé : son cache le suit (case « Emporter le cache »).
         cache_follows: bool,
+        /// Et il est gardé avec le dossier à sa nouvelle place ([`CacheGoes::WithFolder`]).
+        keep_here: bool,
     },
     /// Nom donné au favori `path` (vide : retiré).
     FavoriteNamed { path: PathBuf, name: String },
@@ -310,6 +315,7 @@ impl FileDialog {
             pairs: None,
             has_pairs: None,
             bring_cache: true,
+            keep_here: false,
             hidden: false,
         }))
     }
@@ -376,6 +382,7 @@ impl FileDialog {
                             point: Some(path),
                             renamed: None,
                             cache_follows: false,
+                            keep_here: false,
                         },
                         Err(e) => Outcome::Failed(t!("folder-failed", error = e.to_string())),
                     },
@@ -413,6 +420,7 @@ impl FileDialog {
                             point: Some(to.clone()),
                             renamed: Some((path.clone(), to)),
                             cache_follows: true,
+                            keep_here: false,
                         },
                         Err(e) => Outcome::Failed(t!("folder-failed", error = e.to_string())),
                     },
@@ -875,6 +883,7 @@ fn delete_folder_dialog(
                 point: path.parent().map(Path::to_path_buf),
                 renamed: None,
                 cache_follows: false,
+                keep_here: false,
             },
             Err(e) => Outcome::Failed(t!("folder-failed", error = e.to_string())),
         };
@@ -995,6 +1004,21 @@ impl Transfer {
                 if matches!(self.source, Source::Folder(_)) && self.mode == TransferMode::Move {
                     ui.checkbox(&mut self.bring_cache, t!("transfer-bring-cache"))
                         .on_hover_text(t!("transfer-bring-cache-tip"));
+                    // Où il ira, selon où il est et ce que garde la destination (retour du
+                    // 19/11/2026 : déplacé d'une clé vers iCloud, il était resté sur le Mac).
+                    if let Ok(Plan::Folder(plan)) = &plan {
+                        let goes = cache_goes(&plan.from, &plan.to);
+                        self.keep_here = goes == CacheGoes::WithFolder;
+                        let text = match (self.bring_cache, goes) {
+                            (false, _) => t!("transfer-cache-dropped"),
+                            (true, CacheGoes::Computer) => t!("transfer-cache-computer"),
+                            (true, CacheGoes::Kept(root)) => {
+                                t!("transfer-cache-kept", place = tilde(&root))
+                            }
+                            (true, CacheGoes::WithFolder) => t!("transfer-cache-with-folder"),
+                        };
+                        ui.weak(text);
+                    }
                 }
                 if let Some(e) = &self.error {
                     ui.colored_label(ui.visuals().error_fg_color, e);
@@ -1117,6 +1141,7 @@ impl Transfer {
                                 .then(|| (plan.from.clone(), plan.to.clone())),
                             step: Some(tri::history::transfer_dir_step(plan)),
                             cache_follows: self.bring_cache,
+                            keep_here: self.bring_cache && self.keep_here,
                         },
                     }
                 }
@@ -1162,6 +1187,30 @@ pub fn tilde(path: &Path) -> String {
         Some(rest) if rest.as_os_str().is_empty() => "~".into(),
         Some(rest) => format!("~{}{}", std::path::MAIN_SEPARATOR, rest.display()),
         None => path.display().to_string(),
+    }
+}
+
+/// Où va le cache d'un dossier déplacé de `from` en `to` (case « Emporter le cache »).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum CacheGoes {
+    /// Dans le cache de cet ordinateur : il y était, et la destination ne garde pas le sien.
+    Computer,
+    /// Dans le cache gardé avec les photos de la destination, à cette racine.
+    Kept(PathBuf),
+    /// Il était gardé avec les photos, la destination ne garde pas le sien : gardé avec
+    /// le dossier à sa nouvelle place (« Garder les données de tri dans ce dossier »).
+    WithFolder,
+}
+
+/// [`CacheGoes`] pour `from` déplacé en `to`.
+pub(crate) fn cache_goes(from: &Path, to: &Path) -> CacheGoes {
+    if let Some(root) = to.parent().and_then(tri::store::holder) {
+        return CacheGoes::Kept(root);
+    }
+    if tri::store::holder(from).is_some() {
+        CacheGoes::WithFolder
+    } else {
+        CacheGoes::Computer
     }
 }
 
