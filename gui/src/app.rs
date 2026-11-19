@@ -450,6 +450,8 @@ struct Engine {
     /// empreintes de similarité, scores de netteté, parts saturées / bouchées des badges.
     signature_reads: crate::bg_read::BgReads<PathBuf, tri::similarity::Signature>,
     score_reads: crate::bg_read::BgReads<PathBuf, f32>,
+    /// Analyse d'exposition de l'image sélectionnée (histogramme).
+    exposure_reads: crate::bg_read::BgReads<PathBuf, Arc<Exposure>>,
     clip_reads: crate::bg_read::BgReads<PathBuf, (f64, f64)>,
     /// Logiciels de développement du moteur, remplacés quand `[develop]` change.
     developers: tri::develop::SharedDevelopers,
@@ -582,8 +584,11 @@ pub struct TriApp {
     pairs_dialog: Option<crate::pairs_dialog::PairsDialog>,
     /// Cases RAW / RAW+JPEG / JPEG d'un dossier regroupé (#392).
     pair_kinds: tri::pairs::PairKinds,
-    /// Dossiers du panneau regroupés par décision (#392 : leur marque), lus une fois.
+    /// Dossiers du panneau regroupés par décision (#392 : leur marque), lus une fois, en
+    /// fond (`pairs_reads` ; 19/11/2026, `TRI_IO_WATCH` : lus sur le fil de l'interface,
+    /// une lecture par dossier du panneau, lente sur iCloud ou un NAS).
     pairs_marks: HashMap<PathBuf, bool>,
+    pairs_reads: Option<crate::bg_read::BgReads<PathBuf, bool>>,
     /// Réinitialisation en cours : le dossier, et ce qu'elle a fait, à la fin.
     reset_job: Option<(PathBuf, Receiver<tri::reset::Outcome>)>,
     /// Message pour la barre d'état (texte, vrai si c'est une erreur).
@@ -1776,6 +1781,7 @@ impl TriApp {
             pairs_dialog: None,
             pair_kinds: tri::pairs::PairKinds::default(),
             pairs_marks: HashMap::new(),
+            pairs_reads: None,
             reset_job: None,
             notice: None,
             settings: settings.engine(),
@@ -4424,10 +4430,19 @@ impl TriApp {
                 // Dossiers regroupés par décision (#392) : une marque après le nom.
                 let rows = self.tree.rows();
                 let data = self.settings.data_dir();
+                let repaint = self.repaint.clone();
+                let reads = self
+                    .pairs_reads
+                    .get_or_insert_with(|| crate::bg_read::BgReads::new("tri-pairs", repaint));
+                for (path, grouped) in reads.take() {
+                    self.pairs_marks.insert(path, grouped == Some(true));
+                }
                 for row in &rows {
                     if !self.pairs_marks.contains_key(&row.path) {
-                        let grouped = tri::pairs::decided(data.as_deref(), &row.path) == Some(true);
-                        self.pairs_marks.insert(row.path.clone(), grouped);
+                        let (data, path) = (data.clone(), row.path.clone());
+                        reads.request(row.path.clone(), move || {
+                            Some(tri::pairs::decided(data.as_deref(), &path) == Some(true))
+                        });
                     }
                 }
                 let pairs_marks = &self.pairs_marks;
@@ -8296,6 +8311,7 @@ impl TriApp {
             grid_reader,
             signature_reads: crate::bg_read::BgReads::new("tri-signatures", Some(ctx.clone())),
             score_reads: crate::bg_read::BgReads::new("tri-scores", Some(ctx.clone())),
+            exposure_reads: crate::bg_read::BgReads::new("tri-exposures", Some(ctx.clone())),
             clip_reads: crate::bg_read::BgReads::new("tri-clips", Some(ctx.clone())),
             developers: shared,
         });
@@ -14686,6 +14702,17 @@ impl TriApp {
     /// elle n'y est pas encore (`None` en attendant).
     fn exposure_of(&mut self, index: usize) -> Option<Arc<Exposure>> {
         let path = self.files.get(index)?.path.clone();
+        // Lue en fond (`bg_read` ; 19/11/2026, `TRI_IO_WATCH` : lue sur le fil de
+        // l'interface à chaque image sélectionnée) : prise ici à une image suivante.
+        if let Some(engine) = &mut self.engine {
+            for (done, e) in engine.exposure_reads.take() {
+                if let Some(e) = e {
+                    self.clip_summary
+                        .insert(done.clone(), (e.over_fraction(), e.under_fraction()));
+                    self.exposures.insert(done, e);
+                }
+            }
+        }
         if let Some(e) = self.exposures.get(&path) {
             return Some(e.clone());
         }
@@ -14693,16 +14720,16 @@ impl TriApp {
             self.request(index, Level::Exposure);
             return None;
         }
-        let engine = self.engine.as_ref()?;
-        let e = Arc::new(preview::exposure(
-            &engine.cache,
-            &self.files[index],
-            &engine.preview,
-        )?);
-        self.clip_summary
-            .insert(path.clone(), (e.over_fraction(), e.under_fraction()));
-        self.exposures.insert(path, e.clone());
-        Some(e)
+        let engine = self.engine.as_mut()?;
+        let (cache, preview, file) = (
+            engine.cache.clone(),
+            engine.preview,
+            self.files[index].clone(),
+        );
+        engine.exposure_reads.request(path, move || {
+            preview::exposure(&cache, &file, &preview).map(Arc::new)
+        });
+        None
     }
 
     /// Exposition du JPEG boîtier du RAW `index`, à superposer à son histogramme
