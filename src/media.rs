@@ -103,6 +103,54 @@ pub fn scan_counting(
     Ok(files)
 }
 
+/// Sidecars XMP ouverts en même temps pour savoir s'ils sont de darktable
+/// ([`set_check_threads`]).
+static CHECK_THREADS: AtomicUsize = AtomicUsize::new(16);
+
+/// Nombre de sidecars XMP ouverts en même temps à la lecture d'un dossier, pour savoir
+/// s'ils décrivent un développement darktable (`[gui.folders] sidecar_check_threads`).
+/// Un par un, un dossier de 1 811 photos sur iCloud monté sous Linux mettait plusieurs
+/// minutes (retour du 19/11/2026) : chaque ouverture y est un aller-retour réseau.
+pub fn set_check_threads(threads: usize) {
+    CHECK_THREADS.store(threads.max(1), AtomicOrdering::Relaxed);
+}
+
+/// `check` sur chacun de `paths`, par [`CHECK_THREADS`] fils à la fois ; s'arrête avec
+/// `stop` (les chemins pas vus restent absents).
+fn check_parallel(
+    paths: &[PathBuf],
+    stop: &AtomicBool,
+    check: impl Fn(&Path) -> bool + Sync,
+) -> HashMap<PathBuf, bool> {
+    let threads = CHECK_THREADS.load(AtomicOrdering::Relaxed).min(paths.len());
+    if threads <= 1 {
+        return paths.iter().map(|p| (p.clone(), check(p))).collect();
+    }
+    let next = AtomicUsize::new(0);
+    let results = std::sync::Mutex::new(HashMap::with_capacity(paths.len()));
+    std::thread::scope(|scope| {
+        for _ in 0..threads {
+            scope.spawn(|| {
+                loop {
+                    if stop.load(AtomicOrdering::Relaxed) {
+                        return;
+                    }
+                    let i = next.fetch_add(1, AtomicOrdering::Relaxed);
+                    let Some(path) = paths.get(i) else {
+                        return;
+                    };
+                    let value = check(path);
+                    results
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .insert(path.clone(), value);
+                }
+            });
+        }
+    });
+    results.into_inner().unwrap_or_else(|e| e.into_inner())
+}
+
 /// Extensions de fichiers qui accompagnent les images (sidecars, réglages) : jamais des
 /// dossiers, inutile de le demander au système.
 const COMPANIONS: &[&str] = &["xmp", "pp3", "arp", "cos", "rrdata", "dop", "json", "txt"];
@@ -192,6 +240,23 @@ fn walk(
             by_image.entry(image).or_default().push(name);
         }
     }
+    // Les XMP à ouvrir, ouverts en parallèle (lents sur un montage réseau).
+    let xmps: Vec<PathBuf> = by_image
+        .values()
+        .flatten()
+        .filter(|n| n.to_lowercase().ends_with(".xmp"))
+        .map(|n| dir.join(n))
+        .collect();
+    let darktable = check_parallel(&xmps, stop, crate::developments::file_is_darktable);
+    if stop.load(AtomicOrdering::Relaxed) {
+        return Err(io::ErrorKind::Interrupted.into());
+    }
+    let is_darktable = |xmp: &Path| {
+        darktable
+            .get(xmp)
+            .copied()
+            .unwrap_or_else(|| crate::developments::file_is_darktable(xmp))
+    };
     // Chaque image du dossier, même sans sidecar : ses développements connus sont remplacés
     // par ceux d'aujourd'hui (un clone supprimé n'est plus connu).
     for (photo, kind) in images.values() {
@@ -206,7 +271,7 @@ fn walk(
             photo,
             &names,
             &is_image,
-            &|xmp| crate::developments::file_is_darktable(xmp),
+            &is_darktable,
             &|rrdata| crate::rrdata::file_is_development(rrdata),
             &|profile| crate::pp3::file_is_development(profile),
         );

@@ -1296,6 +1296,10 @@ open_wait_ms = 150
 # delay (ms; share mounted by GVFS on Linux, one network round trip per file) makes the
 # rest rely on names: an image is recognised by its extension.
 type_check_ms = 20
+# Reading a folder: XMP sidecars opened at the same time to know whether they describe a
+# darktable development (one by one, a folder of 1,800 photos on iCloud mounted on Linux
+# took several minutes).
+sidecar_check_threads = 16
 # Right-click on a folder: groups shown at the menu's first level.
 #
 # Right-click on a folder: groups shown at the top level of the menu rather than as a

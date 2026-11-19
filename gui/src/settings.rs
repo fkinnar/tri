@@ -1396,6 +1396,10 @@ pub struct FolderSettings {
     /// Lecture d'un dossier : une demande du type d'une entrée plus lente que ce délai
     /// (ms ; partage monté par GVFS sous Linux) fait se fier aux noms pour la suite.
     pub type_check_ms: u64,
+    /// Lecture d'un dossier : sidecars XMP ouverts en même temps pour savoir s'ils
+    /// décrivent un développement darktable (un par un, un dossier de 1 800 photos sur
+    /// iCloud monté sous Linux mettait plusieurs minutes).
+    pub sidecar_check_threads: usize,
     /// Clic droit sur un dossier : groupes montrés au premier niveau du menu plutôt qu'en
     /// sous-menu (`open`, `files`, `notes`, `develop`, `preferences` ; issue n° 406). Le bouton en
     /// haut à droite d'un sous-menu, ou sur le titre d'un groupe, l'écrit ici.
@@ -1419,6 +1423,7 @@ impl Default for FolderSettings {
             running_check_ms: 1000,
             open_wait_ms: 150,
             type_check_ms: 20,
+            sidecar_check_threads: 16,
             menu_inline: vec!["open".into(), "files".into()],
         }
     }

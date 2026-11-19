@@ -104,6 +104,7 @@ fn main() -> eframe::Result {
     // Repli de la mémoire des notes pour les dossiers en lecture seule (issue n° 368).
     tri::reconcile::set_data_dir(settings.engine().data_dir());
     tri::xmp::set_rules(settings.engine().xmp.rules());
+    tri::media::set_check_threads(settings.gui.folders.sidecar_check_threads);
     // Journal de l'application (issue n° 398), avec les plantages (voir `crash.rs`).
     if let Some(data) = settings.engine().data_dir() {
         tri::log::init(data, settings.engine().log.clone());

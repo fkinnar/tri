@@ -350,6 +350,7 @@ pub fn is_darktable(text: &str) -> bool {
 pub fn file_is_darktable(path: &Path) -> bool {
     use std::io::Read;
     // 64 Ko : `history_end` est en tête en attribut, un peu plus loin en élément.
+    crate::io_watch::access("sidecar darktable ?", path);
     let mut head = vec![0; 64 * 1024];
     let Ok(mut file) = std::fs::File::open(path) else {
         return false;

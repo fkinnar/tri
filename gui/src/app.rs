@@ -1573,6 +1573,7 @@ impl TriApp {
         // Textures colorées d'après les réglages : recalculées.
         self.mask_textures.clear();
         self.analysis_texture = None;
+        tri::media::set_check_threads(new.gui.folders.sidecar_check_threads);
         self.gui = new.gui;
         self.settings.i18n = new.i18n;
         self.settings.files = new.files;
