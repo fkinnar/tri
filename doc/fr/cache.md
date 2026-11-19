@@ -9,7 +9,7 @@ ne calcule rien. La file de travail qui le remplit en tâche de fond viendra par
 
 ```
 <racine>/
-└── v4/                      version du format (FORMAT_VERSION)
+└── v5/                      version du format (FORMAT_VERSION)
     ├── thumbnail/
     │   ├── 8c41…07/         un dossier de photos (début du hash de son chemin)
     │   │   ├── .source      ce dossier de photos, en clair
@@ -30,11 +30,12 @@ ne calcule rien. La file de travail qui le remplit en tâche de fond viendra par
   chaque niveau, sans devoir recalculer les clés : elles dépendent des réglages, et la
   taille de l'aperçu standard de l'écran, que la ligne de commande ne connaît pas.
   Avant, les sous-dossiers étaient les 2 premiers caractères du hash de l'entrée.
-- **`v4/`** : changer le format (ou l'algorithme de clé) se fait en incrémentant
+- **`v5/`** : changer le format (ou l'algorithme de clé) se fait en incrémentant
   `FORMAT_VERSION`. Les anciennes entrées deviennent invisibles ; les formats précédents
-  listés dans `OLD_FORMATS` (`v1/` à `v3/`) sont supprimés en fond à l'ouverture du cache.
+  listés dans `OLD_FORMATS` (`v1/` à `v4/`) sont supprimés en fond à l'ouverture du cache.
   `v3` (24/10/2026) : clé sans le dossier, fichier `.source` (voir plus bas). `v4`
-  (25/10/2026) : date de modification au quart d'heure près (voir la clé).
+  (25/10/2026) : date de modification au quart d'heure près (voir la clé). `v5`
+  (19/11/2026) : date de modification à 2 s près (voir la clé).
 
 ## Cache sur le disque des photos (24/10/2026, issue n° 55)
 
@@ -50,7 +51,7 @@ ici » de [store.md](store.md) (11/11/2026, issue n° 378 : le cache et les donn
 dossiers ensemble, tout ou rien) : sa racine garde le cache de toutes les photos en
 dessous, sous-dossiers compris, dans `.tri/cache` (`disk_dir(racine)` ; `.tri-cache`
 avant, renommé à l'ouverture), avec la même organisation
-(`.tri/cache/v4/<niveau>/<dossier>/`), mais le dossier est repéré par son chemin
+(`.tri/cache/v5/<niveau>/<dossier>/`), mais le dossier est repéré par son chemin
 **relatif** à la racine (écrit avec des `/` sur tous les systèmes). Monté ailleurs
 (`/Volumes/T7` sur un Mac, `/media/u/T7` sous Linux), le disque retrouve son cache.
 `Cache::disk_of(dossier)` est la racine de l'interrupteur (`store::holder` : le
@@ -103,7 +104,11 @@ Une clé est un hash **BLAKE3** (256 bits, en hexadécimal) de :
    en heure locale, et le passage à l'heure d'hiver les décalait toutes d'une heure, donc
    tout le cache d'une clé USB était recalculé. Changements d'heure et fuseaux décalent
    toujours d'un multiple de 15 minutes ; une vraie modification change la taille, ou la
-   date d'autre chose ;
+   date d'autre chose. Ce reste n'est gardé qu'**à 2 secondes près** (depuis `v5`) :
+   FAT32 note les dates à 2 s près (exFAT au centième), et un dossier emporté avec son
+   cache sur une clé FAT32 perdait ses fractions de seconde, donc tout son cache. Linux et
+   macOS tronquent à la tranche de 2 s, Windows arrondit à la suivante : une entrée
+   absente est aussi cherchée sous la clé de la tranche précédente ;
 4. le **niveau** (`Thumbnail`, `Embedded`, `Standard`, `EmbeddedFull`, `Full`) ;
 5. les **paramètres** de calcul, une chaîne libre fournie par l'appelant (ex.
    `"half=1;side=2560"`).

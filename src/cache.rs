@@ -33,11 +33,12 @@ use crate::jpeg::{self, Chroma};
 /// v2 (23/10/2026) : entrées rangées par dossier d'origine. v3 (24/10/2026) : clé sans le
 /// chemin du dossier (cache sur le disque des photos), source de chaque dossier notée.
 /// v4 (25/10/2026) : date de modification prise au quart d'heure près ([`ZONE_STEP_NS`]).
-const FORMAT_VERSION: &str = "v4";
+/// v5 (19/11/2026) : date de modification à 2 s près ([`FAT_STEP_NS`]).
+const FORMAT_VERSION: &str = "v5";
 
 /// Formats précédents, supprimés en fond à l'ouverture (invisibles, ils ne feraient
 /// qu'occuper le disque).
-const OLD_FORMATS: [&str; 3] = ["v1", "v2", "v3"];
+const OLD_FORMATS: [&str; 4] = ["v1", "v2", "v3", "v4"];
 
 /// Pas des fuseaux horaires (15 min, en nanosecondes). La clé ne garde de la date de
 /// modification que le reste de sa division par ce pas : un disque FAT32 note ses dates en
@@ -46,6 +47,14 @@ const OLD_FORMATS: [&str; 3] = ["v1", "v2", "v3"];
 /// d'hiver). Une vraie modification change la taille, ou la date d'autre chose qu'un
 /// multiple exact de ce pas. Constante du calendrier, pas un réglage.
 const ZONE_STEP_NS: u128 = 15 * 60 * 1_000_000_000;
+
+/// Précision des dates de modification de FAT32 (2 s, en nanosecondes). La clé ne garde la
+/// date qu'à ce pas près : une photo copiée sur une clé FAT32 (ou exFAT, au centième) y perd
+/// ses fractions de seconde, et tout le cache emporté avec le dossier était recalculé. Linux
+/// et macOS tronquent à la tranche de 2 s, Windows arrondit à la suivante : une entrée
+/// absente est aussi cherchée dans la tranche précédente ([`Key::earlier`]). Constante du
+/// système de fichiers, pas un réglage.
+const FAT_STEP_NS: u128 = 2 * 1_000_000_000;
 
 /// Dossier qui garde, à la racine de l'interrupteur « garder les données de tri ici »
 /// ([`crate::store`]), le cache des photos qui sont dessous ([`Cache::use_disk`]) :
@@ -141,6 +150,9 @@ pub struct Key {
     /// Dossier d'origine (absolu) : il choisit le rangement, pas la clé.
     folder: PathBuf,
     hash: String,
+    /// Même clé, date dans la tranche de 2 s précédente ([`FAT_STEP_NS`]) : l'entrée d'une
+    /// photo dont la date a été arrondie à la tranche suivante (copie FAT32 sous Windows).
+    earlier: String,
 }
 
 /// Taille et date de modification (ns) des fichiers sources, relevées une fois puis
@@ -353,25 +365,32 @@ impl Key {
         level: Level,
         params: &str,
     ) -> Key {
-        let mut h = blake3::Hasher::new();
-        // Chaque champ est préfixé par sa longueur : pas d'ambiguïté entre (« ab », « c ») et
-        // (« a », « bc »).
-        let mut field = |bytes: &[u8]| {
-            h.update(&(bytes.len() as u64).to_le_bytes());
-            h.update(bytes);
-        };
-        field(FORMAT_VERSION.as_bytes());
-        // Le nom seul : le dossier est dans le rangement (cache déplaçable sur un disque).
         let path = Path::new(path);
-        field(path.file_name().unwrap_or_default().as_encoded_bytes());
-        field(&size.to_le_bytes());
-        field(&(modified_ns % ZONE_STEP_NS).to_le_bytes());
-        field(level.dir_name().as_bytes());
-        field(params.as_bytes());
+        let name = path.file_name().unwrap_or_default();
+        let slots = ZONE_STEP_NS / FAT_STEP_NS;
+        let slot = (modified_ns % ZONE_STEP_NS) / FAT_STEP_NS;
+        let hash = |slot: u128| {
+            let mut h = blake3::Hasher::new();
+            // Chaque champ est préfixé par sa longueur : pas d'ambiguïté entre (« ab », « c »)
+            // et (« a », « bc »).
+            let mut field = |bytes: &[u8]| {
+                h.update(&(bytes.len() as u64).to_le_bytes());
+                h.update(bytes);
+            };
+            field(FORMAT_VERSION.as_bytes());
+            // Le nom seul : le dossier est dans le rangement (cache déplaçable sur un disque).
+            field(name.as_encoded_bytes());
+            field(&size.to_le_bytes());
+            field(&slot.to_le_bytes());
+            field(level.dir_name().as_bytes());
+            field(params.as_bytes());
+            h.finalize().to_hex().to_string()
+        };
         Key {
             level,
             folder: path.parent().unwrap_or(Path::new("")).to_path_buf(),
-            hash: h.finalize().to_hex().to_string(),
+            hash: hash(slot),
+            earlier: hash((slot + slots - 1) % slots),
         }
     }
 
@@ -663,17 +682,32 @@ impl Cache {
         Ok(moved)
     }
 
+    /// Fichier où s'écrit l'entrée `key`.
     fn entry_path(&self, key: &Key) -> PathBuf {
+        self.entry_file(key, &key.hash)
+    }
+
+    fn entry_file(&self, key: &Key, hash: &str) -> PathBuf {
         self.shard(key.level, &key.folder).0.join(format!(
-            "{}.{}",
-            key.hash,
+            "{hash}.{}",
             if key.level.is_image() { "jpg" } else { "bin" }
         ))
     }
 
+    /// Fichier où lire l'entrée `key` : le sien, sinon celui de la tranche de 2 s
+    /// précédente s'il existe ([`Key::earlier`], date arrondie au-dessus par FAT32).
+    fn found_path(&self, key: &Key) -> PathBuf {
+        let path = self.entry_path(key);
+        if path.is_file() {
+            return path;
+        }
+        let earlier = self.entry_file(key, &key.earlier);
+        if earlier.is_file() { earlier } else { path }
+    }
+
     /// Vrai si l'entrée existe (sans la décoder).
     pub fn contains(&self, key: &Key) -> bool {
-        self.entry_path(key).is_file()
+        self.found_path(key).is_file()
     }
 
     /// Lit une entrée. `None` si elle n'existe pas. Une entrée illisible ou corrompue est
@@ -691,7 +725,7 @@ impl Cache {
     /// Comme [`Cache::get`], décodée directement réduite (IDCT) à au moins `min_side`
     /// pixels de côté long (`0` : taille d'origine), sans la réduire davantage.
     pub fn get_fit(&self, key: &Key, min_side: u32) -> Option<Bitmap> {
-        let path = self.entry_path(key);
+        let path = self.found_path(key);
         let bytes = fs::read(&path).ok()?;
         let Ok(mut bitmap) = jpeg::decode(&bytes, min_side) else {
             let _ = fs::remove_file(&path);
@@ -728,7 +762,7 @@ impl Cache {
     /// Lit une entrée binaire (analyse), telle qu'écrite par [`Cache::put_bytes`]. `None`
     /// si elle n'existe pas.
     pub fn get_bytes(&self, key: &Key) -> Option<Vec<u8>> {
-        let path = self.entry_path(key);
+        let path = self.found_path(key);
         let bytes = fs::read(&path).ok()?;
         touch(key.level, &path);
         Some(bytes)
@@ -791,10 +825,13 @@ impl Cache {
 
     /// Supprime une entrée (sans erreur si elle n'existe pas).
     pub fn remove(&self, key: &Key) -> io::Result<()> {
-        match fs::remove_file(self.entry_path(key)) {
-            Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
-            _ => Ok(()),
+        for hash in [&key.hash, &key.earlier] {
+            match fs::remove_file(self.entry_file(key, hash)) {
+                Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+                _ => {}
+            }
         }
+        Ok(())
     }
 
     /// Vide un niveau, ou tout le cache si `level` vaut `None`.
@@ -1157,7 +1194,13 @@ mod tests {
         let variants = [
             Key::from_parts("b.RAF".as_ref(), 10, 20, Level::Standard, "p"),
             Key::from_parts("a.RAF".as_ref(), 11, 20, Level::Standard, "p"),
-            Key::from_parts("a.RAF".as_ref(), 10, 21, Level::Standard, "p"),
+            Key::from_parts(
+                "a.RAF".as_ref(),
+                10,
+                20 + 4_000_000_000,
+                Level::Standard,
+                "p",
+            ),
             Key::from_parts("a.RAF".as_ref(), 10, 20, Level::Full, "p"),
             Key::from_parts("a.RAF".as_ref(), 10, 20, Level::Standard, "q"),
         ];
@@ -1189,7 +1232,7 @@ mod tests {
         assert_eq!(&k.hash[..16], STABLE_PREFIX);
     }
 
-    const STABLE_PREFIX: &str = "272e1707a1420cd8";
+    const STABLE_PREFIX: &str = "320fbc33ca6a4c9c";
 
     #[test]
     fn a_time_zone_shift_keeps_the_key() {
@@ -1201,8 +1244,26 @@ mod tests {
             assert_eq!(at(t + shift).hash, at(t).hash);
             assert_eq!(at(t - shift).hash, at(t).hash);
         }
-        // Une modification deux secondes plus tard (FAT32 : pas de 2 s) se voit.
-        assert_ne!(at(t + 2_000_000_000).hash, at(t).hash);
+        // Une modification quatre secondes plus tard se voit.
+        assert_ne!(at(t + 4_000_000_000).hash, at(t).hash);
+    }
+
+    #[test]
+    fn a_copy_on_fat32_keeps_the_entries() {
+        // Dossier et cache emportés sur une clé FAT32 : dates à 2 s près.
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache::open(dir.path()).unwrap();
+        let at = |ns: u128| Key::from_parts("/a/x.RAF".as_ref(), 10, ns, Level::Exposure, "p");
+        let t = 1_792_000_001 * 1_000_000_000 + 450_000_000; // 1,45 s dans sa tranche de 2 s
+        cache.put_bytes(&at(t), b"histo").unwrap();
+        // exFAT (centième), Linux / macOS FAT32 (tronqué), Windows FAT32 (arrondi au-dessus).
+        for copy in [t - 5_000_000, t - 1_450_000_000, t + 550_000_000] {
+            assert!(cache.contains(&at(copy)), "{copy}");
+            assert_eq!(cache.get_bytes(&at(copy)).as_deref(), Some(&b"histo"[..]));
+        }
+        // Retiré sous l'une ou l'autre clé.
+        cache.remove(&at(t + 550_000_000)).unwrap();
+        assert!(!cache.contains(&at(t)));
     }
 
     #[test]

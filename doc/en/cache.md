@@ -9,7 +9,7 @@ computes nothing. The work queue that fills it in the background sits on top.
 
 ```
 <racine>/
-└── v4/                      format version (FORMAT_VERSION)
+└── v5/                      format version (FORMAT_VERSION)
     ├── thumbnail/
     │   ├── 8c41…07/         one folder of photos (start of the hash of its path)
     │   │   ├── .source      that folder of photos, in plain text
@@ -30,11 +30,12 @@ computes nothing. The work queue that fills it in the background sits on top.
   level, without having to recompute the keys: they depend on the settings, and the
   standard preview size on the screen, which the command line does not know. Before, the
   subfolders were the first 2 characters of the entry's hash.
-- **`v4/`**: changing the format (or the key algorithm) is done by incrementing
+- **`v5/`**: changing the format (or the key algorithm) is done by incrementing
   `FORMAT_VERSION`. Old entries become invisible; the previous formats listed in
-  `OLD_FORMATS` (`v1/` to `v3/`) are deleted in the background when the cache is opened.
+  `OLD_FORMATS` (`v1/` to `v4/`) are deleted in the background when the cache is opened.
   `v3` (2026-10-24): key without the folder, `.source` file (see below). `v4`
-  (2026-10-25): modification date to the quarter hour (see the key).
+  (2026-10-25): modification date to the quarter hour (see the key). `v5`
+  (2026-11-19): modification date to 2 s (see the key).
 
 ## Cache on the photos' drive (2026-10-24, issue #55)
 
@@ -49,7 +50,7 @@ The last two are one mechanism, the "keep tri's data here" switch of
 [store.md](store.md) (2026-11-11, issue #378: the cache and the folders' data together,
 all or nothing): its root keeps the cache of all the photos below it, subfolders
 included, in `.tri/cache` (`disk_dir(root)`; `.tri-cache` before, renamed on opening),
-with the same layout (`.tri/cache/v4/<level>/<folder>/`), but the folder is identified by
+with the same layout (`.tri/cache/v5/<level>/<folder>/`), but the folder is identified by
 its path **relative** to the root (written with `/` on every system). Mounted elsewhere
 (`/Volumes/T7` on a Mac, `/media/u/T7` on Linux), the drive finds its cache again.
 `Cache::disk_of(folder)` is the switch's root (`store::holder`: the nearest `.tri/keep`
@@ -100,7 +101,12 @@ A key is a **BLAKE3** hash (256 bits, in hexadecimal) of:
    division by 15 minutes (since `v4`, issue #74): a FAT32 drive stores its dates in local
    time, and the switch to winter time shifted them all by one hour, so the whole cache of
    a USB stick was computed again. Clock changes and time zones always shift by a multiple
-   of 15 minutes; a real change alters the size, or the date by something else;
+   of 15 minutes; a real change alters the size, or the date by something else. This
+   remainder is only kept **to 2 seconds** (since `v5`): FAT32 stores dates to 2 s (exFAT
+   to the hundredth), and a folder taken to a FAT32 stick with its cache lost its fractions
+   of a second, so its whole cache. Linux and macOS truncate to the 2 s slot, Windows
+   rounds up to the next one: a missing entry is also looked up under the key of the
+   previous slot;
 4. the **level** (`Thumbnail`, `Embedded`, `Standard`, `EmbeddedFull`, `Full`);
 5. the computation **parameters**, a free-form string supplied by the caller (e.g.
    `"half=1;side=2560"`).
