@@ -1712,7 +1712,8 @@ during a window's opening fade showed it half transparent.
   `view_render` (the full-screen "Shown render" list, opened),
   `settings:<section>` (settings window opened on a section: `settings:keys`),
   `export_toast` (end-of-export bubble, as after an export of the selected image,
-  without exporting anything), `search:<text>` (typed in the search of the open settings window or help:
+  without exporting anything), `opening_box:<stage>` (slow folder opening box, at stage 0
+  list, 1 ratings or 2 settings), `search:<text>` (typed in the search of the open settings window or help:
   `search:<text>` (typed in the search of the open settings window, help or `?` help:
   `search:vim`). An unknown
   step is reported and ignored.

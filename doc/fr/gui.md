@@ -1808,7 +1808,8 @@ moitié transparente.
   l'image sélectionnée), `view_render` (liste « Rendu affiché » du plein écran ouverte),
   `settings:<section>` (fenêtre de réglages ouverte sur une
   section : `settings:keys`), `export_toast` (bulle de fin d'export, comme après l'export
-  de l'image sélectionnée, sans rien exporter), `search:<texte>` (tapé dans la recherche de la fenêtre de
+  de l'image sélectionnée, sans rien exporter), `opening_box:<étape>` (boîte d'ouverture d'un
+  dossier lent, à l'étape 0 liste, 1 notes ou 2 réglages), `search:<texte>` (tapé dans la recherche de la fenêtre de
   réglages ou de l'aide ouverte : `search:vim`). Une étape inconnue est signalée et ignorée.
   section : `settings:keys`), `search:<texte>` (tapé dans la recherche de la fenêtre de
   réglages, de l'aide ou de l'aide `?` ouverte : `search:vim`). Une étape inconnue est signalée et ignorée.
