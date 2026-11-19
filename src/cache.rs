@@ -292,6 +292,7 @@ pub fn defer_job(id: String, job: impl FnOnce() + Send + 'static) {
 /// Relève `path` sur le disque et le retient.
 fn read_stamp(path: &Path) -> Option<(u64, u128)> {
     // Clone darktable : le fichier de l'image d'origine.
+    crate::io_watch::access("relevé d'un fichier", path);
     let read = fs::metadata(crate::media::source(path)).ok().map(|meta| {
         let modified = meta
             .modified()
@@ -698,6 +699,7 @@ impl Cache {
     /// précédente s'il existe ([`Key::earlier`], date arrondie au-dessus par FAT32).
     fn found_path(&self, key: &Key) -> PathBuf {
         let path = self.entry_path(key);
+        crate::io_watch::access("cache", &path);
         if path.is_file() {
             return path;
         }
@@ -777,7 +779,9 @@ impl Cache {
     /// image : la mémoire des piles du dossier (#416). Rangé avec les entrées du dossier,
     /// donc vidé avec elles et compté dans leur place.
     pub fn folder_bytes(&self, folder: &Path, level: Level, name: &str) -> Option<Vec<u8>> {
-        fs::read(self.shard(level, folder).0.join(format!("{name}.bin"))).ok()
+        let path = self.shard(level, folder).0.join(format!("{name}.bin"));
+        crate::io_watch::access("cache du dossier", &path);
+        fs::read(path).ok()
     }
 
     /// Écrit le fichier `name` propre au dossier `folder` ([`Cache::folder_bytes`]).
@@ -801,6 +805,7 @@ impl Cache {
     /// Écrit `bytes` dans `path`, fichier du dossier d'entrées de `folder` au niveau
     /// `level` (créé, sa source notée).
     fn write_at(&self, path: &Path, level: Level, folder: &Path, bytes: &[u8]) -> io::Result<()> {
+        crate::io_watch::access("écriture du cache", path);
         let path = path.to_path_buf();
         let dir = path
             .parent()

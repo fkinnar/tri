@@ -21684,6 +21684,8 @@ impl eframe::App for TriApp {
         let ctx = ui.ctx().clone();
         let mut steps = crate::trace::Steps::start();
         if self.repaint.is_none() {
+            // Ses accès disque sous surveillance (`TRI_IO_WATCH`, développement).
+            tri::io_watch::mark_interface_thread();
             self.repaint = Some(ctx.clone());
             let repaint = ctx.clone();
             tri::cache::on_stamps_read(move || repaint.request_repaint());
@@ -21695,6 +21697,7 @@ impl eframe::App for TriApp {
         if ctx.input(|i| i.viewport().close_requested()) {
             self.save_folder_position();
             self.stop_background();
+            io_watch_report();
         }
         ctx.data_mut(|d| d.insert_temp(dialog_settings_id(), self.gui.dialogs()));
         ctx.data_mut(|d| d.insert_temp(crate::fine_slider::speed_id(), self.gui.slider_fine_speed));
@@ -22937,6 +22940,19 @@ fn grid_request(
         small,
         side,
     })
+}
+
+/// Bilan des accès disque faits depuis le fil de l'interface (`TRI_IO_WATCH`), à la
+/// fermeture : le plus fréquent d'abord.
+fn io_watch_report() {
+    if !tri::io_watch::watching() {
+        return;
+    }
+    let report = tri::io_watch::report();
+    eprintln!("[io-watch] bilan : {} endroits", report.len());
+    for (place, what, n) in report {
+        eprintln!("[io-watch] {n:>6} × {what} ← {place}");
+    }
 }
 
 fn folder_depth(subfolders: bool, gui: &GuiSettings) -> usize {

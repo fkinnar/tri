@@ -667,6 +667,7 @@ fn exact_sidecars(image: &Path) -> Vec<PathBuf> {
     let mut found: Vec<PathBuf> = Vec::new();
     for convention in [Convention::Darktable, Convention::Adobe] {
         let path = convention.sidecar(image);
+        crate::io_watch::access("recherche de sidecar", &path);
         if path.is_file() && !found.contains(&path) {
             found.push(path);
         }
@@ -711,6 +712,7 @@ pub fn read(image: &Path) -> Result<Notes> {
 
 /// Notes lues dans le sidecar `path` ; notes vides s'il n'existe pas.
 pub fn read_sidecar(path: &Path) -> Result<Notes> {
+    crate::io_watch::access("lecture d'un sidecar", path);
     match fs::read_to_string(path) {
         Ok(text) => parse(&text),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Notes::default()),
@@ -730,6 +732,7 @@ pub fn write(image: &Path, notes: &Notes, default: Convention) -> Result<PathBuf
 /// Écrit `notes` dans le sidecar `path` (créé s'il n'existe pas), comme [`write()`]. Renvoie
 /// vrai si le fichier a été modifié.
 pub fn write_sidecar(path: &Path, notes: &Notes) -> Result<bool> {
+    crate::io_watch::access("écriture d'un sidecar", path);
     let original = match fs::read_to_string(path) {
         Ok(text) => Some(text),
         Err(e) if e.kind() == io::ErrorKind::NotFound => None,
@@ -2085,6 +2088,7 @@ pub fn read_list_of(image: &Path, field: ListField) -> Result<Vec<String>> {
 
 /// Liste `field` du sidecar `path` ; vide s'il n'existe pas.
 fn read_list_in(path: &Path, field: ListField) -> Result<Vec<String>> {
+    crate::io_watch::access("lecture d'un sidecar", path);
     match fs::read_to_string(path) {
         Ok(text) => read_list(&text, field),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
@@ -2188,6 +2192,7 @@ pub fn write_list(
     if let Some(former) = &former {
         take_over(&path, former)?;
     }
+    crate::io_watch::access("écriture d'un sidecar", &path);
     let original = match fs::read_to_string(&path) {
         Ok(text) => Some(text),
         Err(e) if e.kind() == io::ErrorKind::NotFound => None,

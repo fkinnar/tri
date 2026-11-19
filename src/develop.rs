@@ -968,6 +968,7 @@ pub fn darktable_sidecar(image: &Path) -> Option<PathBuf> {
         return None;
     }
     // La même règle que les piles (`developments::is_darktable`, 31/10/2026).
+    crate::io_watch::access("sidecar darktable", &sidecar);
     let developed = std::fs::read_to_string(&sidecar)
         .is_ok_and(|text| crate::developments::is_darktable(&text));
     if let Ok(mut m) = memo.lock() {
@@ -1133,6 +1134,7 @@ pub fn render_stamp(sidecar: &Path) -> String {
         });
         return PENDING.into();
     }
+    crate::io_watch::access("sidecar de rendu", sidecar);
     let Ok(bytes) = std::fs::read(sidecar) else {
         return "absent".into();
     };

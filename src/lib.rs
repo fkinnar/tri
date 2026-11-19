@@ -44,6 +44,7 @@ pub mod folder;
 pub mod fuzzy;
 pub mod history;
 pub mod i18n;
+pub mod io_watch;
 pub mod jpeg;
 pub mod log;
 pub mod media;

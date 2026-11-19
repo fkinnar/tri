@@ -1758,6 +1758,15 @@ during a window's opening fade showed it half transparent.
   `last_zoom_size`), with a warning at the top right explained on hover. The terminal
   gets one line per session ("détails dans …/tri.log"); a burst of errors (5 s) leaves
   only the first one in the log.
+- `TRI_IO_WATCH=1` and `TRI_SLOW_IO_MS=<ms>` (2026-11-19, `tri::io_watch`, development
+  tools with no effect in normal use): the first reports on standard error every disk
+  access made **from the interface thread** (cache, sorting data, sidecars), once per
+  place in the code with the stack of `tri` functions up to the interface one at fault,
+  then a summary on closing; the second makes each of these accesses wait, in every
+  thread, as on a slow mount (iCloud on Linux, NAS). Built with
+  `CARGO_PROFILE_DEV_DEBUG=line-tables-only`, the stack gives file and line. Why: these
+  accesses only show on a slow drive; they are all found at once on the development
+  machine, instead of one by one at the user's.
 - `TRI_GUI_TRACE=1`: timed trace of the startup steps (configuration read, window opened,
   folder read, tree, first image, engine; added on 2026-10-19 for a startup slowness seen
   on macOS) and of each step of image loading (request to the engine, image ready,
