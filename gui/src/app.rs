@@ -2690,27 +2690,81 @@ impl TriApp {
             opening.started.elapsed().as_secs(),
         );
         let mut cancel = false;
+        // Retour du 19/11/2026 (« très moche ») : une boîte aérée, le nom du dossier en
+        // titre, et les trois étapes de l'ouverture cochées au fil de l'eau.
         egui::Area::new(egui::Id::unique("opening_box"))
             .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                let body = ui.text_style_height(&egui::TextStyle::Body);
+                let frame = egui::Frame::popup(ui.style())
+                    .inner_margin(egui::Margin::same((body * 1.4) as i8))
+                    .corner_radius(body * 0.6);
+                frame.show(ui, |ui| {
+                    let width = body * 22.0;
+                    ui.set_width(width);
+                    ui.spacing_mut().item_spacing.y = body * 0.5;
                     ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = body * 0.9;
                         // Plus grand que le texte : il se voit tourner.
-                        let size = ui.text_style_height(&egui::TextStyle::Body) * 1.6;
-                        ui.add(egui::Spinner::new().size(size));
+                        ui.add(egui::Spinner::new().size(body * 2.2));
                         ui.vertical(|ui| {
-                            ui.strong(t!("folder-opening", name = &name));
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(&name).strong().size(body * 1.25),
+                                )
+                                .truncate(),
+                            );
                             ui.weak(t!("folder-opening-elapsed", seconds = seconds));
                         });
                     });
-                    ui.label(t!("folder-opening-found", count = found));
-                    match stage {
-                        OPEN_NOTES => ui.label(t!("folder-opening-notes")),
-                        OPEN_DATA => ui.label(t!("folder-opening-data")),
-                        _ => ui.weak(t!("folder-opening-why")),
-                    };
-                    cancel = ui.button(t!("cancel")).clicked();
+                    ui.add_space(body * 0.4);
+                    ui.separator();
+                    ui.add_space(body * 0.2);
+                    let steps = [
+                        (OPEN_LIST, t!("folder-opening-list")),
+                        (OPEN_NOTES, t!("folder-opening-notes")),
+                        (OPEN_DATA, t!("folder-opening-data")),
+                    ];
+                    for (step, label) in steps {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = body * 0.6;
+                            let (rect, _) =
+                                ui.allocate_exact_size(Vec2::splat(body), Sense::hover());
+                            let accent = crate::marks::accent(ui.ctx());
+                            let weak = ui.visuals().weak_text_color();
+                            if step < stage {
+                                opening_check(ui.painter(), rect, accent);
+                            } else if step == stage {
+                                ui.put(rect, egui::Spinner::new().size(body * 1.1));
+                            } else {
+                                ui.painter().circle_stroke(
+                                    rect.center(),
+                                    body * 0.3,
+                                    egui::Stroke::new(1.0, weak),
+                                );
+                            }
+                            if step > stage {
+                                ui.weak(label);
+                            } else {
+                                ui.label(label);
+                            }
+                            if step == OPEN_LIST {
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| ui.weak(t!("folder-opening-found", count = found)),
+                                );
+                            }
+                        });
+                    }
+                    if stage == OPEN_LIST {
+                        ui.add_space(body * 0.4);
+                        ui.weak(t!("folder-opening-why"));
+                    }
+                    ui.add_space(body * 0.6);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        cancel = ui.button(t!("cancel")).clicked();
+                    });
                 });
             });
         if cancel {
@@ -19367,6 +19421,23 @@ impl TriApp {
                     }
                 }
                 Step::ViewRender => self.open_view_render = true,
+                Step::OpeningBox(stage) => {
+                    // Une lecture qui n'arrive jamais : la boîte reste, pour la capture.
+                    let (tx, result) = mpsc::channel();
+                    std::mem::forget(tx);
+                    self.opening = Some(Opening {
+                        dir: self.folder.dir.clone(),
+                        result,
+                        stop: Arc::new(AtomicBool::new(false)),
+                        found: Arc::new(AtomicUsize::new(if stage == OPEN_LIST {
+                            0
+                        } else {
+                            self.files.len()
+                        })),
+                        stage: Arc::new(AtomicUsize::new(stage)),
+                        started: Instant::now() - Duration::from_secs(18),
+                    });
+                }
                 Step::RatingDialog => {
                     if let Some(file) = self.files.get(self.selected) {
                         let at = CENTRED;
@@ -22443,6 +22514,9 @@ enum Step {
     /// Montrer la bulle de fin d'export (`export_toast`, #381) pour l'image sélectionnée,
     /// comme après un export réussi : pour la capture, sans rien exporter.
     ExportToast,
+    /// Montrer la boîte d'ouverture d'un dossier lent à l'étape donnée
+    /// (`opening_box:0` liste, `:1` notes, `:2` réglages), pour la capture.
+    OpeningBox(usize),
     /// Ouvrir la fenêtre de réglages sur une section (`settings:keys`, `settings:gui.zoom`).
     Settings(String),
     /// Taper dans la recherche de la boîte ouverte, palette, réglages ou aide
@@ -22474,6 +22548,10 @@ fn parse_actions(list: &str) -> Vec<Step> {
                 None if id == "rating_dialog" => Some(Step::RatingDialog),
                 None if id == "view_render" => Some(Step::ViewRender),
                 None if id == "export_toast" => Some(Step::ExportToast),
+                None if id.starts_with("opening_box:") => id["opening_box:".len()..]
+                    .parse()
+                    .ok()
+                    .map(Step::OpeningBox),
                 None if id.starts_with("settings:") => {
                     Some(Step::Settings(id["settings:".len()..].to_string()))
                 }
@@ -23239,6 +23317,20 @@ fn io_watch_report() {
     for (place, what, n) in report {
         eprintln!("[io-watch] {n:>6} × {what} ← {place}");
     }
+}
+
+/// Coche d'une étape faite de la boîte d'ouverture, dans `rect`.
+fn opening_check(painter: &egui::Painter, rect: Rect, color: Color32) {
+    let (c, r) = (rect.center(), rect.height() * 0.32);
+    let points = vec![
+        c + Vec2::new(-r, 0.0),
+        c + Vec2::new(-r * 0.3, r * 0.7),
+        c + Vec2::new(r, -r * 0.7),
+    ];
+    painter.add(egui::Shape::line(
+        points,
+        egui::Stroke::new(r * 0.45, color),
+    ));
 }
 
 /// Réglage propre au dossier `dir` des notes dans les images (repère du panneau des
@@ -34862,10 +34954,10 @@ mod tests {
             started: Instant::now() - Duration::from_secs(7),
         });
         h.run_steps(2);
-        wait_for_label(&mut h, "Ouverture de « photos »…");
-        wait_for_label(&mut h, "12 images trouvées");
+        wait_for_label(&mut h, "photos");
+        wait_for_label(&mut h, "12 trouvées");
         // Le temps qui défile : la boîte vit (retour du 19/11/2026).
-        wait_for_label(&mut h, "depuis 7 s");
+        wait_for_label(&mut h, &t!("folder-opening-elapsed", seconds = 7));
         // La liste lue : l'étape suivante est dite (retour du 19/11/2026).
         if let Some(opening) = &h.state().opening {
             opening.stage.store(OPEN_DATA, Ordering::Relaxed);

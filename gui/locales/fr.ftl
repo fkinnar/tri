@@ -615,16 +615,16 @@ folders-connect-tip = Taper l'adresse d'un serveur (\\nas\photo, smb://nas/photo
 connecting = Connexion à « { $name } »…
 connected = Connecté à « { $name } ».
 connect-failed = Connexion à « { $name } » impossible : { $error }
-folder-opening = Ouverture de « { $name } »…
 folder-opening-found = { $count ->
-    [0] Aucune image trouvée pour l'instant
-    [one] 1 image trouvée
-   *[other] { $count } images trouvées
+    [0] aucune pour l'instant
+    [one] 1 trouvée
+   *[other] { $count } trouvées
 }
 folder-opening-why = Dossier lent (réseau, disque) : sa liste se lit en fond.
-folder-opening-elapsed = depuis { $seconds } s
-folder-opening-notes = Lecture des notes (étoiles, couleurs…)
-folder-opening-data = Lecture des réglages du dossier (piles, curseurs…)
+folder-opening-elapsed = Ouverture en cours · { $seconds } s
+folder-opening-list = Liste des images
+folder-opening-notes = Notes (étoiles, couleurs…)
+folder-opening-data = Réglages du dossier (piles, curseurs…)
 stacks-waiting = Regroupement des piles…
 stacks-waiting-count = { $done } / { $total }
 folder-open-cancelled = Ouverture de « { $name } » annulée.

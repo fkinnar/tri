@@ -615,16 +615,16 @@ folders-connect-tip = Type the address of a server (\\nas\photo, smb://nas/photo
 connecting = Connecting to "{ $name }"…
 connected = Connected to "{ $name }".
 connect-failed = Could not connect to "{ $name }": { $error }
-folder-opening = Opening "{ $name }"…
 folder-opening-found = { $count ->
-    [0] No image found yet
-    [one] 1 image found
-   *[other] { $count } images found
+    [0] none yet
+    [one] 1 found
+   *[other] { $count } found
 }
 folder-opening-why = Slow folder (network, disk): its list is read in the background.
-folder-opening-elapsed = for { $seconds } s
-folder-opening-notes = Reading the ratings (stars, colours…)
-folder-opening-data = Reading the folder's settings (stacks, sliders…)
+folder-opening-elapsed = Opening · { $seconds } s
+folder-opening-list = Image list
+folder-opening-notes = Ratings (stars, colours…)
+folder-opening-data = Folder settings (stacks, sliders…)
 stacks-waiting = Grouping stacks…
 stacks-waiting-count = { $done } / { $total }
 folder-open-cancelled = Opening "{ $name }" cancelled.
