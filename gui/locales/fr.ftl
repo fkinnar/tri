@@ -617,6 +617,7 @@ folder-opening-found = { $count ->
    *[other] { $count } images trouvées
 }
 folder-opening-why = Dossier lent (réseau, disque) : sa liste se lit en fond.
+folder-opening-elapsed = depuis { $seconds } s
 folder-opening-notes = Lecture des notes (étoiles, couleurs…)
 folder-opening-data = Lecture des réglages du dossier (piles, curseurs…)
 stacks-waiting = Regroupement des piles…
