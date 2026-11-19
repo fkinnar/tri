@@ -175,6 +175,12 @@ impl TriApp {
             return;
         }
         let stale: Vec<PathBuf> = self.adjust_stale.drain().collect();
+        // Vignette sans réglage pas encore en mémoire : lue par les fils de la grille
+        // (`grid_read`), attendue au plus le budget de l'image ; les autres attendent
+        // l'image suivante (`TRI_IO_WATCH`, 19/11/2026 : 33 lectures sur iCloud, 13 s de
+        // fenêtre figée en collant des réglages).
+        let deadline = Instant::now() + self.gui.load_budget();
+        let mut later: Vec<PathBuf> = Vec::new();
         for path in stale {
             let (Some(texture), Some(level)) = (
                 self.textures.get(&path).cloned(),
@@ -187,12 +193,28 @@ impl TriApp {
             };
             let key = (path.clone(), level);
             if !self.adjust_bases.contains_key(&key) {
-                let Some(bitmap) = self.grid_bitmap(index, level) else {
-                    self.textures.remove(&path);
-                    self.texture_levels.remove(&path);
+                let Some(engine) = &mut self.engine else {
                     continue;
                 };
-                self.adjust_bases.insert(key.clone(), bitmap);
+                if !engine.grid_reader.is_pending(&key)
+                    && let Some(request) = super::grid_request(engine, &self.files[index], level)
+                {
+                    engine.grid_reader.request(request);
+                }
+                match engine.grid_reader.take(&key, deadline) {
+                    Some(Some(bitmap)) => {
+                        self.adjust_bases.insert(key.clone(), bitmap);
+                    }
+                    Some(None) => {
+                        self.textures.remove(&path);
+                        self.texture_levels.remove(&path);
+                        continue;
+                    }
+                    None => {
+                        later.push(path);
+                        continue;
+                    }
+                }
             }
             let mut bitmap = self.adjust_bases[&key].clone();
             let kind = self.files[index].kind;
@@ -207,6 +229,7 @@ impl TriApp {
             let layers = self.adjust_now(&path);
             self.texture_adjust.insert(path.clone(), layers);
         }
+        self.adjust_stale.extend(later);
         ctx.request_repaint();
     }
 
