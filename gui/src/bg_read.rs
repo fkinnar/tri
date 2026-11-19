@@ -66,6 +66,11 @@ where
         self.pending.contains(key)
     }
 
+    /// Vrai si aucune lecture n'attend.
+    pub fn idle(&self) -> bool {
+        self.pending.is_empty()
+    }
+
     /// Résultats arrivés depuis le dernier appel (`None` : rien dans le cache).
     pub fn take(&mut self) -> Vec<(K, Option<T>)> {
         let arrived: Vec<_> = self.results.try_iter().collect();
