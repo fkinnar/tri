@@ -5,7 +5,9 @@
 //! des images de l'interface de 1 à 5 s, toutes dans l'étape « événements » ; chaque
 //! empreinte annoncée par le moteur était relue dans le cache sur le fil de l'interface,
 //! et une lecture sur iCloud peut prendre une seconde. Elles se font désormais dans un fil
-//! par sorte de lecture, et l'interface prend les résultats à chaque image.
+//! par sorte de lecture, et l'interface prend les résultats à chaque image ; de même,
+//! quelques écritures (vue du dossier, piles retenues) passent par un fil d'écriture
+//! ([`BgWrites`]), dans l'ordre.
 
 use std::collections::HashSet;
 use std::hash::Hash;
@@ -74,6 +76,56 @@ where
     }
 }
 
+/// Un fil qui fait des écritures dans l'ordre où elles sont demandées (toutes, sans en
+/// fusionner : la dernière écrite est la dernière demandée). Ses copies partagent le même
+/// fil (un autre fil peut attendre ses écritures, [`BgWrites::flush`]).
+#[derive(Clone)]
+pub struct BgWrites {
+    jobs: Sender<Box<dyn FnOnce() + Send>>,
+    pending: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl BgWrites {
+    /// Démarre le fil (`name` : son nom).
+    pub fn new(name: &str) -> BgWrites {
+        let (jobs, inbox) = mpsc::channel::<Box<dyn FnOnce() + Send>>();
+        let pending = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let left = pending.clone();
+        let _ = std::thread::Builder::new()
+            .name(name.into())
+            .spawn(move || {
+                for job in inbox {
+                    job();
+                    left.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                }
+            });
+        BgWrites { jobs, pending }
+    }
+
+    /// Demande l'écriture `write`, faite après celles déjà demandées.
+    pub fn run(&self, write: impl FnOnce() + Send + 'static) {
+        self.pending
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if self.jobs.send(Box::new(write)).is_err() {
+            self.pending
+                .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    /// Attend que les écritures demandées soient faites, au plus `timeout` (fermeture de
+    /// `tri`, tests) ; vrai si elles le sont.
+    pub fn flush(&self, timeout: std::time::Duration) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+        while self.pending.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        true
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -101,5 +153,17 @@ mod tests {
         }
         assert_eq!(got, vec![(1, Some("un".to_string())), (2, None)]);
         assert!(!reads.is_pending(&1));
+    }
+
+    #[test]
+    fn writes_happen_in_order() {
+        let writes = BgWrites::new("test");
+        let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        for i in 0..20 {
+            let log = log.clone();
+            writes.run(move || log.lock().unwrap().push(i));
+        }
+        assert!(writes.flush(Duration::from_secs(5)));
+        assert_eq!(*log.lock().unwrap(), (0..20).collect::<Vec<_>>());
     }
 }

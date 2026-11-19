@@ -1100,6 +1100,9 @@ pub struct TriApp {
     /// la vue pendant que les piles se forment, jusqu'à ce qu'on y touche (retour du
     /// 19/11/2026 : elle défilait d'elle-même et s'arrêtait sur des vignettes grises).
     hold_selection: bool,
+    /// Écritures des données du dossier hors du fil de l'interface, dans l'ordre (vue
+    /// retenue, piles ; 19/11/2026, `TRI_IO_WATCH`).
+    writes: crate::bg_read::BgWrites,
     /// Image gardée en haut de la vue après un refiltrage, et son décalage sous le haut
     /// de sa rangée ([`Reveal::Anchor`]).
     scroll_anchor: Option<(PathBuf, f32)>,
@@ -2004,6 +2007,7 @@ impl TriApp {
             layout: Layout::fit(0.0, gui.grid.cell, gui.grid.gap),
             scroll_offset: 0.0,
             hold_selection: false,
+            writes: crate::bg_read::BgWrites::new("tri-writes"),
             view_height: 0.0,
             reveal: None,
             scroll_anchor: None,
@@ -2450,6 +2454,18 @@ impl TriApp {
         );
         let data = self.settings.data_dir();
         let cache = self.engine.as_ref().map(|e| e.cache.clone());
+        // La position du dossier quitté passe par le fil d'écriture, après les filtres déjà
+        // demandés ; le fil d'ouverture attend qu'ils soient tous écrits avant de lire la
+        // vue (le même dossier rouvert : sa vue à jour).
+        if let Some((left, view)) = position {
+            let data = data.clone();
+            self.writes.run(move || {
+                if let Err(e) = crate::state::remember_folder_view(data.as_deref(), &left, &view) {
+                    trace(|| format!("position dans le dossier pas retenue : {e}"));
+                }
+            });
+        }
+        let writes = self.writes.clone();
         // Un dossier choisi : le dernier, disparu, ne sera plus rouvert de lui-même.
         self.missing_last = None;
         // Ses fichiers ont pu changer depuis (développés ailleurs) : relevés refaits.
@@ -2477,11 +2493,7 @@ impl TriApp {
         let watching = self.settings.watch.interval_ms > 0
             && !self.watch.as_ref().is_some_and(|(w, _, _)| w.dir() == dir);
         std::thread::spawn(move || {
-            if let Some((left, view)) = position
-                && let Err(e) = crate::state::remember_folder_view(data.as_deref(), &left, &view)
-            {
-                trace(|| format!("position dans le dossier pas retenue : {e}"));
-            }
+            writes.flush(Duration::from_secs(30));
             let view = remember
                 .then(|| crate::state::folder_view(data.as_deref(), &target).unwrap_or_default());
             let subfolders = view
@@ -7085,11 +7097,15 @@ impl TriApp {
     /// Image courante et piles dépliées du dossier ouvert : écrites en le quittant et en
     /// fermant `tri` (pas à chaque image : un NAS, une synchronisation).
     fn save_folder_position(&mut self) {
+        // Par le fil d'écriture, après les filtres déjà demandés (sinon un filtre écrit
+        // après coup effacerait la position) ; attendu à la fermeture.
         if let Some((dir, view)) = self.folder_position_to_write() {
             let data = self.settings.data_dir();
-            if let Err(e) = crate::state::remember_folder_view(data.as_deref(), &dir, &view) {
-                trace(|| format!("position dans le dossier pas retenue : {e}"));
-            }
+            self.writes.run(move || {
+                if let Err(e) = crate::state::remember_folder_view(data.as_deref(), &dir, &view) {
+                    trace(|| format!("position dans le dossier pas retenue : {e}"));
+                }
+            });
         }
     }
 
@@ -7258,11 +7274,12 @@ impl TriApp {
         };
         let data = self.settings.data_dir();
         let written = self.view_to_write(view.clone());
-        if let Err(e) =
-            crate::state::remember_folder_view(data.as_deref(), &self.folder.dir, &written)
-        {
-            trace(|| format!("filtres du dossier pas retenus : {e}"));
-        }
+        let dir = self.folder.dir.clone();
+        self.writes.run(move || {
+            if let Err(e) = crate::state::remember_folder_view(data.as_deref(), &dir, &written) {
+                trace(|| format!("filtres du dossier pas retenus : {e}"));
+            }
+        });
         self.folder_view = Some(view);
     }
 
@@ -7413,10 +7430,10 @@ impl TriApp {
         if let Some(engine) = &self.engine
             && let Ok(bytes) = serde_json::to_vec(&memory)
         {
-            let _ =
-                engine
-                    .cache
-                    .put_folder_bytes(&self.folder.dir, Level::Similarity, STACKS, &bytes);
+            let (cache, dir) = (engine.cache.clone(), self.folder.dir.clone());
+            self.writes.run(move || {
+                let _ = cache.put_folder_bytes(&dir, Level::Similarity, STACKS, &bytes);
+            });
         }
         self.stacks_memory = Some(memory);
     }
@@ -17377,12 +17394,15 @@ impl TriApp {
         let mut clicked = None;
         // Versions de l'image (plein écran) : pastilles, puis modifier / supprimer.
         let path = file.path.clone();
+        // Lues en fond, comme pour la grille (19/11/2026, `TRI_IO_WATCH` : relues sur le
+        // fil de l'interface à chaque image affichée) : les pastilles viennent un instant
+        // après.
         let versions: Vec<String> = if self.mode == Mode::View {
-            self.versions_of(&path)
-                .list
-                .iter()
-                .map(|v| v.name.clone())
-                .collect()
+            self.grid_versions(&path);
+            self.versions
+                .get(&path)
+                .map(|v| v.list.iter().map(|v| v.name.clone()).collect())
+                .unwrap_or_default()
         } else {
             Vec::new()
         };
@@ -21697,6 +21717,8 @@ impl eframe::App for TriApp {
         if ctx.input(|i| i.viewport().close_requested()) {
             self.save_folder_position();
             self.stop_background();
+            // Les écritures en cours finies avant de quitter (au plus quelques secondes).
+            self.writes.flush(Duration::from_secs(5));
             io_watch_report();
         }
         ctx.data_mut(|d| d.insert_temp(dialog_settings_id(), self.gui.dialogs()));

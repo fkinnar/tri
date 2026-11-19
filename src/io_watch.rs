@@ -75,7 +75,8 @@ pub fn access(what: &str, path: &Path) {
     entry.1 += 1;
     if entry.1 == 1 {
         eprintln!(
-            "[io-watch] fil de l'interface : {what} {} ← {place}",
+            "[io-watch] fil de l'interface ({}) : {what} {} ← {place}",
+            std::thread::current().name().unwrap_or("?"),
             path.display()
         );
         // Rien de reconnu : la pile telle quelle, pour comprendre.
