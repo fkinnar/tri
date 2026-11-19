@@ -309,6 +309,9 @@ struct Opening {
     /// Étape en cours ([`OPEN_LIST`], [`OPEN_NOTES`], [`OPEN_DATA`]) : la liste lue, la
     /// boîte le dit plutôt que de rester sur le compte (retour du 19/11/2026).
     stage: Arc<AtomicUsize>,
+    /// Début de l'ouverture : le temps écoulé défile dans la boîte, signe qu'elle vit
+    /// (retour du 19/11/2026 : sur iCloud, elle restait longtemps immobile).
+    started: Instant,
 }
 
 /// Ouverture d'un dossier, étape : sa liste d'images.
@@ -2517,6 +2520,7 @@ impl TriApp {
                     stop,
                     found,
                     stage,
+                    started: Instant::now(),
                 });
             }
         }
@@ -2561,10 +2565,11 @@ impl TriApp {
         let Some(opening) = &self.opening else {
             return;
         };
-        let (name, found, stage) = (
+        let (name, found, stage, seconds) = (
             folder_name(&opening.dir),
             opening.found.load(Ordering::Relaxed),
             opening.stage.load(Ordering::Relaxed),
+            opening.started.elapsed().as_secs(),
         );
         let mut cancel = false;
         egui::Area::new(egui::Id::unique("opening_box"))
@@ -2573,8 +2578,13 @@ impl TriApp {
             .show(ctx, |ui| {
                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        ui.spinner();
-                        ui.strong(t!("folder-opening", name = &name));
+                        // Plus grand que le texte : il se voit tourner.
+                        let size = ui.text_style_height(&egui::TextStyle::Body) * 1.6;
+                        ui.add(egui::Spinner::new().size(size));
+                        ui.vertical(|ui| {
+                            ui.strong(t!("folder-opening", name = &name));
+                            ui.weak(t!("folder-opening-elapsed", seconds = seconds));
+                        });
                     });
                     ui.label(t!("folder-opening-found", count = found));
                     match stage {
@@ -2588,8 +2598,9 @@ impl TriApp {
         if cancel {
             self.cancel_opening();
         }
-        // Le compte avance : redessiné de temps en temps.
-        ctx.request_repaint_after(crate::app::poll_interval(ctx));
+        // Le sablier tourne, le compte et le temps avancent : redessiné en continu, le
+        // temps de l'ouverture seulement.
+        ctx.request_repaint();
     }
 
     /// Installe le dossier `dir` lu (ou son erreur) : grille, filtres, moteur.
@@ -34407,10 +34418,13 @@ mod tests {
             stop: Arc::new(AtomicBool::new(false)),
             found: Arc::new(AtomicUsize::new(12)),
             stage: Arc::new(AtomicUsize::new(OPEN_LIST)),
+            started: Instant::now() - Duration::from_secs(7),
         });
         h.run_steps(2);
         wait_for_label(&mut h, "Ouverture de « photos »…");
         wait_for_label(&mut h, "12 images trouvées");
+        // Le temps qui défile : la boîte vit (retour du 19/11/2026).
+        wait_for_label(&mut h, "depuis 7 s");
         // La liste lue : l'étape suivante est dite (retour du 19/11/2026).
         if let Some(opening) = &h.state().opening {
             opening.stage.store(OPEN_DATA, Ordering::Relaxed);
