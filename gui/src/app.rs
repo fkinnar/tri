@@ -7425,7 +7425,19 @@ impl TriApp {
     /// l'analyse).
     fn sort_refilter(&mut self) {
         let p = self.progress[5];
-        if self.sort_pending && self.mode == Mode::Grid && (p.total == 0 || p.done == p.total) {
+        // Les empreintes (leurs dates) lues en fond (`bg_read`) : toutes là d'abord. Sinon
+        // chaque arrivée retriait la grille et relançait le moteur sur toute la liste, qui
+        // réannonçait tout et revérifiait le cache (trace du 19/11/2026 sur iCloud : une
+        // fois par seconde pendant minutes, 650 000 lignes).
+        let reading = self
+            .engine
+            .as_ref()
+            .is_some_and(|e| !e.signature_reads.idle());
+        if self.sort_pending
+            && self.mode == Mode::Grid
+            && !reading
+            && (p.total == 0 || p.done == p.total)
+        {
             self.sort_pending = false;
             self.apply_sort();
             self.refilter(Reveal::Minimal);
