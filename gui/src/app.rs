@@ -443,6 +443,11 @@ struct Engine {
     loader: Loader,
     /// Vignettes de la grille lues dans le cache hors du fil de l'interface.
     grid_reader: crate::grid_read::GridReader,
+    /// Analyses lues dans le cache hors du fil de l'interface ([`crate::bg_read`]) :
+    /// empreintes de similarité, scores de netteté, parts saturées / bouchées des badges.
+    signature_reads: crate::bg_read::BgReads<PathBuf, tri::similarity::Signature>,
+    score_reads: crate::bg_read::BgReads<PathBuf, f32>,
+    clip_reads: crate::bg_read::BgReads<PathBuf, (f64, f64)>,
     /// Logiciels de développement du moteur, remplacés quand `[develop]` change.
     developers: tri::develop::SharedDevelopers,
 }
@@ -8278,6 +8283,9 @@ impl TriApp {
             preview,
             loader,
             grid_reader,
+            signature_reads: crate::bg_read::BgReads::new("tri-signatures", Some(ctx.clone())),
+            score_reads: crate::bg_read::BgReads::new("tri-scores", Some(ctx.clone())),
+            clip_reads: crate::bg_read::BgReads::new("tri-clips", Some(ctx.clone())),
             developers: shared,
         });
         self.fit_grid_render();
@@ -8321,16 +8329,26 @@ impl TriApp {
     /// actif : refiltre une fois tous les scores connus, si le jugement a changé (la
     /// médiane bouge tant que des scores arrivent).
     fn take_scores(&mut self, ready: Vec<usize>) {
-        let Some(engine) = &self.engine else { return };
+        let Some(engine) = &mut self.engine else {
+            return;
+        };
         let mut changed = false;
         for index in ready {
             // Déjà connu : une ré-annonce du moteur (après chaque refiltrage), rien à relire
-            // (une lecture du cache, et un accès au fichier source, par image).
+            // (une lecture du cache, et un accès au fichier source, par image). Lu en fond
+            // (`bg_read`), pris à cette image ou une suivante.
             if let Some(file) = self.files.get(index)
                 && !self.scores.contains_key(&file.path)
-                && let Some(score) = preview::sharpness(&engine.cache, file, &engine.preview)
             {
-                self.scores.insert(file.path.clone(), score.value);
+                let (cache, preview, file) = (engine.cache.clone(), engine.preview, file.clone());
+                engine.score_reads.request(file.path.clone(), move || {
+                    preview::sharpness(&cache, &file, &preview).map(|s| s.value)
+                });
+            }
+        }
+        for (path, score) in engine.score_reads.take() {
+            if let Some(score) = score {
+                self.scores.insert(path, score);
                 changed = true;
             }
         }
@@ -8361,6 +8379,7 @@ impl TriApp {
         let generation = engine.generation;
         // Empreinte arrivée : les piles du jugement de netteté changent.
         let mut signed = false;
+        let mut to_sign: Vec<MediaFile> = Vec::new();
         // Pas plus que le budget d'une image : sur un dossier déjà calculé, des milliers
         // d'analyses arrivent d'un coup (issue n° 15) ; la suite à l'image suivante.
         let deadline = Instant::now() + self.gui.load_budget();
@@ -8401,19 +8420,13 @@ impl TriApp {
                     {
                         self.exposure_refilter_pending = true;
                     }
+                    // Lue en fond (`bg_read`) : prise ci-dessous, à cette image ou une
+                    // suivante.
                     if level == Level::Similarity
                         && let Some(file) = self.files.get(index)
                         && !self.signatures.contains_key(&file.path)
-                        && let Some(sig) = preview::signature(&engine.cache, file, &engine.preview)
                     {
-                        // Une date nouvelle seulement (comme pour l'exposition, issue n° 10 :
-                        // refiltrer fait ré-annoncer celles déjà en cache).
-                        let new = self.signatures.insert(file.path.clone(), sig).is_none();
-                        if new && self.order.key == tri::sort::SortKey::Captured {
-                            self.sort_pending = true;
-                        }
-                        self.stacks_dirty = true;
-                        signed = true;
+                        to_sign.push(file.clone());
                     }
                     set(&mut self.status, index, level, Avail::Ready)
                 }
@@ -8454,6 +8467,26 @@ impl TriApp {
                     }
                 }
                 _ => {} // ancien dossier, ou niveau non suivi
+            }
+        }
+        if let Some(engine) = &mut self.engine {
+            for file in to_sign {
+                let (cache, preview) = (engine.cache.clone(), engine.preview);
+                let path = file.path.clone();
+                engine
+                    .signature_reads
+                    .request(path, move || preview::signature(&cache, &file, &preview));
+            }
+            for (path, sig) in engine.signature_reads.take() {
+                // Une date nouvelle seulement (comme pour l'exposition, issue n° 10 :
+                // refiltrer fait ré-annoncer celles déjà en cache).
+                let Some(sig) = sig else { continue };
+                let new = self.signatures.insert(path, sig).is_none();
+                if new && self.order.key == tri::sort::SortKey::Captured {
+                    self.sort_pending = true;
+                }
+                self.stacks_dirty = true;
+                signed = true;
             }
         }
         if signed && !self.scores.is_empty() {
@@ -14760,11 +14793,29 @@ impl TriApp {
         if !self.ready(index, Level::Exposure) || Instant::now() > deadline {
             return None;
         }
-        let engine = self.engine.as_ref()?;
-        let e = preview::exposure(&engine.cache, &self.files[index], &engine.preview)?;
-        let fractions = (e.over_fraction(), e.under_fraction());
-        self.clip_summary.insert(path.clone(), fractions);
-        Some(fractions)
+        // Lue en fond (`bg_read`) : le badge vient à une image suivante.
+        let path = path.clone();
+        let engine = self.engine.as_mut()?;
+        for (done, fractions) in engine.clip_reads.take() {
+            if let Some(fractions) = fractions {
+                self.clip_summary.insert(done, fractions);
+            }
+        }
+        if let Some(&fractions) = self.clip_summary.get(&path) {
+            return Some(fractions);
+        }
+        if !engine.clip_reads.is_pending(&path) {
+            let (cache, preview, file) = (
+                engine.cache.clone(),
+                engine.preview,
+                self.files[index].clone(),
+            );
+            engine.clip_reads.request(path, move || {
+                preview::exposure(&cache, &file, &preview)
+                    .map(|e| (e.over_fraction(), e.under_fraction()))
+            });
+        }
+        None
     }
 
     /// Texture de la vignette `index`, chargée depuis le cache si besoin et si le budget de

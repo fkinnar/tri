@@ -33,6 +33,7 @@ macro_rules! t {
 mod actions;
 mod adjust_view;
 mod app;
+mod bg_read;
 mod cache_panel;
 mod categories;
 mod cheatsheet;
