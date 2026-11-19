@@ -1111,6 +1111,9 @@ pub struct TriApp {
     writes: crate::bg_read::BgWrites,
     /// Notes écrites en fond, dans l'ordre ([`crate::note_writes`]) ; créé à la première.
     note_writes: Option<crate::note_writes::NoteWrites>,
+    /// Notes écrites sur place, comme avant (tests : ils relisent le disque aussitôt ;
+    /// celui de l'écriture en fond le coupe).
+    notes_inline: bool,
     /// Image gardée en haut de la vue après un refiltrage, et son décalage sous le haut
     /// de sa rangée ([`Reveal::Anchor`]).
     scroll_anchor: Option<(PathBuf, f32)>,
@@ -2018,6 +2021,7 @@ impl TriApp {
             hold_selection: false,
             writes: crate::bg_read::BgWrites::new("tri-writes"),
             note_writes: None,
+            notes_inline: cfg!(test),
             view_height: 0.0,
             reveal: None,
             scroll_anchor: None,
@@ -7298,6 +7302,11 @@ impl TriApp {
     /// si un autre logiciel les avait changées.
     /// Envoie une note préparée au fil des écritures ([`crate::note_writes`]).
     fn submit_notes(&mut self, job: tri::notes::PendingEdit) {
+        if self.notes_inline {
+            let done = job.run();
+            self.finish_notes(vec![done]);
+            return;
+        }
         let repaint = self.repaint.clone();
         self.note_writes
             .get_or_insert_with(|| crate::note_writes::NoteWrites::new(repaint))
@@ -7314,14 +7323,16 @@ impl TriApp {
         if done.is_empty() {
             return;
         }
-        let writes = &*writes;
+        self.finish_notes(done);
+    }
+
+    /// Reprend des écritures de notes faites : ce qui est sur le disque fait foi.
+    fn finish_notes(&mut self, done: Vec<tri::notes::EditDone>) {
+        let writes = self.note_writes.as_ref();
         let mut changed = false;
         for result in done {
-            match self
-                .folder
-                .notes
-                .finish_edit(result, |p| writes.is_pending(p))
-            {
+            let newer = |p: &Path| writes.is_some_and(|w| w.is_pending(p));
+            match self.folder.notes.finish_edit(result, newer) {
                 Ok(images) => {
                     trace(|| format!("notes écrites : {images:?}"));
                     changed |= !images.is_empty();
@@ -29021,6 +29032,7 @@ mod tests {
         // échec remet ce qui est sur le disque, et le dit.
         let (mut h, dir) = harness();
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 3);
+        h.state_mut().notes_inline = false;
         let ctx = h.ctx.clone();
         let path = h.state().files[0].path.clone();
         h.state_mut().perform(&ctx, Action::Stars(3));
