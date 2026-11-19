@@ -6810,8 +6810,23 @@ impl TriApp {
             groups
         };
         self.blurry_applied = self.blurry_now();
+        // Ce qu'on savait déjà prêt dans le cache le reste (vidéo du 19/11/2026 : une note
+        // posée en plein écran sous un filtre de notes refiltrait, l'image affichée perdait
+        // son état « prêt » et disparaissait le temps que le moteur revérifie le cache, un
+        // éclair sur un SSD, une dizaine de secondes sur iCloud). Le moteur, relancé sur la
+        // liste, redit le reste.
+        let mut known: HashMap<PathBuf, Status> = self
+            .files
+            .drain(..)
+            .map(|f| f.path)
+            .zip(std::mem::take(&mut self.status))
+            .collect();
         self.files = groups.into_iter().flatten().collect();
-        self.status = vec![Status::default(); self.files.len()];
+        self.status = self
+            .files
+            .iter()
+            .map(|f| known.remove(&f.path).unwrap_or_default())
+            .collect();
         self.requested.clear();
         self.progress = [Progress::default(); 6];
         let delay = Duration::from_millis(self.gui.progress_delay_ms);
@@ -33902,6 +33917,43 @@ mod tests {
                 .0
                 .contains("Pas de pile ici")
         );
+    }
+
+    #[test]
+    fn a_refilter_keeps_what_is_known_ready() {
+        // Vidéo du 19/11/2026 : une note sous un filtre de notes refiltrait, et l'image du
+        // plein écran perdait son état « prêt » (elle disparaissait le temps que le moteur
+        // revérifie le cache). Chaque image restée garde le sien, à sa nouvelle place.
+        let images = ["a.jpg", "b.jpg", "c.jpg"]
+            .into_iter()
+            .map(|n| (n, image::RgbImage::new(16, 16)))
+            .collect();
+        let (mut h, _dir) = harness_images(images);
+        h.run_steps(3);
+        let app = h.state_mut();
+        let index = |app: &TriApp, name: &str| {
+            app.files
+                .iter()
+                .position(|f| f.path.file_name().is_some_and(|n| n == name))
+        };
+        let (a, c) = (index(app, "a.jpg").unwrap(), index(app, "c.jpg").unwrap());
+        app.status[a].embedded = Avail::Ready;
+        app.status[c].embedded = Avail::Failed("c".into());
+        app.name_query = "c".into();
+        app.refilter(Reveal::Minimal);
+        assert_eq!(app.files.len(), 1);
+        assert_eq!(
+            app.status[0].embedded,
+            Avail::Failed("c".into()),
+            "c à sa place"
+        );
+        app.name_query.clear();
+        app.refilter(Reveal::Minimal);
+        let (a, c) = (index(app, "a.jpg").unwrap(), index(app, "c.jpg").unwrap());
+        assert_eq!(app.status[c].embedded, Avail::Failed("c".into()));
+        // `a` sortie de la liste entre-temps : le moteur la redira.
+        assert_eq!(app.status[a].embedded, Avail::Pending);
+        assert_eq!(app.status.len(), app.files.len());
     }
 
     #[test]
