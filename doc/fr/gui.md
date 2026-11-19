@@ -131,7 +131,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   ligne quand la place manque.
 - **Notation** (17/10/2026) : étoiles, couleurs, accepté / rejeté sur l'image sélectionnée
   (grille ou plein écran), écrites aussitôt dans son sidecar XMP (voir [xmp.md](xmp.md),
-  [notes.md](notes.md)). Notes chargées à l'ouverture du dossier, avec celles déjà posées
+  [notes.md](notes.md)). Depuis le 19/11/2026, la note s'affiche tout de suite et
+  s'écrit en fond, dans l'ordre (`NoteBook::prepare_edit` / `PendingEdit::run` /
+  `finish_edit`, `note_writes.rs`) : sur un support lent (iCloud, NAS), noter figeait la
+  fenêtre le temps d'une dizaine d'accès disque. Un échec remet ce qui est sur le disque
+  et le dit ; « Notes : n images en écriture » dans la barre d'état si ça dure
+  (`[gui] notes_task_ms`) ; annuler et fermer attendent la fin des écritures ; la
+  surveillance du dossier ignore les sidecars en cours d'écriture. Notes chargées à l'ouverture du dossier, avec celles déjà posées
   par darktable, Lightroom ou digiKam. Affichage dessiné en formes (pas de glyphes, voir
   `marks.rs`) : drapeau (coche verte / croix rouge), étoiles dorées, pastilles de couleur,
   en bas à gauche de la vignette et du plein écran ; vignette d'une photo rejetée estompée

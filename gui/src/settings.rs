@@ -235,6 +235,9 @@ pub struct GuiSettings {
     /// par image affichée (ms) : au-delà, on reprend à l'image suivante pour ne pas figer
     /// l'interface.
     pub load_budget_ms: u64,
+    /// Notes écrites en fond : la tâche « Notes : n en écriture » de la barre d'état
+    /// n'apparaît qu'au-delà de ce délai (ms ; sur un disque local, jamais).
+    pub notes_task_ms: u64,
     /// Fils qui lisent les vignettes de la grille dans le cache, hors de l'interface : une
     /// lecture lente (cache dans iCloud, sur un NAS) ne la fige plus.
     pub grid_read_threads: usize,
@@ -356,6 +359,7 @@ impl Default for GuiSettings {
             // En mode JPEG boîtier, la machine reste libre.
             raw_previews: RawPreviews::OnDemand,
             load_budget_ms: 8,
+            notes_task_ms: 500,
             grid_read_threads: 4,
             grid_read_keep: 256,
             progress_width: 160.0,

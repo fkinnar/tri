@@ -278,6 +278,9 @@ struct Status {
 /// Exposition du JPEG boîtier d'une image, calculée en fond.
 type CameraRead = (PathBuf, Option<Arc<Exposure>>);
 
+/// Couvertures choisies et développements préférés d'un dossier ([`TriApp::load_choices`]).
+type ChoicesRead = (HashSet<PathBuf>, HashSet<PathBuf>);
+
 /// Versions d'une image lues en fond pour la grille.
 type VersionsRead = (PathBuf, tri::versions::Versions);
 
@@ -589,6 +592,9 @@ pub struct TriApp {
     /// une lecture par dossier du panneau, lente sur iCloud ou un NAS).
     pairs_marks: HashMap<PathBuf, bool>,
     pairs_reads: Option<crate::bg_read::BgReads<PathBuf, bool>>,
+    /// Couvertures choisies et développements préférés relus après les notes, en fond
+    /// ([`TriApp::load_choices`]).
+    choice_reads: Option<crate::bg_read::BgReads<PathBuf, ChoicesRead>>,
     /// Réinitialisation en cours : le dossier, et ce qu'elle a fait, à la fin.
     reset_job: Option<(PathBuf, Receiver<tri::reset::Outcome>)>,
     /// Message pour la barre d'état (texte, vrai si c'est une erreur).
@@ -1103,6 +1109,8 @@ pub struct TriApp {
     /// Écritures des données du dossier hors du fil de l'interface, dans l'ordre (vue
     /// retenue, piles ; 19/11/2026, `TRI_IO_WATCH`).
     writes: crate::bg_read::BgWrites,
+    /// Notes écrites en fond, dans l'ordre ([`crate::note_writes`]) ; créé à la première.
+    note_writes: Option<crate::note_writes::NoteWrites>,
     /// Image gardée en haut de la vue après un refiltrage, et son décalage sous le haut
     /// de sa rangée ([`Reveal::Anchor`]).
     scroll_anchor: Option<(PathBuf, f32)>,
@@ -1785,6 +1793,7 @@ impl TriApp {
             pair_kinds: tri::pairs::PairKinds::default(),
             pairs_marks: HashMap::new(),
             pairs_reads: None,
+            choice_reads: None,
             reset_job: None,
             notice: None,
             settings: settings.engine(),
@@ -2008,6 +2017,7 @@ impl TriApp {
             scroll_offset: 0.0,
             hold_selection: false,
             writes: crate::bg_read::BgWrites::new("tri-writes"),
+            note_writes: None,
             view_height: 0.0,
             reveal: None,
             scroll_anchor: None,
@@ -2223,18 +2233,45 @@ impl TriApp {
     /// issue n° 378).
     fn load_choices(&mut self) {
         let data = self.settings.data_dir();
-        let mut dirs: std::collections::BTreeSet<&Path> = self
+        let mut dirs: std::collections::BTreeSet<PathBuf> = self
             .folder
             .files
             .iter()
-            .filter_map(|f| f.path.parent())
+            .filter_map(|f| f.path.parent().map(Path::to_path_buf))
             .collect();
-        if !self.folder.is_none() {
-            dirs.insert(&self.folder.dir);
+        if self.folder.is_none() {
+            return;
         }
-        self.chosen = tri::similarity::chosen_covers(data.as_deref(), dirs.iter().copied());
-        self.dev_preferred = tri::developments::preferred(data.as_deref(), dirs);
-        self.stacks_dirty = true;
+        dirs.insert(self.folder.dir.clone());
+        // Lues en fond (simulateur du 19/11/2026 : sur un support lent, la fenêtre se
+        // figeait à la fin de la lecture des notes) ; prises par `poll_choices`.
+        let repaint = self.repaint.clone();
+        self.choice_reads
+            .get_or_insert_with(|| crate::bg_read::BgReads::new("tri-choices", repaint))
+            .request(self.folder.dir.clone(), move || {
+                let dirs = || dirs.iter().map(PathBuf::as_path);
+                Some((
+                    tri::similarity::chosen_covers(data.as_deref(), dirs()),
+                    tri::developments::preferred(data.as_deref(), dirs()),
+                ))
+            });
+    }
+
+    /// Couvertures choisies lues en fond ([`TriApp::load_choices`]) : reprises si elles
+    /// sont celles du dossier ouvert.
+    fn poll_choices(&mut self) {
+        let Some(reads) = &mut self.choice_reads else {
+            return;
+        };
+        for (dir, choices) in reads.take() {
+            if let Some((chosen, preferred)) = choices
+                && dir == self.folder.dir
+            {
+                self.chosen = chosen;
+                self.dev_preferred = preferred;
+                self.stacks_dirty = true;
+            }
+        }
     }
 
     /// Notes lues en fond : reprises (les notes posées entre-temps gardées), filtres et
@@ -2623,6 +2660,10 @@ impl TriApp {
 
     /// Installe le dossier `dir` lu (ou son erreur) : grille, filtres, moteur.
     fn install_folder(&mut self, dir: &Path, result: std::io::Result<Opened>) {
+        // Les notes du dossier quitté finissent de s'écrire, sans toucher à celui-ci.
+        if let Some(writes) = &mut self.note_writes {
+            writes.new_folder();
+        }
         let (result, loading, snapshot, prepared) = match result {
             Ok(opened) => (
                 Ok(opened.folder),
@@ -4265,6 +4306,13 @@ impl TriApp {
         for changes in rx.try_iter() {
             images.extend(changes.images);
             sidecars.extend(changes.sidecars);
+        }
+        // Nos notes en cours d'écriture (support lent : plus d'une seconde) : leurs
+        // sidecars changent sous nos yeux, ce n'est pas un changement fait ailleurs
+        // (simulateur du 19/11/2026 : tout était relu, sur le fil de l'interface). La
+        // surveillance est remise à jour à la fin de l'écriture (`poll_note_writes`).
+        if let Some(writes) = self.note_writes.as_ref().filter(|w| w.waiting() > 0) {
+            sidecars.retain(|sidecar| !writes.writes_sidecar(sidecar));
         }
         if !images.is_empty() {
             trace(|| format!("dossier modifié ailleurs : {} images", images.len()));
@@ -7003,11 +7051,14 @@ impl TriApp {
     /// sélection la suit), refiltrée sous un filtre sur les notes.
     fn notes_changed(&mut self) {
         // Notes peut-être inscrites d'office dans les images : pas un changement venu
-        // d'ailleurs pour la surveillance.
+        // d'ailleurs pour la surveillance. Sans lire le disque (`TRI_IO_WATCH`) : réglage
+        // du dossier pas encore connu, c'est le fil des écritures qui le fera
+        // (`poll_note_writes`).
         if self
             .folder
             .notes
-            .writes_automatically(&self.folder.dir.join("_"))
+            .writes_automatically_known(&self.folder.dir.join("_"))
+            == Some(true)
         {
             self.own_writes_done();
         }
@@ -7245,6 +7296,60 @@ impl TriApp {
     /// Après des écritures de `tri` dans les images (notes inscrites d'office, fusion
     /// propagée) : la surveillance repart de cet état, sans relire tout le dossier comme
     /// si un autre logiciel les avait changées.
+    /// Envoie une note préparée au fil des écritures ([`crate::note_writes`]).
+    fn submit_notes(&mut self, job: tri::notes::PendingEdit) {
+        let repaint = self.repaint.clone();
+        self.note_writes
+            .get_or_insert_with(|| crate::note_writes::NoteWrites::new(repaint))
+            .submit(job);
+    }
+
+    /// Notes écrites en fond revenues : ce qui est sur le disque fait foi (une écriture
+    /// ratée remet la note d'avant, et le dit).
+    fn poll_note_writes(&mut self) {
+        let Some(writes) = &mut self.note_writes else {
+            return;
+        };
+        let done = writes.take();
+        if done.is_empty() {
+            return;
+        }
+        let writes = &*writes;
+        let mut changed = false;
+        for result in done {
+            match self
+                .folder
+                .notes
+                .finish_edit(result, |p| writes.is_pending(p))
+            {
+                Ok(images) => {
+                    trace(|| format!("notes écrites : {images:?}"));
+                    changed |= !images.is_empty();
+                }
+                Err(e) => {
+                    self.note_error = Some(t!("rating-not-saved", error = e.to_string()));
+                    changed = true;
+                }
+            }
+        }
+        // Nos propres écritures : pas un changement fait ailleurs pour la surveillance.
+        self.own_writes_done();
+        if changed {
+            self.stacks_dirty = true;
+            self.notes_changed();
+        }
+    }
+
+    /// Vrai si des notes s'écrivent encore, après avoir attendu au plus `wait` (sur un
+    /// disque local, elles sont écrites bien avant).
+    fn notes_saving(&mut self, wait: Duration) -> bool {
+        if let Some(writes) = &self.note_writes {
+            writes.flush(wait);
+        }
+        self.poll_note_writes();
+        self.note_writes.as_ref().is_some_and(|w| w.waiting() > 0)
+    }
+
     fn own_writes_done(&mut self) {
         if let Some((watch, rx, _)) = &self.watch {
             watch.sync();
@@ -9053,6 +9158,11 @@ impl TriApp {
             Action::Undo | Action::Redo if self.adjust_saving() => {
                 self.notice = Some((t!("adjust-busy"), false));
             }
+            // Ni pendant que des notes s'écrivent (attendues un instant) : l'annulation
+            // relit le disque.
+            Action::Undo | Action::Redo if self.notes_saving(Duration::from_secs(2)) => {
+                self.notice = Some((t!("notes-busy"), false));
+            }
             Action::Log => {
                 if self.log_view.take().is_none() {
                     self.open_log(ctx, Vec::new());
@@ -10224,16 +10334,25 @@ impl TriApp {
                 continue;
             }
             done.extend(self.folder.notes.shared(path));
-            let result = self.folder.notes.edit(path, |n| match action {
-                Action::Stars(stars) => n.set_stars(stars),
-                Action::Color(color) if n.has_color(color) != add => {
-                    n.toggle_color(color, multiple)
+            // Affichée tout de suite, écrite en fond (`note_writes`).
+            let result = self.folder.notes.prepare_edit(
+                path,
+                |n| match action {
+                    Action::Stars(stars) => n.set_stars(stars),
+                    Action::Color(color) if n.has_color(color) != add => {
+                        n.toggle_color(color, multiple)
+                    }
+                    Action::Flag(flag) => n.flag = flag,
+                    _ => {}
+                },
+                false,
+            );
+            match result {
+                Ok(Some(job)) => self.submit_notes(job),
+                Ok(None) => {}
+                Err(e) => {
+                    error.get_or_insert(t!("rating-not-saved", error = e.to_string()));
                 }
-                Action::Flag(flag) => n.flag = flag,
-                _ => {}
-            });
-            if let Err(e) = result {
-                error.get_or_insert(t!("rating-not-saved", error = e.to_string()));
             }
         }
         self.note_error = error;
@@ -10255,15 +10374,23 @@ impl TriApp {
         }
         let before = tri::history::snapshot(&self.folder.notes, std::slice::from_ref(&path));
         let multiple = self.settings.xmp.multiple_colors;
-        let result = self.folder.notes.edit(&path, |n| match action {
-            Action::Stars(stars) => n.set_stars(stars),
-            Action::Color(color) => n.toggle_color(color, multiple),
-            Action::Flag(flag) => n.flag = flag,
-            _ => {}
-        });
+        // Affichée tout de suite, écrite en fond (`note_writes`) : un échec revient à
+        // l'image suivante, avec ce qui est vraiment sur le disque.
+        let result = self.folder.notes.prepare_edit(
+            &path,
+            |n| match action {
+                Action::Stars(stars) => n.set_stars(stars),
+                Action::Color(color) => n.toggle_color(color, multiple),
+                Action::Flag(flag) => n.flag = flag,
+                _ => {}
+            },
+            false,
+        );
         self.note_error = match result {
-            Ok(changed) => {
-                trace(|| format!("notes écrites : {changed:?}"));
+            Ok(job) => {
+                if let Some(job) = job {
+                    self.submit_notes(job);
+                }
                 None
             }
             Err(e) => Some(t!("rating-not-saved", error = e.to_string())),
@@ -15279,6 +15406,20 @@ impl TriApp {
                 cancel: None,
             });
         }
+        // Notes en cours d'écriture, seulement si ça dure (support lent).
+        if let Some(writes) = self
+            .note_writes
+            .as_ref()
+            .filter(|w| w.slow(Duration::from_millis(self.gui.notes_task_ms)))
+        {
+            tasks.push(Task {
+                text: t!("notes-saving", n = writes.waiting()),
+                fraction: 0.0,
+                tip: None,
+                click: None,
+                cancel: None,
+            });
+        }
         // Réglages de beaucoup d'images, calculés et écrits en fond.
         if let Some((done, total)) = self.adjust_progress() {
             tasks.push(Task {
@@ -19982,6 +20123,10 @@ impl TriApp {
             self.notice = Some((t!("adjust-busy"), false));
             return;
         }
+        if (target.is_some() || undo || redo) && self.notes_saving(Duration::from_secs(2)) {
+            self.notice = Some((t!("notes-busy"), false));
+            return;
+        }
         if let Some(target) = target {
             let (applied, error) = self.history.go_to(target, convention);
             self.after_applied(applied, error);
@@ -21716,6 +21861,10 @@ impl eframe::App for TriApp {
         }
         if ctx.input(|i| i.viewport().close_requested()) {
             self.save_folder_position();
+            // Les notes en cours d'écriture finies avant de quitter.
+            if let Some(writes) = &self.note_writes {
+                writes.flush(Duration::from_secs(10));
+            }
             self.stop_background();
             // Les écritures en cours finies avant de quitter (au plus quelques secondes).
             self.writes.flush(Duration::from_secs(5));
@@ -21739,6 +21888,7 @@ impl eframe::App for TriApp {
             trace(|| "moteur démarré".into());
         }
         self.drain_events();
+        self.poll_note_writes();
         self.poll_embed();
         // Notes fusionnées depuis d'autres logiciels (issue n° 368) : dit, discrètement.
         let merged = self.folder.notes.take_merged();
@@ -21773,6 +21923,7 @@ impl eframe::App for TriApp {
         self.adjust_jobs_poll();
         self.poll_opening();
         self.poll_loading(&ctx);
+        self.poll_choices();
         if self.engine_backlog {
             ctx.request_repaint();
         }
@@ -28861,6 +29012,55 @@ mod tests {
         assert!(!h.state().hold_selection);
         h.run_steps(2);
         assert_eq!(h.state().scroll_offset, 0.0);
+    }
+
+    #[test]
+    fn a_rating_shows_at_once_and_is_written_in_the_background() {
+        // 19/11/2026 (`TRI_IO_WATCH`, iCloud) : noter figeait la fenêtre le temps d'une
+        // dizaine d'accès disque. La note s'affiche tout de suite et s'écrit en fond ; un
+        // échec remet ce qui est sur le disque, et le dit.
+        let (mut h, dir) = harness();
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 3);
+        let ctx = h.ctx.clone();
+        let path = h.state().files[0].path.clone();
+        h.state_mut().perform(&ctx, Action::Stars(3));
+        assert_eq!(
+            h.state().folder.notes.notes(&path).stars,
+            3,
+            "tout de suite"
+        );
+        run_until(&mut h, |app| {
+            app.note_writes.as_ref().is_some_and(|w| w.waiting() == 0)
+        });
+        let sidecar = tri::xmp::sidecar_path(&path, tri::xmp::Convention::Darktable);
+        assert_eq!(
+            tri::xmp::read(&path).unwrap().stars,
+            3,
+            "{}",
+            sidecar.display()
+        );
+        assert!(h.state().note_error.is_none());
+        // Dossier en lecture seule : l'écriture échoue, la note revient à 3.
+        let photos = dir.path().join("photos");
+        let mut perms = std::fs::metadata(&photos).unwrap().permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&photos, perms.clone()).unwrap();
+        std::fs::set_permissions(&sidecar, perms).unwrap();
+        h.state_mut().perform(&ctx, Action::Stars(5));
+        assert_eq!(h.state().folder.notes.notes(&path).stars, 5);
+        run_until(&mut h, |app| {
+            app.note_writes.as_ref().is_some_and(|w| w.waiting() == 0)
+        });
+        let back = h.state().folder.notes.notes(&path).stars;
+        let error = h.state().note_error.clone();
+        // Rendre les droits avant de vérifier (le dossier temporaire doit s'effacer).
+        let mut perms = std::fs::metadata(&photos).unwrap().permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        perms.set_readonly(false);
+        std::fs::set_permissions(&photos, perms.clone()).unwrap();
+        std::fs::set_permissions(&sidecar, perms).unwrap();
+        assert_eq!(back, 3, "ce qui est sur le disque");
+        assert!(error.is_some(), "l'échec est dit");
     }
 
     #[test]
