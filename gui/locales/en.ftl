@@ -571,6 +571,11 @@ adjust-developed = Image developed by another software: adjustments apply before
 adjust-write-failed = adjustments of { $name } not saved: { $error }
 adjust-saving = Adjustments: { $done } / { $total }
 adjust-busy = Adjustments being saved…
+notes-saving = { $n ->
+    [one] Ratings: 1 image being written
+   *[other] Ratings: { $n } images being written
+}
+notes-busy = Ratings being written…
 adjust-apply-none = select other images to apply these adjustments to them
 adjust-apply-wait = thumbnail not ready yet, try again in a moment
 adjust-applied = { $n ->

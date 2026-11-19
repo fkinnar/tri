@@ -794,6 +794,9 @@ raw_previews = "on-demand"
 # displayed frame (ms): beyond it, the rest waits for the next frame, so as not to
 # freeze the interface.
 load_budget_ms = 8
+# Ratings written in the background: the "Ratings: n being written" task of the status
+# bar only appears beyond this delay (ms; on a local disk, never).
+notes_task_ms = 500
 # Threads reading the grid's thumbnails from the cache, outside the interface: a slow
 # read (cache in iCloud, on a NAS) no longer freezes it.
 grid_read_threads = 4

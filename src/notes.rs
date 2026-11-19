@@ -349,6 +349,13 @@ impl NoteBook {
         }
     }
 
+    /// [`NoteBook::writes_automatically`] sans lire le disque : `None` si le réglage du
+    /// dossier n'est pas encore connu (il le sera à la prochaine écriture de notes).
+    pub fn writes_automatically_known(&self, image: &Path) -> Option<bool> {
+        let known = self.folder_embed.borrow().get(&dir_of(image)).copied()?;
+        Some(known.is_some_and(|on| on) || (known.is_none() && self.writes_automatically(image)))
+    }
+
     /// Vrai si les notes de `image` vont aussi dans l'image à chaque écriture.
     fn embeds(&self, image: &Path) -> bool {
         crate::embedded::supports(image)
@@ -950,12 +957,32 @@ impl NoteBook {
     }
 
     /// [`NoteBook::edit`] ; `force` : aussi sur une image en conflit ([`NoteBook::resolve`]).
+    /// Les trois temps de [`NoteBook::prepare_edit`], faits à la suite.
     fn edit_with(
         &mut self,
         image: &Path,
         edit: impl FnOnce(&mut Notes),
         force: bool,
     ) -> Result<Vec<PathBuf>, XmpError> {
+        match self.prepare_edit(image, edit, force)? {
+            None => Ok(Vec::new()),
+            Some(pending) => self.finish_edit(pending.run(), |_| false),
+        }
+    }
+
+    /// Prépare la modification des notes de `image` par `edit`, sans toucher au disque
+    /// (19/11/2026 : sur un montage lent, noter figeait l'interface le temps d'une dizaine
+    /// d'accès) : les nouvelles notes sont aussitôt en mémoire (affichées tout de suite),
+    /// et l'écriture à faire est renvoyée, à lancer dans un autre fil
+    /// ([`PendingEdit::run`]), puis à rendre à [`NoteBook::finish_edit`], qui reprend ce
+    /// qui est vraiment sur le disque. `None` : rien à écrire. Mêmes règles que
+    /// [`NoteBook::edit`] (paire, conflits, erreurs).
+    pub fn prepare_edit(
+        &mut self,
+        image: &Path,
+        edit: impl FnOnce(&mut Notes),
+        force: bool,
+    ) -> Result<Option<PendingEdit>, XmpError> {
         if !self.entries.contains_key(image) {
             self.add(image);
         }
@@ -976,9 +1003,9 @@ impl NoteBook {
         let mut notes = entry.notes.clone();
         edit(&mut notes);
         let targets = self.shared_with(image);
-        let mut written: Vec<PathBuf> = Vec::new();
         let mut failure = None;
         let mut remembered: Vec<PathBuf> = Vec::new();
+        let mut planned: Vec<Planned> = Vec::new();
         for target in &targets {
             let entry = &self.entries[target];
             if entry.conflict.is_some() && !force {
@@ -1003,75 +1030,266 @@ impl NoteBook {
             }
             // Tous ses sidecars existants (un sidecar partagé, convention Adobe ou
             // `.rrdata` du développement principal : écrit une fois), puis ceux à créer.
-            let mut planned: Vec<(&'static dyn Format, PathBuf, bool)> = entry
+            let mut all: Vec<(&'static dyn Format, PathBuf, bool)> = entry
                 .sidecars
                 .iter()
                 .map(|s| (sidecars::of(s), s.clone(), false))
                 .collect();
-            planned.extend(
+            all.extend(
                 self.missing(target)
                     .into_iter()
                     .map(|(f, path)| (f, path, true)),
             );
-            for (format, sidecar, create) in planned {
-                if written.contains(&sidecar) {
+            for (format, sidecar, create) in all {
+                if planned.iter().any(|p| p.sidecar == sidecar) {
                     continue;
                 }
-                let result = if create {
-                    format.create(&sidecar, &notes)
-                } else {
-                    format.write(&sidecar, &notes).map(|_| ())
-                };
-                match result {
-                    Ok(()) => written.push(sidecar),
-                    Err(message) => {
-                        failure.get_or_insert(XmpError::Image {
-                            image: target.clone(),
-                            message,
-                        });
-                    }
+                planned.push(Planned {
+                    image: target.clone(),
+                    format,
+                    sidecar,
+                    create,
+                });
+            }
+        }
+        if planned.is_empty() && failure.is_none() {
+            return Ok(None);
+        }
+        // Aussi dans l'image, là où `tri` écrit de lui-même (`[xmp] embed`, réglage du
+        // dossier) : décidé à l'écriture, le réglage du dossier lu là s'il n'est pas
+        // encore connu (un accès disque).
+        let embed = EmbedRule {
+            images: remembered
+                .iter()
+                .filter(|t| crate::embedded::supports(t) && crate::developments::get(t).is_none())
+                .cloned()
+                .collect(),
+            auto: self.auto,
+            outside: self.outside.clone(),
+            known: self.folder_embed.borrow().clone(),
+        };
+        let before: Vec<(PathBuf, Notes)> = targets
+            .iter()
+            .map(|p| (p.clone(), self.notes(p).clone()))
+            .collect();
+        // Affichées tout de suite : ce que l'écriture rendra fera foi.
+        for target in &remembered {
+            if let Some(entry) = self.entries.get_mut(target)
+                && entry.error.is_none()
+            {
+                entry.notes = notes.clone();
+            }
+        }
+        Ok(Some(PendingEdit {
+            notes,
+            targets,
+            remembered,
+            planned,
+            embed,
+            failure,
+            before,
+        }))
+    }
+
+    /// Reprend une écriture faite ([`PendingEdit::run`]) : les notes relues du disque
+    /// remplacent celles affichées, sauf pour les images que `newer` dit attendre une
+    /// écriture plus récente (leurs notes en mémoire sont plus fraîches). Renvoie les
+    /// images dont les notes ont changé, ou la première erreur.
+    pub fn finish_edit(
+        &mut self,
+        done: EditDone,
+        newer: impl Fn(&Path) -> bool,
+    ) -> Result<Vec<PathBuf>, XmpError> {
+        for (dir, value) in done.learned {
+            self.folder_embed.borrow_mut().insert(dir, value);
+        }
+        for (image, entry, merged) in done.entries {
+            if newer(&image) {
+                continue;
+            }
+            if let Some(from) = merged {
+                self.merged.push((image.clone(), from));
+            }
+            if let Some(touched) = &mut self.touched {
+                touched.insert(image.clone());
+            }
+            self.entries.insert(image, entry);
+        }
+        if let Some(e) = done.failure {
+            return Err(e);
+        }
+        Ok(done
+            .before
+            .into_iter()
+            .filter(|(p, old)| self.notes(p) != old)
+            .map(|(p, _)| p)
+            .collect())
+    }
+}
+
+/// Un sidecar à écrire (ou à créer) pour une image ([`PendingEdit`]).
+struct Planned {
+    image: PathBuf,
+    format: &'static dyn Format,
+    sidecar: PathBuf,
+    create: bool,
+}
+
+/// Écriture de notes préparée par [`NoteBook::prepare_edit`], à faire dans un autre fil
+/// ([`PendingEdit::run`]) : tout ce qui touche le disque.
+pub struct PendingEdit {
+    notes: Notes,
+    targets: Vec<PathBuf>,
+    remembered: Vec<PathBuf>,
+    planned: Vec<Planned>,
+    embed: EmbedRule,
+    failure: Option<XmpError>,
+    before: Vec<(PathBuf, Notes)>,
+}
+
+/// Images dont les notes vont aussi dans le fichier ([`NoteBook::writes_automatically`]),
+/// décidé à l'écriture : les réglages, et ceux des dossiers déjà lus.
+struct EmbedRule {
+    images: Vec<PathBuf>,
+    auto: crate::embedded::Auto,
+    outside: Vec<PathBuf>,
+    known: HashMap<PathBuf, Option<bool>>,
+}
+
+impl EmbedRule {
+    /// Les images à écrire, et les réglages de dossier lus pour cela (à retenir).
+    fn decide(self) -> (Vec<PathBuf>, Vec<(PathBuf, Option<bool>)>) {
+        use crate::embedded::Auto;
+        let EmbedRule {
+            images,
+            auto,
+            outside,
+            mut known,
+        } = self;
+        let mut learned = Vec::new();
+        let mut chosen = Vec::new();
+        for image in images {
+            let dir = dir_of(&image);
+            let folder = match known.get(&dir) {
+                Some(&value) => value,
+                None => {
+                    let value = crate::reconcile::Memory::open(&dir).embed();
+                    known.insert(dir.clone(), value);
+                    learned.push((dir, value));
+                    value
+                }
+            };
+            let on = match folder {
+                Some(on) => on,
+                None => match auto {
+                    Auto::Never => false,
+                    Auto::Everywhere => true,
+                    Auto::Internal => !outside.iter().any(|r| image.starts_with(r)),
+                },
+            };
+            if on {
+                chosen.push(image);
+            }
+        }
+        (chosen, learned)
+    }
+}
+
+/// Écriture faite ([`PendingEdit::run`]), à rendre à [`NoteBook::finish_edit`].
+pub struct EditDone {
+    entries: Vec<(PathBuf, Entry, Option<Vec<String>>)>,
+    failure: Option<XmpError>,
+    before: Vec<(PathBuf, Notes)>,
+    /// Réglages de dossier lus pour l'écriture dans l'image ([`EmbedRule`]).
+    learned: Vec<(PathBuf, Option<bool>)>,
+}
+
+impl EditDone {
+    /// Les images écrites (l'image notée et sa paire).
+    pub fn images(&self) -> impl Iterator<Item = &Path> {
+        self.before.iter().map(|(p, _)| p.as_path())
+    }
+}
+
+impl PendingEdit {
+    /// Les images concernées (l'image notée et sa paire).
+    pub fn images(&self) -> &[PathBuf] {
+        &self.targets
+    }
+
+    /// Écrit les sidecars, l'image au besoin et ce que `tri` retient des sources, puis
+    /// relit les notes des images concernées : ce qui est vraiment sur le disque.
+    pub fn run(self) -> EditDone {
+        let PendingEdit {
+            notes,
+            targets,
+            remembered,
+            planned,
+            embed,
+            mut failure,
+            before,
+        } = self;
+        let mut written = false;
+        // Images dont une écriture a échoué : rien n'en est retenu (sinon la note pas
+        // écrite passait pour celle de `tri`, et l'emportait sur le disque à la relecture).
+        let mut failed: Vec<PathBuf> = Vec::new();
+        for p in planned {
+            let result = if p.create {
+                p.format.create(&p.sidecar, &notes)
+            } else {
+                p.format.write(&p.sidecar, &notes).map(|_| ())
+            };
+            match result {
+                Ok(()) => written = true,
+                Err(message) => {
+                    failed.push(p.image.clone());
+                    failure.get_or_insert(XmpError::Image {
+                        image: p.image,
+                        message,
+                    });
                 }
             }
         }
-        if written.is_empty() && failure.is_none() {
-            return Ok(Vec::new());
+        if !written && failure.is_none() {
+            return EditDone {
+                entries: Vec::new(),
+                failure,
+                before,
+                learned: Vec::new(),
+            };
         }
-        // Aussi dans l'image, là où `tri` écrit de lui-même (`[xmp] embed`, réglage du
-        // dossier).
-        for target in &remembered {
-            if self.embeds(target) {
-                match crate::embedded::write(target, &notes) {
-                    Ok(_) => written.push(target.clone()),
-                    Err(message) => {
-                        failure.get_or_insert(XmpError::Image {
-                            image: target.clone(),
-                            message,
-                        });
-                    }
-                }
+        let (embed, learned) = embed.decide();
+        for target in &embed {
+            if let Err(message) = crate::embedded::write(target, &notes) {
+                failed.push(target.clone());
+                failure.get_or_insert(XmpError::Image {
+                    image: target.clone(),
+                    message,
+                });
             }
         }
         // Ce que `tri` vient d'écrire fait foi (une source restée en retard n'est pas un
         // changement, ni, sans mémoire, un désaccord).
-        for target in &remembered {
+        for target in remembered.iter().filter(|t| !failed.contains(t)) {
             remember(target, &notes);
         }
         // Des sidecars ont pu être créés, et les images de la paire les partager : on les
         // relit, elles seules (tout le dossier coûtait cher sur un disque lent ou un NAS,
         // issue n° 15 ; un sidecar n'est partagé qu'entre images de même nom).
-        let before: Vec<(PathBuf, Notes)> = targets
-            .iter()
-            .map(|p| (p.clone(), self.notes(p).clone()))
-            .collect();
-        self.reload_images(&targets);
-        if let Some(e) = failure {
-            return Err(e);
+        let mut by_dir: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
+        for image in &targets {
+            by_dir.entry(dir_of(image)).or_default().push(image.clone());
         }
-        Ok(before
+        let entries = by_dir
             .into_iter()
-            .filter(|(p, old)| self.notes(p) != old)
-            .map(|(p, _)| p)
-            .collect())
+            .flat_map(|(dir, images)| read_entries(&dir, &images, None))
+            .collect();
+        EditDone {
+            entries,
+            failure,
+            before,
+            learned,
+        }
     }
 }
 
@@ -1297,6 +1515,48 @@ mod tests {
         xmp::write(&b, &Notes::default(), Convention::Darktable).unwrap();
         book.edit(&a, |n| n.stars = 1).unwrap();
         assert_eq!(book.notes(&b).stars, 3, "B pas relue");
+    }
+
+    #[test]
+    fn a_prepared_edit_shows_at_once_and_writes_later() {
+        // 19/11/2026 : noter sans attendre le disque (montage lent).
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir.path().join("A.RAF");
+        std::fs::write(&a, b"raw").unwrap();
+        let files = [MediaFile {
+            path: a.clone(),
+            kind: crate::media::MediaKind::Raw,
+        }];
+        let done = AtomicUsize::new(0);
+        let mut book = NoteBook::load_counting(&files, Convention::Darktable, &done);
+        let first = book
+            .prepare_edit(&a, |n| n.stars = 3, false)
+            .unwrap()
+            .unwrap();
+        assert_eq!(book.notes(&a).stars, 3, "affichée tout de suite");
+        assert!(
+            !xmp::sidecar_path(&a, Convention::Darktable).exists(),
+            "rien d'écrit"
+        );
+        assert_eq!(first.images(), std::slice::from_ref(&a));
+        // Une deuxième note avant la fin de la première : elle part de la première.
+        let second = book
+            .prepare_edit(&a, |n| n.flag = Flag::Accepted, false)
+            .unwrap()
+            .unwrap();
+        let first = first.run();
+        // La première finie, la deuxième attendue : la mémoire, plus fraîche, reste.
+        book.finish_edit(first, |p| p == a).unwrap();
+        assert_eq!(book.notes(&a).flag, Flag::Accepted);
+        let changed = book.finish_edit(second.run(), |_| false).unwrap();
+        assert_eq!(changed, vec![a.clone()], "changée depuis avant la note");
+        let read = xmp::read(&a).unwrap();
+        assert_eq!(
+            (read.stars, read.flag),
+            (3, Flag::Accepted),
+            "les deux sur le disque"
+        );
+        assert_eq!(book.notes(&a).stars, 3);
     }
 
     fn notes(stars: u8, flag: Flag, colors: &[Color]) -> Notes {

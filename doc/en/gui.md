@@ -125,7 +125,13 @@ system one ("cold" measurements, experiments).
   out.
 - **Rating** (2026-10-17): stars, colours, picked / rejected on the selected image
   (grid or full screen), written immediately to its XMP sidecar (see [xmp.md](xmp.md),
-  [notes.md](notes.md)). Ratings loaded when the folder is opened, with those already set
+  [notes.md](notes.md)). Since 2026-11-19, the rating shows at once and is written in
+  the background, in order (`NoteBook::prepare_edit` / `PendingEdit::run` /
+  `finish_edit`, `note_writes.rs`): on a slow drive (iCloud, NAS), rating froze the window
+  for about ten disk accesses. A failure brings back what is on disk and says so;
+  "Ratings: n images being written" in the status bar if it lasts (`[gui]
+  notes_task_ms`); undo and closing wait for the writes to finish; the folder watch
+  ignores sidecars being written. Ratings loaded when the folder is opened, with those already set
   by darktable, Lightroom or digiKam. Display drawn as shapes (no glyphs, see
   `marks.rs`): flag (green tick / red cross), golden stars, colour dots, at the bottom
   left of the thumbnail and of the full screen view; thumbnail of a rejected photo faded

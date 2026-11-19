@@ -571,6 +571,11 @@ adjust-developed = Image développée par un autre logiciel : les réglages vale
 adjust-write-failed = réglages de { $name } non enregistrés : { $error }
 adjust-saving = Réglages : { $done } / { $total }
 adjust-busy = Réglages en cours d'enregistrement…
+notes-saving = { $n ->
+    [one] Notes : 1 image en écriture
+   *[other] Notes : { $n } images en écriture
+}
+notes-busy = Notes en cours d'écriture…
 adjust-apply-none = sélectionnez d'autres images pour leur appliquer ces réglages
 adjust-apply-wait = vignette pas encore prête, réessayez dans un instant
 adjust-applied = { $n ->

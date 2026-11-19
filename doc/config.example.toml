@@ -802,6 +802,9 @@ raw_previews = "on-demand"
 # par image affichée (ms) : au-delà, la suite attend l'image suivante, pour ne pas figer
 # l'interface.
 load_budget_ms = 8
+# Notes écrites en fond : la tâche « Notes : n en écriture » de la barre d'état
+# n'apparaît qu'au-delà de ce délai (ms ; sur un disque local, jamais).
+notes_task_ms = 500
 # Fils qui lisent les vignettes de la grille dans le cache, hors de l'interface : une
 # lecture lente (cache dans iCloud, sur un NAS) ne la fige plus.
 grid_read_threads = 4

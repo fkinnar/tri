@@ -57,6 +57,7 @@ mod markdown;
 mod marks;
 mod menu_groups;
 mod meta;
+mod note_writes;
 mod offload;
 mod pairs_dialog;
 mod palette;
