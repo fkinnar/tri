@@ -2269,7 +2269,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let seance = dir.path().join("Séance");
         let dest = dir.path().join("Archive");
-        let cache = crate::cache::disk_dir(&seance).join("v4/embedded");
+        let cache = crate::cache::disk_dir(&seance).join("v5/embedded");
         std::fs::create_dir_all(&cache).unwrap();
         std::fs::create_dir(&dest).unwrap();
         touch(&seance, &["A.RAF"]);
