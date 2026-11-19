@@ -1858,6 +1858,15 @@ moitié transparente.
   du 1:1 (taille connue ou estimée, `last_zoom_size`), avec un avertissement en haut à
   droite expliqué au survol. Le terminal n'a qu'une ligne par session (« détails dans
   …/tri.log ») ; une rafale d'erreurs (5 s) ne laisse que la première au journal.
+- `TRI_IO_WATCH=1` et `TRI_SLOW_IO_MS=<ms>` (19/11/2026, `tri::io_watch`, outils de
+  développement sans effet en usage normal) : le premier signale sur la sortie d'erreur
+  chaque accès disque fait **depuis le fil de l'interface** (cache, données de tri,
+  sidecars), une fois par endroit du code avec la pile des fonctions de `tri` jusqu'à
+  celle de l'interface en cause, puis un bilan à la fermeture ; le second fait attendre
+  chacun de ces accès, dans tous les fils, comme sur un montage lent (iCloud sous Linux,
+  NAS). Compilé avec `CARGO_PROFILE_DEV_DEBUG=line-tables-only`, la pile donne fichier et
+  ligne. Motif : ces accès ne se voient que sur un support lent ; on les trouve tous d'un
+  coup sur la machine de développement, au lieu d'un par un chez l'utilisateur.
 - `TRI_GUI_TRACE=1` : trace minutée des étapes du démarrage (configuration lue, fenêtre
   ouverte, dossier lu, arborescence, première image, moteur ; ajoutées le 19/10/2026
   pour une lenteur de démarrage vue sur macOS) et de chaque étape du chargement des images (demande au

@@ -102,6 +102,7 @@ pub fn holder(folder: &Path) -> Option<PathBuf> {
     // Cherchée hors du verrou : sur un montage lent (iCloud sous Linux, retour du
     // 19/11/2026), un seul accès peut prendre des secondes, et tous les autres fils (le
     // cache, l'interface) attendaient derrière, même pour un dossier déjà connu.
+    crate::io_watch::access("recherche de .tri", folder);
     let found = folder
         .ancestors()
         .find(|a| a.join(DIR).join(KEEP).is_file())
@@ -173,6 +174,7 @@ fn read_places(data: Option<&Path>, folder: &Path, name: &str) -> Vec<PathBuf> {
 /// Contenu du fichier `name` des données de `folder` (absolu), s'il y en a un ; `data` :
 /// dossier de données, pour le repli.
 pub fn read(data: Option<&Path>, folder: &Path, name: &str) -> Option<Vec<u8>> {
+    crate::io_watch::access("données de tri", folder);
     read_places(data, folder, name)
         .into_iter()
         .find_map(|p| std::fs::read(p).ok())
@@ -249,6 +251,7 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     }
     let name = path.file_name().unwrap_or_default().to_string_lossy();
     let tmp = path.with_file_name(format!(".{name}.{}.tmp", std::process::id()));
+    crate::io_watch::access("écriture des données de tri", path);
     std::fs::write(&tmp, bytes)?;
     std::fs::rename(&tmp, path).inspect_err(|_| {
         let _ = std::fs::remove_file(&tmp);
@@ -487,6 +490,7 @@ pub fn settle(data: Option<&Path>, folder: &Path) {
 }
 
 fn modified(path: &Path) -> Option<std::time::SystemTime> {
+    crate::io_watch::access("date d'un fichier", path);
     std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
