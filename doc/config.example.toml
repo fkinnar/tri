@@ -802,6 +802,12 @@ raw_previews = "on-demand"
 # par image affichée (ms) : au-delà, la suite attend l'image suivante, pour ne pas figer
 # l'interface.
 load_budget_ms = 8
+# Fils qui lisent les vignettes de la grille dans le cache, hors de l'interface : une
+# lecture lente (cache dans iCloud, sur un NAS) ne la fige plus.
+grid_read_threads = 4
+# Vignettes lues gardées au plus en attendant la grille (~0,5 Mo chacune) : celles
+# d'images dépassées en défilant sont jetées au-delà.
+grid_read_keep = 256
 # Barres de progression de la barre d'état : largeur (points), et masquées une fois
 # terminées (false : toujours affichées).
 progress_width = 160.0

@@ -441,6 +441,8 @@ struct Engine {
     cache: Cache,
     preview: preview::Settings,
     loader: Loader,
+    /// Vignettes de la grille lues dans le cache hors du fil de l'interface.
+    grid_reader: crate::grid_read::GridReader,
     /// Logiciels de développement du moteur, remplacés quand `[develop]` change.
     developers: tri::develop::SharedDevelopers,
 }
@@ -8262,6 +8264,12 @@ impl TriApp {
             ctx.clone(),
             self.adjust_map.clone(),
         );
+        let grid_reader = crate::grid_read::GridReader::new(
+            cache.clone(),
+            self.gui.grid_read_threads,
+            self.gui.grid_read_keep,
+            Some(ctx.clone()),
+        );
         self.engine = Some(Engine {
             scheduler,
             events: rx,
@@ -8269,6 +8277,7 @@ impl TriApp {
             cache,
             preview,
             loader,
+            grid_reader,
             developers: shared,
         });
         self.fit_grid_render();
@@ -14812,13 +14821,26 @@ impl TriApp {
             if !self.grid_render_ready(index, level) {
                 continue;
             }
-            if Instant::now() > deadline {
-                self.visible_waiting += 1;
-                ctx.request_repaint(); // on continuera à l'image suivante
+            // Lue en fond (`grid_read`) : attendue au plus jusqu'à la fin du budget de
+            // l'image (un disque local : là tout de suite) ; sinon à une image suivante,
+            // réveillée par la lecture.
+            let Some(engine) = &mut self.engine else {
                 return have;
+            };
+            let wanted = (path.clone(), level);
+            if !engine.grid_reader.is_pending(&wanted)
+                && let Some(request) = grid_request(engine, &self.files[index], level)
+            {
+                engine.grid_reader.request(request);
             }
-            if let Some(texture) = self.load_grid_texture(ctx, index, level) {
-                return Some(texture);
+            match engine.grid_reader.take(&wanted, deadline) {
+                Some(Some(bitmap)) => return Some(self.grid_texture(ctx, index, level, bitmap)),
+                // Absente ou illisible : le rendu suivant.
+                Some(None) => continue,
+                None => {
+                    self.visible_waiting += 1;
+                    return have;
+                }
             }
         }
         if want != Level::Thumbnail && self.develop_batch.is_some() {
@@ -14895,13 +14917,13 @@ impl TriApp {
 
     /// Charge le niveau `level` de la vignette `index` depuis le cache, réduit à la taille
     /// des vignettes (un aperçu standard ou développé est bien plus grand).
-    fn load_grid_texture(
+    fn grid_texture(
         &mut self,
         ctx: &egui::Context,
         index: usize,
         level: Level,
-    ) -> Option<TextureHandle> {
-        let mut bitmap = self.grid_bitmap(index, level)?;
+        mut bitmap: tri::bitmap::Bitmap,
+    ) -> TextureHandle {
         let file = &self.files[index];
         crate::adjust_view::apply(&self.adjust_map, &file.path, file.kind, level, &mut bitmap);
         crate::display::to_screen(&mut bitmap);
@@ -14918,38 +14940,24 @@ impl TriApp {
         self.texture_adjust.insert(path.clone(), layers);
         self.textures.insert(path.clone(), texture.clone());
         self.texture_levels.insert(path, level);
-        Some(texture)
+        texture
     }
 
     /// La vignette `index` au niveau `level`, sans réglage (tirée du cache).
+    /// Lue ici même (réglages de visualisation changés : sa base sans réglage) ; la grille,
+    /// elle, les lit en fond ([`crate::grid_read`]).
     fn grid_bitmap(&self, index: usize, level: Level) -> Option<tri::bitmap::Bitmap> {
         let engine = self.engine.as_ref()?;
-        let file = &self.files[index];
-        let key = preview::key(file, level, &engine.preview).ok()?;
-        if level == Level::Thumbnail {
-            return engine.cache.get(&key);
-        }
-        // Rendu RAW ou développé : sa copie à la taille des vignettes, gardée dans le cache
-        // la première fois (11/11/2026 : au lancement, chaque vignette relisait un aperçu
-        // de 2560 px, et la grille se remplissait une à une).
-        let side = engine.preview.sizes.thumbnail;
-        let small = preview::grid_key(file, level, &engine.preview, side).ok();
-        if let Some(small) = &small
-            && let Some(bitmap) = engine.cache.get(small)
-        {
-            return Some(bitmap);
-        }
-        // Dans l'espace de travail (un rendu développé y est converti par le cache).
-        let bitmap = engine.cache.get_fit(&key, side)?.fit(side);
-        // Écrite en fond : une écriture du cache attend le disque (`sync_all`), lent sous
-        // Windows ; pas pendant l'image (CI Windows du 11/11/2026).
-        if let Some(small) = small {
-            let (cache, copy) = (engine.cache.clone(), bitmap.clone());
+        let request = grid_request(engine, &self.files[index], level)?;
+        let cache = engine.cache.clone();
+        crate::grid_read::read(&engine.cache, &request, move |small, bitmap| {
+            // Écrite en fond : une écriture du cache attend le disque (`sync_all`), lent
+            // sous Windows ; pas pendant l'image (CI Windows du 11/11/2026).
+            let (small, copy) = (small.clone(), bitmap.clone());
             std::thread::spawn(move || {
                 let _ = cache.put(&small, &copy);
             });
-        }
-        Some(bitmap)
+        })
     }
 
     /// Politique des rendus RAW de fond : tout le dossier quand la grille les montre.
@@ -22820,6 +22828,28 @@ fn strictness_slider(
 
 /// Niveaux parcourus à l'ouverture d'un dossier : 1 (le dossier seul), ou avec ses
 /// sous-dossiers (`[gui.folders] subfolders_depth` niveaux de plus).
+/// Ce qu'il faut lire pour la vignette de `file` au niveau `level` ([`crate::grid_read`]) :
+/// pour un rendu RAW ou développé, sa copie à la taille des vignettes, gardée dans le cache
+/// la première fois (11/11/2026 : au lancement, chaque vignette relisait un aperçu de
+/// 2560 px, et la grille se remplissait une à une).
+fn grid_request(
+    engine: &Engine,
+    file: &MediaFile,
+    level: Level,
+) -> Option<crate::grid_read::Request> {
+    let key = preview::key(file, level, &engine.preview).ok()?;
+    let side = engine.preview.sizes.thumbnail;
+    let small = (level != Level::Thumbnail)
+        .then(|| preview::grid_key(file, level, &engine.preview, side).ok())
+        .flatten();
+    Some(crate::grid_read::Request {
+        wanted: (file.path.clone(), level),
+        key,
+        small,
+        side,
+    })
+}
+
 fn folder_depth(subfolders: bool, gui: &GuiSettings) -> usize {
     if subfolders {
         1 + gui.folders.subfolders_depth

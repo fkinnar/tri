@@ -46,6 +46,7 @@ mod files;
 mod fine_slider;
 mod fonts;
 mod grid;
+mod grid_read;
 mod grid_render;
 mod histogram;
 mod i18n;

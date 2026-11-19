@@ -38,7 +38,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   dans le budget d'une image (`[gui] load_budget_ms`, comme les vignettes ; des milliers
   arrivent d'un coup sur un dossier déjà calculé), et ceux déjà connus (ré-annoncés après
   chaque refiltrage) ne sont pas relus. L'ordre retenu est appliqué dès le lancement
-  (issue n° 30).
+  (issue n° 30). Les vignettes, elles, sont lues dans le cache par quelques fils
+  (`grid_read`, `[gui] grid_read_threads`) : la grille les attend au plus jusqu'à la fin
+  du budget de l'image, puis les prend à une image suivante (19/11/2026 : un cache gardé
+  dans iCloud figeait la fenêtre à chaque lecture lente).
 - **Sélection** au clavier ou à la souris ; le scheduler est prévenu (`set_focus`), donc
   l'aperçu de l'image sélectionnée et de ses voisines passe en tête de file.
 - **Sélection au clic, survol encadré** (17/10/2026, deuxième version) : la sélection
