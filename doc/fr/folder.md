@@ -20,7 +20,11 @@ manipule quand on « ouvre un dossier ».
   NAS, même la liste peut prendre du temps : l'interface la lit dans un fil, l'attend
   `[gui.folders] open_wait_ms` (150 ms : un disque local ne voit rien changer), puis la
   laisse finir en fond avec une boîte au centre (« Ouverture de « séance »… 340 images
-  trouvées », Annuler ou Échap) ; le dossier d'avant reste affiché en attendant. Le
+  trouvées », Annuler ou Échap) ; le dossier d'avant reste affiché en attendant. Le même
+  fil lit aussi les notes et les données de tri du dossier (vue retenue, curseurs,
+  couvertures, piles) et écrit la position dans le dossier quitté ; la boîte dit l'étape
+  en cours (19/11/2026 : sur iCloud, l'interface restait figée sans rien dire entre le
+  clic et l'ouverture, puis sur « 1811 images trouvées »). Le
   dossier du lancement (en argument, ou le dernier) suit le même chemin (30/10/2026 : sur
   un NAS, la fenêtre attendait la liste plusieurs secondes) : la fenêtre s'ouvre tout de
   suite, l'arborescence se déplie jusqu'au dossier une fois lu, et un dernier dossier

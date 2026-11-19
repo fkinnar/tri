@@ -306,7 +306,17 @@ struct Opening {
     stop: Arc<AtomicBool>,
     /// Images trouvées jusqu'ici.
     found: Arc<AtomicUsize>,
+    /// Étape en cours ([`OPEN_LIST`], [`OPEN_NOTES`], [`OPEN_DATA`]) : la liste lue, la
+    /// boîte le dit plutôt que de rester sur le compte (retour du 19/11/2026).
+    stage: Arc<AtomicUsize>,
 }
+
+/// Ouverture d'un dossier, étape : sa liste d'images.
+const OPEN_LIST: usize = 0;
+/// Ouverture d'un dossier, étape : ses notes (sidecars).
+const OPEN_NOTES: usize = 1;
+/// Ouverture d'un dossier, étape : ses données de tri (vue, curseurs, couvertures…).
+const OPEN_DATA: usize = 2;
 
 /// Dossier lu par [`TriApp::open_folder`], avec ses notes si elles sont arrivées dans le
 /// délai d'attente (sinon leur lecture, qui continue en fond).
@@ -314,6 +324,76 @@ struct Opened {
     folder: Folder,
     loading: Option<tri::folder::Loading>,
     snapshot: Option<tri::watch::Snapshot>,
+    /// Données de tri du dossier, lues dans le même fil.
+    prepared: Prepared,
+}
+
+/// Données de tri d'un dossier qui s'ouvre (vue retenue, curseurs, couvertures…), lues
+/// avec sa liste dans le fil d'ouverture : sur un dossier lent (iCloud, NAS), chaque
+/// lecture peut prendre longtemps, et l'interface restait figée sans rien dire entre le
+/// clic et l'ouverture (retour du 19/11/2026).
+#[derive(Default)]
+struct Prepared {
+    /// Vue retenue (`[gui] remember_folder_view`), `None` : réglage coupé.
+    view: Option<crate::state::FolderView>,
+    /// Case « Sous-dossiers » avec laquelle le dossier a été lu.
+    subfolders: bool,
+    chosen: HashSet<PathBuf>,
+    dev_preferred: HashSet<PathBuf>,
+    group_strictness: Option<f32>,
+    group_pauses: Option<f32>,
+    group_curve: Option<f32>,
+    group_gap: Option<f32>,
+    blur_strictness: Option<f32>,
+    clip_strictness: (Option<f32>, Option<f32>),
+    pairs_decided: Option<bool>,
+    stacks_memory: Option<StacksMemory>,
+}
+
+impl Prepared {
+    /// Lit les données de tri de `folder` (ses sous-dossiers lus compris).
+    fn read(
+        data: Option<&Path>,
+        folder: &Folder,
+        cache: Option<&Cache>,
+        view: Option<crate::state::FolderView>,
+        subfolders: bool,
+    ) -> Prepared {
+        if folder.is_none() {
+            return Prepared {
+                view,
+                subfolders,
+                ..Prepared::default()
+            };
+        }
+        let dir = folder.dir.as_path();
+        let mut dirs: std::collections::BTreeSet<&Path> = folder
+            .files
+            .iter()
+            .filter_map(|f| f.path.parent())
+            .collect();
+        dirs.insert(dir);
+        let clip = |side| tri::exposure::folder_strictness(data, dir, side);
+        Prepared {
+            view,
+            subfolders,
+            chosen: tri::similarity::chosen_covers(data, dirs.iter().copied()),
+            dev_preferred: tri::developments::preferred(data, dirs.iter().copied()),
+            group_strictness: tri::similarity::folder_strictness(data, dir),
+            group_pauses: tri::similarity::folder_pauses(data, dir),
+            group_curve: tri::similarity::folder_curve(data, dir),
+            group_gap: tri::similarity::folder_gap(data, dir),
+            blur_strictness: tri::sharpness::folder_strictness(data, dir),
+            clip_strictness: (
+                clip(tri::exposure::Clip::Over),
+                clip(tri::exposure::Clip::Under),
+            ),
+            pairs_decided: tri::pairs::decided(data, dir),
+            stacks_memory: cache
+                .and_then(|c| c.folder_bytes(dir, Level::Similarity, STACKS))
+                .and_then(|bytes| serde_json::from_slice(&bytes).ok()),
+        }
+    }
 }
 
 impl Opened {
@@ -327,6 +407,7 @@ impl Opened {
                 folder,
                 loading: None,
                 snapshot: None,
+                prepared: Prepared::default(),
             };
         }
         let loading = tri::folder::Loading::start(&folder, depth, watching);
@@ -337,6 +418,7 @@ impl Opened {
                     folder,
                     loading: None,
                     snapshot: loaded.snapshot,
+                    prepared: Prepared::default(),
                 };
             }
             if Instant::now() >= deadline {
@@ -344,6 +426,7 @@ impl Opened {
                     folder,
                     loading: Some(loading),
                     snapshot: None,
+                    prepared: Prepared::default(),
                 };
             }
             std::thread::sleep(Duration::from_millis(2));
@@ -2335,12 +2418,22 @@ impl TriApp {
     fn open_folder(&mut self, dir: &Path) {
         // Le dossier quitté garde l'image où l'on en était (#414) ; puis la case
         // « Sous-dossiers » du dossier ouvert, qui décide de ce qu'on lit.
-        self.save_folder_position();
-        if self.gui.remember_folder_view {
-            self.subfolders = crate::state::folder_view(self.settings.data_dir().as_deref(), dir)
-                .and_then(|v| v.subfolders)
-                .unwrap_or(self.gui.folders.subfolders);
-        }
+        // Tout se lit et s'écrit dans le fil d'ouverture : sur un dossier lent (iCloud, NAS),
+        // l'interface restait figée sans rien dire entre le clic et l'ouverture.
+        let position = self.folder_position_to_write();
+        let remember = self.gui.remember_folder_view;
+        // Réglage coupé : la case du dossier précédent reste.
+        let default_subfolders = if remember {
+            self.gui.folders.subfolders
+        } else {
+            self.subfolders
+        };
+        let depths = (
+            folder_depth(false, &self.gui),
+            folder_depth(true, &self.gui),
+        );
+        let data = self.settings.data_dir();
+        let cache = self.engine.as_ref().map(|e| e.cache.clone());
         // Un dossier choisi : le dernier, disparu, ne sera plus rouvert de lui-même.
         self.missing_last = None;
         // Ses fichiers ont pu changer depuis (développés ailleurs) : relevés refaits.
@@ -2357,12 +2450,9 @@ impl TriApp {
         let (tx, rx) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
         let found = Arc::new(AtomicUsize::new(0));
-        let (target, depth, convention) = (
-            dir.to_path_buf(),
-            self.folder_depth(),
-            self.settings.xmp.sidecar,
-        );
-        let (stop_scan, found_scan) = (stop.clone(), found.clone());
+        let (target, convention) = (dir.to_path_buf(), self.settings.xmp.sidecar);
+        let stage = Arc::new(AtomicUsize::new(OPEN_LIST));
+        let (stop_scan, found_scan, stage_scan) = (stop.clone(), found.clone(), stage.clone());
         let slow = Duration::from_millis(self.gui.folders.type_check_ms);
         let repaint = self.repaint.clone();
         // Ses notes aussi, dans le délai d'attente (un peu avant, pour arriver à temps).
@@ -2371,9 +2461,33 @@ impl TriApp {
         let watching = self.settings.watch.interval_ms > 0
             && !self.watch.as_ref().is_some_and(|(w, _, _)| w.dir() == dir);
         std::thread::spawn(move || {
+            if let Some((left, view)) = position
+                && let Err(e) = crate::state::remember_folder_view(data.as_deref(), &left, &view)
+            {
+                trace(|| format!("position dans le dossier pas retenue : {e}"));
+            }
+            let view = remember
+                .then(|| crate::state::folder_view(data.as_deref(), &target).unwrap_or_default());
+            let subfolders = view
+                .as_ref()
+                .and_then(|v| v.subfolders)
+                .unwrap_or(default_subfolders);
+            let depth = if subfolders { depths.1 } else { depths.0 };
             let result =
                 Folder::scan_counting(&target, depth, convention, slow, &stop_scan, &found_scan)
-                    .map(|folder| Opened::read(folder, depth, watching, deadline));
+                    .map(|folder| {
+                        stage_scan.store(OPEN_NOTES, Ordering::Relaxed);
+                        let mut opened = Opened::read(folder, depth, watching, deadline);
+                        stage_scan.store(OPEN_DATA, Ordering::Relaxed);
+                        opened.prepared = Prepared::read(
+                            data.as_deref(),
+                            &opened.folder,
+                            cache.as_ref(),
+                            view,
+                            subfolders,
+                        );
+                        opened
+                    });
             let _ = tx.send(result);
             if let Some(ctx) = repaint {
                 ctx.request_repaint();
@@ -2395,6 +2509,7 @@ impl TriApp {
                     result: rx,
                     stop,
                     found,
+                    stage,
                 });
             }
         }
@@ -2439,9 +2554,10 @@ impl TriApp {
         let Some(opening) = &self.opening else {
             return;
         };
-        let (name, found) = (
+        let (name, found, stage) = (
             folder_name(&opening.dir),
             opening.found.load(Ordering::Relaxed),
+            opening.stage.load(Ordering::Relaxed),
         );
         let mut cancel = false;
         egui::Area::new(egui::Id::unique("opening_box"))
@@ -2454,7 +2570,11 @@ impl TriApp {
                         ui.strong(t!("folder-opening", name = &name));
                     });
                     ui.label(t!("folder-opening-found", count = found));
-                    ui.weak(t!("folder-opening-why"));
+                    match stage {
+                        OPEN_NOTES => ui.label(t!("folder-opening-notes")),
+                        OPEN_DATA => ui.label(t!("folder-opening-data")),
+                        _ => ui.weak(t!("folder-opening-why")),
+                    };
                     cancel = ui.button(t!("cancel")).clicked();
                 });
             });
@@ -2467,10 +2587,29 @@ impl TriApp {
 
     /// Installe le dossier `dir` lu (ou son erreur) : grille, filtres, moteur.
     fn install_folder(&mut self, dir: &Path, result: std::io::Result<Opened>) {
-        let (result, loading, snapshot) = match result {
-            Ok(opened) => (Ok(opened.folder), opened.loading, opened.snapshot),
-            Err(e) => (Err(e), None, None),
+        let (result, loading, snapshot, prepared) = match result {
+            Ok(opened) => (
+                Ok(opened.folder),
+                opened.loading,
+                opened.snapshot,
+                opened.prepared,
+            ),
+            Err(e) => (Err(e), None, None, Prepared::default()),
         };
+        let Prepared {
+            view,
+            subfolders,
+            chosen,
+            dev_preferred,
+            group_strictness,
+            group_pauses,
+            group_curve,
+            group_gap,
+            blur_strictness,
+            clip_strictness,
+            pairs_decided,
+            stacks_memory,
+        } = prepared;
         // Dossier du lancement : l'arborescence se déplie jusqu'à lui ; le dernier dossier
         // disparu est dit et attendu, pas une erreur.
         let start = self.start_dir.take().filter(|(d, _)| d == dir);
@@ -2492,43 +2631,16 @@ impl TriApp {
                 if let Some(data) = self.settings.data_dir() {
                     let _ = tri::folder::remember(&data, &folder.dir);
                 }
-                let data = self.settings.data_dir();
-                self.chosen =
-                    tri::similarity::chosen_covers(data.as_deref(), [folder.dir.as_path()]);
-                self.dev_preferred =
-                    tri::developments::preferred(data.as_deref(), [folder.dir.as_path()]);
-                self.group_strictness = tri::similarity::folder_strictness(
-                    self.settings.data_dir().as_deref(),
-                    &folder.dir,
-                )
-                .unwrap_or(0.0);
-                self.group_pauses = tri::similarity::folder_pauses(
-                    self.settings.data_dir().as_deref(),
-                    &folder.dir,
-                )
-                .unwrap_or(0.0);
-                self.group_curve =
-                    tri::similarity::folder_curve(self.settings.data_dir().as_deref(), &folder.dir)
-                        .unwrap_or(self.settings.similarity.strictness_curve);
-                self.group_gap =
-                    tri::similarity::folder_gap(self.settings.data_dir().as_deref(), &folder.dir)
-                        .unwrap_or(self.settings.similarity.max_gap_s);
-                self.blur_strictness = tri::sharpness::folder_strictness(
-                    self.settings.data_dir().as_deref(),
-                    &folder.dir,
-                )
-                .unwrap_or(0.0);
-                let clip = |side| {
-                    tri::exposure::folder_strictness(
-                        self.settings.data_dir().as_deref(),
-                        &folder.dir,
-                        side,
-                    )
-                    .unwrap_or(0.0)
-                };
+                self.chosen = chosen;
+                self.dev_preferred = dev_preferred;
+                self.group_strictness = group_strictness.unwrap_or(0.0);
+                self.group_pauses = group_pauses.unwrap_or(0.0);
+                self.group_curve = group_curve.unwrap_or(self.settings.similarity.strictness_curve);
+                self.group_gap = group_gap.unwrap_or(self.settings.similarity.max_gap_s);
+                self.blur_strictness = blur_strictness.unwrap_or(0.0);
                 self.clip_strictness = (
-                    clip(tri::exposure::Clip::Over),
-                    clip(tri::exposure::Clip::Under),
+                    clip_strictness.0.unwrap_or(0.0),
+                    clip_strictness.1.unwrap_or(0.0),
                 );
                 // Les rendus lancés d'office pour la grille d'un autre dossier s'arrêtent
                 // (#303 : ils continuaient après avoir changé de dossier) ; un lot demandé
@@ -2540,14 +2652,10 @@ impl TriApp {
                     batch.cancel();
                 }
                 self.apply_cache_location(&folder.dir);
-                self.restore_folder_view(&folder.dir);
+                self.subfolders = subfolders;
+                self.restore_folder_view(view);
                 // Piles retenues pour ce dossier, et la grille qui les attend (#416).
-                self.stacks_memory = self.engine.as_ref().and_then(|e| {
-                    let bytes = e
-                        .cache
-                        .folder_bytes(&folder.dir, Level::Similarity, STACKS)?;
-                    serde_json::from_slice(&bytes).ok()
-                });
+                self.stacks_memory = stacks_memory;
                 self.stacks_wait = Some(Instant::now());
                 self.opened_at = Some(Instant::now());
                 self.folder = folder;
@@ -2566,7 +2674,8 @@ impl TriApp {
                         if snapshot.is_some() {
                             self.watch_snapshot = snapshot;
                         }
-                        self.load_choices();
+                        // Couvertures choisies : déjà lues avec le dossier.
+                        self.stacks_dirty = true;
                     }
                 }
                 self.apply_sort();
@@ -2604,7 +2713,7 @@ impl TriApp {
         }
         self.apply_filter();
         self.restore_folder_position();
-        self.ask_pairs();
+        self.ask_pairs(pairs_decided);
         if let Some(i) = self.start_select.take() {
             self.selected = i.min(self.files.len().saturating_sub(1));
         }
@@ -6943,21 +7052,27 @@ impl TriApp {
     /// Image courante et piles dépliées du dossier ouvert : écrites en le quittant et en
     /// fermant `tri` (pas à chaque image : un NAS, une synchronisation).
     fn save_folder_position(&mut self) {
+        if let Some((dir, view)) = self.folder_position_to_write() {
+            let data = self.settings.data_dir();
+            if let Err(e) = crate::state::remember_folder_view(data.as_deref(), &dir, &view) {
+                trace(|| format!("position dans le dossier pas retenue : {e}"));
+            }
+        }
+    }
+
+    /// Vue du dossier ouvert à écrire ([`TriApp::save_folder_position`]), tenue pour
+    /// écrite : le dossier et ce qu'il faut y écrire, rien si elle n'a pas changé.
+    fn folder_position_to_write(&mut self) -> Option<(PathBuf, crate::state::FolderView)> {
         if !self.gui.remember_folder_view || self.folder.is_none() || self.folder_view.is_none() {
-            return;
+            return None;
         }
         let view = self.current_folder_view();
         if self.folder_view.as_ref() == Some(&view) {
-            return;
+            return None;
         }
-        let data = self.settings.data_dir();
         let written = self.view_to_write(view.clone());
-        if let Err(e) =
-            crate::state::remember_folder_view(data.as_deref(), &self.folder.dir, &written)
-        {
-            trace(|| format!("position dans le dossier pas retenue : {e}"));
-        }
         self.folder_view = Some(view);
+        Some((self.folder.dir.clone(), written))
     }
 
     /// Reprend l'image où l'on en était et les piles dépliées du dossier qui vient de
@@ -6986,18 +7101,15 @@ impl TriApp {
     /// Reprend les filtres et le tri retenus pour `dir` (`[gui] remember_folder_view`) ;
     /// un dossier sans rien de retenu s'ouvre sans filtre, dans l'ordre retenu pour tous.
     /// Réglage coupé : les filtres restent ceux du dossier précédent, comme avant.
-    fn restore_folder_view(&mut self, dir: &Path) {
+    fn restore_folder_view(&mut self, view: Option<crate::state::FolderView>) {
         // Les filtres du résumé (#388) sont propres au dossier quitté.
         self.extension_only = None;
         self.versions_only = false;
         self.libraw_only = false;
-        if !self.gui.remember_folder_view {
+        let Some(view) = view.filter(|_| self.gui.remember_folder_view) else {
             self.folder_view = None;
             return;
-        }
-        let view =
-            crate::state::folder_view(self.settings.data_dir().as_deref(), dir).unwrap_or_default();
-        self.subfolders = view.subfolders.unwrap_or(self.gui.folders.subfolders);
+        };
         let here = self.developers.engines();
         self.developed_checked = view.developed_engines.as_ref().map(|ids| {
             ids.iter()
@@ -7845,13 +7957,12 @@ impl TriApp {
 
     /// Demande s'il faut regrouper les paires RAW+JPEG du dossier qui vient de s'ouvrir
     /// (#392) : `[files] group_pairs = "ask"`, pas de décision, et des paires.
-    fn ask_pairs(&mut self) {
+    fn ask_pairs(&mut self, decided: Option<bool>) {
         if self.folder.is_none() || self.settings.files.group_pairs != tri::pairs::Grouping::Ask {
             return;
         }
         let dir = self.folder.dir.clone();
-        let data = self.settings.data_dir();
-        if tri::pairs::decided(data.as_deref(), &dir).is_some() {
+        if decided.is_some() {
             return;
         }
         let pairs = tri::pairs::camera_jpegs(&self.folder.files)
@@ -34150,10 +34261,16 @@ mod tests {
             result: rx,
             stop: Arc::new(AtomicBool::new(false)),
             found: Arc::new(AtomicUsize::new(12)),
+            stage: Arc::new(AtomicUsize::new(OPEN_LIST)),
         });
         h.run_steps(2);
         wait_for_label(&mut h, "Ouverture de « photos »…");
         wait_for_label(&mut h, "12 images trouvées");
+        // La liste lue : l'étape suivante est dite (retour du 19/11/2026).
+        if let Some(opening) = &h.state().opening {
+            opening.stage.store(OPEN_DATA, Ordering::Relaxed);
+        }
+        wait_for_label(&mut h, &t!("folder-opening-data"));
         press(&mut h, Key::Escape, Modifiers::NONE);
         h.run_steps(2);
         assert!(h.state().opening.is_none());

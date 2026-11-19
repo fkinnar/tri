@@ -20,7 +20,11 @@ one "opens a folder".
   list can take time: the interface reads it in a thread, waits `[gui.folders]
   open_wait_ms` for it (150 ms: nothing changes on a local disk), then lets it finish in
   the background with a box in the middle ("Opening "shoot"… 340 images found", Cancel or
-  Escape); the previous folder stays on screen meanwhile. The launch folder (argument, or
+  Escape); the previous folder stays on screen meanwhile. The same thread also reads the
+  folder's ratings and sorting data (kept view, sliders, covers, stacks) and writes the
+  position in the folder being left; the box says which step is under way (2026-11-19:
+  on iCloud, the interface froze without a word between the click and the opening, then
+  on "1811 images found"). The launch folder (argument, or
   the last one) takes the same path (2026-10-30: on a NAS, the window waited several
   seconds for the list): the window opens at once, the tree unfolds to the folder once it
   is read, and a last folder that cannot be found is shown in the middle (reopened when
