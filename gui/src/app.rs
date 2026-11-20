@@ -34158,7 +34158,9 @@ mod tests {
             .map(|n| (n.as_str(), image::RgbImage::new(16, 16)))
             .collect();
         let (mut h, _dir) = harness_images(images);
-        h.run_steps(3);
+        // Les scores calculés en fond d'abord : arrivés après ceux du test (CI Windows),
+        // ils les remplaçaient entre les deux jugements.
+        run_until(&mut h, |s| s.scores.len() == 9);
         let paths: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
         for (path, score) in paths
             .iter()
