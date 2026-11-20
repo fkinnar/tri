@@ -15564,21 +15564,42 @@ impl TriApp {
                 )),
             });
         }
-        // Rendus développés d'un dossier (issue n° 69).
+        // Rendus développés d'un dossier (issue n° 69) : la vérification du cache, puis
+        // seulement les rendus vraiment refaits ; rien si tout y était (20/11/2026).
         if let Some(batch) = &self.develop_batch {
-            let (done, total) = batch.progress();
-            tasks.push(Task {
-                text: t!(
-                    "develop-batch-progress",
-                    name = folder_name(&batch.folder),
-                    done = done,
-                    total = total
-                ),
-                fraction: done as f32 / total.max(1) as f32,
-                tip: None,
-                click: None,
-                cancel: Some((t!("develop-batch-cancel"), StatusClick::CancelDevelop)),
-            });
+            let name = folder_name(&batch.folder);
+            let shown = match batch.phase() {
+                crate::develop_batch::Phase::Checking(done, total) => Some((
+                    t!(
+                        "develop-batch-checking",
+                        name = name.as_str(),
+                        done = done,
+                        total = total
+                    ),
+                    done,
+                    total,
+                )),
+                crate::develop_batch::Phase::Rendering(_, 0) => None,
+                crate::develop_batch::Phase::Rendering(done, total) => Some((
+                    t!(
+                        "develop-batch-progress",
+                        name = name.as_str(),
+                        done = done,
+                        total = total
+                    ),
+                    done,
+                    total,
+                )),
+            };
+            if let Some((text, done, total)) = shown {
+                tasks.push(Task {
+                    text,
+                    fraction: done as f32 / total.max(1) as f32,
+                    tip: None,
+                    click: None,
+                    cancel: Some((t!("develop-batch-cancel"), StatusClick::CancelDevelop)),
+                });
+            }
         }
         if let Some((text, fraction)) = self
             .background_transfers

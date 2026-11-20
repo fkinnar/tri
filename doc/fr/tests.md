@@ -116,6 +116,8 @@ les branches d'erreur d'entrée-sortie et les fonctions `main`.
 
 - seules les images développées (sidecar darktable à historique) sont rendues ; sans
   darktable, l'échec est compté et le lot va au bout ;
+- la phase distingue la vérification du cache des vrais rendus : une deuxième fois, tout
+  en cache, `Rendering(0, 0)`, que la barre d'état ne montre pas ;
 - avec `TRI_TEST_DEVELOP` (dossier de RAW dont certains développés, darktable installé,
   `#[ignore]`) : les développés rendus, les autres passés. Le 25/10/2026, sur trois RAF
   (deux développés) : 13 s.

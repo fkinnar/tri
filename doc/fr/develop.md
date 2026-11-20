@@ -199,6 +199,12 @@ avec la barre de progression, puis « 12 développements refaits » à la fin ; 
 s'efface de lui-même (`[gui.grid] develop_toast_ms`, 6 s ; 0 : jamais). La progression
 reste dans la barre d'état.
 
+**Vérifier n'est pas développer** (20/11/2026 : sur iCloud, la vérification du cache,
+lente, s'affichait « développement de … n/total », comme si tout était refait) : la
+tâche de la barre d'état suit `DevelopBatch::phase`. D'abord « développements de … :
+vérification du cache n/total » ; puis « développement de … k/m » pour les seuls rendus
+à refaire ; rien du tout si tout était en cache.
+
 **Choisir le logiciel** (26/10/2026, choix de l'utilisateur ; raccourcis réglables) :
 `Maj+B` et `<leader>r` développent l'image dans son logiciel (celui de son
 développement, voir `[develop] default`), `<leader>d` dans darktable, `<leader>p` dans

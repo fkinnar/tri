@@ -27,10 +27,22 @@ pub struct Summary {
     pub cancelled: bool,
 }
 
+/// Où en est un lot ([`DevelopBatch::phase`]) : la barre d'état ne dit « développement »
+/// que pour de vrais rendus (retour du 20/11/2026 : sur iCloud, la vérification du cache,
+/// lente, s'affichait « développement de … n/total », comme si tout était refait).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Phase {
+    /// Cache consulté pour (faites, toutes) les images.
+    Checking(usize, usize),
+    /// Rendus vraiment refaits : (faits, à faire) ; (0, 0) si tout était en cache.
+    Rendering(usize, usize),
+}
+
 /// Lot de rendus en cours.
 pub struct DevelopBatch {
     /// Dossier dont les images sont rendues.
     pub folder: PathBuf,
+    #[cfg_attr(not(test), allow(dead_code))]
     done: Arc<AtomicUsize>,
     /// Images à rendre (celles qui ont un sidecar), connues une fois les sidecars cherchés.
     total: Arc<AtomicUsize>,
@@ -38,6 +50,9 @@ pub struct DevelopBatch {
     /// faits (réussis ou non), connus une fois le cache consulté.
     stale: Arc<AtomicUsize>,
     redone: Arc<AtomicUsize>,
+    /// Images dont le cache a été consulté, et vrai une fois toutes consultées.
+    checked: Arc<AtomicUsize>,
+    checked_all: Arc<AtomicBool>,
     cancel: Arc<AtomicBool>,
     handle: Option<JoinHandle<Summary>>,
 }
@@ -57,8 +72,11 @@ impl DevelopBatch {
         let cancel = Arc::new(AtomicBool::new(false));
         let stale = Arc::new(AtomicUsize::new(0));
         let redone = Arc::new(AtomicUsize::new(0));
+        let checked = Arc::new(AtomicUsize::new(0));
+        let checked_all = Arc::new(AtomicBool::new(false));
         let (d, t, c) = (done.clone(), total.clone(), cancel.clone());
         let (st, rd) = (stale.clone(), redone.clone());
+        let (ck, ck_all) = (checked.clone(), checked_all.clone());
         let handle = std::thread::spawn(move || {
             // Seulement les images développées, chacune dans le logiciel de son
             // développement ; sans développement, elle garde le rendu LibRaw.
@@ -77,9 +95,15 @@ impl DevelopBatch {
             // dès le départ (retour du 29/10/2026 : refaits sans rien dire).
             let cached: Vec<bool> = todo
                 .iter()
-                .map(|(file, engine)| producer.is_done(file, Level::Developed(*engine)))
+                .map(|(file, engine)| {
+                    let done = producer.is_done(file, Level::Developed(*engine));
+                    ck.fetch_add(1, Ordering::Relaxed);
+                    repaint();
+                    done
+                })
                 .collect();
             st.store(cached.iter().filter(|c| !**c).count(), Ordering::Relaxed);
+            ck_all.store(true, Ordering::Relaxed);
             repaint();
             let mut summary = Summary::default();
             for ((file, engine), cached) in todo.iter().zip(cached) {
@@ -115,17 +139,34 @@ impl DevelopBatch {
             total,
             stale,
             redone,
+            checked,
+            checked_all,
             cancel,
             handle: Some(handle),
         }
     }
 
-    /// Avancement : (faites, à faire).
+    /// Avancement : (faites, à faire), cache consulté ou non (la barre d'état montre
+    /// [`DevelopBatch::phase`]).
+    #[cfg(test)]
     pub fn progress(&self) -> (usize, usize) {
         (
             self.done.load(Ordering::Relaxed),
             self.total.load(Ordering::Relaxed),
         )
+    }
+
+    /// Vérification du cache, puis rendus vraiment refaits ([`Phase`]).
+    pub fn phase(&self) -> Phase {
+        if self.checked_all.load(Ordering::Relaxed) {
+            let (done, stale) = self.redone();
+            Phase::Rendering(done, stale)
+        } else {
+            Phase::Checking(
+                self.checked.load(Ordering::Relaxed),
+                self.total.load(Ordering::Relaxed),
+            )
+        }
     }
 
     /// Rendus à refaire : (faits, à faire) ; (0, 0) tant que le cache n'est pas consulté ou
@@ -185,7 +226,78 @@ mod tests {
         }
     }
 
+    /// Logiciel de développement dont le rendu réussit (un JPEG gris).
+    #[derive(Debug)]
+    struct Renders;
+
+    impl tri::develop::Developer for Renders {
+        fn engine(&self) -> tri::develop::Engine {
+            tri::develop::Engine::Darktable
+        }
+
+        fn render(
+            &self,
+            _: &std::path::Path,
+            _: &std::path::Path,
+            out: &std::path::Path,
+            _: u32,
+            _: &AtomicBool,
+        ) -> Result<(), tri::develop::DevelopError> {
+            image::RgbImage::from_pixel(8, 6, image::Rgb([128, 128, 128]))
+                .save_with_format(out, image::ImageFormat::Jpeg)
+                .map_err(|e| tri::develop::DevelopError::Other(e.to_string()))
+        }
+    }
+
     use tri::media::MediaKind;
+
+    #[test]
+    fn the_phase_tells_checking_the_cache_from_real_renders() {
+        // Retour du 20/11/2026 : « développement de … n/total » s'affichait aussi quand
+        // tout venait du cache. La deuxième fois, rien à refaire : Rendering(0, 0), que la
+        // barre d'état ne montre pas.
+        let dir = tempfile::tempdir().unwrap();
+        let a = MediaFile {
+            path: dir.path().join("a.RAF"),
+            kind: MediaKind::Raw,
+        };
+        std::fs::write(&a.path, b"raw").unwrap();
+        std::fs::write(
+            dir.path().join("a.RAF.xmp"),
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:darktable="http://darktable.sf.net/" darktable:history_end="3"/></rdf:RDF></x:xmpmeta>"#,
+        )
+        .unwrap();
+        let cache = tri::cache::Cache::open(dir.path().join("cache")).unwrap();
+        let run = || {
+            let producer = CachedPreviews {
+                cache: cache.clone(),
+                settings: tri::preview::Settings::default(),
+                developers: tri::develop::Developers::none()
+                    .with(Arc::new(Renders))
+                    .into(),
+            };
+            let mut batch = DevelopBatch::start(
+                dir.path().to_path_buf(),
+                vec![a.clone()],
+                producer,
+                None,
+                || {},
+            );
+            let summary = loop {
+                if let Some(s) = batch.finished() {
+                    break s;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            };
+            (batch.phase(), summary)
+        };
+        let (phase, summary) = run();
+        assert_eq!(phase, Phase::Rendering(1, 1), "{summary:?}");
+        assert_eq!(summary.rendered, 1);
+        let (phase, summary) = run();
+        assert_eq!(phase, Phase::Rendering(0, 0), "tout en cache");
+        assert_eq!(summary.cached, 1);
+    }
 
     #[test]
     fn only_developed_images_are_rendered_and_failures_are_counted() {
@@ -222,6 +334,7 @@ mod tests {
         };
         assert_eq!(batch.progress(), (1, 1), "une seule image développée");
         assert_eq!(batch.redone(), (1, 1), "pas en cache : à refaire, annoncé");
+        assert_eq!(batch.phase(), Phase::Rendering(1, 1));
         assert_eq!(
             summary,
             Summary {

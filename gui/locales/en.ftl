@@ -1447,6 +1447,7 @@ folder-open-in-running = { $name } is already open: close it first (on Windows, 
 develop-batch-unavailable = Darktable not found: setting [develop] darktable
 develop-batch-busy = a folder is already being developed
 develop-batch-progress = developing "{ $name }" { $done }/{ $total }
+develop-batch-checking = developments of "{ $name }": checking the cache { $done }/{ $total }
 develop-batch-done = "{ $name }" developed: { $rendered } rendered, { $cached } already done, { $failed } failed
 develop-batch-error = { " " }({ $error })
 develop-batch-cancelled = { " (interrupted)" }
