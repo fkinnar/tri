@@ -1288,6 +1288,10 @@ pub struct TriApp {
     help_here: Option<(crate::cheatsheet::Place, crate::cheatsheet::Sections)>,
     /// Défilement de l'aide « ici » demandé au clavier, à faire à la prochaine image.
     help_here_scroll: f32,
+    /// Défilement de l'aide « ici » à la dernière image (tests).
+    help_here_offset: f32,
+    /// Fois où la recherche de l'aide « ici » a dû reprendre le clavier (tests).
+    help_here_refocused: usize,
     /// Recherche tapée dans l'aide « ici » (#382) : ne garde que les actions qui y
     /// répondent, lettres trouvées surlignées.
     help_here_query: String,
@@ -2151,6 +2155,8 @@ impl TriApp {
             help_search: None,
             help_here: None,
             help_here_scroll: 0.0,
+            help_here_offset: 0.0,
+            help_here_refocused: 0,
             help_here_query: String::new(),
             palette: None,
             palette_history: data
@@ -8997,17 +9003,6 @@ impl TriApp {
                         self.help = true;
                     }
                     Action::Quit => self.perform(ctx, action),
-                    // Défiler, comme dans l'aide complète.
-                    Action::NavDown | Action::NavUp | Action::NavPageDown | Action::NavPageUp => {
-                        let line = self.gui.dialogs.help_scroll_line;
-                        let page = ctx.content_rect().height() * 0.6;
-                        self.help_here_scroll += match action {
-                            Action::NavDown => -line,
-                            Action::NavUp => line,
-                            Action::NavPageDown => -page,
-                            _ => page,
-                        };
-                    }
                     _ => {}
                 }
                 continue;
@@ -21202,7 +21197,36 @@ impl TriApp {
             stacks[lowest].1.push(i);
         }
         let mut close = false;
-        let scroll = std::mem::take(&mut self.help_here_scroll);
+        // Défiler au clavier (retour du 20/11/2026) : la recherche a le clavier, et les
+        // raccourcis n'y reçoivent que les touches qui ne tapent rien (Échap, F1…). Les
+        // touches de défilement du profil qui ne tapent pas de texte (flèches haut / bas,
+        // pages, Ctrl+U / Ctrl+D) sont donc prises ici, avant le champ, comme dans l'aide
+        // complète.
+        let line = self.gui.dialogs.help_scroll_line;
+        let page = screen.height() * 0.6;
+        let mut steps = Vec::new();
+        for (action, step) in [
+            (Action::NavDown, -line),
+            (Action::NavUp, line),
+            (Action::NavPageDown, -page),
+            (Action::NavPageUp, page),
+        ] {
+            for chord in self.keymap.scroll_keys(action) {
+                steps.push((chord.1, chord.0, step));
+            }
+        }
+        let typed_scroll = ctx.input_mut(|i| {
+            let mut delta = 0.0;
+            for &(modifiers, key, step) in &steps {
+                while i.consume_key(modifiers, key) {
+                    delta += step;
+                }
+            }
+            delta
+        });
+        let scroll = std::mem::take(&mut self.help_here_scroll) + typed_scroll;
+        let mut offset = self.help_here_offset;
+        let mut refocused = 0;
         egui::Area::new(egui::Id::unique("help_here"))
             .order(egui::Order::Foreground)
             .fixed_pos(screen.min)
@@ -21230,14 +21254,21 @@ impl TriApp {
                                 .font(egui::FontId::proportional(size))
                                 .desired_width(card.min(inner.width())),
                         );
-                        field.request_focus();
+                        // Seulement s'il ne l'a plus : redemandé à chaque image, le focus
+                        // perdait le filtre qui réserve les flèches au champ, et egui les
+                        // prenait pour passer au widget voisin le temps d'une image (le
+                        // champ clignotait, 20/11/2026).
+                        if !field.has_focus() {
+                            field.request_focus();
+                            refocused += 1;
+                        }
                         if sections.is_empty() {
                             ui.add_space(size);
                             ui.label(egui::RichText::new(t!("help-no-match")).size(size).weak());
                         }
                     });
                     ui.add_space(size);
-                    ScrollArea::vertical()
+                    let shown = ScrollArea::vertical()
                         .max_height(inner.height() - 4.0 * size)
                         .show(ui, |ui| {
                             ui.scroll_with_delta(vec2(0.0, scroll));
@@ -21257,6 +21288,7 @@ impl TriApp {
                                 }
                             });
                         });
+                    offset = shown.state.clamped_offset().y;
                     ui.add_space(size * 0.5);
                     ui.vertical_centered(|ui| {
                         ui.label(egui::RichText::new(&footer).size(size * 0.85).weak());
@@ -21264,6 +21296,8 @@ impl TriApp {
                 });
             });
         self.help_here_query = typed;
+        self.help_here_offset = offset;
+        self.help_here_refocused += refocused;
         if close {
             self.help_here = None;
         }
@@ -35237,6 +35271,45 @@ mod tests {
         }
         assert!(freed(&h), "freed space announced");
         assert_eq!(thumbnails(&cache), 0);
+    }
+
+    #[test]
+    fn the_help_here_scrolls_with_the_keyboard() {
+        // Retour du 20/11/2026 : dans l'aide `?`, la flèche bas ne faisait pas défiler, et
+        // les flèches faisaient clignoter la recherche (le clavier passait un instant au
+        // widget voisin).
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        act(&mut h, Action::HelpHere);
+        h.run_steps(3);
+        assert!(h.state().help_here.is_some());
+        let field = egui::Id::unique("help_here_search");
+        assert_eq!(
+            h.ctx.memory(|m| m.focused()),
+            Some(field),
+            "la recherche a le clavier"
+        );
+        let before = h.state().help_here_refocused;
+        for key in [
+            Key::ArrowDown,
+            Key::ArrowLeft,
+            Key::ArrowRight,
+            Key::ArrowDown,
+        ] {
+            press(&mut h, key, Modifiers::NONE);
+            h.run_steps(3);
+            assert_eq!(
+                h.state().help_here_refocused,
+                before,
+                "{key:?} : la recherche n'a jamais perdu le clavier"
+            );
+        }
+        let down = h.state().help_here_offset;
+        assert!(down > 0.0, "défilée vers le bas");
+        press(&mut h, Key::ArrowUp, Modifiers::NONE);
+        h.run_steps(3);
+        assert!(h.state().help_here_offset < down, "puis vers le haut");
+        assert!(h.state().help_here.is_some(), "toujours ouverte");
     }
 
     #[test]
