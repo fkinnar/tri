@@ -224,31 +224,51 @@ impl LogView {
             });
         let response = frame
             .show(ui, |ui| {
+                // Un seul texte (retour du 20/11/2026 : des libellés côte à côte dans un
+                // `horizontal_wrapped`, la suite d'un long message revenait à la ligne
+                // hors de la fenêtre, à gauche).
+                let size = ui.text_style_height(&egui::TextStyle::Body);
+                let mono = egui::FontId::monospace(size * 0.9);
+                let weak = ui.visuals().weak_text_color();
+                let gap = size * 0.5;
+                let mut job = egui::text::LayoutJob::default();
+                job.append(
+                    &entry.time,
+                    0.0,
+                    egui::TextFormat::simple(mono.clone(), weak),
+                );
+                job.append(
+                    entry.level.tag(),
+                    gap,
+                    egui::TextFormat::simple(mono, level_color(ui, entry.level)),
+                );
+                if !entry.source.is_empty() {
+                    job.append(
+                        &entry.source,
+                        gap,
+                        egui::TextFormat::simple(egui::FontId::proportional(size * 0.9), weak),
+                    );
+                }
+                job.append(
+                    " ",
+                    gap * 0.5,
+                    egui::TextFormat::simple(egui::FontId::proportional(size * 0.9), weak),
+                );
+                crate::app::append_marked(
+                    &mut job,
+                    &entry.message,
+                    &self.query,
+                    size * 0.9,
+                    ui.visuals().text_color(),
+                    accent,
+                );
                 let header = ui
-                    .horizontal_wrapped(|ui| {
-                        ui.weak(egui::RichText::new(&entry.time).monospace());
-                        let color = level_color(ui, entry.level);
-                        ui.label(
-                            egui::RichText::new(entry.level.tag())
-                                .monospace()
-                                .strong()
-                                .color(color),
-                        );
-                        if !entry.source.is_empty() {
-                            ui.weak(&entry.source);
-                        }
-                        let size = ui.text_style_height(&egui::TextStyle::Body);
-                        let job = crate::app::marked_job(
-                            &entry.message,
-                            &self.query,
-                            size * 0.9,
-                            ui.visuals().text_color(),
-                            accent,
-                        );
-                        ui.label(job);
-                    })
-                    .response
-                    .interact(egui::Sense::click())
+                    .add(
+                        egui::Label::new(job)
+                            .wrap()
+                            .selectable(false)
+                            .sense(egui::Sense::click()),
+                    )
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
                     .on_hover_text(t!(if entry.detail.is_empty() {
                         "log-entry-copy-tip"

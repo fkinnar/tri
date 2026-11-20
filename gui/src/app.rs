@@ -6938,7 +6938,11 @@ impl TriApp {
         if pitch <= 0.0 || self.view_height <= 0.0 || self.layout.columns == 0 {
             return None;
         }
-        let shown: Vec<usize> = if self.stacks.shown.is_empty() {
+        // Piles d'avant un refiltrage pas encore refaites (deux refiltrages de suite) :
+        // leurs indices visent l'ancienne liste (crash du 20/11/2026, liste vide et
+        // indice 1) ; la liste telle quelle.
+        let stale = self.stacks_dirty || self.stacks.shown.iter().any(|&i| i >= self.files.len());
+        let shown: Vec<usize> = if self.stacks.shown.is_empty() || stale {
             (0..self.files.len()).collect()
         } else {
             self.stacks.shown.clone()
@@ -6963,7 +6967,11 @@ impl TriApp {
         let first = *shown.get(first_row * self.layout.columns)?;
         let shift = top - first_row as f32 * pitch;
         Some((
-            self.files[first..].iter().map(|f| f.path.clone()).collect(),
+            self.files
+                .get(first..)?
+                .iter()
+                .map(|f| f.path.clone())
+                .collect(),
             shift,
         ))
     }
@@ -24235,6 +24243,21 @@ pub(crate) fn marked_job(
     color: Color32,
     marked: Color32,
 ) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    append_marked(&mut job, text, query, size, color, marked);
+    job
+}
+
+/// [`marked_job`] ajouté à la fin de `job` (journal : l'en-tête et le message en un seul
+/// texte, qui revient à la ligne dans sa fenêtre).
+pub(crate) fn append_marked(
+    job: &mut egui::text::LayoutJob,
+    text: &str,
+    query: &str,
+    size: f32,
+    color: Color32,
+    marked: Color32,
+) {
     let marks = tri::fuzzy::matched_chars(query, text);
     let font = egui::FontId::proportional(size);
     let plain = egui::TextFormat::simple(font.clone(), color);
@@ -24242,7 +24265,6 @@ pub(crate) fn marked_job(
         underline: egui::Stroke::new(1.0, marked),
         ..egui::TextFormat::simple(font, marked)
     };
-    let mut job = egui::text::LayoutJob::default();
     let mut buf = [0u8; 4];
     for (i, c) in text.chars().enumerate() {
         let format = if marks.binary_search(&i).is_ok() {
@@ -24252,7 +24274,6 @@ pub(crate) fn marked_job(
         };
         job.append(c.encode_utf8(&mut buf), 0.0, format);
     }
-    job
 }
 
 /// `label` sans sa précision finale entre parenthèses : le menu des suites se lit d'un
@@ -34068,6 +34089,24 @@ mod tests {
                 .0
                 .contains("Pas de pile ici")
         );
+    }
+
+    #[test]
+    fn a_refilter_before_the_stacks_are_redone_does_not_crash() {
+        // Crash du 20/11/2026 (`grid_anchor`, « range start index 1 out of range for slice
+        // of length 0 ») : un refiltrage qui ne laisse rien, puis un autre avant que les
+        // piles soient refaites ; leurs indices visaient encore l'ancienne liste.
+        let (mut h, _dir) = harness_with(40, 30);
+        h.run_steps(3);
+        assert!(h.state().layout.columns > 0 && h.state().view_height > 0.0);
+        let app = h.state_mut();
+        app.mode = Mode::Grid;
+        app.cursor_hidden = true;
+        app.files.clear();
+        app.status.clear();
+        app.stacks.shown = vec![1, 2];
+        app.refilter(Reveal::Minimal);
+        assert_eq!(h.state().files.len(), 3);
     }
 
     #[test]
