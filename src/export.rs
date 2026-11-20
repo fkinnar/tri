@@ -834,7 +834,7 @@ pub fn export(
     let total = images.len();
     let mut report = Report::default();
     let mut errors = Vec::new();
-    let mut run = |cmd: Command, report: &mut Report| -> Result<(), DevelopError> {
+    let mut run = |cmd: Command, dir: &Path, report: &mut Report| -> Result<(), DevelopError> {
         let mut cmd = cmd;
         cmd.args(&args)
             .args(["--apply-custom-presets", "false"])
@@ -848,7 +848,7 @@ pub fn export(
             cmd.args(["--conf", c]);
         }
         let line = crate::develop::command_line(&cmd);
-        let (status, message) = run_darktable(cmd, total, cancel, report, &mut progress)?;
+        let (status, message) = run_darktable(cmd, dir, total, cancel, report, &mut progress)?;
         if !status.success() {
             // Tout le détail au journal (issue n° 398) ; le bilan n'en garde qu'une ligne.
             crate::log::error(
@@ -892,7 +892,7 @@ pub fn export(
                 .unwrap_or_else(|| output_pattern(&dir, NAME).expect("{name}")),
         );
         let first = report.written.len();
-        run(cmd, &mut report)?;
+        run(cmd, &dir, &mut report)?;
         if pattern.is_none() {
             rename_written(&mut report, first, &group, req);
         }
@@ -910,8 +910,9 @@ pub fn export(
             }
         };
         let mut cmd = dt.cli.command();
+        let dir = out.parent().map(Path::to_path_buf).unwrap_or_default();
         cmd.arg(&clone.photo).arg(&clone.sidecar).arg(out);
-        run(cmd, &mut report)?;
+        run(cmd, &dir, &mut report)?;
     }
     if report.written.is_empty() && !errors.is_empty() {
         let last = errors
@@ -984,8 +985,15 @@ fn failed_image(image: &Path, error: &dyn std::fmt::Display) -> (PathBuf, String
 /// Lance darktable (`cmd`, sorties lues au fil de l'eau) jusqu'au bout : chaque fichier
 /// écrit va dans `report` et `progress` (sur `total`). Rend son statut et ses messages
 /// d'erreur ; `cancel` l'arrête.
+///
+/// darktable écrit ses lignes « exported to » dans un tampon quand sa sortie est un
+/// tuyau : elles n'arrivent qu'à sa fin (retour du 20/11/2026 : 0 / 14 tout le long d'un
+/// export de quatre minutes). La progression suit donc aussi les fichiers qui apparaissent
+/// dans `dir`, le dossier de sortie ([`new_files`]) ; `report` ne prend que les chemins
+/// donnés par darktable.
 fn run_darktable(
     mut cmd: Command,
+    dir: &Path,
     total: usize,
     cancel: &AtomicBool,
     report: &mut Report,
@@ -994,12 +1002,14 @@ fn run_darktable(
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    // Fichiers déjà là avant le lancement : pas les nôtres.
+    let before = list_files(dir);
     let mut child = crate::process::spawn(&mut cmd)
         .map_err(|e| DevelopError::Failed(Engine::Darktable, e.to_string()))?;
     // Sorties lues dans des fils à part : darktable ne se bloque jamais sur un tuyau plein.
     let (tx, rx) = std::sync::mpsc::channel();
     let stdout = child.stdout.take().expect("stdout");
-    std::thread::spawn(move || {
+    let lines = std::thread::spawn(move || {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             if let Some(path) = exported_path(&line) {
                 let _ = tx.send(path);
@@ -1012,17 +1022,35 @@ fn run_darktable(
         let _ = stderr.read_to_string(&mut text);
         text
     });
-    let mut written = |report: &mut Report, path: PathBuf| {
+    // Un chemin donné par darktable ; la progression ne recule jamais (les fichiers vus
+    // dans le dossier l'ont souvent déjà avancée).
+    fn written(
+        report: &mut Report,
+        path: PathBuf,
+        shown: &mut usize,
+        total: usize,
+        progress: &mut impl FnMut(usize, usize, &Path),
+    ) {
         report.written.push(path);
-        progress(
-            report.written.len(),
-            total,
-            report.written.last().expect("ajouté"),
-        );
-    };
+        *shown = (*shown).max(report.written.len());
+        progress(*shown, total, report.written.last().expect("ajouté"));
+    }
+    let base = report.written.len();
+    let mut shown = base;
+    let mut looked = std::time::Instant::now();
     let status = loop {
         for path in rx.try_iter() {
-            written(report, path);
+            written(report, path, &mut shown, total, progress);
+        }
+        if looked.elapsed() >= POLL_OUTPUT {
+            looked = std::time::Instant::now();
+            let appeared = new_files(&before, dir);
+            if let Some(last) = appeared.last()
+                && base + appeared.len() > shown
+            {
+                shown = (base + appeared.len()).min(total);
+                progress(shown, total, last);
+            }
         }
         if cancel.load(Ordering::Relaxed) {
             let _ = child.kill();
@@ -1036,10 +1064,11 @@ fn run_darktable(
         }
     };
     let message = errors.join().unwrap_or_default();
-    // Dernières lignes de la sortie, lues après la fin du programme.
-    std::thread::sleep(Duration::from_millis(20));
+    // Dernières lignes de la sortie, lues jusqu'au bout après la fin du programme (toutes,
+    // quand darktable les gardait en tampon : 20 ms d'attente n'y suffisaient pas toujours).
+    let _ = lines.join();
     for path in rx.try_iter() {
-        written(report, path);
+        written(report, path, &mut shown, total, progress);
     }
     Ok((status, message))
 }
@@ -2253,6 +2282,39 @@ fn write_image(
     }
 }
 
+/// Intervalle entre deux regards dans le dossier de sortie pendant un export darktable.
+const POLL_OUTPUT: Duration = Duration::from_millis(500);
+
+/// Fichiers de `dir` (sans les sous-dossiers ni les fichiers cachés).
+fn list_files(dir: &Path) -> HashSet<PathBuf> {
+    std::fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+                .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
+                .map(|e| e.path())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Fichiers apparus dans `dir` depuis `before`, du plus ancien au plus récent.
+fn new_files(before: &HashSet<PathBuf>, dir: &Path) -> Vec<PathBuf> {
+    let mut new: Vec<(std::time::SystemTime, PathBuf)> = list_files(dir)
+        .into_iter()
+        .filter(|p| !before.contains(p))
+        .map(|p| {
+            let at = std::fs::metadata(&p)
+                .and_then(|m| m.modified())
+                .unwrap_or(std::time::UNIX_EPOCH);
+            (at, p)
+        })
+        .collect();
+    new.sort();
+    new.into_iter().map(|(_, p)| p).collect()
+}
+
 /// Chemin d'une ligne « `[export_job] exported to `…'` » de darktable.
 fn exported_path(line: &str) -> Option<PathBuf> {
     let rest = &line[line.find("exported to `")? + "exported to `".len()..];
@@ -2263,6 +2325,66 @@ fn exported_path(line: &str) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn darktable_progress_follows_the_files_before_its_buffered_lines() {
+        // Retour du 20/11/2026 : darktable n'envoie ses « exported to » qu'à sa fin
+        // (sortie en tampon dans un tuyau) ; la barre restait à 0 / 14.
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("out");
+        std::fs::create_dir(&out).unwrap();
+        let (a, b) = (out.join("a.jpg"), out.join("b.jpg"));
+        let script = format!(
+            "touch '{a}'; sleep 1.2; touch '{b}'; sleep 1.2; \
+             echo \"[export_job] exported to \\`{a}'\"; \
+             echo \"[export_job] exported to \\`{b}'\"",
+            a = a.display(),
+            b = b.display()
+        );
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c").arg(script);
+        let mut seen: Vec<(usize, std::time::Instant)> = Vec::new();
+        let mut report = Report::default();
+        let (status, _) = run_darktable(
+            cmd,
+            &out,
+            2,
+            &AtomicBool::new(false),
+            &mut report,
+            &mut |n, _, _| seen.push((n, std::time::Instant::now())),
+        )
+        .unwrap();
+        let end = std::time::Instant::now();
+        assert!(status.success());
+        assert_eq!(report.written, [a, b]);
+        let counts: Vec<usize> = seen.iter().map(|(n, _)| *n).collect();
+        assert!(counts.windows(2).all(|w| w[0] <= w[1]), "{counts:?}");
+        assert_eq!(counts.last(), Some(&2));
+        // La première image comptée bien avant la fin de darktable.
+        let first = seen.iter().find(|(n, _)| *n == 1).expect("1 / 2 montré");
+        assert!(end - first.1 > Duration::from_millis(800), "{counts:?}");
+    }
+
+    #[test]
+    fn new_files_are_those_that_appear_oldest_first() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("old.jpg"), b"x").unwrap();
+        std::fs::write(dir.path().join(".hidden"), b"x").unwrap();
+        let before = list_files(dir.path());
+        assert_eq!(before.len(), 1);
+        assert!(new_files(&before, dir.path()).is_empty());
+        std::fs::write(dir.path().join("b.jpg"), b"x").unwrap();
+        std::thread::sleep(Duration::from_millis(20));
+        std::fs::write(dir.path().join("a.jpg"), b"x").unwrap();
+        std::fs::create_dir(dir.path().join("sub")).unwrap();
+        assert_eq!(
+            new_files(&before, dir.path()),
+            [dir.path().join("b.jpg"), dir.path().join("a.jpg")]
+        );
+        // Dossier absent : rien, sans erreur.
+        assert!(list_files(&dir.path().join("none")).is_empty());
+    }
 
     #[test]
     fn the_export_renders_like_the_screen() {

@@ -74,8 +74,11 @@ X-T4, en JPEG 2048 px : 13,5 s en tout.
   l'extension ; `{name}` seul passe à darktable comme `$(FILE_NAME)` (nom de l'image sans
   extension). darktable n'écrase jamais rien : il ajoute `_01`…
 - **Progression** : darktable écrit une ligne `[export_job] exported to `…'` par fichier.
-  Lue au fil de l'eau, elle donne la progression et les fichiers vraiment écrits
-  (`Report::written`). Les images sans fichier écrit sont comptées (`Report::failed`).
+  Elle donne les fichiers vraiment écrits (`Report::written`) ; les images sans fichier
+  écrit sont comptées (`Report::failed`). Mais dans un tuyau, darktable garde ces lignes
+  en tampon jusqu'à sa fin (20/11/2026 : barre à 0 / 14 pendant tout un export de quatre
+  minutes) : la **progression** suit donc aussi les fichiers qui apparaissent dans le
+  dossier de sortie (regardé toutes les 500 ms), sans jamais reculer.
 - **Annulation** : le programme est arrêté ; les fichiers déjà écrits restent.
 - **Paires RAW+JPEG** : voir « Paires RAW + JPEG, mélanges » (les deux sont exportés).
 - **Rien n'est écrit chez l'utilisateur** : configuration propre
