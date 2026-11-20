@@ -7624,12 +7624,30 @@ impl TriApp {
         }
     }
 
-    /// Juge la netteté de tout le dossier, dans l'ordre du dossier quels que soient les
-    /// filtres (les voisines d'une photo sont celles prises juste avant et après) ; dans
+    /// Juge la netteté de tout le dossier, dans l'ordre de prise de vue quels que soient
+    /// le tri et les filtres (les voisines d'une photo sont celles prises juste avant et après) ; dans
     /// les piles d'images semblables quand les empreintes sont connues
     /// (`sharpness::judge_in_groups`, seuil `[sharpness] group_threshold`).
     fn rejudge(&mut self) {
-        let files = &self.folder.files;
+        // Toujours dans l'ordre de prise de vue, pas dans celui de la grille (vidéo du
+        // 20/11/2026 : `folder.files` est trié sur place par le tri choisi ; trié par
+        // étoiles ou par nom, les « voisines » d'une photo n'étaient plus celles prises
+        // juste avant et après, et les piles ne se formaient plus : le libellé de la
+        // netteté changeait avec le tri).
+        let mut files = self.folder.files.clone();
+        let signatures = &self.signatures;
+        let notes = &self.folder.notes;
+        tri::sort::sort(
+            &mut files,
+            tri::sort::Order {
+                key: tri::sort::SortKey::Captured,
+                descending: false,
+            },
+            |p| signatures.get(p).and_then(|s| s.time),
+            |p| notes.notes(p).clone(),
+            &self.settings.sort,
+        );
+        let files = &files;
         let ordered: Vec<(PathBuf, Option<f32>)> = files
             .iter()
             .map(|f| (f.path.clone(), self.scores.get(&f.path).copied()))
@@ -34046,6 +34064,60 @@ mod tests {
         // `a` sortie de la liste entre-temps : le moteur la redira.
         assert_eq!(app.status[a].embedded, Avail::Pending);
         assert_eq!(app.status.len(), app.files.len());
+    }
+
+    #[test]
+    fn sharpness_is_judged_in_capture_order_whatever_the_sort() {
+        // Vidéo du 20/11/2026 : trier la grille (par étoiles…) changeait le jugement de
+        // netteté (« × 1,25 les voisines » puis « × 1,17 la pile ») : il se faisait dans
+        // l'ordre de la grille. Les voisines d'une photo sont celles prises juste avant et
+        // après, quel que soit le tri.
+        let names: Vec<String> = (0..9).map(|i| format!("i{i}.jpg")).collect();
+        let images = names
+            .iter()
+            .map(|n| (n.as_str(), image::RgbImage::new(16, 16)))
+            .collect();
+        let (mut h, _dir) = harness_images(images);
+        h.run_steps(3);
+        let paths: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        for (path, score) in paths
+            .iter()
+            .zip([10.0, 3.0, 9.0, 4.0, 8.0, 2.0, 10.0, 5.0, 9.0])
+        {
+            h.state_mut().scores.insert(path.clone(), score);
+        }
+        h.state_mut().rejudge();
+        let ratios = |app: &TriApp| -> Vec<Option<f32>> {
+            paths
+                .iter()
+                .map(|p| app.judgements.get(p).and_then(|j| j.neighbour_ratio))
+                .collect()
+        };
+        let before = ratios(h.state());
+        assert!(before.iter().all(Option::is_some));
+        // Des étoiles qui mélangent l'ordre de la grille.
+        for (index, stars) in [(8, 5), (1, 4), (5, 3)] {
+            let at = h
+                .state()
+                .files
+                .iter()
+                .position(|f| f.path == paths[index])
+                .unwrap();
+            h.state_mut().selected = at;
+            act(&mut h, Action::Stars(stars));
+        }
+        h.state_mut().set_order(tri::sort::Order {
+            key: tri::sort::SortKey::Stars,
+            descending: true,
+        });
+        h.run_steps(2);
+        assert_eq!(
+            h.state().files[0].path,
+            paths[8],
+            "grille triée par étoiles"
+        );
+        h.state_mut().rejudge();
+        assert_eq!(ratios(h.state()), before, "même jugement");
     }
 
     #[test]
