@@ -2,8 +2,190 @@
 
 *[English version](CHANGELOG.md)*
 
-## Non publié
+## 1.0.0-beta.2 — 20/11/2026
 
+Deuxième bêta : paires RAW+JPEG regroupées en une photo, résumé du dossier qui filtre,
+réglages de visualisation et gestion des couleurs, versions en mosaïque et côte à côte,
+renommage par lot, gabarits et file d'attente d'export, notation en ligne de commande,
+une fenêtre qui reste fluide sur les disques lents (iCloud, NAS), raccourcis Cmd sur
+macOS, et les corrections des tests sur macOS, Linux et Windows.
+
+- Barre d'état : pendant que les rendus développés d'un dossier sont vérifiés dans le
+  cache, elle affiche « vérification du cache » ; « développement » ne compte plus que les
+  rendus vraiment refaits, et rien ne s'affiche si tout était déjà en cache.
+- Export avec accentuation de sortie ou d'une version (par darktable) : les photos sont
+  rendues et écrites une à une, la barre de progression avance à chaque photo au lieu de
+  rester à 0 jusqu'à ce que toutes soient rendues.
+- Panneau des dossiers : iCloud Drive apparaît dans la section Réseau (macOS ; aussi
+  iCloud pour Windows). Il était caché dans le dossier Bibliothèque.
+- Corrigé un plantage quand la grille était refiltrée deux fois avant que ses piles soient
+  refaites (par exemple après un filtre qui ne laissait aucune photo).
+- Journal de l'application : les longs messages reviennent à la ligne dans la fenêtre au
+  lieu d'en déborder à gauche.
+- Export par darktable : la barre de progression avance à chaque fichier écrit. Elle
+  restait à 0 jusqu'à la fin, darktable n'annonçant ses fichiers qu'en se terminant.
+- macOS : les raccourcis d'application passent sur Cmd, comme dans toute application Mac
+  (Cmd+Z, Cmd+C, Cmd+E, Cmd+, …). `Cmd+` dans les raccourcis vaut Cmd sur macOS et Ctrl
+  ailleurs ; les touches de vim et tmux (Ctrl+U / Ctrl+D / Ctrl+R, le leader Ctrl+B) et
+  l'historique (Ctrl+H : Cmd+H masque l'application) restent sur Ctrl.
+- La netteté est jugée dans l'ordre de prise de vue, quel que soit le tri de la grille :
+  trier par étoiles ou par nom ne change plus les voisines d'une photo, ni le verdict de
+  flou et son libellé.
+- L'aide `?` défile de nouveau au clavier (flèches haut et bas, touches de page, Ctrl+U /
+  Ctrl+D), et les flèches ne font plus clignoter son champ de recherche.
+- La boîte affichée pendant l'ouverture d'un dossier lent est plus aérée : le nom du
+  dossier en titre, puis ses trois étapes (liste des images, notes, réglages du dossier)
+  cochées au fil de l'eau.
+- Noter une photo en plein écran sous un filtre de notes ne la fait plus clignoter (sur un
+  support lent, disparaître plusieurs secondes) le temps que le dossier soit refiltré.
+- Changer ou coller des réglages de visualisation ne fige plus la fenêtre sur un support
+  lent : les vignettes à redessiner sont lues dans le cache en fond.
+- Ouvrir un dossier sur un support lent ne fige plus la fenêtre pendant que tri cherche
+  les photos développées dans darktable (39 s pour 1 811 photos sur iCloud), ni pendant
+  que le panneau des dossiers montre lesquels écrivent les notes dans les images : les
+  deux se lisent en fond.
+- Une grille triée par date de prise de vue ne relance plus sans cesse le travail de fond
+  pendant la lecture des empreintes de similarité : elle est triée une fois toutes là.
+- Ouvrir un dossier sur un montage lent (iCloud, NAS) : les sidecars XMP lus pour trouver
+  les développements darktable s'ouvrent 16 à la fois au lieu d'un par un (`[gui.folders]
+  sidecar_check_threads`) ; 300 sidecars sur un disque lent simulé : 19 s → 3 s.
+- Les notes s'affichent tout de suite et s'écrivent en fond, dans l'ordre : sur un support
+  lent (iCloud, NAS), noter ne fige plus la fenêtre. Une écriture ratée remet ce qui est
+  sur le disque et le dit ; elle n'est plus retenue comme écrite.
+- Les pastilles des versions de l'image en plein écran, la vue retenue du dossier et ses
+  piles retenues se lisent et s'écrivent en fond, dans l'ordre : sur un support lent,
+  parcourir et filtrer ne figent plus la fenêtre.
+- Les marques de paires du panneau des dossiers et l'histogramme de l'image sélectionnée
+  se lisent en fond : sur un support lent, parcourir dossiers et images ne fige plus la
+  fenêtre.
+- Outils de développement : `TRI_IO_WATCH=1` signale chaque accès disque fait depuis le
+  fil de l'interface, et `TRI_SLOW_IO_MS` simule un support lent (iCloud, NAS), pour
+  trouver ce qui peut y figer la fenêtre.
+- Chercher où un dossier garde ses données ne tient plus un verrou pendant la lecture du
+  disque : sur un montage lent (iCloud, NAS), le cache, le moteur et la fenêtre
+  n'attendent plus derrière une seule recherche lente, qui figeait la fenêtre plusieurs
+  secondes au lancement.
+- La boîte « Ouverture… » d'un dossier lent montre qu'elle vit : un sablier plus grand,
+  qui tourne sans à-coups, et le temps écoulé.
+- Les empreintes de similarité, les scores de netteté et les badges d'exposition sont lus
+  dans le cache en fond : avec un cache sur un support lent (iCloud, NAS), la fenêtre ne
+  se fige plus plusieurs secondes pendant l'analyse d'un dossier.
+- La grille lit ses vignettes dans le cache en fond : un cache sur un support lent (gardé
+  dans iCloud, sur un NAS) ne fige plus la fenêtre (`[gui] grid_read_threads`,
+  `grid_read_keep`).
+- Déplacer un dossier : la boîte dit où ira son cache. Un cache gardé avec les photos
+  (une clé, un disque) déplacé vers un endroit qui ne garde pas le sien (iCloud…) est
+  désormais gardé avec le dossier déplacé, pour qu'il le suive sur les autres ordinateurs,
+  au lieu de rester dans le cache de cet ordinateur.
+- Ouvrir un dossier sur un support lent (iCloud, NAS) ne fige plus la fenêtre entre le clic
+  et l'ouverture : les données du dossier se lisent en fond, et la boîte « Ouverture… »
+  dit l'étape en cours (liste, notes, réglages du dossier).
+- Un dossier rouvert sur l'image où l'on en était la garde en haut de la grille pendant
+  que les piles se forment : la grille ne défile plus d'elle-même pour s'arrêter sur des
+  vignettes grises.
+- Un dossier déplacé sur une clé FAT32 avec son cache ne recalcule plus tout : la clé du
+  cache garde la date de modification à 2 secondes près. Le format du cache change
+  (`v5`) : aperçus et analyses sont recalculés une fois après la mise à jour.
+- `f k` (aussi `<leader> f k`) affiche les filtres en cours et le nombre de photos qui
+  restent, en grand, dans un encadré au milieu de l'écran ; il suit les changements de
+  filtre et se ferme avec Échap (`[gui.grid] filter_count_size`).
+- Effacer les filtres en grille ramène à la première image, en haut, d'un seul saut (la
+  grille s'arrêtait quelque part au milieu, après plusieurs mouvements).
+- Filtres : `f d` efface tous les filtres ; Échap après `f` ne fait plus que fermer le
+  menu, comme après le leader (il effaçait les filtres). Les filtres sont aussi
+  accessibles après le leader (`<leader> f 3`), rangés sous « f » dans son menu.
+- Les réglages sur beaucoup d'images ne figent plus l'interface : à partir de `[gui]
+  adjust_background_from` images (20), coller, harmoniser et enregistrer se font en fond,
+  avec « Réglages : n / N » dans la barre d'état.
+- Réglages : une image dont la balance dépasse la plage du curseur des kelvins ne la voit
+  plus réécrite (avec un pas d'annulation en trop) du seul fait d'être montrée dans le
+  panneau.
+- Plein écran : les boutons ↑ / ↓ de la barre du bas s'appellent « Pile précédente » et
+  « Pile suivante » (leur bulle disait « Ligne du dessus » / « du dessous »).
+- Déchargement d'une carte : les messages de place insuffisante sont plus courts, tailles
+  en Go (« Pas assez de place : 12,4 Go à copier, 7,8 Go libres. ») ; l'explication de
+  « Décharger quand même » passe dans sa bulle.
+- La barre du bas et la barre des filtres ne se réorganisent plus : les boutons sans objet
+  (boutons des piles sans les piles, flèches des développements sur une photo sans
+  développement) restent à leur place, grisés plus sombre, au lieu de disparaître.
+- Le bouton du filtre « pile courante seulement » a sa propre icône (une petite pile entre
+  des coins de cadrage), différente de l'interrupteur des piles.
+- Après un changement de filtre, tri peut repartir de la première image au lieu de rester
+  sur l'image sélectionnée : `f g` ou le nouveau bouton de la barre du bas (à côté de
+  l'entrée dans les piles) l'allume ou l'éteint (`[gui] filter_restart`, retenu).
+- En plein écran ajusté, la roulette passe à l'image suivante (vers le bas) ou précédente
+  (vers le haut), une par cran (`[gui.view] wheel_step`) ; zoomée, elle déplace toujours
+  l'image.
+- Linux : un disque éjecté ne reste plus dans le panneau des dossiers quand son dossier
+  de montage demeure dans `/media` ; seuls les vrais points de montage sont des volumes.
+- Exporter plusieurs versions d'un coup (« Exporter les N versions », « Exporter tout »)
+  se termine maintenant par une seule bulle de bilan pour toutes, au lieu d'une par
+  version.
+- Les montages lents (iCloud Drive, NAS) ne figent plus la fenêtre : le panneau des
+  dossiers lit en fond les dossiers qu'il déplie, ceux qu'il relit et les favoris, avec
+  une roue sur un dossier encore en lecture (`[places] read_wait_ms`), et la surveillance
+  du dossier ouvert reprend elle-même sa référence après une note au lieu de relire le
+  dossier depuis l'interface.
+- Versions : supprimer une version demande désormais confirmation partout (comparaison, éditeur de cadre, liste du plein écran) ; Entrée supprime, Échap garde. Dans la comparaison des versions, l'étiquette de chaque volet donne aussi le préréglage d'export de la version, ou dit qu'elle n'en a pas. Les indications de touches évidentes (« Entrée : … », « Échap : fermer ») ont disparu des boîtes, des bulles et de l'aide. Échap depuis une image ou une version ouverte en plein écran depuis une comparaison ramène désormais à cette comparaison (elle ramenait à la grille).
+- Comparaison des versions : une section « Versions » du panneau de droite filtre les volets par rendu (JPEG boîtier, rendu RAW, un développement), une case par rendu avec son nombre de versions.
+- Les versions se suppriment là où on les regarde : dans la comparaison des versions, Suppr (`x` en vim) supprime les versions marquées, sinon l'active, en un seul pas d'annulation ; l'éditeur d'une version existante a un bouton « Supprimer la version » (et la même touche, pas pendant qu'on tape le nom).
+- Boîte d'export : avec « Exporter les versions » cochée, « Les images entières aussi » exporte aussi chaque image entière (celles sans version comprises) avec le préréglage, le dossier et le nom de la boîte.
+- darktable : quand un rendu échoue parce que le darktable installé est plus ancien que celui qui a fait le développement (par exemple AgX de darktable 5.x avec la 4.6 de Linux Mint 22), l'erreur nomme désormais les modules inconnus et la version installée, et conseille d'installer un darktable à jour. La sortie standard de darktable est aussi gardée au journal.
+- Une version appartient à son rendu : la comparaison des versions montre chaque version dans le rendu sur lequel elle a été cadrée (JPEG boîtier, rendu RAW ou un développement), jamais dans celui de la grille ; ce qu'on voit est ce qui s'exporte. Le volet « Original » prend le rendu de la version active. Une version cadrée sur un développement dont le logiciel manque est dite indisponible et n'est pas exportée dans un autre rendu.
+- Boîte d'export : quand les images marquées ont des versions, une case « Exporter les versions » les exporte à la place des images entières, chacune avec son préréglage d'export, son dossier et son nom (celui de la boîte pour celles qui n'en ont pas). Une seconde case, « Ce préréglage pour toutes les versions », leur applique à toutes le préréglage, le dossier et le nom de la boîte.
+- Les versions d'un développement darktable sont désormais gardées dans son sidecar darktable (`IMG.RAF.xmp`, à côté de ses notes), et non plus dans un fichier `IMG@dt.RAF.xmp` au nom du chemin interne de tri. Les fichiers déjà créés sont encore lus, et repris sans rien perdre à la prochaine modification.
+- Sélection : Maj+clic, le mode visuel et « tout sélectionner » ne marquent plus les photos et développements cachés dans une pile de développements repliée. Quatre vignettes marquées font quatre images, pas sept, et un export n'envoie plus plusieurs fois la même photo.
+- Enregistrer la première version d'une image sans sidecar `.xmp` ne signale plus de conflit de notes : le sidecar créé porte désormais les notes que tri retient pour l'image (par exemple des étoiles inscrites dans un JPEG), et non des notes vides.
+- Versions côte à côte (#393) : le badge des versions d'une vignette, `<leader> v v` (aussi depuis le plein écran) ou la palette ouvrent la comparaison avec un volet par version, recadré, zoom lié ; « Original » montre l'image entière en premier volet. Ctrl+E exporte la version active ; les versions marquées (Espace, Ctrl+clic) ou « Exporter tout » partent ensemble, chacune avec son préréglage, par la file d'export. `v` modifie la version active et ramène à la comparaison.
+- Export : le nom des fichiers est un gabarit par préréglage (`file_name`), avec les champs du renommage par lot : `{name}`, `{date}`, `{time}`, `{folder}`, `{camera}` et `{n}`, le rang dans l'export (`{n:3}` = 001) ; `{name}` par défaut. La boîte d'export a un champ « Nom des fichiers » sous le dossier, retenu par préréglage comme lui ; `tri --export … --name <gabarit>` en ligne de commande. L'ancienne clé `suffix` marche toujours (`-web` vaut `{name}-web`) (#485).
+- Champs des gabarits : `{folder}` est désormais le nom du dossier en entier, avec sa date ; `{folder_short}` le nom sans la date en tête (ce que donnait `{folder}` avant). Le gabarit proposé du renommage par lot devient `{date}_{folder_short}_{n:3}`.
+- Fenêtre de réglages et aide : les mêmes six titres repliables (Général, Importer et fichiers, Trier et noter, Affichage, Développer et exporter, Avancé), pour les découvrir sans rien chercher. Les réglages s'ouvrent sur Langue ; l'aide passe en deux colonnes comme les réglages (les thèmes à gauche, leurs raccourcis à droite ; les flèches changent de thème). Au survol d'une ligne de l'aide, « Modifier… » ouvre les réglages sur ce raccourci.
+- Fenêtre de réglages : plus de pavés de texte. Chaque long commentaire de la configuration d'exemple commence par un résumé d'une ligne, seule partie que montre la fenêtre ; la référence qui suit reste dans le fichier et la recherche de la fenêtre la trouve toujours (#486). Une page vide « Données [data] » (son seul réglage n'est qu'un exemple en commentaire) n'est plus listée.
+- Liste « Rendu affiché » (plein écran) : un logiciel qui n'a pas développé la photo le dit (entrée grisée « pas développée » dans la liste, « pas de développement Darktable » dans la barre d'état au lieu de « pas encore développé (<leader> rr) » : tri rend un développement fait dans le logiciel, il ne peut pas en créer) ; les entrées sont alignées, avec ou sans signet, et le surlignage couvre toute la largeur de la liste (#487).
+- **Champs des gabarits dans l'aide** (#484) : l'aide F1 liste les champs des gabarits du
+  renommage par lot et des dossiers d'export (`{date}`, `{time}`, `{name}`, `{n}`, `{folder}`,
+  `{camera}`, `{source}`), chacun avec un exemple et où il sert ; chercher « gabarit » ou un
+  champ.
+- **Fenêtre de réglages : une phrase pour les préréglages** (#483) : les pages des
+  préréglages d'export et de version montraient sous leur titre toute la référence des
+  clés du fichier d'exemple ; elles n'en montrent plus qu'une phrase, la référence restant
+  dans le fichier pour qui l'édite à la main.
+- **Le JPEG d'une paire regroupée garde ses réglages** (#482, ferme #481) : +1 IL posé sur
+  un RAW se retrouvait sur son JPEG boîtier, qui écrêtait. Chaque fichier garde maintenant
+  les siens : avec un seul sidecar partagé (convention Adobe, `IMG.xmp`), ceux du JPEG
+  vont sous `tri:AdjustJpeg`, et synchroniser sur une sélection, « appliquer à la
+  sélection » et coller ne passent plus d'un RAW à son JPEG regroupé ni l'inverse.
+- **Dossier d'export en gabarit** (#479, ferme #480) : le dossier d'un préréglage est un
+  gabarit — `{source}` (le dossier de chaque image), `~/…` ou `/…`, et les champs du
+  renommage par lot `{date}`, `{time}`, `{name}`, `{folder}`, `{camera}`
+  (`~/Images/Export/{date}_{folder}`) — au lieu de la règle implicite « un `export`
+  relatif est à côté de chaque image » (`export` se lit maintenant `{source}/export`, le
+  défaut). La boîte d'export montre le gabarit lui-même, sans la ligne « Destination »
+  dessous, une erreur en rouge pour un champ inconnu ; un dossier tapé ou choisi par
+  Parcourir est retenu tel quel pour son préréglage, d'une session à l'autre.
+- **Renommage par lot** (#478, ferme #439) : avec plusieurs photos sélectionnées, `F2`
+  (ou Renommer dans la boîte du clic droit, plus grisé) les renomme toutes par un gabarit
+  de champs entre accolades — `{date}`, `{time}`, `{name}`, `{n}` / `{n:3}`, `{folder}`,
+  `{camera}` — numérotées dans l'ordre de la grille, avec l'aperçu des nouveaux noms en
+  direct. Paires, sidecars et clones suivent ; un nom déjà pris ou donné deux fois est
+  montré en rouge et bloque tout le lot ; un seul pas d'annulation. Gabarit par défaut
+  `[files] rename_template`.
+- **File d'attente des exports** (#477, ferme #400) : `Ctrl+E` pendant un export n'est
+  plus refusé (« Un export est déjà en cours », facile à manquer) ; le nouvel export
+  attend son tour et part à la fin du précédent, avec ce qui a été demandé (images,
+  préréglage, dossier, rendu). Chaque export en attente a sa ligne dans la barre d'état,
+  avec un × pour le retirer ; chacun garde sa bulle de fin et sa ligne au rapport.
+- **Erreurs des réglages en clair** (#476, ferme #353) : une valeur refusée ne dit plus
+  « invalid value: integer `-2`, expected u64 » mais « attendu : un nombre entier
+  positif ou nul (donné : -2) », dans la langue de l'interface ; un choix inconnu donne
+  les choix possibles, une clé mal tapée propose la plus proche (« vouliez-vous dire
+  « thumbnail » ? »), une clé donnée deux fois est signalée comme telle. Pareil au
+  démarrage pour un fichier de configuration invalide, qui garde sa ligne et sa colonne.
+- **Historique en fragments** (#475) : chaque pull request écrit maintenant son entrée
+  dans `changelog.d/<PR>.md` et `.fr.md` plutôt qu'en tête des historiques : des pull
+  requests ouvertes en même temps ne se heurtent plus ; `scripts/changelog.py` les
+  vérifie (dans la CI) et les rassemble dans `CHANGELOG.md` / `CHANGELOG.fr.md` pour une
+  version.
 - **Une paire regroupée est filtrée comme une photo** (#474) : sous un filtre sur le
   contenu (bien exposées, nettes, notes…), le JPEG d'une paire regroupée suit son RAW ;
   jugé seul pendant l'arrivée des analyses, il sortait du filtre, la vignette de la

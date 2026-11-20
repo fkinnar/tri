@@ -2,8 +2,176 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
-## Unreleased
+## 1.0.0-beta.2 — 2026-11-20
 
+Second beta: RAW+JPEG pairs grouped as one photo, a folder summary that filters,
+viewing adjustments and colour management, versions in tiles and side by side, batch
+rename, export templates and queue, rating from the command line, a responsive window on
+slow drives (iCloud, NAS), Cmd shortcuts on macOS, and the fixes from the tests on macOS,
+Linux and Windows.
+
+- Status bar: while the developed renders of a folder are checked against the cache, it
+  says "checking the cache"; "developing" now only counts the renders actually redone,
+  and nothing shows when everything was already in the cache.
+- Export with output sharpening or of a version (through darktable): the photos are
+  rendered and written one at a time, so the progress bar moves with each photo instead
+  of staying at 0 until all of them are rendered.
+- Folder panel: iCloud Drive appears in the Network section (macOS; also iCloud for
+  Windows). It was hidden in the Library folder.
+- Fixed a crash when the grid was refiltered twice before its stacks were rebuilt, for
+  example after a filter that left no photo.
+- Log window: long messages wrap inside the window instead of spilling out on the left.
+- Export through darktable: the progress bar moves as each file is written. It used to
+  stay at 0 until the end, because darktable only reports its files when it exits.
+- macOS: the application shortcuts use Cmd, like every Mac application (Cmd+Z, Cmd+C,
+  Cmd+E, Cmd+, …). `Cmd+` in the shortcuts is Cmd on macOS and Ctrl elsewhere; the vim
+  and tmux keys (Ctrl+U / Ctrl+D / Ctrl+R, the leader Ctrl+B) and the history (Ctrl+H:
+  Cmd+H hides the application) stay on Ctrl.
+- Sharpness is judged in capture order whatever the grid's sort: sorting by stars or name
+  no longer changes which photos count as neighbours, nor the blur verdict and its label.
+- The `?` help scrolls with the keyboard again (arrows up and down, page keys, Ctrl+U /
+  Ctrl+D), and the arrows no longer make its search field blink.
+- The box shown while a slow folder opens is airier: the folder's name as its title, then
+  its three stages (image list, ratings, folder settings) ticked off as they finish.
+- Rating a photo in full screen under a ratings filter no longer makes it blink out (on a
+  slow drive, vanish for several seconds) while the folder is filtered again.
+- Changing or pasting viewing adjustments no longer freezes the window on a slow drive:
+  the thumbnails to redraw are read from the cache in the background.
+- Opening a folder on a slow drive no longer freezes the window while tri looks for the
+  photos developed in darktable (39 s on 1,811 photos on iCloud), nor while the folder
+  panel shows which folders write ratings into images: both are read in the background.
+- A grid sorted by capture date no longer restarts the background work over and over
+  while the similarity signatures are read: it is sorted once they are all there.
+- Opening a folder on a slow mount (iCloud, NAS): the XMP sidecars checked for darktable
+  developments are opened 16 at a time instead of one by one (`[gui.folders]
+  sidecar_check_threads`); 300 sidecars on a simulated slow drive: 19 s → 3 s.
+- Ratings show at once and are written in the background, in order: on a slow drive
+  (iCloud, NAS), rating no longer freezes the window. A failed write brings back what is
+  on disk and says so; it is no longer remembered as written.
+- The version chips of the full-screen image, the folder's kept view and its kept stacks
+  are read and written in the background, in order: on a slow drive, browsing and
+  filtering no longer freeze the window.
+- The folder panel's pair marks and the selected image's histogram are read in the
+  background: on a slow drive, browsing folders and images no longer freezes the window.
+- Development tools: `TRI_IO_WATCH=1` reports every disk access made from the interface
+  thread, and `TRI_SLOW_IO_MS` simulates a slow drive (iCloud, NAS), to find what can
+  freeze the window there.
+- Finding where a folder keeps its data no longer holds a lock while it reads the drive:
+  on a slow mount (iCloud, NAS), the cache, the engine and the window no longer wait
+  behind one slow lookup, which froze the window for seconds at launch.
+- The "Opening…" box of a slow folder shows that it is alive: a larger spinner, turning
+  smoothly, and the time elapsed.
+- Similarity signatures, sharpness scores and exposure badges are read from the cache in
+  the background: with a cache on a slow drive (iCloud, NAS), the window no longer freezes
+  for seconds while a folder is being analysed.
+- The grid reads its thumbnails from the cache in the background: a cache on a slow drive
+  (kept in iCloud, on a NAS) no longer freezes the window (`[gui] grid_read_threads`,
+  `grid_read_keep`).
+- Moving a folder: the dialog says where its cache will go. A cache kept with the photos
+  (a stick, a disk) moved to a place that does not keep its own (iCloud…) is now kept
+  with the moved folder, so that it follows it on other computers, instead of staying in
+  this computer's cache.
+- Opening a folder on a slow drive (iCloud, NAS) no longer freezes the window between the
+  click and the opening: the folder's data is read in the background, and the "Opening…"
+  box says which step is under way (list, ratings, folder settings).
+- A folder reopened on the image one was on keeps it at the top of the grid while the
+  stacks form: the grid no longer scrolls by itself and stops on grey thumbnails.
+- A folder moved to a FAT32 stick with its cache no longer computes everything again: the
+  cache key keeps the modification date to 2 seconds. The cache format changes (`v5`):
+  previews and analyses are computed once more after the update.
+- `f k` (also `<leader> f k`) shows the filters in use and the number of photos left,
+  large, in a box in the middle of the screen; it follows filter changes and closes
+  with Esc (`[gui.grid] filter_count_size`).
+- Clearing the filters in the grid goes back to the first image, at the top, in a single
+  jump (the grid used to stop somewhere in the middle, after several moves).
+- Filters: `f d` clears every filter; Esc after `f` now only closes the menu, as after
+  the leader (it used to clear the filters). The filters are also reachable after the
+  leader (`<leader> f 3`), listed under "f" in its menu.
+- Adjustments on many images no longer freeze the interface: from `[gui]
+  adjust_background_from` images on (20), pasting, harmonising and saving are done in the
+  background, with "Adjustments: n / N" in the status bar.
+- Adjustments: an image whose balance is beyond the range of the kelvin slider no longer
+  gets it rewritten (and an extra undo step) just by being shown in the panel.
+- Full screen: the ↑ / ↓ buttons of the bottom bar are named "Previous stack" and "Next
+  stack" (their tooltip said "Row above" / "Row below").
+- Offloading a card: the "not enough room" messages are shorter, with sizes in GB
+  ("Not enough room: 12.4 GB to copy, 7.8 GB free."); the explanation of "Offload anyway"
+  moved to its tooltip.
+- The bottom bar and the filter bar no longer rearrange themselves: buttons that do not
+  apply (stack buttons without stacks, development arrows on a photo without
+  developments) stay in place, greyed out darker, instead of disappearing.
+- The "current stack only" filter button has its own icon (a small stack between framing
+  corners), no longer the same as the stacks switch.
+- After a filter change, tri can start again from the first image instead of staying on
+  the selected one: `f g` or the new bottom bar button (next to the stack entry) turns it
+  on or off (`[gui] filter_restart`, remembered).
+- In fitted full screen, the mouse wheel goes to the next image (down) or the previous
+  one (up), one per notch (`[gui.view] wheel_step`); zoomed in, it still moves the image.
+- Linux: an ejected disk no longer stays in the folder panel when its mount folder is
+  left in `/media`; only real mount points are shown as volumes.
+- Exporting several versions at once ("Export the N versions", "Export all") now ends
+  with a single summary bubble for all of them, instead of one per version.
+- Slow mounts (iCloud Drive, NAS) no longer freeze the window: the folder panel reads
+  the folders it unfolds, rereads and favourites in the background, with a spinner on
+  a folder still being read (`[places] read_wait_ms`), and the open folder's watch takes
+  its new reference itself after a rating instead of rescanning the folder in the
+  interface.
+- Versions: deleting a version now asks for confirmation everywhere (comparison, frame editor, full-screen list); Enter deletes, Escape keeps. In the versions comparison, each pane's label also gives the version's export preset, or says it has none. Obvious key hints ("Enter: …", "Esc: close") are gone from dialogs, tooltips and the help. Escape from an image or a version opened full screen from a comparison now goes back to that comparison (it went to the grid).
+- Versions comparison: a "Versions" section in the right panel filters the panes by render (camera JPEG, RAW render, a development), one box per render with its number of versions.
+- Versions can be deleted where they are looked at: in the versions comparison, Delete (`x` in vim) deletes the marked versions, otherwise the active one, in one undo step; the frame editor of an existing version has a "Delete the version" button (and the same key, not while typing the name).
+- Export dialog: with "Export the versions" checked, "The whole images too" also exports each whole image (those without versions included) with the dialog's preset, folder and name.
+- darktable: when a render fails because the installed darktable is older than the one that made the development (for example AgX from darktable 5.x with the 4.6 of Linux Mint 22), the error now names the unknown modules and the installed version, and advises installing an up-to-date darktable. darktable's standard output is also kept in the log.
+- Versions belong to their render: the versions comparison shows each version in the render it was framed on (camera JPEG, RAW render or a development), never in the grid's render, so what you see is what is exported. The "Original" pane takes the active version's render. A version framed on a development whose software is missing is shown as unavailable and is not exported in another render.
+- Export dialog: when the marked images have versions, an "Export the versions" box exports them instead of the whole images, each with its own export preset, folder and name (the dialog's preset for those without one). A second box, "This preset for every version", applies the dialog's preset, folder and name to all of them.
+- Versions of a darktable development are now kept in its darktable sidecar (`IMG.RAF.xmp`, next to its ratings) instead of a stray `IMG@dt.RAF.xmp` file named after tri's internal path. Existing stray files are still read, and taken over at the next change without losing anything.
+- Selection: Shift+click, visual mode and "select all" no longer mark the photos and developments hidden in a folded development stack. Four thumbnails marked are four images, not seven, and an export no longer sends the same photo several times.
+- Saving the first version of an image with no `.xmp` sidecar no longer shows a ratings conflict: the new sidecar now carries the ratings tri keeps for the image (for example stars written inside a JPEG) instead of empty ones.
+- Versions side by side (#393): the versions badge of a thumbnail, `<leader> v v` (also from full screen) or the palette open the comparison with one pane per version, cropped, with linked zoom; "Original" shows the whole image as the first pane. Ctrl+E exports the active version; marked versions (Space, Ctrl+click) or "Export all" go together, each with its preset, through the export queue. `v` edits the active version and comes back to the comparison.
+- Export: the file names are a template per preset (`file_name`), with the batch rename fields: `{name}`, `{date}`, `{time}`, `{folder}`, `{camera}` and `{n}`, the rank in the export (`{n:3}` = 001); `{name}` by default. The export dialog has a "File names" field under the folder, remembered per preset like it; `tri --export … --name <template>` on the command line. The former `suffix` key still works (`-web` reads `{name}-web`) (#485).
+- Template fields: `{folder}` is now the folder name in full, with its date; `{folder_short}` is the name without the leading date (what `{folder}` gave before). The default batch rename template becomes `{date}_{folder_short}_{n:3}`.
+- Settings window and help: the same six collapsible headings (General, Import and files, Sort and rate, Display, Develop and export, Advanced), to discover them without searching. The settings open on Language; the help gets two columns like the settings (topics on the left, their shortcuts on the right; the arrows change topic). Hovering a help line shows "Edit…", which opens the settings on that shortcut.
+- Settings window: no more walls of text. Every long comment of the example configuration starts with a one-line summary, the only part the window shows; the reference that follows stays in the file and is still found by the window's search (#486). An empty "Data [data]" page (its only setting is a commented example) is no longer listed.
+- Shown render list (full screen): a developer that has not developed the photo says so (greyed "not developed" entry in the list, "no Darktable development" in the status bar instead of "not developed yet (<leader> rr)": tri renders a development made in the software, it cannot make one); the entries line up, with or without a bookmark, and the highlight spans the whole list (#487).
+- **Template fields in the help** (#484): the F1 help lists the fields of the batch rename
+  and export folder templates (`{date}`, `{time}`, `{name}`, `{n}`, `{folder}`, `{camera}`,
+  `{source}`), each with an example and where it can be used; search "template" or a
+  field.
+- **Settings window: one sentence for the presets** (#483): the export and version preset
+  pages showed the whole key reference of the example file under their title; they now
+  show one sentence, the reference staying in the file for hand editing.
+- **A grouped pair's JPEG keeps its own adjustments** (#482, closes #481): +1 EV set on a
+  RAW also showed on its camera JPEG, which clipped. Each file now keeps its own: with
+  one shared sidecar (Adobe convention, `IMG.xmp`) the JPEG's go under
+  `tri:AdjustJpeg`, and syncing over a selection, "apply to the selection" and paste no
+  longer pass from a RAW to its grouped JPEG or back.
+- **Export folder as a template** (#479, closes #480): a preset's folder is a template —
+  `{source}` (each image's folder), `~/…` or `/…`, and the batch rename fields `{date}`,
+  `{time}`, `{name}`, `{folder}`, `{camera}` (`~/Images/Export/{date}_{folder}`) —
+  instead of the implicit "a relative `export` is next to each image" (`export` now reads
+  `{source}/export`, the default). The export dialog shows the template itself, without
+  the "Destination" line below, an error in red for an unknown field; a folder typed or
+  picked with Browse is remembered as is for its preset, across sessions.
+- **Batch rename** (#478, closes #439): with several photos selected, `F2` (or Rename in
+  the right-click dialog, no longer greyed) renames them all by a template of fields in
+  braces — `{date}`, `{time}`, `{name}`, `{n}` / `{n:3}`, `{folder}`, `{camera}` — numbered in
+  grid order, with a live preview of the new names. Pairs, sidecars and clones follow; a
+  name already taken or given twice is shown in red and blocks the whole batch; one
+  undo step. Default template `[files] rename_template`.
+- **Export queue** (#477, closes #400): `Ctrl+E` during an export is no longer refused
+  ("An export is already running", easy to miss); the new export waits its turn and
+  starts when the previous one ends, with what was asked (images, preset, folder,
+  render). Each waiting export has its line in the status bar, with a × to remove it;
+  each keeps its own end bubble and report line.
+- **Settings errors in plain words** (#476, closes #353): a refused value no longer says
+  "invalid value: integer `-2`, expected u64" but "expected a whole number, zero or
+  more (given: -2)", in the interface language; an unknown choice lists the possible
+  ones, a mistyped key suggests the closest ("did you mean "thumbnail"?"), a key given
+  twice is said so. Same at startup for an invalid configuration file, which keeps its
+  line and column.
+- **Changelog fragments** (#475): each pull request now writes its changelog entry in
+  `changelog.d/<PR>.md` and `.fr.md` instead of the top of the changelogs, so pull
+  requests open at the same time no longer conflict; `scripts/changelog.py` checks them
+  (in the CI) and gathers them into `CHANGELOG.md` / `CHANGELOG.fr.md` for a version.
 - **A grouped pair is filtered as one photo** (#474): under a content filter (well
   exposed, sharp, ratings…) the JPEG of a grouped pair follows its RAW; judged on its
   own while the analyses arrived, it left the filter, the pair's thumbnail switched

@@ -3718,7 +3718,7 @@ dependencies = [
 
 [[package]]
 name = "tri"
-version = "1.0.0-beta.1"
+version = "1.0.0-beta.2"
 dependencies = [
  "blake3",
  "cc",
@@ -3752,7 +3752,7 @@ dependencies = [
 
 [[package]]
 name = "tri-gui"
-version = "1.0.0-beta.1"
+version = "1.0.0-beta.2"
 dependencies = [
  "chrono",
  "eframe",
