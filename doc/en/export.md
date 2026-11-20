@@ -73,8 +73,11 @@ image): its startup (~6 s) is paid only once. Measured on 2026-10-19 on two X-T4
   alone goes to darktable as `$(FILE_NAME)` (image name without extension). darktable
   never overwrites anything: it appends `_01`…
 - **Progress**: darktable writes an `[export_job] exported to `…'` line per file. Read
-  as it comes, it gives the progress and the files actually written
-  (`Report::written`). Images with no file written are counted (`Report::failed`).
+  as it comes, it gives the files actually written (`Report::written`); images with no
+  file written are counted (`Report::failed`). But in a pipe, darktable keeps these lines
+  in a buffer until it ends (2026-11-20: bar at 0 / 14 through a whole four-minute
+  export): the **progress** therefore also follows the files that appear in the output
+  folder (looked at every 500 ms), never going back.
 - **Cancellation**: the program is stopped; files already written remain.
 - **RAW+JPEG pairs**: see "RAW + JPEG pairs, mixes" (both are exported).
 - **Nothing is written in the user's setup**: a dedicated configuration
