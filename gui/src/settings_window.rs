@@ -1640,7 +1640,7 @@ impl SettingsWindow {
                 && let Some(chord) = Chord::from_event(*key, *modifiers)
             {
                 let chord = match typed.first() {
-                    Some(&c) if !chord.ctrl => Chord::char(c),
+                    Some(&c) if !chord.ctrl && !chord.cmd => Chord::char(c),
                     _ => chord,
                 };
                 chords.push(chord);

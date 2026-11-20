@@ -1676,10 +1676,18 @@ seul reste libre pour l'annulation (à venir), comme dans vim.
 Une couleur déjà posée est retirée par la même touche ; en mode une couleur (défaut), une
 autre couleur remplace la précédente.
 
-Cmd et Alt ne déclenchent aucune action : ces combinaisons restent au système (Cmd+Q…).
-Ctrl est permis (Ctrl+U / Ctrl+D du profil vim) ; Sous Linux et Windows, egui signale aussi
-Ctrl comme `command` : seul `mac_cmd`, ou `command` sans Ctrl, désigne Cmd. Pas de raccourci
-Ctrl + flèches (sur macOS, cela change de bureau), d'où Maj pour le déplacement.
+Alt ne déclenche aucune action : il reste au système. **`Cmd+` dans `keys.toml`**
+(20/11/2026, retour de l'utilisateur : les raccourcis d'application en Ctrl détonnaient
+sur Mac) : Cmd sur macOS, Ctrl sous Linux et Windows (`Chord::cmd`, `command_chord`).
+Les raccourcis d'une application y sont écrits (annuler, copier, exporter, réglages,
+recherche, palette…), là où chaque système les met. **`Ctrl+`** reste Ctrl partout, macOS
+compris : les touches de vim et tmux (Ctrl+U / Ctrl+D / Ctrl+R du profil vim, le leader
+Ctrl+B) et celles que macOS garde avec Cmd (`MAC_SYSTEM_CMD_KEYS` : Cmd+H masque
+l'application, d'où l'historique sur Ctrl+H ; Cmd+Q, Cmd+M, Cmd+W, Cmd+Espace, Cmd+Tab ;
+un test vérifie qu'aucun défaut ne les prend). Sous Linux et Windows, egui signale aussi
+Ctrl comme `command` : seul `mac_cmd`, ou `command` sans Ctrl, désigne Cmd, refusé hors
+de macOS. Pas de raccourci Ctrl + flèches (sur macOS, cela change de bureau), d'où Maj
+pour le déplacement.
 
 Filtres, communs aux deux profils : voir « Filtres » plus haut (`core.filter.*` : `f f`,
 `f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f .`, `f d`) ;

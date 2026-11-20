@@ -8874,7 +8874,7 @@ impl TriApp {
         let loupe = self.keymap.loupe();
         let is_loupe = |c: &crate::actions::Chord| {
             matches!(c.trigger, crate::actions::Trigger::Key(k)
-                if loupe == crate::settings::LoupeKey::Key(k) && !c.ctrl)
+                if loupe == crate::settings::LoupeKey::Key(k) && !c.ctrl && !c.cmd)
         };
         if chords.iter().any(|(c, _)| !is_loupe(c)) {
             self.mouse_active = false;
@@ -24908,6 +24908,13 @@ mod tests {
         (harness, dir)
     }
 
+    /// Modificateur des raccourcis `Cmd+` de `keys.toml` : Cmd sur macOS, Ctrl ailleurs.
+    const CMD: Modifiers = if crate::actions::MAC {
+        Modifiers::MAC_CMD.plus(Modifiers::COMMAND)
+    } else {
+        Modifiers::CTRL
+    };
+
     /// Tape `key` avec `modifiers` comme la vraie fenêtre la livre (revue du 28/10/2026,
     /// après #194) : egui-winit remplace Ctrl+X / C / V (et sous Windows Maj+Suppr,
     /// Ctrl+Inser, Maj+Inser) par couper / copier / coller ; `egui_kittest`, lui, enverrait
@@ -25126,7 +25133,7 @@ mod tests {
         assert!(h.state().notice.is_some());
         // Dans un autre rendu : la palette la trouve en tête, et la bascule.
         press(&mut h, Key::R, Modifiers::NONE);
-        press(&mut h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::P, CMD | Modifiers::SHIFT);
         type_text(&mut h, "passer en revue");
         let first = h
             .state()
@@ -25152,7 +25159,7 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         let palette = |h: &mut Harness<'_, TriApp>| {
-            press(h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+            press(h, Key::P, CMD | Modifiers::SHIFT);
         };
         let shown = |h: &Harness<'_, TriApp>| -> Vec<Item> {
             h.state()
@@ -25207,7 +25214,7 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         h.state_mut().metadata_panel = false;
-        press(&mut h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::P, CMD | Modifiers::SHIFT);
         type_text(&mut h, "empiler");
         let stacks = t!("panel-grid-stacks-on");
         assert_eq!(h.query_all_by_label(&stacks).count(), 1, "une fois");
@@ -25243,7 +25250,7 @@ mod tests {
         h.state_mut().stacking = true;
         h.state_mut().stacks_dirty = true;
         h.run_steps(2);
-        press(&mut h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::P, CMD | Modifiers::SHIFT);
         type_text(&mut h, "similarité");
         assert!(h.query_by_label(&t!("panel-grid-similarity")).is_some());
         // La case, puis le curseur.
@@ -25263,7 +25270,7 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         h.state_mut().metadata_panel = false;
-        press(&mut h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::P, CMD | Modifiers::SHIFT);
         type_text(&mut h, "rendu");
         let before = h.state().grid_render;
         press(&mut h, Key::ArrowDown, Modifiers::NONE);
@@ -25329,7 +25336,7 @@ mod tests {
             h.state_mut().metadata_panel = true;
             h.state_mut().folder_panel = true;
             h.state_mut().focus = focus;
-            press(h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+            press(h, Key::P, CMD | Modifiers::SHIFT);
             type_text(h, "passer");
             let hits: Vec<crate::palette::Item> = h
                 .state()
@@ -25364,7 +25371,7 @@ mod tests {
     fn the_palette_finds_and_runs_an_action() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
-        press(&mut h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::P, CMD | Modifiers::SHIFT);
         assert!(h.state().palette.is_some(), "Ctrl+Maj+P ouvre la palette");
         let before = h.state().histogram;
         type_text(&mut h, "histogramme");
@@ -25387,7 +25394,7 @@ mod tests {
         assert!(h.state().palette.is_none(), "Entrée lance et ferme");
         assert_ne!(h.state().histogram, before);
         // Échap ferme sans rien lancer.
-        press(&mut h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::P, CMD | Modifiers::SHIFT);
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().palette.is_none());
         // En vim, « : » ouvre, sans s'écrire dans le champ.
@@ -27284,13 +27291,13 @@ mod tests {
         );
         assert_eq!(h.state().history.entries().len(), 1);
         // Annulé : le développement revient.
-        press(&mut h, Key::Z, Modifiers::CTRL);
+        press(&mut h, Key::Z, CMD);
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 4);
         assert!(tri::developments::file_is_darktable(&xmp));
         h.run_steps(2);
         assert_eq!(selected_name(&h), "img0@dt.jpg");
         // Ctrl+Suppr depuis le développement : la photo et son XMP.
-        press(&mut h, Key::Delete, Modifiers::CTRL);
+        press(&mut h, Key::Delete, CMD);
         assert!(h.state().file_dialog.is_some());
         h.get_by_label("img0.jpg");
         h.get_by_label("img0.jpg.xmp");
@@ -27314,11 +27321,11 @@ mod tests {
         press(&mut h, Key::X, Modifiers::SHIFT);
         assert_eq!(h.state().history.entries().len(), 2, "un pas par note");
         // u : la dernière note (rejet) défaite, puis Ctrl+Z : les étoiles.
-        press(&mut h, Key::Z, Modifiers::CTRL);
+        press(&mut h, Key::Z, CMD);
         assert_eq!(tri::xmp::read(&image).unwrap().flag, Flag::None);
         assert_eq!(tri::xmp::read(&image).unwrap().stars, 3);
         assert!(h.state().notice.as_ref().unwrap().0.starts_with("Annulé"));
-        press(&mut h, Key::Z, Modifiers::CTRL);
+        press(&mut h, Key::Z, CMD);
         assert_eq!(tri::xmp::read(&image).unwrap().stars, 0);
         assert_eq!(
             h.state().folder.notes.notes(&image).stars,
@@ -27326,15 +27333,15 @@ mod tests {
             "affichage relu"
         );
         // Rétablir : Ctrl+R puis Ctrl+Maj+Z.
-        press(&mut h, Key::Y, Modifiers::CTRL);
-        press(&mut h, Key::Z, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::Y, CMD);
+        press(&mut h, Key::Z, CMD | Modifiers::SHIFT);
         let notes = tri::xmp::read(&image).unwrap();
         assert_eq!((notes.stars, notes.flag), (3, Flag::Rejected));
         // Modifié ailleurs : refus, rien ne bouge.
         let mut changed = notes.clone();
         changed.stars = 5;
         tri::xmp::write_sidecar(&dir.path().join("photos/img0.jpg.xmp"), &changed).unwrap();
-        press(&mut h, Key::Z, Modifiers::CTRL);
+        press(&mut h, Key::Z, CMD);
         assert_eq!(tri::xmp::read(&image).unwrap().stars, 5);
         assert!(
             h.state()
@@ -27362,7 +27369,7 @@ mod tests {
         // Déplacer l'image courante vers un dossier (Ctrl+X, couper).
         let dest = dir.path().join("dest");
         std::fs::create_dir(&dest).unwrap();
-        press(&mut h, Key::X, Modifiers::CTRL);
+        press(&mut h, Key::X, CMD);
         h.event(UiEvent::Text(dest.display().to_string()));
         h.run_steps(2);
         press(&mut h, Key::Enter, Modifiers::NONE);
@@ -27704,9 +27711,9 @@ mod tests {
     fn ctrl_a_selects_everything_and_ctrl_shift_a_nothing() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
-        press(&mut h, Key::A, Modifiers::CTRL);
+        press(&mut h, Key::A, CMD);
         assert_eq!(h.state().selection.len(), 3);
-        press(&mut h, Key::A, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::A, CMD | Modifiers::SHIFT);
         assert!(h.state().selection.is_empty());
     }
 
@@ -28213,7 +28220,7 @@ mod tests {
         assert_eq!(h.state().zoom_scale, 2.0);
         assert_eq!(h.state().loupe_scale, 1.0, "la loupe ne bouge pas");
         // Ctrl+J sans la loupe tenue : le zoom d'un palier.
-        press(&mut h, Key::J, Modifiers::CTRL);
+        press(&mut h, Key::J, CMD);
         assert_eq!(h.state().zoom_scale, 1.0);
         assert_eq!(h.state().loupe_scale, 1.0);
         // Idée de l'utilisateur, 07/11/2026 : `<leader> z /` ajusté, `<leader> z z` 100 %,
@@ -28391,10 +28398,10 @@ mod tests {
             modifiers: Modifiers::NONE,
         });
         h.run_steps(2);
-        press(&mut h, Key::K, Modifiers::CTRL);
+        press(&mut h, Key::K, CMD);
         assert_eq!(h.state().loupe_scale, 4.0);
-        press(&mut h, Key::J, Modifiers::CTRL);
-        press(&mut h, Key::J, Modifiers::CTRL);
+        press(&mut h, Key::J, CMD);
+        press(&mut h, Key::J, CMD);
         assert_eq!(h.state().loupe_scale, 1.0);
         // La roulette, la loupe tenue : un palier par cran, la grille ne défile pas.
         let offset = h.state().scroll_offset;
@@ -28510,7 +28517,7 @@ mod tests {
         h.run_steps(3);
         // Curseur masqué (Échap, clic dans le vide), puis tout sélectionné.
         h.state_mut().cursor_hidden = true;
-        press(&mut h, Key::A, Modifiers::CTRL);
+        press(&mut h, Key::A, CMD);
         assert_eq!(h.state().selection.len(), 3);
         type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Compare);
@@ -29739,7 +29746,7 @@ mod tests {
         assert_eq!(names(&h), ["img2.jpg", "img1.jpg", "img0.jpg"]);
         assert_eq!(h.state().selected, 0);
         // Annulée : img2 revient à 0 étoile, derrière (ordre des noms à égalité).
-        press(&mut h, Key::Z, Modifiers::CTRL);
+        press(&mut h, Key::Z, CMD);
         h.run_steps(2);
         assert_eq!(names(&h), ["img1.jpg", "img0.jpg", "img2.jpg"]);
         // Drapeaux : acceptée, sans drapeau, rejetée ; une rejetée sous 0 étoile.
@@ -29929,7 +29936,7 @@ mod tests {
             h.state().notice.as_ref().map(|n| n.0.clone()),
             Some(t!("files-actions-off"))
         );
-        press(&mut h, Key::X, Modifiers::CTRL);
+        press(&mut h, Key::X, CMD);
         assert!(h.state().file_dialog.is_none());
         assert!(dir.path().join("photos/img0.jpg").exists());
         click_settled(&mut h, &t!("panel-grid-files-allow"));
@@ -29954,7 +29961,7 @@ mod tests {
         let dest = dir.path().join("Sélection");
         std::fs::create_dir(&dest).unwrap();
         // Ctrl+X : déplacer l'image courante ; chemin tapé puis complété par Tab.
-        press(&mut h, Key::X, Modifiers::CTRL);
+        press(&mut h, Key::X, CMD);
         assert!(h.state().file_dialog.is_some());
         assert!(h.ctx.egui_wants_keyboard_input(), "le champ a le focus");
         let sep = std::path::MAIN_SEPARATOR;
@@ -29968,7 +29975,7 @@ mod tests {
         assert_eq!(h.state().files.len(), 2, "dossier relu");
         assert!(h.state().file_error.is_none());
         // y : copier ; la destination récente revient par la flèche du haut.
-        press(&mut h, Key::C, Modifiers::CTRL);
+        press(&mut h, Key::C, CMD);
         press(&mut h, Key::ArrowUp, Modifiers::NONE);
         press(&mut h, Key::Enter, Modifiers::NONE);
         run_until(&mut h, |app| app.file_dialog.is_none());
@@ -30067,7 +30074,7 @@ mod tests {
         let photos = dir.path().join("photos");
         let dest = dir.path().join("dest");
         std::fs::create_dir(&dest).unwrap();
-        press(&mut h, Key::X, Modifiers::CTRL);
+        press(&mut h, Key::X, CMD);
         h.event(UiEvent::Text(dest.display().to_string()));
         h.run_steps(2);
         h.get_by_label(&t!("files-with-pairs")).click();
@@ -32128,21 +32135,21 @@ mod tests {
             .unwrap();
         let found =
             |q: &str| -> Vec<Action> { help_rows(&km, q).into_iter().map(|(a, _)| a).collect() };
-        for query in ["ctrl f", "Ctrl+F", "ctrl+f", "CTRL F"] {
+        for query in ["cmd f", "Cmd+F", "cmd+f", "CMD F"] {
             let actions = found(query);
             assert!(actions.contains(&Action::Search), "{query}");
-            assert!(actions.contains(&Action::FocusMode), "{query} : Ctrl+Maj+f");
+            assert!(actions.contains(&Action::FocusMode), "{query} : Cmd+Maj+f");
             assert_eq!(actions.len(), 2, "{query} : {actions:?}");
         }
-        // Avec Maj : seulement Ctrl+Maj+f.
-        assert_eq!(found("ctrl maj f"), [Action::FocusMode]);
-        // Au moins ces modificateurs : Maj+p, et Ctrl+Maj+p (la palette).
+        // Avec Maj : seulement Cmd+Maj+f.
+        assert_eq!(found("cmd maj f"), [Action::FocusMode]);
+        // Au moins ces modificateurs : Maj+p, et Cmd+Maj+p (la palette).
         assert_eq!(
             found("maj p"),
             [Action::Flag(tri::xmp::Flag::Accepted), Action::Palette]
         );
         // Pas une touche : la recherche par mots.
-        assert!(found("ctrl").len() > 2);
+        assert!(found("cmd").len() > 2);
         assert!(found("netteté").contains(&Action::TogglePeaking));
     }
 
@@ -32607,7 +32614,7 @@ mod tests {
                     press(&mut h, Key::Z, Modifiers::NONE);
                 }
                 2 => {
-                    press(&mut h, Key::A, Modifiers::CTRL);
+                    press(&mut h, Key::A, CMD);
                     type_text(&mut h, "=");
                     assert_eq!(h.state().mode, Mode::Compare);
                 }
@@ -32655,7 +32662,7 @@ mod tests {
         assert!(!h.ctx.memory(|m| m.has_focus(grid_search_id())));
         assert_eq!(names(&h).len(), 1);
         // Ctrl+F y retourne ; Échap efface le filtre.
-        press(&mut h, Key::F, Modifiers::CTRL);
+        press(&mut h, Key::F, CMD);
         assert!(h.ctx.memory(|m| m.has_focus(grid_search_id())));
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(names(&h).len(), 3, "Échap : filtre effacé");
@@ -32709,7 +32716,7 @@ mod tests {
         // Échap referme une recherche en cours, l'arborescence revient.
         press(&mut h, Key::B, Modifiers::CTRL);
         press(&mut h, Key::H, Modifiers::NONE);
-        press(&mut h, Key::F, Modifiers::CTRL);
+        press(&mut h, Key::F, CMD);
         h.event(UiEvent::Text("plage".into()));
         h.run_steps(3);
         assert!(h.state().folder_search.is_some());
@@ -33279,7 +33286,7 @@ mod tests {
         h.state_mut().tree.point_at(&seance);
         // m : favori, dans sa section après le dossier personnel ; le curseur reste dans
         // l'arborescence.
-        press(&mut h, Key::D, Modifiers::CTRL);
+        press(&mut h, Key::D, CMD);
         let data = dir.path().join("data");
         assert_eq!(
             tri::places::favorites(&data),
@@ -33340,7 +33347,7 @@ mod tests {
         assert!(!h.state().tree.is_expanded(&renamed));
         // m sur la ligne du favori : retiré.
         h.state_mut().tree.set_cursor(f);
-        press(&mut h, Key::D, Modifiers::CTRL);
+        press(&mut h, Key::D, CMD);
         assert!(tri::places::favorites(&data).is_empty());
         assert_eq!(favorite(&h.state().tree.rows()), None);
     }
@@ -33688,7 +33695,7 @@ mod tests {
         assert_eq!(h.state().focus, Scope::Folders);
         h.state_mut().tree.point_at(&base);
         // a : nouveau dossier dans « base ».
-        press(&mut h, Key::N, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::N, CMD | Modifiers::SHIFT);
         h.event(UiEvent::Text("Séance".into()));
         h.run_steps(2);
         press(&mut h, Key::Enter, Modifiers::NONE);
@@ -33703,9 +33710,9 @@ mod tests {
         let renamed = base.join("Séance du jour");
         assert!(renamed.is_dir() && !made.exists());
         // Annuler deux fois : renommage puis création défaits.
-        press(&mut h, Key::Z, Modifiers::CTRL);
+        press(&mut h, Key::Z, CMD);
         assert!(made.is_dir() && !renamed.exists());
-        press(&mut h, Key::Z, Modifiers::CTRL);
+        press(&mut h, Key::Z, CMD);
         assert!(!made.exists());
         // x : supprimer (confirmé ; corbeille désactivée dans les tests).
         h.state_mut().tree.point_at(&base);
@@ -33760,7 +33767,7 @@ mod tests {
         assert_eq!(h.state().focus, Scope::Folders);
         h.state_mut().tree.point_at(&seance);
         // Ctrl+X : déplacer le dossier (pas les images) ; destination tapée, Entrée.
-        press(&mut h, Key::X, Modifiers::CTRL);
+        press(&mut h, Key::X, CMD);
         h.run_steps(2);
         assert!(
             h.query_by_label_contains("Dossier « séance » vers")
@@ -33781,7 +33788,7 @@ mod tests {
         assert!(moved.join("JPEG/A.JPG").exists() && !seance.exists());
         assert_eq!(h.state().tree.cursor_path(), Some(moved.clone()), "pointé");
         // Annulé : le dossier revient.
-        press(&mut h, Key::Z, Modifiers::CTRL);
+        press(&mut h, Key::Z, CMD);
         assert!(seance.join("JPEG/A.JPG").exists() && !moved.exists());
         // Clic droit, « Ajouter aux favoris » : ajouté (ouvrait la boîte de suppression).
         h.state_mut().tree.reload();
@@ -33814,7 +33821,7 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         assert!(!h.state().stacking);
-        press(&mut h, Key::S, Modifiers::CTRL);
+        press(&mut h, Key::S, CMD);
         assert!(h.state().group_dialog);
         // Espace coche aussitôt (plus de Tab pour atteindre la case).
         press(&mut h, Key::Space, Modifiers::NONE);
@@ -33852,7 +33859,7 @@ mod tests {
             "indication"
         );
         // Ctrl+Maj+F aussi ; les panneaux reviennent tels quels.
-        press(&mut h, Key::F, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::F, CMD | Modifiers::SHIFT);
         assert!(!h.state().focus_mode);
         let after = (
             h.state().folder_panel,
@@ -33915,7 +33922,7 @@ mod tests {
         h.state_mut().group_curve = 3.0;
         // La fenêtre (Ctrl+G) montre les deux curseurs ; à sa fermeture, retenus pour le
         // dossier.
-        press(&mut h, Key::S, Modifiers::CTRL);
+        press(&mut h, Key::S, CMD);
         h.run_steps(2);
         for label in [t!("groups-pauses"), t!("groups-curve")] {
             assert!(h.query_by_label_contains(&label).is_some(), "{label}");
@@ -34020,7 +34027,7 @@ mod tests {
         assert_eq!(h.state().selected, 0);
         // Ctrl+Maj+S : entrer par la première photo, puis de nouveau par la couverture.
         let before = h.state().stack_enter;
-        press(&mut h, Key::S, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::S, CMD | Modifiers::SHIFT);
         assert_ne!(h.state().stack_enter, before);
         // Rien ne bouge à l'écran : un message dit ce qui a changé.
         assert!(
@@ -34032,7 +34039,7 @@ mod tests {
             "{:?}",
             h.state().hint
         );
-        press(&mut h, Key::S, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::S, CMD | Modifiers::SHIFT);
         assert_eq!(h.state().stack_enter, before);
         press(&mut h, Key::Escape, Modifiers::NONE);
         // `c` sur la pile repliée, sans sélection : ses photos côte à côte (#52) ; Échap
@@ -34530,7 +34537,7 @@ mod tests {
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::Grid);
         // Ctrl+G : la fenêtre ; seuil nul : plus de piles.
-        press(&mut h, Key::S, Modifiers::CTRL);
+        press(&mut h, Key::S, CMD);
         assert!(h.state().group_dialog);
         h.state_mut().settings.similarity.auto = false;
         h.state_mut().settings.similarity.threshold = 0.0;
@@ -34672,7 +34679,7 @@ mod tests {
             }
             assert_eq!(h.state().meta_cursor, 1, "la souris pointe la ligne");
             assert_eq!(h.state().focus, Scope::Images, "sans prendre le clavier");
-            press(&mut h, Key::C, Modifiers::CTRL);
+            press(&mut h, Key::C, CMD);
             let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
             if notice.contains(&label) {
                 assert!(h.state().file_dialog.is_none(), "pas la copie de l'image");
@@ -34684,7 +34691,7 @@ mod tests {
         h.event(UiEvent::PointerMoved(pos2(1.0, 1.0)));
         h.run_steps(2);
         assert_eq!(h.state().meta_hover, None);
-        press(&mut h, Key::C, Modifiers::CTRL);
+        press(&mut h, Key::C, CMD);
         assert!(h.state().file_dialog.is_some(), "copie de l'image");
     }
 
@@ -34770,7 +34777,7 @@ mod tests {
         click(&mut h, 2, Modifiers::COMMAND, &|app| {
             app.meta_selection().into_iter().collect::<Vec<_>>() == [0, 2]
         });
-        press(&mut h, Key::C, Modifiers::CTRL);
+        press(&mut h, Key::C, CMD);
         let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
         assert!(notice.contains("2 lignes"), "{notice}");
         // Ctrl+clic de nouveau : la ligne sort de la sélection.
@@ -34785,7 +34792,7 @@ mod tests {
         assert_eq!(picked(&h), [0, 1, 2]);
         // Ctrl+A, le panneau ayant le clavier : toutes les lignes.
         press(&mut h, Key::J, Modifiers::NONE);
-        press(&mut h, Key::A, Modifiers::CTRL);
+        press(&mut h, Key::A, CMD);
         let all: Vec<usize> = (0..h.state().meta_rows.len()).collect();
         assert_eq!(picked(&h), all);
         // L'icône du titre, depuis les images.
@@ -35265,7 +35272,7 @@ mod tests {
         h.state_mut().metadata_panel = false;
         h.run_steps(3);
         h.state_mut().config_path = Some(dir.path().join("config.toml"));
-        press(&mut h, Key::Comma, Modifiers::CTRL);
+        press(&mut h, Key::Comma, CMD);
         // Une case à cocher (réglage booléen) : pas un bouton d'egui.
         h.event(UiEvent::Text("auto_advance".into()));
         h.run_steps(2);
@@ -35310,7 +35317,7 @@ mod tests {
         };
         run_until(&mut h, |_| thumbnails(&cache) > 0);
         h.state_mut().config_path = Some(dir.path().join("config.toml"));
-        press(&mut h, Key::Comma, Modifiers::CTRL);
+        press(&mut h, Key::Comma, CMD);
         h.state_mut()
             .settings_window
             .as_mut()
@@ -35389,7 +35396,7 @@ mod tests {
         let (mut h, dir) = harness();
         h.run_steps(3);
         h.state_mut().config_path = Some(dir.path().join("config.toml"));
-        press(&mut h, Key::Comma, Modifiers::CTRL);
+        press(&mut h, Key::Comma, CMD);
         assert!(
             h.state().settings_window.is_some(),
             "Ctrl+, ouvre les réglages"
@@ -37223,8 +37230,8 @@ mod tests {
             h.run_steps(2);
         };
         // Toutes les images, dans l'ordre de la grille.
-        press(&mut h, Key::A, Modifiers::CTRL);
-        press(&mut h, Key::E, Modifiers::CTRL);
+        press(&mut h, Key::A, CMD);
+        press(&mut h, Key::E, CMD);
         assert_eq!(name(&h), "{name}", "le gabarit du préréglage");
         assert!(h.query_by_label(&t!("export-name")).is_some());
         // `{source}` est un dossier : dit en rouge, l'export refusé.
@@ -37256,7 +37263,7 @@ mod tests {
             1,
             "gardé dans gui-state.toml"
         );
-        press(&mut h, Key::E, Modifiers::CTRL);
+        press(&mut h, Key::E, CMD);
         assert_eq!(name(&h), "serie_{n:2}", "retenu");
     }
 
@@ -37272,7 +37279,7 @@ mod tests {
                 _ => panic!("boîte d'export attendue"),
             }
         };
-        press(&mut h, Key::E, Modifiers::CTRL);
+        press(&mut h, Key::E, CMD);
         // Le gabarit du préréglage, explicite (#480) : `{source}/export`.
         assert_eq!(dialog(&h), "{source}/export");
         assert!(h.query_by_label_contains("Destination").is_none());
@@ -37293,7 +37300,7 @@ mod tests {
             1,
             "gardé dans gui-state.toml"
         );
-        press(&mut h, Key::E, Modifiers::CTRL);
+        press(&mut h, Key::E, CMD);
         assert_eq!(dialog(&h), elsewhere.to_string_lossy(), "retenu");
         // Un compteur n'a pas de sens dans un dossier : dit en rouge.
         if let Some(crate::files::FileDialog::Export(d)) = &mut h.state_mut().file_dialog {
@@ -37366,7 +37373,7 @@ mod tests {
         // La grille montre le rendu LibRaw : c'est lui qu'on exporte.
         h.state_mut().grid_render = crate::grid_render::GridRender::LibRaw;
         h.run_steps(3);
-        press(&mut h, Key::E, Modifiers::CTRL);
+        press(&mut h, Key::E, CMD);
         assert!(matches!(
             h.state().file_dialog,
             Some(crate::files::FileDialog::Export(_))
@@ -37444,12 +37451,12 @@ mod tests {
         assert!(tri::export_log::read(&data).is_empty(), "effacé du disque");
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().export_report);
-        press(&mut h, Key::E, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::E, CMD | Modifiers::SHIFT);
         assert!(h.state().export_report, "Ctrl+Maj+E");
-        press(&mut h, Key::E, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::E, CMD | Modifiers::SHIFT);
         assert!(!h.state().export_report);
         // Rouverte : le profil choisi la dernière fois.
-        press(&mut h, Key::E, Modifiers::CTRL);
+        press(&mut h, Key::E, CMD);
         let Some(crate::files::FileDialog::Export(dialog)) = &h.state().file_dialog else {
             panic!("boîte d'export attendue");
         };
@@ -37471,7 +37478,7 @@ mod tests {
             if let Some(key) = key {
                 press(&mut h, key, Modifiers::NONE);
             }
-            press(&mut h, Key::E, Modifiers::CTRL);
+            press(&mut h, Key::E, CMD);
             let Some(crate::files::FileDialog::Export(dialog)) = &h.state().file_dialog else {
                 panic!("boîte d'export attendue");
             };
@@ -37550,7 +37557,7 @@ mod tests {
             "remontrée"
         );
         // Ctrl+E sur la version montrée : elle seule, recadrée, nommée d'après elle.
-        press(&mut h, Key::E, Modifiers::CTRL);
+        press(&mut h, Key::E, CMD);
         press(&mut h, Key::Enter, Modifiers::NONE);
         run_until(&mut h, |app| {
             app.export_job.is_none() && app.notice.is_some()
@@ -37565,7 +37572,7 @@ mod tests {
         // Maj+V : version suivante (ici la seule), puis l'original ; Ctrl+Maj+V dans
         // l'autre sens (07/11/2026 : v crée une version).
         let shift = Modifiers::SHIFT;
-        let back = Modifiers::CTRL | Modifiers::SHIFT;
+        let back = CMD | Modifiers::SHIFT;
         press(&mut h, Key::V, shift);
         assert_eq!(h.state().version_shown, None);
         press(&mut h, Key::V, shift);
@@ -37589,10 +37596,10 @@ mod tests {
         press(&mut h, Key::Enter, Modifiers::NONE);
         h.run_steps(2);
         assert!(tri::versions::read(&image).unwrap().list.is_empty());
-        press(&mut h, Key::Z, Modifiers::CTRL);
+        press(&mut h, Key::Z, CMD);
         assert_eq!(tri::versions::read(&image).unwrap().list.len(), 1);
         // Et Ctrl+Z encore : la création défaite.
-        press(&mut h, Key::Z, Modifiers::CTRL);
+        press(&mut h, Key::Z, CMD);
         assert!(tri::versions::read(&image).unwrap().list.is_empty());
         // Échap abandonne sans rien écrire.
         press(&mut h, Key::V, Modifiers::NONE);
@@ -37767,7 +37774,7 @@ mod tests {
                 app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
             });
         }
-        press(&mut h, Key::S, Modifiers::CTRL);
+        press(&mut h, Key::S, CMD);
         assert_eq!(h.state().settings.versions.presets.0.len(), before + 1);
         // v / Maj+V : de préréglage en préréglage, sans quitter la version en cours.
         let preset = |h: &Harness<'_, TriApp>| h.state().crop.as_ref().unwrap().preset.clone();
@@ -38195,7 +38202,7 @@ mod tests {
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         press(&mut h, Key::Space, Modifiers::NONE);
         assert_eq!(h.state().selection.visible(&h.state().files), 2);
-        press(&mut h, Key::E, Modifiers::CTRL);
+        press(&mut h, Key::E, CMD);
         let choice = |h: &Harness<'_, TriApp>| match &h.state().file_dialog {
             Some(crate::files::FileDialog::Export(d)) => d.choice(),
             _ => panic!("boîte d'export attendue"),

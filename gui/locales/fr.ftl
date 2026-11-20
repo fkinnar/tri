@@ -1616,6 +1616,7 @@ keys-file-unreadable = Raccourcis par défaut illisibles ({ $path } : { $error }
 keys-conflict = [keys] « { $spec } » attribué à { $first } et à { $second } : gardé pour { $first }
 keys-replaces = [keys] « { $spec } » ({ $action }) remplace le raccourci de { $other }
 keys-unknown-key = touche inconnue « { $text } »
+keys-system-cmd = « { $text } » : macOS garde cette touche avec Cmd (écrire « Ctrl+ » à la place)
 keys-empty = raccourci vide
 keys-none-short = sans raccourci
 key-shift-prefix = Maj+
