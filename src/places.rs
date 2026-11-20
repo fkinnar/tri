@@ -277,6 +277,13 @@ pub fn places() -> Vec<Place> {
         }
     }
     places.extend(network);
+    if let Some(home) = home_dir(os, env) {
+        places.extend(
+            cloud_drives(os, &home)
+                .into_iter()
+                .filter(|p| p.path.is_dir()),
+        );
+    }
     places.extend(unmounted_devices().into_iter().map(|d| d.place()));
     if let Some(home) = home_dir(os, env) {
         let user_dirs = user_dirs(
@@ -339,6 +346,24 @@ fn user_dirs(os: &str, home: &Path, xdg: &str) -> Vec<Place> {
             })
         })
         .collect()
+}
+
+/// **iCloud Drive** du dossier personnel `home`, dans la section Réseau (retour du
+/// 20/11/2026 : introuvable sur macOS, caché dans `~/Library` ; « plus logique dans
+/// Réseau » que dans les dossiers) : `~/Library/Mobile Documents/com~apple~CloudDocs` sur
+/// macOS, `~/iCloudDrive` sous Windows (application iCloud), rien sous Linux. Existence
+/// non vérifiée. Comme un partage, hors des disques internes ([`outside_roots`]).
+fn cloud_drives(os: &str, home: &Path) -> Vec<Place> {
+    let path = match os {
+        "macos" => home.join("Library/Mobile Documents/com~apple~CloudDocs"),
+        "windows" => home.join("iCloudDrive"),
+        _ => return Vec::new(),
+    };
+    vec![Place {
+        name: crate::t!("places-icloud"),
+        path,
+        kind: PlaceKind::Network,
+    }]
 }
 
 /// Types de systèmes de fichiers réseau, tels que les écrivent `mount` (macOS) et
@@ -2325,6 +2350,19 @@ mod tests {
             .map(|p| p.path)
             .collect();
         assert_eq!(mac[3], home.join("Pictures"));
+        assert_eq!(mac.len(), 4, "iCloud Drive : dans Réseau");
+        let icloud = cloud_drives("macos", home);
+        assert_eq!(
+            icloud[0].path,
+            home.join("Library/Mobile Documents/com~apple~CloudDocs"),
+            "iCloud Drive, caché dans ~/Library"
+        );
+        assert_eq!(icloud[0].kind.section(), Section::Network);
+        assert_eq!(
+            cloud_drives("windows", home)[0].path,
+            home.join("iCloudDrive")
+        );
+        assert!(cloud_drives("linux", home).is_empty());
         let mount = "/dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)\n\
                      //fab@nas._smb._tcp.local/photo on /Volumes/photo (smbfs, nodev, nosuid, mounted by fab)\n\
                      /dev/disk5s1 on /Volumes/Work (apfs, local, nodev, nosuid, journaled)\n";

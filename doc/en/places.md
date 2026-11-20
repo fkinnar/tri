@@ -106,6 +106,10 @@ does so when confirming).
   after the home folder (`user_dirs`). On Linux, those from `~/.config/user-dirs.dirs`
   (`xdg-user-dirs`: "Bureau", "Images" on Mint in French, absolute path allowed);
   otherwise the English names. Missing ones: omitted.
+- **iCloud Drive** (`cloud_drives`, 2026-11-20: hidden in `~/Library`, impossible to find
+  otherwise), in the Network section (the user's choice):
+  `~/Library/Mobile Documents/com~apple~CloudDocs` on macOS, `~/iCloudDrive` on Windows,
+  nothing on Linux. Missing: omitted. Like a share, outside the internal disks.
 - **Network shares** (`PlaceKind::Network`): mount points of a network file system (SMB,
   AFP, NFS, WebDAV, SSHFS, rclone…), read from the output of `mount` (macOS) or
   `/proc/mounts` (Linux); a share mounted in `/Volumes` or `/media` changes section, the
