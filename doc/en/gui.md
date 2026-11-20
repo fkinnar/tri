@@ -1585,10 +1585,17 @@ alone stays free for undo (to come), as in vim.
 A colour already set is removed by the same key; in single-colour mode (default),
 another colour replaces the previous one.
 
-Cmd and Alt trigger no action: these combinations stay with the system (Cmd+Q…).
-Ctrl is allowed (Ctrl+U / Ctrl+D of the vim profile); on Linux and Windows, egui also
-reports Ctrl as `command`: only `mac_cmd`, or `command` without Ctrl, means Cmd. No
-Ctrl + arrows shortcut (on macOS, it switches desktop), hence Shift for panning.
+Alt triggers no action: it stays with the system. **`Cmd+` in `keys.toml`** (2026-11-20,
+user feedback: application shortcuts on Ctrl felt wrong on a Mac): Cmd on macOS, Ctrl on
+Linux and Windows (`Chord::cmd`, `command_chord`). The shortcuts of an application are
+written that way (undo, copy, export, settings, search, palette…), where each system puts
+them. **`Ctrl+`** stays Ctrl everywhere, macOS included: the keys of vim and tmux
+(Ctrl+U / Ctrl+D / Ctrl+R of the vim profile, the leader Ctrl+B) and those macOS keeps
+with Cmd (`MAC_SYSTEM_CMD_KEYS`: Cmd+H hides the application, hence the history on
+Ctrl+H; Cmd+Q, Cmd+M, Cmd+W, Cmd+Space, Cmd+Tab; a test checks that no default takes
+them). On Linux and Windows, egui also reports Ctrl as `command`: only `mac_cmd`, or
+`command` without Ctrl, means Cmd, refused outside macOS. No Ctrl + arrows shortcut (on
+macOS, it switches desktop), hence Shift for panning.
 
 Filters, common to both profiles: see "Filters" above (`core.filter.*`: `f f`,
 `f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f .`, `f d`);

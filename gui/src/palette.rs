@@ -444,7 +444,7 @@ mod tests {
         let hits = search(
             &keymap(),
             &|_| true,
-            "ctrl f",
+            "cmd f",
             PREFIXES,
             &[Place::Grid],
             &settings(),

@@ -1354,9 +1354,9 @@ impl Trigger {
     }
 }
 
-/// Une combinaison : une touche avec ou sans Maj et Ctrl, ou un caractère. Cmd et Alt sont
-/// réservés au système et ne déclenchent rien ici ; Ctrl + flèches aussi, par convention
-/// (sur macOS, cela change de bureau).
+/// Une combinaison : une touche avec ou sans Maj, Ctrl et (sur macOS) Cmd, ou un
+/// caractère. Alt est réservé au système et ne déclenche rien ici ; Ctrl + flèches aussi,
+/// par convention (sur macOS, cela change de bureau).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Chord {
     /// Touche ou caractère.
@@ -1365,6 +1365,28 @@ pub struct Chord {
     pub shift: bool,
     /// Ctrl enfoncée.
     pub ctrl: bool,
+    /// Cmd enfoncée, sur macOS seulement : ailleurs, `Cmd+` de `keys.toml` est Ctrl
+    /// ([`command_chord`]).
+    pub cmd: bool,
+}
+
+/// Vrai sur macOS : `Cmd+` de `keys.toml` y désigne Cmd, ailleurs Ctrl (retour du
+/// 20/11/2026 : les raccourcis d'application en Ctrl détonnaient sur Mac).
+pub(crate) const MAC: bool = cfg!(target_os = "macos");
+
+/// Touches que macOS garde pour lui avec Cmd (masquer, quitter, réduire, fermer, Spotlight,
+/// changer d'application) : jamais un raccourci de `tri`.
+pub const MAC_SYSTEM_CMD_KEYS: [Key; 6] = [Key::H, Key::Q, Key::M, Key::W, Key::Space, Key::Tab];
+
+/// Combinaison « commande » de la touche `key` : Cmd sur macOS (`mac`), Ctrl ailleurs.
+#[cfg(test)]
+pub const fn command_chord(key: Key, shift: bool, mac: bool) -> Chord {
+    Chord {
+        trigger: Trigger::Key(key),
+        shift,
+        ctrl: !mac,
+        cmd: mac,
+    }
 }
 
 /// Panneau qui a le clavier (façon tmux, demandé le 18/10/2026) : ses raccourcis passent
@@ -1419,25 +1441,17 @@ fn conflict(a: Action, b: Action) -> bool {
 }
 
 impl Chord {
-    /// Combinaison d'une touche pressée, `None` si Cmd ou Alt est enfoncé. Sous Linux et
-    /// Windows, egui signale Ctrl aussi comme `command` : seul `mac_cmd`, ou `command` sans
-    /// Ctrl, désigne Cmd.
+    /// Combinaison d'une touche pressée, `None` si Alt est enfoncé, ou Cmd ailleurs que sur
+    /// macOS. Sous Linux et Windows, egui signale Ctrl aussi comme `command` : seul
+    /// `mac_cmd`, ou `command` sans Ctrl, désigne Cmd.
     pub fn from_event(key: Key, modifiers: Modifiers) -> Option<Chord> {
-        // Exceptions (décidées le 18/10/2026) : Cmd+Z / Cmd+Maj+Z / Cmd+C sur macOS,
-        // réflexes de tout utilisateur de Mac, valent Ctrl+Z / Ctrl+Maj+Z / Ctrl+C
-        // (annuler, rétablir, copier).
-        if cfg!(target_os = "macos")
-            && modifiers.mac_cmd
-            && !modifiers.alt
-            && matches!(key, Key::Z | Key::C)
-        {
-            return Some(Chord {
-                trigger: Trigger::Key(key),
-                shift: modifiers.shift,
-                ctrl: true,
-            });
-        }
-        if modifiers.alt || modifiers.mac_cmd || (modifiers.command && !modifiers.ctrl) {
+        Self::from_event_on(key, modifiers, MAC)
+    }
+
+    /// [`Chord::from_event`] sur macOS (`mac`) ou ailleurs : pour les tests.
+    pub(crate) fn from_event_on(key: Key, modifiers: Modifiers, mac: bool) -> Option<Chord> {
+        let cmd = modifiers.mac_cmd || (modifiers.command && !modifiers.ctrl);
+        if modifiers.alt || (cmd && !mac) {
             return None;
         }
         // Un modificateur seul n'est pas un raccourci (07/11/2026 : sous Linux, egui-winit
@@ -1461,6 +1475,7 @@ impl Chord {
             trigger: Trigger::Key(key),
             shift: modifiers.shift,
             ctrl: modifiers.ctrl,
+            cmd,
         })
     }
 
@@ -1475,6 +1490,7 @@ impl Chord {
             trigger: Trigger::Char(c),
             shift: false,
             ctrl: false,
+            cmd: false,
         }
     }
 }
@@ -1484,6 +1500,7 @@ const fn plain(key: Key) -> Chord {
         trigger: Trigger::Key(key),
         shift: false,
         ctrl: false,
+        cmd: false,
     }
 }
 
@@ -1493,6 +1510,7 @@ const fn shifted(key: Key) -> Chord {
         trigger: Trigger::Key(key),
         shift: true,
         ctrl: false,
+        cmd: false,
     }
 }
 
@@ -1502,7 +1520,14 @@ const fn ctrl(key: Key) -> Chord {
         trigger: Trigger::Key(key),
         shift: false,
         ctrl: true,
+        cmd: false,
     }
+}
+
+/// Cmd + `key` sur macOS, Ctrl + `key` ailleurs (`Cmd+` de `keys.toml`).
+#[cfg(test)]
+const fn cmd(key: Key) -> Chord {
+    command_chord(key, false, MAC)
 }
 
 /// Jeu de raccourcis, au choix (`[gui] profile`, décidé le 18/10/2026 : un utilisateur
@@ -2185,6 +2210,7 @@ impl Keymap {
                 [chord] => match chord.trigger {
                     Trigger::Key(key)
                         if chord.ctrl
+                            || chord.cmd
                             || matches!(
                                 key,
                                 Key::ArrowUp
@@ -2198,6 +2224,8 @@ impl Keymap {
                         let modifiers = Modifiers {
                             shift: chord.shift,
                             ctrl: chord.ctrl,
+                            mac_cmd: chord.cmd,
+                            command: chord.cmd,
                             ..Modifiers::NONE
                         };
                         Some((key, modifiers))
@@ -2392,7 +2420,7 @@ impl Keymap {
             Trigger::Key(Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown) => {
                 self.vim
             }
-            Trigger::Key(Key::H | Key::J | Key::K | Key::L) if !c.ctrl => !self.vim,
+            Trigger::Key(Key::H | Key::J | Key::K | Key::L) if !c.ctrl && !c.cmd => !self.vim,
             _ => false,
         })
     }
@@ -2466,13 +2494,16 @@ impl Keymap {
             })
             .chain(["shift".to_string()])
             .collect();
-        let (mut ctrl, mut shift, mut key) = (false, false, None);
+        let (mut ctrl, mut cmd, mut shift, mut key) = (false, false, false, None);
         for token in query.split(|c: char| c.is_whitespace() || c == '+') {
             let lower = token.to_lowercase();
             if token.is_empty() {
                 continue;
             } else if matches!(lower.as_str(), "ctrl" | "control" | "ctl") {
                 ctrl = true;
+            } else if matches!(lower.as_str(), "cmd" | "command" | "⌘") {
+                // « Cmd » désigne Ctrl ailleurs que sur macOS, comme dans `keys.toml`.
+                (ctrl, cmd) = (ctrl || !MAC, cmd || MAC);
             } else if shift_words.contains(&lower) {
                 shift = true;
             } else if key.is_none() {
@@ -2482,14 +2513,15 @@ impl Keymap {
             }
         }
         let key = key?;
-        if !ctrl && !shift {
+        if !ctrl && !cmd && !shift {
             return None;
         }
         let mut found: Vec<Action> = Vec::new();
         for (keys, action) in &self.bindings {
             // Un raccourci d'une seule touche (`f Maj+p` est un filtre, pas Maj+p).
             let hit = matches!(keys.as_slice(), [c]
-                if c.trigger == key.trigger && (!ctrl || c.ctrl) && (!shift || c.shift));
+                if c.trigger == key.trigger && (!ctrl || c.ctrl) && (!cmd || c.cmd)
+                    && (!shift || c.shift));
             if hit && action.available() && !found.contains(action) {
                 found.push(*action);
             }
@@ -2600,7 +2632,12 @@ fn strip_prefix_ignore_case<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
 /// comme dans vim). Un caractère qui n'est pas une touche connue d'egui devient un
 /// [`Trigger::Char`] (sans modificateur).
 fn parse_chord(text: &str) -> Result<Chord, String> {
-    let (mut rest, mut shift, mut ctrl) = (text, false, false);
+    parse_chord_on(text, MAC)
+}
+
+/// [`parse_chord`] sur macOS (`mac` : `Cmd+` y est Cmd) ou ailleurs (`Cmd+` y est Ctrl).
+fn parse_chord_on(text: &str, mac: bool) -> Result<Chord, String> {
+    let (mut rest, mut shift, mut ctrl, mut cmd) = (text, false, false, false);
     // « Maj+ », « Shift+ » : préfixes de toutes les langues.
     let shift_prefixes: Vec<String> = Language::ALL
         .iter()
@@ -2618,6 +2655,12 @@ fn parse_chord(text: &str) -> Result<Chord, String> {
             (rest, shift) = (r, true);
         } else if let Some(r) = strip_prefix_ignore_case(rest, "Ctrl+") {
             (rest, ctrl) = (r, true);
+        } else if let Some(r) = strip_prefix_ignore_case(rest, "Cmd+") {
+            if mac {
+                (rest, cmd) = (r, true);
+            } else {
+                (rest, ctrl) = (r, true);
+            }
         } else {
             break;
         }
@@ -2636,17 +2679,22 @@ fn parse_chord(text: &str) -> Result<Chord, String> {
     if let Some(c) = single.filter(|c| "+-*/()=:".contains(*c))
         && !shift
         && !ctrl
+        && !cmd
     {
         return Ok(Chord::char(c));
     }
     match key_named(rest) {
+        Some(key) if cmd && MAC_SYSTEM_CMD_KEYS.contains(&key) => {
+            Err(t!("keys-system-cmd", text = text))
+        }
         Some(key) => Ok(Chord {
             trigger: Trigger::Key(key),
             shift,
             ctrl,
+            cmd,
         }),
         None => match single {
-            Some(c) if !shift && !ctrl => Ok(Chord::char(c)),
+            Some(c) if !shift && !ctrl && !cmd => Ok(Chord::char(c)),
             _ => Err(t!("keys-unknown-key", text = text)),
         },
     }
@@ -2693,7 +2741,7 @@ pub fn keys_spec(keys: &[Chord]) -> String {
 /// Le chiffre d'une touche (rangée du haut, avec ou sans Maj selon le clavier, ou pavé
 /// numérique), sans Ctrl ; `None` pour les autres.
 pub fn digit(chord: Chord) -> Option<char> {
-    if chord.ctrl {
+    if chord.ctrl || chord.cmd {
         return None;
     }
     match chord.trigger {
@@ -2719,6 +2767,9 @@ pub(crate) fn chord_label(c: &Chord) -> String {
     let mut label = String::new();
     if c.ctrl {
         label.push_str("Ctrl+");
+    }
+    if c.cmd {
+        label.push_str("Cmd+");
     }
     if c.shift && c.trigger != Trigger::Key(Key::Questionmark) {
         label.push_str(&t!("key-shift-prefix"));
@@ -3091,13 +3142,64 @@ mod tests {
         assert_eq!(km.action(Key::O, Modifiers::CTRL), None, "Ctrl+O : libre");
         assert_eq!(km.action(Key::L, Modifiers::ALT), None);
         assert_eq!(Chord::from_event(Key::ArrowLeft, Modifiers::ALT), None);
-        // Cmd+Z : annuler sur macOS (exception), rien ailleurs.
-        let cmd_z = Chord::from_event(Key::Z, Modifiers::MAC_CMD | Modifiers::COMMAND);
-        if cfg!(target_os = "macos") {
-            assert_eq!(cmd_z, Chord::from_event(Key::Z, Modifiers::CTRL));
-        } else {
-            assert_eq!(cmd_z, None);
+        // Cmd+Z : annuler sur macOS, rien ailleurs (retour du 20/11/2026 : les raccourcis
+        // d'application en Cmd sur Mac).
+        let mac_cmd = Modifiers::MAC_CMD | Modifiers::COMMAND;
+        assert_eq!(
+            Chord::from_event_on(Key::Z, mac_cmd, true),
+            Some(command_chord(Key::Z, false, true))
+        );
+        assert_eq!(Chord::from_event_on(Key::Z, mac_cmd, false), None);
+        assert_eq!(km.action(Key::Z, mac_cmd).is_some(), MAC);
+        // Ctrl+Z sous macOS : un autre raccourci, libre.
+        assert_eq!(
+            Chord::from_event_on(Key::Z, Modifiers::CTRL, true),
+            Some(ctrl(Key::Z))
+        );
+    }
+
+    #[test]
+    fn cmd_in_keys_toml_is_cmd_on_macos_and_ctrl_elsewhere() {
+        assert_eq!(
+            parse_chord_on("Cmd+Shift+e", true),
+            Ok(command_chord(Key::E, true, true))
+        );
+        assert_eq!(
+            parse_chord_on("Cmd+Shift+e", false),
+            parse_chord_on("Ctrl+Shift+e", false)
+        );
+        // « Ctrl+ » reste Ctrl partout (vim, tmux).
+        assert_eq!(parse_chord_on("Ctrl+u", true), Ok(ctrl(Key::U)));
+        // Cmd+H masque l'application sous macOS : refusé, expliqué ; Ctrl+H ailleurs.
+        assert!(parse_chord_on("Cmd+h", true).is_err());
+        assert_eq!(parse_chord_on("Cmd+h", false), Ok(ctrl(Key::H)));
+        // Relu tel qu'écrit par la fenêtre de réglages.
+        let chord = parse_chord("Cmd+e").unwrap();
+        assert_eq!(parse_chord(&keys_spec(&[chord])), Ok(chord));
+        assert_eq!(chord_label(&chord), if MAC { "Cmd+e" } else { "Ctrl+e" });
+    }
+
+    #[test]
+    fn no_default_takes_a_cmd_key_macos_keeps() {
+        // Cmd+H masque l'application sous macOS, Cmd+Q la quitte… : l'historique reste
+        // sur Ctrl+H.
+        for profile in [Profile::Classic, Profile::Vim] {
+            for (chords, action) in profile.defaults() {
+                for chord in chords.iter() {
+                    let Trigger::Key(key) = chord.trigger else {
+                        continue;
+                    };
+                    let command = chord.cmd || (!MAC && chord.ctrl);
+                    let mac_ctrl =
+                        parse_chord_on(&chord_label(chord), true).is_ok_and(|c| c.ctrl && !c.cmd);
+                    assert!(
+                        !(command && !mac_ctrl && MAC_SYSTEM_CMD_KEYS.contains(&key)),
+                        "{action:?} : {chord:?} pris par macOS"
+                    );
+                }
+            }
         }
+        assert_eq!(Keymap::default().keys_for(Action::History), ["Ctrl+h"]);
     }
 
     #[test]
@@ -3250,7 +3352,7 @@ mod tests {
         assert_eq!(vim.keys_for(Action::FileDelete), ["x"]);
         assert_eq!(vim.keys_for(Action::Undo), ["u"]);
         let classic = Keymap::from_profiles(&[Profile::Classic]);
-        assert_eq!(classic.keys_for(Action::Undo), ["Ctrl+z"]);
+        assert_eq!(classic.keys_for(Action::Undo), [chord_label(&cmd(Key::Z))]);
         assert_eq!(classic.keys_for(Action::FileDelete).len(), 2);
         // Les communes marchent toujours.
         assert_eq!(
@@ -3261,7 +3363,10 @@ mod tests {
         assert_eq!(vim.keys_for(Action::Open), classic.keys_for(Action::Open));
         // La recherche : `/` en grille (« ajusté » y cherche), seul en vim.
         assert_eq!(vim.keys_for(Action::Search), ["/"]);
-        assert_eq!(classic.keys_for(Action::Search), ["/", "Ctrl+f"]);
+        assert_eq!(
+            classic.keys_for(Action::Search),
+            ["/".to_string(), chord_label(&cmd(Key::F))]
+        );
         // `[keys]` : ce que l'utilisateur a choisi.
         let mut overrides = BTreeMap::new();
         overrides.insert(
@@ -3423,11 +3528,13 @@ mod tests {
             .feed_one(&km, key(Key::Y), now)
             .or_else(|| seq.expire(now + Duration::from_secs(2)));
         assert_eq!(y, Some(Action::FolderCopy));
-        let ctrl_x = Chord::from_event(Key::X, Modifiers::CTRL).unwrap();
-        assert_eq!(seq.feed_one(&km, ctrl_x, now), Some(Action::FolderMove));
+        assert_eq!(
+            seq.feed_one(&km, cmd(Key::X), now),
+            Some(Action::FolderMove)
+        );
         km.set_focus(Scope::Metadata);
         assert_eq!(seq.feed_one(&km, key(Key::Y), now), Some(Action::MetaCopy));
-        let ctrl_c = Chord::from_event(Key::C, Modifiers::CTRL).unwrap();
+        let ctrl_c = cmd(Key::C);
         assert_eq!(
             seq.feed_one(&km, ctrl_c, now),
             Some(Action::MetaCopy),
@@ -3719,6 +3826,7 @@ mod tests {
             trigger: Trigger::Key(key),
             shift,
             ctrl,
+            cmd: false,
         }
     }
 
@@ -3948,11 +4056,19 @@ mod tests {
                         continue;
                     };
                     for os in ["linux", "windows", "macos"] {
+                        // `Cmd+` de `keys.toml` : Ctrl ailleurs que sur macOS. Le Cmd de
+                        // macOS ne passe que sur un Mac.
+                        let chord = &match chord.cmd {
+                            true if os != "macos" => command_chord(key, chord.shift, false),
+                            true if !MAC => continue,
+                            _ => *chord,
+                        };
                         let modifiers = Modifiers {
                             shift: chord.shift,
                             ctrl: chord.ctrl,
+                            mac_cmd: chord.cmd,
                             // Ailleurs que sur macOS, « commande » est Ctrl.
-                            command: chord.ctrl && os != "macos",
+                            command: chord.cmd || (chord.ctrl && os != "macos"),
                             ..Default::default()
                         };
                         let events = winit_events(key, modifiers, os == "windows");

@@ -1610,6 +1610,7 @@ keys-file-unreadable = Default shortcuts unreadable ({ $path }: { $error }): the
 keys-conflict = [keys] "{ $spec }" assigned to { $first } and to { $second }: kept for { $first }
 keys-replaces = [keys] "{ $spec }" ({ $action }) replaces the shortcut of { $other }
 keys-unknown-key = unknown key "{ $text }"
+keys-system-cmd = "{ $text }": macOS keeps this key with Cmd (write "Ctrl+" instead)
 keys-empty = empty shortcut
 keys-none-short = no shortcut
 key-shift-prefix = Shift+
