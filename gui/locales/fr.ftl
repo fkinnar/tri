@@ -1447,6 +1447,7 @@ folder-open-in-running = { $name } est déjà ouvert : fermez-le d'abord (sous W
 develop-batch-unavailable = Darktable introuvable : réglage [develop] darktable
 develop-batch-busy = un dossier est déjà en cours de développement
 develop-batch-progress = développement de « { $name } » { $done }/{ $total }
+develop-batch-checking = développements de « { $name } » : vérification du cache { $done }/{ $total }
 develop-batch-done = « { $name } » développé : { $rendered } rendus, { $cached } déjà faits, { $failed } échecs
 develop-batch-error = { " " }({ $error })
 develop-batch-cancelled = { " (interrompu)" }

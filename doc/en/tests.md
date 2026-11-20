@@ -116,6 +116,8 @@ functions.
 
 - only the developed images (darktable sidecar with a history) are rendered; without
   darktable, the failure is counted and the batch goes to the end;
+- the phase tells the cache check from real renders: a second time, all in the cache,
+  `Rendering(0, 0)`, which the status bar does not show;
 - with `TRI_TEST_DEVELOP` (a folder of RAWs, some developed, darktable installed,
   `#[ignore]`): the developed ones rendered, the others skipped. On 2026-10-25, three
   RAFs (two developed): 13 s.

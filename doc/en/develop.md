@@ -193,6 +193,12 @@ top of the image says so, "12 changed developments to redo (3/12)" with the prog
 then "12 developments redone" at the end; each fades by itself (`[gui.grid]
 develop_toast_ms`, 6 s; 0: never). Progress stays in the status bar.
 
+**Checking is not developing** (2026-11-20: on iCloud, the slow cache check showed as
+"developing … n/total", as if everything were rendered again): the status bar task
+follows `DevelopBatch::phase`. First "developments of …: checking the cache n/total";
+then "developing … k/m" for the renders to redo only; nothing at all if everything was
+in the cache.
+
 **Choosing the software** (2026-10-26, user's choice; shortcuts configurable):
 `Shift+B` and `<leader>r` develop the image in its software (the one of its development,
 see `[develop] default`), `<leader>d` in darktable, `<leader>p` in RapidRAW
