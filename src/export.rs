@@ -2082,7 +2082,8 @@ fn finish_one(
 }
 
 /// Exporte `images` **par darktable, en passant par un TIFF 16 bits temporaire** (espace
-/// du profil, pleine définition, un seul lancement), puis recadré (version `cut`), réduit,
+/// du profil, pleine définition, une image à la fois : la progression avance à chaque
+/// image et chaque TIFF est effacé aussitôt l'image écrite), puis recadré (version `cut`), réduit,
 /// accentué et écrit au format du profil : pour ce que darktable ne fait pas lui-même. Une
 /// seule compression, jamais deux.
 pub fn export_via_tiff(
@@ -2110,45 +2111,50 @@ pub fn export_via_tiff(
     };
     let result = (|| {
         let folder = tmp.display().to_string();
-        let rendered = export(
-            dt,
-            &images,
-            &Request::new(&render, &folder),
-            cancel,
-            |_, _, _| {},
-        )?;
         let total = images.len();
-        let mut used = vec![false; total];
         let mut done = 0;
         let mut report = Report::default();
-        for file in &rendered.written {
-            // L'image d'origine du rendu : même nom d'export (un clone `IMG@dt-01.RAF`
-            // est rendu sous `IMG_01` ; darktable ajoute « _01 » en cas de doublon de nom).
-            let stem = file
-                .file_stem()
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            let base = stem.rsplit_once('_').map_or(stem.as_str(), |(b, _)| b);
-            let Some(i) = (0..total).find(|&i| {
-                if used[i] {
-                    return false;
+        // Une image à la fois : rendue par darktable, terminée, puis la suivante (retour
+        // du 20/11/2026 : tout le dossier était rendu d'abord, sans progression, la barre
+        // restait à 0 / 18 pendant des minutes ; et les TIFF de 150 Mo s'accumulaient).
+        for image in &images {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(DevelopError::Cancelled);
+            }
+            let rendered = match export(
+                dt,
+                std::slice::from_ref(image),
+                &Request::new(&render, &folder),
+                cancel,
+                |_, _, _| {},
+            ) {
+                Ok(rendered) => rendered,
+                Err(DevelopError::Cancelled) => return Err(DevelopError::Cancelled),
+                Err(e) => {
+                    report.errors.push(failed_image(image, &e));
+                    continue;
                 }
-                let name = export_name(&images[i]);
-                name == stem || name == base
-            }) else {
+            };
+            let Some(file) = rendered.written.first() else {
+                report.errors.push(failed_image(image, &"darktable"));
                 continue;
             };
-            used[i] = true;
-            let mut decoder = image::ImageReader::open(file)
-                .and_then(|r| r.with_guessed_format())
-                .map_err(|e| failed(&e))?
-                .into_decoder()
-                .map_err(|e| failed(&e))?;
-            let icc = decoder.icc_profile().ok().flatten();
-            let pixels = image::DynamicImage::from_decoder(decoder)
-                .map_err(|e| failed(&e))?
-                .into_rgb16();
-            match finish(&images[i], pixels, icc.as_deref(), req) {
+            let finished = (|| {
+                let mut decoder = image::ImageReader::open(file)
+                    .and_then(|r| r.with_guessed_format())
+                    .map_err(|e| failed(&e))?
+                    .into_decoder()
+                    .map_err(|e| failed(&e))?;
+                let icc = decoder.icc_profile().ok().flatten();
+                let pixels = image::DynamicImage::from_decoder(decoder)
+                    .map_err(|e| failed(&e))?
+                    .into_rgb16();
+                finish(image, pixels, icc.as_deref(), req)
+            })();
+            for written in &rendered.written {
+                let _ = std::fs::remove_file(written);
+            }
+            match finished {
                 Ok(outs) => {
                     report.written.extend(outs);
                     done += 1;
@@ -2156,7 +2162,7 @@ pub fn export_via_tiff(
                         progress(done, total, last);
                     }
                 }
-                Err(e) => report.errors.push(failed_image(&images[i], &e)),
+                Err(e) => report.errors.push(failed_image(image, &e)),
             }
         }
         if report.written.is_empty() && report.errors.is_empty() && total > 0 {
@@ -2364,6 +2370,92 @@ mod tests {
         // La première image comptée bien avant la fin de darktable.
         let first = seen.iter().find(|(n, _)| *n == 1).expect("1 / 2 montré");
         assert!(end - first.1 > Duration::from_millis(800), "{counts:?}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_export_through_tiff_moves_on_image_by_image() {
+        // Retour du 20/11/2026 (préréglage qui accentue : rendu TIFF par darktable) : tout
+        // était rendu d'abord, sans progression ; la barre restait à 0 / 18. Maintenant
+        // une image à la fois, terminée avant la suivante, son TIFF effacé.
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let photos = dir.path().join("photos");
+        std::fs::create_dir(&photos).unwrap();
+        let images: Vec<PathBuf> = ["a", "b", "c"]
+            .iter()
+            .map(|n| photos.join(format!("{n}.RAF")))
+            .collect();
+        for image in &images {
+            std::fs::write(image, b"raw").unwrap();
+        }
+        let tiff = dir.path().join("render.tif");
+        image::RgbImage::from_pixel(40, 30, image::Rgb([120, 90, 60]))
+            .save(&tiff)
+            .unwrap();
+        // Faux darktable-cli : les images après `--import`, le gabarit de sortie (premier
+        // argument seul), un TIFF par image ; ses lignes à la fin, comme le vrai.
+        let launches = dir.path().join("launches");
+        let script = dir.path().join("darktable-cli");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\necho x >> '{launches}'\nimages=''\npattern=''\n\
+                 while [ $# -gt 0 ]; do case \"$1\" in\n\
+                 --import) images=\"$images $2\"; shift 2;;\n\
+                 --core) shift;;\n\
+                 --*) shift 2;;\n\
+                 *) [ -z \"$pattern\" ] && pattern=\"$1\"; shift;;\n\
+                 esac; done\n\
+                 lines=''\n\
+                 for i in $images; do s=$(basename \"$i\"); s=${{s%.*}}; \
+                 out=$(printf '%s' \"$pattern\" | sed \"s|\\$(FILE_NAME)|$s|\").tif; \
+                 mkdir -p \"$(dirname \"$out\")\"; cp '{tiff}' \"$out\"; \
+                 lines=\"$lines\\n[export_job] exported to \\`$out'\"; done\n\
+                 printf \"$lines\\n\"\n",
+                launches = launches.display(),
+                tiff = tiff.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let dt = Darktable {
+            cli: crate::develop::Cli {
+                program: script,
+                args: Vec::new(),
+            },
+            config_dir: dir.path().join("cfg"),
+            high_quality: false,
+        };
+        // Comme le préréglage de l'utilisateur : JPEG sRGB accentué pour le tirage.
+        let print = Profile {
+            sharpen: Sharpen::Print,
+            ..Profiles::default().get("web").unwrap().clone()
+        };
+        let out = dir.path().join("out");
+        let folder = out.display().to_string();
+        let mut seen: Vec<(usize, usize)> = Vec::new();
+        let report = export_via_tiff(
+            &dt,
+            &images,
+            &Request::new(&print, &folder),
+            &AtomicBool::new(false),
+            |n, _, _| {
+                let runs = std::fs::read_to_string(&launches).unwrap_or_default();
+                seen.push((n, runs.lines().count()));
+            },
+        )
+        .unwrap();
+        assert_eq!(report.written.len(), 3, "{report:?}");
+        assert_eq!(report.failed, 0);
+        // Chaque image comptée juste après son propre lancement de darktable.
+        assert_eq!(seen, [(1, 1), (2, 2), (3, 3)]);
+        assert!(
+            !dt.config_dir
+                .join(format!("render-{}", std::process::id()))
+                .exists(),
+            "TIFF temporaires effacés"
+        );
     }
 
     #[test]

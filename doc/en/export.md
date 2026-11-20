@@ -295,8 +295,11 @@ profile: `"none"` (Editing, JPEG as is: the external editor or nothing), `"scree
   default: screen 0.6 px, amount 0.6, threshold 2 levels; print 1.2 px, amount 0.9,
   threshold 3. Starting values, to be adjusted with use.
 - **darktable** does not sharpen for us: a profile that sharpens (or a version) goes
-  through `export_via_tiff`. darktable renders a temporary 16-bit TIFF, in a single
-  launch, which is then cropped, downsized, sharpened and written. A single compression.
+  through `export_via_tiff`. darktable renders a temporary 16-bit TIFF, which is then
+  cropped, downsized, sharpened and written. A single compression. **One image at a time**
+  (2026-11-20: everything was rendered first, the bar stayed at 0 / 18 for minutes): each
+  image is finished, and its TIFF deleted, before the next one is rendered; one darktable
+  launch per image (a second or two more each).
 - A **copy without recompression** is not sharpened: sharpening means re-encoding. A
   profile that sharpens is therefore never "as is".
 - Summary in the dialog: "… · screen sharpening".

@@ -300,8 +300,11 @@ chaque profil : `"none"` (Retouche, JPEG tel quel : l'éditeur externe ou rien),
   défaut : écran 0,6 px, force 0,6, seuil 2 niveaux ; tirage 1,2 px, force 0,9, seuil 3.
   Valeurs de départ, à ajuster à l'usage.
 - **darktable** n'accentue pas pour nous : un profil qui accentue (ou une version) passe
-  par `export_via_tiff`. darktable rend un TIFF 16 bits temporaire, en un seul
-  lancement, qui est ensuite recadré, réduit, accentué et écrit. Une seule compression.
+  par `export_via_tiff`. darktable rend un TIFF 16 bits temporaire, recadré, réduit,
+  accentué et écrit. Une seule compression. **Une image à la fois** (20/11/2026 : tout
+  était rendu d'abord, la barre restait à 0 / 18 pendant des minutes) : chaque image est
+  terminée, et son TIFF effacé, avant le rendu de la suivante ; un lancement de
+  darktable par image (une ou deux secondes de plus chacune).
 - Une **copie sans recompression** n'est pas accentuée : accentuer, c'est réencoder. Un
   profil qui accentue n'est donc jamais « tel quel ».
 - Résumé dans la boîte : « … · accentuation écran ».
