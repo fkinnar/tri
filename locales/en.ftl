@@ -169,6 +169,7 @@ places-desktop = Desktop
 places-documents = Documents
 places-downloads = Downloads
 places-pictures = Pictures
+places-icloud = iCloud Drive
 places-root = Root (/)
 places-device = { $size } GB media
 places-mount-unsupported = mounting a device only works on Linux and macOS

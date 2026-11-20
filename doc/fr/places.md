@@ -109,7 +109,10 @@ sauvegarde) ; `PlaceSettings::ejectable`, et `Tree::can_eject` à vérifier avan
 - **Dossiers habituels**, comme la barre latérale du Finder : Bureau, Documents,
   Téléchargements, Images, après le dossier personnel (`user_dirs`). Sous Linux, ceux de
   `~/.config/user-dirs.dirs` (`xdg-user-dirs` : « Bureau », « Images » sous Mint en
-  français, chemin absolu permis) ; sinon les noms anglais. Absents : omis.
+  français, chemin absolu permis) ; sinon les noms anglais. Puis **iCloud Drive**
+  (20/11/2026 : caché dans `~/Library`, introuvable autrement) :
+  `~/Library/Mobile Documents/com~apple~CloudDocs` sur macOS, `~/iCloudDrive` sous
+  Windows. Absents : omis.
 - **Partages réseau** (`PlaceKind::Network`) : points de montage d'un système de fichiers
   réseau (SMB, AFP, NFS, WebDAV, SSHFS, rclone…), lus dans la sortie de `mount` (macOS)
   ou `/proc/mounts` (Linux) ; un partage monté dans `/Volumes` ou `/media` change de

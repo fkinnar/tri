@@ -170,6 +170,7 @@ places-desktop = Bureau
 places-documents = Documents
 places-downloads = Téléchargements
 places-pictures = Images
+places-icloud = iCloud Drive
 places-root = Racine (/)
 places-device = Support de { $size } Go
 places-mount-unsupported = monter un support n'est possible que sous Linux et macOS
