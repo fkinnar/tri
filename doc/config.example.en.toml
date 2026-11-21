@@ -1238,9 +1238,9 @@ seconds = -1.0
 # stack), the current stack lit and the photo marked. "split": on top, the photo in the
 # stack and the stack in the list, side by side; below, the photo in the list (easier
 # to read with small stacks in a large folder). Without stacks, a single bar.
-shape = "segmented"
+shape = "split"
 # Where: "overlay" (on the image, along the bottom) or "panel" (right panel).
-place = "overlay"
+place = "panel"
 # Thickness of a bar (points).
 thickness = 5.0
 

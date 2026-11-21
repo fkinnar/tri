@@ -1249,9 +1249,9 @@ seconds = -1.0
 # pile), la pile en cours éclairée et la photo marquée. "split" : en haut, la photo dans
 # la pile et la pile dans la liste, côte à côte ; en dessous, la photo dans la liste
 # (plus lisible avec de petites piles dans un grand dossier). Sans piles, une seule barre.
-shape = "segmented"
+shape = "split"
 # Où : "overlay" (sur l'image, le long du bas) ou "panel" (panneau de droite).
-place = "overlay"
+place = "panel"
 # Épaisseur d'une barre (points).
 thickness = 5.0
 

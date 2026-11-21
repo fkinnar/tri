@@ -29883,6 +29883,7 @@ mod tests {
         h.run_steps(3);
         press(&mut h, Key::Enter, Modifiers::NONE);
         h.state_mut().image_info = true;
+        h.state_mut().gui.position_bar.place = crate::settings::BarPlace::Overlay;
         h.run_steps(3);
         let first = h.state().position_bar_key.clone();
         assert!(first.is_some(), "barre montrée en plein écran");

@@ -992,10 +992,10 @@ pub struct PositionBarSettings {
 #[serde(rename_all = "kebab-case")]
 pub enum BarShape {
     /// Une barre, la liste découpée en un segment par pile.
-    #[default]
     Segmented,
     /// Trois barres : la photo dans la pile et la pile dans la liste, côte à côte, puis
-    /// la photo dans la liste.
+    /// la photo dans la liste (par défaut : choix de l'utilisateur, 21/11/2026).
+    #[default]
     Split,
 }
 
@@ -1004,9 +1004,10 @@ pub enum BarShape {
 #[serde(rename_all = "kebab-case")]
 pub enum BarPlace {
     /// Sur l'image, le long du bas.
-    #[default]
     Overlay,
-    /// Dans le panneau de droite, sous l'histogramme.
+    /// Dans le panneau de droite, sous l'histogramme (par défaut : choix de
+    /// l'utilisateur, 21/11/2026).
+    #[default]
     Panel,
 }
 
@@ -1014,8 +1015,8 @@ impl Default for PositionBarSettings {
     fn default() -> Self {
         Self {
             seconds: -1.0,
-            shape: BarShape::Segmented,
-            place: BarPlace::Overlay,
+            shape: BarShape::Split,
+            place: BarPlace::Panel,
             thickness: 5.0,
         }
     }

@@ -187,7 +187,7 @@ system one ("cold" measurements, experiments).
   the end) and `place` (`center`, `top-left`, `top-right`, `bottom-right`, `bottom-left`).
 - **Position bar** (`[gui.position_bar]`, #537, 2026-11-21, user's idea: culling in full
   screen, one loses track of where one is, and nobody looks at the status bar), over the
-  shown list (filtered: what ← / → browse). Two shapes on trial (`shape`): `segmented`,
+  shown list (filtered: what ← / → browse). Two shapes (`shape`; `split` by default with `place = "panel"`, the user's choice): `segmented`,
   one bar split into segments, one per stack, as wide as the stack, the current stack lit
   (`accent_light`) and the photo marked (`accent`, at least 3 points wide in a large
   folder); `split` (user's idea, easier to read with small stacks in a large folder),

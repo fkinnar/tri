@@ -196,8 +196,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `bottom-right`, `bottom-left`).
 - **Barre de position** (`[gui.position_bar]`, #537, 21/11/2026, idée de l'utilisateur :
   en triant en plein écran, on ne sait plus où on en est, et personne ne regarde la barre
-  d'état), sur la liste affichée (filtrée : ce que ← / → parcourent). Deux formes à
-  l'essai (`shape`) : `segmented`, une barre découpée en segments, un par pile, aussi
+  d'état), sur la liste affichée (filtrée : ce que ← / → parcourent). Deux formes
+  (`shape`, `split` par défaut avec `place = "panel"`, choix de l'utilisateur) : `segmented`, une barre découpée en segments, un par pile, aussi
   large que la pile, la pile en cours éclairée (`accent_light`) et la photo marquée
   (`accent`, 3 points au moins dans un grand dossier) ; `split` (idée de l'utilisateur,
   plus lisible avec de petites piles dans un grand dossier), trois barres : en haut la
