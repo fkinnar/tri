@@ -56,6 +56,9 @@ pub enum SourceKind {
     Raw,
     /// Les développements de ce logiciel.
     Developed(crate::develop::Engine),
+    /// Comme la couverture de la grille : le rendu de chaque développement, et pour une
+    /// photo sans développement, son JPEG boîtier.
+    Cover,
 }
 
 impl SourceKind {
@@ -63,6 +66,7 @@ impl SourceKind {
     /// logiciels, RAW).
     pub fn all() -> Vec<SourceKind> {
         std::iter::once(SourceKind::Camera)
+            .chain(std::iter::once(SourceKind::Cover))
             .chain(crate::develop::Engine::ALL.map(SourceKind::Developed))
             .chain(std::iter::once(SourceKind::Raw))
             .collect()
@@ -73,6 +77,7 @@ impl SourceKind {
         match self {
             SourceKind::Camera => "camera",
             SourceKind::Raw => "raw",
+            SourceKind::Cover => "cover",
             SourceKind::Developed(engine) => engine.id(),
         }
     }
@@ -95,6 +100,13 @@ impl SourceKind {
             SourceKind::Developed(engine) => crate::developments::get(&file.path)
                 .filter(|d| d.engine == engine)
                 .map(|_| Source::Developed(engine)),
+            // Un développement : son rendu ; une photo qui en a : rien (ses développements
+            // portent ses palettes) ; sinon son JPEG boîtier.
+            SourceKind::Cover => match crate::developments::get(&file.path) {
+                Some(d) => Some(Source::Developed(d.engine)),
+                None if crate::developments::of(&file.path).is_empty() => Some(Source::Camera),
+                None => None,
+            },
         }
     }
 }

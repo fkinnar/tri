@@ -1104,8 +1104,14 @@ pub struct TriApp {
     clipping: bool,
     /// Analyses d'exposition lues dans le cache (images affichées récemment).
     exposures: Lru<PathBuf, Arc<Exposure>>,
-    /// Source des palettes de couleurs (#492) ; `None` : aucune, rien ne se calcule.
+    /// Source des palettes de couleurs en vigueur (#492) ; `None` : aucune, rien ne se
+    /// calcule. Suit le rendu de la grille, ou le choix de la liste (`palette_manual`).
     palette_source: Option<tri::palette::SourceKind>,
+    /// Source choisie dans la liste, quand elle ne suit pas la grille.
+    palette_manual: Option<tri::palette::SourceKind>,
+    /// « Comme la grille » (retour du 21/11/2026, coché par défaut) : la source des
+    /// palettes suit le rendu des vignettes.
+    palette_follow_grid: bool,
     /// Palettes lues dans le cache, par image et source.
     palettes: HashMap<(PathBuf, tri::palette::Source), Arc<Palette>>,
     /// « Palettes proches » en cours (#492).
@@ -2133,6 +2139,8 @@ impl TriApp {
             clipping: gui.histogram.clipping,
             exposures: Lru::new(gui.view.textures),
             palette_source: None,
+            palette_manual: None,
+            palette_follow_grid: true,
             palettes: HashMap::new(),
             palette_like: None,
             palette_refilter_pending: false,
@@ -2479,7 +2487,8 @@ impl TriApp {
                 folded.sort();
                 folded
             }),
-            palette_source: self.palette_source,
+            palette_source: self.palette_manual,
+            palette_follow_grid: Some(self.palette_follow_grid),
             window: self.window_kept,
         }
     }
@@ -2591,7 +2600,8 @@ impl TriApp {
             self.grid_render = render;
             self.sync_source();
         }
-        self.palette_source = s.palette_source;
+        self.palette_manual = s.palette_source;
+        self.palette_follow_grid = s.palette_follow_grid.unwrap_or(true);
         if let Some(folded) = &s.panel_folded {
             self.panel_folded = folded.iter().cloned().collect();
             for section in tri::places::Section::ALL {
@@ -3899,6 +3909,22 @@ impl TriApp {
         }
     }
 
+    /// Source des palettes voulue : celle du rendu de la grille (« Comme la grille »), ou
+    /// celle de la liste.
+    fn wanted_palette_source(&self) -> Option<tri::palette::SourceKind> {
+        use crate::grid_render::GridRender;
+        use tri::palette::SourceKind;
+        if !self.palette_follow_grid {
+            return self.palette_manual;
+        }
+        Some(match self.grid_render {
+            GridRender::Embedded => SourceKind::Camera,
+            GridRender::Cover => SourceKind::Cover,
+            GridRender::Engine(engine) => SourceKind::Developed(engine),
+            GridRender::LibRaw => SourceKind::Raw,
+        })
+    }
+
     /// Change la source des palettes (#492) : le calcul en fond du dossier suit (aucune :
     /// plus de calcul).
     fn set_palette_source(&mut self, kind: Option<tri::palette::SourceKind>) {
@@ -4000,26 +4026,45 @@ impl TriApp {
                 None => t!("palette-source-none").into(),
                 Some(SourceKind::Camera) => GridRender::Embedded.label(weak),
                 Some(SourceKind::Raw) => GridRender::LibRaw.label(weak),
+                Some(SourceKind::Cover) => GridRender::Cover.label(weak),
                 Some(SourceKind::Developed(engine)) => GridRender::Engine(engine).label(weak),
             }
         };
-        let mut chosen = self.palette_source;
-        // Sous-titre puis liste pointable, comme les autres réglages du panneau.
+        // Sous-titre, « Comme la grille » (coché par défaut, retour du 21/11/2026), puis,
+        // décoché, la liste pointable.
         self.subheading(ui, t!("palette-source"));
-        let engines = self.developers.engines();
-        let mut all = vec![None, Some(SourceKind::Camera)];
-        all.extend(engines.iter().map(|&e| Some(SourceKind::Developed(e))));
-        // Un logiciel retenu puis désactivé reste montré tant qu'il est choisi.
-        if let Some(SourceKind::Developed(e)) = chosen
-            && !engines.contains(&e)
+        let mut follow = self.palette_follow_grid;
+        if self
+            .side_checkbox(ui, &mut follow, t!("palette-follow-grid"))
+            .on_hover_text(t!("palette-follow-grid-tip"))
+            .changed()
         {
-            all.push(chosen);
+            self.palette_follow_grid = follow;
+            // Décoché : la liste part de la source en vigueur.
+            if !follow && self.palette_manual.is_none() {
+                self.palette_manual = self.palette_source;
+            }
         }
-        all.push(Some(SourceKind::Raw));
-        self.side_combo(ui, "palette_source", &mut chosen, &all, name, None);
-        if chosen != self.palette_source {
-            self.set_palette_source(chosen);
+        if !self.palette_follow_grid {
+            let mut chosen = self.palette_manual;
+            let engines = self.developers.engines();
+            let mut all = vec![None, Some(SourceKind::Camera)];
+            if !engines.is_empty() {
+                all.push(Some(SourceKind::Cover));
+            }
+            all.extend(engines.iter().map(|&e| Some(SourceKind::Developed(e))));
+            // Un logiciel retenu puis désactivé reste montré tant qu'il est choisi.
+            if let Some(SourceKind::Developed(e)) = chosen
+                && !engines.contains(&e)
+            {
+                all.push(chosen);
+            }
+            all.push(Some(SourceKind::Raw));
+            self.side_combo(ui, "palette_source", &mut chosen, &all, name, None);
+            self.palette_manual = chosen;
         }
+        let wanted = self.wanted_palette_source();
+        self.set_palette_source(wanted);
         let Some(kind) = self.palette_source else {
             ui.weak(t!("palette-choose"));
             return;
@@ -9522,6 +9567,9 @@ impl TriApp {
 
     /// Intègre les événements du moteur reçus depuis la dernière image.
     fn drain_events(&mut self) {
+        // Source des palettes : suit le rendu de la grille (« Comme la grille »).
+        let wanted = self.wanted_palette_source();
+        self.set_palette_source(wanted);
         let mut scored = Vec::new();
         self.drain_engine(&mut scored);
         self.take_scores(scored);
@@ -25926,6 +25974,14 @@ mod tests {
     use egui_kittest::kittest::Queryable;
 
     /// Application sur un dossier temporaire de 3 JPEG, avec un cache temporaire.
+    /// Source de palette choisie dans la liste (« Comme la grille » décoché).
+    fn choose_palette(h: &mut Harness<'static, TriApp>, kind: Option<tri::palette::SourceKind>) {
+        let app = h.state_mut();
+        app.palette_follow_grid = false;
+        app.palette_manual = kind;
+        app.set_palette_source(kind);
+    }
+
     fn harness() -> (Harness<'static, TriApp>, tempfile::TempDir) {
         harness_with(64, 48)
     }
@@ -27851,7 +27907,7 @@ mod tests {
         let (mut h, _dir) = harness_images(images);
         h.state_mut().metadata_panel = true;
         h.run_steps(3);
-        h.state_mut().set_palette_source(Some(SourceKind::Camera));
+        choose_palette(&mut h, Some(SourceKind::Camera));
         run_until(&mut h, |app| {
             app.files
                 .iter()
@@ -27909,7 +27965,7 @@ mod tests {
         // Sans source : l'action le dit.
         act(&mut h, Action::FilterPaletteColour);
         assert!(h.state().palette_colour.is_none());
-        h.state_mut().set_palette_source(Some(SourceKind::Camera));
+        choose_palette(&mut h, Some(SourceKind::Camera));
         run_until(&mut h, |app| {
             app.files
                 .iter()
@@ -28001,7 +28057,7 @@ mod tests {
             .collect();
         let (mut h, _dir) = harness_images(images);
         h.run_steps(3);
-        h.state_mut().set_palette_source(Some(SourceKind::Camera));
+        choose_palette(&mut h, Some(SourceKind::Camera));
         run_until(&mut h, |app| {
             app.files
                 .iter()
@@ -28058,7 +28114,7 @@ mod tests {
         h.state_mut().metadata_panel = true;
         h.set_size(vec2(1400.0, 1400.0));
         h.run_steps(3);
-        h.state_mut().set_palette_source(Some(SourceKind::Camera));
+        choose_palette(&mut h, Some(SourceKind::Camera));
         run_until(&mut h, |app| {
             app.files
                 .iter()
@@ -28087,7 +28143,7 @@ mod tests {
             .collect();
         let (mut h, _dir) = harness_images(images);
         h.run_steps(3);
-        h.state_mut().set_palette_source(Some(SourceKind::Camera));
+        choose_palette(&mut h, Some(SourceKind::Camera));
         run_until(&mut h, |app| {
             app.files
                 .iter()
@@ -28142,10 +28198,12 @@ mod tests {
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 6);
         assert_eq!(selected_name(&h), "img0.jpg");
         h.state_mut().metadata_panel = true;
-        h.state_mut()
-            .set_palette_source(Some(tri::palette::SourceKind::Developed(
+        choose_palette(
+            &mut h,
+            Some(tri::palette::SourceKind::Developed(
                 tri::develop::Engine::Darktable,
-            )));
+            )),
+        );
         h.run_steps(3);
         let labels: Vec<String> = (0..h.state().files.len())
             .filter(|&i| tri::developments::get(&h.state().files[i].path).is_some())
@@ -31117,6 +31175,16 @@ mod tests {
         let (mut h, _dir) = harness();
         h.state_mut().metadata_panel = true;
         h.run_steps(3);
+        // Par défaut, « Comme la grille » : la source du rendu des vignettes (retour du
+        // 21/11/2026).
+        assert!(h.state().palette_follow_grid);
+        assert_eq!(
+            h.state().palette_source,
+            Some(tri::palette::SourceKind::Camera)
+        );
+        // Décoché, sans choix : rien ne se calcule, invitation à choisir.
+        choose_palette(&mut h, None);
+        h.run_steps(3);
         assert!(h.state().palette_source.is_none());
         assert!(
             h.query_all_by_label_contains(&t!("palette-choose"))
@@ -31124,8 +31192,7 @@ mod tests {
                 .is_some(),
             "invitation à choisir"
         );
-        h.state_mut()
-            .set_palette_source(Some(tri::palette::SourceKind::Camera));
+        choose_palette(&mut h, Some(tri::palette::SourceKind::Camera));
         run_until(&mut h, |app| {
             let path = app.files[app.selected].path.clone();
             app.palettes

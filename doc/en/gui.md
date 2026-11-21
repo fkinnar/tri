@@ -210,10 +210,13 @@ system one ("cold" measurements, experiments).
   `Stacks::photos_per_group` (developments counted with their photo). Thickness
   `thickness`.
 - **Colour palette** (#492, 2026-11-21). "Palette" section of the right panel, in the grid
-  and in full screen, at the bottom of the panel: mostly to look. A **source** to choose,
-  modelled on the shown render (`palette_source` of the display state, remembered): none
-  (default: nothing is computed), "JPEG camera", each active development program (all its
-  developments, clones included), "RAW LibRaw". Once chosen, the folder's palettes are
+  and in full screen, at the bottom of the panel: mostly to look. The **source**: "Same as the
+  grid", checked by default, follows the thumbnails' render (camera JPEG, cover: each
+  development's render and the camera JPEG of photos without development, program, RAW);
+  unchecked, a list modelled on the shown render (`palette_source`, `palette_follow_grid`
+  of the display state, remembered): none (nothing is computed), "JPEG camera",
+  "Cover", each active development program (all its developments, clones included), "RAW
+  LibRaw". Once chosen, the folder's palettes are
   computed in the background (`Scheduler::set_palette`, "palettes" progress in the status
   bar). For the selected image: the colour **band**, each colour as wide as its share, the
   **colour wheel** (hue as angle, chroma as the square root of the radius to spread a

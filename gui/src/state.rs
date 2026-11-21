@@ -68,6 +68,9 @@ pub struct DisplayState {
     /// Source des palettes de couleurs (#492) ; absente : aucune (pas de calcul).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub palette_source: Option<tri::palette::SourceKind>,
+    /// « Comme la grille » des palettes ; absent : oui.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub palette_follow_grid: Option<bool>,
     /// Fenêtre à la fermeture (issue n° 58), reprise au lancement suivant.
     pub window: Option<WindowState>,
 }

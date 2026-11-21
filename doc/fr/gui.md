@@ -221,10 +221,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `Stacks::photos_per_group` (développements comptés avec leur photo). Épaisseur
   `thickness`.
 - **Palette de couleurs** (#492, 21/11/2026). Section « Palette » du panneau de droite,
-  en grille et en plein écran, en bas du panneau : surtout pour voir. Une **source** au
-  choix, sur le modèle du rendu affiché (`palette_source` de l'état d'affichage,
-  retenue) : aucune (par défaut : rien ne se calcule), « JPEG boîtier », chaque logiciel de
-  développement actif (tous ses développements, clones compris), « RAW LibRaw ». Choisie,
+  en grille et en plein écran, en bas du panneau : surtout pour voir. La **source** : « Comme la
+  grille », coché par défaut, suit le rendu des vignettes (JPEG boîtier, couverture : le
+  rendu de chaque développement et le JPEG boîtier des photos sans développement,
+  logiciel, RAW) ; décoché, une liste sur le modèle du rendu affiché (`palette_source`,
+  `palette_follow_grid` de l'état d'affichage, retenus) : aucune (rien ne se calcule),
+  « JPEG boîtier », « Couverture », chaque logiciel de développement actif (tous ses
+  développements, clones compris), « RAW LibRaw ». Choisie,
   les palettes du dossier se calculent en fond (`Scheduler::set_palette`, avancement
   « palettes » dans la barre d'état). Pour l'image sélectionnée : la **bande** des
   couleurs, chacune aussi large que sa part, la **roue chromatique** (teinte en angle,
