@@ -1439,6 +1439,8 @@ width = 280.0
 min_width = 280.0
 histogram = true
 histogram_height = 120.0
+# Histogram not computed yet: the previous one stays, greyed after this delay (ms).
+histogram_stale_ms = 400
 # Step of a strictness slider of the panel from the keyboard (<core.metadata.left> /
 # <core.metadata.right>),
 # over its range from -1 to 1.

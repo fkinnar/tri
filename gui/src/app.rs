@@ -1427,6 +1427,9 @@ pub struct TriApp {
     /// boîtier) : gardé à l'écran le temps que celui de l'image suivante se calcule
     /// (retour du 21/11/2026 : il disparaissait et réapparaissait à chaque image).
     last_histogram: Option<Histograms>,
+    /// Image dont on attend l'histogramme, et depuis quand (le précédent est grisé après
+    /// `[gui.metadata] histogram_stale_ms`).
+    histogram_wait: Option<(usize, Instant)>,
     /// Dernière image affichée en plein écran (pour la trace).
     last_shown: (usize, Option<Level>),
 }
@@ -2225,6 +2228,7 @@ impl TriApp {
             position_bar_since: Instant::now(),
             position_bar_reserved: 0.0,
             last_histogram: None,
+            histogram_wait: None,
             last_zoom_size: std::collections::HashMap::new(),
             gui,
         };
@@ -3515,7 +3519,22 @@ impl TriApp {
         });
         if current.is_some() {
             self.last_histogram = current.clone();
+            self.histogram_wait = None;
+        } else if self.histogram_wait.is_none_or(|(i, _)| i != self.selected) {
+            self.histogram_wait = Some((self.selected, Instant::now()));
         }
+        // Le calcul traîne (disque lent, iCloud : plusieurs secondes) : le précédent est
+        // grisé, pour ne pas le prendre pour celui de l'image (retour du 21/11/2026).
+        let stale_after = Duration::from_millis(settings.histogram_stale_ms);
+        let stale = match self.histogram_wait.filter(|_| current.is_none()) {
+            Some((_, since)) if since.elapsed() >= stale_after => true,
+            Some((_, since)) => {
+                ui.ctx()
+                    .request_repaint_after(stale_after - since.elapsed());
+                false
+            }
+            None => false,
+        };
         // En attendant celui de l'image, le précédent reste (retour du 21/11/2026 : la
         // place vide clignotait à chaque image) ; à la même hauteur dans tous les cas (la
         // barre de position, dessous, ne saute pas).
@@ -3550,8 +3569,12 @@ impl TriApp {
             self.histogram_large = true;
         }
         let look = self.small_histogram_look();
+        let mut painter = ui.painter().clone();
+        if stale {
+            painter.multiply_opacity(0.3);
+        }
         histogram::draw(
-            ui.painter(),
+            &painter,
             rect,
             &e,
             real.as_deref(),

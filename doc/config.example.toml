@@ -1449,6 +1449,8 @@ width = 280.0
 min_width = 280.0
 histogram = true
 histogram_height = 120.0
+# Histogramme pas encore calculé : le précédent reste affiché, grisé après ce délai (ms).
+histogram_stale_ms = 400
 # Pas d'un curseur de sévérité du panneau au clavier (<core.metadata.left> /
 # <core.metadata.right>),
 # sur sa course de -1 à 1.

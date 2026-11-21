@@ -206,7 +206,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   l'image, masquée avec les infos sur l'image (`t`), durée `seconds` (-1 : toujours) ;
   `panel`, une section « Position » sous l'histogramme du panneau de droite, toujours
   visible (pendant le calcul de l'histogramme, le précédent reste affiché, `last_histogram` :
-  sinon il clignotait et la barre sautait à chaque image). Sur l'image, les notes et les repères du bas remontent au-dessus d'elle
+  sinon il clignotait et la barre sautait à chaque image ; grisé si le calcul dépasse
+  `[gui.metadata] histogram_stale_ms`, 400 ms, sur un disque lent par exemple). Sur l'image, les notes et les repères du bas remontent au-dessus d'elle
   (`marks_area`). Jamais pendant le recadrage. Une barre verticale de la place dans la pile a été
   essayée puis retirée (redondante avec la barre segmentée). Position seulement (décidé le
   21/11/2026 : colorer selon le tri viendra quand on saura quoi y montrer d'utile ;

@@ -1533,6 +1533,9 @@ pub struct MetadataSettings {
     pub histogram: bool,
     /// Hauteur de cet histogramme (points).
     pub histogram_height: f32,
+    /// Image suivante, histogramme pas encore prêt : le précédent reste affiché, grisé
+    /// au-delà de ce délai (ms).
+    pub histogram_stale_ms: u64,
     /// Pas d'un curseur de sévérité du panneau au clavier (flèches gauche / droite, h /
     /// l), sur sa course de -1 à 1.
     pub slider_step: f32,
@@ -1549,6 +1552,7 @@ impl Default for MetadataSettings {
             min_width: 280.0,
             histogram: true,
             histogram_height: 120.0,
+            histogram_stale_ms: 400,
             slider_step: 0.1,
             group_gap: 0.5,
         }
