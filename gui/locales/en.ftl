@@ -1215,6 +1215,7 @@ settings-section-gui-zoom = Zoom and loupe
 settings-section-gui-dialogs = Dialogs
 settings-section-gui-compare = Compare
 settings-section-gui-position = Position mark
+settings-section-gui-position_bar = Position bar
 settings-section-gui-notes = Notes on the image
 settings-section-gui-end = End of the stack or of the list
 end-stack-first = Start of the stack

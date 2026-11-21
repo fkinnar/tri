@@ -316,6 +316,8 @@ pub struct GuiSettings {
     pub compare: CompareSettings,
     /// `[gui.position]`.
     pub position: PositionSettings,
+    /// `[gui.position_bar]`.
+    pub position_bar: PositionBarSettings,
     /// `[gui.notes]`.
     pub notes: NotesSettings,
     /// `[gui.end]`.
@@ -389,6 +391,7 @@ impl Default for GuiSettings {
             zoom: ZoomSettings::default(),
             compare: CompareSettings::default(),
             position: PositionSettings::default(),
+            position_bar: PositionBarSettings::default(),
             notes: NotesSettings::default(),
             end: EndSettings::default(),
             dialogs: DialogSettings::default(),
@@ -963,6 +966,30 @@ impl Default for PositionSettings {
         Self {
             seconds: 2.0,
             place: PositionPlace::TopLeft,
+        }
+    }
+}
+
+/// Section `[gui.position_bar]` : barre de position en plein écran (#537), le long du bas
+/// de l'image : la liste découpée par pile, la photo marquée, et sa place dans la pile.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PositionBarSettings {
+    /// Durée d'affichage (secondes) après un changement d'image ; 0 : jamais ; négatif
+    /// (-1) : toujours.
+    pub seconds: f32,
+    /// Épaisseur de la barre (points).
+    pub thickness: f32,
+    /// Longueur de la barre verticale de la pile (points).
+    pub stack_length: f32,
+}
+
+impl Default for PositionBarSettings {
+    fn default() -> Self {
+        Self {
+            seconds: -1.0,
+            thickness: 5.0,
+            stack_length: 48.0,
         }
     }
 }

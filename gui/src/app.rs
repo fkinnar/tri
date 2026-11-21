@@ -34,6 +34,7 @@ use crate::marks;
 use crate::menu_groups::{self, MenuGroups};
 use crate::meta::MetaLoader;
 use crate::offload::{OffloadDialog, Request as OffloadRequest};
+use crate::position_bar;
 use crate::settings::{AppSettings, GuiSettings, HistogramScale};
 use crate::textures::Lru;
 use crate::trace::trace;
@@ -1416,6 +1417,9 @@ pub struct TriApp {
     /// Image et notes du cadre des notes, et depuis quand il est montré (`[gui.notes]`).
     notes_key: Option<(PathBuf, tri::xmp::Notes)>,
     notes_since: Instant,
+    /// Barre de position (#537) : image pour laquelle elle s'est montrée, et depuis quand.
+    position_bar_key: Option<PathBuf>,
+    position_bar_since: Instant,
     /// Dernière image affichée en plein écran (pour la trace).
     last_shown: (usize, Option<Level>),
 }
@@ -2210,6 +2214,8 @@ impl TriApp {
             notes_rect: None,
             notes_key: None,
             notes_since: Instant::now(),
+            position_bar_key: None,
+            position_bar_since: Instant::now(),
             last_zoom_size: std::collections::HashMap::new(),
             gui,
         };
@@ -11977,6 +11983,72 @@ impl TriApp {
             });
     }
 
+    /// Barre de position le long du bas de l'image (#537) : la liste affichée par piles,
+    /// la photo, sa place dans la pile. Masquée avec les infos sur l'image et pendant le
+    /// recadrage.
+    fn position_bar(
+        &mut self,
+        ctx: &egui::Context,
+        painter: &egui::Painter,
+        area: Rect,
+        path: &Path,
+    ) {
+        let b = self.gui.position_bar;
+        if !self.image_info || b.seconds == 0.0 || self.crop.is_some() {
+            self.position_bar_key = None;
+            return;
+        }
+        if self.position_bar_key.as_deref() != Some(path) {
+            self.position_bar_key = Some(path.to_path_buf());
+            self.position_bar_since = Instant::now();
+        }
+        let Some(opacity) = mark_opacity(b.seconds, self.position_bar_since, ctx) else {
+            return;
+        };
+        let i = self.selected;
+        let position = match self.stacks.stack_number(i).filter(|_| self.stacking) {
+            Some(((g, _), (m, _))) => {
+                let segments = self.stacks.photos_per_group();
+                let before: usize = segments[..g - 1].iter().sum();
+                position_bar::Position {
+                    segments,
+                    stacked: true,
+                    photo: before + m - 1,
+                }
+            }
+            None => {
+                let (n, total) = self
+                    .stacks
+                    .photo_number(i)
+                    .unwrap_or((i + 1, self.files.len()));
+                position_bar::Position {
+                    segments: vec![total],
+                    stacked: false,
+                    photo: n - 1,
+                }
+            }
+        };
+        let Some(layout) = position.layout() else {
+            return;
+        };
+        let c = &self.gui.colors;
+        let style = position_bar::Style {
+            thickness: b.thickness,
+            stack_length: b.stack_length,
+            track: Color32::from_white_alpha(70),
+            stack: c.accent_light.into(),
+            photo: c.accent.into(),
+        };
+        let margin = 16.0;
+        let bar = Rect::from_x_y_ranges(
+            area.left() + margin..=area.right() - margin,
+            area.bottom() - margin / 2.0 - b.thickness..=area.bottom() - margin / 2.0,
+        );
+        let mut painter = painter.clone();
+        painter.multiply_opacity(opacity);
+        position_bar::draw(&painter, bar, &layout, &style);
+    }
+
     /// Texte du repère de position de l'image sélectionnée : « Photo 12 / 94 », avec les
     /// piles « Pile 3 / 20 · 2 / 5 », et « Dév. 2 / 3 » si sa photo a des développements
     /// (qui comptent pour une photo).
@@ -14964,6 +15036,7 @@ impl TriApp {
             );
         }
         self.view_info = format!("{position}{info}");
+        self.position_bar(&ctx, &painter, view_rect, &file.path);
         // Notes sur l'image (issue n° 8) : durée et place réglables comme le repère de
         // position (`[gui.notes]`, 04/11/2026), même cadre, bandeau du bas affiché ou non
         // (retour du même jour : tout pareil).
@@ -29681,6 +29754,29 @@ mod tests {
         assert!(h.state().position_key.is_none(), "repère masqué aussi");
         act(&mut h, Action::ToggleImageInfo);
         assert!(h.state().image_info);
+    }
+
+    #[test]
+    fn the_position_bar_follows_the_image_and_hides_with_the_info() {
+        // #537 : la barre suit l'image affichée, et part avec les infos sur l'image.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.state_mut().image_info = true;
+        h.run_steps(3);
+        let first = h.state().position_bar_key.clone();
+        assert!(first.is_some(), "barre montrée en plein écran");
+        act(&mut h, Action::NavNext);
+        h.run_steps(3);
+        assert!(
+            h.state().position_bar_key.is_some() && h.state().position_bar_key != first,
+            "elle suit l'image"
+        );
+        act(&mut h, Action::ToggleImageInfo);
+        assert!(
+            h.state().position_bar_key.is_none(),
+            "masquée avec les infos"
+        );
     }
 
     #[test]

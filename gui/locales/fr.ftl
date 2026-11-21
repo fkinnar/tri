@@ -1215,6 +1215,7 @@ settings-section-gui-zoom = Zoom et loupe
 settings-section-gui-dialogs = Boîtes de dialogue
 settings-section-gui-compare = Comparaison
 settings-section-gui-position = Repère de position
+settings-section-gui-position_bar = Barre de position
 settings-section-gui-notes = Notes sur l'image
 settings-section-gui-end = Bout de la pile ou de la liste
 end-stack-first = Début de la pile

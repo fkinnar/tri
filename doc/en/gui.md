@@ -185,6 +185,19 @@ system one ("cold" measurements, experiments).
   image or Enter shows it again (`Stacks::photo_number`, `stack_number`,
   `development_number`). `[gui.position] seconds` (2; 0: never; -1: always; fades out at
   the end) and `place` (`center`, `top-left`, `top-right`, `bottom-right`, `bottom-left`).
+- **Position bar** (`[gui.position_bar]`, #537, 2026-11-21, user's idea: culling in full
+  screen, one loses track of where one is, and nobody looks at the status bar): along the
+  bottom of the image, the shown list (filtered: what ← / → browse) split into segments,
+  one per stack, as wide as the stack; the current stack lit (`accent_light`), the photo
+  marked (`accent`, at least 3 points wide in a large folder). Above the photo, a short
+  vertical bar gives its place in the stack, bottom to top (stacks of more than one
+  photo). Without stacks, a single bar, no segments and no vertical bar. Position only
+  (decided 2026-11-21: colouring by culling state will come once we know what is useful
+  to show; the user culls in star passes, not accepted / rejected). Hidden with the info
+  on the image (`t`) and while cropping. Geometry testable on its own in
+  `gui/src/position_bar.rs` (`Position::layout`), segments from `Stacks::photos_per_group`
+  (developments counted with their photo). `seconds` (-1: always; like the mark),
+  `thickness`, `stack_length`.
 - **End of the stack or of the list** (`[gui.end]`, #307, 2026-11-05): in full screen,
   ← / → that no longer move say so for a moment, in the same frame as the position mark
   ("End of the stack", "Start of the stack", "End of the selection", "Start of the

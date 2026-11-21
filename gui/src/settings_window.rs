@@ -238,6 +238,7 @@ const CATEGORIES: [&[&str]; 6] = [
         "gui.zoom",
         "gui.compare",
         "gui.position",
+        "gui.position_bar",
         "gui.notes",
         "gui.end",
         "gui.folders",
