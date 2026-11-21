@@ -8631,7 +8631,10 @@ impl TriApp {
             grid_reader,
             signature_reads: crate::bg_read::BgReads::new("tri-signatures", Some(ctx.clone())),
             score_reads: crate::bg_read::BgReads::new("tri-scores", Some(ctx.clone())),
-            exposure_reads: crate::bg_read::BgReads::new("tri-exposures", Some(ctx.clone())),
+            exposure_reads: crate::bg_read::BgReads::newest_first(
+                "tri-exposures",
+                Some(ctx.clone()),
+            ),
             clip_reads: crate::bg_read::BgReads::new("tri-clips", Some(ctx.clone())),
             developers: shared,
         });

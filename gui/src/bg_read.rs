@@ -9,17 +9,25 @@
 //! quelques écritures (vue du dossier, piles retenues) passent par un fil d'écriture
 //! ([`BgWrites`]), dans l'ordre.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::hash::Hash;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Condvar, Mutex};
 
 use eframe::egui;
 
 type Job<K, T> = (K, Box<dyn FnOnce() -> Option<T> + Send>);
 
+/// File des lectures demandées, partagée avec le fil ; `closed` quand l'interface lâche
+/// ses demandes.
+struct Queue<K, T> {
+    jobs: Mutex<(VecDeque<Job<K, T>>, bool)>,
+    ready: Condvar,
+}
+
 /// Un fil qui fait des lectures demandées par clé `K` et rend leurs résultats `T`.
 pub struct BgReads<K, T> {
-    jobs: Sender<Job<K, T>>,
+    queue: Arc<Queue<K, T>>,
     results: Receiver<(K, Option<T>)>,
     pending: HashSet<K>,
 }
@@ -30,15 +38,49 @@ where
     T: Send + 'static,
 {
     /// Démarre le fil (`name` : son nom) ; `repaint` réveille l'interface à chaque
-    /// résultat.
+    /// résultat. Lectures dans l'ordre des demandes.
     pub fn new(name: &str, repaint: Option<egui::Context>) -> BgReads<K, T> {
-        let (jobs, inbox) = mpsc::channel::<Job<K, T>>();
+        Self::start(name, repaint, false)
+    }
+
+    /// Comme [`BgReads::new`], la dernière demande lue d'abord : pour ce qui suit l'image
+    /// sélectionnée (retour du 21/11/2026 : en avançant vite sur un disque lent, l'image
+    /// où l'on s'arrête attendait derrière la lecture de toutes celles traversées).
+    pub fn newest_first(name: &str, repaint: Option<egui::Context>) -> BgReads<K, T> {
+        Self::start(name, repaint, true)
+    }
+
+    fn start(name: &str, repaint: Option<egui::Context>, newest_first: bool) -> BgReads<K, T> {
+        let queue = Arc::new(Queue {
+            jobs: Mutex::new((VecDeque::new(), false)),
+            ready: Condvar::new(),
+        });
         let (outbox, results) = mpsc::channel();
+        let shared = queue.clone();
         let _ = std::thread::Builder::new()
             .name(name.into())
             .spawn(move || {
-                // S'arrête quand l'interface lâche ses demandes (autre dossier, fermeture).
-                for (key, read) in inbox {
+                loop {
+                    let job = {
+                        let mut jobs = shared.jobs.lock().unwrap_or_else(|e| e.into_inner());
+                        loop {
+                            let next = if newest_first {
+                                jobs.0.pop_back()
+                            } else {
+                                jobs.0.pop_front()
+                            };
+                            if let Some(job) = next {
+                                break job;
+                            }
+                            // S'arrête quand l'interface lâche ses demandes (autre dossier,
+                            // fermeture).
+                            if jobs.1 {
+                                return;
+                            }
+                            jobs = shared.ready.wait(jobs).unwrap_or_else(|e| e.into_inner());
+                        }
+                    };
+                    let (key, read) = job;
                     if outbox.send((key, read())).is_err() {
                         return;
                     }
@@ -48,7 +90,7 @@ where
                 }
             });
         BgReads {
-            jobs,
+            queue,
             results,
             pending: HashSet::new(),
         }
@@ -57,7 +99,10 @@ where
     /// Demande la lecture `read` pour `key`, sauf si elle est déjà demandée.
     pub fn request(&mut self, key: K, read: impl FnOnce() -> Option<T> + Send + 'static) {
         if self.pending.insert(key.clone()) {
-            let _ = self.jobs.send((key, Box::new(read)));
+            let mut jobs = self.queue.jobs.lock().unwrap_or_else(|e| e.into_inner());
+            jobs.0.push_back((key, Box::new(read)));
+            drop(jobs);
+            self.queue.ready.notify_one();
         }
     }
 
@@ -78,6 +123,16 @@ where
             self.pending.remove(key);
         }
         arrived
+    }
+}
+
+impl<K, T> Drop for BgReads<K, T> {
+    fn drop(&mut self) {
+        let mut jobs = self.queue.jobs.lock().unwrap_or_else(|e| e.into_inner());
+        jobs.0.clear();
+        jobs.1 = true;
+        drop(jobs);
+        self.queue.ready.notify_all();
     }
 }
 
@@ -158,6 +213,33 @@ mod tests {
         }
         assert_eq!(got, vec![(1, Some("un".to_string())), (2, None)]);
         assert!(!reads.is_pending(&1));
+    }
+
+    #[test]
+    fn newest_first_reads_the_last_request_first() {
+        // Retour du 21/11/2026 : en avançant vite, l'image où l'on s'arrête passe avant
+        // celles traversées.
+        let mut reads: BgReads<u32, u32> = BgReads::newest_first("test", None);
+        let (go, wait) = mpsc::channel::<()>();
+        let (started, running) = mpsc::channel::<()>();
+        // La première occupe le fil le temps que les autres arrivent.
+        reads.request(0, move || {
+            let _ = started.send(());
+            let _ = wait.recv();
+            Some(0)
+        });
+        running.recv().unwrap();
+        for k in 1..=5 {
+            reads.request(k, move || Some(k));
+        }
+        go.send(()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut got = Vec::new();
+        while got.len() < 6 && Instant::now() < deadline {
+            got.extend(reads.take().into_iter().map(|(k, _)| k));
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert_eq!(got, vec![0, 5, 4, 3, 2, 1]);
     }
 
     #[test]
