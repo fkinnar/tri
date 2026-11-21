@@ -3615,53 +3615,73 @@ impl TriApp {
             return;
         };
         let index = self.selected;
-        let Some(file) = self.files.get(index).cloned() else {
+        if index >= self.files.len() {
             return;
+        }
+        // Rendus finis : tous les développements de la photo, de tous les logiciels
+        // (retour du 21/11/2026 : « rendu fini » seul ne disait pas lequel), chacun avec
+        // sa palette ; sinon, l'image elle-même.
+        let candidates = match kind {
+            SourceKind::Developed => self
+                .stacks
+                .developments_of(index)
+                .cloned()
+                .unwrap_or(index..index + 1),
+            _ => index..index + 1,
         };
-        if kind.source_for(&file).is_none() {
+        let targets: Vec<usize> = candidates
+            .filter(|&i| kind.source_for(&self.files[i]).is_some())
+            .collect();
+        if targets.is_empty() {
             ui.weak(t!("palette-no-render"));
             return;
         }
-        let Some(palette) = self.palette_of(index) else {
-            match &self.status[index].palette {
-                Avail::Failed(e) => {
-                    ui.colored_label(self.gui.colors.error, e.as_str());
-                }
-                _ => {
-                    ui.weak(t!("palette-computing"));
-                }
+        // La roue et la liste : celle de l'image sélectionnée, sinon du premier
+        // développement.
+        let main = if targets.contains(&index) {
+            index
+        } else {
+            targets[0]
+        };
+        let several = targets.len() > 1;
+        let mut main_palette = None;
+        for &i in &targets {
+            if several {
+                let label = development_label(&self.files[i].path);
+                let text = egui::RichText::new(label);
+                ui.label(if i == main {
+                    text.strong()
+                } else {
+                    text.weak()
+                });
             }
+            match self.palette_of(i) {
+                Some(p) if p.swatches.is_empty() => {
+                    ui.weak(t!("colour-palette-empty"));
+                }
+                Some(p) => {
+                    self.palette_band(ui, &p);
+                    if i == main {
+                        main_palette = Some(p);
+                    }
+                }
+                None => match &self.status[i].palette {
+                    Avail::Failed(e) => {
+                        ui.colored_label(self.gui.colors.error, e.as_str());
+                    }
+                    _ => {
+                        ui.weak(t!("palette-computing"));
+                    }
+                },
+            }
+            if several {
+                ui.add_space(4.0);
+            }
+        }
+        let Some(palette) = main_palette else {
             return;
         };
-        if palette.swatches.is_empty() {
-            ui.weak(t!("colour-palette-empty"));
-            return;
-        }
         let width = ui.available_width();
-        let (band, response) = ui.allocate_exact_size(
-            vec2(width, crate::palette_view::BAND_HEIGHT),
-            Sense::click(),
-        );
-        let rects = crate::palette_view::draw_band(ui.painter(), band, &palette);
-        // Survol d'une pastille : sa couleur et sa part ; un clic copie `#rrggbb`.
-        if let Some(pos) = response.hover_pos()
-            && let Some(k) = rects.iter().position(|r| r.contains(pos))
-        {
-            let swatch = palette.swatches[k];
-            let hex = crate::palette_view::hex(&swatch);
-            let tip = t!(
-                "palette-swatch-tip",
-                hex = hex.clone(),
-                share = format!("{:.0}", swatch.share * 100.0)
-            );
-            if response
-                .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .on_hover_text(tip)
-                .clicked()
-            {
-                ui.ctx().copy_text(hex);
-            }
-        }
         ui.add_space(6.0);
         ui.horizontal_top(|ui| {
             let (wheel, _) =
@@ -3684,6 +3704,34 @@ impl TriApp {
                 }
             });
         });
+    }
+
+    /// Bande des couleurs d'une palette, sur toute la largeur : au survol d'une pastille,
+    /// sa couleur et sa part ; un clic copie `#rrggbb`.
+    fn palette_band(&self, ui: &mut Ui, palette: &Palette) {
+        let (band, response) = ui.allocate_exact_size(
+            vec2(ui.available_width(), crate::palette_view::BAND_HEIGHT),
+            Sense::click(),
+        );
+        let rects = crate::palette_view::draw_band(ui.painter(), band, palette);
+        if let Some(pos) = response.hover_pos()
+            && let Some(k) = rects.iter().position(|r| r.contains(pos))
+        {
+            let swatch = palette.swatches[k];
+            let hex = crate::palette_view::hex(&swatch);
+            let tip = t!(
+                "palette-swatch-tip",
+                hex = hex.clone(),
+                share = format!("{:.0}", swatch.share * 100.0)
+            );
+            if response
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .on_hover_text(tip)
+                .clicked()
+            {
+                ui.ctx().copy_text(hex);
+            }
+        }
     }
 
     /// Histogramme de l'image sélectionnée, en tête du panneau de droite, en grille comme
@@ -27135,6 +27183,42 @@ mod tests {
         assert_eq!(format_label(Path::new("a.tif"), MediaKind::Flat), "TIFF");
         assert_eq!(format_label(Path::new("a.heic"), MediaKind::Flat), "HEIF");
         assert_eq!(format_label(Path::new("a.png"), MediaKind::Flat), "PNG");
+    }
+
+    #[test]
+    fn finished_render_palettes_list_every_development_of_the_photo() {
+        // Retour du 21/11/2026 : une photo peut avoir plusieurs rendus finis (clones,
+        // logiciels) ; la section les montre tous, chacun nommé.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp"] {
+            std::fs::write(
+                photos.join(name),
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
+            )
+            .unwrap();
+        }
+        h.state_mut().developers = fake_darktable();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
+        assert_eq!(selected_name(&h), "img0.jpg");
+        h.state_mut().metadata_panel = true;
+        h.state_mut()
+            .set_palette_source(Some(tri::palette::SourceKind::Developed));
+        h.run_steps(3);
+        let labels: Vec<String> = (0..h.state().files.len())
+            .filter(|&i| tri::developments::get(&h.state().files[i].path).is_some())
+            .map(|i| development_label(&h.state().files[i].path))
+            .collect();
+        assert_eq!(labels.len(), 2, "{labels:?}");
+        for label in &labels {
+            assert!(h.query_by_label(label).is_some(), "{label} montré");
+        }
+        assert!(
+            h.query_by_label(&t!("palette-no-render")).is_none(),
+            "la photo a des rendus finis"
+        );
     }
 
     #[test]

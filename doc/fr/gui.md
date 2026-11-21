@@ -226,8 +226,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   barre d'état). Pour l'image sélectionnée : la **bande** des couleurs, chacune aussi
   large que sa part (survol : `#rrggbb` et part ; clic : copie), la **roue chromatique**
   (teinte en angle, chroma en racine du rayon pour étaler les couleurs peu saturées d'une
-  photo, taille selon la part) et la liste des couleurs. Une image sans rendu fini (pas un
-  développement) le dit. Lecture du cache en fond, la dernière demandée d'abord
+  photo, taille selon la part) et la liste des couleurs. En rendus finis, **tous les développements** de la photo
+  (logiciels, clones, copies), chacun nommé avec sa bande (retour du 21/11/2026) ; la roue et
+  la liste : celui sélectionné, sinon le premier ; une photo sans développement le dit. Lecture du cache en fond, la dernière demandée d'abord
   (`palette_reads`), comme l'histogramme. Dessin dans `gui/src/palette_view.rs`. À venir :
   « palettes proches » (filtre et tri, curseur de seuil) et « contient cette couleur ».
 - **Bout de la pile ou de la liste** (`[gui.end]`, #307, 05/11/2026) : en plein écran,
