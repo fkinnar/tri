@@ -215,8 +215,9 @@ system one ("cold" measurements, experiments).
   the selected image: the colour **band**, each colour as wide as its share (hover:
   `#rrggbb` and share; click: copy), the **colour wheel** (hue as angle, chroma as the
   square root of the radius to spread a photo's low-saturation colours, size by share)
-  and the list of colours. An image without a finished render (not a development) says
-  so. Cache read in the background, newest request first (`palette_reads`), like the
+  and the list of colours. With finished renders, **every development** of the photo
+  (software, clones, copies), each named with its band (feedback of 2026-11-21); the wheel
+  and list: the selected one, otherwise the first; a photo without development says so. Cache read in the background, newest request first (`palette_reads`), like the
   histogram. Drawing in `gui/src/palette_view.rs`. Coming: "similar palettes" (filter and
   sort, threshold slider) and "contains this colour".
 - **End of the stack or of the list** (`[gui.end]`, #307, 2026-11-05): in full screen,
