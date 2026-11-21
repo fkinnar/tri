@@ -115,6 +115,13 @@ pub struct PaletteSettings {
     pub similar_threshold: f32,
     /// « Palettes proches » : seuil au bout du curseur.
     pub similar_max: f32,
+    /// « Contient cette couleur » : tolérance de départ (distance d'une couleur de la
+    /// palette à la couleur cherchée, comptée comme [`distance`]).
+    pub colour_radius: f32,
+    /// « Contient cette couleur » : tolérance au bout du curseur.
+    pub colour_radius_max: f32,
+    /// « Contient cette couleur » : part minimale de l'image de départ (0 à 1).
+    pub colour_min_share: f32,
 }
 
 impl Default for PaletteSettings {
@@ -128,6 +135,9 @@ impl Default for PaletteSettings {
             chroma_weight: 2.0,
             similar_threshold: 0.12,
             similar_max: 0.5,
+            colour_radius: 0.1,
+            colour_radius_max: 0.4,
+            colour_min_share: 0.05,
         }
     }
 }
@@ -170,12 +180,13 @@ pub struct Palette {
 }
 
 impl Palette {
-    /// Part de l'image dont la couleur est à moins de `radius` (distance OKLab) de
-    /// `oklab` : « contient assez de ce bleu ».
-    pub fn share_near(&self, oklab: [f32; 3], radius: f32) -> f32 {
+    /// Part de l'image dont la couleur est à moins de `radius` de `oklab` (distance OKLab,
+    /// teinte et saturation comptées `chroma_weight` fois, comme [`distance`]) : « contient
+    /// assez de ce bleu ».
+    pub fn share_near(&self, oklab: [f32; 3], radius: f32, chroma_weight: f32) -> f32 {
         self.swatches
             .iter()
-            .filter(|s| oklab_distance(s.oklab, oklab) <= radius)
+            .filter(|s| weighted_distance(s.oklab, oklab, chroma_weight) <= radius)
             .map(|s| s.share)
             .sum()
     }
@@ -631,8 +642,8 @@ mod tests {
             &PaletteSettings::default(),
         );
         let blue = working_to_oklab([45, 65, 195]);
-        assert!((p.share_near(blue, 0.05) - 0.3).abs() < 0.03);
-        assert_eq!(p.share_near(srgb_to_oklab([0, 255, 0]), 0.05), 0.0);
+        assert!((p.share_near(blue, 0.05, 1.0) - 0.3).abs() < 0.03);
+        assert_eq!(p.share_near(srgb_to_oklab([0, 255, 0]), 0.05, 2.0), 0.0);
     }
 
     #[test]

@@ -238,8 +238,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   rendu fini) partent. En rendus finis, chaque développement est comparé. Mentionnée dans
   le résumé des filtres ; effacer les filtres (`f d`) ou « Terminer » y met fin ; changer de
   source aussi. Toutes les palettes du dossier sont lues en fond à leur arrivée, la grille
-  refiltrée de temps en temps (`analysis_refilter_ms`). À venir : « contient cette
-  couleur ».
+  refiltrée de temps en temps (`analysis_refilter_ms`). **Contient cette couleur** : un clic sur
+  une couleur de la bande, ou la **pipette** en plein écran (bouton de la section, action
+  `core.filter.palette_colour` ; couleur moyenne d'une petite zone de l'image d'où la
+  palette est tirée, lue en fond) ; la grille garde les images dont la part proche de
+  cette couleur atteint la part minimale, de celle qui en a le plus à celle qui en a le
+  moins (mêmes règles que les palettes proches : pas encore calculées à la fin). Deux
+  curseurs : tolérance (`colour_radius`, `colour_radius_max`) et part minimale
+  (`colour_min_share`), double-clic : valeur de départ ; la couleur cherchée entourée dans
+  la bande. Une recherche de palettes à la fois. Copier une couleur : clic sur son
+  `#rrggbb` dans la liste.
 - **Bout de la pile ou de la liste** (`[gui.end]`, #307, 05/11/2026) : en plein écran,
   ← / → qui ne bougent plus le disent un instant, dans le même cadre que le repère de
   position (« Fin de la pile », « Début de la pile », « Fin de la sélection », « Début

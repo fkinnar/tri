@@ -53,7 +53,9 @@ kept at the end, those without a possible palette removed. Slider start and end:
 ## Share of a colour (`Palette::share_near`)
 
 The share of the image whose colour is within an OKLab radius of a given colour: "has
-enough of this blue" (the eyedropper already exists in the interface).
+enough of this blue". Measured like the distances between palettes (hue and saturation
+`chroma_weight` times). Search settings: `colour_radius` (0.1), `colour_radius_max`
+(0.4), `colour_min_share` (0.05).
 
 ## Cache
 

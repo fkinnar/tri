@@ -291,6 +291,19 @@ struct PaletteLike {
     threshold: f32,
 }
 
+/// « Contient cette couleur » (#492) : la grille ne garde que les images dont une part
+/// suffisante de la palette est proche de la couleur, de celle qui en a le plus à celle qui
+/// en a le moins.
+#[derive(Clone, Copy, Debug)]
+struct PaletteColour {
+    /// La couleur cherchée, en OKLab.
+    oklab: [f32; 3],
+    /// Tolérance (distance d'une couleur de la palette, comptée comme entre palettes).
+    radius: f32,
+    /// Part minimale de l'image (0 à 1).
+    min_share: f32,
+}
+
 /// Exposition du JPEG boîtier d'une image, calculée en fond.
 type CameraRead = (PathBuf, Option<Arc<Exposure>>);
 
@@ -1101,6 +1114,13 @@ pub struct TriApp {
     palette_like: Option<PaletteLike>,
     /// Palettes arrivées depuis le dernier refiltrage, sous « palettes proches ».
     palette_refilter_pending: bool,
+    /// « Contient cette couleur » en cours (#492).
+    palette_colour: Option<PaletteColour>,
+    /// Pipette des palettes armée : le prochain clic sur l'image en plein écran choisit la
+    /// couleur.
+    palette_eyedropper: bool,
+    /// Couleur relevée par la pipette, lue en fond dans l'image source de la palette.
+    colour_pick: Option<Receiver<Option<[f32; 3]>>>,
     /// Logiciels de développement qui ne peuvent pas recevoir un dossier (déjà ouverts,
     /// Windows), vérifiés au plus une fois par `[gui.folders] running_check_ms`
     /// ([`TriApp::engine_blocked`]).
@@ -2109,6 +2129,9 @@ impl TriApp {
             palettes: HashMap::new(),
             palette_like: None,
             palette_refilter_pending: false,
+            palette_colour: None,
+            palette_eyedropper: false,
+            colour_pick: None,
             camera_exposures: Lru::new(gui.view.textures),
             screen: crate::display::Screen::default(),
             camera_pending: HashSet::new(),
@@ -3576,7 +3599,7 @@ impl TriApp {
             && self.analysis_refilter_due(self.progress[6])
         {
             self.palette_refilter_pending = false;
-            if self.palette_like.is_some() {
+            if self.palette_searching() {
                 self.refilter(Reveal::Minimal);
             }
         }
@@ -3594,6 +3617,10 @@ impl TriApp {
             reference,
             threshold,
         });
+        // Une recherche de palettes à la fois.
+        if self.palette_like.is_some() {
+            self.palette_colour = None;
+        }
         self.palette_refilter_pending = false;
         self.apply_filter();
     }
@@ -3602,24 +3629,113 @@ impl TriApp {
     /// au plus lointain ; ceux dont la palette n'est pas encore calculée à la fin (voir
     /// [`tri::palette::rank_similar`]).
     fn rank_by_palette(&self, groups: Vec<Vec<MediaFile>>) -> Vec<Vec<MediaFile>> {
-        let (Some(like), Some(kind)) = (&self.palette_like, self.palette_source) else {
+        let Some(kind) = self.palette_source else {
             return groups;
+        };
+        let weight = self.settings.palette.chroma_weight;
+        // Palettes proches : la distance à la référence ; contient cette couleur : la part
+        // qui manque (1 - part), sous 1 - la part minimale.
+        let (like, colour) = (self.palette_like.as_ref(), self.palette_colour);
+        let threshold = match (like, colour) {
+            (Some(l), _) => l.threshold,
+            (None, Some(c)) => 1.0 - c.min_share,
+            (None, None) => return groups,
+        };
+        let key = |p: &Palette| match (like, colour) {
+            (Some(l), _) => tri::palette::distance(&l.reference, p, weight),
+            (None, Some(c)) => 1.0 - p.share_near(c.oklab, c.radius, weight),
+            (None, None) => 0.0,
         };
         let files: Vec<MediaFile> = groups.into_iter().flatten().collect();
         let ranked = tri::palette::rank_similar(
             files,
             |f| {
                 let source = kind.source_for(f)?;
-                Some(self.palettes.get(&(f.path.clone(), source)).map(|p| {
-                    tri::palette::distance(&like.reference, p, self.settings.palette.chroma_weight)
-                }))
+                Some(self.palettes.get(&(f.path.clone(), source)).map(|p| key(p)))
             },
-            like.threshold,
+            threshold,
         );
         if ranked.is_empty() {
             Vec::new()
         } else {
             vec![ranked]
+        }
+    }
+
+    /// Une recherche de palettes en cours (proches, ou contient cette couleur).
+    fn palette_searching(&self) -> bool {
+        self.palette_like.is_some() || self.palette_colour.is_some()
+    }
+
+    /// « Contient cette couleur » (`oklab`), ou fin de la recherche (`None`) ; tolérance et
+    /// part minimale gardées d'une couleur à l'autre.
+    fn set_palette_colour(&mut self, oklab: Option<[f32; 3]>) {
+        let p = self.settings.palette;
+        let (radius, min_share) = self
+            .palette_colour
+            .map_or((p.colour_radius, p.colour_min_share), |c| {
+                (c.radius, c.min_share)
+            });
+        self.palette_colour = oklab.map(|oklab| PaletteColour {
+            oklab,
+            radius,
+            min_share,
+        });
+        self.palette_eyedropper = false;
+        if self.palette_colour.is_some() {
+            self.palette_like = None;
+        }
+        self.palette_refilter_pending = false;
+        self.apply_filter();
+    }
+
+    /// Pipette des palettes : la couleur au point `point` (coordonnées relatives de
+    /// l'image) de l'image `index`, lue en fond dans l'image d'où sa palette est tirée
+    /// (moyenne d'une petite zone).
+    fn pick_palette_colour(&mut self, index: usize, point: egui::Pos2) {
+        let (Some(file), Some(kind), Some(engine)) = (
+            self.files.get(index).cloned(),
+            self.palette_source,
+            &self.engine,
+        ) else {
+            return;
+        };
+        let Some(source) = kind.source_for(&file) else {
+            self.notice = Some((t!("palette-no-render"), false));
+            return;
+        };
+        let (cache, preview) = (engine.cache.clone(), engine.preview);
+        let (tx, rx) = mpsc::channel();
+        let repaint = self.repaint.clone();
+        std::thread::spawn(move || {
+            let colour = preview::key(&file, preview::palette_input(source), &preview)
+                .ok()
+                .and_then(|key| cache.get(&key))
+                .map(|image| average_oklab(&image, point));
+            let _ = tx.send(colour);
+            if let Some(ctx) = repaint {
+                ctx.request_repaint();
+            }
+        });
+        self.colour_pick = Some(rx);
+        self.palette_eyedropper = false;
+    }
+
+    /// Couleur de la pipette arrivée : la recherche commence.
+    fn take_colour_pick(&mut self) {
+        let Some(rx) = &self.colour_pick else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok(Some(oklab)) => {
+                self.colour_pick = None;
+                self.set_palette_colour(Some(oklab));
+            }
+            Ok(None) | Err(mpsc::TryRecvError::Disconnected) => {
+                self.colour_pick = None;
+                self.notice = Some((t!("palette-computing"), false));
+            }
+            Err(mpsc::TryRecvError::Empty) => {}
         }
     }
 
@@ -3634,7 +3750,9 @@ impl TriApp {
             s.palette = Avail::default();
         }
         // Une autre source : la recherche en cours n'a plus de sens.
-        if self.palette_like.take().is_some() {
+        let like = self.palette_like.take().is_some();
+        let colour = self.palette_colour.take().is_some();
+        if like || colour {
             self.apply_filter();
         }
         self.requested
@@ -3733,6 +3851,7 @@ impl TriApp {
         // s'attendait à lire « darktable »).
         let named = kind == SourceKind::Developed;
         let mut main_palette = None;
+        let mut picked = None;
         for &i in &targets {
             if named {
                 let label = development_label(&self.files[i].path);
@@ -3748,7 +3867,9 @@ impl TriApp {
                     ui.weak(t!("colour-palette-empty"));
                 }
                 Some(p) => {
-                    self.palette_band(ui, &p);
+                    if let Some(c) = self.palette_band(ui, &p) {
+                        picked = Some(c);
+                    }
                     if i == main {
                         main_palette = Some(p);
                     }
@@ -3766,8 +3887,12 @@ impl TriApp {
                 ui.add_space(4.0);
             }
         }
+        if picked.is_some() {
+            self.set_palette_colour(picked);
+        }
         let Some(palette) = main_palette else {
             self.palette_like_controls(ui, None);
+            self.palette_colour_controls(ui);
             return;
         };
         let main_path = self.files[main].path.clone();
@@ -3788,13 +3913,91 @@ impl TriApp {
                         let (dot, _) = ui.allocate_exact_size(vec2(12.0, 12.0), Sense::hover());
                         ui.painter()
                             .rect_filled(dot, 2.0, crate::palette_view::color(swatch));
-                        ui.monospace(crate::palette_view::hex(swatch));
+                        let hex = crate::palette_view::hex(swatch);
+                        if ui
+                            .add(
+                                egui::Label::new(egui::RichText::new(&hex).monospace())
+                                    .sense(Sense::click()),
+                            )
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .on_hover_text(t!("palette-copy-tip"))
+                            .clicked()
+                        {
+                            ui.ctx().copy_text(hex);
+                        }
                         ui.weak(format!("{:.0} %", swatch.share * 100.0));
                     });
                 }
             });
         });
         self.palette_like_controls(ui, Some((main_path, palette)));
+        self.palette_colour_controls(ui);
+    }
+
+    /// « Contient cette couleur » (#492) : la pipette (en plein écran) ou l'invitation à
+    /// cliquer une couleur de la bande ; recherche en cours : la couleur, la tolérance, la
+    /// part minimale (curseurs, double-clic : valeur de départ), le nombre d'images, la fin.
+    fn palette_colour_controls(&mut self, ui: &mut Ui) {
+        ui.add_space(6.0);
+        let Some(colour) = self.palette_colour else {
+            ui.horizontal_wrapped(|ui| {
+                let armed = self.palette_eyedropper;
+                let button = ui
+                    .add_enabled(
+                        self.mode == Mode::View,
+                        egui::Button::selectable(armed, t!("palette-eyedropper")),
+                    )
+                    .on_hover_text(t!("palette-eyedropper-tip"))
+                    .on_disabled_hover_text(t!("palette-eyedropper-view"));
+                if button.clicked() {
+                    self.palette_eyedropper = !armed;
+                }
+                ui.weak(t!("palette-colour-hint"));
+            });
+            return;
+        };
+        let p = self.settings.palette;
+        ui.horizontal(|ui| {
+            let (dot, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
+            let swatch = tri::palette::Swatch {
+                oklab: colour.oklab,
+                share: 0.0,
+            };
+            ui.painter()
+                .rect_filled(dot, 3.0, crate::palette_view::color(&swatch));
+            ui.label(t!(
+                "palette-colour-summary",
+                hex = crate::palette_view::hex(&swatch)
+            ));
+        });
+        let width = ui.available_width();
+        let mut radius = colour.radius;
+        let slider = ui
+            .add(FineSlider::new(&mut radius, 0.0..=p.colour_radius_max.max(0.01)).width(width))
+            .on_hover_text(t!("palette-colour-radius"));
+        if slider.double_clicked_slider(ui) {
+            radius = p.colour_radius;
+        }
+        let mut share = colour.min_share;
+        let slider = ui
+            .add(FineSlider::new(&mut share, 0.0..=1.0).width(width))
+            .on_hover_text(t!("palette-colour-share"));
+        if slider.double_clicked_slider(ui) {
+            share = p.colour_min_share;
+        }
+        if radius != colour.radius || share != colour.min_share {
+            if let Some(c) = &mut self.palette_colour {
+                c.radius = radius;
+                c.min_share = share;
+            }
+            self.refilter(Reveal::Minimal);
+        }
+        ui.horizontal(|ui| {
+            ui.weak(t!("palette-similar-count", n = self.files.len()));
+            if ui.button(t!("palette-similar-end")).clicked() {
+                self.set_palette_colour(None);
+            }
+        });
     }
 
     /// « Palettes proches » (#492) : le bouton qui lance la recherche sur la palette de
@@ -3843,31 +4046,39 @@ impl TriApp {
     }
 
     /// Bande des couleurs d'une palette, sur toute la largeur : au survol d'une pastille,
-    /// sa couleur et sa part ; un clic copie `#rrggbb`.
-    fn palette_band(&self, ui: &mut Ui, palette: &Palette) {
+    /// sa couleur et sa part ; un clic la cherche (« contient cette couleur »), renvoyée.
+    fn palette_band(&self, ui: &mut Ui, palette: &Palette) -> Option<[f32; 3]> {
         let (band, response) = ui.allocate_exact_size(
             vec2(ui.available_width(), crate::palette_view::BAND_HEIGHT),
             Sense::click(),
         );
         let rects = crate::palette_view::draw_band(ui.painter(), band, palette);
-        if let Some(pos) = response.hover_pos()
-            && let Some(k) = rects.iter().position(|r| r.contains(pos))
-        {
-            let swatch = palette.swatches[k];
-            let hex = crate::palette_view::hex(&swatch);
-            let tip = t!(
-                "palette-swatch-tip",
-                hex = hex.clone(),
-                share = format!("{:.0}", swatch.share * 100.0)
-            );
-            if response
-                .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .on_hover_text(tip)
-                .clicked()
-            {
-                ui.ctx().copy_text(hex);
+        // La couleur cherchée, entourée.
+        if let Some(c) = &self.palette_colour {
+            for (r, s) in rects.iter().zip(&palette.swatches) {
+                if tri::palette::weighted_distance(s.oklab, c.oklab, 1.0) < 0.005 {
+                    ui.painter().rect_stroke(
+                        r.shrink(1.0),
+                        0.0,
+                        egui::Stroke::new(2.0, ui.visuals().strong_text_color()),
+                        egui::StrokeKind::Inside,
+                    );
+                }
             }
         }
+        let pos = response.hover_pos()?;
+        let k = rects.iter().position(|r| r.contains(pos))?;
+        let swatch = palette.swatches[k];
+        let tip = t!(
+            "palette-swatch-tip",
+            hex = crate::palette_view::hex(&swatch),
+            share = format!("{:.0}", swatch.share * 100.0)
+        );
+        response
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .on_hover_text(tip)
+            .clicked()
+            .then_some(swatch.oklab)
     }
 
     /// Histogramme de l'image sélectionnée, en tête du panneau de droite, en grille comme
@@ -9146,10 +9357,11 @@ impl TriApp {
         let mut scored = Vec::new();
         self.drain_engine(&mut scored);
         self.take_scores(scored);
-        if self.take_palette_reads() && self.palette_like.is_some() {
+        if self.take_palette_reads() && self.palette_searching() {
             self.palette_refilter_pending = true;
         }
         self.palette_refilter();
+        self.take_colour_pick();
         self.exposure_refilter();
         self.sort_refilter();
     }
@@ -10666,6 +10878,7 @@ impl TriApp {
                 self.leave_stack_only();
                 self.filter_inverted = false;
                 self.palette_like = None;
+                self.palette_colour = None;
                 self.apply_filter();
                 // Tout effacé : la grille repart du début, en un saut (retour du 18/11/2026 :
                 // elle gardait la première image visible, au milieu de la liste complète,
@@ -10733,6 +10946,21 @@ impl TriApp {
             Action::FilterConflicts => {
                 self.conflicts_only = !self.conflicts_only;
                 self.apply_filter();
+            }
+            // Contient cette couleur (#492) : la pipette, ou fin de la recherche.
+            Action::FilterPaletteColour => {
+                if self.palette_colour.is_some() {
+                    self.set_palette_colour(None);
+                } else if self.palette_source.is_none() {
+                    self.notice = Some((t!("palette-choose"), false));
+                } else if self.mode == Mode::View {
+                    self.palette_eyedropper = !self.palette_eyedropper;
+                    if self.palette_eyedropper {
+                        self.notice = Some((t!("palette-eyedropper-tip"), false));
+                    }
+                } else {
+                    self.notice = Some((t!("palette-colour-hint-grid"), false));
+                }
             }
             // Palettes proches (#492) : de l'image sélectionnée, ou fin de la recherche.
             Action::FilterPalette => {
@@ -15333,6 +15561,20 @@ impl TriApp {
         };
         let peaking = self.peaking_overlay(&painter, &file, shown, image_rect, peaking_uv);
 
+        // Pipette des palettes (#492) : un clic choisit la couleur cherchée.
+        if self.palette_eyedropper && shown_crop.is_none() {
+            if response.hovered() {
+                ctx.set_cursor_icon(egui::CursorIcon::Crosshair);
+            }
+            if response.clicked()
+                && let (Some(rect), Some(pos)) = (image_rect, response.interact_pointer_pos())
+            {
+                let rel = view::relative(rect, pos);
+                let p = uv.min + vec2(rel.x * uv.width(), rel.y * uv.height());
+                self.pick_palette_colour(index, pos2(p.x, p.y));
+                ctx.request_repaint();
+            }
+        }
         // Pipette des réglages (#137) : un clic sur une zone qui devrait être grise, ou un
         // cadre tracé (balance auto sur cette partie de l'image).
         if self.adjust_eyedropper && shown_crop.is_none() {
@@ -19009,6 +19251,9 @@ impl TriApp {
                 "palette-similar-to",
                 name = development_label(&like.path)
             ));
+        }
+        if let Some(c) = &self.palette_colour {
+            parts.push(t!("palette-colour-summary", hex = oklab_hex(c.oklab)));
         }
         if name && !self.name_query.trim().is_empty() {
             parts.push(t!("filter-summary-name", query = self.name_query.trim()));
@@ -23431,6 +23676,35 @@ type Histograms = (Arc<Exposure>, Option<Arc<Exposure>>, Option<Arc<Exposure>>);
 /// `position_bar::draw`.
 const BAR_BACKDROP: f32 = position_bar::BACKDROP;
 
+/// `#rrggbb` d'une couleur OKLab.
+fn oklab_hex(oklab: [f32; 3]) -> String {
+    crate::palette_view::hex(&tri::palette::Swatch { oklab, share: 0.0 })
+}
+
+/// Couleur moyenne (OKLab) d'une petite zone de `image` autour de `point` (coordonnées
+/// relatives, 0..1) : 1 % du côté long, 2 pixels au moins.
+fn average_oklab(image: &tri::bitmap::Bitmap, point: egui::Pos2) -> [f32; 3] {
+    let (w, h) = (image.width.max(1), image.height.max(1));
+    let half = ((w.max(h) as f32 * 0.01) as u32).max(2);
+    let cx = (point.x.clamp(0.0, 1.0) * (w - 1) as f32) as u32;
+    let cy = (point.y.clamp(0.0, 1.0) * (h - 1) as f32) as u32;
+    let mut sum = [0.0f32; 3];
+    let mut n = 0.0f32;
+    for y in cy.saturating_sub(half)..(cy + half + 1).min(h) {
+        for x in cx.saturating_sub(half)..(cx + half + 1).min(w) {
+            let i = ((y * w + x) * 3) as usize;
+            if let Some(px) = image.data.get(i..i + 3) {
+                let lab = tri::palette::working_to_oklab([px[0], px[1], px[2]]);
+                for k in 0..3 {
+                    sum[k] += lab[k];
+                }
+                n += 1.0;
+            }
+        }
+    }
+    sum.map(|v| v / n.max(1.0))
+}
+
 /// Texte lisible sur n'importe quelle image : fond sombre translucide.
 fn overlay(painter: &egui::Painter, pos: egui::Pos2, anchor: Align2, text: &str) {
     let galley = painter.layout_no_wrap(
@@ -27424,6 +27698,73 @@ mod tests {
         assert!(h.state().palette_like.is_some());
         act(&mut h, Action::FilterPalette);
         assert!(h.state().palette_like.is_none());
+    }
+
+    #[test]
+    fn contains_this_colour_keeps_the_images_with_it_and_the_eyedropper_picks_it() {
+        // #492 : « contient cette couleur » garde les images qui en ont assez ; la pipette
+        // relève la couleur sur l'image en plein écran.
+        use tri::palette::{Source, SourceKind};
+        let colors = [[30u8, 60, 200], [220, 40, 40], [40, 70, 210]];
+        let images = ["img0.jpg", "img1.jpg", "img2.jpg"]
+            .iter()
+            .zip(colors)
+            .map(|(name, c)| (*name, image::RgbImage::from_pixel(64, 48, image::Rgb(c))))
+            .collect();
+        let (mut h, _dir) = harness_images(images);
+        h.state_mut().metadata_panel = true;
+        h.run_steps(3);
+        // Sans source : l'action le dit.
+        act(&mut h, Action::FilterPaletteColour);
+        assert!(h.state().palette_colour.is_none());
+        h.state_mut().set_palette_source(Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        // La couleur de img0 (une pastille de sa bande).
+        let path = h.state().files[0].path.clone();
+        let blue = h.state().palettes[&(path, Source::Camera)].swatches[0].oklab;
+        h.state_mut().set_palette_colour(Some(blue));
+        h.run_steps(3);
+        let names: Vec<String> = h
+            .state()
+            .files
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["img0.jpg", "img2.jpg"], "le rouge écarté");
+        assert!(h.state().filter_summary().contains('#'));
+        // L'action y met fin.
+        act(&mut h, Action::FilterPaletteColour);
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_none());
+        assert_eq!(h.state().files.len(), 3);
+        // La pipette en plein écran, sur img1 (rouge).
+        let img1 = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path.ends_with("img1.jpg"))
+            .unwrap();
+        h.state_mut().selected = img1;
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        act(&mut h, Action::FilterPaletteColour);
+        assert!(h.state().palette_eyedropper, "pipette armée");
+        let img1_path = h.state().files[img1].path.clone();
+        h.state_mut().pick_palette_colour(img1, pos2(0.5, 0.5));
+        run_until(&mut h, |app| app.palette_colour.is_some());
+        // La même couleur que la palette de l'image (même source, même espace) ; la grille
+        // ne garde plus qu'elle.
+        assert_eq!(h.state().files.len(), 1);
+        let red = h.state().palettes[&(img1_path, Source::Camera)].swatches[0].oklab;
+        let got = h.state().palette_colour.unwrap().oklab;
+        assert!(
+            tri::palette::oklab_distance(got, red) < 0.02,
+            "{got:?} contre {red:?}"
+        );
+        assert!(!h.state().palette_eyedropper, "désarmée après le relevé");
     }
 
     #[test]

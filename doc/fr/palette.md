@@ -55,7 +55,9 @@ et bout du curseur : `similar_threshold` (0,12), `similar_max` (0,5).
 ## Part d'une couleur (`Palette::share_near`)
 
 La part de l'image dont la couleur est à moins d'un rayon OKLab d'une couleur donnée :
-« contient assez de ce bleu » (la pipette existe déjà dans l'interface).
+« contient assez de ce bleu ». Comptée comme les distances entre palettes (teinte et
+saturation `chroma_weight` fois). Réglages de la recherche : `colour_radius` (0,1),
+`colour_radius_max` (0,4), `colour_min_share` (0,05).
 
 ## Cache
 

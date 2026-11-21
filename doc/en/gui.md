@@ -228,7 +228,16 @@ system one ("cold" measurements, experiments).
   leave. With finished renders, every development is compared. Shown in the filter
   summary; clearing the filters (`f d`) or "Done" ends it; so does changing source. All
   the folder's palettes are read in the background as they arrive, the grid refiltered
-  from time to time (`analysis_refilter_ms`). Coming: "contains this colour".
+  from time to time (`analysis_refilter_ms`). **Contains this colour**: a click on a
+  colour of the band, or the **eyedropper** in full screen (section button, action
+  `core.filter.palette_colour`; average colour of a small area of the image the palette
+  comes from, read in the background); the grid keeps the images whose share close to
+  that colour reaches the minimum share, from the one with the most to the one with the
+  least (same rules as similar palettes: not computed yet at the end). Two sliders:
+  tolerance (`colour_radius`, `colour_radius_max`) and minimum share
+  (`colour_min_share`), double-click: starting value; the colour looked for is outlined
+  in the band. One palette search at a time. Copy a colour: click its `#rrggbb` in the
+  list.
 - **End of the stack or of the list** (`[gui.end]`, #307, 2026-11-05): in full screen,
   ← / → that no longer move say so for a moment, in the same frame as the position mark
   ("End of the stack", "Start of the stack", "End of the selection", "Start of the
