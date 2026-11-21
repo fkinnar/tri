@@ -4046,55 +4046,64 @@ impl TriApp {
                             eyedropper = button.clicked();
                         });
                         ui.add_space(10.0);
-                        // R V B.
+                        // R G B puis T S V, alignés (retour du 21/11/2026) : la lettre, la
+                        // valeur, l'unité en petit et en gris.
                         let mut rgb = dialog.rgb();
-                        let before = rgb;
-                        ui.horizontal(|ui| {
-                            for (v, name) in rgb.iter_mut().zip(["R", "V", "B"]) {
-                                ui.add(
-                                    egui::DragValue::new(v)
-                                        .prefix(format!("{name} "))
-                                        .speed(0.5),
-                                );
-                            }
-                        });
-                        if rgb != before {
-                            dialog.set_rgb(rgb);
-                        }
-                        // T S V (degrés, pourcentages).
-                        let [mut h, mut s, mut v] = dialog.hsv;
+                        let before_rgb = rgb;
+                        let [mut h, s, v] = dialog.hsv;
                         let (mut sp, mut vp) = (s * 100.0, v * 100.0);
-                        let before = (h, sp, vp);
-                        ui.horizontal(|ui| {
-                            ui.add(
-                                egui::DragValue::new(&mut h)
-                                    .prefix(format!("{} ", t!("palette-colour-h")))
-                                    .suffix("°")
-                                    .range(0.0..=360.0)
-                                    .max_decimals(0)
-                                    .speed(1.0),
+                        let before_hsv = (h, sp, vp);
+                        let small = egui::TextStyle::Small.resolve(ui.style());
+                        let weak = ui.visuals().weak_text_color();
+                        let unit = |ui: &mut Ui, text: &str| {
+                            ui.add_sized(
+                                vec2(14.0, ui.spacing().interact_size.y),
+                                egui::Label::new(
+                                    egui::RichText::new(text).font(small.clone()).color(weak),
+                                ),
                             );
-                            ui.add(
-                                egui::DragValue::new(&mut sp)
-                                    .prefix(format!("{} ", t!("palette-colour-s")))
-                                    .suffix(" %")
-                                    .range(0.0..=100.0)
-                                    .max_decimals(0)
-                                    .speed(0.5),
-                            );
-                            ui.add(
-                                egui::DragValue::new(&mut vp)
-                                    .prefix(format!("{} ", t!("palette-colour-v")))
-                                    .suffix(" %")
-                                    .range(0.0..=100.0)
-                                    .max_decimals(0)
-                                    .speed(0.5),
-                            );
-                        });
-                        if (h, sp, vp) != before {
-                            s = sp / 100.0;
-                            v = vp / 100.0;
-                            dialog.set_hsv([h, s, v]);
+                        };
+                        egui::Grid::new("palette_colour_values")
+                            .num_columns(9)
+                            .min_col_width(0.0)
+                            .spacing(vec2(4.0, 6.0))
+                            .show(ui, |ui| {
+                                for (value, name) in rgb.iter_mut().zip(["R:", "G:", "B:"]) {
+                                    ui.label(name);
+                                    ui.add_sized(
+                                        vec2(44.0, ui.spacing().interact_size.y),
+                                        egui::DragValue::new(value).speed(0.5),
+                                    );
+                                    unit(ui, "");
+                                }
+                                ui.end_row();
+                                let names = [
+                                    t!("palette-colour-h"),
+                                    t!("palette-colour-s"),
+                                    t!("palette-colour-v"),
+                                ];
+                                let fields: [(&mut f32, f32, &str); 3] = [
+                                    (&mut h, 360.0, "°"),
+                                    (&mut sp, 100.0, "%"),
+                                    (&mut vp, 100.0, "%"),
+                                ];
+                                for ((value, max, suffix), name) in fields.into_iter().zip(names) {
+                                    ui.label(format!("{name}:"));
+                                    ui.add_sized(
+                                        vec2(44.0, ui.spacing().interact_size.y),
+                                        egui::DragValue::new(value)
+                                            .range(0.0..=max)
+                                            .max_decimals(0)
+                                            .speed(0.5),
+                                    );
+                                    unit(ui, suffix);
+                                }
+                                ui.end_row();
+                            });
+                        if rgb != before_rgb {
+                            dialog.set_rgb(rgb);
+                        } else if (h, sp, vp) != before_hsv {
+                            dialog.set_hsv([h, sp / 100.0, vp / 100.0]);
                         }
                         ui.add_space(16.0);
                         ui.horizontal(|ui| {
