@@ -1204,6 +1204,7 @@ settings-section-neighbourhood = Voisinage réseau
 settings-section-files = Fichiers
 settings-section-sharpness = Netteté
 settings-section-similarity = Regroupement
+settings-section-palette = Palettes de couleurs
 settings-section-i18n = Langue
 settings-section-data = Données
 settings-section-log = Journal de l'application

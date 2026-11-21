@@ -229,6 +229,7 @@ const CATEGORIES: [&[&str]; 6] = [
         "sidecars.",
         "sort",
         "similarity",
+        "palette",
         "sharpness",
         "exposure",
     ],

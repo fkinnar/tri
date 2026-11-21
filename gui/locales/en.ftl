@@ -1204,6 +1204,7 @@ settings-section-neighbourhood = Network neighbourhood
 settings-section-files = Files
 settings-section-sharpness = Sharpness
 settings-section-similarity = Grouping
+settings-section-palette = Colour palettes
 settings-section-i18n = Language
 settings-section-data = Data
 settings-section-log = Application log

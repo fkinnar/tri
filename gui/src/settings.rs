@@ -62,6 +62,8 @@ pub struct AppSettings {
     pub sharpness: tri::sharpness::SharpnessSettings,
     /// `[similarity]` (moteur) : regroupement des images semblables.
     pub similarity: tri::similarity::SimilaritySettings,
+    /// `[palette]` (moteur) : palettes de couleurs.
+    pub palette: tri::palette::PaletteSettings,
     /// `[i18n]` (moteur) : langue des textes.
     pub i18n: tri::i18n::I18nSettings,
     /// `[update]` (moteur) : recherche d'une nouvelle version.
@@ -101,6 +103,7 @@ impl AppSettings {
             files: self.files.clone(),
             sharpness: self.sharpness,
             similarity: self.similarity,
+            palette: self.palette,
             i18n: self.i18n,
             update: self.update.clone(),
             remote: self.remote.clone(),

@@ -578,6 +578,23 @@ strictness_span = 2.0
 # Scores de tout le dossier calculés en fond (cache d'analyse).
 background = true
 
+[palette]
+# Palettes de couleurs : nombre de couleurs cherchées par image.
+#
+# Palettes de couleurs (#492) : les couleurs principales de chaque image et leur part,
+# calculées sur une petite version de l'image (k-moyennes dans l'espace OKLab), gardées
+# dans le cache d'analyse. Nombre de couleurs cherchées (au plus : les couleurs très
+# proches sont fusionnées).
+colors = 6
+# Côté de la grille de points lus dans l'image (side × side au plus).
+side = 96
+# Passes du calcul (k-moyennes).
+iterations = 12
+# Deux couleurs plus proches que cette distance (OKLab) sont fusionnées.
+merge = 0.03
+# Part minimale d'une couleur (0 à 1) : en deçà, retirée.
+min_share = 0.02
+
 [similarity]
 # Regrouper en fond les images semblables (rafales, séries) en piles.
 #
