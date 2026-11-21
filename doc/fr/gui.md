@@ -244,8 +244,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   départ, `[palette] similar_threshold` / `similar_max`), de la plus proche à la moins
   proche. **Couleur** (icône pipette, action `core.filter.palette_colour` : cochée, la dernière
   couleur cherchée, sinon la boîte de choix). À droite du nom, la **pastille** de la
-  couleur : un clic ouvre la boîte de choix (retour du 21/11/2026) — roue (teinte et
-  saturation, même géométrie que celle des palettes), clarté, R V B, `#rrggbb`, et une
+  couleur : un clic ouvre la boîte de choix (retour du 21/11/2026) — roue TSV (teinte en
+  angle, saturation au rayon, à la valeur en cours ; la clarté d'OKLab, essayée, ne parlait
+  pas), R V B, teinte / saturation / valeur, `#rrggbb`, et une
   **pipette** : la boîte se masque, un clic n'importe où dans la fenêtre relève la couleur
   (sur une vignette ou l'image en plein écran, la couleur moyenne d'une petite zone de
   l'image d'où la palette est tirée, lue en fond ; ailleurs, le pixel de la capture de la

@@ -49,56 +49,72 @@ pub fn wheel_pos(swatch: &Swatch, centre: Pos2, radius: f32) -> Pos2 {
     pos2(centre.x + r * a.cos(), centre.y - r * a.sin())
 }
 
-/// Couleur au point `pos` de la roue du **sélecteur** de centre `centre` et de rayon
-/// `radius`, à la clarté `lightness` : la teinte en angle, la saturation en distance au
-/// centre, **relative** à la plus forte affichable pour cette teinte et cette clarté (le
-/// bord est toujours la couleur la plus saturée possible : le point reste sous le
-/// pointeur, retour du 21/11/2026) ; `None` hors de la roue.
-pub fn wheel_colour(pos: Pos2, centre: Pos2, radius: f32, lightness: f32) -> Option<[f32; 3]> {
+/// Teinte (degrés), saturation et valeur (0 à 1) vers sRGB 8 bits.
+pub fn hsv_to_rgb([h, s, v]: [f32; 3]) -> [u8; 3] {
+    let h = h.rem_euclid(360.0) / 60.0;
+    let c = v * s;
+    let x = c * (1.0 - (h % 2.0 - 1.0).abs());
+    let (r, g, b) = match h as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = v - c;
+    [r, g, b].map(|u| ((u + m).clamp(0.0, 1.0) * 255.0).round() as u8)
+}
+
+/// sRGB 8 bits vers teinte (degrés), saturation et valeur ; un gris garde la teinte
+/// `hue_if_grey` (sa teinte n'existe pas : la roue ne saute pas à zéro).
+pub fn rgb_to_hsv(rgb: [u8; 3], hue_if_grey: f32) -> [f32; 3] {
+    let [r, g, b] = rgb.map(|u| f32::from(u) / 255.0);
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let d = max - min;
+    let h = if d <= f32::EPSILON {
+        hue_if_grey
+    } else if max == r {
+        60.0 * ((g - b) / d).rem_euclid(6.0)
+    } else if max == g {
+        60.0 * ((b - r) / d + 2.0)
+    } else {
+        60.0 * ((r - g) / d + 4.0)
+    };
+    let s = if max <= f32::EPSILON { 0.0 } else { d / max };
+    [h, s, max]
+}
+
+/// Teinte et saturation au point `pos` de la roue TSV de centre `centre` et de rayon
+/// `radius` (rouge à droite, sens trigonométrique, gris au centre) ; `None` hors de la
+/// roue.
+pub fn hsv_at(pos: Pos2, centre: Pos2, radius: f32) -> Option<(f32, f32)> {
     let d = pos - centre;
-    let r = d.length() / radius.max(1.0);
-    if r > 1.0 {
-        return None;
-    }
-    let hue = (-d.y).atan2(d.x);
-    let chroma = r * tri::palette::max_chroma(lightness, hue);
-    Some([lightness, chroma * hue.cos(), chroma * hue.sin()])
+    let s = d.length() / radius.max(1.0);
+    (s <= 1.0).then(|| ((-d.y).atan2(d.x).to_degrees().rem_euclid(360.0), s))
 }
 
-/// Place de `oklab` sur la roue du sélecteur (l'inverse de [`wheel_colour`]).
-pub fn picker_pos(oklab: [f32; 3], centre: Pos2, radius: f32) -> Pos2 {
-    let [l, a, b] = oklab;
-    let hue = b.atan2(a);
-    let max = tri::palette::max_chroma(l, hue).max(1e-6);
-    let r = radius * (a.hypot(b) / max).min(1.0);
-    pos2(centre.x + r * hue.cos(), centre.y - r * hue.sin())
+/// Place d'une teinte (degrés) et d'une saturation sur la roue TSV.
+pub fn hsv_pos(hue: f32, saturation: f32, centre: Pos2, radius: f32) -> Pos2 {
+    let a = hue.to_radians();
+    let r = radius * saturation.clamp(0.0, 1.0);
+    pos2(centre.x + r * a.cos(), centre.y - r * a.sin())
 }
 
-/// Roue du sélecteur de couleur : les teintes et saturations à la clarté `lightness`,
-/// en dégradé (gris au centre, au bord la couleur la plus saturée affichable de chaque
-/// teinte).
-pub fn draw_picker_wheel(painter: &Painter, rect: Rect, lightness: f32) {
+/// Roue TSV du sélecteur de couleur, à la valeur `value` (0 à 1).
+pub fn draw_hsv_wheel(painter: &Painter, rect: Rect, value: f32) {
     let centre = rect.center();
     let radius = rect.width().min(rect.height()) / 2.0;
     let (rings, sectors) = (14usize, 72usize);
-    let max: Vec<f32> = (0..=sectors)
-        .map(|k| {
-            let a = k as f32 / sectors as f32 * std::f32::consts::TAU;
-            tri::palette::max_chroma(lightness, a)
-        })
-        .collect();
     let mut mesh = egui::Mesh::default();
     for ring in 0..=rings {
-        let f = ring as f32 / rings as f32;
-        let r = radius * f;
-        for (sector, &m) in max.iter().enumerate() {
-            let a = sector as f32 / sectors as f32 * std::f32::consts::TAU;
-            let pos = pos2(centre.x + r * a.cos(), centre.y - r * a.sin());
-            // De l'angle et du rayon directement (par la position, les sommets du bord
-            // tombaient parfois juste dehors, en gris : des pointillés).
-            let chroma = f * m;
-            let oklab = [lightness, chroma * a.cos(), chroma * a.sin()];
-            mesh.colored_vertex(pos, color(&Swatch { oklab, share: 0.0 }));
+        let s = ring as f32 / rings as f32;
+        for sector in 0..=sectors {
+            let hue = sector as f32 / sectors as f32 * 360.0;
+            let pos = hsv_pos(hue, s, centre, radius);
+            let [r, g, b] = hsv_to_rgb([hue, s, value]);
+            mesh.colored_vertex(pos, Color32::from_rgb(r, g, b));
         }
     }
     let row = (sectors + 1) as u32;
@@ -110,7 +126,6 @@ pub fn draw_picker_wheel(painter: &Painter, rect: Rect, lightness: f32) {
         }
     }
     painter.add(egui::Shape::mesh(mesh));
-    // Le bord adouci : un trait fin sur les facettes du maillage.
     painter.circle_stroke(
         centre,
         radius,
@@ -194,35 +209,27 @@ mod tests {
     }
 
     #[test]
-    fn the_picked_point_stays_under_the_pointer_even_at_the_edge() {
-        // Retour du 21/11/2026 : le point de la roue du sélecteur ne suivait pas le
-        // pointeur (ramené dans le gamut, il reculait vers le centre).
-        let (c, r) = (pos2(100.0, 100.0), 50.0);
-        for at in [
-            pos2(140.0, 80.0),
-            pos2(100.0, 51.0),
-            pos2(62.0, 120.0),
-            pos2(149.5, 100.0),
+    fn hsv_round_trips_and_the_wheel_point_comes_back() {
+        for rgb in [
+            [255, 0, 0],
+            [12, 200, 90],
+            [3, 109, 255],
+            [128, 128, 128],
+            [0, 0, 0],
         ] {
-            for l in [0.3, 0.6, 0.9] {
-                let oklab = wheel_colour(at, c, r, l).unwrap();
-                let back = picker_pos(oklab, c, r);
-                assert!(
-                    back.distance(at) < 0.5,
-                    "{at:?} à L {l} : revenu en {back:?}"
-                );
-                let srgb = Swatch { oklab, share: 0.0 }.srgb();
-                let again = tri::palette::srgb_to_oklab(srgb);
-                assert!(
-                    tri::palette::oklab_distance(again, oklab) < 0.02,
-                    "affichable"
-                );
-            }
+            let hsv = rgb_to_hsv(rgb, 0.0);
+            assert_eq!(hsv_to_rgb(hsv), rgb, "{rgb:?} → {hsv:?}");
         }
-        assert!(
-            wheel_colour(pos2(200.0, 100.0), c, r, 0.5).is_none(),
-            "hors de la roue"
+        assert_eq!(
+            rgb_to_hsv([128, 128, 128], 200.0)[0],
+            200.0,
+            "le gris garde sa teinte"
         );
+        let c = pos2(100.0, 100.0);
+        let at = hsv_pos(210.0, 0.7, c, 50.0);
+        let (h, s) = hsv_at(at, c, 50.0).unwrap();
+        assert!((h - 210.0).abs() < 0.01 && (s - 0.7).abs() < 1e-4);
+        assert!(hsv_at(pos2(160.0, 100.0), c, 50.0).is_none());
     }
 
     #[test]

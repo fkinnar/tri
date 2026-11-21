@@ -302,25 +302,49 @@ struct PaletteColour {
     radius: f32,
 }
 
-/// Boîte de choix de la couleur cherchée : la couleur en cours (OKLab), et le texte du
-/// champ hexadécimal en cours de saisie.
+/// Boîte de choix de la couleur cherchée : la couleur en cours, en TSV (teinte en degrés,
+/// saturation et valeur de 0 à 1 ; la teinte d'un gris est gardée), et le texte du champ
+/// hexadécimal en cours de saisie.
 #[derive(Clone, Debug)]
 struct ColourDialog {
-    oklab: [f32; 3],
+    hsv: [f32; 3],
     hex: String,
 }
 
 impl ColourDialog {
     fn new(oklab: [f32; 3]) -> ColourDialog {
-        ColourDialog {
-            oklab,
-            hex: oklab_hex(oklab),
-        }
+        let mut dialog = ColourDialog {
+            hsv: [0.0; 3],
+            hex: String::new(),
+        };
+        dialog.set(oklab);
+        dialog
+    }
+
+    /// Couleur en sRGB 8 bits.
+    fn rgb(&self) -> [u8; 3] {
+        crate::palette_view::hsv_to_rgb(self.hsv)
+    }
+
+    /// Couleur en OKLab, pour la recherche.
+    fn oklab(&self) -> [f32; 3] {
+        tri::palette::srgb_to_oklab(self.rgb())
     }
 
     fn set(&mut self, oklab: [f32; 3]) {
-        self.oklab = oklab;
-        self.hex = oklab_hex(oklab);
+        let rgb = tri::palette::Swatch { oklab, share: 0.0 }.srgb();
+        self.set_rgb(rgb);
+    }
+
+    fn set_rgb(&mut self, rgb: [u8; 3]) {
+        self.hsv = crate::palette_view::rgb_to_hsv(rgb, self.hsv[0]);
+        self.hex = format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]);
+    }
+
+    fn set_hsv(&mut self, hsv: [f32; 3]) {
+        self.hsv = hsv;
+        let rgb = self.rgb();
+        self.hex = format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]);
     }
 }
 
@@ -3953,12 +3977,12 @@ impl TriApp {
                 // La roue à gauche, les réglages à droite (retour du 21/11/2026 : en
                 // colonne, la boîte était trop large pour son contenu).
                 ui.horizontal_top(|ui| {
-                    // La roue, à la clarté choisie ; un clic ou un glisser y choisit teinte
-                    // et saturation.
+                    // La roue TSV (retour du 21/11/2026 : la clarté d'OKLab ne parlait pas) :
+                    // un clic ou un glisser y choisit teinte et saturation, à la valeur V.
                     let side = 200.0;
                     let (rect, response) =
                         ui.allocate_exact_size(vec2(side, side), Sense::click_and_drag());
-                    crate::palette_view::draw_picker_wheel(ui.painter(), rect, dialog.oklab[0]);
+                    crate::palette_view::draw_hsv_wheel(ui.painter(), rect, dialog.hsv[2]);
                     let radius = side / 2.0;
                     if let Some(pos) = response.interact_pointer_pos()
                         && (response.clicked() || response.dragged())
@@ -3970,37 +3994,31 @@ impl TriApp {
                         } else {
                             pos
                         };
-                        if let Some(c) = crate::palette_view::wheel_colour(
-                            pos,
-                            rect.center(),
-                            radius,
-                            dialog.oklab[0],
-                        ) {
-                            dialog.set(c);
+                        if let Some((h, s)) =
+                            crate::palette_view::hsv_at(pos, rect.center(), radius)
+                        {
+                            dialog.set_hsv([h, s, dialog.hsv[2]]);
                         }
                     }
-                    let swatch = tri::palette::Swatch {
-                        oklab: dialog.oklab,
-                        share: 0.0,
-                    };
-                    let at = crate::palette_view::picker_pos(dialog.oklab, rect.center(), radius);
+                    let at = crate::palette_view::hsv_pos(
+                        dialog.hsv[0],
+                        dialog.hsv[1],
+                        rect.center(),
+                        radius,
+                    );
                     ui.painter()
                         .circle_stroke(at, 6.0, egui::Stroke::new(2.0, Color32::WHITE));
                     ui.painter()
                         .circle_stroke(at, 7.5, egui::Stroke::new(1.0, Color32::BLACK));
                     ui.add_space(12.0);
                     ui.vertical(|ui| {
-                        let width = 170.0;
-                        ui.set_width(width);
                         // La couleur, son `#rrggbb` et la pipette.
                         ui.horizontal(|ui| {
+                            let [r, g, b] = dialog.rgb();
                             let (patch, _) =
                                 ui.allocate_exact_size(vec2(28.0, 22.0), Sense::hover());
-                            ui.painter().rect_filled(
-                                patch,
-                                3.0,
-                                crate::palette_view::color(&swatch),
-                            );
+                            ui.painter()
+                                .rect_filled(patch, 3.0, Color32::from_rgb(r, g, b));
                             let field = ui.add(
                                 egui::TextEdit::singleline(&mut dialog.hex)
                                     .desired_width(80.0)
@@ -4009,7 +4027,9 @@ impl TriApp {
                             if field.changed()
                                 && let Some(rgb) = parse_hex(&dialog.hex)
                             {
-                                dialog.oklab = tri::palette::srgb_to_oklab(rgb);
+                                let hex = dialog.hex.clone();
+                                dialog.set_rgb(rgb);
+                                dialog.hex = hex;
                             }
                             let size = ui.spacing().interact_size.y;
                             let (rect, button) = marks::icon_button(
@@ -4025,23 +4045,9 @@ impl TriApp {
                             );
                             eyedropper = button.clicked();
                         });
-                        ui.add_space(8.0);
-                        // La clarté.
-                        ui.label(t!("palette-colour-lightness"));
-                        let mut l = dialog.oklab[0];
-                        ui.add(FineSlider::new(&mut l, 0.0..=1.0).width(width));
-                        if l != dialog.oklab[0] {
-                            // Plus clair ou plus sombre, la même saturation n'est pas
-                            // toujours affichable : ramenée dans le gamut.
-                            dialog.set(tri::palette::gamut_map([
-                                l,
-                                dialog.oklab[1],
-                                dialog.oklab[2],
-                            ]));
-                        }
-                        ui.add_space(8.0);
+                        ui.add_space(10.0);
                         // R V B.
-                        let mut rgb = swatch.srgb();
+                        let mut rgb = dialog.rgb();
                         let before = rgb;
                         ui.horizontal(|ui| {
                             for (v, name) in rgb.iter_mut().zip(["R", "V", "B"]) {
@@ -4053,7 +4059,42 @@ impl TriApp {
                             }
                         });
                         if rgb != before {
-                            dialog.set(tri::palette::srgb_to_oklab(rgb));
+                            dialog.set_rgb(rgb);
+                        }
+                        // T S V (degrés, pourcentages).
+                        let [mut h, mut s, mut v] = dialog.hsv;
+                        let (mut sp, mut vp) = (s * 100.0, v * 100.0);
+                        let before = (h, sp, vp);
+                        ui.horizontal(|ui| {
+                            ui.add(
+                                egui::DragValue::new(&mut h)
+                                    .prefix(format!("{} ", t!("palette-colour-h")))
+                                    .suffix("°")
+                                    .range(0.0..=360.0)
+                                    .max_decimals(0)
+                                    .speed(1.0),
+                            );
+                            ui.add(
+                                egui::DragValue::new(&mut sp)
+                                    .prefix(format!("{} ", t!("palette-colour-s")))
+                                    .suffix(" %")
+                                    .range(0.0..=100.0)
+                                    .max_decimals(0)
+                                    .speed(0.5),
+                            );
+                            ui.add(
+                                egui::DragValue::new(&mut vp)
+                                    .prefix(format!("{} ", t!("palette-colour-v")))
+                                    .suffix(" %")
+                                    .range(0.0..=100.0)
+                                    .max_decimals(0)
+                                    .speed(0.5),
+                            );
+                        });
+                        if (h, sp, vp) != before {
+                            s = sp / 100.0;
+                            v = vp / 100.0;
+                            dialog.set_hsv([h, s, v]);
                         }
                         ui.add_space(16.0);
                         ui.horizontal(|ui| {
@@ -4065,7 +4106,7 @@ impl TriApp {
             });
         if search {
             self.colour_dialog = None;
-            self.set_palette_colour(Some(dialog.oklab));
+            self.set_palette_colour(Some(dialog.oklab()));
         } else if cancel || modal.should_close() {
             self.colour_dialog = None;
         } else {
@@ -28308,7 +28349,7 @@ mod tests {
         run_until(&mut h, |app| {
             app.colour_dialog
                 .as_ref()
-                .is_some_and(|d| tri::palette::oklab_distance(d.oklab, red) < 0.02)
+                .is_some_and(|d| tri::palette::oklab_distance(d.oklab(), red) < 0.02)
         });
         h.run_steps(10);
         h.get_by_label(&t!("palette-colour-search")).click();
@@ -28416,9 +28457,7 @@ mod tests {
             app.colour_pick.is_none() && !app.palette_eyedropper
         });
         run_until(&mut h, |app| {
-            app.colour_dialog
-                .as_ref()
-                .is_some_and(|d| d.oklab != [0.6, 0.0, 0.0])
+            app.colour_dialog.as_ref().is_some_and(|d| d.hsv[1] > 0.1)
         });
         h.run_steps(10);
         h.get_by_label(&t!("palette-colour-search")).click();

@@ -232,8 +232,9 @@ system one ("cold" measurements, experiments).
   `[palette] similar_threshold` / `similar_max`), closest first. **Colour** (eyedropper
   icon, action `core.filter.palette_colour`: checked, the last colour looked for, otherwise
   the choice box). Right of the name, the colour **patch**: a click opens the choice box
-  (feedback of 2026-11-21) — wheel (hue and saturation, same geometry as the palettes'),
-  lightness, R G B, `#rrggbb`, and an **eyedropper**: the box hides, a click anywhere in the
+  (feedback of 2026-11-21) — HSV wheel (hue as angle, saturation as radius, at the
+  current value; OKLab lightness, tried, did not speak), R G B, hue / saturation / value,
+  `#rrggbb`, and an **eyedropper**: the box hides, a click anywhere in the
   window reads the colour (on a thumbnail or the full-screen image, the average colour of
   a small area of the image the palette comes from, read in the background; elsewhere,
   the pixel of a capture of the window), then the box comes back; "Search" starts the
