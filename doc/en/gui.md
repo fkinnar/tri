@@ -185,6 +185,26 @@ system one ("cold" measurements, experiments).
   image or Enter shows it again (`Stacks::photo_number`, `stack_number`,
   `development_number`). `[gui.position] seconds` (2; 0: never; -1: always; fades out at
   the end) and `place` (`center`, `top-left`, `top-right`, `bottom-right`, `bottom-left`).
+- **Position bar** (`[gui.position_bar]`, #537, 2026-11-21, user's idea: culling in full
+  screen, one loses track of where one is, and nobody looks at the status bar), over the
+  shown list (filtered: what ← / → browse). Two shapes (`shape`; `split` by default with `place = "panel"`, the user's choice): `segmented`,
+  one bar split into segments, one per stack, as wide as the stack, the current stack lit
+  (`accent_light`) and the photo marked (`accent`, at least 3 points wide in a large
+  folder); `split` (user's idea, easier to read with small stacks in a large folder),
+  three bars: on top the photo in the stack and the stack in the list, side by side,
+  below the photo in the list. Without stacks, a single bar. Two places (`place`):
+  `overlay`, along the bottom of the image, hidden with the info on the image (`t`),
+  duration `seconds` (-1: always); `panel`, a "Position" section under the histogram of
+  the right panel, always visible (while the histogram is computed, the previous one stays, `last_histogram`:
+  otherwise it blinked and the bar jumped at each image; greyed if the computation
+  takes longer than `[gui.metadata] histogram_stale_ms`, 400 ms, on a slow drive say). On the image, the notes and the bottom marks
+  move up above it (`marks_area`). Never while cropping. A vertical bar for the place in
+  the stack was tried, then removed (redundant with the segmented bar). Position only
+  (decided 2026-11-21: colouring by culling state will come once we know what is useful
+  to show; the user culls in star passes). Geometry testable on its own in
+  `gui/src/position_bar.rs` (`Position::layout`, `split`), segments from
+  `Stacks::photos_per_group` (developments counted with their photo). Thickness
+  `thickness`.
 - **End of the stack or of the list** (`[gui.end]`, #307, 2026-11-05): in full screen,
   ← / → that no longer move say so for a moment, in the same frame as the position mark
   ("End of the stack", "Start of the stack", "End of the selection", "Start of the

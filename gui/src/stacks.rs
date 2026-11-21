@@ -302,6 +302,23 @@ impl Stacks {
         ))
     }
 
+    /// Nombre de photos de chaque groupe, dans l'ordre (développements comptés avec leur
+    /// photo, comme [`Stacks::stack_number`]) : les segments de la barre de position
+    /// (#537).
+    pub fn photos_per_group(&self) -> Vec<usize> {
+        let photo = |i: usize| {
+            if self.photos.is_empty() {
+                i
+            } else {
+                self.photo_of[i]
+            }
+        };
+        self.ranges
+            .iter()
+            .map(|r| photo(r.end - 1) - photo(r.start) + 1)
+            .collect()
+    }
+
     /// Rang (à partir de 1) de l'image `index` dans la pile de développements de sa photo,
     /// et sa taille, si la photo a des développements.
     pub fn development_number(&self, index: usize) -> Option<(usize, usize)> {

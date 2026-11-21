@@ -1225,6 +1225,25 @@ seconds = 2.0
 # Where: "center", "top-left", "top-right", "bottom-right" or "bottom-left".
 place = "top-left"
 
+[gui.position_bar]
+# Position bar in full screen: how long it shows on the image.
+#
+# "Where am I" bar in full screen, over the shown list. On the image, hidden with the info
+# (<core.view.image_info>); display time in seconds after a change of image; 0: never;
+# -1: always (in the panel, always visible).
+seconds = -1.0
+# Shape: "segmented" (one bar, a segment per stack) or "split" (three bars).
+#
+# "segmented": one bar, the list split into segments, one per stack (as wide as the
+# stack), the current stack lit and the photo marked. "split": on top, the photo in the
+# stack and the stack in the list, side by side; below, the photo in the list (easier
+# to read with small stacks in a large folder). Without stacks, a single bar.
+shape = "split"
+# Where: "overlay" (on the image, along the bottom) or "panel" (right panel).
+place = "panel"
+# Thickness of a bar (points).
+thickness = 5.0
+
 [gui.notes]
 # Ratings drawn on the image in full screen: how long they show.
 #
@@ -1420,6 +1439,8 @@ width = 280.0
 min_width = 280.0
 histogram = true
 histogram_height = 120.0
+# Histogram not computed yet: the previous one stays, greyed after this delay (ms).
+histogram_stale_ms = 400
 # Step of a strictness slider of the panel from the keyboard (<core.metadata.left> /
 # <core.metadata.right>),
 # over its range from -1 to 1.

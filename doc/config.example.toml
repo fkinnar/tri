@@ -1236,6 +1236,25 @@ seconds = 2.0
 # Où : "center", "top-left", "top-right", "bottom-right" ou "bottom-left".
 place = "top-left"
 
+[gui.position_bar]
+# Barre de position en plein écran : durée d'affichage sur l'image.
+#
+# Barre « où on en est » en plein écran, sur la liste affichée. Sur l'image, masquée avec
+# les infos (<core.view.image_info>) ; durée d'affichage en secondes après un changement
+# d'image ; 0 : jamais ; -1 : toujours (dans le panneau, toujours visible).
+seconds = -1.0
+# Forme : "segmented" (une barre, un segment par pile) ou "split" (trois barres).
+#
+# "segmented" : une barre, la liste découpée en segments, un par pile (aussi large que la
+# pile), la pile en cours éclairée et la photo marquée. "split" : en haut, la photo dans
+# la pile et la pile dans la liste, côte à côte ; en dessous, la photo dans la liste
+# (plus lisible avec de petites piles dans un grand dossier). Sans piles, une seule barre.
+shape = "split"
+# Où : "overlay" (sur l'image, le long du bas) ou "panel" (panneau de droite).
+place = "panel"
+# Épaisseur d'une barre (points).
+thickness = 5.0
+
 [gui.notes]
 # Notes posées sur l'image en plein écran : durée d'affichage.
 #
@@ -1430,6 +1449,8 @@ width = 280.0
 min_width = 280.0
 histogram = true
 histogram_height = 120.0
+# Histogramme pas encore calculé : le précédent reste affiché, grisé après ce délai (ms).
+histogram_stale_ms = 400
 # Pas d'un curseur de sévérité du panneau au clavier (<core.metadata.left> /
 # <core.metadata.right>),
 # sur sa course de -1 à 1.

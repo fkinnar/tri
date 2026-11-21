@@ -316,6 +316,8 @@ pub struct GuiSettings {
     pub compare: CompareSettings,
     /// `[gui.position]`.
     pub position: PositionSettings,
+    /// `[gui.position_bar]`.
+    pub position_bar: PositionBarSettings,
     /// `[gui.notes]`.
     pub notes: NotesSettings,
     /// `[gui.end]`.
@@ -389,6 +391,7 @@ impl Default for GuiSettings {
             zoom: ZoomSettings::default(),
             compare: CompareSettings::default(),
             position: PositionSettings::default(),
+            position_bar: PositionBarSettings::default(),
             notes: NotesSettings::default(),
             end: EndSettings::default(),
             dialogs: DialogSettings::default(),
@@ -967,6 +970,58 @@ impl Default for PositionSettings {
     }
 }
 
+/// Section `[gui.position_bar]` : barre de position en plein écran (#537), le long du bas
+/// de l'image : la liste découpée par pile, la photo marquée, et sa place dans la pile.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PositionBarSettings {
+    /// Durée d'affichage (secondes) après un changement d'image ; 0 : jamais ; négatif
+    /// (-1) : toujours.
+    pub seconds: f32,
+    /// Forme : une barre segmentée par pile, ou trois barres.
+    pub shape: BarShape,
+    /// Où : sur l'image, ou dans le panneau de droite.
+    pub place: BarPlace,
+    /// Épaisseur d'une barre (points).
+    pub thickness: f32,
+}
+
+/// Forme de la barre de position (#537, à l'essai). Dans le fichier : `"segmented"` ou
+/// `"split"`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BarShape {
+    /// Une barre, la liste découpée en un segment par pile.
+    Segmented,
+    /// Trois barres : la photo dans la pile et la pile dans la liste, côte à côte, puis
+    /// la photo dans la liste (par défaut : choix de l'utilisateur, 21/11/2026).
+    #[default]
+    Split,
+}
+
+/// Place de la barre de position. Dans le fichier : `"overlay"` ou `"panel"`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BarPlace {
+    /// Sur l'image, le long du bas.
+    Overlay,
+    /// Dans le panneau de droite, sous l'histogramme (par défaut : choix de
+    /// l'utilisateur, 21/11/2026).
+    #[default]
+    Panel,
+}
+
+impl Default for PositionBarSettings {
+    fn default() -> Self {
+        Self {
+            seconds: -1.0,
+            shape: BarShape::Split,
+            place: BarPlace::Panel,
+            thickness: 5.0,
+        }
+    }
+}
+
 /// Section `[gui.notes]` : notes posées sur l'image en plein écran, bandeau du bas affiché
 /// ou non (04/11/2026, idée de l'utilisateur : réglables comme le repère de position, pour
 /// éviter de les avoir au même coin). Même place que le repère : les notes restent,
@@ -1479,6 +1534,9 @@ pub struct MetadataSettings {
     pub histogram: bool,
     /// Hauteur de cet histogramme (points).
     pub histogram_height: f32,
+    /// Image suivante, histogramme pas encore prêt : le précédent reste affiché, grisé
+    /// au-delà de ce délai (ms).
+    pub histogram_stale_ms: u64,
     /// Pas d'un curseur de sévérité du panneau au clavier (flèches gauche / droite, h /
     /// l), sur sa course de -1 à 1.
     pub slider_step: f32,
@@ -1495,6 +1553,7 @@ impl Default for MetadataSettings {
             min_width: 280.0,
             histogram: true,
             histogram_height: 120.0,
+            histogram_stale_ms: 400,
             slider_step: 0.1,
             group_gap: 0.5,
         }

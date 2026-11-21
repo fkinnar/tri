@@ -34,6 +34,7 @@ use crate::marks;
 use crate::menu_groups::{self, MenuGroups};
 use crate::meta::MetaLoader;
 use crate::offload::{OffloadDialog, Request as OffloadRequest};
+use crate::position_bar;
 use crate::settings::{AppSettings, GuiSettings, HistogramScale};
 use crate::textures::Lru;
 use crate::trace::trace;
@@ -1416,6 +1417,19 @@ pub struct TriApp {
     /// Image et notes du cadre des notes, et depuis quand il est montré (`[gui.notes]`).
     notes_key: Option<(PathBuf, tri::xmp::Notes)>,
     notes_since: Instant,
+    /// Barre de position (#537) : image pour laquelle elle s'est montrée, et depuis quand.
+    position_bar_key: Option<PathBuf>,
+    position_bar_since: Instant,
+    /// Hauteur prise en bas de l'image par la barre de position dessinée dessus : les
+    /// notes et les repères du bas remontent d'autant (retour du 21/11/2026).
+    position_bar_reserved: f32,
+    /// Dernier histogramme dessiné dans le panneau (exposition, réelle à côté, JPEG
+    /// boîtier) : gardé à l'écran le temps que celui de l'image suivante se calcule
+    /// (retour du 21/11/2026 : il disparaissait et réapparaissait à chaque image).
+    last_histogram: Option<Histograms>,
+    /// Image dont on attend l'histogramme, et depuis quand (le précédent est grisé après
+    /// `[gui.metadata] histogram_stale_ms`).
+    histogram_wait: Option<(usize, Instant)>,
     /// Dernière image affichée en plein écran (pour la trace).
     last_shown: (usize, Option<Level>),
 }
@@ -2210,6 +2224,11 @@ impl TriApp {
             notes_rect: None,
             notes_key: None,
             notes_since: Instant::now(),
+            position_bar_key: None,
+            position_bar_since: Instant::now(),
+            position_bar_reserved: 0.0,
+            last_histogram: None,
+            histogram_wait: None,
             last_zoom_size: std::collections::HashMap::new(),
             gui,
         };
@@ -3015,6 +3034,12 @@ impl TriApp {
             self.histogram_section(ui);
             ui.separator();
         }
+        if self.mode == Mode::View
+            && self.crop.is_none()
+            && self.gui.position_bar.place == crate::settings::BarPlace::Panel
+        {
+            self.position_bar_section(ui);
+        }
     }
 
     /// Ajoute un élément pointable au panneau de droite (`title` : un titre de section) :
@@ -3488,44 +3513,76 @@ impl TriApp {
     /// l'image. Un clic l'ouvre en grand.
     fn histogram_section(&mut self, ui: &mut Ui) {
         let settings = self.gui.metadata;
-        match self.shown_exposure(self.selected) {
-            Some((e, real)) => {
-                self.meta_has_histogram = true;
-                let (rect, response) = ui.allocate_exact_size(
-                    vec2(ui.available_width(), settings.histogram_height),
-                    Sense::click(),
-                );
-                let camera = self.camera_exposure_of(self.selected);
-                let mut tip = t!(
-                    "histogram-enlarge",
-                    keys = self.keys_text(Action::HistogramLarge)
-                );
-                if camera.is_some() {
-                    tip = format!("{tip}\n{}", t!("histogram-camera-tip-short"));
-                }
-                if response
-                    .on_hover_cursor(egui::CursorIcon::ZoomIn)
-                    .on_hover_text(tip)
-                    .clicked()
-                {
-                    self.histogram_large = true;
-                }
-                let look = self.small_histogram_look();
-                histogram::draw(
-                    ui.painter(),
-                    rect,
-                    &e,
-                    real.as_deref(),
-                    camera.as_deref(),
-                    look,
-                    &self.gui.histogram,
-                    &self.gui.colors,
-                );
-            }
-            None => {
-                ui.weak(t!("histogram-computing"));
-            }
+        let current = self.shown_exposure(self.selected).map(|(e, real)| {
+            let camera = self.camera_exposure_of(self.selected);
+            (e, real, camera)
+        });
+        if current.is_some() {
+            self.last_histogram = current.clone();
+            self.histogram_wait = None;
+        } else if self.histogram_wait.is_none_or(|(i, _)| i != self.selected) {
+            self.histogram_wait = Some((self.selected, Instant::now()));
         }
+        // Le calcul traîne (disque lent, iCloud : plusieurs secondes) : le précédent est
+        // grisé, pour ne pas le prendre pour celui de l'image (retour du 21/11/2026).
+        let stale_after = Duration::from_millis(settings.histogram_stale_ms);
+        let stale = match self.histogram_wait.filter(|_| current.is_none()) {
+            Some((_, since)) if since.elapsed() >= stale_after => true,
+            Some((_, since)) => {
+                ui.ctx()
+                    .request_repaint_after(stale_after - since.elapsed());
+                false
+            }
+            None => false,
+        };
+        // En attendant celui de l'image, le précédent reste (retour du 21/11/2026 : la
+        // place vide clignotait à chaque image) ; à la même hauteur dans tous les cas (la
+        // barre de position, dessous, ne saute pas).
+        let ready = current.is_some();
+        let (rect, response) = ui.allocate_exact_size(
+            vec2(ui.available_width(), settings.histogram_height),
+            Sense::click(),
+        );
+        let Some((e, real, camera)) = current.or_else(|| self.last_histogram.clone()) else {
+            ui.painter().text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                t!("histogram-computing"),
+                egui::TextStyle::Body.resolve(ui.style()),
+                ui.visuals().weak_text_color(),
+            );
+            return;
+        };
+        self.meta_has_histogram = ready;
+        let mut tip = t!(
+            "histogram-enlarge",
+            keys = self.keys_text(Action::HistogramLarge)
+        );
+        if camera.is_some() {
+            tip = format!("{tip}\n{}", t!("histogram-camera-tip-short"));
+        }
+        if response
+            .on_hover_cursor(egui::CursorIcon::ZoomIn)
+            .on_hover_text(tip)
+            .clicked()
+        {
+            self.histogram_large = true;
+        }
+        let look = self.small_histogram_look();
+        let mut painter = ui.painter().clone();
+        if stale {
+            painter.multiply_opacity(0.3);
+        }
+        histogram::draw(
+            &painter,
+            rect,
+            &e,
+            real.as_deref(),
+            camera.as_deref(),
+            look,
+            &self.gui.histogram,
+            &self.gui.colors,
+        );
     }
 
     /// Sous-section « Fichiers » (30/10/2026) : les actions sur les fichiers, interdites
@@ -11852,7 +11909,7 @@ impl TriApp {
             return;
         };
         let align = e.place.align();
-        let at = align.pos_in_rect(&area.shrink(16.0));
+        let at = align.pos_in_rect(&self.marks_area(area).shrink(16.0));
         egui::Area::new(egui::Id::unique("end_mark"))
             .pivot(align)
             .fixed_pos(at)
@@ -11942,7 +11999,7 @@ impl TriApp {
         };
         let text = self.position_text();
         let align = p.place.align();
-        let inner = area.shrink(16.0);
+        let inner = self.marks_area(area).shrink(16.0);
         let mut at = align.pos_in_rect(&inner);
         let mut pivot = align;
         // Même place que les notes posées sur l'image : à côté d'elles, qui ne bougent pas
@@ -11975,6 +12032,133 @@ impl TriApp {
                     );
                 });
             });
+    }
+
+    /// Barre de position (#537) sur l'image, le long du bas : la liste affichée par piles
+    /// et la photo (`[gui.position_bar]`). Masquée avec les infos sur l'image et pendant
+    /// le recadrage ; rien ici si elle est dans le panneau de droite.
+    fn position_bar(
+        &mut self,
+        ctx: &egui::Context,
+        painter: &egui::Painter,
+        area: Rect,
+        path: &Path,
+    ) {
+        let b = self.gui.position_bar;
+        self.position_bar_reserved = 0.0;
+        if !self.image_info
+            || b.seconds == 0.0
+            || self.crop.is_some()
+            || b.place != crate::settings::BarPlace::Overlay
+        {
+            self.position_bar_key = None;
+            return;
+        }
+        if self.position_bar_key.as_deref() != Some(path) {
+            self.position_bar_key = Some(path.to_path_buf());
+            self.position_bar_since = Instant::now();
+        }
+        let Some(opacity) = mark_opacity(b.seconds, self.position_bar_since, ctx) else {
+            return;
+        };
+        let Some(position) = self.bar_position() else {
+            return;
+        };
+        let style = self.bar_style(Color32::from_white_alpha(70), true);
+        // Même cadre que les marques du bas (notes, repère), alignée sur elles : son fond
+        // sombre à 16 points des bords comme leur cadre, et de l'air entre les deux
+        // (retour du 21/11/2026).
+        let base = if self.mark_area.is_positive() {
+            self.mark_area
+        } else {
+            area
+        };
+        let (margin, backdrop, air) = (16.0, BAR_BACKDROP, 8.0);
+        let height = position.height(b.shape, b.thickness);
+        let inner = base.shrink(margin + backdrop);
+        let bar = Rect::from_x_y_ranges(inner.x_range(), inner.bottom() - height..=inner.bottom());
+        self.position_bar_reserved = height + 2.0 * backdrop + air;
+        let mut painter = painter.clone();
+        painter.multiply_opacity(opacity);
+        position_bar::draw(&painter, bar, &position, b.shape, &style);
+    }
+
+    /// Zone des marques posées sur l'image (`area`), sans le bas pris par la barre de
+    /// position.
+    fn marks_area(&self, area: Rect) -> Rect {
+        let mut area = area;
+        if self.mode == Mode::View {
+            area.max.y -= self.position_bar_reserved.max(0.0);
+        }
+        area
+    }
+
+    /// Barre de position dans le panneau de droite (`place = "panel"`), en plein écran,
+    /// sous l'histogramme : toujours visible, comme lui.
+    fn position_bar_section(&mut self, ui: &mut Ui) {
+        let b = self.gui.position_bar;
+        let Some(position) = self.bar_position() else {
+            return;
+        };
+        section_heading(ui, &t!("panel-section-position"), &self.gui.folders);
+        let height = position.height(b.shape, b.thickness);
+        let (rect, _) =
+            ui.allocate_exact_size(vec2(ui.available_width(), height + 4.0), Sense::hover());
+        let track = ui.visuals().widgets.inactive.bg_fill;
+        let style = self.bar_style(track, false);
+        position_bar::draw(
+            ui.painter(),
+            rect.shrink2(vec2(2.0, 2.0)),
+            &position,
+            b.shape,
+            &style,
+        );
+        ui.separator();
+    }
+
+    /// Couleurs de la barre de position, sur le fond `track`.
+    fn bar_style(&self, track: Color32, backdrop: bool) -> position_bar::Style {
+        let c = &self.gui.colors;
+        position_bar::Style {
+            thickness: self.gui.position_bar.thickness,
+            track,
+            stack: c.accent_light.into(),
+            photo: c.accent.into(),
+            backdrop: backdrop.then(|| Color32::from_black_alpha(110)),
+        }
+    }
+
+    /// Ce que montre la barre de position : les piles de la liste affichée (photos,
+    /// développements comptés avec leur photo) et le rang de la photo sélectionnée.
+    fn bar_position(&self) -> Option<position_bar::Position> {
+        let i = self.selected;
+        if i >= self.files.len() {
+            return None;
+        }
+        Some(
+            match self.stacks.stack_number(i).filter(|_| self.stacking) {
+                Some(((g, _), (m, _))) => {
+                    let segments = self.stacks.photos_per_group();
+                    let before: usize = segments[..g - 1].iter().sum();
+                    position_bar::Position {
+                        segments,
+                        stacked: true,
+                        photo: before + m - 1,
+                    }
+                }
+                None => {
+                    let (n, total) = self
+                        .stacks
+                        .photo_number(i)
+                        .unwrap_or((i + 1, self.files.len()));
+                    position_bar::Position {
+                        segments: vec![total],
+                        stacked: false,
+                        photo: n - 1,
+                    }
+                }
+            },
+        )
     }
 
     /// Texte du repère de position de l'image sélectionnée : « Photo 12 / 94 », avec les
@@ -14964,6 +15148,7 @@ impl TriApp {
             );
         }
         self.view_info = format!("{position}{info}");
+        self.position_bar(&ctx, &painter, view_rect, &file.path);
         // Notes sur l'image (issue n° 8) : durée et place réglables comme le repère de
         // position (`[gui.notes]`, 04/11/2026), même cadre, bandeau du bas affiché ou non
         // (retour du même jour : tout pareil).
@@ -14990,11 +15175,11 @@ impl TriApp {
                 let frame = mark_frame(ui.style());
                 let edge = frame.widget_rect(Rect::ZERO);
                 let width = marks::row_width(&notes, size);
-                let area = if self.mark_area.is_positive() {
+                let area = self.marks_area(if self.mark_area.is_positive() {
                     self.mark_area
                 } else {
                     view_rect
-                };
+                });
                 let align = n.place.align();
                 let outer_size = vec2(width, size) + edge.size();
                 let outer = align.anchor_size(align.pos_in_rect(&area.shrink(16.0)), outer_size);
@@ -22815,6 +23000,14 @@ fn mark_frame(style: &egui::Style) -> egui::Frame {
     })
 }
 
+/// Histogramme dessiné dans le panneau : l'exposition montrée, la réelle à côté (après
+/// réglages), celle du JPEG boîtier.
+type Histograms = (Arc<Exposure>, Option<Arc<Exposure>>, Option<Arc<Exposure>>);
+
+/// Débord du fond sombre de la barre de position autour d'elle (points), comme dans
+/// `position_bar::draw`.
+const BAR_BACKDROP: f32 = position_bar::BACKDROP;
+
 /// Texte lisible sur n'importe quelle image : fond sombre translucide.
 fn overlay(painter: &egui::Painter, pos: egui::Pos2, anchor: Align2, text: &str) {
     let galley = painter.layout_no_wrap(
@@ -29681,6 +29874,53 @@ mod tests {
         assert!(h.state().position_key.is_none(), "repère masqué aussi");
         act(&mut h, Action::ToggleImageInfo);
         assert!(h.state().image_info);
+    }
+
+    #[test]
+    fn the_position_bar_follows_the_image_and_hides_with_the_info() {
+        // #537 : la barre suit l'image affichée, et part avec les infos sur l'image.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.state_mut().image_info = true;
+        h.state_mut().gui.position_bar.place = crate::settings::BarPlace::Overlay;
+        h.run_steps(3);
+        let first = h.state().position_bar_key.clone();
+        assert!(first.is_some(), "barre montrée en plein écran");
+        // Les notes et repères du bas remontent au-dessus d'elle (retour du 21/11/2026 :
+        // les étoiles la chevauchaient).
+        let view = Rect::from_min_size(egui::Pos2::ZERO, vec2(800.0, 600.0));
+        assert!(
+            h.state().marks_area(view).bottom() < view.bottom(),
+            "marques remontées"
+        );
+        act(&mut h, Action::NavNext);
+        h.run_steps(3);
+        assert!(
+            h.state().position_bar_key.is_some() && h.state().position_bar_key != first,
+            "elle suit l'image"
+        );
+        act(&mut h, Action::ToggleImageInfo);
+        assert!(
+            h.state().position_bar_key.is_none(),
+            "masquée avec les infos"
+        );
+        // Dans le panneau de droite : plus sur l'image, une section « Position ».
+        act(&mut h, Action::ToggleImageInfo);
+        h.state_mut().metadata_panel = true;
+        h.state_mut().gui.position_bar.place = crate::settings::BarPlace::Panel;
+        h.run_steps(3);
+        assert!(h.state().position_bar_key.is_none(), "pas sur l'image");
+        assert_eq!(
+            h.state().marks_area(view),
+            view,
+            "rien à éviter sur l'image"
+        );
+        let title = t!("panel-section-position").to_uppercase();
+        assert!(
+            h.query_all_by_label_contains(&title).next().is_some(),
+            "section du panneau"
+        );
     }
 
     #[test]
