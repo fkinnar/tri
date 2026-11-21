@@ -12037,15 +12037,19 @@ impl TriApp {
             return;
         };
         let style = self.bar_style(Color32::from_white_alpha(70), true);
-        let margin = 16.0;
+        // Même cadre que les marques du bas (notes, repère), alignée sur elles : son fond
+        // sombre à 16 points des bords comme leur cadre, et de l'air entre les deux
+        // (retour du 21/11/2026).
+        let base = if self.mark_area.is_positive() {
+            self.mark_area
+        } else {
+            area
+        };
+        let (margin, backdrop, air) = (16.0, BAR_BACKDROP, 8.0);
         let height = position.height(b.shape, b.thickness);
-        let bottom = area.bottom() - margin / 2.0;
-        let bar = Rect::from_x_y_ranges(
-            area.left() + margin..=area.right() - margin,
-            bottom - height..=bottom,
-        );
-        // Les marques du bas sont à 16 points du bord : remontées au-dessus de la barre.
-        self.position_bar_reserved = margin / 2.0 + height + 12.0 - 16.0;
+        let inner = base.shrink(margin + backdrop);
+        let bar = Rect::from_x_y_ranges(inner.x_range(), inner.bottom() - height..=inner.bottom());
+        self.position_bar_reserved = height + 2.0 * backdrop + air;
         let mut painter = painter.clone();
         painter.multiply_opacity(opacity);
         position_bar::draw(&painter, bar, &position, b.shape, &style);
@@ -22967,6 +22971,10 @@ fn mark_frame(style: &egui::Style) -> egui::Frame {
         color: Color32::from_black_alpha(60),
     })
 }
+
+/// Débord du fond sombre de la barre de position autour d'elle (points), comme dans
+/// `position_bar::draw`.
+const BAR_BACKDROP: f32 = position_bar::BACKDROP;
 
 /// Texte lisible sur n'importe quelle image : fond sombre translucide.
 fn overlay(painter: &egui::Painter, pos: egui::Pos2, anchor: Align2, text: &str) {

@@ -126,6 +126,8 @@ pub struct Style {
     pub backdrop: Option<Color32>,
 }
 
+/// Débord du fond sombre autour des barres (points).
+pub const BACKDROP: f32 = 3.0;
 /// Espace entre deux segments (points) ; supprimé quand les segments deviennent trop
 /// fins pour le garder lisible.
 const GAP: f32 = 2.0;
@@ -138,7 +140,11 @@ const MIN_PHOTO: f32 = 3.0;
 /// Dessine la position dans `rect` (sa largeur ; sa hauteur : [`Position::height`]).
 pub fn draw(painter: &Painter, rect: Rect, position: &Position, shape: BarShape, style: &Style) {
     if let Some(color) = style.backdrop {
-        painter.rect_filled(rect.expand(3.0), style.thickness / 2.0 + 3.0, color);
+        painter.rect_filled(
+            rect.expand(BACKDROP),
+            style.thickness / 2.0 + BACKDROP,
+            color,
+        );
     }
     match shape {
         BarShape::Segmented => {
