@@ -4226,6 +4226,17 @@ impl TriApp {
             .show(ctx, |ui| {
                 let response = ui.allocate_response(screen.size(), Sense::click());
                 ctx.set_cursor_icon(egui::CursorIcon::Crosshair);
+                // Sur une image (loupe fermée) : le collimateur, à la taille de la zone
+                // prélevée dans l'image entière.
+                if let Some(pos) = response.hover_pos()
+                    && !self.loupe_on
+                    && let Some(full) = self.image_under(pos).map(|(_, rect, uv)| {
+                        vec2(rect.width() / uv.width(), rect.height() / uv.height())
+                    })
+                {
+                    let side = self.settings.palette.pick_area * full.x.max(full.y);
+                    eyedropper_reticle(ui.painter(), pos, side);
+                }
                 response
                     .clicked()
                     .then(|| response.interact_pointer_pos())
@@ -4236,15 +4247,7 @@ impl TriApp {
             return;
         };
         self.palette_eyedropper = false;
-        let image = match self.mode {
-            Mode::Grid => self
-                .grid_images
-                .iter()
-                .find(|(_, r)| r.contains(pos))
-                .map(|&(i, r)| (i, r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)))),
-            Mode::View => self.view_image.filter(|(_, r, _)| r.contains(pos)),
-            _ => None,
-        };
+        let image = self.image_under(pos);
         if let Some((index, rect, uv)) = image
             && self.palette_source.is_some_and(|k| {
                 self.files
@@ -4273,6 +4276,20 @@ impl TriApp {
         self.screen_pick = Some(rx);
     }
 
+    /// Image sous `pos` (grille : une vignette ; plein écran : l'image), avec son rectangle
+    /// à l'écran et la partie de l'image qu'il montre (coordonnées relatives).
+    fn image_under(&self, pos: egui::Pos2) -> Option<(usize, Rect, Rect)> {
+        match self.mode {
+            Mode::Grid => self
+                .grid_images
+                .iter()
+                .find(|(_, r)| r.contains(pos))
+                .map(|&(i, r)| (i, r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)))),
+            Mode::View => self.view_image.filter(|(_, r, _)| r.contains(pos)),
+            _ => None,
+        }
+    }
+
     /// Pipette des palettes : la couleur au point `point` (coordonnées relatives de
     /// l'image) de l'image `index`, lue en fond dans l'image d'où sa palette est tirée
     /// (moyenne d'une petite zone).
@@ -4289,13 +4306,14 @@ impl TriApp {
             return;
         };
         let (cache, preview) = (engine.cache.clone(), engine.preview);
+        let area = self.settings.palette.pick_area;
         let (tx, rx) = mpsc::channel();
         let repaint = self.repaint.clone();
         std::thread::spawn(move || {
             let colour = preview::key(&file, preview::palette_input(source), &preview)
                 .ok()
                 .and_then(|key| cache.get(&key))
-                .map(|image| average_oklab(&image, point));
+                .map(|image| average_oklab(&image, point, area));
             let _ = tx.send(colour);
             if let Some(ctx) = repaint {
                 ctx.request_repaint();
@@ -16381,6 +16399,11 @@ impl TriApp {
         let clipped = painter.with_clip_rect(square);
         clipped.rect_filled(square, 0.0, self.view_background());
         clipped.image(texture, whole, uv, Color32::WHITE);
+        // Pipette active : le collimateur, à la taille de la zone prélevée (#492).
+        if self.palette_eyedropper {
+            let side = self.settings.palette.pick_area * size.x.max(size.y);
+            eyedropper_reticle(&clipped, center, side);
+        }
         painter.rect_stroke(
             square,
             4.0,
@@ -24850,9 +24873,10 @@ fn oklab_hex(oklab: [f32; 3]) -> String {
 
 /// Couleur moyenne (OKLab) d'une petite zone de `image` autour de `point` (coordonnées
 /// relatives, 0..1) : 1 % du côté long, 2 pixels au moins.
-fn average_oklab(image: &tri::bitmap::Bitmap, point: egui::Pos2) -> [f32; 3] {
+fn average_oklab(image: &tri::bitmap::Bitmap, point: egui::Pos2, area: f32) -> [f32; 3] {
     let (w, h) = (image.width.max(1), image.height.max(1));
-    let half = ((w.max(h) as f32 * 0.01) as u32).max(2);
+    // Zone de côté `area` × le grand côté (`[palette] pick_area`), celle du collimateur.
+    let half = ((w.max(h) as f32 * area / 2.0) as u32).max(2);
     let cx = (point.x.clamp(0.0, 1.0) * (w - 1) as f32) as u32;
     let cy = (point.y.clamp(0.0, 1.0) * (h - 1) as f32) as u32;
     let mut sum = [0.0f32; 3];
@@ -24870,6 +24894,28 @@ fn average_oklab(image: &tri::bitmap::Bitmap, point: egui::Pos2) -> [f32; 3] {
         }
     }
     sum.map(|v| v / n.max(1.0))
+}
+
+/// Collimateur de la pipette (idée de l'utilisateur, 21/11/2026) : la zone dont la
+/// couleur moyenne est prise, un carré de côté `side` centré en `centre`, cerné de clair
+/// et de sombre (lisible sur toute image), et quatre traits qui y mènent.
+fn eyedropper_reticle(painter: &egui::Painter, centre: egui::Pos2, side: f32) {
+    let side = side.max(6.0);
+    let square = Rect::from_center_size(centre, vec2(side, side));
+    let dark = egui::Stroke::new(3.0, Color32::from_black_alpha(160));
+    let light = egui::Stroke::new(1.5, Color32::from_gray(240));
+    let tick = side * 0.5 + 10.0;
+    for stroke in [dark, light] {
+        painter.rect_stroke(square, 0.0, stroke, egui::StrokeKind::Outside);
+        for (from, to) in [
+            (vec2(-tick, 0.0), vec2(-side * 0.5 - 3.0, 0.0)),
+            (vec2(tick, 0.0), vec2(side * 0.5 + 3.0, 0.0)),
+            (vec2(0.0, -tick), vec2(0.0, -side * 0.5 - 3.0)),
+            (vec2(0.0, tick), vec2(0.0, side * 0.5 + 3.0)),
+        ] {
+            painter.line_segment([centre + from, centre + to], stroke);
+        }
+    }
 }
 
 /// Texte lisible sur n'importe quelle image : fond sombre translucide.
@@ -29153,6 +29199,7 @@ mod tests {
         choose_palette(&mut h, Some(SourceKind::Developed(darktable)));
         // Une palette pour chaque développement (le rendu de darktable n'est pas fait ici).
         let grey = Arc::new(Palette {
+            coverage: Default::default(),
             swatches: vec![Swatch {
                 oklab: [0.5, 0.0, 0.0],
                 share: 1.0,
@@ -36203,6 +36250,39 @@ mod tests {
         run_until(&mut h, |app| app.compute_tasks.is_empty());
         let (text, _) = h.state().notice.clone().unwrap();
         assert!(text.contains(&t!("compute-images", n = 2)), "{text}");
+    }
+
+    #[test]
+    fn the_eyedropper_averages_the_reticle_area() {
+        // `[palette] pick_area` : la zone moyennée est celle que montre le collimateur.
+        let (w, h) = (100u32, 50u32);
+        let mut data = Vec::new();
+        for _ in 0..h {
+            for x in 0..w {
+                data.extend_from_slice(if x < 50 {
+                    &[200, 40, 40]
+                } else {
+                    &[40, 60, 200]
+                });
+            }
+        }
+        let image = tri::bitmap::Bitmap {
+            width: w,
+            height: h,
+            data,
+        };
+        let red = tri::palette::working_to_oklab([200, 40, 40]);
+        let near_edge = pos2(0.45, 0.5);
+        let small = average_oklab(&image, near_edge, 0.04);
+        assert!(
+            tri::palette::oklab_distance(small, red) < 1e-3,
+            "zone dans le rouge"
+        );
+        let large = average_oklab(&image, near_edge, 0.4);
+        assert!(
+            tri::palette::oklab_distance(large, red) > 0.05,
+            "zone à cheval"
+        );
     }
 
     #[test]

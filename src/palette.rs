@@ -27,7 +27,7 @@ use crate::bitmap::Bitmap;
 use crate::colour;
 
 /// Version du calcul (dans la clé du cache : la changer recalcule tout).
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 
 /// Source d'une palette (décision de l'utilisateur, 21/11/2026) : trois usages, une
 /// palette par image et par source dans le cache.
@@ -168,6 +168,9 @@ pub struct PaletteSettings {
     /// Empiler par palette : distance entre palettes ramenée à l'échelle des empreintes
     /// (divisée par cette valeur, bornée à 1), sur laquelle le curseur des piles est calé.
     pub stack_scale: f32,
+    /// Pipette : côté de la zone moyennée autour du point visé, en part du grand côté de
+    /// l'image (montrée par le collimateur de la loupe).
+    pub pick_area: f32,
     /// Écart de teintes au plus (degrés) d'une image monochrome teintée : ses couleurs
     /// suivent une seule teinte.
     pub mono_hue_spread: f32,
@@ -190,6 +193,7 @@ impl Default for PaletteSettings {
             mono_chroma: 0.03,
             mono_toned_chroma: 0.08,
             stack_scale: 0.5,
+            pick_area: 0.02,
             mono_hue_spread: 15.0,
         }
     }
@@ -230,6 +234,115 @@ impl Swatch {
 pub struct Palette {
     /// Les couleurs, parts décroissantes.
     pub swatches: Vec<Swatch>,
+    /// Couverture fine des couleurs, pour « contient cette couleur » ([`Coverage`]).
+    pub coverage: Coverage,
+}
+
+/// Cases de clarté de [`Coverage`] (L de 0 à 1, pas de 0,04).
+const COVER_L: u32 = 25;
+/// Cases de a et de b (de -0,32 à 0,32, pas de 0,016 : ×2 pour la saturation, ~0,03).
+const COVER_AB: u32 = 40;
+/// Bornes de a et b dans [`Coverage`] (un sRGB très saturé atteint ~0,32).
+const COVER_AB_MAX: f32 = 0.32;
+
+/// Couverture fine des couleurs d'une image : ses points d'échantillonnage comptés par
+/// petites cases OKLab. Retour du 21/11/2026 : la palette (6 couleurs moyennes) fondait
+/// la peau dans l'ombre dans une couleur bien moins saturée ; la couleur pipetée sur la
+/// photo ne retrouvait pas la photo. « Contient cette couleur » mesure ici la vraie part
+/// des pixels proches ([`Coverage::reach`], [`Coverage::share_within`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Coverage {
+    /// Cases occupées (numéro, nombre de points), dans l'ordre des numéros.
+    bins: Vec<(u16, u16)>,
+    /// Nombre total de points.
+    total: u32,
+}
+
+impl Coverage {
+    /// Couverture des points `samples` (OKLab).
+    pub fn from_samples(samples: &[[f32; 3]]) -> Coverage {
+        let mut counts: std::collections::BTreeMap<u16, u32> = Default::default();
+        for &p in samples {
+            *counts.entry(cover_bin(p)).or_default() += 1;
+        }
+        Coverage {
+            bins: counts
+                .into_iter()
+                .map(|(bin, n)| (bin, n.min(u32::from(u16::MAX)) as u16))
+                .collect(),
+            total: samples.len() as u32,
+        }
+    }
+
+    /// Vrai sans aucun point (palette d'une ancienne version, image vide).
+    pub fn is_empty(&self) -> bool {
+        self.total == 0
+    }
+
+    /// Part des pixels à moins de `radius` de `oklab` (teinte et saturation comptées
+    /// `chroma_weight` fois).
+    pub fn share_within(&self, oklab: [f32; 3], radius: f32, chroma_weight: f32) -> f32 {
+        let near: u32 = self
+            .bins
+            .iter()
+            .filter(|(bin, _)| {
+                weighted_distance(cover_centre(*bin), oklab, chroma_weight) <= radius
+            })
+            .map(|&(_, n)| u32::from(n))
+            .sum();
+        near as f32 / self.total.max(1) as f32
+    }
+
+    /// Distance à `oklab` en deçà de laquelle se trouve au moins `min_share` de l'image
+    /// (les miettes plus petites ne comptent pas) ; `None` sans point.
+    pub fn reach(&self, oklab: [f32; 3], chroma_weight: f32, min_share: f32) -> Option<f32> {
+        if self.is_empty() {
+            return None;
+        }
+        let mut near: Vec<(f32, u16)> = self
+            .bins
+            .iter()
+            .map(|&(bin, n)| {
+                (
+                    weighted_distance(cover_centre(bin), oklab, chroma_weight),
+                    n,
+                )
+            })
+            .collect();
+        near.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let wanted = (min_share.max(0.0) * self.total as f32).max(1.0);
+        let mut seen = 0.0;
+        for (d, n) in near {
+            seen += f32::from(n);
+            if seen >= wanted {
+                return Some(d);
+            }
+        }
+        None
+    }
+}
+
+/// Case de [`Coverage`] d'une couleur OKLab.
+fn cover_bin([l, a, b]: [f32; 3]) -> u16 {
+    let index = |v: f32, lo: f32, hi: f32, n: u32| {
+        (((v - lo) / (hi - lo) * n as f32).floor().max(0.0) as u32).min(n - 1)
+    };
+    let l = index(l, 0.0, 1.0, COVER_L);
+    let a = index(a, -COVER_AB_MAX, COVER_AB_MAX, COVER_AB);
+    let b = index(b, -COVER_AB_MAX, COVER_AB_MAX, COVER_AB);
+    ((l * COVER_AB + a) * COVER_AB + b) as u16
+}
+
+/// Centre d'une case de [`Coverage`].
+fn cover_centre(bin: u16) -> [f32; 3] {
+    let bin = u32::from(bin);
+    let (b, a, l) = (
+        bin % COVER_AB,
+        bin / COVER_AB % COVER_AB,
+        bin / COVER_AB / COVER_AB,
+    );
+    let ab = |i: u32| -COVER_AB_MAX + (i as f32 + 0.5) * 2.0 * COVER_AB_MAX / COVER_AB as f32;
+    [(l as f32 + 0.5) / COVER_L as f32, ab(a), ab(b)]
 }
 
 impl Palette {
@@ -237,6 +350,9 @@ impl Palette {
     /// teinte et saturation comptées `chroma_weight` fois, comme [`distance`]) : « contient
     /// assez de ce bleu ».
     pub fn share_near(&self, oklab: [f32; 3], radius: f32, chroma_weight: f32) -> f32 {
+        if !self.coverage.is_empty() {
+            return self.coverage.share_within(oklab, radius, chroma_weight);
+        }
         self.swatches
             .iter()
             .filter(|s| weighted_distance(s.oklab, oklab, chroma_weight) <= radius)
@@ -268,6 +384,10 @@ impl Palette {
     /// [`distance`]), parmi celles d'au moins `min_share` de l'image ; `None` s'il n'y en a
     /// aucune. « Contient cette couleur » : plus elle est petite, plus l'image la contient.
     pub fn nearest(&self, oklab: [f32; 3], chroma_weight: f32, min_share: f32) -> Option<f32> {
+        // La vraie part des pixels proches (couverture), sinon les couleurs de la palette.
+        if !self.coverage.is_empty() {
+            return self.coverage.reach(oklab, chroma_weight, min_share);
+        }
         self.swatches
             .iter()
             .filter(|s| s.share >= min_share)
@@ -285,6 +405,13 @@ impl Palette {
             for v in s.oklab.iter().chain([&s.share]) {
                 out.extend_from_slice(&v.to_le_bytes());
             }
+        }
+        // Puis la couverture : nombre de points, nombre de cases, (case, points) en u16.
+        out.extend_from_slice(&self.coverage.total.to_le_bytes());
+        out.extend_from_slice(&(self.coverage.bins.len() as u32).to_le_bytes());
+        for &(bin, n) in &self.coverage.bins {
+            out.extend_from_slice(&bin.to_le_bytes());
+            out.extend_from_slice(&n.to_le_bytes());
         }
         out
     }
@@ -305,7 +432,19 @@ impl Palette {
                 share: f(k * 4 + 3),
             })
             .collect();
-        Some(Palette { swatches })
+        let rest = bytes.get(5 + n * 16..)?;
+        let u32_at = |i: usize| Some(u32::from_le_bytes(rest.get(i..i + 4)?.try_into().ok()?));
+        let total = u32_at(0)?;
+        let count = u32_at(4)? as usize;
+        let body = rest.get(8..8 + count * 4)?;
+        let u16_at = |i: usize| u16::from_le_bytes([body[i], body[i + 1]]);
+        let bins = (0..count)
+            .map(|k| (u16_at(k * 4), u16_at(k * 4 + 2)))
+            .collect();
+        Some(Palette {
+            swatches,
+            coverage: Coverage { bins, total },
+        })
     }
 }
 
@@ -369,7 +508,10 @@ pub fn extract(bitmap: &Bitmap, settings: &PaletteSettings) -> Palette {
         }
     }
     swatches.sort_by(|a, b| b.share.total_cmp(&a.share));
-    Palette { swatches }
+    Palette {
+        swatches,
+        coverage: Coverage::from_samples(&samples),
+    }
 }
 
 /// Distance entre deux palettes (0 : identiques) : coût de transport de leurs parts, en
@@ -850,6 +992,7 @@ mod tests {
         let s = PaletteSettings::default();
         let mono = s.monochrome();
         let from = |hexes: &[(&str, f32)]| Palette {
+            coverage: Default::default(),
             swatches: hexes
                 .iter()
                 .map(|(h, share)| {
@@ -932,6 +1075,7 @@ mod tests {
     #[test]
     fn nearest_colour_ignores_specks() {
         let p = Palette {
+            coverage: Default::default(),
             swatches: vec![
                 Swatch {
                     oklab: [0.5, 0.1, 0.0],
@@ -961,6 +1105,44 @@ mod tests {
         let blue = working_to_oklab([45, 65, 195]);
         assert!((p.share_near(blue, 0.05, 1.0) - 0.3).abs() < 0.03);
         assert_eq!(p.share_near(srgb_to_oklab([0, 255, 0]), 0.05, 2.0), 0.0);
+    }
+
+    #[test]
+    fn a_colour_picked_on_the_photo_finds_the_photo() {
+        // Retour du 21/11/2026 (vidéo) : la peau dans l'ombre, orangée et saturée, était
+        // fondue dans une couleur moyenne de la palette, bien moins saturée ; pipetée sur
+        // la photo, elle ne retrouvait pas la photo. La couverture compte les vrais pixels.
+        let skin_shadow = [121u8, 66, 24];
+        let image = bands(&[
+            ([20, 18, 17], 50),
+            ([150, 110, 85], 20),
+            ([170, 130, 105], 10),
+            (skin_shadow, 5),
+            ([90, 80, 72], 15),
+        ]);
+        let s = PaletteSettings::default();
+        let palette = extract(&image, &s);
+        let picked = working_to_oklab(skin_shadow);
+        let reach = palette
+            .nearest(picked, s.chroma_weight, s.colour_min_share)
+            .unwrap();
+        assert!(reach < 0.04, "trouvée : {reach}");
+        assert!(
+            (palette.share_near(picked, 0.05, s.chroma_weight) - 0.05).abs() < 0.02,
+            "5 % de l'image"
+        );
+        // Une couleur absente reste loin ; une miette sous la part minimale ne compte pas.
+        let blue = working_to_oklab([30, 60, 200]);
+        assert!(palette.nearest(blue, s.chroma_weight, 0.02).unwrap() > 0.3);
+        assert!(palette.nearest(picked, s.chroma_weight, 0.2).unwrap() > reach);
+    }
+
+    #[test]
+    fn coverage_bins_round_trip_their_centres() {
+        for oklab in [[0.5, 0.0, 0.0], [0.9, 0.2, -0.25], [0.1, -0.3, 0.31]] {
+            let c = cover_centre(cover_bin(oklab));
+            assert!(weighted_distance(c, oklab, 2.0) < 0.04, "{oklab:?} → {c:?}");
+        }
     }
 
     #[test]

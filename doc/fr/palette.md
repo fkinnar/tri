@@ -60,10 +60,23 @@ saturation `chroma_weight` fois). « Contient cette couleur » utilise plutôt `
 de la palette la plus proche, miettes sous `colour_min_share` (0,02) ignorées ; tolérance
 `colour_radius` (0,1), `colour_radius_max` (0,4).
 
+## Couverture fine (`Coverage`)
+
+Retour du 21/11/2026 (vidéo) : la peau dans l'ombre, orangée et saturée, était fondue
+dans une couleur moyenne de la palette, bien moins saturée ; pipetée sur la photo, la
+couleur ne retrouvait pas la photo. Chaque palette garde donc aussi ses points
+d'échantillonnage comptés par petites cases OKLab (L par pas de 0,04 ; a et b par pas
+de 0,016, de -0,32 à 0,32). « Contient cette couleur » (`Palette::nearest`) mesure la
+distance en deçà de laquelle se trouve au moins `colour_min_share` de l'image
+(`Coverage::reach`), et `share_near` la vraie part des pixels proches
+(`Coverage::share_within`). Mesuré sur une séance (131 images) : ~1,2 Ko par palette
+(0,4 à 3 Ko). Une palette d'une version précédente (sans couverture) est recalculée.
+
 ## Cache
 
-`Palette::to_bytes` / `from_bytes` : version du calcul (`VERSION`), nombre de couleurs,
-puis L, a, b et part de chacune. Une autre version est refusée (recalcul).
+`Palette::to_bytes` / `from_bytes` : version du calcul (`VERSION`, 2), nombre de couleurs,
+puis L, a, b et part de chacune, puis la couverture (nombre de points, de cases, puis
+case et points en u16). Une autre version est refusée (recalcul).
 
 ## Sources (décision de l'utilisateur, 21/11/2026)
 

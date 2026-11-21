@@ -622,6 +622,11 @@ mono_hue_spread = 15.0
 # divided by this value (capped at 1), takes the signatures' scale, which the stacks
 # slider is set on.
 stack_scale = 0.5
+# Eyedropper: area averaged around the pointed spot, as a share of the image's long side.
+#
+# Eyedropper: side of the area whose average colour is taken (0.02: 2 % of the image's
+# long side), shown by the reticle under the pointer and in the loupe.
+pick_area = 0.02
 
 [similarity]
 # Group similar images (bursts, series) into stacks in the background.

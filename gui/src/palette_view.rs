@@ -200,6 +200,7 @@ mod tests {
     #[test]
     fn the_band_splits_by_share() {
         let p = Palette {
+            coverage: Default::default(),
             swatches: vec![swatch([200, 0, 0], 0.75), swatch([0, 0, 200], 0.25)],
         };
         let rects = band_rects(&p, Rect::from_min_size(Pos2::ZERO, vec2(200.0, 20.0)));

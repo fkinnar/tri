@@ -58,10 +58,23 @@ enough of this blue". Measured like the distances between palettes (hue and satu
 palette colour, specks under `colour_min_share` (0.02) ignored; tolerance `colour_radius`
 (0.1), `colour_radius_max` (0.4).
 
+## Fine coverage (`Coverage`)
+
+Feedback of 2026-11-21 (video): skin in shadow, orange and saturated, was blended into an
+average palette colour, much less saturated; picked on the photo, the colour did not find
+the photo. Each palette therefore also keeps its sample points counted in small OKLab
+cells (L by steps of 0.04; a and b by steps of 0.016, from -0.32 to 0.32). "Contains this
+colour" (`Palette::nearest`) measures the distance within which at least
+`colour_min_share` of the image lies (`Coverage::reach`), and `share_near` the real share
+of nearby pixels (`Coverage::share_within`). Measured on a session (131 images): ~1.2 KB
+per palette (0.4 to 3 KB). A palette from an earlier version (without coverage) is
+computed again.
+
 ## Cache
 
-`Palette::to_bytes` / `from_bytes`: computation version (`VERSION`), number of colours,
-then L, a, b and share of each. Another version is refused (computed again).
+`Palette::to_bytes` / `from_bytes`: computation version (`VERSION`, 2), number of colours,
+then L, a, b and share of each, then the coverage (number of points, of cells, then cell
+and points as u16). Another version is refused (computed again).
 
 ## Sources (user's decision, 2026-11-21)
 
