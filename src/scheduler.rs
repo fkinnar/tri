@@ -109,6 +109,10 @@ impl Producer for CachedPreviews {
         if let Level::Developed(engine) = level {
             return self.develop(file, engine, cancel);
         }
+        // Palette d'un rendu fini : le rendu d'abord (logiciel externe), s'il manque.
+        if let Level::Palette(crate::palette::Source::Developed(engine)) = level {
+            self.develop(file, engine, cancel)?;
+        }
         match preview::ensure(&self.cache, file, level, &self.settings, cancel) {
             Ok(Outcome::Cached | Outcome::Computed) => Ok(()),
             Err(PreviewError::Cancelled) => Err(Failure::Cancelled),
@@ -212,6 +216,10 @@ pub struct Config {
     /// Empreintes de regroupement ([`Level::Similarity`]) de tout le dossier en fond
     /// (workers légers), juste après les vignettes.
     pub similarity: bool,
+    /// Palettes de couleurs ([`Level::Palette`]) de tout le dossier en fond, tirées de
+    /// cette source (#492) ; `None` : aucune (choisie dans l'interface des palettes, voir
+    /// [`Scheduler::set_palette`]).
+    pub palette: Option<crate::palette::SourceKind>,
 }
 
 /// Politique de calcul des rendus RAW (aperçus standard des RAW). Les aperçus des images
@@ -239,6 +247,7 @@ impl Default for Config {
             exposure: true,
             sharpness: true,
             similarity: true,
+            palette: None,
         }
     }
 }
@@ -304,9 +313,18 @@ type Job = (usize, Level);
 /// l'analyse d'exposition, elle aussi parallélisée en interne).
 fn is_heavy(kind: MediaKind, level: Level) -> bool {
     // Développé : un logiciel externe qui occupe toute la machine, RAW ou image plate.
-    matches!(level, Level::Developed(_))
-        || kind == MediaKind::Raw
-            && matches!(level, Level::Standard | Level::Full | Level::Exposure)
+    // Palette : celle d'un rendu RAW ou d'un logiciel peut devoir le faire d'abord.
+    matches!(
+        level,
+        Level::Developed(_) | Level::Palette(crate::palette::Source::Developed(_))
+    ) || kind == MediaKind::Raw
+        && matches!(
+            level,
+            Level::Standard
+                | Level::Full
+                | Level::Exposure
+                | Level::Palette(crate::palette::Source::Raw)
+        )
 }
 
 /// Classe de priorité des aperçus boîtier de fond (ni l'image affichée, ni ses voisines).
@@ -316,6 +334,9 @@ const EMBEDDED_BACKGROUND: u8 = 4;
 const EXPOSURE_BACKGROUND: u8 = 5;
 /// Classe de priorité des aperçus standard de fond.
 const STANDARD_BACKGROUND: u8 = 6;
+/// Classe de priorité des palettes de fond (#492) : après le reste, on les demande pour
+/// chercher, pas pour trier.
+const PALETTE_BACKGROUND: u8 = 7;
 
 /// Priorité d'une tâche (la plus petite passe en premier). Ordre :
 /// 1. l'image affichée : d'abord ce qui s'affiche ajusté (aperçu boîtier, rendu RAW
@@ -352,6 +373,7 @@ fn priority_in(
         Level::Exposure | Level::Sharpness => (1, EXPOSURE_BACKGROUND),
         // Empreintes : vite faites, et le regroupement de la grille en dépend.
         Level::Similarity => (1, EMBEDDED_BACKGROUND),
+        Level::Palette(_) => (1, PALETTE_BACKGROUND),
         Level::EmbeddedFull | Level::Full => (2, STANDARD_BACKGROUND),
         // Développé (plusieurs secondes) : comme un ajusté, à la demande.
         Level::Developed(_) => (0, STANDARD_BACKGROUND),
@@ -404,6 +426,7 @@ struct State {
     exposure: bool,
     sharpness: bool,
     similarity: bool,
+    palette: Option<crate::palette::SourceKind>,
     /// Tâches demandées hors du travail de fond ([`Scheduler::request`]) : elles ne
     /// comptent pas dans la progression.
     on_demand: HashSet<Job>,
@@ -429,12 +452,18 @@ struct State {
 }
 
 impl State {
-    /// Niveaux calculés en fond pour un fichier de type `kind`, selon les réglages.
-    fn background_levels(&self, kind: MediaKind) -> Vec<Level> {
-        let mut levels =
-            background_levels(kind, self.raw_previews, (self.exposure, self.sharpness));
+    /// Niveaux calculés en fond pour `file`, selon les réglages.
+    fn background_levels(&self, file: &MediaFile) -> Vec<Level> {
+        let mut levels = background_levels(
+            file.kind,
+            self.raw_previews,
+            (self.exposure, self.sharpness),
+        );
         if self.similarity {
             levels.push(Level::Similarity);
+        }
+        if let Some(source) = self.palette.and_then(|k| k.source_for(file)) {
+            levels.push(Level::Palette(source));
         }
         levels
     }
@@ -531,6 +560,7 @@ impl Scheduler {
                 exposure: config.exposure,
                 sharpness: config.sharpness,
                 similarity: config.similarity,
+                palette: config.palette,
                 ..State::default()
             }),
             work: Condvar::new(),
@@ -583,7 +613,7 @@ impl Scheduler {
         s.checked.clear();
         s.pending = (0..files.len())
             .flat_map(|i| {
-                s.background_levels(files[i].kind)
+                s.background_levels(&files[i])
                     .into_iter()
                     .map(move |l| (i, l))
             })
@@ -618,7 +648,7 @@ impl Scheduler {
         let total = |level: Level| {
             files
                 .iter()
-                .filter(|f| s.background_levels(f.kind).contains(&level))
+                .filter(|f| s.background_levels(f).contains(&level))
                 .count()
         };
         s.progress = TRACKED.map(|l| Progress {
@@ -638,6 +668,30 @@ impl Scheduler {
         self.shared.lock().raw_previews = raw_previews;
     }
 
+    /// Palettes de tout le dossier en fond, tirées de la source `kind` (#492 ; `None` :
+    /// plus aucune). Les palettes d'une autre source encore en attente sont abandonnées ;
+    /// celles déjà dans le cache ne sont pas refaites.
+    pub fn set_palette(&self, kind: Option<crate::palette::SourceKind>) {
+        let mut s = self.shared.lock();
+        if s.palette == kind {
+            return;
+        }
+        s.palette = kind;
+        let State {
+            pending, on_demand, ..
+        } = &mut *s;
+        pending.retain(|j| !matches!(j.1, Level::Palette(_)) || on_demand.contains(j));
+        let jobs: Vec<Job> = s
+            .files
+            .iter()
+            .enumerate()
+            .filter_map(|(i, f)| Some((i, Level::Palette(kind?.source_for(f)?))))
+            .collect();
+        s.pending.extend(jobs);
+        drop(s);
+        self.shared.work.notify_all();
+    }
+
     /// Ajoute `files` à la fin du dossier en cours sans rien interrompre : leur travail de
     /// fond rejoint la file, les totaux d'avancement grandissent (signalés par
     /// [`Event::Progress`]). Sert au déchargement, qui calcule chaque photo dès qu'elle est
@@ -647,7 +701,7 @@ impl Scheduler {
         let start = s.files.len();
         let mut grown = [false; TRACKED.len()];
         for (k, file) in files.iter().enumerate() {
-            for level in s.background_levels(file.kind) {
+            for level in s.background_levels(file) {
                 s.pending.insert((start + k, level));
                 if let Some(i) = TRACKED.iter().position(|&l| l == level) {
                     s.progress[i].total += 1;

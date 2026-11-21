@@ -148,6 +148,9 @@ struct Args {
     metadata: bool,
     sharpness: bool,
     groups: bool,
+    /// Palettes de couleurs (`--palette`), de la source `--source` (#492).
+    palette: bool,
+    palette_source: Option<tri::palette::SourceKind>,
     threshold: Option<f32>,
     offload: Option<PathBuf>,
     to: Option<PathBuf>,
@@ -479,6 +482,14 @@ fn parse() -> AnyResult<Args> {
             "--metadata" => args.metadata = true,
             "--sharpness" => args.sharpness = true,
             "--groups" => args.groups = true,
+            "--palette" => args.palette = true,
+            "--source" => {
+                let text = value()?;
+                args.palette_source = Some(
+                    tri::palette::SourceKind::parse(&text)
+                        .ok_or_else(|| t!("cli-palette-bad-source", source = text))?,
+                );
+            }
             "--threshold" => args.threshold = Some(value()?.parse()?),
             "--offload" => args.offload = Some(value()?.into()),
             "--to" => args.to = Some(value()?.into()),
@@ -1013,6 +1024,62 @@ fn exposure(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyRe
             Err(e) => eprintln!("{name}\t{}", t!("cli-error-detail", error = e)),
         }
     }
+    Ok(())
+}
+
+/// Palette de couleurs de chaque image (#492), tirée de la source `kind`, calculée et
+/// rangée dans le cache comme dans l'interface : chaque couleur `#rrggbb` et sa part. Les
+/// rendus finis : seulement ceux déjà faits par l'interface (pas de logiciel lancé ici).
+fn palettes(
+    settings: &EngineSettings,
+    files: &[tri::media::MediaFile],
+    kind: tri::palette::SourceKind,
+) -> AnyResult<()> {
+    use tri::scheduler::Producer;
+    let cache = settings.open_cache()?;
+    let preview = settings.preview(None);
+    let producer = CachedPreviews {
+        cache: cache.clone(),
+        settings: preview,
+        developers: tri::develop::Developers::none().into(),
+    };
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    println!("{}", t!("cli-palette-header", source = kind.id()));
+    let mut done = 0;
+    for file in files {
+        let name = file.path.file_name().unwrap_or_default().to_string_lossy();
+        let Some(source) = kind.source_for(file) else {
+            continue;
+        };
+        let start = Instant::now();
+        let level = tri::cache::Level::Palette(source);
+        let read = producer
+            .produce(file, level, &cancel)
+            .map_err(|e| format!("{e:?}"))
+            .and_then(|()| {
+                tri::preview::palette(&cache, file, source, &preview).ok_or_else(|| "?".to_string())
+            });
+        match read {
+            Ok(p) => {
+                let colours: Vec<String> = p
+                    .swatches
+                    .iter()
+                    .map(|s| {
+                        let [r, g, b] = s.srgb();
+                        format!("#{r:02x}{g:02x}{b:02x} {:.0} %", s.share * 100.0)
+                    })
+                    .collect();
+                println!(
+                    "{name}\t{}\t{:.0} ms",
+                    colours.join("  "),
+                    start.elapsed().as_secs_f64() * 1000.0
+                );
+                done += 1;
+            }
+            Err(e) => eprintln!("{name}\t{}", t!("cli-error-detail", error = e)),
+        }
+    }
+    println!("{}", t!("cli-palette-summary", n = done));
     Ok(())
 }
 
@@ -2117,6 +2184,10 @@ fn run() -> AnyResult<()> {
     if args.groups {
         let files: Vec<_> = groups.into_iter().flatten().collect();
         return similarity_groups(&settings, &files, args.threshold);
+    }
+    if args.palette {
+        let files: Vec<_> = groups.into_iter().flatten().collect();
+        return palettes(&settings, &files, args.palette_source.unwrap_or_default());
     }
     if let Some(target) = args.convert {
         let files: Vec<_> = groups.into_iter().flatten().collect();

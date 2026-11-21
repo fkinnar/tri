@@ -62,6 +62,8 @@ pub struct Settings {
     pub sharpness: crate::sharpness::SharpnessSettings,
     /// Empreinte de regroupement (niveau [`Level::Similarity`]).
     pub similarity: crate::similarity::SimilaritySettings,
+    /// Palettes de couleurs (niveaux [`Level::Palette`]).
+    pub palette: crate::palette::PaletteSettings,
 }
 
 impl Default for Settings {
@@ -75,6 +77,7 @@ impl Default for Settings {
             exposure: ExposureSettings::default(),
             sharpness: crate::sharpness::SharpnessSettings::default(),
             similarity: crate::similarity::SimilaritySettings::default(),
+            palette: crate::palette::PaletteSettings::default(),
         }
     }
 }
@@ -205,6 +208,20 @@ pub fn params(level: Level, settings: &Settings) -> String {
             crate::similarity::VERSION,
             settings.similarity.side
         ),
+        // L'image d'où elle est tirée compte aussi : refaite, la palette l'est aussi.
+        Level::Palette(source) => {
+            let p = &settings.palette;
+            format!(
+                "r{RULES_VERSION};v{};colors={};side={};it={};merge={};min={};from={}",
+                crate::palette::VERSION,
+                p.colors,
+                p.side,
+                p.iterations,
+                p.merge,
+                p.min_share,
+                params(palette_input(source), settings)
+            )
+        }
         Level::Sharpness => {
             let s = &settings.sharpness;
             format!(
@@ -240,7 +257,9 @@ fn key_with(file: &MediaFile, level: Level, settings: &Settings, extra: &str) ->
     let mut params = params(level, settings);
     // Développé : le développement du sidecar aussi (modifié dans le logiciel : le rendu
     // est refait ; une note posée par `tri` dans le même fichier ne compte pas).
-    if let Level::Developed(engine) = level {
+    if let Level::Developed(engine) | Level::Palette(crate::palette::Source::Developed(engine)) =
+        level
+    {
         let stamp = engine
             .sidecar(&file.path)
             .map_or_else(|| "aucun".to_string(), |s| crate::develop::render_stamp(&s));
@@ -307,7 +326,7 @@ pub fn compute(
         (MediaKind::Flat, Level::EmbeddedFull | Level::Full) => {
             Ok(flat::decode_working(&file.path, 0)?)
         }
-        (_, Level::Exposure | Level::Sharpness | Level::Similarity) => {
+        (_, Level::Exposure | Level::Sharpness | Level::Similarity | Level::Palette(_)) => {
             Err(PreviewError::NotAnImage)
         }
         // Développé : par le producteur, qui connaît le logiciel
@@ -426,6 +445,11 @@ pub fn ensure(
         cache.put_bytes(&key, &signature.to_bytes())?;
         return Ok(Outcome::Computed);
     }
+    if let Level::Palette(source) = level {
+        let palette = compute_palette(cache, file, source, settings, cancel)?;
+        cache.put_bytes(&key, &palette.to_bytes())?;
+        return Ok(Outcome::Computed);
+    }
     let bitmap = compute(file, level, settings, cancel)?;
     cache.put(&key, &bitmap)?;
     Ok(Outcome::Computed)
@@ -512,6 +536,53 @@ pub fn signature(
     let bytes = cache.get_bytes(&key)?;
     match crate::similarity::Signature::from_bytes(&bytes) {
         Some(s) => Some(s),
+        None => {
+            let _ = cache.remove(&key);
+            None
+        }
+    }
+}
+
+/// Image d'où la palette de la source `source` est tirée : la vignette (JPEG boîtier
+/// d'un RAW, image plate réduite), le rendu RAW, ou le rendu du logiciel.
+pub fn palette_input(source: crate::palette::Source) -> Level {
+    match source {
+        crate::palette::Source::Camera => Level::Thumbnail,
+        crate::palette::Source::Raw => Level::Standard,
+        crate::palette::Source::Developed(engine) => Level::Developed(engine),
+    }
+}
+
+/// Palette de `file` tirée de `source`, sans la ranger : l'image d'où elle vient est
+/// prise dans le cache, calculée d'abord si elle manque (sauf un rendu de logiciel, que
+/// le producteur du scheduler fait avant, voir `scheduler::CachedPreviews`).
+pub fn compute_palette(
+    cache: &Cache,
+    file: &MediaFile,
+    source: crate::palette::Source,
+    settings: &Settings,
+    cancel: &AtomicBool,
+) -> Result<crate::palette::Palette> {
+    let input = palette_input(source);
+    ensure(cache, file, input, settings, cancel)?;
+    let image = cache
+        .get(&key(file, input, settings)?)
+        .ok_or(PreviewError::NotAnImage)?;
+    Ok(crate::palette::extract(&image, &settings.palette))
+}
+
+/// Palette de `file` tirée de `source`, lue dans le cache ; `None` si elle n'y est pas
+/// (encore) ou si l'entrée est illisible (supprimée, pour être recalculée).
+pub fn palette(
+    cache: &Cache,
+    file: &MediaFile,
+    source: crate::palette::Source,
+    settings: &Settings,
+) -> Option<crate::palette::Palette> {
+    let key = key(file, Level::Palette(source), settings).ok()?;
+    let bytes = cache.get_bytes(&key)?;
+    match crate::palette::Palette::from_bytes(&bytes) {
+        Some(p) => Some(p),
         None => {
             let _ = cache.remove(&key);
             None
@@ -631,11 +702,21 @@ mod tests {
                 .filter(|&l| params(l, &s) != params(l, &t))
                 .collect::<Vec<_>>()
         };
+        // La palette des données brutes suit le rendu RAW d'où elle est tirée (#492).
+        let raw_palette = Level::Palette(crate::palette::Source::Raw);
         assert_eq!(
             changed(&|t| t.render.auto_bright = true),
-            [Level::Standard, Level::Full]
+            [Level::Standard, Level::Full, raw_palette]
         );
-        assert_eq!(changed(&|t| t.half_size_margin = 1.5), [Level::Standard]);
+        assert_eq!(
+            changed(&|t| t.half_size_margin = 1.5),
+            [Level::Standard, raw_palette]
+        );
+        assert_eq!(
+            changed(&|t| t.palette.colors = 8).len(),
+            6,
+            "toutes les palettes, rien d'autre"
+        );
         assert_eq!(changed(&|t| t.embedded_min_ratio = 0.8), [Level::Embedded]);
         assert_eq!(
             changed(&|t| t.min_embedded_full = 2000),

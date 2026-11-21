@@ -271,6 +271,8 @@ struct Status {
     exposure: Avail,
     sharpness: Avail,
     similarity: Avail,
+    /// Palette de couleurs de la source choisie (#492).
+    palette: Avail,
     /// Développé par darktable (à la demande).
     developed: Avail,
 }
@@ -11137,6 +11139,7 @@ impl TriApp {
             Level::Sharpness => &s.sharpness,
             Level::Similarity => &s.similarity,
             Level::Developed(_) => &s.developed,
+            Level::Palette(_) => &s.palette,
         };
         *avail == Avail::Ready
     }
@@ -22950,7 +22953,7 @@ fn tracked(level: Level) -> Option<usize> {
         Level::Exposure => Some(3),
         Level::Sharpness => Some(4),
         Level::Similarity => Some(5),
-        Level::EmbeddedFull | Level::Full | Level::Developed(_) => None,
+        Level::EmbeddedFull | Level::Full | Level::Developed(_) | Level::Palette(_) => None,
     }
 }
 
@@ -22966,6 +22969,7 @@ fn set(status: &mut [Status], index: usize, level: Level, avail: Avail) {
             Level::Sharpness => s.sharpness = avail,
             Level::Similarity => s.similarity = avail,
             Level::Developed(_) => s.developed = avail,
+            Level::Palette(_) => s.palette = avail,
         }
     }
 }

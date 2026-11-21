@@ -17,6 +17,15 @@ Background work queue that fills the cache for a folder.
      renders: they feed the grid badges), then other standard previews, by distance
      (forward first).
 
+  **Colour palettes** (`Level::Palette(source)`, #492, 2026-11-21): for the whole folder
+  only once a source is chosen (`Config::palette`, `Scheduler::set_palette`; none by
+  default), after everything else (class `PALETTE_BACKGROUND`: they are asked for to
+  search, not to cull). The camera JPEG's goes through the light workers (the
+  thumbnail); a RAW's raw-data palette and a finished render's through the **heavy
+  worker**: they first make the RAW render or the software's render if it is missing.
+  Changing the source drops the other source's palettes still waiting. See
+  [palette.md](palette.md).
+
   **Sharpness score** (`Level::Sharpness`, 2026-10-17): computed in the background for the
   whole folder (`[sharpness] background`), by the **light workers** (downscaled camera
   JPEG, ~120 ms), same priority class as the exposure analysis; "sharpness" progress. See

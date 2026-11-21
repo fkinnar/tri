@@ -24,3 +24,37 @@ fn palette_settings_are_read_from_the_configuration() {
     assert_eq!(s.palette.min_share, 0.05);
     assert_eq!(s.palette.side, PaletteSettings::default().side);
 }
+
+#[test]
+fn a_palette_is_computed_from_the_cached_thumbnail_and_kept_per_source() {
+    use std::sync::atomic::AtomicBool;
+    use tri::cache::{Cache, Level};
+    use tri::media::{MediaFile, MediaKind};
+    use tri::palette::Source;
+    let dir = tempfile::tempdir().unwrap();
+    let photo = dir.path().join("photo.jpg");
+    std::fs::copy("tests/fixtures/exif.jpg", &photo).unwrap();
+    let cache = Cache::open(dir.path().join("cache")).unwrap();
+    let file = MediaFile {
+        path: photo,
+        kind: MediaKind::Flat,
+    };
+    let settings = tri::preview::Settings::default();
+    let cancel = AtomicBool::new(false);
+    assert!(tri::preview::palette(&cache, &file, Source::Camera, &settings).is_none());
+    tri::preview::ensure(
+        &cache,
+        &file,
+        Level::Palette(Source::Camera),
+        &settings,
+        &cancel,
+    )
+    .unwrap();
+    let camera = tri::preview::palette(&cache, &file, Source::Camera, &settings).unwrap();
+    assert!(!camera.swatches.is_empty());
+    // La vignette d'où elle vient est passée par le cache.
+    let thumb = tri::preview::key(&file, Level::Thumbnail, &settings).unwrap();
+    assert!(cache.contains(&thumb));
+    // Une autre source : une autre entrée.
+    assert!(tri::preview::palette(&cache, &file, Source::Raw, &settings).is_none());
+}

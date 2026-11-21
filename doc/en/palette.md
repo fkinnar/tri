@@ -4,8 +4,8 @@ Issue #492 (user's idea, 2026-11-15): build **moodboards** from one's photos and
 reference images. Extract each image's palette, find images with close palettes or that
 contain a colour, gather them.
 
-This module does step 1, on one image: it knows neither the cache, nor the sources, nor
-the interface (next steps).
+The module computes on one image; the cache per source and the background computation
+are described below, the interface comes next.
 
 ## A palette
 
@@ -60,7 +60,24 @@ Three sources, for three uses, chosen in the palette interface:
 2. **raw LibRaw data**: a "scientific" look at the data, outside any processing;
 3. **finished renders** (developments): moodboard research.
 
-One palette per image **and per source** in the cache: next step.
+One palette per image **and per source** in the cache (`Level::Palette(Source)`,
+`palette::Source`: `Camera`, `Raw`, `Developed(software)`), taken from the image it comes
+from (`preview::palette_input`): the **thumbnail** (camera JPEG of a RAW, downscaled flat
+image), tri's **RAW render**, or the **software's render**. Its key includes that image's:
+remade (render settings changed, development edited in darktable), the palette is too.
+`SourceKind` is the user's choice (`camera`, `raw`, `developed`); `SourceKind::source_for`
+translates it for each image: a flat image has no raw data (its image, the camera
+source), a finished render only exists for a development of the list.
+
+`preview::compute_palette` computes (the source image first, if missing),
+`preview::palette` reads the cache. Background computation: see
+[scheduler.md](scheduler.md).
+
+## Command line
+
+`tri <folder> --palette [--source camera|raw|developed]`: each image, its `#rrggbb`
+colours and their share, stored in the cache as in the interface. Finished renders: only
+those already made by the interface (no software launched from the command line).
 
 ## Settings `[palette]`
 
