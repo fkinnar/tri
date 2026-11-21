@@ -239,7 +239,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   copie. Lecture du cache en fond, la dernière demandée d'abord (`palette_reads`).
   Dessin dans `gui/src/palette_view.rs`.
 - **Recherches de palettes** (section Filtre, sous les autres filtres, même forme : case,
-  icône, nom ; grisées sans source ; retour du 21/11/2026). **Palettes proches** (une
+  icône, nom ; et dans la barre des filtres du haut, avec les autres ; grisées sans source ;
+  retours du 21/11/2026). Seuil et tolérance retenus par dossier comme les autres curseurs
+  (`tri::palette::folder_threshold` / `folder_radius`, écrits au lâcher du curseur). **Palettes proches** (une
   cible, action `core.filter.palette`) : la grille ne garde que les images dont la palette
   est à moins du seuil de celle de l'image (curseur dessous, double-clic : valeur de
   départ, `[palette] similar_threshold` / `similar_max`), de la plus proche à la moins

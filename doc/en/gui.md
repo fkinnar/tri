@@ -227,7 +227,10 @@ system one ("cold" measurements, experiments).
   it. Cache read in the background, newest request first (`palette_reads`). Drawing in
   `gui/src/palette_view.rs`.
 - **Palette searches** (Filter section, under the other filters, same shape: checkbox,
-  icon, name; greyed without a source; feedback of 2026-11-21). **Similar palettes** (a
+  icon, name; and in the top filter bar, with the others; greyed without a source;
+  feedback of 2026-11-21). Threshold and tolerance kept per folder like the other sliders
+  (`tri::palette::folder_threshold` / `folder_radius`, written when the slider is
+  released). **Similar palettes** (a
   target, action `core.filter.palette`): the grid keeps only the images whose palette is
   within the threshold of the image's (slider below, double-click: starting value,
   `[palette] similar_threshold` / `similar_max`), closest first. **Colour** (eyedropper

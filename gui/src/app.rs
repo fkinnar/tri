@@ -424,6 +424,9 @@ struct Prepared {
     group_curve: Option<f32>,
     group_gap: Option<f32>,
     blur_strictness: Option<f32>,
+    /// Seuil « palettes proches » et tolérance « couleur » retenus (#492).
+    palette_threshold: Option<f32>,
+    palette_radius: Option<f32>,
     clip_strictness: (Option<f32>, Option<f32>),
     pairs_decided: Option<bool>,
     stacks_memory: Option<StacksMemory>,
@@ -463,6 +466,8 @@ impl Prepared {
             group_curve: tri::similarity::folder_curve(data, dir),
             group_gap: tri::similarity::folder_gap(data, dir),
             blur_strictness: tri::sharpness::folder_strictness(data, dir),
+            palette_threshold: tri::palette::folder_threshold(data, dir),
+            palette_radius: tri::palette::folder_radius(data, dir),
             clip_strictness: (
                 clip(tri::exposure::Clip::Over),
                 clip(tri::exposure::Clip::Under),
@@ -1162,6 +1167,10 @@ pub struct TriApp {
     palettes: HashMap<(PathBuf, tri::palette::Source), Arc<Palette>>,
     /// « Palettes proches » en cours (#492).
     palette_like: Option<PaletteLike>,
+    /// Seuil des palettes proches et tolérance de la couleur du dossier ouvert (retenus
+    /// par dossier).
+    palette_threshold: f32,
+    palette_radius: f32,
     /// Palettes arrivées depuis le dernier refiltrage, sous « palettes proches ».
     palette_refilter_pending: bool,
     /// « Contient cette couleur » en cours (#492).
@@ -2195,6 +2204,8 @@ impl TriApp {
             palette_follow_grid: true,
             palettes: HashMap::new(),
             palette_like: None,
+            palette_threshold: settings.palette.similar_threshold,
+            palette_radius: settings.palette.colour_radius,
             palette_refilter_pending: false,
             palette_colour: None,
             palette_last: None,
@@ -2954,6 +2965,8 @@ impl TriApp {
             group_curve,
             group_gap,
             blur_strictness,
+            palette_threshold,
+            palette_radius,
             clip_strictness,
             pairs_decided,
             stacks_memory,
@@ -2986,6 +2999,11 @@ impl TriApp {
                 self.group_curve = group_curve.unwrap_or(self.settings.similarity.strictness_curve);
                 self.group_gap = group_gap.unwrap_or(self.settings.similarity.max_gap_s);
                 self.blur_strictness = blur_strictness.unwrap_or(0.0);
+                // Curseurs des palettes retenus par dossier, comme les autres (retour du
+                // 21/11/2026).
+                let p = self.settings.palette;
+                self.palette_threshold = palette_threshold.unwrap_or(p.similar_threshold);
+                self.palette_radius = palette_radius.unwrap_or(p.colour_radius);
                 self.clip_strictness = (
                     clip_strictness.0.unwrap_or(0.0),
                     clip_strictness.1.unwrap_or(0.0),
@@ -3482,6 +3500,21 @@ impl TriApp {
         toggles
     }
 
+    /// Recherches de palettes (#492) de la barre des filtres : (action, allumée,
+    /// utilisable) ; grisées sans source de palette. Dans le panneau, leurs lignes à part
+    /// (`palette_filter_rows`).
+    fn palette_toggles(&self) -> Vec<(Action, bool, bool)> {
+        let ready = self.palette_source.is_some();
+        vec![
+            (Action::FilterPalette, self.palette_like.is_some(), ready),
+            (
+                Action::FilterPaletteColour,
+                self.palette_colour.is_some(),
+                ready,
+            ),
+        ]
+    }
+
     /// Section « Filtres » du panneau de droite : chaque filtre réglable, avec sa case
     /// (comme son icône de la barre du haut) ; ses réglages n'apparaissent que s'il est
     /// allumé (retour du 27/10/2026 : cachés quand ils ne servent pas). La place ne
@@ -3641,14 +3674,19 @@ impl TriApp {
                                     .width(width),
                             )
                             .on_hover_text(t!("palette-similar-threshold"));
-                        if slider.double_clicked_slider(ui) {
+                        let reset = slider.double_clicked_slider(ui);
+                        if reset {
                             threshold = p.similar_threshold;
                         }
                         if threshold != like.threshold {
+                            self.palette_threshold = threshold;
                             if let Some(l) = &mut self.palette_like {
                                 l.threshold = threshold;
                             }
                             self.refilter(Reveal::Minimal);
+                        }
+                        if slider.drag_stopped() || reset {
+                            self.remember_palette_levels();
                         }
                     }
                 }
@@ -3661,14 +3699,19 @@ impl TriApp {
                                     .width(width),
                             )
                             .on_hover_text(t!("palette-colour-radius"));
-                        if slider.double_clicked_slider(ui) {
+                        let reset = slider.double_clicked_slider(ui);
+                        if reset {
                             radius = p.colour_radius;
                         }
                         if radius != colour.radius {
+                            self.palette_radius = radius;
                             if let Some(c) = &mut self.palette_colour {
                                 c.radius = radius;
                             }
                             self.refilter(Reveal::Minimal);
+                        }
+                        if slider.drag_stopped() || reset {
+                            self.remember_palette_levels();
                         }
                     }
                 }
@@ -3833,10 +3876,7 @@ impl TriApp {
     /// « Palettes proches » de l'image `index` (sa palette dans la source choisie), ou fin
     /// de la recherche (`None`).
     fn set_palette_like(&mut self, like: Option<(PathBuf, Arc<Palette>)>) {
-        let threshold = self
-            .palette_like
-            .as_ref()
-            .map_or(self.settings.palette.similar_threshold, |l| l.threshold);
+        let threshold = self.palette_threshold;
         self.palette_like = like.map(|(path, reference)| PaletteLike {
             path,
             reference,
@@ -3919,9 +3959,7 @@ impl TriApp {
     /// « Contient cette couleur » (`oklab`), ou fin de la recherche (`None`) ; tolérance et
     /// part minimale gardées d'une couleur à l'autre.
     fn set_palette_colour(&mut self, oklab: Option<[f32; 3]>) {
-        let radius = self
-            .palette_colour
-            .map_or(self.settings.palette.colour_radius, |c| c.radius);
+        let radius = self.palette_radius;
         self.palette_colour = oklab.map(|oklab| PaletteColour { oklab, radius });
         if oklab.is_some() {
             self.palette_colour_last = oklab;
@@ -8341,6 +8379,28 @@ impl TriApp {
                 tri::exposure::remember_strictness(data.as_deref(), &self.folder.dir, side, keep);
         }
         slider
+    }
+
+    /// Retient le seuil des palettes proches et la tolérance de la couleur pour le dossier
+    /// ouvert (oubliés à leur valeur de départ), comme les autres curseurs.
+    fn remember_palette_levels(&self) {
+        if self.folder.is_none() {
+            return;
+        }
+        let data = self.settings.data_dir();
+        let p = self.settings.palette;
+        let keep = |v: f32, default: f32| ((v - default).abs() > 1e-6).then_some(v);
+        let dir = &self.folder.dir;
+        let _ = tri::palette::remember_threshold(
+            data.as_deref(),
+            dir,
+            keep(self.palette_threshold, p.similar_threshold),
+        );
+        let _ = tri::palette::remember_radius(
+            data.as_deref(),
+            dir,
+            keep(self.palette_radius, p.colour_radius),
+        );
     }
 
     /// Retient la sévérité du flou pour le dossier ouvert (oubliée au centre).
@@ -19923,7 +19983,12 @@ impl TriApp {
                 "filter-settings-in-panel",
                 keys = self.keys_text(Action::ToggleMetadata)
             );
-            for (action, on, enabled) in self.content_toggles() {
+            // Avec les recherches de palettes (retour du 21/11/2026 : comme les autres).
+            let toggles = self
+                .content_toggles()
+                .into_iter()
+                .chain(self.palette_toggles());
+            for (action, on, enabled) in toggles {
                 let tip = format!("{}\n{settings_tip}", self.action_tip(action));
                 let (rect, response) = marks::clickable(ui, size, &tip);
                 // Pas de développement dans le dossier : grisé, sans effet (#305).
@@ -24470,6 +24535,12 @@ fn filter_icon(painter: &egui::Painter, rect: Rect, action: Action, color: Color
         Action::FilterWellExposed => marks::sun(painter, rect, color),
         Action::FilterDeveloped => marks::film_reel(painter, rect, color),
         Action::FilterStack => marks::stack_only_icon(painter, rect, color),
+        Action::FilterPalette => {
+            marks::target_icon(painter, rect.shrink(rect.width() * 0.12), color)
+        }
+        Action::FilterPaletteColour => {
+            marks::eyedropper_icon(painter, rect.shrink(rect.width() * 0.12), color)
+        }
         _ => {}
     }
 }
@@ -28417,6 +28488,49 @@ mod tests {
         h.run_steps(3);
         assert!(h.state().palette_colour.is_none());
         assert_eq!(h.state().files.len(), 3);
+    }
+
+    #[test]
+    fn palette_slider_levels_are_kept_per_folder_and_searches_sit_in_the_top_bar() {
+        // Retour du 21/11/2026 : seuil et tolérance retenus comme les autres curseurs ; les
+        // deux recherches dans la barre des filtres aussi.
+        use tri::palette::{Source, SourceKind};
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        choose_palette(&mut h, Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        h.state_mut().palette_threshold = 0.21;
+        h.state_mut().palette_radius = 0.17;
+        h.state_mut().remember_palette_levels();
+        h.state_mut().palette_threshold = 0.0;
+        h.state_mut().palette_radius = 0.0;
+        // Rouvert : relus.
+        let dir = h.state().folder.dir.clone();
+        h.state_mut().open_folder(&dir);
+        run_until(&mut h, |app| app.opening.is_none() && !app.files.is_empty());
+        h.run_steps(3);
+        assert_eq!(h.state().palette_threshold, 0.21);
+        assert_eq!(h.state().palette_radius, 0.17);
+        // Lancée, la recherche part de ce seuil.
+        act(&mut h, Action::FilterPalette);
+        assert_eq!(
+            h.state().palette_like.as_ref().map(|l| l.threshold),
+            Some(0.21)
+        );
+        act(&mut h, Action::FilterPalette);
+        // L'icône de la barre du haut la lance aussi.
+        let tip = h.state().action_tip(Action::FilterPalette);
+        h.run_steps(2);
+        h.query_all_by_label_contains(&tip)
+            .next()
+            .expect("icône de la barre")
+            .click();
+        h.run_steps(3);
+        assert!(h.state().palette_like.is_some(), "lancée de la barre");
     }
 
     #[test]

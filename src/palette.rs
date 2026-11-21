@@ -497,6 +497,39 @@ pub fn gamut_map(oklab: [f32; 3]) -> [f32; 3] {
     [l, a * lo, b * lo]
 }
 
+/// Clé du seuil « palettes proches » retenu par dossier.
+const SIMILAR_KEY: &str = "palette-similar";
+/// Clé de la tolérance « contient cette couleur » retenue par dossier.
+const COLOUR_KEY: &str = "palette-colour";
+
+/// Seuil « palettes proches » retenu pour le dossier `dir` (comme les autres curseurs).
+pub fn folder_threshold(data: Option<&std::path::Path>, dir: &std::path::Path) -> Option<f32> {
+    crate::store::value(data, dir, SIMILAR_KEY)
+}
+
+/// Retient le seuil « palettes proches » pour `dir` ; `None` : l'oublie (valeur de départ).
+pub fn remember_threshold(
+    data: Option<&std::path::Path>,
+    dir: &std::path::Path,
+    value: Option<f32>,
+) -> std::io::Result<()> {
+    crate::store::set_value(data, dir, SIMILAR_KEY, value)
+}
+
+/// Tolérance « contient cette couleur » retenue pour le dossier `dir`.
+pub fn folder_radius(data: Option<&std::path::Path>, dir: &std::path::Path) -> Option<f32> {
+    crate::store::value(data, dir, COLOUR_KEY)
+}
+
+/// Retient la tolérance « contient cette couleur » pour `dir` ; `None` : l'oublie.
+pub fn remember_radius(
+    data: Option<&std::path::Path>,
+    dir: &std::path::Path,
+    value: Option<f32>,
+) -> std::io::Result<()> {
+    crate::store::set_value(data, dir, COLOUR_KEY, value)
+}
+
 /// Un pixel 8 bits de l'espace de travail, en OKLab.
 pub fn working_to_oklab(rgb: [u8; 3]) -> [f32; 3] {
     let linear = rgb.map(|c| decode_srgb(f32::from(c) / 255.0));
