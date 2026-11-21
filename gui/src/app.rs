@@ -9215,11 +9215,24 @@ impl TriApp {
             } else {
                 tri::similarity::distances(&signatures, s.shape_weight)
             };
+            // Les liens entre une photo et son développement (ou son JPEG de paire) ne se
+            // coupent jamais (`merge_split_photos` les recolle) : hors du centre et de la
+            // course du curseur (retour du 21/11/2026 : le curseur continuait à droite alors
+            // que tout était déjà dépilé, il ne coupait plus que ces liens invisibles).
+            let camera = &self.camera_raw;
+            let files = &self.files;
+            let photo = |i: usize| camera_photo(camera, &files[i].path);
+            let movable: Vec<Option<tri::similarity::Link>> = links
+                .iter()
+                .enumerate()
+                .map(|(i, l)| l.filter(|_| photo(i) != photo(i + 1)))
+                .collect();
             // Centre calculé sur le contenu seul ; les pauses ne font que couper
             // davantage (issue n° 306).
-            self.group_centre = tri::similarity::suggested_threshold(&links, s);
+            self.group_centre = tri::similarity::suggested_threshold(&movable, s);
             let links = tri::similarity::with_pauses(&links, self.group_pause_weight());
-            self.group_distances = tri::similarity::distances_by_rank(&links, self.group_gap);
+            let movable = tri::similarity::with_pauses(&movable, self.group_pause_weight());
+            self.group_distances = tri::similarity::distances_by_rank(&movable, self.group_gap);
             let ranges = tri::similarity::group(&links, self.group_threshold(), self.group_gap);
             if complete {
                 self.stacks_wait = None;
@@ -28751,6 +28764,19 @@ mod tests {
         assert!(
             links.iter().all(|l| l.is_some_and(|l| l.distance == 0.0)),
             "photo et voisines liées par la palette de leurs développements : {links:?}"
+        );
+        // La course du curseur ne compte que les liens d'une photo à l'autre (2 sur 5) :
+        // ceux d'une photo à son développement ne se coupent jamais (retour du 21/11/2026 :
+        // le curseur continuait à droite alors que tout était dépilé).
+        h.state_mut().stacking = true;
+        h.state_mut().stack_by_palette = true;
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(3);
+        assert_eq!(
+            h.state().group_distances.len(),
+            2,
+            "{:?}",
+            h.state().group_distances
         );
     }
 
