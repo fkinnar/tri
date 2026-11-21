@@ -1,0 +1,519 @@
+//! Palettes de couleurs (#492, idée de l'utilisateur, 15/11/2026 : construire des
+//! moodboards à partir de ses photos et d'images de référence).
+//!
+//! Chaque image reçoit une **palette** ([`Palette`]) : ses couleurs principales, de 5 à 8,
+//! chacune avec sa **part** de l'image. Calculée une fois sur une petite version de
+//! l'image, gardée dans le cache d'analyse (donnée dérivée, pas une note de
+//! l'utilisateur : rien dans le XMP), comme les empreintes de [`crate::similarity`].
+//!
+//! - **Extraction** ([`extract`]) : k-moyennes dans l'espace **OKLab** (perceptuel : des
+//!   écarts égaux s'y voient à peu près égaux), initialisées sans hasard (même image, même
+//!   palette), couleurs trop proches fusionnées, miettes retirées.
+//! - **Distance** entre deux palettes ([`distance`]) : le coût de transport des parts de
+//!   l'une vers l'autre (« Earth Mover's Distance »), approché en servant d'abord les
+//!   couples les plus proches ; instantané sur des milliers de palettes.
+//! - **Part d'une couleur** ([`Palette::share_near`]) : « contient assez de ce bleu ».
+//!
+//! Trois **sources** sont prévues (décision de l'utilisateur, 21/11/2026) : le JPEG
+//! boîtier, les données brutes de LibRaw et les rendus finis ; le choix de la source et le
+//! cache viennent ensuite, ce module ne voit qu'une image.
+//!
+//! Les images arrivent dans l'espace de travail de `tri` ([`crate::colour`] : primaires
+//! Rec.2020, courbe sRGB) ; OKLab est calculé depuis la lumière linéaire.
+
+use serde::Deserialize;
+
+use crate::bitmap::Bitmap;
+use crate::colour;
+
+/// Version du calcul (dans la clé du cache : la changer recalcule tout).
+pub const VERSION: u32 = 1;
+
+/// Réglages (section `[palette]` du fichier de configuration).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PaletteSettings {
+    /// Couleurs cherchées dans une image (au plus ; moins après fusion des proches).
+    pub colors: usize,
+    /// Côté de la grille de points lus dans l'image (`side × side` au plus) : la palette
+    /// ne dépend pas des détails, une petite image suffit.
+    pub side: u32,
+    /// Passes des k-moyennes.
+    pub iterations: u32,
+    /// Deux couleurs plus proches que cette distance OKLab sont fusionnées (0,03 : à
+    /// peine distinguables côte à côte).
+    pub merge: f32,
+    /// Part minimale d'une couleur (0 à 1) : en deçà, retirée (miettes, bruit).
+    pub min_share: f32,
+}
+
+impl Default for PaletteSettings {
+    fn default() -> Self {
+        Self {
+            colors: 6,
+            side: 96,
+            iterations: 12,
+            merge: 0.03,
+            min_share: 0.02,
+        }
+    }
+}
+
+/// Une couleur de la palette.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Swatch {
+    /// La couleur, en OKLab (L de 0 à 1, a et b autour de 0).
+    pub oklab: [f32; 3],
+    /// Sa part de l'image (0 à 1 ; les parts d'une palette font 1).
+    pub share: f32,
+}
+
+impl Swatch {
+    /// La couleur en sRGB 8 bits (pour l'écrire, `#rrggbb`), écrêtée au gamut sRGB.
+    pub fn srgb(&self) -> [u8; 3] {
+        let linear = oklab_to_linear_srgb(self.oklab);
+        linear.map(|c| (encode_srgb(c.clamp(0.0, 1.0)) * 255.0).round() as u8)
+    }
+
+    /// La couleur dans l'espace de travail (8 bits, comme les images du cache) : à
+    /// afficher comme elles.
+    pub fn working(&self) -> [u8; 3] {
+        let linear = colour::srgb_linear_to_working(oklab_to_linear_srgb(self.oklab));
+        linear.map(|c| (encode_srgb(c.clamp(0.0, 1.0)) * 255.0).round() as u8)
+    }
+
+    /// Teinte (degrés, 0 à 360) et chroma (0 : gris) : sa place sur la roue chromatique.
+    pub fn hue_chroma(&self) -> (f32, f32) {
+        let [_, a, b] = self.oklab;
+        (b.atan2(a).to_degrees().rem_euclid(360.0), a.hypot(b))
+    }
+}
+
+/// Palette d'une image : ses couleurs, de la plus présente à la moins présente.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Palette {
+    /// Les couleurs, parts décroissantes.
+    pub swatches: Vec<Swatch>,
+}
+
+impl Palette {
+    /// Part de l'image dont la couleur est à moins de `radius` (distance OKLab) de
+    /// `oklab` : « contient assez de ce bleu ».
+    pub fn share_near(&self, oklab: [f32; 3], radius: f32) -> f32 {
+        self.swatches
+            .iter()
+            .filter(|s| oklab_distance(s.oklab, oklab) <= radius)
+            .map(|s| s.share)
+            .sum()
+    }
+
+    /// Format binaire du cache d'analyse : version, nombre de couleurs, puis pour chacune
+    /// L, a, b et sa part (f32).
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(5 + self.swatches.len() * 16);
+        out.extend_from_slice(&VERSION.to_le_bytes());
+        out.push(self.swatches.len() as u8);
+        for s in &self.swatches {
+            for v in s.oklab.iter().chain([&s.share]) {
+                out.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        out
+    }
+
+    /// Relit [`Palette::to_bytes`] ; `None` si l'entrée est illisible ou d'une autre
+    /// version.
+    pub fn from_bytes(bytes: &[u8]) -> Option<Palette> {
+        let version = u32::from_le_bytes(bytes.get(..4)?.try_into().ok()?);
+        if version != VERSION {
+            return None;
+        }
+        let n = *bytes.get(4)? as usize;
+        let body = bytes.get(5..5 + n * 16)?;
+        let f = |i: usize| f32::from_le_bytes(body[i * 4..i * 4 + 4].try_into().unwrap());
+        let swatches = (0..n)
+            .map(|k| Swatch {
+                oklab: [f(k * 4), f(k * 4 + 1), f(k * 4 + 2)],
+                share: f(k * 4 + 3),
+            })
+            .collect();
+        Some(Palette { swatches })
+    }
+}
+
+/// Palette de `bitmap` (espace de travail de `tri`).
+pub fn extract(bitmap: &Bitmap, settings: &PaletteSettings) -> Palette {
+    let samples = sample(bitmap, settings.side.max(1));
+    let k = settings.colors.clamp(1, 16);
+    if samples.is_empty() {
+        return Palette::default();
+    }
+    let mut centres = initial_centres(&samples, k);
+    let mut members = vec![0usize; samples.len()];
+    for _ in 0..settings.iterations.max(1) {
+        for (m, p) in members.iter_mut().zip(&samples) {
+            *m = nearest(&centres, *p);
+        }
+        let mut sums = vec![[0.0f64; 4]; centres.len()];
+        for (m, p) in members.iter().zip(&samples) {
+            let s = &mut sums[*m];
+            s[0] += f64::from(p[0]);
+            s[1] += f64::from(p[1]);
+            s[2] += f64::from(p[2]);
+            s[3] += 1.0;
+        }
+        let mut moved = false;
+        for (c, s) in centres.iter_mut().zip(&sums) {
+            if s[3] > 0.0 {
+                let next = [
+                    (s[0] / s[3]) as f32,
+                    (s[1] / s[3]) as f32,
+                    (s[2] / s[3]) as f32,
+                ];
+                moved |= oklab_distance(next, *c) > 1e-5;
+                *c = next;
+            }
+        }
+        if !moved {
+            break;
+        }
+    }
+    let mut counts = vec![0usize; centres.len()];
+    for p in &samples {
+        counts[nearest(&centres, *p)] += 1;
+    }
+    let total = samples.len() as f32;
+    let mut swatches: Vec<Swatch> = centres
+        .into_iter()
+        .zip(counts)
+        .filter(|(_, n)| *n > 0)
+        .map(|(oklab, n)| Swatch {
+            oklab,
+            share: n as f32 / total,
+        })
+        .collect();
+    merge_close(&mut swatches, settings.merge);
+    swatches.retain(|s| s.share >= settings.min_share);
+    let kept: f32 = swatches.iter().map(|s| s.share).sum();
+    if kept > 0.0 {
+        for s in &mut swatches {
+            s.share /= kept;
+        }
+    }
+    swatches.sort_by(|a, b| b.share.total_cmp(&a.share));
+    Palette { swatches }
+}
+
+/// Distance entre deux palettes (0 : identiques ; en unités OKLab, ~0,1 déjà bien
+/// différentes) : coût de transport de leurs parts, en servant d'abord les couples de
+/// couleurs les plus proches (approche gloutonne de l'« Earth Mover's Distance », exacte
+/// dans les cas simples et toujours au moins aussi grande que la vraie). Une palette vide :
+/// distance infinie.
+pub fn distance(a: &Palette, b: &Palette) -> f32 {
+    if a.swatches.is_empty() || b.swatches.is_empty() {
+        return f32::INFINITY;
+    }
+    let mut pairs: Vec<(f32, usize, usize)> = Vec::new();
+    for (i, x) in a.swatches.iter().enumerate() {
+        for (j, y) in b.swatches.iter().enumerate() {
+            pairs.push((oklab_distance(x.oklab, y.oklab), i, j));
+        }
+    }
+    pairs.sort_by(|p, q| p.0.total_cmp(&q.0));
+    let mut left_a: Vec<f32> = a.swatches.iter().map(|s| s.share).collect();
+    let mut left_b: Vec<f32> = b.swatches.iter().map(|s| s.share).collect();
+    let mut cost = 0.0;
+    for (d, i, j) in pairs {
+        let flow = left_a[i].min(left_b[j]);
+        if flow > 0.0 {
+            cost += flow * d;
+            left_a[i] -= flow;
+            left_b[j] -= flow;
+        }
+    }
+    cost
+}
+
+/// Distance euclidienne dans OKLab.
+pub fn oklab_distance(a: [f32; 3], b: [f32; 3]) -> f32 {
+    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+}
+
+/// Un pixel 8 bits de l'espace de travail, en OKLab.
+pub fn working_to_oklab(rgb: [u8; 3]) -> [f32; 3] {
+    let linear = rgb.map(|c| decode_srgb(f32::from(c) / 255.0));
+    linear_srgb_to_oklab(colour::working_to_srgb_linear(linear))
+}
+
+/// Un pixel sRGB 8 bits (une couleur tapée `#rrggbb`), en OKLab.
+pub fn srgb_to_oklab(rgb: [u8; 3]) -> [f32; 3] {
+    linear_srgb_to_oklab(rgb.map(|c| decode_srgb(f32::from(c) / 255.0)))
+}
+
+/// Points de l'image, en OKLab : une grille d'au plus `side × side`.
+fn sample(bitmap: &Bitmap, side: u32) -> Vec<[f32; 3]> {
+    let (w, h) = (bitmap.width, bitmap.height);
+    if w == 0 || h == 0 || bitmap.data.len() < (w * h * 3) as usize {
+        return Vec::new();
+    }
+    let step = (w.max(h) / side).max(1);
+    let mut out = Vec::with_capacity(((w / step + 1) * (h / step + 1)) as usize);
+    for y in (step / 2..h).step_by(step as usize) {
+        for x in (step / 2..w).step_by(step as usize) {
+            let i = ((y * w + x) * 3) as usize;
+            out.push(working_to_oklab([
+                bitmap.data[i],
+                bitmap.data[i + 1],
+                bitmap.data[i + 2],
+            ]));
+        }
+    }
+    out
+}
+
+/// Centres de départ, sans hasard : le point le plus proche de la moyenne, puis à chaque
+/// fois le point au milieu (en cumul) des distances au carré aux centres déjà pris
+/// (k-moyennes++ sans tirage : même image, même palette).
+fn initial_centres(samples: &[[f32; 3]], k: usize) -> Vec<[f32; 3]> {
+    let n = samples.len() as f32;
+    let mean = samples.iter().fold([0.0f32; 3], |m, p| {
+        [m[0] + p[0] / n, m[1] + p[1] / n, m[2] + p[2] / n]
+    });
+    let first = samples
+        .iter()
+        .min_by(|a, b| oklab_distance(**a, mean).total_cmp(&oklab_distance(**b, mean)))
+        .copied()
+        .unwrap_or(mean);
+    let mut centres = vec![first];
+    let mut nearest_sq: Vec<f32> = samples
+        .iter()
+        .map(|p| oklab_distance(*p, first).powi(2))
+        .collect();
+    while centres.len() < k {
+        let total: f64 = nearest_sq.iter().map(|d| f64::from(*d)).sum();
+        if total <= 1e-12 {
+            break;
+        }
+        let half = total / 2.0;
+        let mut acc = 0.0;
+        let mut chosen = samples.len() - 1;
+        for (i, d) in nearest_sq.iter().enumerate() {
+            acc += f64::from(*d);
+            if acc >= half {
+                chosen = i;
+                break;
+            }
+        }
+        let c = samples[chosen];
+        centres.push(c);
+        for (d, p) in nearest_sq.iter_mut().zip(samples) {
+            *d = d.min(oklab_distance(*p, c).powi(2));
+        }
+    }
+    centres
+}
+
+fn nearest(centres: &[[f32; 3]], p: [f32; 3]) -> usize {
+    let mut best = (f32::INFINITY, 0);
+    for (i, c) in centres.iter().enumerate() {
+        let d = (c[0] - p[0]).powi(2) + (c[1] - p[1]).powi(2) + (c[2] - p[2]).powi(2);
+        if d < best.0 {
+            best = (d, i);
+        }
+    }
+    best.1
+}
+
+/// Fusionne les couleurs plus proches que `radius` (moyenne pondérée par leurs parts).
+fn merge_close(swatches: &mut Vec<Swatch>, radius: f32) {
+    loop {
+        let mut closest: Option<(f32, usize, usize)> = None;
+        for i in 0..swatches.len() {
+            for j in i + 1..swatches.len() {
+                let d = oklab_distance(swatches[i].oklab, swatches[j].oklab);
+                if d < radius && closest.is_none_or(|c| d < c.0) {
+                    closest = Some((d, i, j));
+                }
+            }
+        }
+        let Some((_, i, j)) = closest else {
+            return;
+        };
+        let (a, b) = (swatches[i], swatches[j]);
+        let share = a.share + b.share;
+        swatches[i] = Swatch {
+            oklab: std::array::from_fn(|c| (a.oklab[c] * a.share + b.oklab[c] * b.share) / share),
+            share,
+        };
+        swatches.remove(j);
+    }
+}
+
+fn decode_srgb(c: f32) -> f32 {
+    if c <= 0.04045 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn encode_srgb(c: f32) -> f32 {
+    if c <= 0.003_130_8 {
+        c * 12.92
+    } else {
+        1.055 * c.powf(1.0 / 2.4) - 0.055
+    }
+}
+
+/// sRGB linéaire → OKLab (Björn Ottosson, 2020).
+fn linear_srgb_to_oklab([r, g, b]: [f32; 3]) -> [f32; 3] {
+    let l = 0.412_221_47 * r + 0.536_332_55 * g + 0.051_445_99 * b;
+    let m = 0.211_903_5 * r + 0.680_699_5 * g + 0.107_396_96 * b;
+    let s = 0.088_302_46 * r + 0.281_718_85 * g + 0.629_978_7 * b;
+    let (l, m, s) = (l.cbrt(), m.cbrt(), s.cbrt());
+    [
+        0.210_454_26 * l + 0.793_617_8 * m - 0.004_072_047 * s,
+        1.977_998_5 * l - 2.428_592_2 * m + 0.450_593_7 * s,
+        0.025_904_037 * l + 0.782_771_77 * m - 0.808_675_77 * s,
+    ]
+}
+
+/// OKLab → sRGB linéaire (valeurs hors de 0..1 hors du gamut sRGB).
+fn oklab_to_linear_srgb([l, a, b]: [f32; 3]) -> [f32; 3] {
+    let l_ = l + 0.396_337_78 * a + 0.215_803_76 * b;
+    let m_ = l - 0.105_561_346 * a - 0.063_854_17 * b;
+    let s_ = l - 0.089_484_18 * a - 1.291_485_5 * b;
+    let (l, m, s) = (l_.powi(3), m_.powi(3), s_.powi(3));
+    [
+        4.076_741_7 * l - 3.307_711_6 * m + 0.230_969_94 * s,
+        -1.268_438 * l + 2.609_757_4 * m - 0.341_319_38 * s,
+        -0.004_196_086_3 * l - 0.703_418_6 * m + 1.707_614_7 * s,
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Une image faite de bandes verticales de couleurs (espace de travail), de largeurs
+    /// données.
+    fn bands(colors: &[([u8; 3], u32)]) -> Bitmap {
+        let width: u32 = colors.iter().map(|(_, w)| w).sum();
+        let height = 40;
+        let mut data = Vec::new();
+        for _ in 0..height {
+            for (c, w) in colors {
+                for _ in 0..*w {
+                    data.extend_from_slice(c);
+                }
+            }
+        }
+        Bitmap {
+            width,
+            height,
+            data,
+        }
+    }
+
+    #[test]
+    fn oklab_round_trips_and_white_is_l_one() {
+        let white = srgb_to_oklab([255, 255, 255]);
+        assert!((white[0] - 1.0).abs() < 1e-3 && white[1].abs() < 1e-3);
+        for c in [[200, 30, 40], [10, 120, 230], [128, 128, 128]] {
+            let s = Swatch {
+                oklab: srgb_to_oklab(c),
+                share: 1.0,
+            };
+            let back = s.srgb();
+            for k in 0..3 {
+                assert!(back[k].abs_diff(c[k]) <= 1, "{c:?} → {back:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn two_colours_give_two_swatches_with_their_shares() {
+        // Trois quarts de rouge, un quart de bleu (dans l'espace de travail).
+        let img = bands(&[([200, 40, 40], 120), ([40, 60, 200], 40)]);
+        let p = extract(&img, &PaletteSettings::default());
+        assert_eq!(p.swatches.len(), 2, "{p:?}");
+        assert!((p.swatches[0].share - 0.75).abs() < 0.03, "{p:?}");
+        let red = working_to_oklab([200, 40, 40]);
+        assert!(oklab_distance(p.swatches[0].oklab, red) < 0.01);
+        let sum: f32 = p.swatches.iter().map(|s| s.share).sum();
+        assert!((sum - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn same_image_same_palette() {
+        let img = bands(&[
+            ([200, 40, 40], 50),
+            ([40, 160, 60], 30),
+            ([40, 60, 200], 20),
+            ([230, 220, 90], 10),
+        ]);
+        let s = PaletteSettings::default();
+        assert_eq!(extract(&img, &s), extract(&img, &s));
+    }
+
+    #[test]
+    fn tiny_specks_and_near_duplicates_are_dropped() {
+        // Deux rouges indiscernables fusionnent ; un point vert de 1 % disparaît.
+        let img = bands(&[([200, 40, 40], 60), ([201, 41, 40], 39), ([40, 200, 40], 1)]);
+        let p = extract(&img, &PaletteSettings::default());
+        assert_eq!(p.swatches.len(), 1, "{p:?}");
+        assert!((p.swatches[0].share - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn closer_palettes_have_smaller_distances() {
+        let s = PaletteSettings::default();
+        let a = extract(&bands(&[([200, 40, 40], 80), ([40, 60, 200], 20)]), &s);
+        let near = extract(&bands(&[([190, 50, 45], 80), ([40, 60, 200], 20)]), &s);
+        let far = extract(&bands(&[([40, 160, 60], 80), ([230, 220, 90], 20)]), &s);
+        assert_eq!(distance(&a, &a), 0.0);
+        assert!(distance(&a, &near) < distance(&a, &far));
+        assert!((distance(&a, &near) - distance(&near, &a)).abs() < 1e-6);
+        assert!(distance(&a, &Palette::default()).is_infinite());
+    }
+
+    #[test]
+    fn share_near_finds_a_colour() {
+        let p = extract(
+            &bands(&[([200, 40, 40], 70), ([40, 60, 200], 30)]),
+            &PaletteSettings::default(),
+        );
+        let blue = working_to_oklab([45, 65, 195]);
+        assert!((p.share_near(blue, 0.05) - 0.3).abs() < 0.03);
+        assert_eq!(p.share_near(srgb_to_oklab([0, 255, 0]), 0.05), 0.0);
+    }
+
+    #[test]
+    fn bytes_round_trip_and_reject_other_versions() {
+        let p = extract(
+            &bands(&[([200, 40, 40], 70), ([40, 60, 200], 30)]),
+            &PaletteSettings::default(),
+        );
+        assert_eq!(Palette::from_bytes(&p.to_bytes()), Some(p.clone()));
+        let mut bytes = p.to_bytes();
+        bytes[0] ^= 0xff;
+        assert_eq!(Palette::from_bytes(&bytes), None);
+        assert_eq!(Palette::from_bytes(&bytes[..3]), None);
+    }
+
+    #[test]
+    fn hue_places_red_near_zero_and_grey_has_no_chroma() {
+        let red = Swatch {
+            oklab: srgb_to_oklab([255, 0, 0]),
+            share: 1.0,
+        };
+        let (h, c) = red.hue_chroma();
+        assert!(h < 40.0 || h > 340.0, "{h}");
+        assert!(c > 0.2);
+        let grey = Swatch {
+            oklab: srgb_to_oklab([128, 128, 128]),
+            share: 1.0,
+        };
+        assert!(grey.hue_chroma().1 < 1e-3);
+    }
+}

@@ -576,6 +576,22 @@ strictness_span = 2.0
 # Scores of the whole folder computed in the background (analysis cache).
 background = true
 
+[palette]
+# Colour palettes: number of colours looked for in each image.
+#
+# Colour palettes (#492): the main colours of each image and their share, computed on a
+# small version of the image (k-means in the OKLab space), kept in the analysis cache.
+# Number of colours looked for (at most: very close colours are merged).
+colors = 6
+# Side of the grid of points read in the image (side × side at most).
+side = 96
+# Passes of the computation (k-means).
+iterations = 12
+# Two colours closer than this distance (OKLab) are merged.
+merge = 0.03
+# Minimum share of a colour (0 to 1): below, removed.
+min_share = 0.02
+
 [similarity]
 # Group similar images (bursts, series) into stacks in the background.
 #

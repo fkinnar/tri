@@ -121,6 +121,8 @@ pub struct EngineSettings {
     pub sharpness: crate::sharpness::SharpnessSettings,
     /// Regroupement des images semblables.
     pub similarity: crate::similarity::SimilaritySettings,
+    /// Palettes de couleurs (#492).
+    pub palette: crate::palette::PaletteSettings,
     /// Langue des textes.
     pub i18n: crate::i18n::I18nSettings,
     /// Recherche d'une nouvelle version (sur demande).

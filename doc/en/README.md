@@ -28,6 +28,7 @@ exists.
 | [jpeg.md](jpeg.md) | Module `tri::jpeg`: fast JPEG (libjpeg-turbo, pure Rust fallback) |
 | [exposure.md](exposure.md) | Module `tri::exposure`: histograms on the sensor data, clipped / blocked, mask |
 | [i18n.md](i18n.md) | Module `tri::i18n`: languages (Fluent), `.ftl` catalogs, plurals, `t!` |
+| [palette.md](palette.md) | Module `tri::palette`: colour palettes (OKLab, k-means), distances, share of a colour |
 | [similarity.md](similarity.md) | Module `tri::similarity`: fingerprints, distances, grouping into stacks (bursts, series) |
 | [sort.md](sort.md) | Module `tri::sort`: order of the images (name, shooting date, modification date) |
 | [adjust.md](adjust.md) | Module `tri::adjust`: viewing adjustments (exposure, balance, black and white), matching a series, `tri --adjust` |
