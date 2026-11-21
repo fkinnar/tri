@@ -23,7 +23,9 @@ Distance de 0 (identiques) à 1 : `shape_weight` × (bits différents / 64) + le
 
 Les images sont prises **dans l'ordre de la grille** (celui de la séance) : deux voisines
 sont du même groupe si leur distance est sous le seuil (`threshold`, 0,25 par défaut) et
-leur écart de temps sous `max_gap_s` (60 s ; 0 : sans limite). `distances` calcule les
+leur écart de temps sous `max_gap_s` (60 s ; 0 : sans limite). Dans l'interface, un lien
+au-delà de l'écart n'est joint qu'à fond à gauche du curseur (`gap_last`, 21/11/2026 : sur
+une sélection, les voisines sont souvent à plus de 10 min, rien ne se joignait). `distances` calcule les
 liens entre voisines une fois ; `group` n'est ensuite qu'un parcours de la liste :
 instantané, d'où le curseur en direct. Un lien inconnu (empreinte pas encore calculée)
 coupe le groupe.

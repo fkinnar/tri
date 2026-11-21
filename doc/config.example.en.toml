@@ -671,8 +671,8 @@ strictness_curve = 2.0
 # Bounds of the "Slider progression" slider: from 1 / strictness_curve_max to
 # strictness_curve_max.
 strictness_curve_max = 4.0
-# Capture time gap beyond which two neighbouring images are never
-# grouped (seconds; 0: no limit).
+# Capture time gap beyond which two neighbouring images are only
+# grouped fully to the left of the slider (seconds; 0: no limit).
 max_gap_s = 60.0
 # Weight of the pauses between two shots when stacking.
 #

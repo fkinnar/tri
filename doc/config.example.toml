@@ -674,8 +674,8 @@ strictness_curve = 2.0
 # Bornes du curseur « Progression du curseur » : de 1 / strictness_curve_max à
 # strictness_curve_max.
 strictness_curve_max = 4.0
-# Écart de temps de prise de vue au-delà duquel deux images voisines ne sont jamais
-# groupées (secondes ; 0 : sans limite).
+# Écart de temps de prise de vue au-delà duquel deux images voisines ne sont groupées
+# qu'à fond à gauche du curseur (secondes ; 0 : sans limite).
 max_gap_s = 60.0
 # Poids des pauses entre deux prises dans le regroupement en piles.
 #

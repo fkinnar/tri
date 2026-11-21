@@ -3790,17 +3790,20 @@ impl TriApp {
             ui.indent("stacks", |ui| {
                 // Par ressemblance (rafales) ou par palette (séries, #492).
                 let mut by_palette = self.stack_by_palette;
+                // La précision en gris, comme dans « Rendu affiché » (retour du 21/11/2026).
+                let weak = ui.visuals().weak_text_color();
                 self.side_combo(
                     ui,
                     "stack_by",
                     &mut by_palette,
                     &[false, true],
                     |p| {
-                        if p {
-                            t!("stack-by-palette").into()
+                        let (main, note) = if p {
+                            (t!("stack-by-palette"), t!("stack-by-palette-note"))
                         } else {
-                            t!("stack-by-similarity").into()
-                        }
+                            (t!("stack-by-similarity"), t!("stack-by-similarity-note"))
+                        };
+                        crate::grid_render::with_note(&main, &note, weak)
                     },
                     Some(t!("stack-by-tip")),
                 );
@@ -9232,8 +9235,12 @@ impl TriApp {
             self.group_centre = tri::similarity::suggested_threshold(&movable, s);
             let links = tri::similarity::with_pauses(&links, self.group_pause_weight());
             let movable = tri::similarity::with_pauses(&movable, self.group_pause_weight());
-            self.group_distances = tri::similarity::distances_by_rank(&movable, self.group_gap);
-            let ranges = tri::similarity::group(&links, self.group_threshold(), self.group_gap);
+            // Au-delà de l'écart de temps maximal : joints en dernier, à fond à gauche
+            // seulement (retour du 21/11/2026).
+            let links = tri::similarity::gap_last(&links, self.group_gap);
+            let movable = tri::similarity::gap_last(&movable, self.group_gap);
+            self.group_distances = tri::similarity::distances_by_rank(&movable, 0.0);
+            let ranges = tri::similarity::group(&links, self.group_threshold(), 0.0);
             if complete {
                 self.stacks_wait = None;
                 if self.stacking && settled {
@@ -22165,7 +22172,7 @@ impl TriApp {
         let (mut pauses, mut curve) = (self.group_pauses, self.group_curve);
         let threshold = t!(
             "groups-threshold-value",
-            threshold = format!("{:.2}", self.group_threshold()),
+            threshold = format!("{:.2}", self.group_threshold() % tri::similarity::GAP_LAST),
             centre = format!("{:.2}", self.group_centre)
         );
         let summary = t!(

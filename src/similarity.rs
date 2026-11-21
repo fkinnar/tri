@@ -315,6 +315,31 @@ pub fn pause_weight(weight: f32, t: f32, range: f32) -> f32 {
     }
 }
 
+/// Distance ajoutée aux liens au-delà de l'écart de temps maximal par [`gap_last`] : plus
+/// grande que toute autre (empreintes 0 à 1, pauses comprises).
+pub const GAP_LAST: f32 = 1000.0;
+
+/// Les liens au-delà de l'écart de temps `max_gap_s` (0 : sans limite) **joints en
+/// dernier** plutôt que jamais (retour du 21/11/2026 : sur une sélection, voisines prises
+/// à plus de 10 min d'intervalle, le curseur à fond à gauche ne joignait rien) : leur
+/// distance passe derrière toutes les autres. Ils restent coupés partout sauf au bout
+/// gauche du curseur, qui regroupe tout. À passer ensuite à [`distances_by_rank`] et
+/// [`group`] sans écart maximal (0).
+pub fn gap_last(links: &[Option<Link>], max_gap_s: f32) -> Vec<Option<Link>> {
+    links
+        .iter()
+        .map(|l| {
+            l.map(|l| match l.gap_s {
+                Some(g) if max_gap_s > 0.0 && g > max_gap_s => Link {
+                    distance: l.distance + GAP_LAST,
+                    ..l
+                },
+                _ => l,
+            })
+        })
+        .collect()
+}
+
 /// Groupes d'images voisines : rangs de début et de fin (exclue) de chaque groupe, dans
 /// l'ordre. Une image rejoint la précédente si leur lien est sous `threshold` et leur
 /// écart de temps sous `max_gap_s` (0 : sans limite) ; un lien inconnu coupe.
@@ -622,6 +647,28 @@ mod tests {
             height: h,
             data,
         }
+    }
+
+    #[test]
+    fn links_past_the_time_gap_join_last() {
+        let link = |distance, gap| {
+            Some(Link {
+                distance,
+                gap_s: Some(gap),
+            })
+        };
+        let links = gap_last(&[link(0.1, 5.0), link(0.2, 900.0), None], 600.0);
+        let sorted = distances_by_rank(&links, 0.0);
+        assert_eq!(sorted, vec![0.1, 0.2 + GAP_LAST]);
+        // Au centre : coupé par le temps ; à fond à gauche : tout joint.
+        assert_eq!(group(&links, 0.5, 0.0).len(), 3);
+        let left = threshold_by_rank(&sorted, 0.5, -1.0, 2.0, 3.0, 8);
+        assert_eq!(
+            group(&links, left, 0.0).len(),
+            2,
+            "le lien inconnu coupe encore"
+        );
+        assert_eq!(gap_last(&links, 0.0), links, "sans limite : inchangés");
     }
 
     #[test]

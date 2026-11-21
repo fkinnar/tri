@@ -66,19 +66,7 @@ impl GridRender {
             GridRender::Embedded => (t!("grid-render-jpeg"), t!("grid-render-camera")),
             _ => return self.name().into(),
         };
-        let mut job = eframe::egui::text::LayoutJob::default();
-        let font = eframe::egui::FontSelection::Default;
-        let style = eframe::egui::Style::default();
-        eframe::egui::RichText::new(main).append_to(
-            &mut job,
-            &style,
-            font.clone(),
-            eframe::egui::Align::Center,
-        );
-        eframe::egui::RichText::new(format!("  {note}"))
-            .color(weak)
-            .append_to(&mut job, &style, font, eframe::egui::Align::Center);
-        job.into()
+        with_note(&main, &note, weak)
     }
 
     /// Choix proposés : les logiciels installés (`engines`) seulement (05/11/2026 : un
@@ -219,6 +207,24 @@ pub fn to_render(
             None,
         ),
     }
+}
+
+/// Nom d'un choix de liste suivi de sa précision en gris (`weak`) : « JPEG  boîtier »,
+/// « Par palette  séries ». Le nom prend la couleur de la liste.
+pub fn with_note(main: &str, note: &str, weak: eframe::egui::Color32) -> eframe::egui::WidgetText {
+    let mut job = eframe::egui::text::LayoutJob::default();
+    let font = eframe::egui::FontSelection::Default;
+    let style = eframe::egui::Style::default();
+    eframe::egui::RichText::new(main).append_to(
+        &mut job,
+        &style,
+        font.clone(),
+        eframe::egui::Align::Center,
+    );
+    eframe::egui::RichText::new(format!("  {note}"))
+        .color(weak)
+        .append_to(&mut job, &style, font, eframe::egui::Align::Center);
+    job.into()
 }
 
 #[cfg(test)]
