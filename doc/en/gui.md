@@ -420,7 +420,10 @@ system one ("cold" measurements, experiments).
   camera previews, RAW renders, histograms, sharpness, stack signatures, palettes (camera
   JPEG, raw data, renders of each installed program), "Compute everything", "Compute
   everything again". Each an action, a background task with its line and stop button in
-  the status bar (`compute_tasks.rs`); the open folder's background waits.
+  the status bar (`compute_tasks.rs`); the open folder's background waits. On the
+  selection too: right-click box on an image, where the rating actions (sidecars,
+  embedded ratings) and the computations are text lists ("Ratings", "Compute", "Develop
+  with"), easier to read than icons (2026-11-21).
 - **Developed in darktable** (2026-10-19, see `develop.md`; a whole folder in the background:
   `Ctrl+Shift+B` or the right click on a folder, 2026-10-25, issue #69; the folder itself
   opens in Darktable through the right click "Open in Darktable" or `d` in the folder

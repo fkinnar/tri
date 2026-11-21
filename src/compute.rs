@@ -201,6 +201,24 @@ pub fn clear(
     Ok(())
 }
 
+/// « Recréer » sur des images choisies : efface du cache ce que `kind` calcule pour
+/// `files` (clés de `settings`), avant [`run`].
+pub fn clear_files(
+    cache: &crate::cache::Cache,
+    files: &[MediaFile],
+    kind: Kind,
+    settings: &crate::preview::Settings,
+) -> std::io::Result<()> {
+    for file in files {
+        for level in kind.levels(file) {
+            if let Ok(key) = crate::preview::key(file, level, settings) {
+                cache.remove(&key)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

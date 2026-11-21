@@ -1396,6 +1396,27 @@ action-plugin-rawtherapee-compute_palettes = Dossiers : calculer les palettes de
 action-plugin-art-compute_palettes = Dossiers : calculer les palettes des rendus ART du dossier pointé
 action-core-folders-compute-all = Dossiers : tout calculer pour le dossier pointé (ce qui manque)
 action-core-folders-compute-recreate_all = Dossiers : tout recalculer pour le dossier pointé, même ce qui est en cache
+action-core-file-compute-previews = Calculer les vignettes et aperçus boîtier de la sélection
+action-core-file-compute-raw = Calculer les rendus RAW de la sélection
+action-core-file-compute-exposure = Calculer les histogrammes de la sélection
+action-core-file-compute-sharpness = Calculer la netteté de la sélection
+action-core-file-compute-signatures = Calculer les empreintes des piles de la sélection
+action-core-file-compute-palette_camera = Calculer les palettes (JPEG boîtier) de la sélection
+action-core-file-compute-palette_raw = Calculer les palettes (données brutes) de la sélection
+action-plugin-darktable-compute_image_palettes = Calculer les palettes des rendus Darktable de la sélection
+action-plugin-rapidraw-compute_image_palettes = Calculer les palettes des rendus RapidRAW de la sélection
+action-plugin-rawtherapee-compute_image_palettes = Calculer les palettes des rendus RawTherapee de la sélection
+action-plugin-art-compute_image_palettes = Calculer les palettes des rendus ART de la sélection
+action-core-file-compute-all = Tout calculer pour la sélection (ce qui manque)
+action-core-file-compute-recreate_all = Tout recalculer pour la sélection, même ce qui est en cache
+compute-images = { $n ->
+    [one] 1 image
+   *[other] { $n } images
+}
+rating-dialog-notes = Notes
+rating-dialog-notes-choose = Sidecars, notes inscrites…
+rating-dialog-compute = Calculer
+rating-dialog-compute-choose = Aperçus, palettes…
 folder-group-compute = Calculer
 folder-menu-compute-palettes = Palettes
 folder-menu-compute-all = Tout calculer

@@ -1034,6 +1034,8 @@ pub struct TriApp {
     /// Calculs choisis sur des dossiers, en fond (#555), et le numéro du suivant.
     compute_tasks: Vec<crate::compute_tasks::ComputeTask>,
     compute_next: u64,
+    /// Calculs demandés sur des images, lancés à l'image suivante.
+    compute_pending: Vec<(Action, crate::compute_tasks::Target)>,
     /// Lot lancé de lui-même pour la grille (`[gui.grid] develop = "auto"`) : pas de
     /// bilan s'il n'y avait rien à rendre.
     develop_batch_auto: bool,
@@ -2154,6 +2156,7 @@ impl TriApp {
             develop_batch: None,
             compute_tasks: Vec::new(),
             compute_next: 0,
+            compute_pending: Vec::new(),
             develop_batch_auto: false,
             any_developed: false,
             developed_reads: None,
@@ -6606,7 +6609,7 @@ impl TriApp {
                 Action::FolderReset => self.ask_reset(path, false),
                 Action::FolderOpenIn(engine) => self.open_folder_in(engine, &path),
                 Action::FolderCompute(_) | Action::FolderComputeAll | Action::FolderRecreateAll => {
-                    self.compute_action(&ctx, action, path)
+                    self.compute_action(&ctx, action, crate::compute_tasks::Target::Folder(path))
                 }
                 Action::FolderCopy | Action::FolderMove => {
                     self.transfer_folder(&ctx, path, action == Action::FolderCopy, None)
@@ -7123,11 +7126,19 @@ impl TriApp {
 
     /// Lance le calcul demandé par `action` sur `dir` (#555) : une tâche par calcul,
     /// « tout » = chacun le sien.
-    fn compute_action(&mut self, ctx: &egui::Context, action: Action, dir: PathBuf) {
+    fn compute_action(
+        &mut self,
+        ctx: &egui::Context,
+        action: Action,
+        target: crate::compute_tasks::Target,
+    ) {
         use tri::compute::Kind;
         let (kinds, recreate) = match action {
-            Action::FolderCompute(kind) => (vec![kind], false),
-            Action::FolderComputeAll | Action::FolderRecreateAll => {
+            Action::FolderCompute(kind) | Action::Compute(kind) => (vec![kind], false),
+            Action::FolderComputeAll
+            | Action::FolderRecreateAll
+            | Action::ComputeAll
+            | Action::RecreateAll => {
                 let mut kinds = vec![
                     Kind::Previews,
                     Kind::Raw,
@@ -7136,35 +7147,48 @@ impl TriApp {
                     Kind::Signatures,
                 ];
                 kinds.extend(self.compute_palette_kinds());
-                (kinds, action == Action::FolderRecreateAll)
+                let recreate = matches!(action, Action::FolderRecreateAll | Action::RecreateAll);
+                (kinds, recreate)
             }
             _ => return,
         };
         for kind in kinds {
-            self.start_compute(ctx, dir.clone(), kind, recreate);
+            self.start_compute(ctx, target.clone(), kind, recreate);
         }
     }
 
-    /// Lance le calcul `kind` sur `dir`, en fond ; refusé (message) s'il tourne déjà.
+    /// Images choisies pour un calcul (#555) : `paths` (sélection, image courante), des
+    /// images de la liste.
+    fn compute_images(&self, paths: &[PathBuf]) -> crate::compute_tasks::Target {
+        let wanted: HashSet<&PathBuf> = paths.iter().collect();
+        crate::compute_tasks::Target::Images {
+            folder: self.folder.dir.clone(),
+            files: self
+                .files
+                .iter()
+                .filter(|f| wanted.contains(&f.path))
+                .cloned()
+                .collect(),
+        }
+    }
+
+    /// Lance le calcul `kind` sur `target`, en fond ; refusé (message) s'il tourne déjà.
     fn start_compute(
         &mut self,
         ctx: &egui::Context,
-        dir: PathBuf,
+        target: crate::compute_tasks::Target,
         kind: tri::compute::Kind,
         recreate: bool,
     ) {
         let Some(engine) = &self.engine else { return };
         let what = crate::compute_tasks::kind_label(kind);
+        let name = target.name();
         if self
             .compute_tasks
             .iter()
-            .any(|t| t.folder == dir && t.kind == kind)
+            .any(|t| t.kind == kind && t.folder == target.folder() && t.name == name)
         {
-            let text = t!(
-                "compute-task-running",
-                what = what.as_str(),
-                name = folder_name(&dir)
-            );
+            let text = t!("compute-task-running", what = what.as_str(), name = name);
             self.notice = Some((text, false));
             return;
         }
@@ -7178,7 +7202,7 @@ impl TriApp {
         self.compute_tasks
             .push(crate::compute_tasks::ComputeTask::start(
                 self.compute_next,
-                dir,
+                target,
                 kind,
                 recreate,
                 producer,
@@ -7197,14 +7221,13 @@ impl TriApp {
         let mut finished = Vec::new();
         self.compute_tasks.retain_mut(|task| match task.finished() {
             Some(result) => {
-                finished.push((task.folder.clone(), task.kind, result));
+                finished.push((task.folder.clone(), task.name.clone(), task.kind, result));
                 false
             }
             None => true,
         });
-        for (folder, kind, result) in finished {
+        for (folder, name, kind, result) in finished {
             let what = crate::compute_tasks::kind_label(kind);
-            let name = folder_name(&folder);
             self.notice = Some(match result {
                 Ok(s) if s.cancelled => (
                     t!(
@@ -11173,7 +11196,7 @@ impl TriApp {
                     .cursor_path()
                     .unwrap_or_else(|| self.folder.dir.clone());
                 if !path.as_os_str().is_empty() {
-                    self.compute_action(ctx, action, path);
+                    self.compute_action(ctx, action, crate::compute_tasks::Target::Folder(path));
                 }
             }
             Action::FolderCopy | Action::FolderMove => {
@@ -11759,6 +11782,9 @@ impl TriApp {
             | Action::Sidecars
             | Action::EmbedNotes
             | Action::ImportNotes
+            | Action::Compute(_)
+            | Action::ComputeAll
+            | Action::RecreateAll
             | Action::Send(_) => {
                 // Afficher : l'image courante ; renommer : la sélection marquée (par lot,
                 // #439), sinon l'image courante ; les autres : la sélection.
@@ -11774,6 +11800,9 @@ impl TriApp {
                     | Action::Sidecars
                     | Action::EmbedNotes
                     | Action::ImportNotes
+                    | Action::Compute(_)
+                    | Action::ComputeAll
+                    | Action::RecreateAll
                     | Action::Send(_) => self.selection.targets(&self.files, self.selected),
                     _ => self
                         .files
@@ -17450,7 +17479,7 @@ impl TriApp {
                 text: t!(
                     "compute-task-progress",
                     what = crate::compute_tasks::kind_label(task.kind),
-                    name = folder_name(&task.folder),
+                    name = task.name.as_str(),
                     done = done,
                     total = total
                 ),
@@ -18617,6 +18646,12 @@ impl TriApp {
                 self.import_notes(&paths);
                 Ok(())
             }
+            Action::Compute(_) | Action::ComputeAll | Action::RecreateAll => {
+                // Lancé à l'image suivante, où le contexte d'affichage est là.
+                let target = self.compute_images(&paths);
+                self.compute_pending.push((action, target));
+                Ok(())
+            }
             Action::Send(_) => {
                 let Some(sender) = action.sender() else {
                     return;
@@ -19485,9 +19520,6 @@ impl TriApp {
                     Action::FileDelete,
                     Action::FileReveal,
                     Action::FileEdit,
-                    Action::Sidecars,
-                    Action::EmbedNotes,
-                    Action::ImportNotes,
                     Action::Send("plugin.airdrop.send"),
                 ]
                 .into_iter()
@@ -19517,47 +19549,124 @@ impl TriApp {
                     }
                 }
             });
-            // Développer avec (26/10/2026) : les logiciels installés, ou le rendu RAW.
-            if !engines.is_empty() {
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    ui.label(t!("develop-with"));
-                    egui::ComboBox::from_id_salt("develop_with")
-                        .selected_text(t!("develop-with-choose"))
+            // Listes de texte, plus lisibles qu'une rangée d'icônes (retour du 21/11/2026) :
+            // notes (sidecars, notes inscrites), calculs (#555), développer avec.
+            ui.add_space(6.0);
+            let compute_kinds: Vec<tri::compute::Kind> = [
+                tri::compute::Kind::Previews,
+                tri::compute::Kind::Raw,
+                tri::compute::Kind::Exposure,
+                tri::compute::Kind::Sharpness,
+                tri::compute::Kind::Signatures,
+            ]
+            .into_iter()
+            .chain(self.compute_palette_kinds())
+            .collect();
+            egui::Grid::new("rating_dialog_lists")
+                .num_columns(2)
+                .spacing([8.0, 6.0])
+                .show(ui, |ui| {
+                    let mut item = |ui: &mut Ui, action: Action, text: String| {
+                        if ui
+                            .add(egui::Button::selectable(false, text))
+                            .on_hover_text(self.action_tip(action))
+                            .clicked()
+                        {
+                            file_action = Some(action);
+                        }
+                    };
+                    ui.label(t!("rating-dialog-notes"));
+                    egui::ComboBox::from_id_salt("rating_dialog_notes")
+                        // Listes de même largeur, alignées.
+                        .width(200.0)
+                        .selected_text(t!("rating-dialog-notes-choose"))
                         .show_ui(ui, |ui| {
-                            for &engine in &engines {
-                                let action = Action::DevelopWith(engine);
-                                // Seulement ce qu'on y a développé (un `.rrdata` de
-                                // notes seules donnait un rendu orphelin, hors de la
-                                // pile : retour du 31/10/2026 ; puis darktable aussi,
-                                // le soir : sans développement, rien à voir ; seul le
-                                // rendu LibRaw est toujours là).
-                                let developable = tri::develop::is_developed_in(&path, engine);
-                                let tip = if developable {
-                                    self.action_tip(action)
-                                } else {
-                                    t!("develop-with-not-developed", engine = engine.name())
-                                };
+                            for action in
+                                [Action::Sidecars, Action::EmbedNotes, Action::ImportNotes]
+                            {
+                                item(ui, action, action.label());
+                            }
+                        })
+                        .response
+                        // Nom accessible : le texte montré (les tests la trouvent).
+                        .widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::Role::ComboBox,
+                                true,
+                                t!("rating-dialog-notes-choose"),
+                            )
+                        });
+                    ui.end_row();
+                    ui.label(t!("rating-dialog-compute"));
+                    egui::ComboBox::from_id_salt("rating_dialog_compute")
+                        // Listes de même largeur, alignées.
+                        .width(200.0)
+                        .selected_text(t!("rating-dialog-compute-choose"))
+                        .show_ui(ui, |ui| {
+                            for &kind in &compute_kinds {
+                                let text = crate::compute_tasks::kind_label(kind);
+                                item(ui, Action::Compute(kind), text);
+                            }
+                            ui.separator();
+                            item(ui, Action::ComputeAll, t!("folder-menu-compute-all"));
+                            item(
+                                ui,
+                                Action::RecreateAll,
+                                t!("folder-menu-compute-recreate-all"),
+                            );
+                        })
+                        .response
+                        // Nom accessible : le texte montré (les tests la trouvent).
+                        .widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::Role::ComboBox,
+                                true,
+                                t!("rating-dialog-compute-choose"),
+                            )
+                        });
+                    ui.end_row();
+                    // Développer avec (26/10/2026) : les logiciels installés, ou le rendu RAW.
+                    if !engines.is_empty() {
+                        ui.label(t!("develop-with"));
+                        egui::ComboBox::from_id_salt("develop_with")
+                            // Listes de même largeur, alignées.
+                            .width(200.0)
+                            .selected_text(t!("develop-with-choose"))
+                            .show_ui(ui, |ui| {
+                                for &engine in &engines {
+                                    let action = Action::DevelopWith(engine);
+                                    // Seulement ce qu'on y a développé (un `.rrdata` de
+                                    // notes seules donnait un rendu orphelin, hors de la
+                                    // pile : retour du 31/10/2026 ; puis darktable aussi,
+                                    // le soir : sans développement, rien à voir ; seul le
+                                    // rendu LibRaw est toujours là).
+                                    let developable = tri::develop::is_developed_in(&path, engine);
+                                    let tip = if developable {
+                                        self.action_tip(action)
+                                    } else {
+                                        t!("develop-with-not-developed", engine = engine.name())
+                                    };
+                                    if ui
+                                        .add_enabled(
+                                            developable,
+                                            egui::Button::selectable(false, engine.name()),
+                                        )
+                                        .on_hover_text(tip)
+                                        .clicked()
+                                    {
+                                        develop = Some(Some(engine));
+                                    }
+                                }
                                 if ui
-                                    .add_enabled(
-                                        developable,
-                                        egui::Button::selectable(false, engine.name()),
-                                    )
-                                    .on_hover_text(tip)
+                                    .selectable_label(false, t!("develop-with-libraw"))
                                     .clicked()
                                 {
-                                    develop = Some(Some(engine));
+                                    develop = Some(None);
                                 }
-                            }
-                            if ui
-                                .selectable_label(false, t!("develop-with-libraw"))
-                                .clicked()
-                            {
-                                develop = Some(None);
-                            }
-                        });
+                            });
+                        ui.end_row();
+                    }
                 });
-            }
         });
         if let Some(choice) = develop {
             self.rating_dialog = None;
@@ -24075,6 +24184,9 @@ impl eframe::App for TriApp {
         self.poll_remote();
         self.poll_cache_jobs();
         self.poll_develop_batch();
+        for (action, target) in std::mem::take(&mut self.compute_pending) {
+            self.compute_action(&ctx, action, target);
+        }
         self.poll_compute_tasks();
         self.auto_develop(&ctx);
         self.run_script(&ctx);
@@ -36056,6 +36168,36 @@ mod tests {
     }
 
     #[test]
+    fn the_right_click_box_computes_the_selection() {
+        // Retour du 21/11/2026 : calculer sur une sélection aussi ; dans la boîte du clic
+        // droit, notes et calculs en listes de texte.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        let (a, b) = (
+            h.state().files[0].path.clone(),
+            h.state().files[1].path.clone(),
+        );
+        h.state_mut().selection.toggle(&a);
+        h.state_mut().selection.toggle(&b);
+        h.state_mut().rating_dialog = Some((a.clone(), pos2(200.0, 200.0)));
+        h.run_steps(10);
+        assert!(
+            h.query_by_label(&Action::Sidecars.label()).is_none(),
+            "plus d'icône : dans la liste « Notes »"
+        );
+        h.get_by_label(&t!("rating-dialog-compute-choose")).click();
+        h.run_steps(2);
+        let what = crate::compute_tasks::kind_label(tri::compute::Kind::Signatures);
+        h.get_by_label(&what).click();
+        h.run_steps(3);
+        assert!(h.state().rating_dialog.is_none());
+        assert_eq!(h.state().compute_next, 1);
+        run_until(&mut h, |app| app.compute_tasks.is_empty());
+        let (text, _) = h.state().notice.clone().unwrap();
+        assert!(text.contains(&t!("compute-images", n = 2)), "{text}");
+    }
+
+    #[test]
     fn the_folder_menu_computes_chosen_data() {
         // #555 : clic droit sur un dossier, « Calculer », une entrée par calcul.
         let (mut h, dir) = harness();
@@ -41067,7 +41209,11 @@ mod tests {
         let other = h.state().files[1].path.clone();
         h.state_mut().rating_dialog = Some((other.clone(), pos2(200.0, 200.0)));
         h.run_steps(2);
-        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        // La dernière liste de la boîte : « Développer avec ».
+        h.query_all_by_role(egui::accesskit::Role::ComboBox)
+            .last()
+            .unwrap()
+            .click();
         h.run_steps(2);
         h.get_by_label("Darktable").click();
         h.run_steps(2);
@@ -41083,7 +41229,11 @@ mod tests {
         let third = h.state().files[2].path.clone();
         h.state_mut().rating_dialog = Some((third.clone(), pos2(200.0, 200.0)));
         h.run_steps(2);
-        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        // La dernière liste de la boîte : « Développer avec ».
+        h.query_all_by_role(egui::accesskit::Role::ComboBox)
+            .last()
+            .unwrap()
+            .click();
         h.run_steps(2);
         h.get_by_label("Darktable").click();
         h.run_steps(2);
@@ -41093,7 +41243,11 @@ mod tests {
         );
         assert!(h.state().rating_dialog.is_some(), "la boîte reste ouverte");
         // La liste s'est refermée sur le clic : rouverte pour le rendu LibRaw.
-        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        // La dernière liste de la boîte : « Développer avec ».
+        h.query_all_by_role(egui::accesskit::Role::ComboBox)
+            .last()
+            .unwrap()
+            .click();
         h.run_steps(2);
         h.get_by_label(&t!("develop-with-libraw")).click();
         h.run_steps(2);

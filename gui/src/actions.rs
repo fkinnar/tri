@@ -366,6 +366,12 @@ pub enum Action {
     FolderCompute(tri::compute::Kind),
     /// Calcule tout pour le dossier pointé (ce qui manque au cache).
     FolderComputeAll,
+    /// Calcule ce qui est choisi pour la sélection (sinon l'image courante), en fond.
+    Compute(tri::compute::Kind),
+    /// Calcule tout pour la sélection (ce qui manque au cache).
+    ComputeAll,
+    /// Recalcule tout pour la sélection, même ce qui est en cache.
+    RecreateAll,
     /// Recalcule tout pour le dossier pointé, même ce qui est en cache.
     FolderRecreateAll,
     /// Panneau des dossiers : copier le dossier pointé vers… (une boîte confirme).
@@ -588,7 +594,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 265] = [
+    pub const ALL: [Action; 278] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -791,6 +797,29 @@ impl Action {
         )),
         Action::FolderComputeAll,
         Action::FolderRecreateAll,
+        Action::Compute(tri::compute::Kind::Previews),
+        Action::Compute(tri::compute::Kind::Raw),
+        Action::Compute(tri::compute::Kind::Exposure),
+        Action::Compute(tri::compute::Kind::Sharpness),
+        Action::Compute(tri::compute::Kind::Signatures),
+        Action::Compute(tri::compute::Kind::Palette(
+            tri::palette::SourceKind::Camera,
+        )),
+        Action::Compute(tri::compute::Kind::Palette(tri::palette::SourceKind::Raw)),
+        Action::Compute(tri::compute::Kind::Palette(
+            tri::palette::SourceKind::Developed(tri::develop::Engine::Darktable),
+        )),
+        Action::Compute(tri::compute::Kind::Palette(
+            tri::palette::SourceKind::Developed(tri::develop::Engine::RapidRaw),
+        )),
+        Action::Compute(tri::compute::Kind::Palette(
+            tri::palette::SourceKind::Developed(tri::develop::Engine::RawTherapee),
+        )),
+        Action::Compute(tri::compute::Kind::Palette(
+            tri::palette::SourceKind::Developed(tri::develop::Engine::Art),
+        )),
+        Action::ComputeAll,
+        Action::RecreateAll,
         Action::FolderCopy,
         Action::FolderMove,
         Action::MetaUp,
@@ -1014,7 +1043,8 @@ impl Action {
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileActionsAllow | FileRename | FileDelete | FileReveal | FileEdit | FileCopy
             | FileMove | Sidecars | EmbedNotes | ImportNotes | FileDeleteStack
-            | FileDeletePhoto | FileCopyStack | FileExport | ExportReport | Send(_) => Group::Files,
+            | FileDeletePhoto | FileCopyStack | FileExport | ExportReport | Send(_)
+            | Compute(_) | ComputeAll | RecreateAll => Group::Files,
             Undo | Redo | History => Group::Edit,
             StackToggle | StackOpen | StackClose | StacksAll | GroupingWindow | StackMode
             | StackChoose | StackFirst | StackLast | StackEnterToggle | DevToggle | DevNext
@@ -1304,6 +1334,36 @@ impl Action {
                     }
                 }
             }
+            Action::Compute(kind) => {
+                use tri::compute::Kind;
+                use tri::develop::Engine;
+                use tri::palette::SourceKind;
+                match kind {
+                    Kind::Previews => "core.file.compute.previews",
+                    Kind::Raw => "core.file.compute.raw",
+                    Kind::Exposure => "core.file.compute.exposure",
+                    Kind::Sharpness => "core.file.compute.sharpness",
+                    Kind::Signatures => "core.file.compute.signatures",
+                    Kind::Palette(SourceKind::Camera | SourceKind::Cover) => {
+                        "core.file.compute.palette_camera"
+                    }
+                    Kind::Palette(SourceKind::Raw) => "core.file.compute.palette_raw",
+                    Kind::Palette(SourceKind::Developed(Engine::Darktable)) => {
+                        "plugin.darktable.compute_image_palettes"
+                    }
+                    Kind::Palette(SourceKind::Developed(Engine::RapidRaw)) => {
+                        "plugin.rapidraw.compute_image_palettes"
+                    }
+                    Kind::Palette(SourceKind::Developed(Engine::RawTherapee)) => {
+                        "plugin.rawtherapee.compute_image_palettes"
+                    }
+                    Kind::Palette(SourceKind::Developed(Engine::Art)) => {
+                        "plugin.art.compute_image_palettes"
+                    }
+                }
+            }
+            Action::ComputeAll => "core.file.compute.all",
+            Action::RecreateAll => "core.file.compute.recreate_all",
             Action::FolderComputeAll => "core.folders.compute.all",
             Action::FolderRecreateAll => "core.folders.compute.recreate_all",
             Action::FolderCopy => "core.folders.copy",

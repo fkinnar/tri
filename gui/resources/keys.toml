@@ -277,6 +277,20 @@ loupe = "m"
 "core.file.sidecars" = []
 # Write the ratings into the images themselves (JPEG, PNG, WebP, TIFF, HEIC).
 "core.file.embed_notes" = []
+# Compute chosen data for the selection (or the current image), in the background (#555).
+"core.file.compute.previews" = []
+"core.file.compute.raw" = []
+"core.file.compute.exposure" = []
+"core.file.compute.sharpness" = []
+"core.file.compute.signatures" = []
+"core.file.compute.palette_camera" = []
+"core.file.compute.palette_raw" = []
+"core.file.compute.all" = []
+"core.file.compute.recreate_all" = []
+"plugin.darktable.compute_image_palettes" = []
+"plugin.rapidraw.compute_image_palettes" = []
+"plugin.rawtherapee.compute_image_palettes" = []
+"plugin.art.compute_image_palettes" = []
 # Read the ratings written inside the images (changed in another program) into the
 # sidecars.
 "core.file.import_notes" = []

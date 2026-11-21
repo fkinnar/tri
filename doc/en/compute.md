@@ -40,6 +40,11 @@ Right-click a folder, "Compute": one entry per computation, "Compute everything"
 `plugin.<program>.compute_palettes`), so also in `:`, `?` and `[keys]`. Each computation
 has its line in the status bar, with its stop button (see [gui.md](gui.md)).
 
+On a **selection** too (feedback of 2026-11-21): actions `core.file.compute.*` and
+`plugin.<program>.compute_image_palettes` (the selection, else the current image), and
+the "Compute" list of the right-click box on an image; "recreate" then erases only those
+images' entries (`clear_files`).
+
 `tri <folder> --compute previews,exposure,palette-camera [--recreate]`.
 
 ## Tests

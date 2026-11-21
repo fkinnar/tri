@@ -188,6 +188,9 @@ pub fn navigate(
         | Action::Sidecars
         | Action::EmbedNotes
         | Action::ImportNotes
+        | Action::Compute(_)
+        | Action::ComputeAll
+        | Action::RecreateAll
         | Action::ZoomIn
         | Action::ZoomOut
         | Action::ZoomFit
