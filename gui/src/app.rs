@@ -4054,27 +4054,32 @@ impl TriApp {
                         let (mut sp, mut vp) = (s * 100.0, v * 100.0);
                         let before_hsv = (h, sp, vp);
                         let small = egui::TextStyle::Small.resolve(ui.style());
+                        let body = egui::TextStyle::Body.resolve(ui.style());
                         let weak = ui.visuals().weak_text_color();
-                        let unit = |ui: &mut Ui, text: &str| {
-                            ui.add_sized(
-                                vec2(14.0, ui.spacing().interact_size.y),
-                                egui::Label::new(
-                                    egui::RichText::new(text).font(small.clone()).color(weak),
-                                ),
-                            );
+                        let field = vec2(44.0, ui.spacing().interact_size.y);
+                        // La valeur et son unité collées dans la même case (« ° » à la taille du
+                        // texte, « % » en petit : à taille égale, le degré paraissait minuscule).
+                        let with_unit = |ui: &mut Ui, value: egui::DragValue, text: &str| {
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 2.0;
+                                ui.add_sized(field, value);
+                                let font = if text == "°" {
+                                    egui::FontId::new(body.size * 1.35, body.family.clone())
+                                } else {
+                                    small.clone()
+                                };
+                                let unit = egui::RichText::new(text).font(font).color(weak);
+                                ui.add_sized(vec2(10.0, field.y), egui::Label::new(unit));
+                            });
                         };
                         egui::Grid::new("palette_colour_values")
-                            .num_columns(9)
+                            .num_columns(6)
                             .min_col_width(0.0)
-                            .spacing(vec2(4.0, 6.0))
+                            .spacing(vec2(8.0, 6.0))
                             .show(ui, |ui| {
                                 for (value, name) in rgb.iter_mut().zip(["R:", "G:", "B:"]) {
                                     ui.label(name);
-                                    ui.add_sized(
-                                        vec2(44.0, ui.spacing().interact_size.y),
-                                        egui::DragValue::new(value).speed(0.5),
-                                    );
-                                    unit(ui, "");
+                                    with_unit(ui, egui::DragValue::new(value).speed(0.5), "");
                                 }
                                 ui.end_row();
                                 let names = [
@@ -4089,14 +4094,11 @@ impl TriApp {
                                 ];
                                 for ((value, max, suffix), name) in fields.into_iter().zip(names) {
                                     ui.label(format!("{name}:"));
-                                    ui.add_sized(
-                                        vec2(44.0, ui.spacing().interact_size.y),
-                                        egui::DragValue::new(value)
-                                            .range(0.0..=max)
-                                            .max_decimals(0)
-                                            .speed(0.5),
-                                    );
-                                    unit(ui, suffix);
+                                    let drag = egui::DragValue::new(value)
+                                        .range(0.0..=max)
+                                        .max_decimals(0)
+                                        .speed(0.5);
+                                    with_unit(ui, drag, suffix);
                                 }
                                 ui.end_row();
                             });
