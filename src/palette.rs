@@ -106,6 +106,11 @@ pub struct PaletteSettings {
     pub merge: f32,
     /// Part minimale d'une couleur (0 à 1) : en deçà, retirée (miettes, bruit).
     pub min_share: f32,
+    /// Poids de la teinte et de la saturation (a et b d'OKLab) face à la clarté dans la
+    /// distance entre palettes (retour du 21/11/2026 : à poids égal, une photo brune au
+    /// fond sombre semblait aussi proche d'une photo violette au fond sombre que les autres
+    /// violettes : la clarté l'emportait).
+    pub chroma_weight: f32,
     /// « Palettes proches » : seuil de départ du curseur (distance, voir [`distance`]).
     pub similar_threshold: f32,
     /// « Palettes proches » : seuil au bout du curseur.
@@ -120,8 +125,9 @@ impl Default for PaletteSettings {
             iterations: 12,
             merge: 0.03,
             min_share: 0.02,
-            similar_threshold: 0.08,
-            similar_max: 0.3,
+            chroma_weight: 2.0,
+            similar_threshold: 0.12,
+            similar_max: 0.5,
         }
     }
 }
@@ -271,19 +277,20 @@ pub fn extract(bitmap: &Bitmap, settings: &PaletteSettings) -> Palette {
     Palette { swatches }
 }
 
-/// Distance entre deux palettes (0 : identiques ; en unités OKLab, ~0,1 déjà bien
-/// différentes) : coût de transport de leurs parts, en servant d'abord les couples de
-/// couleurs les plus proches (approche gloutonne de l'« Earth Mover's Distance », exacte
-/// dans les cas simples et toujours au moins aussi grande que la vraie). Une palette vide :
-/// distance infinie.
-pub fn distance(a: &Palette, b: &Palette) -> f32 {
+/// Distance entre deux palettes (0 : identiques) : coût de transport de leurs parts, en
+/// servant d'abord les couples de couleurs les plus proches (approche gloutonne de
+/// l'« Earth Mover's Distance », exacte dans les cas simples et toujours au moins aussi
+/// grande que la vraie). Distances entre couleurs dans OKLab, teinte et saturation (a, b)
+/// comptées `chroma_weight` fois (1 : OKLab tel quel). Une palette vide : distance
+/// infinie.
+pub fn distance(a: &Palette, b: &Palette, chroma_weight: f32) -> f32 {
     if a.swatches.is_empty() || b.swatches.is_empty() {
         return f32::INFINITY;
     }
     let mut pairs: Vec<(f32, usize, usize)> = Vec::new();
     for (i, x) in a.swatches.iter().enumerate() {
         for (j, y) in b.swatches.iter().enumerate() {
-            pairs.push((oklab_distance(x.oklab, y.oklab), i, j));
+            pairs.push((weighted_distance(x.oklab, y.oklab, chroma_weight), i, j));
         }
     }
     pairs.sort_by(|p, q| p.0.total_cmp(&q.0));
@@ -324,6 +331,12 @@ pub fn rank_similar<T>(
     }
     known.sort_by(|a, b| a.0.total_cmp(&b.0));
     known.into_iter().map(|(_, t)| t).chain(unknown).collect()
+}
+
+/// Distance dans OKLab, a et b comptés `chroma_weight` fois.
+pub fn weighted_distance(a: [f32; 3], b: [f32; 3], chroma_weight: f32) -> f32 {
+    let w = chroma_weight;
+    ((a[0] - b[0]).powi(2) + (w * (a[1] - b[1])).powi(2) + (w * (a[2] - b[2])).powi(2)).sqrt()
 }
 
 /// Distance euclidienne dans OKLab.
@@ -563,10 +576,38 @@ mod tests {
         let a = extract(&bands(&[([200, 40, 40], 80), ([40, 60, 200], 20)]), &s);
         let near = extract(&bands(&[([190, 50, 45], 80), ([40, 60, 200], 20)]), &s);
         let far = extract(&bands(&[([40, 160, 60], 80), ([230, 220, 90], 20)]), &s);
-        assert_eq!(distance(&a, &a), 0.0);
-        assert!(distance(&a, &near) < distance(&a, &far));
-        assert!((distance(&a, &near) - distance(&near, &a)).abs() < 1e-6);
-        assert!(distance(&a, &Palette::default()).is_infinite());
+        let w = s.chroma_weight;
+        assert_eq!(distance(&a, &a, w), 0.0);
+        assert!(distance(&a, &near, w) < distance(&a, &far, w));
+        assert!((distance(&a, &near, w) - distance(&near, &a, w)).abs() < 1e-6);
+        assert!(distance(&a, &Palette::default(), w).is_infinite());
+    }
+
+    #[test]
+    fn hue_counts_more_than_lightness_for_dark_backgrounds() {
+        // Retour du 21/11/2026 : référence au fond bleu nuit ; une photo violette au fond
+        // sombre doit être plus proche qu'une photo brune au fond sombre, nettement.
+        let s = PaletteSettings::default();
+        let reference = extract(
+            &bands(&[([3, 37, 106], 62), ([3, 13, 50], 18), ([36, 87, 195], 20)]),
+            &s,
+        );
+        let purple = extract(
+            &bands(&[([26, 10, 74], 50), ([176, 64, 224], 30), ([5, 8, 48], 20)]),
+            &s,
+        );
+        let brown = extract(
+            &bands(&[([26, 21, 18], 55), ([58, 42, 34], 25), ([128, 96, 80], 20)]),
+            &s,
+        );
+        let gap = |w: f32| distance(&reference, &brown, w) - distance(&reference, &purple, w);
+        assert!(gap(s.chroma_weight) > 0.0, "la violette d'abord");
+        assert!(
+            gap(s.chroma_weight) > 2.0 * gap(1.0),
+            "l'écart se creuse : {} contre {}",
+            gap(s.chroma_weight),
+            gap(1.0)
+        );
     }
 
     #[test]

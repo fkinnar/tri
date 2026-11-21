@@ -3610,11 +3610,9 @@ impl TriApp {
             files,
             |f| {
                 let source = kind.source_for(f)?;
-                Some(
-                    self.palettes
-                        .get(&(f.path.clone(), source))
-                        .map(|p| tri::palette::distance(&like.reference, p)),
-                )
+                Some(self.palettes.get(&(f.path.clone(), source)).map(|p| {
+                    tri::palette::distance(&like.reference, p, self.settings.palette.chroma_weight)
+                }))
             },
             like.threshold,
         );

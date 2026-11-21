@@ -591,10 +591,16 @@ iterations = 12
 merge = 0.03
 # Minimum share of a colour (0 to 1): below, removed.
 min_share = 0.02
+# Weight of hue and saturation against lightness in the distance between palettes.
+#
+# Weight of hue and saturation (OKLab a and b) against lightness in the distance between
+# palettes: at 1, a brown photo on a dark background looked as close to a purple photo on a
+# dark background as the other purple ones, lightness won.
+chroma_weight = 2.0
 # Similar palettes: starting threshold of the slider (distance between palettes).
-similar_threshold = 0.08
+similar_threshold = 0.12
 # Similar palettes: threshold at the end of the slider.
-similar_max = 0.3
+similar_max = 0.5
 
 [similarity]
 # Group similar images (bursts, series) into stacks in the background.
