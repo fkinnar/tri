@@ -221,7 +221,8 @@ system one ("cold" measurements, experiments).
   bar). For the selected image: the colour **band**, each colour as wide as its share, the
   **colour wheel** (hue as angle, chroma as the square root of the radius to spread a
   photo's low-saturation colours, size by share) and the list of colours; with a program,
-  each of its developments of the photo, named, with its band. A click on a colour (band,
+  each of its developments of the photo with its band, named when there are several
+  (alone, the name repeated the source). A click on a colour (band,
   wheel dot, list patch) finds the images that contain it; a click on a `#rrggbb` copies
   it. Cache read in the background, newest request first (`palette_reads`). Drawing in
   `gui/src/palette_view.rs`.

@@ -233,7 +233,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   couleurs, chacune aussi large que sa part, la **roue chromatique** (teinte en angle,
   chroma en racine du rayon pour étaler les couleurs peu saturées d'une photo, taille
   selon la part) et la liste des couleurs ; avec un logiciel, chacun de ses développements
-  de la photo, nommé, avec sa bande. Un clic sur une couleur (bande, point de la roue,
+  de la photo avec sa bande, nommés quand il y en a plusieurs (seul, le nom répétait la
+  source). Un clic sur une couleur (bande, point de la roue,
   pastille de la liste) cherche les images qui la contiennent ; un clic sur un `#rrggbb` le
   copie. Lecture du cache en fond, la dernière demandée d'abord (`palette_reads`).
   Dessin dans `gui/src/palette_view.rs`.

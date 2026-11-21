@@ -4446,7 +4446,10 @@ impl TriApp {
         if index < self.files.len() {
             let (targets, main) = self.palette_targets(kind, index);
             no_render = targets.is_empty();
-            let named = matches!(kind, SourceKind::Developed(_));
+            // Nommés seulement quand la photo en a plusieurs (clones, autre logiciel avec la
+            // couverture) : seul, le nom répétait la source (retour du 21/11/2026).
+            let named =
+                matches!(kind, SourceKind::Developed(_) | SourceKind::Cover) && targets.len() > 1;
             for &i in &targets {
                 let label = named.then(|| development_label(&self.files[i].path));
                 let row = match self.palette_of(i) {
@@ -4492,6 +4495,8 @@ impl TriApp {
             return;
         }
         let several = rows.len() > 1;
+        // De l'air sous la source, comme entre les autres réglages du panneau.
+        ui.add_space(self.gui.dialogs.spacing);
         let mut picked = None;
         let mut shown: Vec<(Option<String>, Arc<Palette>)> = Vec::new();
         for (label, row) in rows {
@@ -28611,7 +28616,8 @@ mod tests {
             h.query_by_label(&t!("palette-no-render")).is_none(),
             "la photo a des rendus finis"
         );
-        // Un seul développement (img1) : nommé aussi (retour du 21/11/2026).
+        // Un seul développement (img1) : pas nommé, le nom répétait la source (retour du
+        // 21/11/2026).
         let img1 = h
             .state()
             .files
@@ -28629,7 +28635,7 @@ mod tests {
             })
             .map(|f| development_label(&f.path))
             .unwrap();
-        assert!(h.query_by_label(&dev).is_some(), "{dev} montré, même seul");
+        assert!(h.query_by_label(&dev).is_none(), "{dev} pas répété, seul");
     }
 
     #[test]
