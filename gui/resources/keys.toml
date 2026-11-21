@@ -205,6 +205,7 @@ loupe = "m"
 "core.filter.developed" = ["f r"]
 # In conflict (ratings that disagree between programs): "c".
 "core.filter.conflicts" = ["f c"]
+"core.filter.palette" = []
 # After a filter change, start again from the first image (on / off): "g", like "g g".
 "core.filter.restart" = ["f g"]
 # f k ("count"): the filters in use and the number of photos left, large, in the middle.

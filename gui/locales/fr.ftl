@@ -45,6 +45,8 @@ action-core-filter-count = Filtres en cours et nombre de photos, en grand
 kw-core-filter-count = compter nombre combien résumé filtres restantes total
 action-core-filter-restart = Après un changement de filtre : repartir de la première image (allumé) ou rester sur l'image
 kw-core-filter-conflicts = conflit désaccord notes logiciels trancher
+action-core-filter-palette = Filtre : palettes proches de l'image sélectionnée (ou fin de la recherche)
+kw-core-filter-palette = palette couleurs proches semblables moodboard teintes
 action-core-filter-developed = Filtre : développées (allumer / éteindre ; logiciels à cocher dans la liste)
 action-core-grid-render = Rendu affiché précédent (vignettes et plein écran)
 action-core-view-render-embedded = Rendu affiché : JPEG boîtier
@@ -1489,6 +1491,15 @@ palette-computing = palette en cours de calcul
 palette-no-render = Pas de rendu fini pour cette image (seuls les développements en ont).
 colour-palette-empty = Aucune couleur trouvée.
 palette-swatch-tip = { $hex } · { $share } % (clic : copier)
+palette-similar = Palettes proches
+palette-similar-tip = Ne garder que les images aux palettes proches de celle-ci, de la plus proche à la moins proche (curseur : seuil)
+palette-similar-to = Palettes proches de { $name }
+palette-similar-threshold = Seuil : plus à droite, des palettes plus éloignées gardées (double-clic : valeur de départ)
+palette-similar-count = { $n ->
+    [one] { $n } image
+   *[other] { $n } images
+}
+palette-similar-end = Terminer
 progress-palettes = palettes
 panel-section-position = Position
 panel-section-filters = Filtre

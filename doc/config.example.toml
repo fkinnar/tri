@@ -594,6 +594,10 @@ iterations = 12
 merge = 0.03
 # Part minimale d'une couleur (0 à 1) : en deçà, retirée.
 min_share = 0.02
+# Palettes proches : seuil de départ du curseur (distance entre palettes).
+similar_threshold = 0.08
+# Palettes proches : seuil au bout du curseur.
+similar_max = 0.3
 
 [similarity]
 # Regrouper en fond les images semblables (rafales, séries) en piles.

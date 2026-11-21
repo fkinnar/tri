@@ -229,8 +229,17 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   photo, taille selon la part) et la liste des couleurs. En rendus finis, **tous les développements** de la photo
   (logiciels, clones, copies), chacun nommé avec sa bande (retour du 21/11/2026) ; la roue et
   la liste : celui sélectionné, sinon le premier ; une photo sans développement le dit. Lecture du cache en fond, la dernière demandée d'abord
-  (`palette_reads`), comme l'histogramme. Dessin dans `gui/src/palette_view.rs`. À venir :
-  « palettes proches » (filtre et tri, curseur de seuil) et « contient cette couleur ».
+  (`palette_reads`), comme l'histogramme. Dessin dans `gui/src/palette_view.rs`. **Palettes proches** (bouton de la
+  section, action `core.filter.palette`) : la grille ne garde que les images dont la
+  palette est à moins du seuil de celle de l'image (curseur, double-clic : valeur de
+  départ, `[palette] similar_threshold` / `similar_max`), de la plus proche à la moins
+  proche ; celles pas encore calculées restent, à la fin (sinon le calcul en fond, qui ne
+  voit que la liste, ne les ferait jamais) ; celles sans palette possible (photo sans
+  rendu fini) partent. En rendus finis, chaque développement est comparé. Mentionnée dans
+  le résumé des filtres ; effacer les filtres (`f d`) ou « Terminer » y met fin ; changer de
+  source aussi. Toutes les palettes du dossier sont lues en fond à leur arrivée, la grille
+  refiltrée de temps en temps (`analysis_refilter_ms`). À venir : « contient cette
+  couleur ».
 - **Bout de la pile ou de la liste** (`[gui.end]`, #307, 05/11/2026) : en plein écran,
   ← / → qui ne bougent plus le disent un instant, dans le même cadre que le repère de
   position (« Fin de la pile », « Début de la pile », « Fin de la sélection », « Début

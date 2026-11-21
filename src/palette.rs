@@ -106,6 +106,10 @@ pub struct PaletteSettings {
     pub merge: f32,
     /// Part minimale d'une couleur (0 à 1) : en deçà, retirée (miettes, bruit).
     pub min_share: f32,
+    /// « Palettes proches » : seuil de départ du curseur (distance, voir [`distance`]).
+    pub similar_threshold: f32,
+    /// « Palettes proches » : seuil au bout du curseur.
+    pub similar_max: f32,
 }
 
 impl Default for PaletteSettings {
@@ -116,6 +120,8 @@ impl Default for PaletteSettings {
             iterations: 12,
             merge: 0.03,
             min_share: 0.02,
+            similar_threshold: 0.08,
+            similar_max: 0.3,
         }
     }
 }
@@ -293,6 +299,31 @@ pub fn distance(a: &Palette, b: &Palette) -> f32 {
         }
     }
     cost
+}
+
+/// « Palettes proches » (#492) : les éléments de `items` dont la palette est à moins de
+/// `threshold` de la référence, du plus proche au plus lointain (ordre gardé à distance
+/// égale). `distance` dit, pour chacun : `None` s'il n'a pas de palette possible (une photo
+/// sans rendu fini) — retiré ; `Some(None)` si elle n'est pas encore calculée — **gardé, à
+/// la fin**, sans quoi elle ne serait jamais calculée (le calcul en fond ne voit que la
+/// liste affichée) ; `Some(Some(d))` sinon.
+pub fn rank_similar<T>(
+    items: Vec<T>,
+    distance: impl Fn(&T) -> Option<Option<f32>>,
+    threshold: f32,
+) -> Vec<T> {
+    let mut known: Vec<(f32, T)> = Vec::new();
+    let mut unknown: Vec<T> = Vec::new();
+    for item in items {
+        match distance(&item) {
+            None => {}
+            Some(None) => unknown.push(item),
+            Some(Some(d)) if d <= threshold => known.push((d, item)),
+            Some(Some(_)) => {}
+        }
+    }
+    known.sort_by(|a, b| a.0.total_cmp(&b.0));
+    known.into_iter().map(|(_, t)| t).chain(unknown).collect()
 }
 
 /// Distance euclidienne dans OKLab.
@@ -536,6 +567,20 @@ mod tests {
         assert!(distance(&a, &near) < distance(&a, &far));
         assert!((distance(&a, &near) - distance(&near, &a)).abs() < 1e-6);
         assert!(distance(&a, &Palette::default()).is_infinite());
+    }
+
+    #[test]
+    fn similar_palettes_are_kept_under_the_threshold_closest_first() {
+        // a : 0,05 ; b : sans palette possible ; c : 0,01 ; d : pas encore calculée ; e : 0,2.
+        let items = ["a", "b", "c", "d", "e"];
+        let distance = |s: &&str| match *s {
+            "a" => Some(Some(0.05)),
+            "b" => None,
+            "c" => Some(Some(0.01)),
+            "d" => Some(None),
+            _ => Some(Some(0.2)),
+        };
+        assert_eq!(rank_similar(items.to_vec(), distance, 0.1), ["c", "a", "d"]);
     }
 
     #[test]

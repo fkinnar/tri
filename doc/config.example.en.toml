@@ -591,6 +591,10 @@ iterations = 12
 merge = 0.03
 # Minimum share of a colour (0 to 1): below, removed.
 min_share = 0.02
+# Similar palettes: starting threshold of the slider (distance between palettes).
+similar_threshold = 0.08
+# Similar palettes: threshold at the end of the slider.
+similar_max = 0.3
 
 [similarity]
 # Group similar images (bursts, series) into stacks in the background.

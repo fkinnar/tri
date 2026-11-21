@@ -41,6 +41,12 @@ never smaller than the true one, and instant over thousands of palettes (the exa
 computation would need a transport solver for a gain invisible when culling).
 Symmetric; an empty palette is at infinite distance.
 
+## Similar palettes (`rank_similar`)
+
+The items under the threshold, closest first; those whose palette is not computed yet
+kept at the end, those without a possible palette removed. Slider start and end:
+`similar_threshold` (0.08), `similar_max` (0.3).
+
 ## Share of a colour (`Palette::share_near`)
 
 The share of the image whose colour is within an OKLab radius of a given colour: "has

@@ -218,8 +218,16 @@ system one ("cold" measurements, experiments).
   and the list of colours. With finished renders, **every development** of the photo
   (software, clones, copies), each named with its band (feedback of 2026-11-21); the wheel
   and list: the selected one, otherwise the first; a photo without development says so. Cache read in the background, newest request first (`palette_reads`), like the
-  histogram. Drawing in `gui/src/palette_view.rs`. Coming: "similar palettes" (filter and
-  sort, threshold slider) and "contains this colour".
+  histogram. Drawing in `gui/src/palette_view.rs`. **Similar palettes** (section button,
+  action `core.filter.palette`): the grid keeps only the images whose palette is within
+  the threshold of the image's (slider, double-click: starting value,
+  `[palette] similar_threshold` / `similar_max`), closest first; those not computed yet
+  stay, at the end (otherwise the background computation, which only sees the list,
+  would never do them); those without a possible palette (photo without finished render)
+  leave. With finished renders, every development is compared. Shown in the filter
+  summary; clearing the filters (`f d`) or "Done" ends it; so does changing source. All
+  the folder's palettes are read in the background as they arrive, the grid refiltered
+  from time to time (`analysis_refilter_ms`). Coming: "contains this colour".
 - **End of the stack or of the list** (`[gui.end]`, #307, 2026-11-05): in full screen,
   ← / → that no longer move say so for a moment, in the same frame as the position mark
   ("End of the stack", "Start of the stack", "End of the selection", "Start of the
