@@ -99,11 +99,14 @@ pub enum Level {
     /// l'aperçu standard : le JPEG du logiciel, rangé tel quel. Un niveau par logiciel :
     /// une image développée dans deux logiciels a deux rendus.
     Developed(crate::develop::Engine),
+    /// Palette de couleurs ([`crate::palette::Palette`]) tirée d'une source (#492) : un
+    /// niveau par source. Entrée binaire.
+    Palette(crate::palette::Source),
 }
 
 impl Level {
     /// Tous les niveaux.
-    pub const ALL: [Level; 12] = [
+    pub const ALL: [Level; 18] = [
         Level::Thumbnail,
         Level::Embedded,
         Level::Standard,
@@ -116,12 +119,29 @@ impl Level {
         Level::Developed(crate::develop::Engine::RapidRaw),
         Level::Developed(crate::develop::Engine::RawTherapee),
         Level::Developed(crate::develop::Engine::Art),
+        Level::Palette(crate::palette::Source::Camera),
+        Level::Palette(crate::palette::Source::Raw),
+        Level::Palette(crate::palette::Source::Developed(
+            crate::develop::Engine::Darktable,
+        )),
+        Level::Palette(crate::palette::Source::Developed(
+            crate::develop::Engine::RapidRaw,
+        )),
+        Level::Palette(crate::palette::Source::Developed(
+            crate::develop::Engine::RawTherapee,
+        )),
+        Level::Palette(crate::palette::Source::Developed(
+            crate::develop::Engine::Art,
+        )),
     ];
 
     /// Vrai pour les niveaux qui sont des images (JPEG) ; faux pour les analyses
     /// (binaire).
     pub fn is_image(self) -> bool {
-        !matches!(self, Level::Exposure | Level::Sharpness | Level::Similarity)
+        !matches!(
+            self,
+            Level::Exposure | Level::Sharpness | Level::Similarity | Level::Palette(_)
+        )
     }
 
     fn dir_name(self) -> &'static str {
@@ -139,6 +159,18 @@ impl Level {
             Self::Developed(crate::develop::Engine::RapidRaw) => "developed-rapidraw",
             Self::Developed(crate::develop::Engine::RawTherapee) => "developed-rawtherapee",
             Self::Developed(crate::develop::Engine::Art) => "developed-art",
+            Self::Palette(source) => {
+                use crate::develop::Engine;
+                use crate::palette::Source;
+                match source {
+                    Source::Camera => "palette-camera",
+                    Source::Raw => "palette-raw",
+                    Source::Developed(Engine::Darktable) => "palette-darktable",
+                    Source::Developed(Engine::RapidRaw) => "palette-rapidraw",
+                    Source::Developed(Engine::RawTherapee) => "palette-rawtherapee",
+                    Source::Developed(Engine::Art) => "palette-art",
+                }
+            }
         }
     }
 }

@@ -23,9 +23,17 @@ fn rows() -> Vec<(&'static str, Vec<Level>)> {
         ("standard", vec![Level::Standard]),
         ("full", vec![Level::EmbeddedFull, Level::Full]),
         ("developed", developed),
+        // Les palettes (#492) sont des analyses aussi.
         (
             "analysis",
-            vec![Level::Exposure, Level::Sharpness, Level::Similarity],
+            [Level::Exposure, Level::Sharpness, Level::Similarity]
+                .into_iter()
+                .chain(
+                    Level::ALL
+                        .into_iter()
+                        .filter(|l| matches!(l, Level::Palette(_))),
+                )
+                .collect(),
         ),
     ]
 }

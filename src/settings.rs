@@ -326,6 +326,7 @@ impl EngineSettings {
             exposure: self.exposure,
             sharpness: self.sharpness,
             similarity: self.similarity,
+            palette: self.palette,
         }
     }
 
@@ -345,6 +346,8 @@ impl EngineSettings {
             exposure: self.scheduler.exposure,
             sharpness: self.sharpness.background,
             similarity: self.similarity.background,
+            // Choisie dans l'interface des palettes, ou en ligne de commande.
+            palette: None,
         }
     }
 

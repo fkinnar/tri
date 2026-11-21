@@ -4,8 +4,8 @@ Issue #492 (idée de l'utilisateur, 15/11/2026) : construire des **moodboards** 
 de ses photos et d'images de référence. Extraire la palette de chaque image, chercher
 les images aux palettes proches ou qui contiennent une couleur, les rassembler.
 
-Ce module fait l'étape 1, sur une image : il ne connaît ni le cache, ni les sources, ni
-l'interface (étapes suivantes).
+Le module fait le calcul sur une image ; le cache par source et le calcul en fond sont
+décrits plus bas, l'interface vient ensuite.
 
 ## Une palette
 
@@ -64,7 +64,24 @@ Trois sources, pour trois usages, au choix dans l'interface des palettes :
    tout traitement ;
 3. **rendus finis** (développements) : la recherche pour un moodboard.
 
-Une palette par image **et par source** dans le cache : étape suivante.
+Une palette par image **et par source** dans le cache (`Level::Palette(Source)`,
+`palette::Source` : `Camera`, `Raw`, `Developed(logiciel)`), tirée de l'image d'où elle
+vient (`preview::palette_input`) : la **vignette** (JPEG boîtier d'un RAW, image plate
+réduite), le **rendu RAW** de `tri`, ou le **rendu du logiciel**. Sa clé comprend celle
+de cette image : refaite (réglages de rendu changés, développement modifié dans
+darktable), la palette l'est aussi. `SourceKind` est le choix de l'utilisateur
+(`camera`, `raw`, `developed`) ; `SourceKind::source_for` le traduit pour chaque image :
+une image plate n'a pas de données brutes (son image, la source boîtier), un rendu fini
+n'existe que pour un développement de la liste.
+
+`preview::compute_palette` calcule (l'image source d'abord, si elle manque),
+`preview::palette` relit le cache. Calcul en fond : voir [scheduler.md](scheduler.md).
+
+## Ligne de commande
+
+`tri <dossier> --palette [--source camera|raw|developed]` : chaque image, ses couleurs
+`#rrggbb` et leur part, rangées dans le cache comme dans l'interface. Les rendus finis :
+seulement ceux déjà faits par l'interface (aucun logiciel lancé en ligne de commande).
 
 ## Réglages `[palette]`
 

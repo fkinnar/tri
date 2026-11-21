@@ -297,6 +297,14 @@ pub const COMMANDS: &[Command] = &[
         example: "tri <folder> --groups",
     },
     Command {
+        id: "palette",
+        theme: Theme::Analysis,
+        syntax: "tri <folder> --palette [--source camera|raw|developed] [--raw|--flat] [--depth N]",
+        main: &["--palette"],
+        options: opts!["--source", "--raw", "--flat", "--depth"],
+        example: "tri <folder> --palette --source raw",
+    },
+    Command {
         id: "clear-cache",
         theme: Theme::Cache,
         syntax: "tri [<folder>] --clear-cache [<level>] [--depth N] [--cache <folder>]",
