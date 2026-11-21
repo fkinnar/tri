@@ -16412,6 +16412,27 @@ impl TriApp {
                 None => return,
             },
         };
+        // Un développement : sa vraie taille à 100 % (comme le plein écran), aussi pendant
+        // l'attente, où la vignette agrandie tient lieu (retour du 21/11/2026 : la loupe
+        // montrait la vignette entière, réduite, le temps du chargement).
+        let px = match level {
+            Level::Developed(_) => {
+                let ratio = px.x / px.y.max(1.0);
+                let standard = self
+                    .engine
+                    .as_ref()
+                    .map_or(2560.0, |e| e.preview.sizes.standard as f32);
+                let fallback = if px.x.max(px.y) < standard * 0.5 {
+                    px * (standard / px.x.max(px.y).max(1.0))
+                } else {
+                    px
+                };
+                let file = file.clone();
+                self.developed_full_size(ctx, &file, ratio)
+                    .unwrap_or(fallback)
+            }
+            _ => px,
+        };
         let side = z.loupe_size;
         // Gardée dans la zone visible (retour du 06/11/2026 : en haut ou en bas de l'écran,
         // la moitié sortait), le point visé au centre de ce qu'elle montre.
