@@ -8091,6 +8091,15 @@ impl TriApp {
         } else {
             groups
         };
+        // Recherches de palettes inversées (retour du 21/11/2026 : elles ne l'étaient pas) :
+        // appliquées avec les autres filtres sur le contenu, l'inversion garde ce qu'elles
+        // écartent, dans l'ordre habituel ; sinon, à la fin (leur tri par ressemblance).
+        let palette_inverted = self.filter_inverted && self.palette_searching();
+        let groups = if palette_inverted {
+            self.rank_by_palette(groups)
+        } else {
+            groups
+        };
         // Paire regroupée (#392) : une photo ; son JPEG suit le verdict de son RAW (vidéo
         // du 14/11/2026 : sous « Bien exposées », chaque JPEG analysé était jugé seul, la
         // vignette de la paire basculait du JPEG au RAW et la grille clignotait).
@@ -8116,7 +8125,11 @@ impl TriApp {
             groups
         };
         // Palettes proches (#492) : filtrées et triées, après les autres filtres.
-        let groups = self.rank_by_palette(groups);
+        let groups = if palette_inverted {
+            groups
+        } else {
+            self.rank_by_palette(groups)
+        };
         self.blurry_applied = self.blurry_now();
         // Ce qu'on savait déjà prêt dans le cache le reste (vidéo du 19/11/2026 : une note
         // posée en plein écran sous un filtre de notes refiltrait, l'image affichée perdait
@@ -8443,6 +8456,7 @@ impl TriApp {
             || self.well_exposed
             || self.developed_on
             || self.conflicts_only
+            || self.palette_searching()
     }
 
     /// Parts saturées / bouchées des images de la grille dont l'analyse est prête, lues
@@ -28356,6 +28370,19 @@ mod tests {
             "le rouge écarté, la référence d'abord"
         );
         assert!(h.state().filter_summary().contains("img2"));
+        // Inversée (retour du 21/11/2026) : ce que la recherche écarte, le rouge.
+        act(&mut h, Action::FilterInvert);
+        h.run_steps(3);
+        let kept: Vec<String> = h
+            .state()
+            .files
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(kept, ["img1.jpg"]);
+        act(&mut h, Action::FilterInvert);
+        h.run_steps(3);
+        assert_eq!(h.state().files.len(), 2);
         let ctx = h.ctx.clone();
         h.state_mut().perform(&ctx, Action::FilterClear);
         h.run_steps(3);

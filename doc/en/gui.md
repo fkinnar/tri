@@ -252,8 +252,9 @@ system one ("cold" measurements, experiments).
   under `mono_toned_chroma` and within `mono_hue_spread` degrees of hue; the user's brown
   colour series, hues over 26°, stays colour, a typical sepia, 14°, is monochrome).
   Started from full screen, a search shows its results in the grid; the top of the panel
-  never moves, even without result. Shown in the filter summary; unchecking, clearing the
-  filters (`f d`) or changing source ends it. The folder's palettes are read in the
+  never moves, even without result. Shown in the filter summary; invertible like the other content filters (inverted: what
+  it leaves out, in the usual order); unchecking, clearing the filters (`f d`) or changing
+  source ends it. The folder's palettes are read in the
   background as they arrive, the grid refiltered from time to time
   (`analysis_refilter_ms`).
 - **End of the stack or of the list** (`[gui.end]`, #307, 2026-11-05): in full screen,

@@ -264,8 +264,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `mono_hue_spread` degrés de teinte ; la série brune en couleur de l'utilisateur, teintes
   sur 26°, reste en couleur, un sépia type, 14°, est monochrome). Lancée du plein écran, une
   recherche montre ses résultats en grille ; le haut du panneau ne bouge pas, même sans
-  résultat. Mentionnée dans le résumé des filtres ; décocher, effacer les filtres (`f d`)
-  ou changer de source y met fin. Les palettes du dossier sont lues en fond à leur
+  résultat. Mentionnée dans le résumé des filtres ; inversible comme les autres filtres sur le
+  contenu (inversée : ce qu'elle écarte, dans l'ordre habituel) ; décocher, effacer les
+  filtres (`f d`) ou changer de source y met fin. Les palettes du dossier sont lues en fond à leur
   arrivée, la grille refiltrée de temps en temps (`analysis_refilter_ms`).
 - **Bout de la pile ou de la liste** (`[gui.end]`, #307, 05/11/2026) : en plein écran,
   ← / → qui ne bougent plus le disent un instant, dans le même cadre que le repère de
