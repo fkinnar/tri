@@ -3510,13 +3510,26 @@ impl TriApp {
         toggles
     }
 
+    /// Vrai si une photo sert de départ à « palettes proches » : l'image pointée (curseur
+    /// visible, ou plein écran) ou une sélection (retour du 22/11/2026 : sans elles, le
+    /// filtre est grisé).
+    fn has_palette_reference(&self) -> bool {
+        !self.files.is_empty()
+            && (self.mode != Mode::Grid || !self.cursor_hidden || !self.selection.is_empty())
+    }
+
     /// Recherches de palettes (#492) de la barre des filtres : (action, allumée,
     /// utilisable) ; grisées sans source de palette. Dans le panneau, leurs lignes à part
     /// (`palette_filter_rows`).
     fn palette_toggles(&self) -> Vec<(Action, bool, bool)> {
         let ready = self.palette_source.is_some();
+        let like = self.palette_like.is_some();
         vec![
-            (Action::FilterPalette, self.palette_like.is_some(), ready),
+            (
+                Action::FilterPalette,
+                like,
+                like || (ready && self.has_palette_reference()),
+            ),
             (
                 Action::FilterPaletteColour,
                 self.palette_colour.is_some(),
@@ -3591,17 +3604,23 @@ impl TriApp {
                 Action::FilterPalette => self.palette_like.is_some(),
                 _ => self.palette_colour.is_some(),
             };
-            let tip = if ready {
-                action.label()
-            } else {
+            // Palettes proches : il faut aussi une photo de départ (sauf pour l'éteindre).
+            let no_reference =
+                action == Action::FilterPalette && !on && !self.has_palette_reference();
+            let usable = ready && !no_reference;
+            let tip = if !ready {
                 t!("palette-choose")
+            } else if no_reference {
+                t!("palette-similar-no-photo")
+            } else {
+                action.label()
             };
             let name = match action {
                 Action::FilterPalette => t!("palette-similar"),
                 _ => t!("palette-colour"),
             };
             let (item, key) = self.side_begin(false);
-            let row = ui.add_enabled_ui(ready, |ui| {
+            let row = ui.add_enabled_ui(usable, |ui| {
                 ui.horizontal(|ui| {
                     let mut checked = on;
                     let check = ui.checkbox(&mut checked, "").on_hover_text(&tip);
@@ -3666,7 +3685,7 @@ impl TriApp {
                 .inner
             });
             let clicked = row.inner;
-            let toggled = ready && (clicked || key == Some(SideKey::Activate));
+            let toggled = usable && (clicked || key == Some(SideKey::Activate));
             self.side_end(ui, item, row.response.rect, clicked);
             if toggled {
                 let ctx = ui.ctx().clone();
@@ -12048,6 +12067,10 @@ impl TriApp {
                 }
                 if self.palette_source.is_none() {
                     self.notice = Some((t!("palette-choose"), false));
+                    return;
+                }
+                if !self.has_palette_reference() {
+                    self.notice = Some((t!("palette-similar-no-photo"), false));
                     return;
                 }
                 match self.current_palette() {
@@ -29473,6 +29496,31 @@ mod tests {
         h.state_mut().refilter(Reveal::Minimal);
         h.run_steps(3);
         assert_eq!(names(&h), ["img0.jpg"]);
+    }
+
+    #[test]
+    fn similar_palettes_need_a_photo_to_start_from() {
+        // Retour du 22/11/2026 : sans image pointée ni sélection, « palettes proches » est
+        // grisé (il part de l'image courante).
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        choose_palette(&mut h, Some(tri::palette::SourceKind::Camera));
+        let usable = |h: &Harness<'static, TriApp>| {
+            h.state()
+                .palette_toggles()
+                .iter()
+                .find(|(a, _, _)| *a == Action::FilterPalette)
+                .unwrap()
+                .2
+        };
+        assert!(usable(&h), "curseur visible");
+        h.state_mut().cursor_hidden = true;
+        assert!(!usable(&h), "ni curseur ni sélection");
+        act(&mut h, Action::FilterPalette);
+        assert!(h.state().palette_like.is_none());
+        let path = h.state().files[0].path.clone();
+        h.state_mut().selection.toggle(&path);
+        assert!(usable(&h), "une sélection");
     }
 
     #[test]
