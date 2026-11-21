@@ -680,6 +680,35 @@ fn pause_holds_work_until_resumed() {
 }
 
 #[test]
+fn background_pause_keeps_thumbnails_and_the_shown_image() {
+    // #555 : un calcul demandé sur un dossier passe d'abord ; le fond du dossier ouvert
+    // attend, l'image affichée et les vignettes continuent.
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let (scheduler, _) = start(&fake, 2);
+    scheduler.set_background_paused(true);
+    scheduler.set_folder(files(4, MediaKind::Flat));
+    scheduler.set_focus(2);
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(
+        scheduler.progress(Level::Thumbnail),
+        complete(4),
+        "vignettes servies"
+    );
+    let standard = fake.order(Level::Standard);
+    assert!(
+        standard.contains(&"img2.JPG".to_string()),
+        "l'image affichée : {standard:?}"
+    );
+    assert!(
+        !standard.contains(&"img0.JPG".to_string()),
+        "le fond attend : {standard:?}"
+    );
+    scheduler.set_background_paused(false);
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(scheduler.progress(Level::Standard), complete(4));
+}
+
+#[test]
 fn on_demand_policy_leaves_raw_renders_to_requests() {
     let fake = Fake::with_delay(Duration::from_millis(1));
     let mut all = files(6, MediaKind::Raw);

@@ -298,6 +298,16 @@ loupe = "m"
 # Clear the cache kept in the folder or drive under the cursor (a dialog confirms).
 "core.folders.cache_clear" = []
 "core.folders.reset" = []
+# Compute chosen data for the folder under the cursor, in the background (#555).
+"core.folders.compute.previews" = []
+"core.folders.compute.raw" = []
+"core.folders.compute.exposure" = []
+"core.folders.compute.sharpness" = []
+"core.folders.compute.signatures" = []
+"core.folders.compute.palette_camera" = []
+"core.folders.compute.palette_raw" = []
+"core.folders.compute.all" = []
+"core.folders.compute.recreate_all" = []
 # Removable drive under the cursor: offload, eject (a dialog confirms).
 "core.folders.offload" = ["o"]
 "core.folders.eject" = ["e"]
@@ -530,6 +540,10 @@ loupe = "m"
 "plugin.darktable.open_folder" = ["r d"]
 "plugin.rawtherapee.open_folder" = ["r t"]
 "plugin.art.open_folder" = ["r a"]
+"plugin.darktable.compute_palettes" = []
+"plugin.rapidraw.compute_palettes" = []
+"plugin.rawtherapee.compute_palettes" = []
+"plugin.art.compute_palettes" = []
 # i: the histogram. s: the scale (EV / linear); c: the next channel; r, g, b, a, l:
 # red, green, blue, all, luminance.
 "core.view.histogram_scale" = ["i s"]

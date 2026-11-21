@@ -362,6 +362,12 @@ pub enum Action {
     /// Panneau des dossiers : ouvrir le dossier pointé dans un logiciel de
     /// développement (darktable, 28/10/2026).
     FolderOpenIn(tri::develop::Engine),
+    /// Calcule ce qui est choisi pour le dossier pointé, en fond (#555).
+    FolderCompute(tri::compute::Kind),
+    /// Calcule tout pour le dossier pointé (ce qui manque au cache).
+    FolderComputeAll,
+    /// Recalcule tout pour le dossier pointé, même ce qui est en cache.
+    FolderRecreateAll,
     /// Panneau des dossiers : copier le dossier pointé vers… (une boîte confirme).
     FolderCopy,
     /// Panneau des dossiers : déplacer le dossier pointé vers… (une boîte confirme).
@@ -582,7 +588,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 252] = [
+    pub const ALL: [Action; 265] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -762,6 +768,29 @@ impl Action {
         Action::FolderOpenIn(tri::develop::Engine::Darktable),
         Action::FolderOpenIn(tri::develop::Engine::RawTherapee),
         Action::FolderOpenIn(tri::develop::Engine::Art),
+        Action::FolderCompute(tri::compute::Kind::Previews),
+        Action::FolderCompute(tri::compute::Kind::Raw),
+        Action::FolderCompute(tri::compute::Kind::Exposure),
+        Action::FolderCompute(tri::compute::Kind::Sharpness),
+        Action::FolderCompute(tri::compute::Kind::Signatures),
+        Action::FolderCompute(tri::compute::Kind::Palette(
+            tri::palette::SourceKind::Camera,
+        )),
+        Action::FolderCompute(tri::compute::Kind::Palette(tri::palette::SourceKind::Raw)),
+        Action::FolderCompute(tri::compute::Kind::Palette(
+            tri::palette::SourceKind::Developed(tri::develop::Engine::Darktable),
+        )),
+        Action::FolderCompute(tri::compute::Kind::Palette(
+            tri::palette::SourceKind::Developed(tri::develop::Engine::RapidRaw),
+        )),
+        Action::FolderCompute(tri::compute::Kind::Palette(
+            tri::palette::SourceKind::Developed(tri::develop::Engine::RawTherapee),
+        )),
+        Action::FolderCompute(tri::compute::Kind::Palette(
+            tri::palette::SourceKind::Developed(tri::develop::Engine::Art),
+        )),
+        Action::FolderComputeAll,
+        Action::FolderRecreateAll,
         Action::FolderCopy,
         Action::FolderMove,
         Action::MetaUp,
@@ -994,10 +1023,11 @@ impl Action {
             | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
             | FolderEject | FolderCreate | FolderRename | FolderDelete | FolderFavorite
             | FolderFavoriteName | FolderConnect | FolderForget | FolderCacheClear
-            | FolderReset | FolderOpenIn(_) | FolderCopy | FolderMove | MetaUp | MetaDown
-            | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll
-            | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft | PanelRight
-            | FolderSectionNext | FolderSectionPrev => Group::Panels,
+            | FolderReset | FolderOpenIn(_) | FolderCompute(_) | FolderComputeAll
+            | FolderRecreateAll | FolderCopy | FolderMove | MetaUp | MetaDown | MetaCopy
+            | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll | PanelSectionNext
+            | PanelSectionPrev | PanelActivate | PanelLeft | PanelRight | FolderSectionNext
+            | FolderSectionPrev => Group::Panels,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | HelpHere | Palette | Settings | CheckUpdate | ReportIssue | Log | Quit => {
                 Group::App
@@ -1246,6 +1276,36 @@ impl Action {
                 "plugin.rawtherapee.open_folder"
             }
             Action::FolderOpenIn(tri::develop::Engine::Art) => "plugin.art.open_folder",
+            Action::FolderCompute(kind) => {
+                use tri::compute::Kind;
+                use tri::develop::Engine;
+                use tri::palette::SourceKind;
+                match kind {
+                    Kind::Previews => "core.folders.compute.previews",
+                    Kind::Raw => "core.folders.compute.raw",
+                    Kind::Exposure => "core.folders.compute.exposure",
+                    Kind::Sharpness => "core.folders.compute.sharpness",
+                    Kind::Signatures => "core.folders.compute.signatures",
+                    Kind::Palette(SourceKind::Camera | SourceKind::Cover) => {
+                        "core.folders.compute.palette_camera"
+                    }
+                    Kind::Palette(SourceKind::Raw) => "core.folders.compute.palette_raw",
+                    Kind::Palette(SourceKind::Developed(Engine::Darktable)) => {
+                        "plugin.darktable.compute_palettes"
+                    }
+                    Kind::Palette(SourceKind::Developed(Engine::RapidRaw)) => {
+                        "plugin.rapidraw.compute_palettes"
+                    }
+                    Kind::Palette(SourceKind::Developed(Engine::RawTherapee)) => {
+                        "plugin.rawtherapee.compute_palettes"
+                    }
+                    Kind::Palette(SourceKind::Developed(Engine::Art)) => {
+                        "plugin.art.compute_palettes"
+                    }
+                }
+            }
+            Action::FolderComputeAll => "core.folders.compute.all",
+            Action::FolderRecreateAll => "core.folders.compute.recreate_all",
             Action::FolderCopy => "core.folders.copy",
             Action::FolderMove => "core.folders.move",
             Action::MetaUp => "core.metadata.up",
@@ -1424,7 +1484,8 @@ impl Action {
             FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
             | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
             | FolderDelete | FolderFavorite | FolderFavoriteName | FolderConnect | FolderForget
-            | FolderCacheClear | FolderReset | FolderOpenIn(_) | FolderCopy | FolderMove
+            | FolderCacheClear | FolderReset | FolderOpenIn(_) | FolderCompute(_)
+            | FolderComputeAll | FolderRecreateAll | FolderCopy | FolderMove
             | FolderSectionNext | FolderSectionPrev => Some(Scope::Folders),
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft

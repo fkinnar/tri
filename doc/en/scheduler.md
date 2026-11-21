@@ -97,6 +97,12 @@ available as soon as possible, before starting the LibRaw renders that take all 
 Each finished task wakes the workers up, so that they pick up the previews as soon as the
 last thumbnail is done.
 
+## Background on hold (#555)
+
+`set_background_paused`: background work (classes from background camera previews on)
+waits; the shown image, its neighbours and the thumbnails still go through. A computation
+requested on a folder ([compute.md](compute.md)) thus goes first.
+
 ## What is already cached goes through at once (issue #428)
 
 One more thread, the **sweeper** (`tri-cache`), computes nothing: it takes the pending

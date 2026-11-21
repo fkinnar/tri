@@ -1031,6 +1031,9 @@ pub struct TriApp {
     sidecars_dialog: Option<SidecarsDialog>,
     /// Rendus développés d'un dossier en cours (issue n° 69), un lot à la fois.
     develop_batch: Option<crate::develop_batch::DevelopBatch>,
+    /// Calculs choisis sur des dossiers, en fond (#555), et le numéro du suivant.
+    compute_tasks: Vec<crate::compute_tasks::ComputeTask>,
+    compute_next: u64,
     /// Lot lancé de lui-même pour la grille (`[gui.grid] develop = "auto"`) : pas de
     /// bilan s'il n'y avait rien à rendre.
     develop_batch_auto: bool,
@@ -2149,6 +2152,8 @@ impl TriApp {
             develop_folder_dialog: None,
             sidecars_dialog: None,
             develop_batch: None,
+            compute_tasks: Vec::new(),
+            compute_next: 0,
             develop_batch_auto: false,
             any_developed: false,
             developed_reads: None,
@@ -3810,6 +3815,8 @@ impl TriApp {
                 if by_palette != self.stack_by_palette {
                     self.set_stack_by_palette(by_palette);
                 }
+                // Un peu d'air entre la liste et le curseur (retour du 21/11/2026).
+                ui.add_space(4.0);
                 let width = panel_slider_width(ui);
                 // Même logique que le flou (idée de l'utilisateur, 20/10/2026) : centre
                 // calculé d'après le dossier, à droite plus strict (petites piles).
@@ -6222,6 +6229,43 @@ impl TriApp {
                                         }
                                     });
                                 }
+                                // Calculs choisis, en fond (#555) : chacun une action.
+                                groups.group(ui, "compute", &t!("folder-group-compute"), |ui| {
+                                    use tri::compute::Kind;
+                                    for kind in [
+                                        Kind::Previews,
+                                        Kind::Raw,
+                                        Kind::Exposure,
+                                        Kind::Sharpness,
+                                        Kind::Signatures,
+                                    ] {
+                                        entry(
+                                            ui,
+                                            Action::FolderCompute(kind),
+                                            crate::compute_tasks::kind_label(kind),
+                                        );
+                                    }
+                                    menu_groups::subtitle(ui, &t!("folder-menu-compute-palettes"));
+                                    for kind in self.compute_palette_kinds() {
+                                        let label = crate::compute_tasks::kind_label(kind);
+                                        // Sans « Palettes » devant : le sous-titre le dit.
+                                        let short = label
+                                            .split_once("  ")
+                                            .map_or(label.clone(), |(_, s)| s.to_string());
+                                        entry(ui, Action::FolderCompute(kind), short);
+                                    }
+                                    ui.separator();
+                                    entry(
+                                        ui,
+                                        Action::FolderComputeAll,
+                                        t!("folder-menu-compute-all"),
+                                    );
+                                    entry(
+                                        ui,
+                                        Action::FolderRecreateAll,
+                                        t!("folder-menu-compute-recreate-all"),
+                                    );
+                                });
                                 if opened || !self.developers.is_empty() {
                                     groups.group(
                                         ui,
@@ -6556,6 +6600,9 @@ impl TriApp {
                 Action::FolderCacheClear => self.ask_reset(path, true),
                 Action::FolderReset => self.ask_reset(path, false),
                 Action::FolderOpenIn(engine) => self.open_folder_in(engine, &path),
+                Action::FolderCompute(_) | Action::FolderComputeAll | Action::FolderRecreateAll => {
+                    self.compute_action(&ctx, action, path)
+                }
                 Action::FolderCopy | Action::FolderMove => {
                     self.transfer_folder(&ctx, path, action == Action::FolderCopy, None)
                 }
@@ -7053,6 +7100,151 @@ impl TriApp {
     /// la fois.
     /// `force` : tout dans ce logiciel (les images qu'il a développées), plutôt que
     /// chacune dans le sien.
+    /// Palettes proposées au calcul (#555) : JPEG boîtier, données brutes, puis les rendus
+    /// des logiciels installés.
+    fn compute_palette_kinds(&self) -> Vec<tri::compute::Kind> {
+        use tri::compute::Kind;
+        use tri::palette::SourceKind;
+        let engines = self.developers.engines();
+        Kind::all()
+            .into_iter()
+            .filter(|k| match k {
+                Kind::Palette(SourceKind::Developed(e)) => engines.contains(e),
+                Kind::Palette(_) => true,
+                _ => false,
+            })
+            .collect()
+    }
+
+    /// Lance le calcul demandé par `action` sur `dir` (#555) : une tâche par calcul,
+    /// « tout » = chacun le sien.
+    fn compute_action(&mut self, ctx: &egui::Context, action: Action, dir: PathBuf) {
+        use tri::compute::Kind;
+        let (kinds, recreate) = match action {
+            Action::FolderCompute(kind) => (vec![kind], false),
+            Action::FolderComputeAll | Action::FolderRecreateAll => {
+                let mut kinds = vec![
+                    Kind::Previews,
+                    Kind::Raw,
+                    Kind::Exposure,
+                    Kind::Sharpness,
+                    Kind::Signatures,
+                ];
+                kinds.extend(self.compute_palette_kinds());
+                (kinds, action == Action::FolderRecreateAll)
+            }
+            _ => return,
+        };
+        for kind in kinds {
+            self.start_compute(ctx, dir.clone(), kind, recreate);
+        }
+    }
+
+    /// Lance le calcul `kind` sur `dir`, en fond ; refusé (message) s'il tourne déjà.
+    fn start_compute(
+        &mut self,
+        ctx: &egui::Context,
+        dir: PathBuf,
+        kind: tri::compute::Kind,
+        recreate: bool,
+    ) {
+        let Some(engine) = &self.engine else { return };
+        let what = crate::compute_tasks::kind_label(kind);
+        if self
+            .compute_tasks
+            .iter()
+            .any(|t| t.folder == dir && t.kind == kind)
+        {
+            let text = t!(
+                "compute-task-running",
+                what = what.as_str(),
+                name = folder_name(&dir)
+            );
+            self.notice = Some((text, false));
+            return;
+        }
+        let producer = CachedPreviews {
+            cache: engine.cache.clone(),
+            settings: engine.preview,
+            developers: self.developers.clone().into(),
+        };
+        let repaint = ctx.clone();
+        self.compute_next += 1;
+        self.compute_tasks
+            .push(crate::compute_tasks::ComputeTask::start(
+                self.compute_next,
+                dir,
+                kind,
+                recreate,
+                producer,
+                move || repaint.request_repaint(),
+            ));
+        // L'action demandée passe d'abord : le fond du dossier ouvert attend (#555).
+        engine.scheduler.set_background_paused(true);
+    }
+
+    /// Calculs finis (#555) : leur bilan dans la barre d'état ; plus aucun, le travail
+    /// de fond du dossier ouvert reprend, et ce qui vient d'arriver au cache s'y lit.
+    fn poll_compute_tasks(&mut self) {
+        if self.compute_tasks.is_empty() {
+            return;
+        }
+        let mut finished = Vec::new();
+        self.compute_tasks.retain_mut(|task| match task.finished() {
+            Some(result) => {
+                finished.push((task.folder.clone(), task.kind, result));
+                false
+            }
+            None => true,
+        });
+        for (folder, kind, result) in finished {
+            let what = crate::compute_tasks::kind_label(kind);
+            let name = folder_name(&folder);
+            self.notice = Some(match result {
+                Ok(s) if s.cancelled => (
+                    t!(
+                        "compute-task-cancelled",
+                        what = what.as_str(),
+                        name = name.as_str()
+                    ),
+                    false,
+                ),
+                Ok(s) => {
+                    let mut text = t!(
+                        "compute-task-done",
+                        what = what.as_str(),
+                        name = name.as_str(),
+                        computed = s.computed,
+                        cached = s.cached,
+                        failed = s.failed
+                    );
+                    if let Some(e) = &s.error {
+                        text.push_str(&t!("develop-batch-error", error = e.as_str()));
+                    }
+                    (text, s.failed > 0)
+                }
+                Err(e) => (
+                    t!(
+                        "compute-task-error",
+                        what = what.as_str(),
+                        name = name.as_str(),
+                        error = e.as_str()
+                    ),
+                    true,
+                ),
+            });
+            if folder == self.folder.dir {
+                // Arrivés dans le cache : les vignettes qui attendaient le relisent.
+                self.grid_looked.clear();
+            }
+        }
+        if self.compute_tasks.is_empty()
+            && let Some(engine) = &self.engine
+        {
+            engine.scheduler.set_background_paused(false);
+        }
+    }
+
     fn develop_folder(
         &mut self,
         ctx: &egui::Context,
@@ -10967,6 +11159,16 @@ impl TriApp {
                 if let Some(i) = self.tree.cursor() {
                     let path = self.tree.rows()[i].path.clone();
                     self.open_folder_in(engine, &path);
+                }
+            }
+            Action::FolderCompute(_) | Action::FolderComputeAll | Action::FolderRecreateAll => {
+                // Le dossier pointé dans le panneau, sinon le dossier ouvert.
+                let path = self
+                    .tree
+                    .cursor_path()
+                    .unwrap_or_else(|| self.folder.dir.clone());
+                if !path.as_os_str().is_empty() {
+                    self.compute_action(ctx, action, path);
                 }
             }
             Action::FolderCopy | Action::FolderMove => {
@@ -17235,6 +17437,26 @@ impl TriApp {
                     cancel: Some((t!("develop-batch-cancel"), StatusClick::CancelDevelop)),
                 });
             }
+        }
+        // Calculs choisis sur des dossiers (#555) : une ligne chacun.
+        for task in &self.compute_tasks {
+            let (done, total) = task.progress();
+            tasks.push(Task {
+                text: t!(
+                    "compute-task-progress",
+                    what = crate::compute_tasks::kind_label(task.kind),
+                    name = folder_name(&task.folder),
+                    done = done,
+                    total = total
+                ),
+                fraction: done as f32 / total.max(1) as f32,
+                tip: None,
+                click: None,
+                cancel: Some((
+                    t!("compute-task-cancel"),
+                    StatusClick::CancelCompute(task.id),
+                )),
+            });
         }
         if let Some((text, fraction)) = self
             .background_transfers
@@ -23848,6 +24070,7 @@ impl eframe::App for TriApp {
         self.poll_remote();
         self.poll_cache_jobs();
         self.poll_develop_batch();
+        self.poll_compute_tasks();
         self.auto_develop(&ctx);
         self.run_script(&ctx);
         if ctx.input(|i| i.pointer.delta() != Vec2::ZERO) {
@@ -23922,6 +24145,11 @@ impl eframe::App for TriApp {
             Some(StatusClick::CancelDevelop) => {
                 if let Some(batch) = &self.develop_batch {
                     batch.cancel();
+                }
+            }
+            Some(StatusClick::CancelCompute(id)) => {
+                if let Some(task) = self.compute_tasks.iter().find(|t| t.id == id) {
+                    task.cancel();
                 }
             }
             Some(StatusClick::Action(action)) => self.perform(&ctx, action),
@@ -24626,6 +24854,8 @@ enum StatusClick {
     CancelQueuedExport(u64),
     /// Interrompre les rendus développés du dossier.
     CancelDevelop,
+    /// Arrêter un calcul choisi sur un dossier (#555).
+    CancelCompute(u64),
     /// Progression d'une copie en arrière-plan : réafficher sa boîte.
     RevealTransfer,
     /// Ouvrir la séance déchargée en arrière-plan.
@@ -28705,6 +28935,26 @@ mod tests {
             .click();
         h.run_steps(3);
         assert!(h.state().palette_like.is_some(), "lancée de la barre");
+    }
+
+    #[test]
+    fn a_folder_computation_runs_in_the_background_and_holds_the_folder_work() {
+        // #555 : chaque calcul choisi est une action ; il tourne en fond, sa ligne dans la
+        // barre d'état ; le fond du dossier ouvert attend qu'il finisse.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        h.state_mut().tree.point_at(&photos);
+        act(&mut h, Action::FolderCompute(tri::compute::Kind::Sharpness));
+        assert_eq!(h.state().compute_next, 1, "une tâche lancée");
+        run_until(&mut h, |app| app.compute_tasks.is_empty());
+        let (text, error) = h.state().notice.clone().unwrap();
+        assert!(!error, "{text}");
+        assert!(text.contains(&t!("compute-sharpness")), "{text}");
+        // Tout : une tâche par calcul (sans logiciel installé : 5, et 2 palettes).
+        act(&mut h, Action::FolderComputeAll);
+        assert_eq!(h.state().compute_next, 8);
+        run_until(&mut h, |app| app.compute_tasks.is_empty());
     }
 
     #[test]
@@ -35798,6 +36048,43 @@ mod tests {
             run_until(&mut h, |app| app.cache_jobs.is_empty());
             assert_eq!(marker.is_dir(), kept);
         }
+    }
+
+    #[test]
+    fn the_folder_menu_computes_chosen_data() {
+        // #555 : clic droit sur un dossier, « Calculer », une entrée par calcul.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        std::fs::create_dir(dir.path().join("séance")).unwrap();
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        h.run_steps(2);
+        h.get_by_label("séance").click_secondary();
+        h.run_steps(2);
+        h.get_by_label(&t!("folder-group-compute")).hover();
+        h.run_steps(3);
+        for id in [
+            "compute-previews",
+            "compute-exposure",
+            "folder-menu-compute-recreate-all",
+        ] {
+            assert!(h.query_by_label(&t!(id)).is_some(), "{id}");
+        }
+        h.get_by_label(&t!("compute-signatures")).click();
+        h.run_steps(2);
+        assert_eq!(h.state().compute_next, 1);
+        run_until(&mut h, |app| app.compute_tasks.is_empty());
+        assert!(
+            h.state()
+                .notice
+                .as_ref()
+                .is_some_and(|(t, _)| t.contains("séance"))
+        );
     }
 
     #[test]

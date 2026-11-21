@@ -218,6 +218,9 @@ pub fn navigate(
         | Action::FolderCacheClear
         | Action::FolderReset
         | Action::FolderOpenIn(_)
+        | Action::FolderCompute(_)
+        | Action::FolderComputeAll
+        | Action::FolderRecreateAll
         | Action::FolderCopy
         | Action::FolderMove
         | Action::MetaOpen

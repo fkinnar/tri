@@ -305,6 +305,14 @@ pub const COMMANDS: &[Command] = &[
         example: "tri <folder> --palette --source raw",
     },
     Command {
+        id: "compute",
+        theme: Theme::Cache,
+        syntax: "tri <folder> --compute <what>[,<what>…] [--recreate] [--raw|--flat] [--depth N]",
+        main: &["--compute"],
+        options: opts!["--recreate", "--raw", "--flat", "--depth"],
+        example: "tri <folder> --compute previews,exposure,palette-camera",
+    },
+    Command {
         id: "clear-cache",
         theme: Theme::Cache,
         syntax: "tri [<folder>] --clear-cache [<level>] [--depth N] [--cache <folder>]",

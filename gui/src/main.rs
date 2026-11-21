@@ -38,6 +38,7 @@ mod cache_panel;
 mod categories;
 mod cheatsheet;
 mod compare;
+mod compute_tasks;
 mod crash;
 mod crop;
 mod develop_batch;
