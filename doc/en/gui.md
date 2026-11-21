@@ -254,9 +254,10 @@ system one ("cold" measurements, experiments).
   under `mono_toned_chroma` and within `mono_hue_spread` degrees of hue; the user's brown
   colour series, hues over 26°, stays colour, a typical sepia, 14°, is monochrome; more than `colour_min_share` of the real pixels beyond `mono_toned_chroma`
   (fine coverage): colour, a warm, slightly saturated portrait is no longer taken for a
-  sepia, feedback of 2026-11-21). A **muted** searched colour (chroma between
-  `mono_chroma` and `mono_toned_chroma`: skin, beige, sepia) only leaves out pure black and
-  white (`Palette::is_grey`): it is what a toned image contains.
+  sepia, feedback of 2026-11-21). Depending on the searched colour (2026-11-22): **grey**, pure
+  black and white only (`Palette::is_grey`); **muted** (chroma between `mono_chroma` and
+  `mono_toned_chroma`: skin, beige, sepia), everything but it (it is what a toned image
+  contains); **saturated**, neither black and white nor toned.
   Started from full screen, a search shows its results in the grid; the top of the panel
   never moves, even without result. Shown in the filter summary; invertible like the other content filters (inverted: what
   it leaves out, in the usual order); unchecking, clearing the filters (`f d`) or changing

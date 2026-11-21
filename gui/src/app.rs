@@ -3967,11 +3967,15 @@ impl TriApp {
             .hue_chroma()
             .1
         });
-        let muted = colour_chroma.is_some_and(|c| c >= ps.mono_chroma && c < ps.mono_toned_chroma);
-        let reference_mono = match (like, colour_chroma) {
-            (Some(l), _) => mono(&l.reference),
-            (None, Some(c)) => c < ps.mono_chroma,
-            (None, None) => false,
+        // Selon la couleur cherchée (retours du 21-22/11/2026) : grise, le noir et blanc
+        // pur seulement ; peu saturée, tout sauf lui ; saturée, ni lui ni les teintées.
+        // Palettes proches : même famille que la référence.
+        let reference_mono = like.is_some_and(|l| mono(&l.reference));
+        let left_out = |p: &Palette| match colour_chroma {
+            Some(c) if c < ps.mono_chroma => !grey(p),
+            Some(c) if c < ps.mono_toned_chroma => grey(p),
+            Some(_) => mono(p),
+            None => mono(p) != reference_mono,
         };
         let files: Vec<MediaFile> = groups.into_iter().flatten().collect();
         let ranked = tri::palette::rank_similar(
@@ -3979,8 +3983,7 @@ impl TriApp {
             |f| {
                 let source = kind.source_for(f)?;
                 match self.palettes.get(&(f.path.clone(), source)) {
-                    Some(p) if muted && grey(p) => None,
-                    Some(p) if !muted && mono(p) != reference_mono => None,
+                    Some(p) if left_out(p) => None,
                     Some(p) => Some(Some(key(p))),
                     None => Some(None),
                 }
@@ -29470,7 +29473,7 @@ mod tests {
     }
 
     #[test]
-    fn a_muted_colour_finds_toned_images_but_not_black_and_white() {
+    fn a_searched_colour_keeps_its_family_grey_muted_or_saturated() {
         // Retour du 21/11/2026 (vidéo) : une peau pipetée ne retrouvait qu'une des trois
         // photos d'une série chaude et peu saturée ; les deux autres, jugées « teintées »,
         // étaient écartées comme le noir et blanc. Une couleur peu saturée les retrouve ;
@@ -29524,6 +29527,22 @@ mod tests {
             .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
         assert_eq!(names, ["warm.jpg"], "ni le gris ni le bleu");
+        // Un gris neutre : le noir et blanc pur seulement, ni la teintée ni le bleu (retour
+        // du 22/11/2026 : des photos en couleur peu saturées sortaient).
+        h.state_mut()
+            .set_palette_colour(Some(tri::palette::srgb_to_oklab([120, 120, 120])));
+        if let Some(c) = &mut h.state_mut().palette_colour {
+            c.radius = ps.colour_radius_max;
+        }
+        h.state_mut().refilter(Reveal::Minimal);
+        h.run_steps(3);
+        let names: Vec<String> = h
+            .state()
+            .files
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["grey.jpg"]);
     }
 
     #[test]
