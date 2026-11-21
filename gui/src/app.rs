@@ -3948,97 +3948,113 @@ impl TriApp {
         let title = t!("palette-colour-title");
         let modal = modal_at("palette_colour_dialog", CENTRED)
             .title(title)
+            .free_width()
             .show(ctx, |ui| {
-                // La roue, à la clarté choisie ; un clic ou un glisser y choisit teinte et
-                // saturation.
-                let side = 200.0;
-                let (rect, response) =
-                    ui.allocate_exact_size(vec2(side, side), Sense::click_and_drag());
-                crate::palette_view::draw_picker_wheel(ui.painter(), rect, dialog.oklab[0]);
-                let radius = side / 2.0;
-                if let Some(pos) = response.interact_pointer_pos()
-                    && (response.clicked() || response.dragged())
-                {
-                    // Hors de la roue en glissant : au bord, dans la même direction.
-                    let d = pos - rect.center();
-                    let pos = if d.length() > radius {
-                        rect.center() + d * (radius / d.length())
-                    } else {
-                        pos
-                    };
-                    if let Some(c) = crate::palette_view::wheel_colour(
-                        pos,
-                        rect.center(),
-                        radius,
-                        dialog.oklab[0],
-                    ) {
-                        dialog.set(c);
-                    }
-                }
-                let swatch = tri::palette::Swatch {
-                    oklab: dialog.oklab,
-                    share: 0.0,
-                };
-                let at = crate::palette_view::wheel_pos(&swatch, rect.center(), radius);
-                ui.painter()
-                    .circle_stroke(at, 6.0, egui::Stroke::new(2.0, Color32::WHITE));
-                ui.painter()
-                    .circle_stroke(at, 7.5, egui::Stroke::new(1.0, Color32::BLACK));
-                ui.add_space(6.0);
-                // La clarté.
-                ui.label(t!("palette-colour-lightness"));
-                let mut l = dialog.oklab[0];
-                ui.add(FineSlider::new(&mut l, 0.0..=1.0).width(side));
-                if l != dialog.oklab[0] {
-                    dialog.set([l, dialog.oklab[1], dialog.oklab[2]]);
-                }
-                // R V B et l'hexadécimal.
-                let mut rgb = swatch.srgb();
-                let before = rgb;
-                ui.horizontal(|ui| {
-                    for (v, name) in rgb.iter_mut().zip(["R", "V", "B"]) {
-                        ui.add(
-                            egui::DragValue::new(v)
-                                .prefix(format!("{name} "))
-                                .speed(0.5),
-                        );
-                    }
-                });
-                if rgb != before {
-                    dialog.set(tri::palette::srgb_to_oklab(rgb));
-                }
-                ui.horizontal(|ui| {
-                    let (patch, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
-                    ui.painter()
-                        .rect_filled(patch, 3.0, crate::palette_view::color(&swatch));
-                    let field = ui.add(
-                        egui::TextEdit::singleline(&mut dialog.hex)
-                            .desired_width(90.0)
-                            .font(egui::TextStyle::Monospace),
-                    );
-                    if field.changed()
-                        && let Some(rgb) = parse_hex(&dialog.hex)
+                // La roue à gauche, les réglages à droite (retour du 21/11/2026 : en
+                // colonne, la boîte était trop large pour son contenu).
+                ui.horizontal_top(|ui| {
+                    // La roue, à la clarté choisie ; un clic ou un glisser y choisit teinte
+                    // et saturation.
+                    let side = 200.0;
+                    let (rect, response) =
+                        ui.allocate_exact_size(vec2(side, side), Sense::click_and_drag());
+                    crate::palette_view::draw_picker_wheel(ui.painter(), rect, dialog.oklab[0]);
+                    let radius = side / 2.0;
+                    if let Some(pos) = response.interact_pointer_pos()
+                        && (response.clicked() || response.dragged())
                     {
-                        dialog.oklab = tri::palette::srgb_to_oklab(rgb);
+                        // Hors de la roue en glissant : au bord, dans la même direction.
+                        let d = pos - rect.center();
+                        let pos = if d.length() > radius {
+                            rect.center() + d * (radius / d.length())
+                        } else {
+                            pos
+                        };
+                        if let Some(c) = crate::palette_view::wheel_colour(
+                            pos,
+                            rect.center(),
+                            radius,
+                            dialog.oklab[0],
+                        ) {
+                            dialog.set(tri::palette::gamut_map(c));
+                        }
                     }
-                    let size = ui.spacing().interact_size.y;
-                    let (rect, button) = marks::icon_button(
-                        ui,
-                        size,
-                        &t!("palette-eyedropper-name"),
-                        &t!("palette-eyedropper-tip"),
-                    );
-                    marks::eyedropper_icon(
-                        ui.painter(),
-                        rect.shrink(size * 0.15),
-                        ui.visuals().text_color(),
-                    );
-                    eyedropper = button.clicked();
-                });
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    search = ui.button(t!("palette-colour-search")).clicked();
-                    cancel = ui.button(t!("cancel")).clicked();
+                    let swatch = tri::palette::Swatch {
+                        oklab: dialog.oklab,
+                        share: 0.0,
+                    };
+                    let at = crate::palette_view::wheel_pos(&swatch, rect.center(), radius);
+                    ui.painter()
+                        .circle_stroke(at, 6.0, egui::Stroke::new(2.0, Color32::WHITE));
+                    ui.painter()
+                        .circle_stroke(at, 7.5, egui::Stroke::new(1.0, Color32::BLACK));
+                    ui.add_space(12.0);
+                    ui.vertical(|ui| {
+                        let width = 170.0;
+                        ui.set_width(width);
+                        // La couleur, son `#rrggbb` et la pipette.
+                        ui.horizontal(|ui| {
+                            let (patch, _) =
+                                ui.allocate_exact_size(vec2(28.0, 22.0), Sense::hover());
+                            ui.painter().rect_filled(
+                                patch,
+                                3.0,
+                                crate::palette_view::color(&swatch),
+                            );
+                            let field = ui.add(
+                                egui::TextEdit::singleline(&mut dialog.hex)
+                                    .desired_width(80.0)
+                                    .font(egui::TextStyle::Monospace),
+                            );
+                            if field.changed()
+                                && let Some(rgb) = parse_hex(&dialog.hex)
+                            {
+                                dialog.oklab = tri::palette::srgb_to_oklab(rgb);
+                            }
+                            let size = ui.spacing().interact_size.y;
+                            let (rect, button) = marks::icon_button(
+                                ui,
+                                size,
+                                &t!("palette-eyedropper-name"),
+                                &t!("palette-eyedropper-tip"),
+                            );
+                            marks::eyedropper_icon(
+                                ui.painter(),
+                                rect.shrink(size * 0.15),
+                                ui.visuals().text_color(),
+                            );
+                            eyedropper = button.clicked();
+                        });
+                        ui.add_space(8.0);
+                        // La clarté.
+                        ui.label(t!("palette-colour-lightness"));
+                        let mut l = dialog.oklab[0];
+                        ui.add(FineSlider::new(&mut l, 0.0..=1.0).width(width));
+                        if l != dialog.oklab[0] {
+                            dialog.set([l, dialog.oklab[1], dialog.oklab[2]]);
+                        }
+                        ui.add_space(8.0);
+                        // R V B.
+                        let mut rgb = swatch.srgb();
+                        let before = rgb;
+                        ui.horizontal(|ui| {
+                            for (v, name) in rgb.iter_mut().zip(["R", "V", "B"]) {
+                                ui.add(
+                                    egui::DragValue::new(v)
+                                        .prefix(format!("{name} "))
+                                        .speed(0.5),
+                                );
+                            }
+                        });
+                        if rgb != before {
+                            dialog.set(tri::palette::srgb_to_oklab(rgb));
+                        }
+                        ui.add_space(16.0);
+                        ui.horizontal(|ui| {
+                            search = ui.button(t!("palette-colour-search")).clicked();
+                            cancel = ui.button(t!("cancel")).clicked();
+                        });
+                    });
                 });
             });
         if search {

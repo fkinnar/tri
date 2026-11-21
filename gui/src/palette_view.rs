@@ -74,8 +74,13 @@ pub fn draw_picker_wheel(painter: &Painter, rect: Rect, lightness: f32) {
         for sector in 0..=sectors {
             let a = sector as f32 / sectors as f32 * std::f32::consts::TAU;
             let pos = pos2(centre.x + r * a.cos(), centre.y - r * a.sin());
-            let oklab =
-                wheel_colour(pos, centre, radius, lightness).unwrap_or([lightness, 0.0, 0.0]);
+            // Directement de l'angle et du rayon (par la position, les sommets du bord
+            // tombaient parfois juste dehors, en gris : des pointillés), puis ramenée dans le
+            // gamut (coupée composante par composante, une couleur trop saturée changeait de
+            // teinte) : un dégradé continu jusqu'au bord.
+            let f = ring as f32 / rings as f32;
+            let chroma = MAX_CHROMA * f * f;
+            let oklab = tri::palette::gamut_map([lightness, chroma * a.cos(), chroma * a.sin()]);
             let c = color(&Swatch { oklab, share: 0.0 });
             mesh.colored_vertex(pos, c);
         }
@@ -89,6 +94,12 @@ pub fn draw_picker_wheel(painter: &Painter, rect: Rect, lightness: f32) {
         }
     }
     painter.add(egui::Shape::mesh(mesh));
+    // Le bord adouci : un trait fin sur les facettes du maillage.
+    painter.circle_stroke(
+        centre,
+        radius,
+        Stroke::new(1.5, Color32::from_black_alpha(90)),
+    );
 }
 
 /// Dessine la roue : un cercle de teintes en bordure, et chaque pastille, d'autant plus

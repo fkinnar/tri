@@ -471,6 +471,32 @@ pub fn oklab_distance(a: [f32; 3], b: [f32; 3]) -> f32 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
 }
 
+/// La couleur `oklab` ramenée dans le gamut sRGB en gardant sa clarté et sa teinte : son
+/// chroma réduit juste assez (une couleur trop saturée pour l'écran, coupée composante par
+/// composante, changeait de teinte et faisait des taches au bord de la roue du sélecteur).
+pub fn gamut_map(oklab: [f32; 3]) -> [f32; 3] {
+    let inside = |c: [f32; 3]| {
+        oklab_to_linear_srgb(c)
+            .iter()
+            .all(|v| (-1e-4..=1.0 + 1e-4).contains(v))
+    };
+    if inside(oklab) {
+        return oklab;
+    }
+    let [l, a, b] = oklab;
+    let l = l.clamp(0.0, 1.0);
+    let (mut lo, mut hi) = (0.0f32, 1.0f32);
+    for _ in 0..20 {
+        let mid = (lo + hi) / 2.0;
+        if inside([l, a * mid, b * mid]) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    [l, a * lo, b * lo]
+}
+
 /// Un pixel 8 bits de l'espace de travail, en OKLab.
 pub fn working_to_oklab(rgb: [u8; 3]) -> [f32; 3] {
     let linear = rgb.map(|c| decode_srgb(f32::from(c) / 255.0));
@@ -798,6 +824,22 @@ mod tests {
         let blue = from(&[("#e6e6e6", 0.6), ("#283cc8", 0.4)]);
         assert!(!blue.is_monochrome(mono, s.colour_min_share));
         assert_eq!(hue_range(&mut [350.0, 10.0]), 20.0, "autour de 0°");
+    }
+
+    #[test]
+    fn gamut_mapping_keeps_lightness_and_hue() {
+        let wild = [0.6, 0.3, -0.3];
+        let mapped = gamut_map(wild);
+        assert_eq!(mapped[0], 0.6);
+        let (h0, h1) = (wild[2].atan2(wild[1]), mapped[2].atan2(mapped[1]));
+        assert!((h0 - h1).abs() < 1e-4);
+        assert!(
+            oklab_to_linear_srgb(mapped)
+                .iter()
+                .all(|v| (-1e-3..=1.001).contains(v))
+        );
+        let grey = [0.5, 0.0, 0.0];
+        assert_eq!(gamut_map(grey), grey, "déjà dedans");
     }
 
     #[test]
