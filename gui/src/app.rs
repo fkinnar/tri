@@ -9045,15 +9045,29 @@ impl TriApp {
         let Some(kind) = self.palette_source else {
             return vec![None; self.files.len().saturating_sub(1)];
         };
+        // La palette de chaque photo : la sienne, sinon celle d'un de ses développements
+        // (retour du 21/11/2026 : grille en rendu darktable, la photo elle-même n'a pas de
+        // palette darktable et chaque lien avec ses voisines était coupé, plus aucune pile).
+        let own = |f: &MediaFile| -> Option<&Palette> {
+            let src = kind.source_for(f)?;
+            self.palettes
+                .get(&(f.path.clone(), src))
+                .map(|p| p.as_ref())
+        };
+        let photo_of = |f: &MediaFile| -> PathBuf {
+            let path = tri::developments::get(&f.path).map_or(f.path.clone(), |d| d.photo);
+            camera_photo(&self.camera_raw, &path)
+        };
+        let mut by_photo: HashMap<PathBuf, &Palette> = HashMap::new();
+        for f in &self.files {
+            if let Some(p) = own(f) {
+                by_photo.entry(photo_of(f)).or_insert(p);
+            }
+        }
         let palettes: Vec<Option<&Palette>> = self
             .files
             .iter()
-            .map(|f| {
-                let src = kind.source_for(f)?;
-                self.palettes
-                    .get(&(f.path.clone(), src))
-                    .map(|p| p.as_ref())
-            })
+            .map(|f| own(f).or_else(|| by_photo.get(&photo_of(f)).copied()))
             .collect();
         let times: Vec<Option<i64>> = signatures.iter().map(|s| s.and_then(|s| s.time)).collect();
         tri::palette::stack_links(&palettes, &times, &self.settings.palette)
@@ -28688,6 +28702,56 @@ mod tests {
         run_until(&mut h, |app| app.opening.is_none() && !app.files.is_empty());
         h.run_steps(3);
         assert!(h.state().stack_by_palette, "retenu pour le dossier");
+    }
+
+    #[test]
+    fn stacks_by_palette_link_photos_whose_palettes_come_from_their_developments() {
+        // Retour du 21/11/2026 (vidéo) : grille en rendu darktable, le curseur des piles
+        // par palette ne faisait rien. Seuls les développements ont une palette darktable ;
+        // la photo d'à côté n'en avait pas, chaque lien était coupé.
+        use tri::palette::{Palette, Source, SourceKind, Swatch};
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        for name in ["img0_01.jpg.xmp", "img1_01.jpg.xmp", "img2_01.jpg.xmp"] {
+            std::fs::write(
+                photos.join(name),
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
+            )
+            .unwrap();
+        }
+        h.state_mut().developers = fake_darktable();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 6);
+        let darktable = tri::develop::Engine::Darktable;
+        choose_palette(&mut h, Some(SourceKind::Developed(darktable)));
+        // Une palette pour chaque développement (le rendu de darktable n'est pas fait ici).
+        let grey = Arc::new(Palette {
+            swatches: vec![Swatch {
+                oklab: [0.5, 0.0, 0.0],
+                share: 1.0,
+            }],
+        });
+        let devs: Vec<PathBuf> = h
+            .state()
+            .files
+            .iter()
+            .filter(|f| tri::developments::get(&f.path).is_some())
+            .map(|f| f.path.clone())
+            .collect();
+        assert_eq!(devs.len(), 3);
+        for path in devs {
+            h.state_mut()
+                .palettes
+                .insert((path, Source::Developed(darktable)), grey.clone());
+        }
+        let n = h.state().files.len();
+        let links = h.state().palette_stack_links(&vec![None; n]);
+        assert_eq!(links.len(), n - 1);
+        assert!(
+            links.iter().all(|l| l.is_some_and(|l| l.distance == 0.0)),
+            "photo et voisines liées par la palette de leurs développements : {links:?}"
+        );
     }
 
     #[test]
