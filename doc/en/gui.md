@@ -229,10 +229,15 @@ system one ("cold" measurements, experiments).
   icon, name; greyed without a source; feedback of 2026-11-21). **Similar palettes** (a
   target, action `core.filter.palette`): the grid keeps only the images whose palette is
   within the threshold of the image's (slider below, double-click: starting value,
-  `[palette] similar_threshold` / `similar_max`), closest first. **Colour** (the
-  eyedropper, action `core.filter.palette_colour`, in the grid as in full screen: a click
-  on a thumbnail or the image reads the average colour of a small area of the image the
-  palette comes from, in the background; or a click on a colour of the Palette section):
+  `[palette] similar_threshold` / `similar_max`), closest first. **Colour** (eyedropper
+  icon, action `core.filter.palette_colour`: checked, the last colour looked for, otherwise
+  the choice box). Right of the name, the colour **patch**: a click opens the choice box
+  (feedback of 2026-11-21) — wheel (hue and saturation, same geometry as the palettes'),
+  lightness, R G B, `#rrggbb`, and an **eyedropper**: the box hides, a click anywhere in the
+  window reads the colour (on a thumbnail or the full-screen image, the average colour of
+  a small area of the image the palette comes from, read in the background; elsewhere,
+  the pixel of a capture of the window), then the box comes back; "Search" starts the
+  filter. Or a click on a colour of the Palette section:
   the images with a palette colour close enough, closest first (a single slider, the
   tolerance, `colour_radius` / `colour_radius_max`; specks under `colour_min_share`
   ignored). Common rules: one search at a time; images not computed yet stay, at the end

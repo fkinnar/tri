@@ -49,6 +49,48 @@ pub fn wheel_pos(swatch: &Swatch, centre: Pos2, radius: f32) -> Pos2 {
     pos2(centre.x + r * a.cos(), centre.y - r * a.sin())
 }
 
+/// Couleur au point `pos` de la roue de centre `centre` et de rayon `radius`, à la clarté
+/// `lightness` (L d'OKLab) : l'inverse de [`wheel_pos`] ; `None` hors de la roue.
+pub fn wheel_colour(pos: Pos2, centre: Pos2, radius: f32, lightness: f32) -> Option<[f32; 3]> {
+    let d = pos - centre;
+    let r = d.length() / radius.max(1.0);
+    if r > 1.0 {
+        return None;
+    }
+    let chroma = MAX_CHROMA * r * r;
+    let hue = (-d.y).atan2(d.x);
+    Some([lightness, chroma * hue.cos(), chroma * hue.sin()])
+}
+
+/// Roue du sélecteur de couleur : les teintes et saturations à la clarté `lightness`,
+/// en dégradé (gris au centre), avec la même géométrie que [`wheel_pos`].
+pub fn draw_picker_wheel(painter: &Painter, rect: Rect, lightness: f32) {
+    let centre = rect.center();
+    let radius = rect.width().min(rect.height()) / 2.0;
+    let (rings, sectors) = (14usize, 72usize);
+    let mut mesh = egui::Mesh::default();
+    for ring in 0..=rings {
+        let r = radius * ring as f32 / rings as f32;
+        for sector in 0..=sectors {
+            let a = sector as f32 / sectors as f32 * std::f32::consts::TAU;
+            let pos = pos2(centre.x + r * a.cos(), centre.y - r * a.sin());
+            let oklab =
+                wheel_colour(pos, centre, radius, lightness).unwrap_or([lightness, 0.0, 0.0]);
+            let c = color(&Swatch { oklab, share: 0.0 });
+            mesh.colored_vertex(pos, c);
+        }
+    }
+    let row = (sectors + 1) as u32;
+    for ring in 0..rings as u32 {
+        for sector in 0..sectors as u32 {
+            let i = ring * row + sector;
+            mesh.add_triangle(i, i + 1, i + row);
+            mesh.add_triangle(i + 1, i + row + 1, i + row);
+        }
+    }
+    painter.add(egui::Shape::mesh(mesh));
+}
+
 /// Dessine la roue : un cercle de teintes en bordure, et chaque pastille, d'autant plus
 /// grande que sa part.
 pub fn draw_wheel(painter: &Painter, rect: Rect, palette: &Palette, stroke: Color32) {
@@ -122,6 +164,19 @@ mod tests {
         assert_eq!(rects[0].width(), 150.0);
         assert_eq!(rects[1].left(), 150.0);
         assert_eq!(rects[1].right(), 200.0);
+    }
+
+    #[test]
+    fn a_picked_point_of_the_wheel_goes_back_to_its_place() {
+        let (c, r) = (pos2(100.0, 100.0), 50.0);
+        let s = swatch([200, 60, 40], 1.0);
+        let at = wheel_pos(&s, c, r);
+        let back = wheel_colour(at, c, r, s.oklab[0]).unwrap();
+        assert!((back[1] - s.oklab[1]).abs() < 1e-3 && (back[2] - s.oklab[2]).abs() < 1e-3);
+        assert!(
+            wheel_colour(pos2(200.0, 100.0), c, r, 0.5).is_none(),
+            "hors de la roue"
+        );
     }
 
     #[test]

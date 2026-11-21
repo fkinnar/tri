@@ -242,10 +242,15 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   cible, action `core.filter.palette`) : la grille ne garde que les images dont la palette
   est à moins du seuil de celle de l'image (curseur dessous, double-clic : valeur de
   départ, `[palette] similar_threshold` / `similar_max`), de la plus proche à la moins
-  proche. **Couleur** (la pipette, action `core.filter.palette_colour`, en grille comme en
-  plein écran : un clic sur une vignette ou l'image relève la couleur moyenne d'une petite
-  zone de l'image d'où la palette est tirée, lue en fond ; ou un clic sur une couleur de la
-  section Palette) : les images dont une couleur de la palette est assez proche, la plus
+  proche. **Couleur** (icône pipette, action `core.filter.palette_colour` : cochée, la dernière
+  couleur cherchée, sinon la boîte de choix). À droite du nom, la **pastille** de la
+  couleur : un clic ouvre la boîte de choix (retour du 21/11/2026) — roue (teinte et
+  saturation, même géométrie que celle des palettes), clarté, R V B, `#rrggbb`, et une
+  **pipette** : la boîte se masque, un clic n'importe où dans la fenêtre relève la couleur
+  (sur une vignette ou l'image en plein écran, la couleur moyenne d'une petite zone de
+  l'image d'où la palette est tirée, lue en fond ; ailleurs, le pixel de la capture de la
+  fenêtre), puis la boîte revient ; « Chercher » lance le filtre. Ou un clic sur une couleur
+  de la section Palette : les images dont une couleur de la palette est assez proche, la plus
   proche d'abord (un seul curseur, la tolérance, `colour_radius` / `colour_radius_max` ;
   miettes sous `colour_min_share` ignorées). Règles communes : une recherche à la fois ;
   celles pas encore calculées restent, à la fin (sinon le calcul en fond, qui ne voit que

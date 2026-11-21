@@ -302,6 +302,28 @@ struct PaletteColour {
     radius: f32,
 }
 
+/// Boîte de choix de la couleur cherchée : la couleur en cours (OKLab), et le texte du
+/// champ hexadécimal en cours de saisie.
+#[derive(Clone, Debug)]
+struct ColourDialog {
+    oklab: [f32; 3],
+    hex: String,
+}
+
+impl ColourDialog {
+    fn new(oklab: [f32; 3]) -> ColourDialog {
+        ColourDialog {
+            oklab,
+            hex: oklab_hex(oklab),
+        }
+    }
+
+    fn set(&mut self, oklab: [f32; 3]) {
+        self.oklab = oklab;
+        self.hex = oklab_hex(oklab);
+    }
+}
+
 /// Exposition du JPEG boîtier d'une image, calculée en fond.
 type CameraRead = (PathBuf, Option<Arc<Exposure>>);
 
@@ -1124,14 +1146,20 @@ pub struct TriApp {
     /// roue : redessinées telles quelles quand une recherche ne trouve rien, pour que la
     /// section ne bouge pas (retour du 21/11/2026 : le curseur remontait sous la souris).
     palette_last: Option<ShownPalettes>,
-    /// Clic de la pipette sur une vignette (image, point de l'écran), traité une fois la
-    /// grille dessinée (le rectangle de l'image connu).
-    eyedrop_click: Option<(usize, egui::Pos2)>,
     /// Pipette des palettes armée : le prochain clic sur l'image en plein écran choisit la
     /// couleur.
     palette_eyedropper: bool,
     /// Couleur relevée par la pipette, lue en fond dans l'image source de la palette.
     colour_pick: Option<Receiver<Option<[f32; 3]>>>,
+    /// Couleur relevée par la pipette ailleurs dans la fenêtre (capture de la fenêtre).
+    screen_pick: Option<Receiver<[u8; 3]>>,
+    /// Boîte de choix de la couleur cherchée (#492, retour du 21/11/2026), ouverte.
+    colour_dialog: Option<ColourDialog>,
+    /// Dernière couleur cherchée : cocher « Couleur » la reprend.
+    palette_colour_last: Option<[f32; 3]>,
+    /// Image en plein écran à la dernière image : (rang, rectangle, partie de l'image
+    /// montrée), pour la pipette.
+    view_image: Option<(usize, Rect, Rect)>,
     /// Logiciels de développement qui ne peuvent pas recevoir un dossier (déjà ouverts,
     /// Windows), vérifiés au plus une fois par `[gui.folders] running_check_ms`
     /// ([`TriApp::engine_blocked`]).
@@ -2146,9 +2174,12 @@ impl TriApp {
             palette_refilter_pending: false,
             palette_colour: None,
             palette_last: None,
-            eyedrop_click: None,
             palette_eyedropper: false,
             colour_pick: None,
+            screen_pick: None,
+            colour_dialog: None,
+            palette_colour_last: None,
+            view_image: None,
             camera_exposures: Lru::new(gui.view.textures),
             screen: crate::display::Screen::default(),
             camera_pending: HashSet::new(),
@@ -3491,7 +3522,7 @@ impl TriApp {
         for action in [Action::FilterPalette, Action::FilterPaletteColour] {
             let on = match action {
                 Action::FilterPalette => self.palette_like.is_some(),
-                _ => self.palette_colour.is_some() || self.palette_eyedropper,
+                _ => self.palette_colour.is_some(),
             };
             let tip = if ready {
                 action.label()
@@ -3519,21 +3550,50 @@ impl TriApp {
                         Action::FilterPalette => marks::target_icon(ui.painter(), icon_rect, color),
                         _ => marks::eyedropper_icon(ui.painter(), icon_rect, color),
                     }
-                    // La couleur cherchée, à côté du nom.
-                    if action == Action::FilterPaletteColour
-                        && let Some(c) = &self.palette_colour
-                    {
-                        let swatch = tri::palette::Swatch {
-                            oklab: c.oklab,
-                            share: 0.0,
-                        };
-                        let (dot, _) = ui.allocate_exact_size(vec2(12.0, 12.0), Sense::hover());
-                        ui.painter()
-                            .rect_filled(dot, 2.0, crate::palette_view::color(&swatch));
-                    }
                     let label = ui
                         .add(egui::Label::new(name.as_str()).sense(Sense::click()))
                         .on_hover_text(&tip);
+                    // À droite de « Couleur », la pastille de la couleur cherchée (ou la
+                    // dernière) : un clic ouvre la boîte de choix (retour du 21/11/2026).
+                    if action == Action::FilterPaletteColour {
+                        let colour = self
+                            .palette_colour
+                            .map(|c| c.oklab)
+                            .or(self.palette_colour_last);
+                        let side = 14.0;
+                        let (patch, response) =
+                            ui.allocate_exact_size(vec2(side * 1.6, side), Sense::click());
+                        response.widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::Role::Button,
+                                true,
+                                t!("palette-colour-title"),
+                            )
+                        });
+                        let _ = match colour {
+                            Some(oklab) => ui.painter().rect_filled(
+                                patch,
+                                3.0,
+                                crate::palette_view::color(&tri::palette::Swatch {
+                                    oklab,
+                                    share: 0.0,
+                                }),
+                            ),
+                            None => ui.painter().rect_stroke(
+                                patch,
+                                3.0,
+                                egui::Stroke::new(1.0, ui.visuals().weak_text_color()),
+                                egui::StrokeKind::Inside,
+                            ),
+                        };
+                        if response
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .on_hover_text(t!("palette-colour-patch-tip"))
+                            .clicked()
+                        {
+                            self.open_colour_dialog();
+                        }
+                    }
                     check.changed() || icon.clicked() || label.clicked()
                 })
                 .inner
@@ -3839,6 +3899,9 @@ impl TriApp {
             .palette_colour
             .map_or(self.settings.palette.colour_radius, |c| c.radius);
         self.palette_colour = oklab.map(|oklab| PaletteColour { oklab, radius });
+        if oklab.is_some() {
+            self.palette_colour_last = oklab;
+        }
         self.palette_eyedropper = false;
         if self.palette_colour.is_some() {
             self.palette_like = None;
@@ -3857,6 +3920,202 @@ impl TriApp {
             self.zoom_anchor = None;
             self.reveal = Some(Reveal::Top);
         }
+    }
+
+    /// Ouvre la boîte de choix de la couleur cherchée, sur la couleur en cours (ou la
+    /// dernière, ou un gris moyen).
+    fn open_colour_dialog(&mut self) {
+        let oklab = self
+            .palette_colour
+            .map(|c| c.oklab)
+            .or(self.palette_colour_last)
+            .unwrap_or([0.6, 0.0, 0.0]);
+        self.colour_dialog = Some(ColourDialog::new(oklab));
+    }
+
+    /// Boîte de choix de la couleur cherchée (#492, retour du 21/11/2026) : la roue
+    /// (teinte et saturation, comme celle des palettes), la clarté, R V B, l'hexadécimal,
+    /// la pipette (partout dans la fenêtre) ; « Chercher » lance le filtre. Masquée tant
+    /// que la pipette attend son clic.
+    fn colour_dialog_ui(&mut self, ctx: &egui::Context) {
+        if self.palette_eyedropper {
+            return;
+        }
+        let Some(mut dialog) = self.colour_dialog.clone() else {
+            return;
+        };
+        let (mut search, mut cancel, mut eyedropper) = (false, false, false);
+        let title = t!("palette-colour-title");
+        let modal = modal_at("palette_colour_dialog", CENTRED)
+            .title(title)
+            .show(ctx, |ui| {
+                // La roue, à la clarté choisie ; un clic ou un glisser y choisit teinte et
+                // saturation.
+                let side = 200.0;
+                let (rect, response) =
+                    ui.allocate_exact_size(vec2(side, side), Sense::click_and_drag());
+                crate::palette_view::draw_picker_wheel(ui.painter(), rect, dialog.oklab[0]);
+                let radius = side / 2.0;
+                if let Some(pos) = response.interact_pointer_pos()
+                    && (response.clicked() || response.dragged())
+                {
+                    // Hors de la roue en glissant : au bord, dans la même direction.
+                    let d = pos - rect.center();
+                    let pos = if d.length() > radius {
+                        rect.center() + d * (radius / d.length())
+                    } else {
+                        pos
+                    };
+                    if let Some(c) = crate::palette_view::wheel_colour(
+                        pos,
+                        rect.center(),
+                        radius,
+                        dialog.oklab[0],
+                    ) {
+                        dialog.set(c);
+                    }
+                }
+                let swatch = tri::palette::Swatch {
+                    oklab: dialog.oklab,
+                    share: 0.0,
+                };
+                let at = crate::palette_view::wheel_pos(&swatch, rect.center(), radius);
+                ui.painter()
+                    .circle_stroke(at, 6.0, egui::Stroke::new(2.0, Color32::WHITE));
+                ui.painter()
+                    .circle_stroke(at, 7.5, egui::Stroke::new(1.0, Color32::BLACK));
+                ui.add_space(6.0);
+                // La clarté.
+                ui.label(t!("palette-colour-lightness"));
+                let mut l = dialog.oklab[0];
+                ui.add(FineSlider::new(&mut l, 0.0..=1.0).width(side));
+                if l != dialog.oklab[0] {
+                    dialog.set([l, dialog.oklab[1], dialog.oklab[2]]);
+                }
+                // R V B et l'hexadécimal.
+                let mut rgb = swatch.srgb();
+                let before = rgb;
+                ui.horizontal(|ui| {
+                    for (v, name) in rgb.iter_mut().zip(["R", "V", "B"]) {
+                        ui.add(
+                            egui::DragValue::new(v)
+                                .prefix(format!("{name} "))
+                                .speed(0.5),
+                        );
+                    }
+                });
+                if rgb != before {
+                    dialog.set(tri::palette::srgb_to_oklab(rgb));
+                }
+                ui.horizontal(|ui| {
+                    let (patch, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
+                    ui.painter()
+                        .rect_filled(patch, 3.0, crate::palette_view::color(&swatch));
+                    let field = ui.add(
+                        egui::TextEdit::singleline(&mut dialog.hex)
+                            .desired_width(90.0)
+                            .font(egui::TextStyle::Monospace),
+                    );
+                    if field.changed()
+                        && let Some(rgb) = parse_hex(&dialog.hex)
+                    {
+                        dialog.oklab = tri::palette::srgb_to_oklab(rgb);
+                    }
+                    let size = ui.spacing().interact_size.y;
+                    let (rect, button) = marks::icon_button(
+                        ui,
+                        size,
+                        &t!("palette-eyedropper-name"),
+                        &t!("palette-eyedropper-tip"),
+                    );
+                    marks::eyedropper_icon(
+                        ui.painter(),
+                        rect.shrink(size * 0.15),
+                        ui.visuals().text_color(),
+                    );
+                    eyedropper = button.clicked();
+                });
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    search = ui.button(t!("palette-colour-search")).clicked();
+                    cancel = ui.button(t!("cancel")).clicked();
+                });
+            });
+        if search {
+            self.colour_dialog = None;
+            self.set_palette_colour(Some(dialog.oklab));
+        } else if cancel || modal.should_close() {
+            self.colour_dialog = None;
+        } else {
+            self.palette_eyedropper = eyedropper;
+            self.colour_dialog = Some(dialog);
+        }
+    }
+
+    /// Pipette armée : un voile invisible sur toute la fenêtre prend le prochain clic
+    /// (rien dessous ne réagit). Sur une vignette ou l'image en plein écran : la couleur
+    /// lue dans l'image d'où la palette est tirée ; ailleurs (interface…) : le pixel de la
+    /// capture de la fenêtre. Échap y renonce.
+    fn eyedropper_overlay(&mut self, ctx: &egui::Context) {
+        if !self.palette_eyedropper {
+            return;
+        }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+            self.palette_eyedropper = false;
+            return;
+        }
+        let screen = ctx.content_rect();
+        let clicked = egui::Area::new(egui::Id::unique("palette_eyedropper"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(screen.min)
+            .show(ctx, |ui| {
+                let response = ui.allocate_response(screen.size(), Sense::click());
+                ctx.set_cursor_icon(egui::CursorIcon::Crosshair);
+                response
+                    .clicked()
+                    .then(|| response.interact_pointer_pos())
+                    .flatten()
+            })
+            .inner;
+        let Some(pos) = clicked else {
+            return;
+        };
+        self.palette_eyedropper = false;
+        let image = match self.mode {
+            Mode::Grid => self
+                .grid_images
+                .iter()
+                .find(|(_, r)| r.contains(pos))
+                .map(|&(i, r)| (i, r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)))),
+            Mode::View => self.view_image.filter(|(_, r, _)| r.contains(pos)),
+            _ => None,
+        };
+        if let Some((index, rect, uv)) = image
+            && self.palette_source.is_some_and(|k| {
+                self.files
+                    .get(index)
+                    .is_some_and(|f| k.source_for(f).is_some())
+            })
+        {
+            let rel = (pos - rect.min) / rect.size();
+            let p = uv.min + vec2(rel.x * uv.width(), rel.y * uv.height());
+            self.pick_palette_colour(index, pos2(p.x, p.y));
+            return;
+        }
+        // Ailleurs : le pixel de la fenêtre, à la prochaine image.
+        let (tx, rx) = mpsc::channel();
+        let ppp = ctx.pixels_per_point();
+        let repaint = ctx.clone();
+        ctx.request_screenshot(move |image| {
+            let (x, y) = ((pos.x * ppp) as usize, (pos.y * ppp) as usize);
+            let [w, h] = image.size;
+            if x < w && y < h {
+                let c = image.pixels[y * w + x];
+                let _ = tx.send([c.r(), c.g(), c.b()]);
+            }
+            repaint.request_repaint();
+        });
+        self.screen_pick = Some(rx);
     }
 
     /// Pipette des palettes : la couleur au point `point` (coordonnées relatives de
@@ -3891,21 +4150,39 @@ impl TriApp {
         self.palette_eyedropper = false;
     }
 
-    /// Couleur de la pipette arrivée : la recherche commence.
+    /// Couleur de la pipette arrivée (lue dans une image, ou dans la capture de la
+    /// fenêtre) : dans la boîte de choix, rouverte ; sans boîte, la recherche commence.
     fn take_colour_pick(&mut self) {
-        let Some(rx) = &self.colour_pick else {
+        let mut picked = None;
+        if let Some(rx) = &self.colour_pick {
+            match rx.try_recv() {
+                Ok(Some(oklab)) => {
+                    self.colour_pick = None;
+                    picked = Some(oklab);
+                }
+                Ok(None) | Err(mpsc::TryRecvError::Disconnected) => {
+                    self.colour_pick = None;
+                    self.notice = Some((t!("palette-computing"), false));
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        if let Some(rx) = &self.screen_pick {
+            match rx.try_recv() {
+                Ok(rgb) => {
+                    self.screen_pick = None;
+                    picked = Some(tri::palette::srgb_to_oklab(rgb));
+                }
+                Err(mpsc::TryRecvError::Disconnected) => self.screen_pick = None,
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        let Some(oklab) = picked else {
             return;
         };
-        match rx.try_recv() {
-            Ok(Some(oklab)) => {
-                self.colour_pick = None;
-                self.set_palette_colour(Some(oklab));
-            }
-            Ok(None) | Err(mpsc::TryRecvError::Disconnected) => {
-                self.colour_pick = None;
-                self.notice = Some((t!("palette-computing"), false));
-            }
-            Err(mpsc::TryRecvError::Empty) => {}
+        match &mut self.colour_dialog {
+            Some(dialog) => dialog.set(oklab),
+            None => self.set_palette_colour(Some(oklab)),
         }
     }
 
@@ -11169,12 +11446,12 @@ impl TriApp {
                     self.set_palette_colour(None);
                 } else if self.palette_source.is_none() {
                     self.notice = Some((t!("palette-choose"), false));
+                } else if let Some(last) = self.palette_colour_last {
+                    // La dernière couleur cherchée (retour du 21/11/2026 : plus de pipette
+                    // armée d'office ; la boîte de choix par la pastille).
+                    self.set_palette_colour(Some(last));
                 } else {
-                    // En grille comme en plein écran (retour du 21/11/2026).
-                    self.palette_eyedropper = !self.palette_eyedropper;
-                    if self.palette_eyedropper {
-                        self.notice = Some((t!("palette-eyedropper-tip"), false));
-                    }
+                    self.open_colour_dialog();
                 }
             }
             // Palettes proches (#492) : de l'image sélectionnée, ou fin de la recherche.
@@ -15781,20 +16058,8 @@ impl TriApp {
         };
         let peaking = self.peaking_overlay(&painter, &file, shown, image_rect, peaking_uv);
 
-        // Pipette des palettes (#492) : un clic choisit la couleur cherchée.
-        if self.palette_eyedropper && shown_crop.is_none() {
-            if response.hovered() {
-                ctx.set_cursor_icon(egui::CursorIcon::Crosshair);
-            }
-            if response.clicked()
-                && let (Some(rect), Some(pos)) = (image_rect, response.interact_pointer_pos())
-            {
-                let rel = view::relative(rect, pos);
-                let p = uv.min + vec2(rel.x * uv.width(), rel.y * uv.height());
-                self.pick_palette_colour(index, pos2(p.x, p.y));
-                ctx.request_repaint();
-            }
-        }
+        // Image montrée, pour la pipette des palettes (#492).
+        self.view_image = image_rect.map(|rect| (index, rect, uv));
         // Pipette des réglages (#137) : un clic sur une zone qui devrait être grise, ou un
         // cadre tracé (balance auto sur cette partie de l'image).
         if self.adjust_eyedropper && shown_crop.is_none() {
@@ -19807,14 +20072,6 @@ impl TriApp {
 
     fn grid(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
-        // Clic de la pipette à l'image précédente : le point relatif dans la vignette.
-        if let Some((index, pos)) = self.eyedrop_click.take()
-            && let Some(&(_, dest)) = self.grid_images.iter().find(|(i, _)| *i == index)
-            && dest.contains(pos)
-        {
-            let rel = (pos - dest.min) / dest.size();
-            self.pick_palette_colour(index, pos2(rel.x, rel.y));
-        }
         #[cfg(test)]
         self.cell_rects.clear();
         self.grid_images.clear();
@@ -20005,14 +20262,6 @@ impl TriApp {
         }
         #[cfg(test)]
         self.cell_rects.push((index, rect));
-        // Pipette des palettes armée : le clic relève la couleur au point de la vignette
-        // (une fois la grille dessinée, le rectangle de l'image connu).
-        if self.palette_eyedropper && response.hovered() {
-            ctx.set_cursor_icon(egui::CursorIcon::Crosshair);
-        }
-        if self.palette_eyedropper && response.clicked() {
-            self.eyedrop_click = response.interact_pointer_pos().map(|p| (index, p));
-        } else
         // Le clic sélectionne ; le survol ne fait qu'encadrer (retour du 17/10/2026 : quand le
         // survol sélectionnait, aller vers le bandeau de notation changeait d'image).
         if response.clicked() {
@@ -23629,6 +23878,8 @@ impl eframe::App for TriApp {
         self.rating_dialog(&ctx);
         self.conflict_dialog(&ctx);
         self.mark_picker(&ctx);
+        self.colour_dialog_ui(&ctx);
+        self.eyedropper_overlay(&ctx);
         self.develop_folder_dialog(&ctx);
         self.sidecars_dialog(&ctx);
         self.file_dialog(&ctx);
@@ -23915,6 +24166,16 @@ type ShownPalettes = (Vec<(Option<String>, Arc<Palette>)>, Arc<Palette>);
 /// Débord du fond sombre de la barre de position autour d'elle (points), comme dans
 /// `position_bar::draw`.
 const BAR_BACKDROP: f32 = position_bar::BACKDROP;
+
+/// Lit `#rrggbb` (ou `rrggbb`) ; `None` sinon.
+fn parse_hex(text: &str) -> Option<[u8; 3]> {
+    let hex = text.trim().trim_start_matches('#');
+    if hex.len() != 6 || !hex.is_ascii() {
+        return None;
+    }
+    let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
+    Some([byte(0)?, byte(2)?, byte(4)?])
+}
 
 /// `#rrggbb` d'une couleur OKLab.
 fn oklab_hex(oklab: [f32; 3]) -> String {
@@ -27998,16 +28259,42 @@ mod tests {
             .unwrap();
         h.state_mut().selected = img1;
         press(&mut h, Key::Enter, Modifiers::NONE);
-        act(&mut h, Action::FilterPaletteColour);
+        // La pastille ouvre la boîte ; sa pipette, puis un clic sur l'image (retour du
+        // 21/11/2026).
+        // La boîte le temps de s'ouvrir (fondu) avant de prendre un clic.
+        h.state_mut().open_colour_dialog();
+        h.run_steps(10);
+        h.get_by_label(&t!("palette-eyedropper-name")).click();
+        h.run_steps(2);
         assert!(h.state().palette_eyedropper, "pipette armée");
         let img1_path = h.state().files[img1].path.clone();
-        h.state_mut().pick_palette_colour(img1, pos2(0.5, 0.5));
-        run_until(&mut h, |app| app.palette_colour.is_some());
+        let at = h
+            .state()
+            .view_image
+            .map(|(_, r, _)| r.center())
+            .expect("image montrée");
+        h.event(UiEvent::PointerMoved(at));
+        for pressed in [true, false] {
+            h.event(UiEvent::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            });
+        }
+        let red = h.state().palettes[&(img1_path, Source::Camera)].swatches[0].oklab;
+        run_until(&mut h, |app| {
+            app.colour_dialog
+                .as_ref()
+                .is_some_and(|d| tri::palette::oklab_distance(d.oklab, red) < 0.02)
+        });
+        h.run_steps(10);
+        h.get_by_label(&t!("palette-colour-search")).click();
+        h.run_steps(3);
         // La même couleur que la palette de l'image (même source, même espace) ; la grille
         // ne garde plus qu'elle.
         assert_eq!(h.state().files.len(), 1);
         assert_eq!(h.state().mode, Mode::Grid, "les résultats en grille");
-        let red = h.state().palettes[&(img1_path, Source::Camera)].swatches[0].oklab;
         let got = h.state().palette_colour.unwrap().oklab;
         assert!(
             tri::palette::oklab_distance(got, red) < 0.02,
@@ -28045,6 +28332,14 @@ mod tests {
     }
 
     #[test]
+    fn hexadecimal_colours_are_read_with_or_without_the_hash() {
+        assert_eq!(parse_hex("#123abc"), Some([0x12, 0x3a, 0xbc]));
+        assert_eq!(parse_hex(" 123ABC "), Some([0x12, 0x3a, 0xbc]));
+        assert_eq!(parse_hex("#12345"), None);
+        assert_eq!(parse_hex("#zzzzzz"), None);
+    }
+
+    #[test]
     fn the_eyedropper_works_on_a_thumbnail_in_the_grid() {
         // Retour du 21/11/2026 : pourquoi la griser en grille ? Un clic sur une vignette
         // relève la couleur.
@@ -28064,7 +28359,13 @@ mod tests {
                 .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
         });
         assert_eq!(h.state().mode, Mode::Grid);
+        // Cocher « Couleur » sans couleur encore cherchée : la boîte de choix s'ouvre (pas
+        // de pipette armée d'office).
         act(&mut h, Action::FilterPaletteColour);
+        assert!(h.state().colour_dialog.is_some() && !h.state().palette_eyedropper);
+        h.run_steps(10);
+        h.get_by_label(&t!("palette-eyedropper-name")).click();
+        h.run_steps(2);
         assert!(h.state().palette_eyedropper, "pipette armée en grille");
         let img1 = h
             .state()
@@ -28089,7 +28390,18 @@ mod tests {
                 modifiers: Modifiers::NONE,
             });
         }
-        run_until(&mut h, |app| app.palette_colour.is_some());
+        run_until(&mut h, |app| {
+            app.colour_pick.is_none() && !app.palette_eyedropper
+        });
+        run_until(&mut h, |app| {
+            app.colour_dialog
+                .as_ref()
+                .is_some_and(|d| d.oklab != [0.6, 0.0, 0.0])
+        });
+        h.run_steps(10);
+        h.get_by_label(&t!("palette-colour-search")).click();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_some());
         let red = h.state().palettes[&(path, Source::Camera)].swatches[0].oklab;
         let got = h.state().palette_colour.unwrap().oklab;
         assert!(
@@ -29789,6 +30101,8 @@ mod tests {
         // Retour du 07/11/2026 : dans le menu des suites, `m` et `z` ont un niveau de plus
         // (les chiffres, la touche retapée pour 100 %, `/` pour l'ajusté).
         let (mut h, _dir) = harness();
+        // Sans palettes : leur liste dirait « 100 % » aussi.
+        choose_palette(&mut h, None);
         h.run_steps(3);
         h.state_mut().gui.key_menu_delay_ms = 0;
         act(&mut h, Action::Open);
