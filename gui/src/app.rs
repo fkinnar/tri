@@ -1423,6 +1423,10 @@ pub struct TriApp {
     /// Hauteur prise en bas de l'image par la barre de position dessinée dessus : les
     /// notes et les repères du bas remontent d'autant (retour du 21/11/2026).
     position_bar_reserved: f32,
+    /// Dernier histogramme dessiné dans le panneau (exposition, réelle à côté, JPEG
+    /// boîtier) : gardé à l'écran le temps que celui de l'image suivante se calcule
+    /// (retour du 21/11/2026 : il disparaissait et réapparaissait à chaque image).
+    last_histogram: Option<Histograms>,
     /// Dernière image affichée en plein écran (pour la trace).
     last_shown: (usize, Option<Level>),
 }
@@ -2220,6 +2224,7 @@ impl TriApp {
             position_bar_key: None,
             position_bar_since: Instant::now(),
             position_bar_reserved: 0.0,
+            last_histogram: None,
             last_zoom_size: std::collections::HashMap::new(),
             gui,
         };
@@ -3504,57 +3509,57 @@ impl TriApp {
     /// l'image. Un clic l'ouvre en grand.
     fn histogram_section(&mut self, ui: &mut Ui) {
         let settings = self.gui.metadata;
-        match self.shown_exposure(self.selected) {
-            Some((e, real)) => {
-                self.meta_has_histogram = true;
-                let (rect, response) = ui.allocate_exact_size(
-                    vec2(ui.available_width(), settings.histogram_height),
-                    Sense::click(),
-                );
-                let camera = self.camera_exposure_of(self.selected);
-                let mut tip = t!(
-                    "histogram-enlarge",
-                    keys = self.keys_text(Action::HistogramLarge)
-                );
-                if camera.is_some() {
-                    tip = format!("{tip}\n{}", t!("histogram-camera-tip-short"));
-                }
-                if response
-                    .on_hover_cursor(egui::CursorIcon::ZoomIn)
-                    .on_hover_text(tip)
-                    .clicked()
-                {
-                    self.histogram_large = true;
-                }
-                let look = self.small_histogram_look();
-                histogram::draw(
-                    ui.painter(),
-                    rect,
-                    &e,
-                    real.as_deref(),
-                    camera.as_deref(),
-                    look,
-                    &self.gui.histogram,
-                    &self.gui.colors,
-                );
-            }
-            // À la hauteur de l'histogramme (#537, retour du 21/11/2026 : la place se
-            // réduisait à une ligne le temps du calcul, et tout ce qui est dessous, la barre
-            // de position la première, sautait à chaque image).
-            None => {
-                let (rect, _) = ui.allocate_exact_size(
-                    vec2(ui.available_width(), settings.histogram_height),
-                    Sense::hover(),
-                );
-                ui.painter().text(
-                    rect.center(),
-                    Align2::CENTER_CENTER,
-                    t!("histogram-computing"),
-                    egui::TextStyle::Body.resolve(ui.style()),
-                    ui.visuals().weak_text_color(),
-                );
-            }
+        let current = self.shown_exposure(self.selected).map(|(e, real)| {
+            let camera = self.camera_exposure_of(self.selected);
+            (e, real, camera)
+        });
+        if current.is_some() {
+            self.last_histogram = current.clone();
         }
+        // En attendant celui de l'image, le précédent reste (retour du 21/11/2026 : la
+        // place vide clignotait à chaque image) ; à la même hauteur dans tous les cas (la
+        // barre de position, dessous, ne saute pas).
+        let ready = current.is_some();
+        let (rect, response) = ui.allocate_exact_size(
+            vec2(ui.available_width(), settings.histogram_height),
+            Sense::click(),
+        );
+        let Some((e, real, camera)) = current.or_else(|| self.last_histogram.clone()) else {
+            ui.painter().text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                t!("histogram-computing"),
+                egui::TextStyle::Body.resolve(ui.style()),
+                ui.visuals().weak_text_color(),
+            );
+            return;
+        };
+        self.meta_has_histogram = ready;
+        let mut tip = t!(
+            "histogram-enlarge",
+            keys = self.keys_text(Action::HistogramLarge)
+        );
+        if camera.is_some() {
+            tip = format!("{tip}\n{}", t!("histogram-camera-tip-short"));
+        }
+        if response
+            .on_hover_cursor(egui::CursorIcon::ZoomIn)
+            .on_hover_text(tip)
+            .clicked()
+        {
+            self.histogram_large = true;
+        }
+        let look = self.small_histogram_look();
+        histogram::draw(
+            ui.painter(),
+            rect,
+            &e,
+            real.as_deref(),
+            camera.as_deref(),
+            look,
+            &self.gui.histogram,
+            &self.gui.colors,
+        );
     }
 
     /// Sous-section « Fichiers » (30/10/2026) : les actions sur les fichiers, interdites
@@ -22971,6 +22976,10 @@ fn mark_frame(style: &egui::Style) -> egui::Frame {
         color: Color32::from_black_alpha(60),
     })
 }
+
+/// Histogramme dessiné dans le panneau : l'exposition montrée, la réelle à côté (après
+/// réglages), celle du JPEG boîtier.
+type Histograms = (Arc<Exposure>, Option<Arc<Exposure>>, Option<Arc<Exposure>>);
 
 /// Débord du fond sombre de la barre de position autour d'elle (points), comme dans
 /// `position_bar::draw`.
