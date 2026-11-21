@@ -611,6 +611,11 @@ colour_radius = 0.1
 colour_radius_max = 0.4
 # Contient cette couleur : les couleurs plus petites que cette part de l'image ne comptent pas.
 colour_min_share = 0.02
+# Contient cette couleur : part minimale des vrais pixels proches de la couleur.
+#
+# Contient cette couleur, d'après les vrais pixels : part minimale de l'image proche de la
+# couleur (0,005 : 0,5 %). Un détail qu'on pipette, un reflet, suffit.
+colour_coverage = 0.005
 # Chroma sous lequel une couleur est un gris : une image toute en gris est en noir et blanc,
 # jamais mélangée aux images en couleur dans les recherches.
 mono_chroma = 0.03

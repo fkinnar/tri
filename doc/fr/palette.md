@@ -67,7 +67,8 @@ dans une couleur moyenne de la palette, bien moins saturée ; pipetée sur la ph
 couleur ne retrouvait pas la photo. Chaque palette garde donc aussi ses points
 d'échantillonnage comptés par petites cases OKLab (L par pas de 0,04 ; a et b par pas
 de 0,016, de -0,32 à 0,32). « Contient cette couleur » (`Palette::nearest`) mesure la
-distance en deçà de laquelle se trouve au moins `colour_min_share` de l'image
+distance en deçà de laquelle se trouve au moins `colour_coverage` de l'image (0,5 % : un
+reflet pipeté suffit)
 (`Coverage::reach`), et `share_near` la vraie part des pixels proches
 (`Coverage::share_within`). Mesuré sur une séance (131 images) : ~1,2 Ko par palette
 (0,4 à 3 Ko). Une palette d'une version précédente (sans couverture) est recalculée.

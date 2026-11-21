@@ -3945,7 +3945,7 @@ impl TriApp {
         let key = |p: &Palette| match (like, colour) {
             (Some(l), _) => tri::palette::distance(&l.reference, p, weight),
             (None, Some(c)) => p
-                .nearest(c.oklab, weight, self.settings.palette.colour_min_share)
+                .nearest(c.oklab, weight, self.settings.palette.colour_coverage)
                 .unwrap_or(f32::INFINITY),
             (None, None) => 0.0,
         };

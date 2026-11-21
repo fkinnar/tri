@@ -608,6 +608,11 @@ colour_radius = 0.1
 colour_radius_max = 0.4
 # Contains this colour: colours smaller than this share of the image don't count.
 colour_min_share = 0.02
+# Contains this colour: minimum share of real pixels near the colour.
+#
+# Contains this colour, from the real pixels: minimum share of the image near the colour
+# (0.005: 0.5 %). A picked detail, a highlight, is enough.
+colour_coverage = 0.005
 # Chroma under which a colour is a grey: an image all in greys is black and white, never
 # mixed with colour images in the searches.
 mono_chroma = 0.03

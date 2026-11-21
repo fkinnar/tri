@@ -65,7 +65,7 @@ average palette colour, much less saturated; picked on the photo, the colour did
 the photo. Each palette therefore also keeps its sample points counted in small OKLab
 cells (L by steps of 0.04; a and b by steps of 0.016, from -0.32 to 0.32). "Contains this
 colour" (`Palette::nearest`) measures the distance within which at least
-`colour_min_share` of the image lies (`Coverage::reach`), and `share_near` the real share
+`colour_coverage` of the image lies (0.5 %: a picked highlight is enough) (`Coverage::reach`), and `share_near` the real share
 of nearby pixels (`Coverage::share_within`). Measured on a session (131 images): ~1.2 KB
 per palette (0.4 to 3 KB). A palette from an earlier version (without coverage) is
 computed again.

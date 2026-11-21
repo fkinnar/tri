@@ -159,6 +159,10 @@ pub struct PaletteSettings {
     /// « Contient cette couleur » : les couleurs de la palette plus petites que cette part
     /// de l'image (0 à 1) ne comptent pas (miettes).
     pub colour_min_share: f32,
+    /// « Contient cette couleur », d'après les vrais pixels : part minimale de l'image proche
+    /// de la couleur (0 à 1). Plus petite que `colour_min_share` : un détail qu'on pipette
+    /// (un reflet) suffit (retour du 21/11/2026).
+    pub colour_coverage: f32,
     /// Chroma (OKLab) sous lequel une couleur est un gris : une image dont toutes les
     /// couleurs le sont est en noir et blanc, et les recherches ne la mélangent pas aux
     /// images en couleur.
@@ -190,6 +194,7 @@ impl Default for PaletteSettings {
             colour_radius: 0.1,
             colour_radius_max: 0.4,
             colour_min_share: 0.02,
+            colour_coverage: 0.005,
             mono_chroma: 0.03,
             mono_toned_chroma: 0.08,
             stack_scale: 0.5,
@@ -1221,6 +1226,31 @@ mod tests {
         assert!(grey.is_grey(s.monochrome(), s.colour_min_share));
         let toned = extract(&bands(&[([60, 48, 38], 50), ([150, 118, 95], 50)]), &s);
         assert!(!toned.is_grey(s.monochrome(), s.colour_min_share));
+    }
+
+    #[test]
+    fn a_small_highlight_is_found_with_the_colour_coverage() {
+        // Retour du 21/11/2026 (vidéo) : un reflet orangé pipeté sur une photo violette ne
+        // la retrouvait pas : moins de 2 % de l'image.
+        let s = PaletteSettings::default();
+        let highlight = [250u8, 170, 120];
+        let image = bands(&[([60, 20, 160], 99), (highlight, 1)]);
+        let palette = extract(&image, &s);
+        let picked = working_to_oklab(highlight);
+        assert!(
+            palette
+                .nearest(picked, s.chroma_weight, s.colour_min_share)
+                .unwrap()
+                > s.colour_radius,
+            "à 2 %, pas trouvé"
+        );
+        assert!(
+            palette
+                .nearest(picked, s.chroma_weight, s.colour_coverage)
+                .unwrap()
+                < 0.04,
+            "à 0,5 %, trouvé"
+        );
     }
 
     #[test]
