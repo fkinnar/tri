@@ -452,7 +452,9 @@ system one ("cold" measurements, experiments).
   Ctrl+D, the search keeping the letters. Settings: the section list scrolls to the
   chosen one with the arrows (and the settings start again from the top); from the
   search, → (empty search), Enter or Tab give the keyboard to the first setting shown,
-  then Tab / Shift+Tab move from one to the next. A test goes through all sections: it
+  then Tab / Shift+Tab move from one to the next. During a search (feedback of
+  2026-11-21), ↑ / ↓ go through the sections found on the left and Enter opens the one
+  pointed at (`found_cursor`, `found_targets`). A test goes through all sections: it
   found a "←" in the example's comments, missing from egui's font (replaced by words).
 - **Hidden cursor** (2026-10-18, to see the stacks as a whole): in the grid, Esc when
   there is nothing left to close (multiple selection already emptied), or a click in an

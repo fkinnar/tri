@@ -615,6 +615,11 @@ pub struct SettingsWindow {
     /// Section affichée (sans recherche).
     section: usize,
     query: String,
+    /// Pendant une recherche, la section trouvée pointée au clavier (↑ / ↓ depuis le
+    /// champ, Entrée l'ouvre ; retour du 21/11/2026, comme dans l'aide `?`), rang parmi
+    /// les sections trouvées ; et la recherche pour laquelle il vaut.
+    found_cursor: Option<usize>,
+    found_cursor_query: String,
     /// Première image : la recherche prend le focus.
     fresh: bool,
     /// Textes en cours de saisie (texte, liste TOML), écrits à la validation (Entrée ou
@@ -762,6 +767,8 @@ impl SettingsWindow {
             file,
             section: 0,
             query: String::new(),
+            found_cursor: None,
+            found_cursor_query: String::new(),
             fresh: true,
             drafts: HashMap::new(),
             manual: Default::default(),
@@ -1057,6 +1064,45 @@ impl SettingsWindow {
             }
             self.section_moved |= up || down;
         }
+        // Recherche tapée : ↑ / ↓ parcourent les sections trouvées, Entrée ouvre celle
+        // pointée (retour du 21/11/2026 : comme dans l'aide `?`, les flèches n'y menaient
+        // pas).
+        if self.found_cursor_query != self.query {
+            self.found_cursor = None;
+            self.found_cursor_query = self.query.clone();
+        }
+        if ctx.memory(|m| m.has_focus(id)) && !self.query.trim().is_empty() {
+            let targets = found_targets(schema, &self.hits(schema));
+            let (up, down) = ctx.input_mut(|i| {
+                (
+                    i.consume_key(Modifiers::NONE, Key::ArrowUp),
+                    i.consume_key(Modifiers::NONE, Key::ArrowDown),
+                )
+            });
+            if !targets.is_empty() {
+                if down {
+                    self.found_cursor = Some(
+                        self.found_cursor
+                            .map_or(0, |c| (c + 1).min(targets.len() - 1)),
+                    );
+                }
+                if up {
+                    self.found_cursor = self.found_cursor.map(|c| c.saturating_sub(1));
+                }
+            }
+            if up || down {
+                self.section_moved = true;
+            }
+            if let Some(&(_, open)) = self.found_cursor.and_then(|c| targets.get(c))
+                && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter))
+            {
+                self.query.clear();
+                self.found_cursor = None;
+                self.section = open;
+                self.section_moved = true;
+                self.naming = None;
+            }
+        }
         // Depuis la recherche : →, Entrée ou Tab entrent dans les réglages (retour du
         // 18/10/2026 : la partie droite n'était pas joignable au clavier, Tab passant
         // d'abord par toutes les sections).
@@ -1249,8 +1295,14 @@ impl SettingsWindow {
                                         egui::Align::Center,
                                     );
                             }
+                            let pointed = self.found_cursor.is_some_and(|c| {
+                                found_targets(schema, hits).get(c).map(|t| t.0) == Some(i)
+                            });
                             let label =
-                                ui.add_enabled(count > 0, egui::Button::selectable(false, job));
+                                ui.add_enabled(count > 0, egui::Button::selectable(pointed, job));
+                            if pointed && self.section_moved {
+                                label.scroll_to_me(None);
+                            }
                             // Un clic ouvre la section comme sans recherche (issue n° 24 :
                             // il amenait seulement ses résultats en vue, et une famille
                             // montrait alors tous ses membres en entier, l'un après l'autre).
@@ -2810,6 +2862,19 @@ fn color_order_of(value: &Value) -> Vec<tri::xmp::Color> {
     colors
 }
 
+/// Sections trouvées par une recherche (`hits`), dans l'ordre de la liste de gauche : la
+/// page listée, et la section à ouvrir (pour une famille, le membre le mieux trouvé).
+fn found_targets(schema: &Schema, hits: &[(usize, Found)]) -> Vec<(usize, usize)> {
+    let mut targets: Vec<(usize, usize)> = Vec::new();
+    for (s, f) in hits {
+        let l = listed_of(schema, *s);
+        if f.keys.len() + f.actions.len() > 0 && !targets.iter().any(|t| t.0 == l) {
+            targets.push((l, *s));
+        }
+    }
+    targets
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -3247,6 +3312,46 @@ mod tests {
         ] {
             assert!(schema.default_of(section, key).is_some(), "{section}.{key}");
         }
+    }
+
+    #[test]
+    fn arrows_go_through_the_sections_found_and_enter_opens_one() {
+        // Retour du 21/11/2026 : « barre de po » tapé, les flèches ne menaient pas aux
+        // sections trouvées (seulement sans recherche).
+        crate::i18n::ensure();
+        let dir = tempfile::tempdir().unwrap();
+        let w = SettingsWindow::open(&dir.path().join("config.toml")).unwrap();
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(900.0, 420.0))
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, w: &mut SettingsWindow| {
+                    w.show(ui.ctx());
+                },
+                w,
+            );
+        h.run_steps(3);
+        h.state_mut().query = "seconds".into();
+        h.run_steps(2);
+        let targets = found_targets(schema(), &h.state().hits(schema()));
+        assert!(targets.len() >= 2, "{targets:?}");
+        h.key_press(Key::ArrowDown);
+        h.run_steps(1);
+        h.key_press(Key::ArrowDown);
+        h.run_steps(1);
+        assert_eq!(h.state().found_cursor, Some(1));
+        h.key_press(Key::ArrowUp);
+        h.run_steps(1);
+        h.key_press(Key::ArrowDown);
+        h.run_steps(1);
+        h.key_press(Key::Enter);
+        h.run_steps(2);
+        assert!(h.state().query.is_empty(), "la recherche s'efface");
+        assert_eq!(
+            h.state().section,
+            targets[1].1,
+            "la section pointée s'ouvre"
+        );
     }
 
     #[test]
