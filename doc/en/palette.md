@@ -87,12 +87,14 @@ source), a finished render only exists for a development of the list.
 
 ## Interface
 
-"Palette" section of the right panel: source picker, band, wheel and colours of the
-selected image, progress in the status bar; see [gui.md](gui.md).
+"Palette" section of the right panel (source, band, wheel and colours of the selected
+image), searches in the Filter section (similar palettes, colour); see [gui.md](gui.md).
+Sources (`SourceKind`): `camera`, `raw`, or a program (`darktable`…) for its
+developments; the former `developed` reads back as `darktable`.
 
 ## Command line
 
-`tri <folder> --palette [--source camera|raw|developed]`: each image, its `#rrggbb`
+`tri <folder> --palette [--source camera|raw|darktable|…]`: each image, its `#rrggbb`
 colours and their share, stored in the cache as in the interface. Finished renders: only
 those already made by the interface (no software launched from the command line).
 

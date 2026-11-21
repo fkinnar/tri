@@ -42,51 +42,75 @@ pub enum Source {
     Developed(crate::develop::Engine),
 }
 
-/// Source choisie dans l'interface ou en ligne de commande : le logiciel d'un rendu fini
-/// est celui de chaque développement. Dans un fichier : `"camera"`, `"raw"`,
-/// `"developed"`.
+/// Source choisie dans l'interface ou en ligne de commande (sur le modèle du rendu
+/// affiché, retour du 21/11/2026) : JPEG boîtier, un logiciel de développement (tous ses
+/// développements, clones compris), ou les données brutes. Dans un fichier :
+/// `"camera"`, `"raw"`, ou l'identifiant du logiciel (`"darktable"`…).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(from = "String", into = "String")]
 pub enum SourceKind {
     /// JPEG boîtier.
     #[default]
     Camera,
     /// Données brutes de LibRaw.
     Raw,
-    /// Rendus finis.
-    Developed,
+    /// Les développements de ce logiciel.
+    Developed(crate::develop::Engine),
 }
 
 impl SourceKind {
-    /// Tous, dans l'ordre de l'interface.
-    pub const ALL: [SourceKind; 3] = [SourceKind::Camera, SourceKind::Raw, SourceKind::Developed];
+    /// Tous, dans l'ordre de l'interface (comme le rendu affiché : JPEG boîtier, les
+    /// logiciels, RAW).
+    pub fn all() -> Vec<SourceKind> {
+        std::iter::once(SourceKind::Camera)
+            .chain(crate::develop::Engine::ALL.map(SourceKind::Developed))
+            .chain(std::iter::once(SourceKind::Raw))
+            .collect()
+    }
 
     /// Nom dans la ligne de commande et le fichier de configuration.
     pub fn id(self) -> &'static str {
         match self {
             SourceKind::Camera => "camera",
             SourceKind::Raw => "raw",
-            SourceKind::Developed => "developed",
+            SourceKind::Developed(engine) => engine.id(),
         }
     }
 
-    /// Lit [`SourceKind::id`].
+    /// Lit [`SourceKind::id`] ; `"developed"` (avant le choix par logiciel) : darktable.
     pub fn parse(text: &str) -> Option<SourceKind> {
-        Self::ALL.into_iter().find(|k| k.id() == text)
+        if text == "developed" {
+            return Some(SourceKind::Developed(crate::develop::Engine::Darktable));
+        }
+        Self::all().into_iter().find(|k| k.id() == text)
     }
 
     /// Source de la palette de `file` pour ce choix : une image plate n'a pas de données
-    /// brutes (son image) ; un rendu fini n'existe que pour un développement (`None`
-    /// sinon).
+    /// brutes (son image) ; un logiciel : seulement ses développements (`None` sinon).
     pub fn source_for(self, file: &crate::media::MediaFile) -> Option<Source> {
         match self {
             SourceKind::Camera => Some(Source::Camera),
             SourceKind::Raw if file.kind == crate::media::MediaKind::Raw => Some(Source::Raw),
             SourceKind::Raw => Some(Source::Camera),
-            SourceKind::Developed => {
-                crate::developments::get(&file.path).map(|d| Source::Developed(d.engine))
-            }
+            SourceKind::Developed(engine) => crate::developments::get(&file.path)
+                .filter(|d| d.engine == engine)
+                .map(|_| Source::Developed(engine)),
         }
+    }
+}
+
+/// Écrit (état d'affichage) par son identifiant.
+impl From<SourceKind> for String {
+    fn from(kind: SourceKind) -> String {
+        kind.id().to_string()
+    }
+}
+
+/// Relu de son identifiant ; inconnu (logiciel retiré) : le JPEG boîtier, sans perdre le
+/// reste de l'état d'affichage.
+impl From<String> for SourceKind {
+    fn from(text: String) -> SourceKind {
+        SourceKind::parse(&text).unwrap_or_default()
     }
 }
 

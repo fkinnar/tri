@@ -90,12 +90,14 @@ n'existe que pour un développement de la liste.
 
 ## Interface
 
-Section « Palette » du panneau de droite : choix de la source, bande, roue et couleurs
-de l'image sélectionnée, avancement dans la barre d'état ; voir [gui.md](gui.md).
+Section « Palette » du panneau de droite (source, bande, roue et couleurs de l'image
+sélectionnée), recherches dans la section Filtre (palettes proches, couleur) ; voir
+[gui.md](gui.md). Sources (`SourceKind`) : `camera`, `raw`, ou un logiciel (`darktable`…)
+pour ses développements ; `developed` d'avant se relit `darktable`.
 
 ## Ligne de commande
 
-`tri <dossier> --palette [--source camera|raw|developed]` : chaque image, ses couleurs
+`tri <dossier> --palette [--source camera|raw|darktable|…]` : chaque image, ses couleurs
 `#rrggbb` et leur part, rangées dans le cache comme dans l'interface. Les rendus finis :
 seulement ceux déjà faits par l'interface (aucun logiciel lancé en ligne de commande).
 

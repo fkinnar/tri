@@ -1161,7 +1161,7 @@ fn palettes_follow_the_chosen_source_in_the_background() {
     // Une case d'avancement pour les palettes, quelle que soit la source.
     assert_eq!(scheduler.progress(Level::Palette(Source::Raw)), complete(5));
     // Rendus finis : aucune de ces images n'est un développement.
-    scheduler.set_palette(Some(SourceKind::Developed));
+    scheduler.set_palette(Some(SourceKind::Developed(tri::develop::Engine::Darktable)));
     assert!(scheduler.wait_idle(LONG));
     assert_eq!(
         fake.order(Level::Palette(Source::Raw)).len(),

@@ -1900,6 +1900,29 @@ pub fn cover_mark(painter: &Painter, rect: Rect, on: bool, color: Color32) {
     }
 }
 
+/// Icône « palettes proches » (#492) : une cible, trois anneaux et le centre.
+pub fn target_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let c = rect.center();
+    let r = rect.width().min(rect.height()) / 2.0;
+    for k in [1.0, 0.66, 0.33] {
+        painter.circle_stroke(c, r * k, Stroke::new(1.2, color));
+    }
+    painter.circle_filled(c, r * 0.12, color);
+}
+
+/// Icône « contient cette couleur » (#492) : une pipette en biais, la goutte au bout.
+pub fn eyedropper_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let at = |x: f32, y: f32| pos2(rect.min.x + x * s, rect.min.y + y * s);
+    // Le corps, du coin haut droit vers le bas gauche.
+    painter.line_segment([at(0.78, 0.22), at(0.3, 0.7)], Stroke::new(s * 0.14, color));
+    // La poire en haut.
+    painter.circle_filled(at(0.8, 0.2), s * 0.15, color);
+    // La pointe, puis la goutte.
+    painter.line_segment([at(0.3, 0.7), at(0.18, 0.82)], Stroke::new(s * 0.07, color));
+    painter.circle_filled(at(0.13, 0.9), s * 0.06, color);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

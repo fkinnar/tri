@@ -48,7 +48,7 @@ kw-core-filter-conflicts = conflit désaccord notes logiciels trancher
 action-core-filter-palette = Filtre : palettes proches de l'image sélectionnée (ou fin de la recherche)
 kw-core-filter-palette = palette couleurs proches semblables moodboard teintes
 action-core-filter-palette_colour = Filtre : contient cette couleur (pipette sur l'image en plein écran, ou fin de la recherche)
-kw-core-filter-palette_colour = pipette couleur contient teinte chercher moodboard
+kw-core-filter-palette-colour = pipette couleur contient teinte chercher moodboard
 action-core-filter-developed = Filtre : développées (allumer / éteindre ; logiciels à cocher dans la liste)
 action-core-grid-render = Rendu affiché précédent (vignettes et plein écran)
 action-core-view-render-embedded = Rendu affiché : JPEG boîtier
@@ -1494,21 +1494,12 @@ palette-no-render = Pas de développement pour cette photo.
 colour-palette-empty = Aucune couleur trouvée.
 palette-swatch-tip = { $hex } · { $share } % (clic : chercher les images qui contiennent cette couleur)
 palette-similar = Palettes proches
-palette-similar-tip = Ne garder que les images aux palettes proches de celle-ci, de la plus proche à la moins proche (curseur : seuil)
+palette-colour = Couleur
 palette-similar-to = Palettes proches de { $name }
 palette-similar-threshold = Seuil : plus à droite, des palettes plus éloignées gardées (double-clic : valeur de départ)
-palette-similar-count = { $n ->
-    [one] { $n } image
-   *[other] { $n } images
-}
-palette-similar-end = Terminer
 palette-copy-tip = Clic : copier
 palette-band = Couleurs de la palette
-palette-eyedropper = Pipette
 palette-eyedropper-tip = Puis, sur l'image en plein écran : cliquer sur la couleur à chercher dans le dossier
-palette-eyedropper-view = En plein écran seulement
-palette-colour-hint = ou cliquer une couleur de la bande pour chercher les images qui en contiennent.
-palette-colour-hint-grid = Cliquer une couleur de la bande de la section Palette, ou la pipette en plein écran
 palette-colour-summary = Contient { $hex }
 palette-colour-radius = Tolérance : plus à droite, des couleurs plus éloignées comptent (double-clic : valeur de départ)
 progress-palettes = palettes

@@ -48,7 +48,7 @@ kw-core-filter-conflicts = conflict disagree ratings programs settle
 action-core-filter-palette = Filter: palettes similar to the selected image (or end the search)
 kw-core-filter-palette = palette colours similar close moodboard hues
 action-core-filter-palette_colour = Filter: contains this colour (eyedropper on the image in full screen, or end the search)
-kw-core-filter-palette_colour = eyedropper colour contains hue find moodboard
+kw-core-filter-palette-colour = eyedropper colour contains hue find moodboard
 action-core-filter-developed = Filter: developed (on / off; software to check in the list)
 action-core-grid-render = Previous shown render (thumbnails and full screen)
 action-core-view-render-embedded = Shown render: camera JPEG
@@ -1494,21 +1494,12 @@ palette-no-render = No development for this photo.
 colour-palette-empty = No colour found.
 palette-swatch-tip = { $hex } · { $share } % (click: find the images that contain this colour)
 palette-similar = Similar palettes
-palette-similar-tip = Keep only the images whose palette is close to this one, closest first (slider: threshold)
+palette-colour = Colour
 palette-similar-to = Palettes similar to { $name }
 palette-similar-threshold = Threshold: further right, more distant palettes kept (double-click: starting value)
-palette-similar-count = { $n ->
-    [one] { $n } image
-   *[other] { $n } images
-}
-palette-similar-end = Done
 palette-copy-tip = Click: copy
 palette-band = Palette colours
-palette-eyedropper = Eyedropper
 palette-eyedropper-tip = Then, on the image in full screen: click the colour to look for in the folder
-palette-eyedropper-view = In full screen only
-palette-colour-hint = or click a colour of the band to find the images that contain it.
-palette-colour-hint-grid = Click a colour of the band in the Palette section, or use the eyedropper in full screen
 palette-colour-summary = Contains { $hex }
 palette-colour-radius = Tolerance: further right, more distant colours count (double-click: starting value)
 progress-palettes = palettes
