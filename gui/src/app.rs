@@ -1420,6 +1420,9 @@ pub struct TriApp {
     /// Barre de position (#537) : image pour laquelle elle s'est montrée, et depuis quand.
     position_bar_key: Option<PathBuf>,
     position_bar_since: Instant,
+    /// Hauteur prise en bas de l'image par la barre de position dessinée dessus : les
+    /// notes et les repères du bas remontent d'autant (retour du 21/11/2026).
+    position_bar_reserved: f32,
     /// Dernière image affichée en plein écran (pour la trace).
     last_shown: (usize, Option<Level>),
 }
@@ -2216,6 +2219,7 @@ impl TriApp {
             notes_since: Instant::now(),
             position_bar_key: None,
             position_bar_since: Instant::now(),
+            position_bar_reserved: 0.0,
             last_zoom_size: std::collections::HashMap::new(),
             gui,
         };
@@ -3534,8 +3538,21 @@ impl TriApp {
                     &self.gui.colors,
                 );
             }
+            // À la hauteur de l'histogramme (#537, retour du 21/11/2026 : la place se
+            // réduisait à une ligne le temps du calcul, et tout ce qui est dessous, la barre
+            // de position la première, sautait à chaque image).
             None => {
-                ui.weak(t!("histogram-computing"));
+                let (rect, _) = ui.allocate_exact_size(
+                    vec2(ui.available_width(), settings.histogram_height),
+                    Sense::hover(),
+                );
+                ui.painter().text(
+                    rect.center(),
+                    Align2::CENTER_CENTER,
+                    t!("histogram-computing"),
+                    egui::TextStyle::Body.resolve(ui.style()),
+                    ui.visuals().weak_text_color(),
+                );
             }
         }
     }
@@ -11864,7 +11881,7 @@ impl TriApp {
             return;
         };
         let align = e.place.align();
-        let at = align.pos_in_rect(&area.shrink(16.0));
+        let at = align.pos_in_rect(&self.marks_area(area).shrink(16.0));
         egui::Area::new(egui::Id::unique("end_mark"))
             .pivot(align)
             .fixed_pos(at)
@@ -11954,7 +11971,7 @@ impl TriApp {
         };
         let text = self.position_text();
         let align = p.place.align();
-        let inner = area.shrink(16.0);
+        let inner = self.marks_area(area).shrink(16.0);
         let mut at = align.pos_in_rect(&inner);
         let mut pivot = align;
         // Même place que les notes posées sur l'image : à côté d'elles, qui ne bougent pas
@@ -12000,6 +12017,7 @@ impl TriApp {
         path: &Path,
     ) {
         let b = self.gui.position_bar;
+        self.position_bar_reserved = 0.0;
         if !self.image_info
             || b.seconds == 0.0
             || self.crop.is_some()
@@ -12026,9 +12044,21 @@ impl TriApp {
             area.left() + margin..=area.right() - margin,
             bottom - height..=bottom,
         );
+        // Les marques du bas sont à 16 points du bord : remontées au-dessus de la barre.
+        self.position_bar_reserved = margin / 2.0 + height + 12.0 - 16.0;
         let mut painter = painter.clone();
         painter.multiply_opacity(opacity);
         position_bar::draw(&painter, bar, &position, b.shape, &style);
+    }
+
+    /// Zone des marques posées sur l'image (`area`), sans le bas pris par la barre de
+    /// position.
+    fn marks_area(&self, area: Rect) -> Rect {
+        let mut area = area;
+        if self.mode == Mode::View {
+            area.max.y -= self.position_bar_reserved.max(0.0);
+        }
+        area
     }
 
     /// Barre de position dans le panneau de droite (`place = "panel"`), en plein écran,
@@ -15113,11 +15143,11 @@ impl TriApp {
                 let frame = mark_frame(ui.style());
                 let edge = frame.widget_rect(Rect::ZERO);
                 let width = marks::row_width(&notes, size);
-                let area = if self.mark_area.is_positive() {
+                let area = self.marks_area(if self.mark_area.is_positive() {
                     self.mark_area
                 } else {
                     view_rect
-                };
+                });
                 let align = n.place.align();
                 let outer_size = vec2(width, size) + edge.size();
                 let outer = align.anchor_size(align.pos_in_rect(&area.shrink(16.0)), outer_size);
@@ -29816,6 +29846,13 @@ mod tests {
         h.run_steps(3);
         let first = h.state().position_bar_key.clone();
         assert!(first.is_some(), "barre montrée en plein écran");
+        // Les notes et repères du bas remontent au-dessus d'elle (retour du 21/11/2026 :
+        // les étoiles la chevauchaient).
+        let view = Rect::from_min_size(egui::Pos2::ZERO, vec2(800.0, 600.0));
+        assert!(
+            h.state().marks_area(view).bottom() < view.bottom(),
+            "marques remontées"
+        );
         act(&mut h, Action::NavNext);
         h.run_steps(3);
         assert!(
@@ -29833,6 +29870,11 @@ mod tests {
         h.state_mut().gui.position_bar.place = crate::settings::BarPlace::Panel;
         h.run_steps(3);
         assert!(h.state().position_bar_key.is_none(), "pas sur l'image");
+        assert_eq!(
+            h.state().marks_area(view),
+            view,
+            "rien à éviter sur l'image"
+        );
         let title = t!("panel-section-position").to_uppercase();
         assert!(
             h.query_all_by_label_contains(&title).next().is_some(),

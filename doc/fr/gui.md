@@ -205,7 +205,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   liste. Sans piles, une seule barre. Deux places (`place`) : `overlay`, le long du bas de
   l'image, masquée avec les infos sur l'image (`t`), durée `seconds` (-1 : toujours) ;
   `panel`, une section « Position » sous l'histogramme du panneau de droite, toujours
-  visible. Jamais pendant le recadrage. Une barre verticale de la place dans la pile a été
+  visible (l'histogramme garde sa hauteur pendant son calcul : sinon la barre sautait à
+  chaque image). Sur l'image, les notes et les repères du bas remontent au-dessus d'elle
+  (`marks_area`). Jamais pendant le recadrage. Une barre verticale de la place dans la pile a été
   essayée puis retirée (redondante avec la barre segmentée). Position seulement (décidé le
   21/11/2026 : colorer selon le tri viendra quand on saura quoi y montrer d'utile ;
   l'utilisateur trie par passes d'étoiles). Géométrie testable à part dans

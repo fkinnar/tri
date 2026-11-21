@@ -195,7 +195,9 @@ system one ("cold" measurements, experiments).
   below the photo in the list. Without stacks, a single bar. Two places (`place`):
   `overlay`, along the bottom of the image, hidden with the info on the image (`t`),
   duration `seconds` (-1: always); `panel`, a "Position" section under the histogram of
-  the right panel, always visible. Never while cropping. A vertical bar for the place in
+  the right panel, always visible (the histogram keeps its height while computed:
+  otherwise the bar jumped at each image). On the image, the notes and the bottom marks
+  move up above it (`marks_area`). Never while cropping. A vertical bar for the place in
   the stack was tried, then removed (redundant with the segmented bar). Position only
   (decided 2026-11-21: colouring by culling state will come once we know what is useful
   to show; the user culls in star passes). Geometry testable on its own in
