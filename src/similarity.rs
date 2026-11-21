@@ -442,8 +442,23 @@ pub fn threshold_by_rank(
     min_links: usize,
 ) -> f32 {
     let t = strictness.clamp(-1.0, 1.0);
-    if sorted.len() < min_links.max(2) || t == 0.0 {
+    if sorted.is_empty() || t == 0.0 {
         return with_strictness(centre, t, span);
+    }
+    if sorted.len() < min_links.max(2) {
+        // Peu de liens : l'étendue `span`, mais les bouts atteignent toujours « tout
+        // joint » et « rien de joint » (retour du 21/11/2026 : 8 photos, il restait des
+        // piles à fond à gauche).
+        let (first, last) = (sorted[0], sorted[sorted.len() - 1]);
+        // Au moins aussi loin que l'étendue, et jusqu'au bout à fond (linéaire).
+        let base = with_strictness(centre, t, span);
+        let u = t.abs();
+        return if t < 0.0 {
+            base.max(centre + u * (last.max(centre) - centre))
+        } else {
+            let end = first - (first.abs() + 1.0) * 1e-3;
+            base.min(centre + u * (end - centre))
+        };
     }
     let n = sorted.len();
     // Liens coupés + 1 : au centre, puis au bout vers lequel on va.
@@ -607,6 +622,19 @@ mod tests {
             height: h,
             data,
         }
+    }
+
+    #[test]
+    fn with_few_links_the_slider_ends_still_join_all_or_nothing() {
+        // Retour du 21/11/2026 : 8 photos (7 liens), il restait des piles à fond à gauche.
+        let sorted = [0.05, 0.1, 0.6, 0.9];
+        let left = threshold_by_rank(&sorted, 0.12, -1.0, 2.0, 3.0, 8);
+        assert!(left >= 0.9, "{left}");
+        let right = threshold_by_rank(&sorted, 0.12, 1.0, 2.0, 3.0, 8);
+        assert!(right < 0.05, "{right}");
+        let half = threshold_by_rank(&sorted, 0.12, -0.5, 2.0, 3.0, 8);
+        assert!(half > 0.12 && half < 0.9, "{half}");
+        assert_eq!(threshold_by_rank(&sorted, 0.12, 0.0, 2.0, 3.0, 8), 0.12);
     }
 
     #[test]
@@ -850,10 +878,9 @@ mod tests {
         // λ > 1 : plus doux près du centre à gauche, plus rapide à droite.
         assert!(joined(-0.5, 3.0) < joined(-0.5, 1.0));
         assert!(joined(0.2, 3.0) < joined(0.2, 1.0));
-        // Trop peu de liens : le seuil géométrique d'avant.
-        assert_eq!(
-            threshold_by_rank(&sorted[..1], 0.2, 1.0, 2.0, 3.0, 2),
-            with_strictness(0.2, 1.0, 3.0)
-        );
+        // Trop peu de liens : le seuil géométrique d'avant en chemin, mais le bout ne joint
+        // plus rien (21/11/2026).
+        let few = threshold_by_rank(&sorted[..1], 0.2, 1.0, 2.0, 3.0, 2);
+        assert!(few <= with_strictness(0.2, 1.0, 3.0) && few < sorted[0]);
     }
 }

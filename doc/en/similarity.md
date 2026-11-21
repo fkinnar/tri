@@ -59,7 +59,8 @@ double-click: back to the middle.
   down to none; towards the left, up to `centre × span` (up to grouping everything since 2026-11-06,
   see below). Simulated on six real shoots:
   fully to the right, 9 to 40 stacks remained with the geometric threshold, none now.
-  Fewer than `min` links: `with_strictness`.
+  Fewer than `min` links: `with_strictness`, but the ends always reach "all joined"
+  and "nothing joined" (2026-11-21: 8 photos, stacks remained fully to the left).
 - `folder_strictness` / `remember_strictness`: the chosen strictness, remembered for each
   folder (key `group-strictness` of the folder's `tuning.json`, [store.md](store.md)); in
   the middle, it is forgotten. The

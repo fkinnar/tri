@@ -103,8 +103,9 @@ Idée de l'utilisateur (21/11/2026), après un essai sur une vraie séance : mê
 automatiquement », retenu par dossier : `similarity::folder_by_palette`), elle sépare les
 **séries** (un éclairage, un fond) plutôt que les rafales. `stack_links` : la distance des
 palettes voisines divisée par `[palette] stack_scale` (0,5, bornée à 1) prend l'échelle des
-empreintes, sur laquelle le curseur des piles et son centre calculé sont calés ; l'écart de
-temps vient des empreintes ; une palette inconnue coupe. Sans source de palette choisie,
+empreintes, sur laquelle le curseur des piles et son centre calculé sont calés ; **sans
+l'heure** (une série est une lumière, pas un moment : à fond à gauche, tout se rejoint) ;
+une palette inconnue coupe. Sans source de palette choisie,
 le JPEG boîtier.
 
 ## Ligne de commande

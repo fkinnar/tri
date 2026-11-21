@@ -61,7 +61,8 @@ plus grandes) ; double-clic : retour au centre.
   la gauche, jusqu'à `centre × span` (jusqu'à tout regrouper depuis le 06/11/2026, voir
   plus bas). Simulé sur six vraies séances : tout à droite, 9 à
   40 piles restaient avec le seuil géométrique, aucune maintenant. Moins de `min` liens :
-  `with_strictness`.
+  `with_strictness`, mais les bouts vont toujours jusqu'à « tout joint » et « rien de
+  joint » (21/11/2026 : 8 photos, il restait des piles à fond à gauche).
 - `folder_strictness` / `remember_strictness` : la sévérité choisie, retenue pour chaque
   dossier (clé `group-strictness` du `tuning.json` du dossier, [store.md](store.md)) ; au
   centre, elle est oubliée.

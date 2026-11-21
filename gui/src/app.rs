@@ -9037,11 +9037,8 @@ impl TriApp {
     }
 
     /// Liens entre images voisines pour empiler par palette (#492) : la distance de leurs
-    /// palettes, l'écart de temps tiré de leurs empreintes.
-    fn palette_stack_links(
-        &self,
-        signatures: &[Option<&tri::similarity::Signature>],
-    ) -> Vec<Option<tri::similarity::Link>> {
+    /// palettes, sans écart de temps.
+    fn palette_stack_links(&self) -> Vec<Option<tri::similarity::Link>> {
         let Some(kind) = self.palette_source else {
             return vec![None; self.files.len().saturating_sub(1)];
         };
@@ -9069,7 +9066,10 @@ impl TriApp {
             .iter()
             .map(|f| own(f).or_else(|| by_photo.get(&photo_of(f)).copied()))
             .collect();
-        let times: Vec<Option<i64>> = signatures.iter().map(|s| s.and_then(|s| s.time)).collect();
+        // Sans les heures : une série, c'est une lumière, pas un moment (retour du
+        // 21/11/2026 : à fond à gauche, les pauses entre séries coupaient encore, il restait
+        // des piles là où tout devait se rejoindre).
+        let times: Vec<Option<i64>> = vec![None; palettes.len()];
         tri::palette::stack_links(&palettes, &times, &self.settings.palette)
     }
 
@@ -9211,7 +9211,7 @@ impl TriApp {
             ranges
         } else {
             let links = if by_palette {
-                self.palette_stack_links(&signatures)
+                self.palette_stack_links()
             } else {
                 tri::similarity::distances(&signatures, s.shape_weight)
             };
@@ -28708,6 +28708,15 @@ mod tests {
         run_until(&mut h, |app| app.palettes_complete() && !app.stacks_dirty);
         h.run_steps(3);
         assert_eq!(h.state().stacks.groups(), 3, "bleus, rouges, bleu");
+        // À fond à gauche, tout se rejoint : ni l'heure ni les pauses ne coupent une série
+        // (retour du 21/11/2026 : il restait 8 piles).
+        h.state_mut().group_strictness = -1.0;
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(3);
+        assert_eq!(h.state().stacks.groups(), 1, "tout empilé à fond à gauche");
+        h.state_mut().group_strictness = 0.0;
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(3);
         // Rouvert : retenu.
         let dir = h.state().folder.dir.clone();
         h.state_mut().stack_by_palette = false;
@@ -28759,7 +28768,7 @@ mod tests {
                 .insert((path, Source::Developed(darktable)), grey.clone());
         }
         let n = h.state().files.len();
-        let links = h.state().palette_stack_links(&vec![None; n]);
+        let links = h.state().palette_stack_links();
         assert_eq!(links.len(), n - 1);
         assert!(
             links.iter().all(|l| l.is_some_and(|l| l.distance == 0.0)),
