@@ -207,6 +207,18 @@ system one ("cold" measurements, experiments).
   `gui/src/position_bar.rs` (`Position::layout`, `split`), segments from
   `Stacks::photos_per_group` (developments counted with their photo). Thickness
   `thickness`.
+- **Colour palette** ("Palette" section of the right panel, #492, 2026-11-21), in the grid
+  and in full screen, at the bottom of the panel. A **source** to choose (`palette_source`
+  of the display state, remembered): none (default: nothing is computed), camera JPEG,
+  raw data (LibRaw), finished renders; once chosen, the folder's palettes are computed in
+  the background (`Scheduler::set_palette`, "palettes" progress in the status bar). For
+  the selected image: the colour **band**, each colour as wide as its share (hover:
+  `#rrggbb` and share; click: copy), the **colour wheel** (hue as angle, chroma as the
+  square root of the radius to spread a photo's low-saturation colours, size by share)
+  and the list of colours. An image without a finished render (not a development) says
+  so. Cache read in the background, newest request first (`palette_reads`), like the
+  histogram. Drawing in `gui/src/palette_view.rs`. Coming: "similar palettes" (filter and
+  sort, threshold slider) and "contains this colour".
 - **End of the stack or of the list** (`[gui.end]`, #307, 2026-11-05): in full screen,
   ← / → that no longer move say so for a moment, in the same frame as the position mark
   ("End of the stack", "Start of the stack", "End of the selection", "Start of the

@@ -65,6 +65,9 @@ pub struct DisplayState {
     pub grid_render: Option<crate::grid_render::GridRender>,
     /// Sections repliées du panneau de droite (« filters », « grid »…), 27/10/2026.
     pub panel_folded: Option<Vec<String>>,
+    /// Source des palettes de couleurs (#492) ; absente : aucune (pas de calcul).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub palette_source: Option<tri::palette::SourceKind>,
     /// Fenêtre à la fermeture (issue n° 58), reprise au lancement suivant.
     pub window: Option<WindowState>,
 }

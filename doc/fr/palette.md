@@ -77,6 +77,11 @@ n'existe que pour un développement de la liste.
 `preview::compute_palette` calcule (l'image source d'abord, si elle manque),
 `preview::palette` relit le cache. Calcul en fond : voir [scheduler.md](scheduler.md).
 
+## Interface
+
+Section « Palette » du panneau de droite : choix de la source, bande, roue et couleurs
+de l'image sélectionnée, avancement dans la barre d'état ; voir [gui.md](gui.md).
+
 ## Ligne de commande
 
 `tri <dossier> --palette [--source camera|raw|developed]` : chaque image, ses couleurs

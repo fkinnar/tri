@@ -61,6 +61,7 @@ mod note_writes;
 mod offload;
 mod pairs_dialog;
 mod palette;
+mod palette_view;
 mod path_field;
 mod position_bar;
 mod rename_batch;

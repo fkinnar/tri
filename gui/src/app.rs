@@ -39,6 +39,7 @@ use crate::settings::{AppSettings, GuiSettings, HistogramScale};
 use crate::textures::Lru;
 use crate::trace::trace;
 use crate::view::{self, Source};
+use tri::palette::Palette;
 
 mod adjust;
 mod after;
@@ -459,6 +460,8 @@ struct Engine {
     /// Analyse d'exposition de l'image sélectionnée (histogramme).
     exposure_reads: crate::bg_read::BgReads<PathBuf, Arc<Exposure>>,
     clip_reads: crate::bg_read::BgReads<PathBuf, (f64, f64)>,
+    /// Palettes de couleurs de l'image sélectionnée (#492), par image et source.
+    palette_reads: crate::bg_read::BgReads<(PathBuf, tri::palette::Source), Arc<Palette>>,
     /// Logiciels de développement du moteur, remplacés quand `[develop]` change.
     developers: tri::develop::SharedDevelopers,
 }
@@ -908,7 +911,7 @@ pub struct TriApp {
     embed_job: Option<std::sync::mpsc::Receiver<EmbedReport>>,
     files: Vec<MediaFile>,
     status: Vec<Status>,
-    progress: [Progress; 6],
+    progress: [Progress; 7],
     engine: Option<Engine>,
     /// Voisinage réseau : serveurs annoncés (mDNS), et leur écoute (démarrée à la
     /// première image si `[neighbourhood] enabled` ; jamais dans les tests, qui ne
@@ -1078,6 +1081,10 @@ pub struct TriApp {
     clipping: bool,
     /// Analyses d'exposition lues dans le cache (images affichées récemment).
     exposures: Lru<PathBuf, Arc<Exposure>>,
+    /// Source des palettes de couleurs (#492) ; `None` : aucune, rien ne se calcule.
+    palette_source: Option<tri::palette::SourceKind>,
+    /// Palettes lues dans le cache, par image et source.
+    palettes: HashMap<(PathBuf, tri::palette::Source), Arc<Palette>>,
     /// Logiciels de développement qui ne peuvent pas recevoir un dossier (déjà ouverts,
     /// Windows), vérifiés au plus une fois par `[gui.folders] running_check_ms`
     /// ([`TriApp::engine_blocked`]).
@@ -2006,7 +2013,7 @@ impl TriApp {
             hint: None,
             files: Vec::new(),
             status: Vec::new(),
-            progress: [Progress::default(); 6],
+            progress: [Progress::default(); 7],
             engine: None,
             neighbourhood: Default::default(),
             neighbour_browser: None,
@@ -2082,6 +2089,8 @@ impl TriApp {
             analysis_texture: None,
             clipping: gui.histogram.clipping,
             exposures: Lru::new(gui.view.textures),
+            palette_source: None,
+            palettes: HashMap::new(),
             camera_exposures: Lru::new(gui.view.textures),
             screen: crate::display::Screen::default(),
             camera_pending: HashSet::new(),
@@ -2419,6 +2428,7 @@ impl TriApp {
                 folded.sort();
                 folded
             }),
+            palette_source: self.palette_source,
             window: self.window_kept,
         }
     }
@@ -2530,6 +2540,7 @@ impl TriApp {
             self.grid_render = render;
             self.sync_source();
         }
+        self.palette_source = s.palette_source;
         if let Some(folded) = &s.panel_folded {
             self.panel_folded = folded.iter().cloned().collect();
             for section in tri::places::Section::ALL {
@@ -3011,6 +3022,16 @@ impl TriApp {
                 self.adjust_section(ui);
             }
         }
+        // Palette de couleurs (#492) : sous les réglages, en bas aussi.
+        if matches!(self.mode, Mode::Grid | Mode::View)
+            && self.crop.is_none()
+            && !self.files.is_empty()
+        {
+            ui.separator();
+            if self.panel_section(ui, "palette", t!("panel-section-palette")) {
+                self.palette_section(ui);
+            }
+        }
         // Éléments disparus (section repliée, autre mode) : le curseur reste dedans.
         if let Some(i) = self.side_cursor
             && i >= self.side_items.len()
@@ -3161,6 +3182,7 @@ impl TriApp {
             Some(SideKey::Activate) => *value = all[(at + 1) % all.len()],
             None => {}
         }
+        let shown = name(*value).text().to_string();
         let mut response = egui::ComboBox::from_id_salt(id)
             .selected_text(name(*value))
             .show_ui(ui, |ui| {
@@ -3169,6 +3191,10 @@ impl TriApp {
                 }
             })
             .response;
+        // Nom accessible : le choix montré.
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::Role::ComboBox, ui.is_enabled(), &shown)
+        });
         if let Some(tip) = tip {
             response = response.on_hover_text(tip);
         }
@@ -3508,6 +3534,156 @@ impl TriApp {
         for action in clicked {
             self.perform(&ctx, action);
         }
+    }
+
+    /// Change la source des palettes (#492) : le calcul en fond du dossier suit (aucune :
+    /// plus de calcul).
+    fn set_palette_source(&mut self, kind: Option<tri::palette::SourceKind>) {
+        if self.palette_source == kind {
+            return;
+        }
+        self.palette_source = kind;
+        for s in &mut self.status {
+            s.palette = Avail::default();
+        }
+        self.requested
+            .retain(|(_, level)| !matches!(level, Level::Palette(_)));
+        if let Some(engine) = &self.engine {
+            engine.scheduler.set_palette(kind);
+        }
+    }
+
+    /// Palette de l'image `index` pour la source choisie : lue dans le cache en fond,
+    /// demandée au moteur si elle n'y est pas encore (`None` en attendant, sans source, ou
+    /// sans rendu fini pour cette image).
+    fn palette_of(&mut self, index: usize) -> Option<Arc<Palette>> {
+        let file = self.files.get(index)?.clone();
+        let source = self.palette_source?.source_for(&file)?;
+        if let Some(engine) = &mut self.engine {
+            for (key, p) in engine.palette_reads.take() {
+                if let Some(p) = p {
+                    self.palettes.insert(key, p);
+                }
+            }
+        }
+        let key = (file.path.clone(), source);
+        if let Some(p) = self.palettes.get(&key) {
+            return Some(p.clone());
+        }
+        if !self.ready(index, Level::Palette(source)) {
+            self.request(index, Level::Palette(source));
+            return None;
+        }
+        let engine = self.engine.as_mut()?;
+        let (cache, preview) = (engine.cache.clone(), engine.preview);
+        engine.palette_reads.request(key, move || {
+            preview::palette(&cache, &file, source, &preview).map(Arc::new)
+        });
+        None
+    }
+
+    /// Section « Palette » du panneau de droite (#492) : la source, puis la palette de
+    /// l'image sélectionnée (bande des couleurs, roue chromatique, couleurs et parts).
+    fn palette_section(&mut self, ui: &mut Ui) {
+        use tri::palette::SourceKind;
+        let name = |k: Option<SourceKind>| match k {
+            None => t!("palette-source-none"),
+            Some(k) => t!(&format!("palette-source-{}", k.id())),
+        };
+        let mut chosen = self.palette_source;
+        // Sous-titre puis liste pointable, comme les autres réglages du panneau.
+        self.subheading(ui, t!("palette-source"));
+        let all = [
+            None,
+            Some(SourceKind::Camera),
+            Some(SourceKind::Raw),
+            Some(SourceKind::Developed),
+        ];
+        self.side_combo(
+            ui,
+            "palette_source",
+            &mut chosen,
+            &all,
+            |k| name(k).into(),
+            None,
+        );
+        if chosen != self.palette_source {
+            self.set_palette_source(chosen);
+        }
+        let Some(kind) = self.palette_source else {
+            ui.weak(t!("palette-choose"));
+            return;
+        };
+        let index = self.selected;
+        let Some(file) = self.files.get(index).cloned() else {
+            return;
+        };
+        if kind.source_for(&file).is_none() {
+            ui.weak(t!("palette-no-render"));
+            return;
+        }
+        let Some(palette) = self.palette_of(index) else {
+            match &self.status[index].palette {
+                Avail::Failed(e) => {
+                    ui.colored_label(self.gui.colors.error, e.as_str());
+                }
+                _ => {
+                    ui.weak(t!("palette-computing"));
+                }
+            }
+            return;
+        };
+        if palette.swatches.is_empty() {
+            ui.weak(t!("colour-palette-empty"));
+            return;
+        }
+        let width = ui.available_width();
+        let (band, response) = ui.allocate_exact_size(
+            vec2(width, crate::palette_view::BAND_HEIGHT),
+            Sense::click(),
+        );
+        let rects = crate::palette_view::draw_band(ui.painter(), band, &palette);
+        // Survol d'une pastille : sa couleur et sa part ; un clic copie `#rrggbb`.
+        if let Some(pos) = response.hover_pos()
+            && let Some(k) = rects.iter().position(|r| r.contains(pos))
+        {
+            let swatch = palette.swatches[k];
+            let hex = crate::palette_view::hex(&swatch);
+            let tip = t!(
+                "palette-swatch-tip",
+                hex = hex.clone(),
+                share = format!("{:.0}", swatch.share * 100.0)
+            );
+            if response
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .on_hover_text(tip)
+                .clicked()
+            {
+                ui.ctx().copy_text(hex);
+            }
+        }
+        ui.add_space(6.0);
+        ui.horizontal_top(|ui| {
+            let (wheel, _) =
+                ui.allocate_exact_size(crate::palette_view::wheel_size(width), Sense::hover());
+            crate::palette_view::draw_wheel(
+                ui.painter(),
+                wheel,
+                &palette,
+                ui.visuals().weak_text_color(),
+            );
+            ui.vertical(|ui| {
+                for swatch in &palette.swatches {
+                    ui.horizontal(|ui| {
+                        let (dot, _) = ui.allocate_exact_size(vec2(12.0, 12.0), Sense::hover());
+                        ui.painter()
+                            .rect_filled(dot, 2.0, crate::palette_view::color(swatch));
+                        ui.monospace(crate::palette_view::hex(swatch));
+                        ui.weak(format!("{:.0} %", swatch.share * 100.0));
+                    });
+                }
+            });
+        });
     }
 
     /// Histogramme de l'image sélectionnée, en tête du panneau de droite, en grille comme
@@ -6947,7 +7123,7 @@ impl TriApp {
             .map(|f| known.remove(&f.path).unwrap_or_default())
             .collect();
         self.requested.clear();
-        self.progress = [Progress::default(); 6];
+        self.progress = [Progress::default(); 7];
         let delay = Duration::from_millis(self.gui.progress_delay_ms);
         self.progress_hidden_until = Some(Instant::now() + delay);
         // Garder la même image sélectionnée si elle reste visible.
@@ -8695,8 +8871,13 @@ impl TriApp {
                 Some(ctx.clone()),
             ),
             clip_reads: crate::bg_read::BgReads::new("tri-clips", Some(ctx.clone())),
+            palette_reads: crate::bg_read::BgReads::newest_first("tri-palettes", Some(ctx.clone())),
             developers: shared,
         });
+        // Palettes : la source retenue se calcule en fond dès l'ouverture (#492).
+        if let Some(engine) = &self.engine {
+            engine.scheduler.set_palette(self.palette_source);
+        }
         self.fit_grid_render();
         // Dossier rouvert avec le filtre « Développées » retenu allumé, ses logiciels
         // désactivés depuis (#395).
@@ -15710,6 +15891,7 @@ impl TriApp {
             (t!("progress-histograms"), self.progress[3]),
             (t!("progress-sharpness"), self.progress[4]),
             (t!("progress-groups"), self.progress[5]),
+            (t!("progress-palettes"), self.progress[6]),
         ] {
             // Rien à calculer en fond pour ce niveau, ou déjà fini.
             if p.total == 0 || waiting || (self.gui.progress_hide_done && p.done >= p.total) {
@@ -22953,7 +23135,8 @@ fn tracked(level: Level) -> Option<usize> {
         Level::Exposure => Some(3),
         Level::Sharpness => Some(4),
         Level::Similarity => Some(5),
-        Level::EmbeddedFull | Level::Full | Level::Developed(_) | Level::Palette(_) => None,
+        Level::Palette(_) => Some(6),
+        Level::EmbeddedFull | Level::Full | Level::Developed(_) => None,
     }
 }
 
@@ -29884,6 +30067,39 @@ mod tests {
     }
 
     #[test]
+    fn the_palette_section_computes_the_chosen_source_and_shows_the_colours() {
+        // #492 : sans source, rien ne se calcule ; une source choisie, le dossier se
+        // calcule en fond et la palette de l'image sélectionnée s'affiche.
+        let (mut h, _dir) = harness();
+        h.state_mut().metadata_panel = true;
+        h.run_steps(3);
+        assert!(h.state().palette_source.is_none());
+        assert!(
+            h.query_all_by_label_contains(&t!("palette-choose"))
+                .next()
+                .is_some(),
+            "invitation à choisir"
+        );
+        h.state_mut()
+            .set_palette_source(Some(tri::palette::SourceKind::Camera));
+        run_until(&mut h, |app| {
+            let path = app.files[app.selected].path.clone();
+            app.palettes
+                .contains_key(&(path, tri::palette::Source::Camera))
+        });
+        h.run_steps(3);
+        // Images unies : une seule couleur, écrite en `#rrggbb`.
+        let path = h.state().files[h.state().selected].path.clone();
+        let palette = h.state().palettes[&(path, tri::palette::Source::Camera)].clone();
+        assert_eq!(palette.swatches.len(), 1, "{palette:?}");
+        let hex = crate::palette_view::hex(&palette.swatches[0]);
+        assert!(h.query_by_label(&hex).is_some(), "{hex} affiché");
+        run_until(&mut h, |app| {
+            app.progress[6].total == 3 && app.progress[6].done == 3
+        });
+    }
+
+    #[test]
     fn the_position_bar_follows_the_image_and_hides_with_the_info() {
         // #537 : la barre suit l'image affichée, et part avec les infos sur l'image.
         let (mut h, _dir) = harness();
@@ -30763,9 +30979,9 @@ mod tests {
             .filter(|&i| h.state().side_items[i])
             .collect();
         assert!(titles.len() >= 3, "{titles:?}");
-        // Filtres, grille, EXIF, réglages (#137) : les filtres sont le 4e titre en partant
-        // de la fin.
-        let filters = titles[titles.len() - 4];
+        // Filtres, grille, EXIF, réglages (#137), palette (#492) : les filtres sont le 5e
+        // titre en partant de la fin.
+        let filters = titles[titles.len() - 5];
         while h.state().side_cursor != Some(filters) {
             press(&mut h, Key::Tab, Modifiers::NONE);
         }
