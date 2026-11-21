@@ -44,7 +44,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   dans iCloud figeait la fenêtre à chaque lecture lente). Les analyses annoncées (empreintes de similarité, scores de netteté,
   parts saturées / bouchées des badges) sont relues dans le cache par un fil chacune
   (`bg_read`) et prises à l'image suivante (19/11/2026 : sur un cache gardé dans iCloud,
-  ces lectures figeaient l'interface jusqu'à 5 s).
+  ces lectures figeaient l'interface jusqu'à 5 s). L'histogramme de l'image sélectionnée
+  est lu dernier demandé, premier servi (`BgReads::newest_first`, 21/11/2026 : en
+  avançant vite sur un disque lent, l'image où l'on s'arrête attendait la lecture de
+  toutes celles traversées).
 - **Sélection** au clavier ou à la souris ; le scheduler est prévenu (`set_focus`), donc
   l'aperçu de l'image sélectionnée et de ses voisines passe en tête de file.
 - **Sélection au clic, survol encadré** (17/10/2026, deuxième version) : la sélection
