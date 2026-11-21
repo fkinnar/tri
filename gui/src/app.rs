@@ -2869,20 +2869,13 @@ impl TriApp {
                     let width = body * 22.0;
                     ui.set_width(width);
                     ui.spacing_mut().item_spacing.y = body * 0.5;
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = body * 0.9;
-                        // Plus grand que le texte : il se voit tourner.
-                        ui.add(egui::Spinner::new().size(body * 2.2));
-                        ui.vertical(|ui| {
-                            ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new(&name).strong().size(body * 1.25),
-                                )
-                                .truncate(),
-                            );
-                            ui.weak(t!("folder-opening-elapsed", seconds = seconds));
-                        });
-                    });
+                    // Une seule animation, celle de l'étape en cours (retour du 21/11/2026 :
+                    // le grand sablier du titre faisait double emploi).
+                    ui.add(
+                        egui::Label::new(egui::RichText::new(&name).strong().size(body * 1.25))
+                            .truncate(),
+                    );
+                    ui.weak(t!("folder-opening-elapsed", seconds = seconds));
                     ui.add_space(body * 0.4);
                     ui.separator();
                     ui.add_space(body * 0.2);
