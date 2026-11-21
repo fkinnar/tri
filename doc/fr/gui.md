@@ -468,7 +468,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   Ctrl+D, la recherche gardant les lettres. Réglages : la liste des sections défile
   jusqu'à celle choisie aux flèches (et les réglages repartent du haut) ; depuis la
   recherche, → (recherche vide), Entrée ou Tab donnent le clavier au premier réglage
-  montré, puis Tab / Maj+Tab passent de l'un à l'autre. Un test parcourt toutes les
+  montré, puis Tab / Maj+Tab passent de l'un à l'autre. Pendant une recherche (retour du
+  21/11/2026), ↑ / ↓ parcourent les sections trouvées à gauche et Entrée ouvre celle
+  pointée (`found_cursor`, `found_targets`). Un test parcourt toutes les
   sections : il a trouvé un « ← » des commentaires de l'exemple, absent de la police
   d'egui (remplacé par des mots).
 - **Curseur masqué** (18/10/2026, pour voir les piles d'ensemble) : en grille, Échap
