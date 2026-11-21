@@ -241,7 +241,9 @@ system one ("cold" measurements, experiments).
   `#rrggbb`, and an **eyedropper**: the box hides, a click anywhere in the
   window reads the colour (on a thumbnail or the full-screen image, the average colour of
   a small area of the image the palette comes from, read in the background; elsewhere,
-  the pixel of a capture of the window), then the box comes back; "Search" starts the
+  the pixel of a capture of the window), then the box comes back; on an image, a
+  **reticle** shows the averaged area (`[palette] pick_area`, 2 % of the long side), and
+  the loupe (`m` held) magnifies it to aim precisely (user's idea, 2026-11-21); "Search" starts the
   filter. Or a click on a colour of the Palette section:
   the images with a palette colour close enough, closest first (a single slider, the
   tolerance, `colour_radius` / `colour_radius_max`; specks under `colour_min_share`

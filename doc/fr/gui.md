@@ -253,7 +253,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   **pipette** : la boîte se masque, un clic n'importe où dans la fenêtre relève la couleur
   (sur une vignette ou l'image en plein écran, la couleur moyenne d'une petite zone de
   l'image d'où la palette est tirée, lue en fond ; ailleurs, le pixel de la capture de la
-  fenêtre), puis la boîte revient ; « Chercher » lance le filtre. Ou un clic sur une couleur
+  fenêtre), puis la boîte revient ; sur une image, un **collimateur** montre la zone
+  moyennée (`[palette] pick_area`, 2 % du grand côté), et la loupe (`m` maintenue)
+  l'agrandit pour viser juste (idée de l'utilisateur, 21/11/2026) ; « Chercher » lance le filtre. Ou un clic sur une couleur
   de la section Palette : les images dont une couleur de la palette est assez proche, la plus
   proche d'abord (un seul curseur, la tolérance, `colour_radius` / `colour_radius_max` ;
   miettes sous `colour_min_share` ignorées). Règles communes : une recherche à la fois ;
