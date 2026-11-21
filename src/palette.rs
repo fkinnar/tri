@@ -312,6 +312,25 @@ impl Coverage {
         above as f32 / self.total.max(1) as f32
     }
 
+    /// Part des pixels **sûrement** plus saturés que `chroma` : leur case entière l'est
+    /// (son point le plus proche du gris). Retour du 22/11/2026 : un gris de JPEG à peine
+    /// teinté (chroma ~0,026) tombait dans une case de centre 0,034 ; jugée sur les
+    /// centres, une photo en noir et blanc passait pour colorée.
+    pub fn share_surely_above(&self, chroma: f32) -> f32 {
+        let step = 2.0 * COVER_AB_MAX / COVER_AB as f32;
+        let nearest_to_zero = |c: f32| (c.abs() - step / 2.0).max(0.0);
+        let above: u32 = self
+            .bins
+            .iter()
+            .filter(|(bin, _)| {
+                let [_, a, b] = cover_centre(*bin);
+                nearest_to_zero(a).hypot(nearest_to_zero(b)) > chroma
+            })
+            .map(|&(_, n)| u32::from(n))
+            .sum();
+        above as f32 / self.total.max(1) as f32
+    }
+
     /// Distance à `oklab` en deçà de laquelle se trouve au moins `min_share` de l'image
     /// (les miettes plus petites ne comptent pas) ; `None` sans point.
     pub fn reach(&self, oklab: [f32; 3], chroma_weight: f32, min_share: f32) -> Option<f32> {
@@ -384,7 +403,7 @@ impl Palette {
     /// image teintée (sépia, virage) ne l'est pas.
     pub fn is_grey(&self, mono: Monochrome, min_share: f32) -> bool {
         if !self.coverage.is_empty() {
-            return self.coverage.share_chroma_above(mono.chroma) <= min_share;
+            return self.coverage.share_surely_above(mono.chroma) <= min_share;
         }
         self.swatches
             .iter()
@@ -1251,6 +1270,27 @@ mod tests {
                 < 0.04,
             "à 0,5 %, trouvé"
         );
+    }
+
+    #[test]
+    fn a_barely_tinted_jpeg_grey_is_still_black_and_white() {
+        // Retour du 22/11/2026 : les photos en noir et blanc sortaient d'une recherche de
+        // couleur peu saturée ; leur gris à peine teinté tombait dans une case colorée.
+        let s = PaletteSettings::default();
+        let samples = vec![[0.5f32, 0.02, 0.017]; 100];
+        let p = Palette {
+            swatches: vec![Swatch {
+                oklab: [0.5, 0.02, 0.017],
+                share: 1.0,
+            }],
+            coverage: Coverage::from_samples(&samples),
+        };
+        let [_, a, b] = cover_centre(cover_bin(samples[0]));
+        assert!(
+            a.hypot(b) > s.mono_chroma,
+            "centre de case au-dessus du seuil"
+        );
+        assert!(p.is_grey(s.monochrome(), s.colour_min_share));
     }
 
     #[test]
