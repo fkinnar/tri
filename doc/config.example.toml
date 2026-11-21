@@ -609,8 +609,8 @@ similar_max = 0.5
 colour_radius = 0.1
 # Contient cette couleur : tolérance au bout du curseur.
 colour_radius_max = 0.4
-# Contient cette couleur : part minimale de l'image de départ (0 à 1).
-colour_min_share = 0.05
+# Contient cette couleur : les couleurs plus petites que cette part de l'image ne comptent pas.
+colour_min_share = 0.02
 
 [similarity]
 # Regrouper en fond les images semblables (rafales, séries) en piles.

@@ -54,8 +54,9 @@ kept at the end, those without a possible palette removed. Slider start and end:
 
 The share of the image whose colour is within an OKLab radius of a given colour: "has
 enough of this blue". Measured like the distances between palettes (hue and saturation
-`chroma_weight` times). Search settings: `colour_radius` (0.1), `colour_radius_max`
-(0.4), `colour_min_share` (0.05).
+`chroma_weight` times). "Contains this colour" uses `Palette::nearest` instead: the distance of the closest
+palette colour, specks under `colour_min_share` (0.02) ignored; tolerance `colour_radius`
+(0.1), `colour_radius_max` (0.4).
 
 ## Cache
 

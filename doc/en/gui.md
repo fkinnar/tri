@@ -231,11 +231,13 @@ system one ("cold" measurements, experiments).
   from time to time (`analysis_refilter_ms`). **Contains this colour**: a click on a
   colour of the band, or the **eyedropper** in full screen (section button, action
   `core.filter.palette_colour`; average colour of a small area of the image the palette
-  comes from, read in the background); the grid keeps the images whose share close to
-  that colour reaches the minimum share, from the one with the most to the one with the
-  least (same rules as similar palettes: not computed yet at the end). Two sliders:
-  tolerance (`colour_radius`, `colour_radius_max`) and minimum share
-  (`colour_min_share`), double-click: starting value; the colour looked for is outlined
+  comes from, read in the background); the grid keeps the images with a palette colour close
+  enough to it, closest first (same rules as similar palettes: not computed yet at the
+  end; specks under `colour_min_share` ignored). A single slider, the tolerance
+  (`colour_radius`, `colour_radius_max`), double-click: starting value (feedback of
+  2026-11-21: a minimum share as well was confusing, and sometimes left out the very
+  image the colour was taken from). Started from full screen, a palette search shows its
+  results in the grid; without result, the section stays (slider, "Done"); the colour looked for is outlined
   in the band. One palette search at a time. Copy a colour: click its `#rrggbb` in the
   list.
 - **End of the stack or of the list** (`[gui.end]`, #307, 2026-11-05): in full screen,

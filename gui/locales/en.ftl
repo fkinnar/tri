@@ -1511,7 +1511,6 @@ palette-colour-hint = or click a colour of the band to find the images that cont
 palette-colour-hint-grid = Click a colour of the band in the Palette section, or use the eyedropper in full screen
 palette-colour-summary = Contains { $hex }
 palette-colour-radius = Tolerance: further right, more distant colours count (double-click: starting value)
-palette-colour-share = Minimum share of the image: further right, more is needed (double-click: starting value)
 progress-palettes = palettes
 panel-section-position = Position
 panel-section-filters = Filter

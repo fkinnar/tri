@@ -291,17 +291,15 @@ struct PaletteLike {
     threshold: f32,
 }
 
-/// « Contient cette couleur » (#492) : la grille ne garde que les images dont une part
-/// suffisante de la palette est proche de la couleur, de celle qui en a le plus à celle qui
-/// en a le moins.
+/// « Contient cette couleur » (#492) : la grille ne garde que les images dont une couleur
+/// de la palette est proche de celle-ci, la plus proche d'abord.
 #[derive(Clone, Copy, Debug)]
 struct PaletteColour {
     /// La couleur cherchée, en OKLab.
     oklab: [f32; 3],
-    /// Tolérance (distance d'une couleur de la palette, comptée comme entre palettes).
+    /// Tolérance : distance maximale de la couleur la plus proche de la palette (comptée
+    /// comme entre palettes).
     radius: f32,
-    /// Part minimale de l'image (0 à 1).
-    min_share: f32,
 }
 
 /// Exposition du JPEG boîtier d'une image, calculée en fond.
@@ -3063,10 +3061,12 @@ impl TriApp {
                 self.adjust_section(ui);
             }
         }
-        // Palette de couleurs (#492) : sous les réglages, en bas aussi.
+        // Palette de couleurs (#492) : sous les réglages, en bas aussi ; sans image, tant
+        // qu'une recherche de palettes est en cours (retour du 21/11/2026 : rien trouvé, la
+        // section partait et on ne savait plus en sortir).
         if matches!(self.mode, Mode::Grid | Mode::View)
             && self.crop.is_none()
-            && !self.files.is_empty()
+            && (!self.files.is_empty() || self.palette_searching())
         {
             ui.separator();
             if self.panel_section(ui, "palette", t!("panel-section-palette")) {
@@ -3620,6 +3620,7 @@ impl TriApp {
         // Une recherche de palettes à la fois.
         if self.palette_like.is_some() {
             self.palette_colour = None;
+            self.show_search_results();
         }
         self.palette_refilter_pending = false;
         self.apply_filter();
@@ -3633,17 +3634,20 @@ impl TriApp {
             return groups;
         };
         let weight = self.settings.palette.chroma_weight;
-        // Palettes proches : la distance à la référence ; contient cette couleur : la part
-        // qui manque (1 - part), sous 1 - la part minimale.
+        // Palettes proches : la distance à la référence ; contient cette couleur : celle de
+        // la couleur la plus proche de la palette (retour du 21/11/2026 : une part minimale
+        // en plus écartait parfois l'image même où la couleur avait été prise).
         let (like, colour) = (self.palette_like.as_ref(), self.palette_colour);
         let threshold = match (like, colour) {
             (Some(l), _) => l.threshold,
-            (None, Some(c)) => 1.0 - c.min_share,
+            (None, Some(c)) => c.radius,
             (None, None) => return groups,
         };
         let key = |p: &Palette| match (like, colour) {
             (Some(l), _) => tri::palette::distance(&l.reference, p, weight),
-            (None, Some(c)) => 1.0 - p.share_near(c.oklab, c.radius, weight),
+            (None, Some(c)) => p
+                .nearest(c.oklab, weight, self.settings.palette.colour_min_share)
+                .unwrap_or(f32::INFINITY),
             (None, None) => 0.0,
         };
         let files: Vec<MediaFile> = groups.into_iter().flatten().collect();
@@ -3670,23 +3674,28 @@ impl TriApp {
     /// « Contient cette couleur » (`oklab`), ou fin de la recherche (`None`) ; tolérance et
     /// part minimale gardées d'une couleur à l'autre.
     fn set_palette_colour(&mut self, oklab: Option<[f32; 3]>) {
-        let p = self.settings.palette;
-        let (radius, min_share) = self
+        let radius = self
             .palette_colour
-            .map_or((p.colour_radius, p.colour_min_share), |c| {
-                (c.radius, c.min_share)
-            });
-        self.palette_colour = oklab.map(|oklab| PaletteColour {
-            oklab,
-            radius,
-            min_share,
-        });
+            .map_or(self.settings.palette.colour_radius, |c| c.radius);
+        self.palette_colour = oklab.map(|oklab| PaletteColour { oklab, radius });
         self.palette_eyedropper = false;
         if self.palette_colour.is_some() {
             self.palette_like = None;
+            self.show_search_results();
         }
         self.palette_refilter_pending = false;
         self.apply_filter();
+    }
+
+    /// Une recherche de palettes lancée du plein écran : ses résultats en grille (retour
+    /// du 21/11/2026 : on restait sur l'image agrandie).
+    fn show_search_results(&mut self) {
+        if self.mode == Mode::View {
+            self.mode = Mode::Grid;
+            self.zoom = None;
+            self.zoom_anchor = None;
+            self.reveal = Some(Reveal::Top);
+        }
     }
 
     /// Pipette des palettes : la couleur au point `point` (coordonnées relatives de
@@ -3819,6 +3828,9 @@ impl TriApp {
         };
         let index = self.selected;
         if index >= self.files.len() {
+            // Recherche sans résultat : ses réglages et sa fin restent.
+            self.palette_like_controls(ui, None);
+            self.palette_colour_controls(ui);
             return;
         }
         // Rendus finis : tous les développements de la photo, de tous les logiciels
@@ -3983,17 +3995,9 @@ impl TriApp {
         if slider.double_clicked_slider(ui) {
             radius = p.colour_radius;
         }
-        let mut share = colour.min_share;
-        let slider = ui
-            .add(FineSlider::new(&mut share, 0.0..=1.0).width(width))
-            .on_hover_text(t!("palette-colour-share"));
-        if slider.double_clicked_slider(ui) {
-            share = p.colour_min_share;
-        }
-        if radius != colour.radius || share != colour.min_share {
+        if radius != colour.radius {
             if let Some(c) = &mut self.palette_colour {
                 c.radius = radius;
-                c.min_share = share;
             }
             self.refilter(Reveal::Minimal);
         }
@@ -27767,6 +27771,7 @@ mod tests {
         // La même couleur que la palette de l'image (même source, même espace) ; la grille
         // ne garde plus qu'elle.
         assert_eq!(h.state().files.len(), 1);
+        assert_eq!(h.state().mode, Mode::Grid, "les résultats en grille");
         let red = h.state().palettes[&(img1_path, Source::Camera)].swatches[0].oklab;
         let got = h.state().palette_colour.unwrap().oklab;
         assert!(
@@ -27774,6 +27779,16 @@ mod tests {
             "{got:?} contre {red:?}"
         );
         assert!(!h.state().palette_eyedropper, "désarmée après le relevé");
+        // Rien trouvé (un vert) : la section reste, avec « Terminer » (retour du
+        // 21/11/2026 : on ne savait plus en sortir).
+        h.state_mut()
+            .set_palette_colour(Some(tri::palette::srgb_to_oklab([0, 255, 0])));
+        h.run_steps(3);
+        assert!(h.state().files.is_empty());
+        h.get_by_label(&t!("palette-similar-end")).click();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_none());
+        assert_eq!(h.state().files.len(), 3);
     }
 
     #[test]

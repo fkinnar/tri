@@ -1511,7 +1511,6 @@ palette-colour-hint = ou cliquer une couleur de la bande pour chercher les image
 palette-colour-hint-grid = Cliquer une couleur de la bande de la section Palette, ou la pipette en plein écran
 palette-colour-summary = Contient { $hex }
 palette-colour-radius = Tolérance : plus à droite, des couleurs plus éloignées comptent (double-clic : valeur de départ)
-palette-colour-share = Part minimale de l'image : plus à droite, il en faut davantage (double-clic : valeur de départ)
 progress-palettes = palettes
 panel-section-position = Position
 panel-section-filters = Filtre

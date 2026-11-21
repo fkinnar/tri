@@ -56,8 +56,9 @@ et bout du curseur : `similar_threshold` (0,12), `similar_max` (0,5).
 
 La part de l'image dont la couleur est à moins d'un rayon OKLab d'une couleur donnée :
 « contient assez de ce bleu ». Comptée comme les distances entre palettes (teinte et
-saturation `chroma_weight` fois). Réglages de la recherche : `colour_radius` (0,1),
-`colour_radius_max` (0,4), `colour_min_share` (0,05).
+saturation `chroma_weight` fois). « Contient cette couleur » utilise plutôt `Palette::nearest` : la distance de la couleur
+de la palette la plus proche, miettes sous `colour_min_share` (0,02) ignorées ; tolérance
+`colour_radius` (0,1), `colour_radius_max` (0,4).
 
 ## Cache
 

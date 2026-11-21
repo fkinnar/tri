@@ -120,7 +120,8 @@ pub struct PaletteSettings {
     pub colour_radius: f32,
     /// « Contient cette couleur » : tolérance au bout du curseur.
     pub colour_radius_max: f32,
-    /// « Contient cette couleur » : part minimale de l'image de départ (0 à 1).
+    /// « Contient cette couleur » : les couleurs de la palette plus petites que cette part
+    /// de l'image (0 à 1) ne comptent pas (miettes).
     pub colour_min_share: f32,
 }
 
@@ -137,7 +138,7 @@ impl Default for PaletteSettings {
             similar_max: 0.5,
             colour_radius: 0.1,
             colour_radius_max: 0.4,
-            colour_min_share: 0.05,
+            colour_min_share: 0.02,
         }
     }
 }
@@ -189,6 +190,17 @@ impl Palette {
             .filter(|s| weighted_distance(s.oklab, oklab, chroma_weight) <= radius)
             .map(|s| s.share)
             .sum()
+    }
+
+    /// Distance de la couleur de la palette la plus proche de `oklab` (comptée comme
+    /// [`distance`]), parmi celles d'au moins `min_share` de l'image ; `None` s'il n'y en a
+    /// aucune. « Contient cette couleur » : plus elle est petite, plus l'image la contient.
+    pub fn nearest(&self, oklab: [f32; 3], chroma_weight: f32, min_share: f32) -> Option<f32> {
+        self.swatches
+            .iter()
+            .filter(|s| s.share >= min_share)
+            .map(|s| weighted_distance(s.oklab, oklab, chroma_weight))
+            .min_by(f32::total_cmp)
     }
 
     /// Format binaire du cache d'analyse : version, nombre de couleurs, puis pour chacune
@@ -633,6 +645,29 @@ mod tests {
             _ => Some(Some(0.2)),
         };
         assert_eq!(rank_similar(items.to_vec(), distance, 0.1), ["c", "a", "d"]);
+    }
+
+    #[test]
+    fn nearest_colour_ignores_specks() {
+        let p = Palette {
+            swatches: vec![
+                Swatch {
+                    oklab: [0.5, 0.1, 0.0],
+                    share: 0.9,
+                },
+                Swatch {
+                    oklab: [0.5, -0.1, 0.0],
+                    share: 0.01,
+                },
+            ],
+        };
+        let target = [0.5, -0.1, 0.0];
+        assert_eq!(p.nearest(target, 1.0, 0.0), Some(0.0));
+        assert!(
+            (p.nearest(target, 1.0, 0.02).unwrap() - 0.2).abs() < 1e-6,
+            "la miette ignorée"
+        );
+        assert_eq!(Palette::default().nearest(target, 1.0, 0.0), None);
     }
 
     #[test]

@@ -241,11 +241,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   refiltrée de temps en temps (`analysis_refilter_ms`). **Contient cette couleur** : un clic sur
   une couleur de la bande, ou la **pipette** en plein écran (bouton de la section, action
   `core.filter.palette_colour` ; couleur moyenne d'une petite zone de l'image d'où la
-  palette est tirée, lue en fond) ; la grille garde les images dont la part proche de
-  cette couleur atteint la part minimale, de celle qui en a le plus à celle qui en a le
-  moins (mêmes règles que les palettes proches : pas encore calculées à la fin). Deux
-  curseurs : tolérance (`colour_radius`, `colour_radius_max`) et part minimale
-  (`colour_min_share`), double-clic : valeur de départ ; la couleur cherchée entourée dans
+  palette est tirée, lue en fond) ; la grille garde les images dont une couleur de la palette
+  est assez proche de celle-ci, la plus proche d'abord (mêmes règles que les palettes
+  proches : pas encore calculées à la fin ; miettes sous `colour_min_share` ignorées). Un
+  seul curseur, la tolérance (`colour_radius`, `colour_radius_max`), double-clic : valeur
+  de départ (retour du 21/11/2026 : une part minimale en plus déroutait, et écartait
+  parfois l'image même où la couleur avait été prise). Lancée du plein écran, une
+  recherche de palettes montre ses résultats en grille ; sans résultat, la section reste
+  (curseur, « Terminer ») ; la couleur cherchée entourée dans
   la bande. Une recherche de palettes à la fois. Copier une couleur : clic sur son
   `#rrggbb` dans la liste.
 - **Bout de la pile ou de la liste** (`[gui.end]`, #307, 05/11/2026) : en plein écran,

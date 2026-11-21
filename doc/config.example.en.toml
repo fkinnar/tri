@@ -606,8 +606,8 @@ similar_max = 0.5
 colour_radius = 0.1
 # Contains this colour: tolerance at the end of the slider.
 colour_radius_max = 0.4
-# Contains this colour: starting minimum share of the image (0 to 1).
-colour_min_share = 0.05
+# Contains this colour: colours smaller than this share of the image don't count.
+colour_min_share = 0.02
 
 [similarity]
 # Group similar images (bursts, series) into stacks in the background.
