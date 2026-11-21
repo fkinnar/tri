@@ -269,7 +269,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   sépia, retour du 21/11/2026). Selon la couleur cherchée (22/11/2026) : **grise**, le noir et
   blanc pur seulement (`Palette::is_grey`) ; **peu saturée** (chroma entre `mono_chroma`
   et `mono_toned_chroma` : peau, beige, sépia), tout sauf lui (c'est ce que contient une
-  image teintée) ; **saturée**, ni noir et blanc ni teintées. Lancée du plein écran, une
+  image teintée) ; **saturée**, ni noir et blanc ni teintées. Palettes proches :
+  le noir et blanc pur d'un côté, le reste de l'autre (la distance départage teintées et
+  couleur). Lancée du plein écran, une
   recherche montre ses résultats en grille ; le haut du panneau ne bouge pas, même sans
   résultat. Mentionnée dans le résumé des filtres ; inversible comme les autres filtres sur le
   contenu (inversée : ce qu'elle écarte, dans l'ordre habituel) ; décocher, effacer les

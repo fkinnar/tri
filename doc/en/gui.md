@@ -257,7 +257,9 @@ system one ("cold" measurements, experiments).
   sepia, feedback of 2026-11-21). Depending on the searched colour (2026-11-22): **grey**, pure
   black and white only (`Palette::is_grey`); **muted** (chroma between `mono_chroma` and
   `mono_toned_chroma`: skin, beige, sepia), everything but it (it is what a toned image
-  contains); **saturated**, neither black and white nor toned.
+  contains); **saturated**, neither black and white nor toned. Similar
+  palettes: pure black and white on one side, the rest on the other (the distance tells
+  toned from colour).
   Started from full screen, a search shows its results in the grid; the top of the panel
   never moves, even without result. Shown in the filter summary; invertible like the other content filters (inverted: what
   it leaves out, in the usual order); unchecking, clearing the filters (`f d`) or changing

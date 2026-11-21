@@ -3969,13 +3969,16 @@ impl TriApp {
         });
         // Selon la couleur cherchée (retours du 21-22/11/2026) : grise, le noir et blanc
         // pur seulement ; peu saturée, tout sauf lui ; saturée, ni lui ni les teintées.
-        // Palettes proches : même famille que la référence.
-        let reference_mono = like.is_some_and(|l| mono(&l.reference));
+        // Palettes proches : le noir et blanc pur d'un côté, le reste de l'autre ; teintées
+        // et couleur, la distance entre palettes les départage (retour du 22/11/2026 : la
+        // frontière teinté / couleur tombait au milieu d'une série chaude, le noir et blanc
+        // entrait et la 3ᵉ photo de la série non).
+        let reference_grey = like.is_some_and(|l| grey(&l.reference));
         let left_out = |p: &Palette| match colour_chroma {
             Some(c) if c < ps.mono_chroma => !grey(p),
             Some(c) if c < ps.mono_toned_chroma => grey(p),
             Some(_) => mono(p),
-            None => mono(p) != reference_mono,
+            None => grey(p) != reference_grey,
         };
         let files: Vec<MediaFile> = groups.into_iter().flatten().collect();
         let ranked = tri::palette::rank_similar(
@@ -29470,6 +29473,63 @@ mod tests {
         h.state_mut().refilter(Reveal::Minimal);
         h.run_steps(3);
         assert_eq!(names(&h), ["img0.jpg"]);
+    }
+
+    #[test]
+    fn similar_palettes_keep_black_and_white_apart_but_not_toned_from_colour() {
+        // Retour du 22/11/2026 (vidéo) : d'une photo chaude jugée « teintée », les palettes
+        // proches amenaient le noir et blanc, pas la 3ᵉ photo de la série, jugée en couleur.
+        use tri::palette::{Source, SourceKind};
+        let colors = [[150u8, 118, 95], [175, 115, 75], [128, 128, 128]];
+        let images = ["toned.jpg", "warm.jpg", "grey.jpg"]
+            .iter()
+            .zip(colors)
+            .map(|(name, c)| (*name, image::RgbImage::from_pixel(64, 48, image::Rgb(c))))
+            .collect();
+        let (mut h, _dir) = harness_images(images);
+        h.run_steps(3);
+        choose_palette(&mut h, Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        let ps = h.state().settings.palette;
+        let palette_of = |h: &Harness<'static, TriApp>, name: &str| {
+            let path = h
+                .state()
+                .folder
+                .files
+                .iter()
+                .find(|f| f.path.ends_with(name))
+                .unwrap()
+                .path
+                .clone();
+            h.state().palettes[&(path, Source::Camera)].clone()
+        };
+        let mono = ps.monochrome();
+        assert!(palette_of(&h, "toned.jpg").is_monochrome(mono, ps.colour_min_share));
+        assert!(!palette_of(&h, "warm.jpg").is_monochrome(mono, ps.colour_min_share));
+        let toned = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path.ends_with("toned.jpg"))
+            .unwrap();
+        h.state_mut().selected = toned;
+        act(&mut h, Action::FilterPalette);
+        if let Some(like) = &mut h.state_mut().palette_like {
+            like.threshold = ps.similar_max;
+        }
+        h.state_mut().refilter(Reveal::Minimal);
+        h.run_steps(3);
+        let names: Vec<String> = h
+            .state()
+            .files
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["toned.jpg", "warm.jpg"], "la chaude, pas le gris");
     }
 
     #[test]
