@@ -186,6 +186,8 @@ pub enum Action {
     FilterDeveloped,
     /// Filtre « en conflit » : les images dont les notes sont à trancher (issue n° 368).
     FilterConflicts,
+    /// « Palettes proches » de l'image sélectionnée, ou fin de la recherche (#492).
+    FilterPalette,
     /// Après un changement de filtre, repartir de la première image (`[gui]
     /// filter_restart`, bouton de la barre du bas ; retour du 16/11/2026).
     FilterRestart,
@@ -577,7 +579,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 250] = [
+    pub const ALL: [Action; 251] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -610,6 +612,7 @@ impl Action {
         Action::FilterInvert,
         Action::FilterDeveloped,
         Action::FilterConflicts,
+        Action::FilterPalette,
         Action::FilterRestart,
         Action::FilterCount,
         Action::SortNext,
@@ -971,10 +974,9 @@ impl Action {
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterColorsAll | FilterClear | FilterBlurry | FilterWellExposed | FilterStack
-            | FilterInvert | FilterDeveloped | FilterConflicts | FilterRestart | FilterCount
-            | SortNext | SortReverse | SortBy(_) | FilterKind(_) | GridRenderNext | Render(_) => {
-                Group::Filters
-            }
+            | FilterInvert | FilterDeveloped | FilterConflicts | FilterPalette | FilterRestart
+            | FilterCount | SortNext | SortReverse | SortBy(_) | FilterKind(_) | GridRenderNext
+            | Render(_) => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileActionsAllow | FileRename | FileDelete | FileReveal | FileEdit | FileCopy
@@ -1062,6 +1064,7 @@ impl Action {
                 | FilterInvert
                 | FilterDeveloped
                 | FilterConflicts
+                | FilterPalette
                 | FilterKind(_)
         )
     }
@@ -1100,6 +1103,7 @@ impl Action {
             Action::FilterInvert => "core.filter.invert",
             Action::FilterDeveloped => "core.filter.developed",
             Action::FilterConflicts => "core.filter.conflicts",
+            Action::FilterPalette => "core.filter.palette",
             Action::FilterRestart => "core.filter.restart",
             Action::FilterCount => "core.filter.count",
             Action::SortNext => "core.filter.sort",

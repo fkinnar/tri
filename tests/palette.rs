@@ -13,7 +13,7 @@ fn a_decoded_jpeg_gets_a_palette_whose_shares_add_up() {
     assert!((total - 1.0).abs() < 1e-3);
     assert!(p.swatches.windows(2).all(|w| w[0].share >= w[1].share));
     assert_eq!(Palette::from_bytes(&p.to_bytes()), Some(p.clone()));
-    assert_eq!(palette::distance(&p, &p), 0.0);
+    assert_eq!(palette::distance(&p, &p, 2.0), 0.0);
 }
 
 #[test]

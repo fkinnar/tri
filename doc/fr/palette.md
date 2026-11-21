@@ -42,7 +42,15 @@ servant d'abord les couples de couleurs les plus proches : une approche gloutonn
 exacte dans les cas simples, jamais plus petite que la vraie, et instantanée sur des
 milliers de palettes (le calcul exact demanderait un solveur de transport pour un gain
 qui ne se verrait pas dans un tri). Symétrique ; une palette vide est à distance
-infinie.
+infinie. Teinte et saturation (a, b) y comptent `chroma_weight` fois (2) face à la clarté
+(retour du 21/11/2026 : à poids égal, une photo brune au fond sombre semblait aussi
+proche d'une photo violette au fond sombre que les autres violettes).
+
+## Palettes proches (`rank_similar`)
+
+Les éléments sous le seuil, du plus proche au plus lointain ; ceux dont la palette n'est
+pas encore calculée gardés à la fin, ceux sans palette possible retirés. Seuil de départ
+et bout du curseur : `similar_threshold` (0,12), `similar_max` (0,5).
 
 ## Part d'une couleur (`Palette::share_near`)
 

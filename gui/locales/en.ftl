@@ -45,6 +45,8 @@ action-core-filter-count = Filters in use and number of photos, large
 kw-core-filter-count = count number how many summary filters left total
 action-core-filter-restart = After a filter change: start again from the first image (on) or stay on the image
 kw-core-filter-conflicts = conflict disagree ratings programs settle
+action-core-filter-palette = Filter: palettes similar to the selected image (or end the search)
+kw-core-filter-palette = palette colours similar close moodboard hues
 action-core-filter-developed = Filter: developed (on / off; software to check in the list)
 action-core-grid-render = Previous shown render (thumbnails and full screen)
 action-core-view-render-embedded = Shown render: camera JPEG
@@ -1483,12 +1485,21 @@ palette-source = Source
 palette-source-none = None
 palette-source-camera = Camera JPEG
 palette-source-raw = Raw data (LibRaw)
-palette-source-developed = Finished renders (every development)
+palette-source-developed = Developments
 palette-choose = Choose a source: the folder's palettes are then computed in the background.
 palette-computing = computing the palette
-palette-no-render = No finished render for this image (only developments have one).
+palette-no-render = No development for this photo.
 colour-palette-empty = No colour found.
 palette-swatch-tip = { $hex } · { $share } % (click: copy)
+palette-similar = Similar palettes
+palette-similar-tip = Keep only the images whose palette is close to this one, closest first (slider: threshold)
+palette-similar-to = Palettes similar to { $name }
+palette-similar-threshold = Threshold: further right, more distant palettes kept (double-click: starting value)
+palette-similar-count = { $n ->
+    [one] { $n } image
+   *[other] { $n } images
+}
+palette-similar-end = Done
 progress-palettes = palettes
 panel-section-position = Position
 panel-section-filters = Filter

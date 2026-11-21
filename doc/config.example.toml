@@ -594,6 +594,16 @@ iterations = 12
 merge = 0.03
 # Part minimale d'une couleur (0 à 1) : en deçà, retirée.
 min_share = 0.02
+# Poids de la teinte et de la saturation face à la clarté dans la distance entre palettes.
+#
+# Poids de la teinte et de la saturation (a et b d'OKLab) face à la clarté dans la distance
+# entre palettes : à 1, une photo brune au fond sombre semblait aussi proche d'une photo
+# violette au fond sombre que les autres violettes, la clarté l'emportait.
+chroma_weight = 2.0
+# Palettes proches : seuil de départ du curseur (distance entre palettes).
+similar_threshold = 0.12
+# Palettes proches : seuil au bout du curseur.
+similar_max = 0.5
 
 [similarity]
 # Regrouper en fond les images semblables (rafales, séries) en piles.

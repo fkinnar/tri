@@ -39,7 +39,16 @@ OKLab units: 0 for two identical palettes, ~0.1 already quite different. Compute
 serving the closest pairs of colours first: a greedy approach, exact in simple cases,
 never smaller than the true one, and instant over thousands of palettes (the exact
 computation would need a transport solver for a gain invisible when culling).
-Symmetric; an empty palette is at infinite distance.
+Symmetric; an empty palette is at infinite distance. Hue and saturation (a, b) count
+`chroma_weight` times (2) against lightness (feedback of 2026-11-21: with equal weights, a
+brown photo on a dark background looked as close to a purple photo on a dark background
+as the other purple ones).
+
+## Similar palettes (`rank_similar`)
+
+The items under the threshold, closest first; those whose palette is not computed yet
+kept at the end, those without a possible palette removed. Slider start and end:
+`similar_threshold` (0.12), `similar_max` (0.5).
 
 ## Share of a colour (`Palette::share_near`)
 

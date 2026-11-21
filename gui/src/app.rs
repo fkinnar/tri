@@ -279,6 +279,18 @@ struct Status {
 }
 
 /// Le moteur, démarré à la première image (il faut connaître la taille de l'écran).
+/// « Palettes proches » d'une image (#492) : la grille filtrée sous le seuil et triée de la
+/// plus proche à la moins proche.
+#[derive(Clone, Debug)]
+struct PaletteLike {
+    /// L'image de référence.
+    path: PathBuf,
+    /// Sa palette.
+    reference: Arc<Palette>,
+    /// Distance maximale gardée (curseur).
+    threshold: f32,
+}
+
 /// Exposition du JPEG boîtier d'une image, calculée en fond.
 type CameraRead = (PathBuf, Option<Arc<Exposure>>);
 
@@ -1085,6 +1097,10 @@ pub struct TriApp {
     palette_source: Option<tri::palette::SourceKind>,
     /// Palettes lues dans le cache, par image et source.
     palettes: HashMap<(PathBuf, tri::palette::Source), Arc<Palette>>,
+    /// « Palettes proches » en cours (#492).
+    palette_like: Option<PaletteLike>,
+    /// Palettes arrivées depuis le dernier refiltrage, sous « palettes proches ».
+    palette_refilter_pending: bool,
     /// Logiciels de développement qui ne peuvent pas recevoir un dossier (déjà ouverts,
     /// Windows), vérifiés au plus une fois par `[gui.folders] running_check_ms`
     /// ([`TriApp::engine_blocked`]).
@@ -2091,6 +2107,8 @@ impl TriApp {
             exposures: Lru::new(gui.view.textures),
             palette_source: None,
             palettes: HashMap::new(),
+            palette_like: None,
+            palette_refilter_pending: false,
             camera_exposures: Lru::new(gui.view.textures),
             screen: crate::display::Screen::default(),
             camera_pending: HashSet::new(),
@@ -3536,6 +3554,75 @@ impl TriApp {
         }
     }
 
+    /// Palettes lues en fond arrivées ; vrai s'il y en a de nouvelles.
+    fn take_palette_reads(&mut self) -> bool {
+        let Some(engine) = &mut self.engine else {
+            return false;
+        };
+        let mut new = false;
+        for (key, p) in engine.palette_reads.take() {
+            if let Some(p) = p {
+                new |= self.palettes.insert(key, p).is_none();
+            }
+        }
+        new
+    }
+
+    /// « Palettes proches » : grille refiltrée avec les palettes arrivées, pas à chacune
+    /// (voir [`Self::analysis_refilter_due`]), en grille seulement (comme la netteté).
+    fn palette_refilter(&mut self) {
+        if self.palette_refilter_pending
+            && self.mode == Mode::Grid
+            && self.analysis_refilter_due(self.progress[6])
+        {
+            self.palette_refilter_pending = false;
+            if self.palette_like.is_some() {
+                self.refilter(Reveal::Minimal);
+            }
+        }
+    }
+
+    /// « Palettes proches » de l'image `index` (sa palette dans la source choisie), ou fin
+    /// de la recherche (`None`).
+    fn set_palette_like(&mut self, like: Option<(PathBuf, Arc<Palette>)>) {
+        let threshold = self
+            .palette_like
+            .as_ref()
+            .map_or(self.settings.palette.similar_threshold, |l| l.threshold);
+        self.palette_like = like.map(|(path, reference)| PaletteLike {
+            path,
+            reference,
+            threshold,
+        });
+        self.palette_refilter_pending = false;
+        self.apply_filter();
+    }
+
+    /// Ordre « palettes proches » : `groups` aplatis, gardés sous le seuil, du plus proche
+    /// au plus lointain ; ceux dont la palette n'est pas encore calculée à la fin (voir
+    /// [`tri::palette::rank_similar`]).
+    fn rank_by_palette(&self, groups: Vec<Vec<MediaFile>>) -> Vec<Vec<MediaFile>> {
+        let (Some(like), Some(kind)) = (&self.palette_like, self.palette_source) else {
+            return groups;
+        };
+        let files: Vec<MediaFile> = groups.into_iter().flatten().collect();
+        let ranked = tri::palette::rank_similar(
+            files,
+            |f| {
+                let source = kind.source_for(f)?;
+                Some(self.palettes.get(&(f.path.clone(), source)).map(|p| {
+                    tri::palette::distance(&like.reference, p, self.settings.palette.chroma_weight)
+                }))
+            },
+            like.threshold,
+        );
+        if ranked.is_empty() {
+            Vec::new()
+        } else {
+            vec![ranked]
+        }
+    }
+
     /// Change la source des palettes (#492) : le calcul en fond du dossier suit (aucune :
     /// plus de calcul).
     fn set_palette_source(&mut self, kind: Option<tri::palette::SourceKind>) {
@@ -3545,6 +3632,10 @@ impl TriApp {
         self.palette_source = kind;
         for s in &mut self.status {
             s.palette = Avail::default();
+        }
+        // Une autre source : la recherche en cours n'a plus de sens.
+        if self.palette_like.take().is_some() {
+            self.apply_filter();
         }
         self.requested
             .retain(|(_, level)| !matches!(level, Level::Palette(_)));
@@ -3559,13 +3650,7 @@ impl TriApp {
     fn palette_of(&mut self, index: usize) -> Option<Arc<Palette>> {
         let file = self.files.get(index)?.clone();
         let source = self.palette_source?.source_for(&file)?;
-        if let Some(engine) = &mut self.engine {
-            for (key, p) in engine.palette_reads.take() {
-                if let Some(p) = p {
-                    self.palettes.insert(key, p);
-                }
-            }
-        }
+        self.take_palette_reads();
         let key = (file.path.clone(), source);
         if let Some(p) = self.palettes.get(&key) {
             return Some(p.clone());
@@ -3644,9 +3729,12 @@ impl TriApp {
             targets[0]
         };
         let several = targets.len() > 1;
+        // Développements : toujours nommés, même seul (retour du 21/11/2026 : on
+        // s'attendait à lire « darktable »).
+        let named = kind == SourceKind::Developed;
         let mut main_palette = None;
         for &i in &targets {
-            if several {
+            if named {
                 let label = development_label(&self.files[i].path);
                 let text = egui::RichText::new(label);
                 ui.label(if i == main {
@@ -3679,8 +3767,10 @@ impl TriApp {
             }
         }
         let Some(palette) = main_palette else {
+            self.palette_like_controls(ui, None);
             return;
         };
+        let main_path = self.files[main].path.clone();
         let width = ui.available_width();
         ui.add_space(6.0);
         ui.horizontal_top(|ui| {
@@ -3703,6 +3793,52 @@ impl TriApp {
                     });
                 }
             });
+        });
+        self.palette_like_controls(ui, Some((main_path, palette)));
+    }
+
+    /// « Palettes proches » (#492) : le bouton qui lance la recherche sur la palette de
+    /// l'image (`current`), ou, recherche en cours, sa référence, le curseur du seuil
+    /// (double-clic : valeur de départ), le nombre d'images gardées et la fin.
+    fn palette_like_controls(&mut self, ui: &mut Ui, current: Option<(PathBuf, Arc<Palette>)>) {
+        ui.add_space(6.0);
+        let Some(like) = self.palette_like.clone() else {
+            if let Some(current) = current
+                && ui
+                    .button(t!("palette-similar"))
+                    .on_hover_text(t!("palette-similar-tip"))
+                    .clicked()
+            {
+                self.set_palette_like(Some(current));
+            }
+            return;
+        };
+        ui.label(t!(
+            "palette-similar-to",
+            name = development_label(&like.path)
+        ));
+        let p = self.settings.palette;
+        let mut threshold = like.threshold;
+        let slider = ui
+            .add(
+                FineSlider::new(&mut threshold, 0.0..=p.similar_max.max(0.01))
+                    .width(ui.available_width()),
+            )
+            .on_hover_text(t!("palette-similar-threshold"));
+        if slider.double_clicked_slider(ui) {
+            threshold = p.similar_threshold;
+        }
+        if threshold != like.threshold {
+            if let Some(l) = &mut self.palette_like {
+                l.threshold = threshold;
+            }
+            self.refilter(Reveal::Minimal);
+        }
+        ui.horizontal(|ui| {
+            ui.weak(t!("palette-similar-count", n = self.files.len()));
+            if ui.button(t!("palette-similar-end")).clicked() {
+                self.set_palette_like(None);
+            }
         });
     }
 
@@ -7152,6 +7288,8 @@ impl TriApp {
         } else {
             groups
         };
+        // Palettes proches (#492) : filtrées et triées, après les autres filtres.
+        let groups = self.rank_by_palette(groups);
         self.blurry_applied = self.blurry_now();
         // Ce qu'on savait déjà prêt dans le cache le reste (vidéo du 19/11/2026 : une note
         // posée en plein écran sous un filtre de notes refiltrait, l'image affichée perdait
@@ -9008,6 +9146,10 @@ impl TriApp {
         let mut scored = Vec::new();
         self.drain_engine(&mut scored);
         self.take_scores(scored);
+        if self.take_palette_reads() && self.palette_like.is_some() {
+            self.palette_refilter_pending = true;
+        }
+        self.palette_refilter();
         self.exposure_refilter();
         self.sort_refilter();
     }
@@ -9018,6 +9160,9 @@ impl TriApp {
         // Empreinte arrivée : les piles du jugement de netteté changent.
         let mut signed = false;
         let mut to_sign: Vec<MediaFile> = Vec::new();
+        // Palettes prêtes de la source choisie : toutes lues (« palettes proches » compare
+        // tout le dossier).
+        let mut to_paint: Vec<(MediaFile, tri::palette::Source)> = Vec::new();
         // Pas plus que le budget d'une image : sur un dossier déjà calculé, des milliers
         // d'analyses arrivent d'un coup (issue n° 15) ; la suite à l'image suivante.
         let deadline = Instant::now() + self.gui.load_budget();
@@ -9066,6 +9211,13 @@ impl TriApp {
                     {
                         to_sign.push(file.clone());
                     }
+                    if let Level::Palette(source) = level
+                        && let Some(file) = self.files.get(index)
+                        && self.palette_source.and_then(|k| k.source_for(file)) == Some(source)
+                        && !self.palettes.contains_key(&(file.path.clone(), source))
+                    {
+                        to_paint.push((file.clone(), source));
+                    }
                     set(&mut self.status, index, level, Avail::Ready)
                 }
                 Event::Failed {
@@ -9108,6 +9260,13 @@ impl TriApp {
             }
         }
         if let Some(engine) = &mut self.engine {
+            for (file, source) in to_paint {
+                let (cache, preview) = (engine.cache.clone(), engine.preview);
+                let key = (file.path.clone(), source);
+                engine.palette_reads.request(key, move || {
+                    preview::palette(&cache, &file, source, &preview).map(Arc::new)
+                });
+            }
             for file in to_sign {
                 let (cache, preview) = (engine.cache.clone(), engine.preview);
                 let path = file.path.clone();
@@ -10506,6 +10665,7 @@ impl TriApp {
                 self.libraw_only = false;
                 self.leave_stack_only();
                 self.filter_inverted = false;
+                self.palette_like = None;
                 self.apply_filter();
                 // Tout effacé : la grille repart du début, en un saut (retour du 18/11/2026 :
                 // elle gardait la première image visible, au milieu de la liste complète,
@@ -10573,6 +10733,25 @@ impl TriApp {
             Action::FilterConflicts => {
                 self.conflicts_only = !self.conflicts_only;
                 self.apply_filter();
+            }
+            // Palettes proches (#492) : de l'image sélectionnée, ou fin de la recherche.
+            Action::FilterPalette => {
+                if self.palette_like.is_some() {
+                    self.set_palette_like(None);
+                    return;
+                }
+                if self.palette_source.is_none() {
+                    self.notice = Some((t!("palette-choose"), false));
+                    return;
+                }
+                let index = self.selected;
+                match self.palette_of(index) {
+                    Some(p) if !p.swatches.is_empty() => {
+                        let path = self.files[index].path.clone();
+                        self.set_palette_like(Some((path, p)));
+                    }
+                    _ => self.notice = Some((t!("palette-computing"), false)),
+                }
             }
             Action::FilterDeveloped => {
                 if let Some(why) = self.action_unusable(action) {
@@ -18824,6 +19003,12 @@ impl TriApp {
         }
         if self.filter_inverted && self.content_filtered() {
             parts.push(t!("filter-bar-inverted"));
+        }
+        if let Some(like) = &self.palette_like {
+            parts.push(t!(
+                "palette-similar-to",
+                name = development_label(&like.path)
+            ));
         }
         if name && !self.name_query.trim().is_empty() {
             parts.push(t!("filter-summary-name", query = self.name_query.trim()));
@@ -27186,13 +27371,69 @@ mod tests {
     }
 
     #[test]
+    fn similar_palettes_filter_and_sort_the_grid_and_clear_with_the_filters() {
+        // #492 : « palettes proches » garde les images sous le seuil, la plus proche
+        // d'abord ; effacer les filtres revient à la normale.
+        use tri::palette::{Source, SourceKind};
+        // Trois teintes unies : img0 et img2 proches (bleus), img1 loin (rouge).
+        let colors = [[30u8, 60, 200], [220, 40, 40], [40, 70, 210]];
+        let images = ["img0.jpg", "img1.jpg", "img2.jpg"]
+            .iter()
+            .zip(colors)
+            .map(|(name, c)| (*name, image::RgbImage::from_pixel(64, 48, image::Rgb(c))))
+            .collect();
+        let (mut h, _dir) = harness_images(images);
+        h.state_mut().metadata_panel = true;
+        h.run_steps(3);
+        h.state_mut().set_palette_source(Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        // La référence : img2.
+        let img2 = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path.ends_with("img2.jpg"))
+            .unwrap();
+        // Par l'action (palette `:`, aide `?`), sur l'image sélectionnée.
+        h.state_mut().selected = img2;
+        act(&mut h, Action::FilterPalette);
+        h.run_steps(3);
+        let names: Vec<String> = h
+            .state()
+            .files
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            names,
+            ["img2.jpg", "img0.jpg"],
+            "le rouge écarté, la référence d'abord"
+        );
+        assert!(h.state().filter_summary().contains("img2"));
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::FilterClear);
+        h.run_steps(3);
+        assert!(h.state().palette_like.is_none());
+        assert_eq!(h.state().files.len(), 3);
+        // L'action relancée puis refaite : fin de la recherche.
+        act(&mut h, Action::FilterPalette);
+        assert!(h.state().palette_like.is_some());
+        act(&mut h, Action::FilterPalette);
+        assert!(h.state().palette_like.is_none());
+    }
+
+    #[test]
     fn finished_render_palettes_list_every_development_of_the_photo() {
         // Retour du 21/11/2026 : une photo peut avoir plusieurs rendus finis (clones,
         // logiciels) ; la section les montre tous, chacun nommé.
         let (mut h, dir) = harness();
         h.run_steps(3);
         let photos = dir.path().join("photos");
-        for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp"] {
+        for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp", "img1_01.jpg.xmp"] {
             std::fs::write(
                 photos.join(name),
                 r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
@@ -27201,7 +27442,7 @@ mod tests {
         }
         h.state_mut().developers = fake_darktable();
         h.state_mut().reload_folder(None);
-        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 6);
         assert_eq!(selected_name(&h), "img0.jpg");
         h.state_mut().metadata_panel = true;
         h.state_mut()
@@ -27211,14 +27452,34 @@ mod tests {
             .filter(|&i| tri::developments::get(&h.state().files[i].path).is_some())
             .map(|i| development_label(&h.state().files[i].path))
             .collect();
-        assert_eq!(labels.len(), 2, "{labels:?}");
-        for label in &labels {
+        assert_eq!(labels.len(), 3, "{labels:?}");
+        let img0: Vec<&String> = labels.iter().filter(|l| !l.is_empty()).take(2).collect();
+        for label in img0 {
             assert!(h.query_by_label(label).is_some(), "{label} montré");
         }
         assert!(
             h.query_by_label(&t!("palette-no-render")).is_none(),
             "la photo a des rendus finis"
         );
+        // Un seul développement (img1) : nommé aussi (retour du 21/11/2026).
+        let img1 = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path.ends_with("img1.jpg"))
+            .unwrap();
+        h.state_mut().selected = img1;
+        h.run_steps(3);
+        let dev = h
+            .state()
+            .files
+            .iter()
+            .find(|f| {
+                tri::developments::get(&f.path).is_some_and(|d| d.photo.ends_with("img1.jpg"))
+            })
+            .map(|f| development_label(&f.path))
+            .unwrap();
+        assert!(h.query_by_label(&dev).is_some(), "{dev} montré, même seul");
     }
 
     #[test]
