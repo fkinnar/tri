@@ -3668,7 +3668,7 @@ impl TriApp {
         // référence (ou une couleur) en couleur écarte les images en noir et blanc, et
         // inversement.
         let ps = self.settings.palette;
-        let mono = |p: &Palette| p.is_monochrome(ps.mono_chroma, ps.colour_min_share);
+        let mono = |p: &Palette| p.is_monochrome(ps.monochrome(), ps.colour_min_share);
         let reference_mono = match (like, colour) {
             (Some(l), _) => mono(&l.reference),
             (None, Some(c)) => {

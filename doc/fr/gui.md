@@ -253,8 +253,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (curseur, « Terminer ») ; la couleur cherchée entourée dans
   la bande. Une recherche de palettes à la fois. **Noir et blanc et
   couleur ne se mélangent pas** (retour du 21/11/2026) : une référence ou une couleur en
-  couleur écarte les images en noir et blanc (`Palette::is_monochrome`, toutes les couleurs
-  sous `[palette] mono_chroma`), et inversement. Copier une couleur : clic sur son
+  couleur écarte les images en noir et blanc (`Palette::is_monochrome` : toutes les couleurs
+  sous `[palette] mono_chroma`, ou teintées, sépia, virage, sous `mono_toned_chroma` et
+  dans `mono_hue_spread` degrés de teinte), et inversement. La série brune en couleur de
+  l'utilisateur (teintes sur 26°) reste en couleur, un sépia type (14°) est monochrome. Copier une couleur : clic sur son
   `#rrggbb` dans la liste.
 - **Bout de la pile ou de la liste** (`[gui.end]`, #307, 05/11/2026) : en plein écran,
   ← / → qui ne bougent plus le disent un instant, dans le même cadre que le repère de

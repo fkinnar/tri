@@ -242,8 +242,10 @@ system one ("cold" measurements, experiments).
   results in the grid; without result, the section stays (slider, "Done"); the colour looked for is outlined
   in the band. One palette search at a time. **Black and white and colour
   never mix** (feedback of 2026-11-21): a colour reference or colour leaves out the black
-  and white images (`Palette::is_monochrome`, every colour under `[palette] mono_chroma`),
-  and the other way round. Copy a colour: click its `#rrggbb` in the
+  and white images (`Palette::is_monochrome`: every colour under `[palette] mono_chroma`,
+  or toned — sepia, toning — under `mono_toned_chroma` and within `mono_hue_spread`
+  degrees of hue), and the other way round. The user's brown colour series (hues over
+  26°) stays colour, a typical sepia (14°) is monochrome. Copy a colour: click its `#rrggbb` in the
   list.
 - **End of the stack or of the list** (`[gui.end]`, #307, 2026-11-05): in full screen,
   ← / → that no longer move say so for a moment, in the same frame as the position mark

@@ -127,6 +127,11 @@ pub struct PaletteSettings {
     /// couleurs le sont est en noir et blanc, et les recherches ne la mélangent pas aux
     /// images en couleur.
     pub mono_chroma: f32,
+    /// Chroma au plus d'une image monochrome teintée (sépia, virage).
+    pub mono_toned_chroma: f32,
+    /// Écart de teintes au plus (degrés) d'une image monochrome teintée : ses couleurs
+    /// suivent une seule teinte.
+    pub mono_hue_spread: f32,
 }
 
 impl Default for PaletteSettings {
@@ -144,6 +149,8 @@ impl Default for PaletteSettings {
             colour_radius_max: 0.4,
             colour_min_share: 0.02,
             mono_chroma: 0.03,
+            mono_toned_chroma: 0.08,
+            mono_hue_spread: 15.0,
         }
     }
 }
@@ -197,14 +204,24 @@ impl Palette {
             .sum()
     }
 
-    /// Vrai si l'image est en noir et blanc : toutes ses couleurs (sauf les miettes sous
-    /// `min_share`) ont un chroma sous `max_chroma`. Les recherches ne mélangent pas noir et
-    /// blanc et couleur (retour du 21/11/2026 : en élargissant, ils arrivaient entremêlés).
-    pub fn is_monochrome(&self, max_chroma: f32, min_share: f32) -> bool {
-        self.swatches
-            .iter()
-            .filter(|s| s.share >= min_share)
-            .all(|s| s.hue_chroma().1 < max_chroma)
+    /// Vrai si l'image est monochrome : en noir et blanc (toutes ses couleurs, sauf les
+    /// miettes sous `min_share`, ont un chroma sous `mono.chroma`), ou **teintée** (sépia,
+    /// virage : les couleurs plus saturées restent sous `mono.toned_chroma` et leurs
+    /// teintes dans `mono.hue_spread` degrés, alignées sur une seule teinte). Les recherches
+    /// ne mélangent pas monochromes et couleur (retours du 21/11/2026).
+    pub fn is_monochrome(&self, mono: Monochrome, min_share: f32) -> bool {
+        let mut hues = Vec::new();
+        for s in self.swatches.iter().filter(|s| s.share >= min_share) {
+            let (hue, chroma) = s.hue_chroma();
+            if chroma < mono.chroma {
+                continue;
+            }
+            if chroma >= mono.toned_chroma {
+                return false;
+            }
+            hues.push(hue);
+        }
+        hue_range(&mut hues) <= mono.hue_spread
     }
 
     /// Distance de la couleur de la palette la plus proche de `oklab` (comptée comme
@@ -369,6 +386,42 @@ pub fn rank_similar<T>(
     }
     known.sort_by(|a, b| a.0.total_cmp(&b.0));
     known.into_iter().map(|(_, t)| t).chain(unknown).collect()
+}
+
+/// Seuils de « monochrome » (voir [`Palette::is_monochrome`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Monochrome {
+    /// Chroma sous lequel une couleur est un gris.
+    pub chroma: f32,
+    /// Chroma au plus d'une image teintée (sépia).
+    pub toned_chroma: f32,
+    /// Écart de teintes au plus d'une image teintée (degrés).
+    pub hue_spread: f32,
+}
+
+impl PaletteSettings {
+    /// Les seuils de « monochrome » de ces réglages.
+    pub fn monochrome(&self) -> Monochrome {
+        Monochrome {
+            chroma: self.mono_chroma,
+            toned_chroma: self.mono_toned_chroma,
+            hue_spread: self.mono_hue_spread,
+        }
+    }
+}
+
+/// Étendue de teintes (degrés) sur le cercle : le plus petit arc qui les contient toutes
+/// (0 sans teinte ou pour une seule).
+fn hue_range(hues: &mut [f32]) -> f32 {
+    if hues.len() < 2 {
+        return 0.0;
+    }
+    hues.sort_by(f32::total_cmp);
+    let mut largest_gap = 360.0 - (hues[hues.len() - 1] - hues[0]);
+    for w in hues.windows(2) {
+        largest_gap = largest_gap.max(w[1] - w[0]);
+    }
+    360.0 - largest_gap
 }
 
 /// Distance dans OKLab, a et b comptés `chroma_weight` fois.
@@ -663,14 +716,52 @@ mod tests {
     }
 
     #[test]
-    fn grey_palettes_are_monochrome_and_a_speck_of_colour_does_not_change_that() {
+    fn grey_and_toned_palettes_are_monochrome_a_warm_colour_one_is_not() {
         let s = PaletteSettings::default();
-        let grey = extract(&bands(&[([230, 230, 230], 60), ([30, 30, 30], 40)]), &s);
-        assert!(grey.is_monochrome(s.mono_chroma, s.colour_min_share));
-        let speck = extract(&bands(&[([230, 230, 230], 99), ([200, 30, 30], 1)]), &s);
-        assert!(speck.is_monochrome(s.mono_chroma, s.colour_min_share));
-        let colour = extract(&bands(&[([230, 230, 230], 60), ([40, 60, 200], 40)]), &s);
-        assert!(!colour.is_monochrome(s.mono_chroma, s.colour_min_share));
+        let mono = s.monochrome();
+        let from = |hexes: &[(&str, f32)]| Palette {
+            swatches: hexes
+                .iter()
+                .map(|(h, share)| {
+                    let v = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).unwrap();
+                    Swatch {
+                        oklab: srgb_to_oklab([v(1), v(3), v(5)]),
+                        share: *share,
+                    }
+                })
+                .collect(),
+        };
+        let grey = from(&[("#e6e6e6", 0.6), ("#1e1e1e", 0.4)]);
+        assert!(grey.is_monochrome(mono, s.colour_min_share));
+        let speck = from(&[("#e6e6e6", 0.99), ("#c81e1e", 0.01)]);
+        assert!(
+            speck.is_monochrome(mono, s.colour_min_share),
+            "miette ignorée"
+        );
+        // Sépia : teintes de 64 à 78°.
+        let sepia = from(&[
+            ("#2b2118", 0.3),
+            ("#5e4a36", 0.3),
+            ("#a88b6a", 0.2),
+            ("#e0cdb0", 0.2),
+        ]);
+        assert!(sepia.is_monochrome(mono, s.colour_min_share), "sépia");
+        // Série brune en couleur (retour du 21/11/2026) : teintes de 32 à 58°.
+        let brown = from(&[
+            ("#151414", 0.51),
+            ("#272221", 0.14),
+            ("#655346", 0.11),
+            ("#433831", 0.09),
+            ("#d8a79d", 0.08),
+            ("#a67e66", 0.07),
+        ]);
+        assert!(
+            !brown.is_monochrome(mono, s.colour_min_share),
+            "brune en couleur"
+        );
+        let blue = from(&[("#e6e6e6", 0.6), ("#283cc8", 0.4)]);
+        assert!(!blue.is_monochrome(mono, s.colour_min_share));
+        assert_eq!(hue_range(&mut [350.0, 10.0]), 20.0, "autour de 0°");
     }
 
     #[test]
