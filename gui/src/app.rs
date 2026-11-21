@@ -1114,6 +1114,10 @@ pub struct TriApp {
     palette_refilter_pending: bool,
     /// « Contient cette couleur » en cours (#492).
     palette_colour: Option<PaletteColour>,
+    /// Dernières palettes montrées par la section (nom éventuel, palette) et celle de la
+    /// roue : redessinées telles quelles quand une recherche ne trouve rien, pour que la
+    /// section ne bouge pas (retour du 21/11/2026 : le curseur remontait sous la souris).
+    palette_last: Option<ShownPalettes>,
     /// Pipette des palettes armée : le prochain clic sur l'image en plein écran choisit la
     /// couleur.
     palette_eyedropper: bool,
@@ -2130,6 +2134,7 @@ impl TriApp {
             palette_like: None,
             palette_refilter_pending: false,
             palette_colour: None,
+            palette_last: None,
             palette_eyedropper: false,
             colour_pick: None,
             camera_exposures: Lru::new(gui.view.textures),
@@ -3055,12 +3060,16 @@ impl TriApp {
         }
         // Réglages de visualisation (#137) : ceux de l'image courante, en bas pour ne rien
         // décaler au-dessus (les EXIF restent à leur place).
+        // Pendant une recherche de palettes sans résultat, son titre reste (la section
+        // Palette, dessous, ne remonte pas).
         if matches!(self.mode, Mode::Grid | Mode::View)
             && self.crop.is_none()
-            && !self.files.is_empty()
+            && (!self.files.is_empty() || self.palette_searching())
         {
             ui.separator();
-            if self.panel_section(ui, "adjust", t!("panel-section-adjust")) {
+            if self.panel_section(ui, "adjust", t!("panel-section-adjust"))
+                && !self.files.is_empty()
+            {
                 self.adjust_section(ui);
             }
         }
@@ -3832,133 +3841,143 @@ impl TriApp {
             return;
         };
         let index = self.selected;
-        if index >= self.files.len() {
-            // Recherche sans résultat : ses réglages et sa fin restent.
-            self.palette_like_controls(ui, None);
-            self.palette_colour_controls(ui);
+        // Ce qu'on montrera, relevé d'abord : les réglages des recherches, dessinés juste
+        // sous la source (retour du 21/11/2026 : en bas de la section, le curseur montait
+        // et descendait sous la souris quand les résultats apparaissaient ou partaient),
+        // peuvent refiltrer la liste ; plus aucun rang n'est lu ensuite.
+        enum Row {
+            Palette(Arc<Palette>),
+            Empty,
+            Failed(String),
+            Computing,
+        }
+        let mut rows: Vec<(Option<String>, Row)> = Vec::new();
+        let mut main_palette: Option<Arc<Palette>> = None;
+        let mut main_path = None;
+        let mut no_render = false;
+        if index < self.files.len() {
+            // Rendus finis : tous les développements de la photo, de tous les logiciels,
+            // chacun avec sa palette ; sinon, l'image elle-même.
+            let candidates = match kind {
+                SourceKind::Developed => self
+                    .stacks
+                    .developments_of(index)
+                    .cloned()
+                    .unwrap_or(index..index + 1),
+                _ => index..index + 1,
+            };
+            let targets: Vec<usize> = candidates
+                .filter(|&i| kind.source_for(&self.files[i]).is_some())
+                .collect();
+            no_render = targets.is_empty();
+            // La roue et la liste : celle de l'image sélectionnée, sinon du premier
+            // développement. Développements toujours nommés, même seul.
+            let main = if targets.contains(&index) {
+                index
+            } else {
+                targets.first().copied().unwrap_or(index)
+            };
+            let named = kind == SourceKind::Developed;
+            for &i in &targets {
+                let label = named.then(|| development_label(&self.files[i].path));
+                let row = match self.palette_of(i) {
+                    Some(p) if p.swatches.is_empty() => Row::Empty,
+                    Some(p) => {
+                        if i == main {
+                            main_palette = Some(p.clone());
+                            main_path = Some(self.files[i].path.clone());
+                        }
+                        Row::Palette(p)
+                    }
+                    None => match &self.status[i].palette {
+                        Avail::Failed(e) => Row::Failed(e.clone()),
+                        _ => Row::Computing,
+                    },
+                };
+                rows.push((label, row));
+            }
+        }
+        // Les recherches : leur bouton, ou leurs réglages et leur fin.
+        let current = main_path.zip(main_palette.clone());
+        self.palette_like_controls(ui, current);
+        self.palette_colour_controls(ui);
+        ui.add_space(6.0);
+        // Recherche sans résultat : les dernières palettes montrées restent.
+        if rows.is_empty() && !no_render {
+            if let Some((entries, main)) = self.palette_last.clone()
+                && self.palette_searching()
+            {
+                for (label, palette) in &entries {
+                    if let Some(label) = label {
+                        ui.weak(label.as_str());
+                    }
+                    let (band, _) = ui.allocate_exact_size(
+                        vec2(ui.available_width(), crate::palette_view::BAND_HEIGHT),
+                        Sense::hover(),
+                    );
+                    crate::palette_view::draw_band(ui.painter(), band, palette);
+                    if entries.len() > 1 {
+                        ui.add_space(4.0);
+                    }
+                }
+                self.palette_detail(ui, &main);
+            }
             return;
         }
-        // Rendus finis : tous les développements de la photo, de tous les logiciels
-        // (retour du 21/11/2026 : « rendu fini » seul ne disait pas lequel), chacun avec
-        // sa palette ; sinon, l'image elle-même.
-        let candidates = match kind {
-            SourceKind::Developed => self
-                .stacks
-                .developments_of(index)
-                .cloned()
-                .unwrap_or(index..index + 1),
-            _ => index..index + 1,
-        };
-        let targets: Vec<usize> = candidates
-            .filter(|&i| kind.source_for(&self.files[i]).is_some())
-            .collect();
-        if targets.is_empty() {
+        if no_render {
             ui.weak(t!("palette-no-render"));
             return;
         }
-        // La roue et la liste : celle de l'image sélectionnée, sinon du premier
-        // développement.
-        let main = if targets.contains(&index) {
-            index
-        } else {
-            targets[0]
-        };
-        let several = targets.len() > 1;
-        // Développements : toujours nommés, même seul (retour du 21/11/2026 : on
-        // s'attendait à lire « darktable »).
-        let named = kind == SourceKind::Developed;
-        let mut main_palette = None;
+        let several = rows.len() > 1;
         let mut picked = None;
-        for &i in &targets {
-            if named {
-                let label = development_label(&self.files[i].path);
-                let text = egui::RichText::new(label);
-                ui.label(if i == main {
+        let mut shown: Vec<(Option<String>, Arc<Palette>)> = Vec::new();
+        for (label, row) in rows {
+            if let Some(label) = &label {
+                let text = egui::RichText::new(label.as_str());
+                let is_main = match (&row, &main_palette) {
+                    (Row::Palette(p), Some(m)) => Arc::ptr_eq(p, m),
+                    _ => false,
+                };
+                ui.label(if is_main || !several {
                     text.strong()
                 } else {
                     text.weak()
                 });
             }
-            match self.palette_of(i) {
-                Some(p) if p.swatches.is_empty() => {
-                    ui.weak(t!("colour-palette-empty"));
-                }
-                Some(p) => {
+            match row {
+                Row::Palette(p) => {
                     if let Some(c) = self.palette_band(ui, &p) {
                         picked = Some(c);
                     }
-                    if i == main {
-                        main_palette = Some(p);
-                    }
+                    shown.push((label, p));
                 }
-                None => match &self.status[i].palette {
-                    Avail::Failed(e) => {
-                        ui.colored_label(self.gui.colors.error, e.as_str());
-                    }
-                    _ => {
-                        ui.weak(t!("palette-computing"));
-                    }
-                },
+                Row::Empty => {
+                    ui.weak(t!("colour-palette-empty"));
+                }
+                Row::Failed(e) => {
+                    ui.colored_label(self.gui.colors.error, e.as_str());
+                }
+                Row::Computing => {
+                    ui.weak(t!("palette-computing"));
+                }
             }
             if several {
                 ui.add_space(4.0);
             }
         }
-        let main_path = self.files[main].path.clone();
-        // La couleur cliquée : cherchée tout à la fin, la recherche refiltre la liste et les
-        // rangs ci-dessus n'y vaudraient plus (plantage du 21/11/2026 : 17 images → 5).
-        let Some(palette) = main_palette else {
-            self.palette_like_controls(ui, None);
-            self.palette_colour_controls(ui);
-            if picked.is_some() {
-                self.set_palette_colour(picked);
-            }
-            return;
-        };
-        let width = ui.available_width();
-        ui.add_space(6.0);
-        ui.horizontal_top(|ui| {
-            let (wheel, _) =
-                ui.allocate_exact_size(crate::palette_view::wheel_size(width), Sense::hover());
-            crate::palette_view::draw_wheel(
-                ui.painter(),
-                wheel,
-                &palette,
-                ui.visuals().weak_text_color(),
-            );
-            ui.vertical(|ui| {
-                for swatch in &palette.swatches {
-                    ui.horizontal(|ui| {
-                        let (dot, _) = ui.allocate_exact_size(vec2(12.0, 12.0), Sense::hover());
-                        ui.painter()
-                            .rect_filled(dot, 2.0, crate::palette_view::color(swatch));
-                        let hex = crate::palette_view::hex(swatch);
-                        if ui
-                            .add(
-                                egui::Label::new(egui::RichText::new(&hex).monospace())
-                                    .sense(Sense::click()),
-                            )
-                            .on_hover_cursor(egui::CursorIcon::PointingHand)
-                            .on_hover_text(t!("palette-copy-tip"))
-                            .clicked()
-                        {
-                            ui.ctx().copy_text(hex);
-                        }
-                        ui.weak(format!("{:.0} %", swatch.share * 100.0));
-                    });
-                }
-            });
-        });
-        self.palette_like_controls(ui, Some((main_path, palette)));
-        self.palette_colour_controls(ui);
+        if let Some(palette) = main_palette {
+            self.palette_last = Some((shown, palette.clone()));
+            self.palette_detail(ui, &palette);
+        }
+        // La couleur cliquée : cherchée tout à la fin (la recherche refiltre la liste).
         if picked.is_some() {
             self.set_palette_colour(picked);
         }
     }
 
     /// « Contient cette couleur » (#492) : la pipette (en plein écran) ou l'invitation à
-    /// cliquer une couleur de la bande ; recherche en cours : la couleur, la tolérance, la
-    /// part minimale (curseurs, double-clic : valeur de départ), le nombre d'images, la fin.
+    /// cliquer une couleur de la bande ; recherche en cours : la couleur, la tolérance
+    /// (curseur, double-clic : valeur de départ), le nombre d'images, la fin.
     fn palette_colour_controls(&mut self, ui: &mut Ui) {
         ui.add_space(6.0);
         let Some(colour) = self.palette_colour else {
@@ -4014,17 +4033,59 @@ impl TriApp {
         });
     }
 
+    /// Roue chromatique et liste des couleurs d'une palette (clic sur un `#rrggbb` :
+    /// copie).
+    fn palette_detail(&self, ui: &mut Ui, palette: &Palette) {
+        let width = ui.available_width();
+        ui.add_space(6.0);
+        ui.horizontal_top(|ui| {
+            let (wheel, _) =
+                ui.allocate_exact_size(crate::palette_view::wheel_size(width), Sense::hover());
+            crate::palette_view::draw_wheel(
+                ui.painter(),
+                wheel,
+                palette,
+                ui.visuals().weak_text_color(),
+            );
+            ui.vertical(|ui| {
+                for swatch in &palette.swatches {
+                    ui.horizontal(|ui| {
+                        let (dot, _) = ui.allocate_exact_size(vec2(12.0, 12.0), Sense::hover());
+                        ui.painter()
+                            .rect_filled(dot, 2.0, crate::palette_view::color(swatch));
+                        let hex = crate::palette_view::hex(swatch);
+                        if ui
+                            .add(
+                                egui::Label::new(egui::RichText::new(&hex).monospace())
+                                    .sense(Sense::click()),
+                            )
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .on_hover_text(t!("palette-copy-tip"))
+                            .clicked()
+                        {
+                            ui.ctx().copy_text(hex);
+                        }
+                        ui.weak(format!("{:.0} %", swatch.share * 100.0));
+                    });
+                }
+            });
+        });
+    }
+
     /// « Palettes proches » (#492) : le bouton qui lance la recherche sur la palette de
     /// l'image (`current`), ou, recherche en cours, sa référence, le curseur du seuil
     /// (double-clic : valeur de départ), le nombre d'images gardées et la fin.
     fn palette_like_controls(&mut self, ui: &mut Ui, current: Option<(PathBuf, Arc<Palette>)>) {
         ui.add_space(6.0);
         let Some(like) = self.palette_like.clone() else {
-            if let Some(current) = current
-                && ui
-                    .button(t!("palette-similar"))
-                    .on_hover_text(t!("palette-similar-tip"))
-                    .clicked()
+            // Sans palette sous la main (pas d'image, pas encore calculée) : grisé, à sa
+            // place (la section ne bouge pas).
+            let enabled = current.is_some();
+            if ui
+                .add_enabled(enabled, egui::Button::new(t!("palette-similar")))
+                .on_hover_text(t!("palette-similar-tip"))
+                .clicked()
+                && let Some(current) = current
             {
                 self.set_palette_like(Some(current));
             }
@@ -23699,6 +23760,10 @@ fn mark_frame(style: &egui::Style) -> egui::Frame {
 /// réglages), celle du JPEG boîtier.
 type Histograms = (Arc<Exposure>, Option<Arc<Exposure>>, Option<Arc<Exposure>>);
 
+/// Palettes montrées par la section Palette : (nom éventuel, palette) de chacune, puis
+/// celle de la roue.
+type ShownPalettes = (Vec<(Option<String>, Arc<Palette>)>, Arc<Palette>);
+
 /// Débord du fond sombre de la barre de position autour d'elle (points), comme dans
 /// `position_bar::draw`.
 const BAR_BACKDROP: f32 = position_bar::BACKDROP;
@@ -27794,12 +27859,25 @@ mod tests {
         );
         assert!(!h.state().palette_eyedropper, "désarmée après le relevé");
         // Rien trouvé (un vert) : la section reste, avec « Terminer » (retour du
-        // 21/11/2026 : on ne savait plus en sortir).
+        // 21/11/2026 : on ne savait plus en sortir), à la même place (le curseur restait
+        // sous la souris).
         h.set_size(vec2(1400.0, 1400.0));
+        // Les sections au-dessus repliées, comme chez l'utilisateur (ouvertes, les EXIF et
+        // les réglages d'une image changent de hauteur sans image).
+        for id in ["filters", "grid", "view", "exif", "adjust"] {
+            h.state_mut().panel_folded.insert(id.to_string());
+        }
+        h.run_steps(3);
+        let before = h.get_by_label(&t!("palette-similar-end")).rect().top();
         h.state_mut()
             .set_palette_colour(Some(tri::palette::srgb_to_oklab([0, 255, 0])));
         h.run_steps(3);
         assert!(h.state().files.is_empty());
+        let after = h.get_by_label(&t!("palette-similar-end")).rect().top();
+        assert!(
+            (before - after).abs() < 1.0,
+            "« Terminer » de {before} à {after}"
+        );
         // Le haut du panneau ne bouge pas : histogramme et position gardés.
         for title in ["panel-section-histogram", "panel-section-position"] {
             let title = t!(title).to_uppercase();
