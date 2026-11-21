@@ -241,7 +241,9 @@ system one ("cold" measurements, experiments).
   `#rrggbb`, and an **eyedropper**: the box hides, a click anywhere in the
   window reads the colour (on a thumbnail or the full-screen image, the average colour of
   a small area of the image the palette comes from, read in the background; elsewhere,
-  the pixel of a capture of the window), then the box comes back; "Search" starts the
+  the pixel of a capture of the window), then the box comes back; on an image, a
+  **reticle** shows the averaged area (`[palette] pick_area`, 2 % of the long side), and
+  the loupe (`m` held) magnifies it to aim precisely (user's idea, 2026-11-21); "Search" starts the
   filter. Or a click on a colour of the Palette section:
   the images with a palette colour close enough, closest first (a single slider, the
   tolerance, `colour_radius` / `colour_radius_max`; specks under `colour_min_share`
@@ -250,7 +252,14 @@ system one ("cold" measurements, experiments).
   those without a possible palette leave; **black and white and colour never mix**
   (`Palette::is_monochrome`: every colour under `mono_chroma`, or toned — sepia, toning —
   under `mono_toned_chroma` and within `mono_hue_spread` degrees of hue; the user's brown
-  colour series, hues over 26°, stays colour, a typical sepia, 14°, is monochrome).
+  colour series, hues over 26°, stays colour, a typical sepia, 14°, is monochrome; more than `colour_min_share` of the real pixels beyond `mono_toned_chroma`
+  (fine coverage): colour, a warm, slightly saturated portrait is no longer taken for a
+  sepia, feedback of 2026-11-21). Depending on the searched colour (2026-11-22): **grey**, pure
+  black and white only (`Palette::is_grey`); **muted** (chroma between `mono_chroma` and
+  `mono_toned_chroma`: skin, beige, sepia), everything but it (it is what a toned image
+  contains); **saturated**, neither black and white nor toned. Similar
+  palettes: pure black and white on one side, the rest on the other (the distance tells
+  toned from colour).
   Started from full screen, a search shows its results in the grid; the top of the panel
   never moves, even without result. Shown in the filter summary; invertible like the other content filters (inverted: what
   it leaves out, in the usual order); unchecking, clearing the filters (`f d`) or changing

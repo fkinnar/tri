@@ -608,6 +608,11 @@ colour_radius = 0.1
 colour_radius_max = 0.4
 # Contains this colour: colours smaller than this share of the image don't count.
 colour_min_share = 0.02
+# Contains this colour: minimum share of real pixels near the colour.
+#
+# Contains this colour, from the real pixels: minimum share of the image near the colour
+# (0.005: 0.5 %). A picked detail, a highlight, is enough.
+colour_coverage = 0.005
 # Chroma under which a colour is a grey: an image all in greys is black and white, never
 # mixed with colour images in the searches.
 mono_chroma = 0.03
@@ -622,6 +627,11 @@ mono_hue_spread = 15.0
 # divided by this value (capped at 1), takes the signatures' scale, which the stacks
 # slider is set on.
 stack_scale = 0.5
+# Eyedropper: area averaged around the pointed spot, as a share of the image's long side.
+#
+# Eyedropper: side of the area whose average colour is taken (0.02: 2 % of the image's
+# long side), shown by the reticle under the pointer and in the loupe.
+pick_area = 0.02
 
 [similarity]
 # Group similar images (bursts, series) into stacks in the background.

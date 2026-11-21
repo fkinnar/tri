@@ -1553,6 +1553,7 @@ palette-source-none = None
 palette-source-camera = Camera JPEG
 palette-source-raw = Raw data (LibRaw)
 palette-source-developed = Developments
+palette-similar-no-photo = Choose a photo first: its similar palettes will be searched for.
 palette-choose = Choose a source: the folder's palettes are then computed in the background.
 palette-computing = computing the palette
 palette-no-render = No development for this photo.

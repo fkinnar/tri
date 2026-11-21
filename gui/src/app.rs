@@ -3510,13 +3510,26 @@ impl TriApp {
         toggles
     }
 
+    /// Vrai si une photo sert de départ à « palettes proches » : l'image pointée (curseur
+    /// visible, ou plein écran) ou une sélection (retour du 22/11/2026 : sans elles, le
+    /// filtre est grisé).
+    fn has_palette_reference(&self) -> bool {
+        !self.files.is_empty()
+            && (self.mode != Mode::Grid || !self.cursor_hidden || !self.selection.is_empty())
+    }
+
     /// Recherches de palettes (#492) de la barre des filtres : (action, allumée,
     /// utilisable) ; grisées sans source de palette. Dans le panneau, leurs lignes à part
     /// (`palette_filter_rows`).
     fn palette_toggles(&self) -> Vec<(Action, bool, bool)> {
         let ready = self.palette_source.is_some();
+        let like = self.palette_like.is_some();
         vec![
-            (Action::FilterPalette, self.palette_like.is_some(), ready),
+            (
+                Action::FilterPalette,
+                like,
+                like || (ready && self.has_palette_reference()),
+            ),
             (
                 Action::FilterPaletteColour,
                 self.palette_colour.is_some(),
@@ -3591,17 +3604,23 @@ impl TriApp {
                 Action::FilterPalette => self.palette_like.is_some(),
                 _ => self.palette_colour.is_some(),
             };
-            let tip = if ready {
-                action.label()
-            } else {
+            // Palettes proches : il faut aussi une photo de départ (sauf pour l'éteindre).
+            let no_reference =
+                action == Action::FilterPalette && !on && !self.has_palette_reference();
+            let usable = ready && !no_reference;
+            let tip = if !ready {
                 t!("palette-choose")
+            } else if no_reference {
+                t!("palette-similar-no-photo")
+            } else {
+                action.label()
             };
             let name = match action {
                 Action::FilterPalette => t!("palette-similar"),
                 _ => t!("palette-colour"),
             };
             let (item, key) = self.side_begin(false);
-            let row = ui.add_enabled_ui(ready, |ui| {
+            let row = ui.add_enabled_ui(usable, |ui| {
                 ui.horizontal(|ui| {
                     let mut checked = on;
                     let check = ui.checkbox(&mut checked, "").on_hover_text(&tip);
@@ -3666,7 +3685,7 @@ impl TriApp {
                 .inner
             });
             let clicked = row.inner;
-            let toggled = ready && (clicked || key == Some(SideKey::Activate));
+            let toggled = usable && (clicked || key == Some(SideKey::Activate));
             self.side_end(ui, item, row.response.rect, clicked);
             if toggled {
                 let ctx = ui.ctx().clone();
@@ -3945,7 +3964,7 @@ impl TriApp {
         let key = |p: &Palette| match (like, colour) {
             (Some(l), _) => tri::palette::distance(&l.reference, p, weight),
             (None, Some(c)) => p
-                .nearest(c.oklab, weight, self.settings.palette.colour_min_share)
+                .nearest(c.oklab, weight, self.settings.palette.colour_coverage)
                 .unwrap_or(f32::INFINITY),
             (None, None) => 0.0,
         };
@@ -3954,16 +3973,31 @@ impl TriApp {
         // inversement.
         let ps = self.settings.palette;
         let mono = |p: &Palette| p.is_monochrome(ps.monochrome(), ps.colour_min_share);
-        let reference_mono = match (like, colour) {
-            (Some(l), _) => mono(&l.reference),
-            (None, Some(c)) => {
-                let swatch = tri::palette::Swatch {
-                    oklab: c.oklab,
-                    share: 1.0,
-                };
-                swatch.hue_chroma().1 < ps.mono_chroma
+        let grey = |p: &Palette| p.is_grey(ps.monochrome(), ps.colour_min_share);
+        // Une couleur peu saturée (peau, sépia, beige : chroma entre les deux seuils) est
+        // ce que contient une image teintée : seules les images en noir et blanc pur sont
+        // alors écartées (retour du 21/11/2026 : une peau pipetée ne retrouvait qu'une des
+        // trois photos de la série, les deux autres jugées « teintées »).
+        let colour_chroma = colour.map(|c| {
+            tri::palette::Swatch {
+                oklab: c.oklab,
+                share: 1.0,
             }
-            (None, None) => false,
+            .hue_chroma()
+            .1
+        });
+        // Selon la couleur cherchée (retours du 21-22/11/2026) : grise, le noir et blanc
+        // pur seulement ; peu saturée, tout sauf lui ; saturée, ni lui ni les teintées.
+        // Palettes proches : le noir et blanc pur d'un côté, le reste de l'autre ; teintées
+        // et couleur, la distance entre palettes les départage (retour du 22/11/2026 : la
+        // frontière teinté / couleur tombait au milieu d'une série chaude, le noir et blanc
+        // entrait et la 3ᵉ photo de la série non).
+        let reference_grey = like.is_some_and(|l| grey(&l.reference));
+        let left_out = |p: &Palette| match colour_chroma {
+            Some(c) if c < ps.mono_chroma => !grey(p),
+            Some(c) if c < ps.mono_toned_chroma => grey(p),
+            Some(_) => mono(p),
+            None => grey(p) != reference_grey,
         };
         let files: Vec<MediaFile> = groups.into_iter().flatten().collect();
         let ranked = tri::palette::rank_similar(
@@ -3971,7 +4005,7 @@ impl TriApp {
             |f| {
                 let source = kind.source_for(f)?;
                 match self.palettes.get(&(f.path.clone(), source)) {
-                    Some(p) if mono(p) != reference_mono => None,
+                    Some(p) if left_out(p) => None,
                     Some(p) => Some(Some(key(p))),
                     None => Some(None),
                 }
@@ -4225,7 +4259,27 @@ impl TriApp {
             .fixed_pos(screen.min)
             .show(ctx, |ui| {
                 let response = ui.allocate_response(screen.size(), Sense::click());
-                ctx.set_cursor_icon(egui::CursorIcon::Crosshair);
+                // Sur une image : le collimateur, à la taille de la zone prélevée dans
+                // l'image entière (dans la loupe quand elle est ouverte), sans le curseur
+                // du système (retour du 21/11/2026 : deux croix, l'une en retard).
+                let full = response.hover_pos().and_then(|pos| {
+                    self.image_under(pos).map(|(_, rect, uv)| {
+                        (
+                            pos,
+                            vec2(rect.width() / uv.width(), rect.height() / uv.height()),
+                        )
+                    })
+                });
+                match full {
+                    Some((pos, full)) => {
+                        ctx.set_cursor_icon(egui::CursorIcon::None);
+                        if !self.loupe_on {
+                            let side = self.settings.palette.pick_area * full.x.max(full.y);
+                            eyedropper_reticle(ui.painter(), pos, side);
+                        }
+                    }
+                    None => ctx.set_cursor_icon(egui::CursorIcon::Crosshair),
+                }
                 response
                     .clicked()
                     .then(|| response.interact_pointer_pos())
@@ -4236,15 +4290,7 @@ impl TriApp {
             return;
         };
         self.palette_eyedropper = false;
-        let image = match self.mode {
-            Mode::Grid => self
-                .grid_images
-                .iter()
-                .find(|(_, r)| r.contains(pos))
-                .map(|&(i, r)| (i, r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)))),
-            Mode::View => self.view_image.filter(|(_, r, _)| r.contains(pos)),
-            _ => None,
-        };
+        let image = self.image_under(pos);
         if let Some((index, rect, uv)) = image
             && self.palette_source.is_some_and(|k| {
                 self.files
@@ -4273,6 +4319,20 @@ impl TriApp {
         self.screen_pick = Some(rx);
     }
 
+    /// Image sous `pos` (grille : une vignette ; plein écran : l'image), avec son rectangle
+    /// à l'écran et la partie de l'image qu'il montre (coordonnées relatives).
+    fn image_under(&self, pos: egui::Pos2) -> Option<(usize, Rect, Rect)> {
+        match self.mode {
+            Mode::Grid => self
+                .grid_images
+                .iter()
+                .find(|(_, r)| r.contains(pos))
+                .map(|&(i, r)| (i, r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)))),
+            Mode::View => self.view_image.filter(|(_, r, _)| r.contains(pos)),
+            _ => None,
+        }
+    }
+
     /// Pipette des palettes : la couleur au point `point` (coordonnées relatives de
     /// l'image) de l'image `index`, lue en fond dans l'image d'où sa palette est tirée
     /// (moyenne d'une petite zone).
@@ -4289,13 +4349,14 @@ impl TriApp {
             return;
         };
         let (cache, preview) = (engine.cache.clone(), engine.preview);
+        let area = self.settings.palette.pick_area;
         let (tx, rx) = mpsc::channel();
         let repaint = self.repaint.clone();
         std::thread::spawn(move || {
             let colour = preview::key(&file, preview::palette_input(source), &preview)
                 .ok()
                 .and_then(|key| cache.get(&key))
-                .map(|image| average_oklab(&image, point));
+                .map(|image| average_oklab(&image, point, area));
             let _ = tx.send(colour);
             if let Some(ctx) = repaint {
                 ctx.request_repaint();
@@ -12008,6 +12069,10 @@ impl TriApp {
                     self.notice = Some((t!("palette-choose"), false));
                     return;
                 }
+                if !self.has_palette_reference() {
+                    self.notice = Some((t!("palette-similar-no-photo"), false));
+                    return;
+                }
                 match self.current_palette() {
                     Some(current) => self.set_palette_like(Some(current)),
                     None => self.notice = Some((t!("palette-computing"), false)),
@@ -12779,7 +12844,7 @@ impl TriApp {
             }
             if self.zoom.is_some() || (self.loupe_on && i == self.loupe_index) {
                 let developed = self.developed_level(&self.files[i].path);
-                let level = view::zoom_level(kind, self.source_for(&self.files[i]), developed);
+                let level = view::zoom_level(kind, self.loupe_source(&self.files[i]), developed);
                 // 100 % RAW : seulement une fois qu'on s'est arrêté sur l'image.
                 let expensive = level == Level::Full && kind == MediaKind::Raw;
                 if !expensive || self.focus_since.elapsed() >= self.gui.view.full_raw_dwell() {
@@ -13018,7 +13083,7 @@ impl TriApp {
         {
             let level = view::zoom_level(
                 file.kind,
-                self.source_for(file),
+                self.loupe_source(file),
                 self.developed_level(&file.path),
             );
             let key = (file.path.clone(), level);
@@ -13052,7 +13117,8 @@ impl TriApp {
                 }
                 continue;
             }
-            let source = self.source_for(&self.files[index]);
+            // En grille (loupe) : la source de la vignette.
+            let source = self.loupe_source(&self.files[index]);
             let developed = self.developed_level(&self.files[index].path);
             let level = view::pick(kind, source, zoomed, developed, |l| self.ready(index, l));
             if let Some(level) = level.filter(|&l| l != Level::Thumbnail) {
@@ -13915,6 +13981,21 @@ impl TriApp {
             self.base_source = source;
         }
         self.source = source;
+    }
+
+    /// Source de la loupe (et du 1:1) pour `file` : en grille, celle de sa vignette
+    /// (retour du 21/11/2026 : grille en rendu darktable, la loupe montrait le rendu
+    /// LibRaw) ; ailleurs, la source affichée ([`TriApp::source_for`]).
+    fn loupe_source(&self, file: &MediaFile) -> Source {
+        if self.mode != Mode::Grid {
+            return self.source_for(file);
+        }
+        match self.grid_levels.get(&file.path) {
+            Some(Level::Developed(_)) => Source::Developed,
+            Some(Level::Standard) if file.kind == MediaKind::Raw => Source::Raw,
+            _ if file.kind == MediaKind::Raw => Source::Embedded,
+            _ => Source::Raw,
+        }
     }
 
     /// Source affichée pour `file` : la source choisie, sauf « développé » sur une image
@@ -16332,7 +16413,7 @@ impl TriApp {
         let file = &self.files[index];
         let level = view::zoom_level(
             file.kind,
-            self.source_for(file),
+            self.loupe_source(file),
             self.developed_level(&file.path),
         );
         let ppp = ctx.pixels_per_point();
@@ -16340,11 +16421,16 @@ impl TriApp {
         let full = self.big.get(&(file.path.clone(), level)).cloned();
         let (texture, px, loading) = match full {
             Some(b) => (b.texture.id(), b.original, false),
-            None => match self
-                .big
-                .get(&(file.path.clone(), Level::Standard))
-                .cloned()
-                .or_else(|| self.big.get(&(file.path.clone(), Level::Embedded)).cloned())
+            // En attendant : un rendu développé ne se remplace pas par une autre source
+            // (retour du 21/11/2026 : le JPEG boîtier, aux couleurs du boîtier).
+            None => match (!matches!(level, Level::Developed(_)))
+                .then(|| self.big.get(&(file.path.clone(), Level::Standard)).cloned())
+                .flatten()
+                .or_else(|| {
+                    (!matches!(level, Level::Developed(_)))
+                        .then(|| self.big.get(&(file.path.clone(), Level::Embedded)).cloned())
+                        .flatten()
+                })
                 // Dans la grille : la vignette, agrandie le temps du 1:1.
                 .or_else(|| {
                     self.textures.get(&file.path).map(|t| Big {
@@ -16364,6 +16450,27 @@ impl TriApp {
                 None => return,
             },
         };
+        // Un développement : sa vraie taille à 100 % (comme le plein écran), aussi pendant
+        // l'attente, où la vignette agrandie tient lieu (retour du 21/11/2026 : la loupe
+        // montrait la vignette entière, réduite, le temps du chargement).
+        let px = match level {
+            Level::Developed(_) => {
+                let ratio = px.x / px.y.max(1.0);
+                let standard = self
+                    .engine
+                    .as_ref()
+                    .map_or(2560.0, |e| e.preview.sizes.standard as f32);
+                let fallback = if px.x.max(px.y) < standard * 0.5 {
+                    px * (standard / px.x.max(px.y).max(1.0))
+                } else {
+                    px
+                };
+                let file = file.clone();
+                self.developed_full_size(ctx, &file, ratio)
+                    .unwrap_or(fallback)
+            }
+            _ => px,
+        };
         let side = z.loupe_size;
         // Gardée dans la zone visible (retour du 06/11/2026 : en haut ou en bas de l'écran,
         // la moitié sortait), le point visé au centre de ce qu'elle montre.
@@ -16381,6 +16488,11 @@ impl TriApp {
         let clipped = painter.with_clip_rect(square);
         clipped.rect_filled(square, 0.0, self.view_background());
         clipped.image(texture, whole, uv, Color32::WHITE);
+        // Pipette active : le collimateur, à la taille de la zone prélevée (#492).
+        if self.palette_eyedropper {
+            let side = self.settings.palette.pick_area * size.x.max(size.y);
+            eyedropper_reticle(&clipped, center, side);
+        }
         painter.rect_stroke(
             square,
             4.0,
@@ -24850,9 +24962,10 @@ fn oklab_hex(oklab: [f32; 3]) -> String {
 
 /// Couleur moyenne (OKLab) d'une petite zone de `image` autour de `point` (coordonnées
 /// relatives, 0..1) : 1 % du côté long, 2 pixels au moins.
-fn average_oklab(image: &tri::bitmap::Bitmap, point: egui::Pos2) -> [f32; 3] {
+fn average_oklab(image: &tri::bitmap::Bitmap, point: egui::Pos2, area: f32) -> [f32; 3] {
     let (w, h) = (image.width.max(1), image.height.max(1));
-    let half = ((w.max(h) as f32 * 0.01) as u32).max(2);
+    // Zone de côté `area` × le grand côté (`[palette] pick_area`), celle du collimateur.
+    let half = ((w.max(h) as f32 * area / 2.0) as u32).max(2);
     let cx = (point.x.clamp(0.0, 1.0) * (w - 1) as f32) as u32;
     let cy = (point.y.clamp(0.0, 1.0) * (h - 1) as f32) as u32;
     let mut sum = [0.0f32; 3];
@@ -24870,6 +24983,28 @@ fn average_oklab(image: &tri::bitmap::Bitmap, point: egui::Pos2) -> [f32; 3] {
         }
     }
     sum.map(|v| v / n.max(1.0))
+}
+
+/// Collimateur de la pipette (idée de l'utilisateur, 21/11/2026) : la zone dont la
+/// couleur moyenne est prise, un carré de côté `side` centré en `centre`, cerné de clair
+/// et de sombre (lisible sur toute image), et quatre traits qui y mènent.
+fn eyedropper_reticle(painter: &egui::Painter, centre: egui::Pos2, side: f32) {
+    let side = side.max(6.0);
+    let square = Rect::from_center_size(centre, vec2(side, side));
+    let dark = egui::Stroke::new(3.0, Color32::from_black_alpha(160));
+    let light = egui::Stroke::new(1.5, Color32::from_gray(240));
+    let tick = side * 0.5 + 10.0;
+    for stroke in [dark, light] {
+        painter.rect_stroke(square, 0.0, stroke, egui::StrokeKind::Outside);
+        for (from, to) in [
+            (vec2(-tick, 0.0), vec2(-side * 0.5 - 3.0, 0.0)),
+            (vec2(tick, 0.0), vec2(side * 0.5 + 3.0, 0.0)),
+            (vec2(0.0, -tick), vec2(0.0, -side * 0.5 - 3.0)),
+            (vec2(0.0, tick), vec2(0.0, side * 0.5 + 3.0)),
+        ] {
+            painter.line_segment([centre + from, centre + to], stroke);
+        }
+    }
 }
 
 /// Texte lisible sur n'importe quelle image : fond sombre translucide.
@@ -29153,6 +29288,7 @@ mod tests {
         choose_palette(&mut h, Some(SourceKind::Developed(darktable)));
         // Une palette pour chaque développement (le rendu de darktable n'est pas fait ici).
         let grey = Arc::new(Palette {
+            coverage: Default::default(),
             swatches: vec![Swatch {
                 oklab: [0.5, 0.0, 0.0],
                 share: 1.0,
@@ -29244,6 +29380,17 @@ mod tests {
             .map(|(_, r)| r.center())
             .expect("vignette dessinée");
         h.event(UiEvent::PointerMoved(at));
+        h.run_steps(2);
+        // Sur la vignette : le collimateur, sans la croix du système (retour du
+        // 21/11/2026 : deux croix, l'une en retard).
+        assert_eq!(
+            h.output().platform_output.cursor_icon,
+            egui::CursorIcon::None,
+            "curseur masqué sur l'image"
+        );
+        // La loupe y montrerait la source de la vignette (ici : l'image plate elle-même).
+        let file = h.state().files[img1].clone();
+        assert_eq!(h.state().loupe_source(&file), crate::view::Source::Raw);
         for pressed in [true, false] {
             h.event(UiEvent::PointerButton {
                 pos: at,
@@ -29349,6 +29496,161 @@ mod tests {
         h.state_mut().refilter(Reveal::Minimal);
         h.run_steps(3);
         assert_eq!(names(&h), ["img0.jpg"]);
+    }
+
+    #[test]
+    fn similar_palettes_need_a_photo_to_start_from() {
+        // Retour du 22/11/2026 : sans image pointée ni sélection, « palettes proches » est
+        // grisé (il part de l'image courante).
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        choose_palette(&mut h, Some(tri::palette::SourceKind::Camera));
+        let usable = |h: &Harness<'static, TriApp>| {
+            h.state()
+                .palette_toggles()
+                .iter()
+                .find(|(a, _, _)| *a == Action::FilterPalette)
+                .unwrap()
+                .2
+        };
+        assert!(usable(&h), "curseur visible");
+        h.state_mut().cursor_hidden = true;
+        assert!(!usable(&h), "ni curseur ni sélection");
+        act(&mut h, Action::FilterPalette);
+        assert!(h.state().palette_like.is_none());
+        let path = h.state().files[0].path.clone();
+        h.state_mut().selection.toggle(&path);
+        assert!(usable(&h), "une sélection");
+    }
+
+    #[test]
+    fn similar_palettes_keep_black_and_white_apart_but_not_toned_from_colour() {
+        // Retour du 22/11/2026 (vidéo) : d'une photo chaude jugée « teintée », les palettes
+        // proches amenaient le noir et blanc, pas la 3ᵉ photo de la série, jugée en couleur.
+        use tri::palette::{Source, SourceKind};
+        let colors = [[150u8, 118, 95], [175, 115, 75], [128, 128, 128]];
+        let images = ["toned.jpg", "warm.jpg", "grey.jpg"]
+            .iter()
+            .zip(colors)
+            .map(|(name, c)| (*name, image::RgbImage::from_pixel(64, 48, image::Rgb(c))))
+            .collect();
+        let (mut h, _dir) = harness_images(images);
+        h.run_steps(3);
+        choose_palette(&mut h, Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        let ps = h.state().settings.palette;
+        let palette_of = |h: &Harness<'static, TriApp>, name: &str| {
+            let path = h
+                .state()
+                .folder
+                .files
+                .iter()
+                .find(|f| f.path.ends_with(name))
+                .unwrap()
+                .path
+                .clone();
+            h.state().palettes[&(path, Source::Camera)].clone()
+        };
+        let mono = ps.monochrome();
+        assert!(palette_of(&h, "toned.jpg").is_monochrome(mono, ps.colour_min_share));
+        assert!(!palette_of(&h, "warm.jpg").is_monochrome(mono, ps.colour_min_share));
+        let toned = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path.ends_with("toned.jpg"))
+            .unwrap();
+        h.state_mut().selected = toned;
+        act(&mut h, Action::FilterPalette);
+        if let Some(like) = &mut h.state_mut().palette_like {
+            like.threshold = ps.similar_max;
+        }
+        h.state_mut().refilter(Reveal::Minimal);
+        h.run_steps(3);
+        let names: Vec<String> = h
+            .state()
+            .files
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["toned.jpg", "warm.jpg"], "la chaude, pas le gris");
+    }
+
+    #[test]
+    fn a_searched_colour_keeps_its_family_grey_muted_or_saturated() {
+        // Retour du 21/11/2026 (vidéo) : une peau pipetée ne retrouvait qu'une des trois
+        // photos d'une série chaude et peu saturée ; les deux autres, jugées « teintées »,
+        // étaient écartées comme le noir et blanc. Une couleur peu saturée les retrouve ;
+        // le noir et blanc pur reste écarté.
+        use tri::palette::{Source, SourceKind};
+        let colors = [[150u8, 118, 95], [128, 128, 128], [30, 60, 200]];
+        let images = ["warm.jpg", "grey.jpg", "blue.jpg"]
+            .iter()
+            .zip(colors)
+            .map(|(name, c)| (*name, image::RgbImage::from_pixel(64, 48, image::Rgb(c))))
+            .collect();
+        let (mut h, _dir) = harness_images(images);
+        h.run_steps(3);
+        choose_palette(&mut h, Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        let ps = h.state().settings.palette;
+        let warm_path = h
+            .state()
+            .folder
+            .files
+            .iter()
+            .find(|f| f.path.ends_with("warm.jpg"))
+            .unwrap()
+            .path
+            .clone();
+        let warm = h.state().palettes[&(warm_path, Source::Camera)].clone();
+        assert!(
+            warm.is_monochrome(ps.monochrome(), ps.colour_min_share),
+            "teintée : {warm:?}"
+        );
+        let colour = warm.swatches[0].oklab;
+        let chroma = warm.swatches[0].hue_chroma().1;
+        assert!(
+            chroma >= ps.mono_chroma && chroma < ps.mono_toned_chroma,
+            "couleur peu saturée : {chroma}"
+        );
+        h.state_mut().set_palette_colour(Some(colour));
+        if let Some(c) = &mut h.state_mut().palette_colour {
+            c.radius = ps.colour_radius_max;
+        }
+        h.state_mut().refilter(Reveal::Minimal);
+        h.run_steps(3);
+        let names: Vec<String> = h
+            .state()
+            .files
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["warm.jpg"], "ni le gris ni le bleu");
+        // Un gris neutre : le noir et blanc pur seulement, ni la teintée ni le bleu (retour
+        // du 22/11/2026 : des photos en couleur peu saturées sortaient).
+        h.state_mut()
+            .set_palette_colour(Some(tri::palette::srgb_to_oklab([120, 120, 120])));
+        if let Some(c) = &mut h.state_mut().palette_colour {
+            c.radius = ps.colour_radius_max;
+        }
+        h.state_mut().refilter(Reveal::Minimal);
+        h.run_steps(3);
+        let names: Vec<String> = h
+            .state()
+            .files
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["grey.jpg"]);
     }
 
     #[test]
@@ -36203,6 +36505,74 @@ mod tests {
         run_until(&mut h, |app| app.compute_tasks.is_empty());
         let (text, _) = h.state().notice.clone().unwrap();
         assert!(text.contains(&t!("compute-images", n = 2)), "{text}");
+    }
+
+    #[test]
+    fn the_grid_loupe_asks_for_the_thumbnail_s_render() {
+        // Retour du 21/11/2026 (vidéo) : grille en rendu darktable, la loupe montrait le
+        // JPEG boîtier (« 100 % en cours… ») au lieu du développement.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert_eq!(h.state().mode, Mode::Grid);
+        let path = h.state().files[0].path.clone();
+        let darktable = Level::Developed(tri::develop::Engine::Darktable);
+        h.state_mut().grid_levels.insert(path.clone(), darktable);
+        let file = h.state().files[0].clone();
+        assert_eq!(
+            h.state().loupe_source(&file),
+            crate::view::Source::Developed
+        );
+        h.state_mut().loupe_on = true;
+        h.state_mut().loupe_index = 0;
+        h.state_mut().requested.clear();
+        h.state_mut().request_zoom();
+        assert!(
+            h.state().requested.contains(&(path.clone(), darktable)),
+            "{:?}",
+            h.state().requested
+        );
+        // Calculé : c'est lui que le chargeur prépare, pas le JPEG boîtier.
+        h.state_mut().status[0].developed = Avail::Ready;
+        let ctx = h.ctx.clone();
+        h.state_mut().update_loads(&ctx);
+        assert!(
+            h.state().wanted.contains(&(path, darktable)),
+            "{:?}",
+            h.state().wanted
+        );
+    }
+
+    #[test]
+    fn the_eyedropper_averages_the_reticle_area() {
+        // `[palette] pick_area` : la zone moyennée est celle que montre le collimateur.
+        let (w, h) = (100u32, 50u32);
+        let mut data = Vec::new();
+        for _ in 0..h {
+            for x in 0..w {
+                data.extend_from_slice(if x < 50 {
+                    &[200, 40, 40]
+                } else {
+                    &[40, 60, 200]
+                });
+            }
+        }
+        let image = tri::bitmap::Bitmap {
+            width: w,
+            height: h,
+            data,
+        };
+        let red = tri::palette::working_to_oklab([200, 40, 40]);
+        let near_edge = pos2(0.45, 0.5);
+        let small = average_oklab(&image, near_edge, 0.04);
+        assert!(
+            tri::palette::oklab_distance(small, red) < 1e-3,
+            "zone dans le rouge"
+        );
+        let large = average_oklab(&image, near_edge, 0.4);
+        assert!(
+            tri::palette::oklab_distance(large, red) > 0.05,
+            "zone à cheval"
+        );
     }
 
     #[test]

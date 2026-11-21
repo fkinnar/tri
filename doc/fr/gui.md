@@ -253,7 +253,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   **pipette** : la boîte se masque, un clic n'importe où dans la fenêtre relève la couleur
   (sur une vignette ou l'image en plein écran, la couleur moyenne d'une petite zone de
   l'image d'où la palette est tirée, lue en fond ; ailleurs, le pixel de la capture de la
-  fenêtre), puis la boîte revient ; « Chercher » lance le filtre. Ou un clic sur une couleur
+  fenêtre), puis la boîte revient ; sur une image, un **collimateur** montre la zone
+  moyennée (`[palette] pick_area`, 2 % du grand côté), et la loupe (`m` maintenue)
+  l'agrandit pour viser juste (idée de l'utilisateur, 21/11/2026) ; « Chercher » lance le filtre. Ou un clic sur une couleur
   de la section Palette : les images dont une couleur de la palette est assez proche, la plus
   proche d'abord (un seul curseur, la tolérance, `colour_radius` / `colour_radius_max` ;
   miettes sous `colour_min_share` ignorées). Règles communes : une recherche à la fois ;
@@ -262,7 +264,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   et couleur ne se mélangent pas** (`Palette::is_monochrome` : toutes les couleurs sous
   `mono_chroma`, ou teintées, sépia, virage, sous `mono_toned_chroma` et dans
   `mono_hue_spread` degrés de teinte ; la série brune en couleur de l'utilisateur, teintes
-  sur 26°, reste en couleur, un sépia type, 14°, est monochrome). Lancée du plein écran, une
+  sur 26°, reste en couleur, un sépia type, 14°, est monochrome ; plus de `colour_min_share` des vrais pixels au-delà de `mono_toned_chroma`
+  (couverture fine) : en couleur, un portrait chaud peu saturé n'est plus pris pour un
+  sépia, retour du 21/11/2026). Selon la couleur cherchée (22/11/2026) : **grise**, le noir et
+  blanc pur seulement (`Palette::is_grey`) ; **peu saturée** (chroma entre `mono_chroma`
+  et `mono_toned_chroma` : peau, beige, sépia), tout sauf lui (c'est ce que contient une
+  image teintée) ; **saturée**, ni noir et blanc ni teintées. Palettes proches :
+  le noir et blanc pur d'un côté, le reste de l'autre (la distance départage teintées et
+  couleur). Lancée du plein écran, une
   recherche montre ses résultats en grille ; le haut du panneau ne bouge pas, même sans
   résultat. Mentionnée dans le résumé des filtres ; inversible comme les autres filtres sur le
   contenu (inversée : ce qu'elle écarte, dans l'ordre habituel) ; décocher, effacer les

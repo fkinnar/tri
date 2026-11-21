@@ -611,6 +611,11 @@ colour_radius = 0.1
 colour_radius_max = 0.4
 # Contient cette couleur : les couleurs plus petites que cette part de l'image ne comptent pas.
 colour_min_share = 0.02
+# Contient cette couleur : part minimale des vrais pixels proches de la couleur.
+#
+# Contient cette couleur, d'après les vrais pixels : part minimale de l'image proche de la
+# couleur (0,005 : 0,5 %). Un détail qu'on pipette, un reflet, suffit.
+colour_coverage = 0.005
 # Chroma sous lequel une couleur est un gris : une image toute en gris est en noir et blanc,
 # jamais mélangée aux images en couleur dans les recherches.
 mono_chroma = 0.03
@@ -625,6 +630,11 @@ mono_hue_spread = 15.0
 # divisée par cette valeur (bornée à 1), prend l'échelle des empreintes, sur laquelle le
 # curseur des piles est calé.
 stack_scale = 0.5
+# Pipette : zone moyennée autour du point visé, en part du grand côté de l'image.
+#
+# Pipette : côté de la zone dont la couleur moyenne est prise (0,02 : 2 % du grand côté
+# de l'image), montrée par le collimateur sous le pointeur et dans la loupe.
+pick_area = 0.02
 
 [similarity]
 # Regrouper en fond les images semblables (rafales, séries) en piles.
