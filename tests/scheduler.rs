@@ -155,6 +155,7 @@ fn start(fake: &Fake, light_workers: usize) -> (Scheduler, Events) {
             exposure: false,
             sharpness: false,
             similarity: false,
+            palette: None,
             ..Config::default()
         },
     )
@@ -305,6 +306,7 @@ fn cached_analyses_do_not_wait_for_thumbnails_being_recomputed() {
             exposure: false,
             sharpness: true,
             similarity: true,
+            palette: None,
             ..Config::default()
         },
     );
@@ -354,6 +356,7 @@ fn a_request_already_in_cache_does_not_wait_for_the_busy_worker() {
             exposure: false,
             sharpness: false,
             similarity: false,
+            palette: None,
             ..Config::default()
         },
     );
@@ -439,6 +442,7 @@ fn thumbnails_first_holds_background_previews_until_the_grid_is_done() {
             exposure: false,
             sharpness: false,
             similarity: false,
+            palette: None,
             ..Config::default()
         },
     );
@@ -501,6 +505,7 @@ fn raw_renders_wait_for_embedded_previews_in_thumbnails_first_mode() {
             exposure: false,
             sharpness: false,
             similarity: false,
+            palette: None,
             ..Config::default()
         },
     );
@@ -688,6 +693,7 @@ fn on_demand_policy_leaves_raw_renders_to_requests() {
             exposure: false,
             sharpness: false,
             similarity: false,
+            palette: None,
         },
     );
     let generation = scheduler.set_folder(all);
@@ -738,6 +744,7 @@ fn the_raw_render_policy_changes_with_the_next_folder() {
             exposure: false,
             sharpness: false,
             similarity: false,
+            palette: None,
         },
     );
     scheduler.set_folder(all.clone());
@@ -763,6 +770,7 @@ fn moving_focus_drops_requests_that_are_no_longer_near() {
             exposure: false,
             sharpness: false,
             similarity: false,
+            palette: None,
         },
     );
     scheduler.set_paused(true);
@@ -890,6 +898,7 @@ fn real_previews_fill_the_cache_and_are_reused() {
                 exposure: false,
                 sharpness: false,
                 similarity: false,
+                palette: None,
                 ..Config::default()
             },
             |_| {},
@@ -960,6 +969,7 @@ fn real_previews_fill_the_cache_and_are_reused() {
                 exposure: false,
                 sharpness: false,
                 similarity: false,
+                palette: None,
                 ..Config::default()
             },
             |_| {},
@@ -1002,6 +1012,7 @@ fn exposure_analyses_run_after_previews_of_the_grid_and_before_raw_renders() {
             exposure: true,
             sharpness: false,
             similarity: false,
+            palette: None,
         },
     );
     let generation = scheduler.set_folder(all);
@@ -1110,5 +1121,49 @@ fn a_refiltered_folder_keeps_the_work_in_progress() {
     assert_eq!(
         scheduler.progress(Level::Thumbnail),
         Some(Progress { done: 2, total: 2 })
+    );
+}
+
+#[test]
+fn palettes_follow_the_chosen_source_in_the_background() {
+    // #492 : aucune palette tant qu'aucune source n'est choisie ; « données brutes » sur une
+    // image plate : son image (la source boîtier) ; changer de source abandonne l'autre.
+    use tri::palette::{Source, SourceKind};
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let mut all = files(3, MediaKind::Raw);
+    all.extend(files(2, MediaKind::Flat));
+    let (scheduler, _events) = start_with(
+        &fake,
+        Config {
+            light_workers: 2,
+            thumbnails_first: true,
+            raw_previews: RawPreviews::OnDemand,
+            exposure: false,
+            sharpness: false,
+            similarity: false,
+            palette: None,
+        },
+    );
+    scheduler.set_folder(all);
+    assert!(scheduler.wait_idle(LONG));
+    assert!(
+        fake.order(Level::Palette(Source::Camera)).is_empty(),
+        "rien sans source"
+    );
+    scheduler.set_palette(Some(SourceKind::Raw));
+    assert!(scheduler.wait_idle(LONG));
+    let mut raw = fake.order(Level::Palette(Source::Raw));
+    raw.sort();
+    assert_eq!(raw, ["img0.RAF", "img1.RAF", "img2.RAF"]);
+    let mut flat = fake.order(Level::Palette(Source::Camera));
+    flat.sort();
+    assert_eq!(flat, ["img0.JPG", "img1.JPG"], "images plates : leur image");
+    // Rendus finis : aucune de ces images n'est un développement.
+    scheduler.set_palette(Some(SourceKind::Developed));
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(
+        fake.order(Level::Palette(Source::Raw)).len(),
+        3,
+        "rien de plus"
     );
 }

@@ -17,6 +17,15 @@ File de travail en tâche de fond qui remplit le cache pour un dossier.
      fond : elles alimentent les badges de la grille), puis autres aperçus standard, par
      distance (en avant d'abord).
 
+  **Palettes de couleurs** (`Level::Palette(source)`, #492, 21/11/2026) : pour tout le
+  dossier seulement quand une source est choisie (`Config::palette`,
+  `Scheduler::set_palette` ; aucune par défaut), après tout le reste (classe
+  `PALETTE_BACKGROUND`, on les demande pour chercher, pas pour trier). Celle du JPEG
+  boîtier passe par les workers légers (la vignette) ; celle des données brutes d'un RAW
+  et celle d'un rendu fini par le **worker lourd** : elles font d'abord le rendu RAW ou
+  le rendu du logiciel s'il manque. Changer de source abandonne les palettes de l'autre
+  encore en attente. Voir [palette.md](palette.md).
+
   **Score de netteté** (`Level::Sharpness`, 17/10/2026) : calculé en fond pour tout le
   dossier (`[sharpness] background`), par les **workers légers** (JPEG boîtier réduit,
   ~120 ms), même classe de priorité que l'analyse d'exposition ; progression

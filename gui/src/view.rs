@@ -102,7 +102,9 @@ pub fn label(kind: MediaKind, level: Level) -> String {
         (MediaKind::Raw, Level::Full) => t!("shown-raw-full"),
         (MediaKind::Raw, Level::EmbeddedFull) => t!("shown-embedded-full"),
         (MediaKind::Flat, Level::Full) => t!("shown-image-full"),
-        (_, Level::Exposure | Level::Sharpness | Level::Similarity) => t!("shown-exposure"),
+        (_, Level::Exposure | Level::Sharpness | Level::Similarity | Level::Palette(_)) => {
+            t!("shown-exposure")
+        }
         (_, Level::Developed(engine)) => t!("shown-developed", engine = engine.name()),
         (MediaKind::Flat, _) => t!("shown-image"),
     }

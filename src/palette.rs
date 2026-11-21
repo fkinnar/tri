@@ -29,6 +29,67 @@ use crate::colour;
 /// Version du calcul (dans la clé du cache : la changer recalcule tout).
 pub const VERSION: u32 = 1;
 
+/// Source d'une palette (décision de l'utilisateur, 21/11/2026) : trois usages, une
+/// palette par image et par source dans le cache.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Source {
+    /// JPEG boîtier (embarqué dans le RAW, ou le JPEG lui-même) : la vignette.
+    Camera,
+    /// Données brutes de LibRaw (rendu RAW de `tri`, sans traitement) ; une image plate :
+    /// l'image elle-même, comme [`Source::Camera`].
+    Raw,
+    /// Rendu fini d'un logiciel de développement (un développement de la liste).
+    Developed(crate::develop::Engine),
+}
+
+/// Source choisie dans l'interface ou en ligne de commande : le logiciel d'un rendu fini
+/// est celui de chaque développement. Dans un fichier : `"camera"`, `"raw"`,
+/// `"developed"`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SourceKind {
+    /// JPEG boîtier.
+    #[default]
+    Camera,
+    /// Données brutes de LibRaw.
+    Raw,
+    /// Rendus finis.
+    Developed,
+}
+
+impl SourceKind {
+    /// Tous, dans l'ordre de l'interface.
+    pub const ALL: [SourceKind; 3] = [SourceKind::Camera, SourceKind::Raw, SourceKind::Developed];
+
+    /// Nom dans la ligne de commande et le fichier de configuration.
+    pub fn id(self) -> &'static str {
+        match self {
+            SourceKind::Camera => "camera",
+            SourceKind::Raw => "raw",
+            SourceKind::Developed => "developed",
+        }
+    }
+
+    /// Lit [`SourceKind::id`].
+    pub fn parse(text: &str) -> Option<SourceKind> {
+        Self::ALL.into_iter().find(|k| k.id() == text)
+    }
+
+    /// Source de la palette de `file` pour ce choix : une image plate n'a pas de données
+    /// brutes (son image) ; un rendu fini n'existe que pour un développement (`None`
+    /// sinon).
+    pub fn source_for(self, file: &crate::media::MediaFile) -> Option<Source> {
+        match self {
+            SourceKind::Camera => Some(Source::Camera),
+            SourceKind::Raw if file.kind == crate::media::MediaKind::Raw => Some(Source::Raw),
+            SourceKind::Raw => Some(Source::Camera),
+            SourceKind::Developed => {
+                crate::developments::get(&file.path).map(|d| Source::Developed(d.engine))
+            }
+        }
+    }
+}
+
 /// Réglages (section `[palette]` du fichier de configuration).
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
