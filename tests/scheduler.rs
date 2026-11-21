@@ -1158,6 +1158,8 @@ fn palettes_follow_the_chosen_source_in_the_background() {
     let mut flat = fake.order(Level::Palette(Source::Camera));
     flat.sort();
     assert_eq!(flat, ["img0.JPG", "img1.JPG"], "images plates : leur image");
+    // Une case d'avancement pour les palettes, quelle que soit la source.
+    assert_eq!(scheduler.progress(Level::Palette(Source::Raw)), complete(5));
     // Rendus finis : aucune de ces images n'est un développement.
     scheduler.set_palette(Some(SourceKind::Developed));
     assert!(scheduler.wait_idle(LONG));

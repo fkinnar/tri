@@ -253,14 +253,24 @@ impl Default for Config {
 }
 
 /// Niveaux dont l'avancement est suivi (calculés en fond) ; `Full` ne l'est qu'à la demande.
-const TRACKED: [Level; 6] = [
+/// Les palettes (#492) ont une case pour toutes leurs sources (une seule à la fois).
+const TRACKED: [Level; 7] = [
     Level::Thumbnail,
     Level::Embedded,
     Level::Standard,
     Level::Exposure,
     Level::Sharpness,
     Level::Similarity,
+    Level::Palette(crate::palette::Source::Camera),
 ];
+
+/// Case d'avancement de `level` dans [`TRACKED`].
+fn tracked_slot(level: Level) -> Option<usize> {
+    match level {
+        Level::Palette(_) => Some(TRACKED.len() - 1),
+        _ => TRACKED.iter().position(|&l| l == level),
+    }
+}
 
 /// Niveaux calculés en fond pour un fichier : l'aperçu boîtier n'existe que pour les RAW,
 /// leur rendu RAW dépend de la politique, les analyses des réglages `exposure` et
@@ -442,7 +452,7 @@ struct State {
     /// ne les revérifie pas ; les workers les calculent à leur tour.
     checked: HashSet<Job>,
     running: Vec<Running>,
-    progress: [Progress; 6],
+    progress: [Progress; 7],
     paused: bool,
     shutdown: bool,
     /// Événements en attente de livraison, dans l'ordre où ils se sont produits.
@@ -648,7 +658,11 @@ impl Scheduler {
         let total = |level: Level| {
             files
                 .iter()
-                .filter(|f| s.background_levels(f).contains(&level))
+                .filter(|f| {
+                    s.background_levels(f)
+                        .iter()
+                        .any(|&l| tracked_slot(l) == tracked_slot(level))
+                })
                 .count()
         };
         s.progress = TRACKED.map(|l| Progress {
@@ -687,9 +701,22 @@ impl Scheduler {
             .enumerate()
             .filter_map(|(i, f)| Some((i, Level::Palette(kind?.source_for(f)?))))
             .collect();
+        // Avancement des palettes : celles de cette source, à partir de zéro.
+        let slot = TRACKED.len() - 1;
+        s.progress[slot] = Progress {
+            done: 0,
+            total: jobs.len(),
+        };
+        let event = Event::Progress {
+            generation: s.generation,
+            level: TRACKED[slot],
+            progress: s.progress[slot],
+        };
         s.pending.extend(jobs);
+        s.outbox.push_back(event);
         drop(s);
         self.shared.work.notify_all();
+        deliver(&self.shared);
     }
 
     /// Ajoute `files` à la fin du dossier en cours sans rien interrompre : leur travail de
@@ -703,7 +730,7 @@ impl Scheduler {
         for (k, file) in files.iter().enumerate() {
             for level in s.background_levels(file) {
                 s.pending.insert((start + k, level));
-                if let Some(i) = TRACKED.iter().position(|&l| l == level) {
+                if let Some(i) = tracked_slot(level) {
                     s.progress[i].total += 1;
                     grown[i] = true;
                 }
@@ -820,7 +847,7 @@ impl Scheduler {
     /// Avancement d'un niveau calculé en fond (`Thumbnail`, `Embedded`, `Standard`) ; `None`
     /// pour `Full`. Le total de `Embedded` est le nombre de RAW.
     pub fn progress(&self, level: Level) -> Option<Progress> {
-        let i = TRACKED.iter().position(|&l| l == level)?;
+        let i = tracked_slot(level)?;
         Some(self.shared.lock().progress[i])
     }
 
@@ -1070,11 +1097,7 @@ fn finish(
             }]
         }
     };
-    if let Some(i) = TRACKED
-        .iter()
-        .position(|&l| l == level)
-        .filter(|_| !on_demand)
-    {
+    if let Some(i) = tracked_slot(level).filter(|_| !on_demand) {
         s.progress[i].done += 1;
         events.push(Event::Progress {
             generation,

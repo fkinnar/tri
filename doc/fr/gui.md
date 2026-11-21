@@ -218,6 +218,18 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `gui/src/position_bar.rs` (`Position::layout`, `split`), segments par
   `Stacks::photos_per_group` (développements comptés avec leur photo). Épaisseur
   `thickness`.
+- **Palette de couleurs** (section « Palette » du panneau de droite, #492, 21/11/2026),
+  en grille et en plein écran, en bas du panneau. Une **source** au choix
+  (`palette_source` de l'état d'affichage, retenue) : aucune (par défaut : rien ne se
+  calcule), JPEG boîtier, données brutes (LibRaw), rendus finis ; choisie, les palettes du
+  dossier se calculent en fond (`Scheduler::set_palette`, avancement « palettes » dans la
+  barre d'état). Pour l'image sélectionnée : la **bande** des couleurs, chacune aussi
+  large que sa part (survol : `#rrggbb` et part ; clic : copie), la **roue chromatique**
+  (teinte en angle, chroma en racine du rayon pour étaler les couleurs peu saturées d'une
+  photo, taille selon la part) et la liste des couleurs. Une image sans rendu fini (pas un
+  développement) le dit. Lecture du cache en fond, la dernière demandée d'abord
+  (`palette_reads`), comme l'histogramme. Dessin dans `gui/src/palette_view.rs`. À venir :
+  « palettes proches » (filtre et tri, curseur de seuil) et « contient cette couleur ».
 - **Bout de la pile ou de la liste** (`[gui.end]`, #307, 05/11/2026) : en plein écran,
   ← / → qui ne bougent plus le disent un instant, dans le même cadre que le repère de
   position (« Fin de la pile », « Début de la pile », « Fin de la sélection », « Début

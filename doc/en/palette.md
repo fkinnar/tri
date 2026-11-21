@@ -73,6 +73,11 @@ source), a finished render only exists for a development of the list.
 `preview::palette` reads the cache. Background computation: see
 [scheduler.md](scheduler.md).
 
+## Interface
+
+"Palette" section of the right panel: source picker, band, wheel and colours of the
+selected image, progress in the status bar; see [gui.md](gui.md).
+
 ## Command line
 
 `tri <folder> --palette [--source camera|raw|developed]`: each image, its `#rrggbb`

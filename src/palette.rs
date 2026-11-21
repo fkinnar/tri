@@ -21,7 +21,7 @@
 //! Les images arrivent dans l'espace de travail de `tri` ([`crate::colour`] : primaires
 //! Rec.2020, courbe sRGB) ; OKLab est calculé depuis la lumière linéaire.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::bitmap::Bitmap;
 use crate::colour;
@@ -45,7 +45,7 @@ pub enum Source {
 /// Source choisie dans l'interface ou en ligne de commande : le logiciel d'un rendu fini
 /// est celui de chaque développement. Dans un fichier : `"camera"`, `"raw"`,
 /// `"developed"`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SourceKind {
     /// JPEG boîtier.
