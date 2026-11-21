@@ -24,6 +24,7 @@ existe.
 | [colour-check.md](colour-check.md) ([English](../en/colour-check.md)) | Vérifier les couleurs : fiche pour les testeurs, avec les mires de `doc/charts` |
 | [colour.md](colour.md) | Module `tri::colour` : gestion des couleurs (espace de travail, profils des sources, écran) |
 | [preview.md](preview.md) | Module `tri::preview` : calcul des vignettes et aperçus |
+| [compute.md](compute.md) | Module `tri::compute` : calculs choisis sur un dossier, en fond |
 | [scheduler.md](scheduler.md) | Module `tri::scheduler` : file de travail en fond |
 | [jpeg.md](jpeg.md) | Module `tri::jpeg` : JPEG rapide (libjpeg-turbo, repli pur Rust) |
 | [exposure.md](exposure.md) | Module `tri::exposure` : histogrammes sur les données du capteur, saturés / bouchés, masque |

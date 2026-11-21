@@ -151,6 +151,9 @@ struct Args {
     /// Palettes de couleurs (`--palette`), de la source `--source` (#492).
     palette: bool,
     palette_source: Option<tri::palette::SourceKind>,
+    /// Calculs choisis (`--compute previews,palette-raw…`, #555), et `--recreate`.
+    compute: Vec<tri::compute::Kind>,
+    recreate: bool,
     threshold: Option<f32>,
     offload: Option<PathBuf>,
     to: Option<PathBuf>,
@@ -483,6 +486,15 @@ fn parse() -> AnyResult<Args> {
             "--sharpness" => args.sharpness = true,
             "--groups" => args.groups = true,
             "--palette" => args.palette = true,
+            "--compute" => {
+                let text = value()?;
+                for part in text.split(',').filter(|p| !p.trim().is_empty()) {
+                    let kind = tri::compute::Kind::parse(part)
+                        .ok_or_else(|| t!("cli-compute-bad-kind", kind = part.trim()))?;
+                    args.compute.push(kind);
+                }
+            }
+            "--recreate" => args.recreate = true,
             "--source" => {
                 let text = value()?;
                 args.palette_source = Some(
@@ -1080,6 +1092,57 @@ fn palettes(
         }
     }
     println!("{}", t!("cli-palette-summary", n = done));
+    Ok(())
+}
+
+/// Calculs choisis sur le dossier `dir` (#555), l'un après l'autre : ce qui est en cache
+/// est sauté, sauf avec `recreate` (effacé d'abord). Rendus des logiciels de
+/// développement : ceux des logiciels installés.
+fn compute(
+    settings: &EngineSettings,
+    dir: &Path,
+    files: &[tri::media::MediaFile],
+    kinds: &[tri::compute::Kind],
+    recreate: bool,
+) -> AnyResult<()> {
+    let cache = settings.open_cache()?;
+    let producer = CachedPreviews {
+        cache: cache.clone(),
+        settings: settings.preview(None),
+        developers: tri::develop::Developers::find(
+            &settings.develop,
+            &cache.root().join("develop"),
+            settings.develop.high_quality,
+        )
+        .into(),
+    };
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    for &kind in kinds {
+        if recreate {
+            tri::compute::clear(&cache, dir, kind)?;
+        }
+        let start = Instant::now();
+        let id = kind.id();
+        let step = |done: usize, total: usize| {
+            eprint!("\r{id} : {done}/{total}");
+        };
+        let s = tri::compute::run(files, kind, &producer, &cancel, &step);
+        eprintln!();
+        println!(
+            "{}",
+            t!(
+                "cli-compute-summary",
+                kind = id.as_str(),
+                computed = s.computed,
+                cached = s.cached,
+                failed = s.failed,
+                seconds = format!("{:.1}", start.elapsed().as_secs_f64())
+            )
+        );
+        if let Some(e) = s.error {
+            eprintln!("{}", t!("cli-error-detail", error = e));
+        }
+    }
     Ok(())
 }
 
@@ -2184,6 +2247,10 @@ fn run() -> AnyResult<()> {
     if args.groups {
         let files: Vec<_> = groups.into_iter().flatten().collect();
         return similarity_groups(&settings, &files, args.threshold);
+    }
+    if !args.compute.is_empty() {
+        let files: Vec<_> = groups.into_iter().flatten().collect();
+        return compute(&settings, &dir, &files, &args.compute, args.recreate);
     }
     if args.palette {
         let files: Vec<_> = groups.into_iter().flatten().collect();

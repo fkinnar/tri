@@ -321,7 +321,7 @@ type Job = (usize, Level);
 
 /// Vrai si la tâche passe par le worker lourd (LibRaw : rendu, ou décompression pour
 /// l'analyse d'exposition, elle aussi parallélisée en interne).
-fn is_heavy(kind: MediaKind, level: Level) -> bool {
+pub fn is_heavy(kind: MediaKind, level: Level) -> bool {
     // Développé : un logiciel externe qui occupe toute la machine, RAW ou image plate.
     // Palette : celle d'un rendu RAW ou d'un logiciel peut devoir le faire d'abord.
     matches!(
@@ -454,6 +454,9 @@ struct State {
     running: Vec<Running>,
     progress: [Progress; 7],
     paused: bool,
+    /// Travail de fond en attente (#555) : un calcul demandé explicitement sur un dossier
+    /// passe d'abord ; l'image affichée, ses voisines et les vignettes visibles continuent.
+    background_paused: bool,
     shutdown: bool,
     /// Événements en attente de livraison, dans l'ordre où ils se sont produits.
     outbox: VecDeque<Event>,
@@ -497,11 +500,15 @@ impl State {
             EXPOSURE_BACKGROUND | STANDARD_BACKGROUND => thumbnails_left || embedded_left,
             _ => false,
         };
+        let background_paused = self.background_paused;
         let job = *self
             .pending
             .iter()
             .filter(|(i, l)| is_heavy(self.files[*i].kind, *l) == heavy)
-            .filter(|job| !blocked(priority_in(**job, focus, group, visible).0))
+            .filter(|job| {
+                let class = priority_in(**job, focus, group, visible).0;
+                !blocked(class) && !(background_paused && class >= EMBEDDED_BACKGROUND)
+            })
             .min_by_key(|job| (priority_in(**job, focus, group, visible), job.0))?;
         self.pending.remove(&job);
         let cancel = Arc::new(AtomicBool::new(false));
@@ -840,6 +847,15 @@ impl Scheduler {
     /// reprend le travail.
     pub fn set_paused(&self, paused: bool) {
         self.shared.lock().paused = paused;
+        self.shared.work.notify_all();
+        self.shared.idle.notify_all();
+    }
+
+    /// Met en attente (ou reprend) le travail de fond du dossier (#555) : un calcul
+    /// demandé explicitement passe d'abord. L'image affichée, ses voisines et les
+    /// vignettes restent servies.
+    pub fn set_background_paused(&self, paused: bool) {
+        self.shared.lock().background_paused = paused;
         self.shared.work.notify_all();
         self.shared.idle.notify_all();
     }

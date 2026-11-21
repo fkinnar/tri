@@ -432,6 +432,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `Ctrl+A` / `Ctrl+Maj+A`, Maj+clic (plage), Cmd/Ctrl+clic (ajout / retrait) ; Échap
   désélectionne avant de quitter le plein écran. Notes, corbeille et éditeur s'appliquent
   aux images sélectionnées visibles. Cadre orange (`[gui.colors] marked`).
+- **Calculer** (clic droit sur un dossier, #555, 21/11/2026, voir `compute.md`) : vignettes
+  et aperçus boîtier, rendus RAW, histogrammes, netteté, empreintes des piles, palettes
+  (JPEG boîtier, données brutes, rendus de chaque logiciel installé), « Tout calculer »,
+  « Tout recalculer ». Chacun une action, une tâche en fond avec sa ligne et son bouton
+  d'arrêt dans la barre d'état (`compute_tasks.rs`) ; le fond du dossier ouvert attend.
+  Sur la sélection aussi : boîte du clic droit sur une image, où les actions de notes
+  (sidecars, notes inscrites) et les calculs sont des listes de texte (« Notes »,
+  « Calculer », « Développer avec »), plus lisibles que des icônes (21/11/2026).
 - **Développé dans darktable** (19/10/2026, voir `develop.md` ; tout un dossier en fond :
   `Ctrl+Maj+B` ou le clic droit sur un dossier, 25/10/2026, issue n° 69 ; le dossier
   lui-même s'ouvre dans Darktable par le clic droit « Ouvrir dans Darktable » ou `d` dans

@@ -13,6 +13,7 @@
 //! - [`raw`] : lecture et développement des RAW via LibRaw ;
 //! - [`preview`] : calcul des vignettes, aperçus et rendus 1:1 ;
 //! - [`scheduler`] : file de travail en tâche de fond, priorités, progression ;
+//! - [`compute`] : calculs choisis sur un dossier (aperçus, histogrammes, palettes…) ;
 //! - [`settings`] : fichier de configuration (TOML), emplacement et lecture ;
 //! - [`xmp`] : notes de tri (étoiles, couleurs, accepté / rejeté) dans les sidecars XMP ;
 //! - [`metadata`] : métadonnées de prise de vue (LibRaw, EXIF), lignes à afficher ;
@@ -30,6 +31,7 @@ pub mod bitmap;
 pub mod cache;
 pub mod colour;
 pub mod commands;
+pub mod compute;
 pub mod config_edit;
 pub mod develop;
 pub mod developments;

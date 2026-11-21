@@ -96,6 +96,12 @@ toujours. Ainsi la grille, puis tout le dossier en plein écran, sont disponible
 avant de lancer les rendus LibRaw qui occupent tous les cœurs. Chaque tâche terminée réveille les workers, pour qu'ils reprennent les aperçus
 dès que la dernière vignette est faite.
 
+## Fond en attente (#555)
+
+`set_background_paused` : le travail de fond (classes à partir des aperçus boîtier de
+fond) attend ; l'image affichée, ses voisines et les vignettes passent toujours. Un calcul
+demandé sur un dossier ([compute.md](compute.md)) passe ainsi d'abord.
+
 ## Ce qui est déjà en cache passe tout de suite (issue n° 428)
 
 Un fil de plus, le **balayeur** (`tri-cache`), ne calcule rien : il prend les tâches en

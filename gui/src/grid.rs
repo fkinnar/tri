@@ -188,6 +188,9 @@ pub fn navigate(
         | Action::Sidecars
         | Action::EmbedNotes
         | Action::ImportNotes
+        | Action::Compute(_)
+        | Action::ComputeAll
+        | Action::RecreateAll
         | Action::ZoomIn
         | Action::ZoomOut
         | Action::ZoomFit
@@ -218,6 +221,9 @@ pub fn navigate(
         | Action::FolderCacheClear
         | Action::FolderReset
         | Action::FolderOpenIn(_)
+        | Action::FolderCompute(_)
+        | Action::FolderComputeAll
+        | Action::FolderRecreateAll
         | Action::FolderCopy
         | Action::FolderMove
         | Action::MetaOpen

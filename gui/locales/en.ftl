@@ -1383,6 +1383,62 @@ folder-menu-adjust = Auto adjustments
 folder-group-open = Access
 folder-group-files = Folder
 folder-group-notes = Ratings
+action-core-folders-compute-previews = Folders: compute the thumbnails and camera previews of the pointed folder
+action-core-folders-compute-raw = Folders: compute the RAW renders of the pointed folder
+action-core-folders-compute-exposure = Folders: compute the histograms of the pointed folder
+action-core-folders-compute-sharpness = Folders: compute the sharpness of the pointed folder
+action-core-folders-compute-signatures = Folders: compute the stack signatures of the pointed folder
+action-core-folders-compute-palette_camera = Folders: compute the palettes (camera JPEG) of the pointed folder
+action-core-folders-compute-palette_raw = Folders: compute the palettes (raw data) of the pointed folder
+action-plugin-darktable-compute_palettes = Folders: compute the palettes of the Darktable renders of the pointed folder
+action-plugin-rapidraw-compute_palettes = Folders: compute the palettes of the RapidRAW renders of the pointed folder
+action-plugin-rawtherapee-compute_palettes = Folders: compute the palettes of the RawTherapee renders of the pointed folder
+action-plugin-art-compute_palettes = Folders: compute the palettes of the ART renders of the pointed folder
+action-core-folders-compute-all = Folders: compute everything for the pointed folder (what is missing)
+action-core-folders-compute-recreate_all = Folders: compute everything again for the pointed folder, even what is cached
+action-core-file-compute-previews = Compute the thumbnails and camera previews of the selection
+action-core-file-compute-raw = Compute the RAW renders of the selection
+action-core-file-compute-exposure = Compute the histograms of the selection
+action-core-file-compute-sharpness = Compute the sharpness of the selection
+action-core-file-compute-signatures = Compute the stack signatures of the selection
+action-core-file-compute-palette_camera = Compute the palettes (camera JPEG) of the selection
+action-core-file-compute-palette_raw = Compute the palettes (raw data) of the selection
+action-plugin-darktable-compute_image_palettes = Compute the palettes of the Darktable renders of the selection
+action-plugin-rapidraw-compute_image_palettes = Compute the palettes of the RapidRAW renders of the selection
+action-plugin-rawtherapee-compute_image_palettes = Compute the palettes of the RawTherapee renders of the selection
+action-plugin-art-compute_image_palettes = Compute the palettes of the ART renders of the selection
+action-core-file-compute-all = Compute everything for the selection (what is missing)
+action-core-file-compute-recreate_all = Compute everything again for the selection, even what is cached
+compute-images = { $n ->
+    [one] 1 image
+   *[other] { $n } images
+}
+rating-dialog-notes = Ratings
+rating-dialog-notes-choose = Sidecars, embedded ratings…
+rating-dialog-compute = Compute
+rating-dialog-compute-choose = Previews, palettes…
+folder-group-compute = Compute
+folder-menu-compute-palettes = Palettes
+folder-menu-compute-all = Compute everything
+folder-menu-compute-recreate-all = Compute everything again
+folder-menu-compute-recreate-all-tip = Even what is already cached
+compute-previews = Thumbnails and camera previews
+compute-raw = RAW renders
+compute-exposure = Histograms
+compute-sharpness = Sharpness
+compute-signatures = Stack signatures
+compute-palette-camera = Palettes  camera JPEG
+compute-palette-raw = Palettes  raw data
+compute-palette-developed = Palettes  { $engine } renders
+compute-task-progress = { $what } · { $name }: { $done }/{ $total }
+compute-task-cancel = Stop this computation
+compute-task-done = { $what } · { $name }: { $computed } computed, { $cached } already cached{ $failed ->
+    [0] {""}
+   *[other] , { $failed } failed
+}
+compute-task-error = { $what } · { $name }: { $error }
+compute-task-cancelled = { $what } · { $name }: stopped
+compute-task-running = { $what } is already running for { $name }
 folder-group-develop = Development
 folder-group-preferences = Preferences
 menu-group-inline = Show this group at the top level of the menu

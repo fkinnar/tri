@@ -1383,6 +1383,62 @@ folder-menu-adjust = Réglages auto
 folder-group-open = Accès
 folder-group-files = Dossier
 folder-group-notes = Notes
+action-core-folders-compute-previews = Dossiers : calculer les vignettes et aperçus boîtier du dossier pointé
+action-core-folders-compute-raw = Dossiers : calculer les rendus RAW du dossier pointé
+action-core-folders-compute-exposure = Dossiers : calculer les histogrammes du dossier pointé
+action-core-folders-compute-sharpness = Dossiers : calculer la netteté du dossier pointé
+action-core-folders-compute-signatures = Dossiers : calculer les empreintes des piles du dossier pointé
+action-core-folders-compute-palette_camera = Dossiers : calculer les palettes (JPEG boîtier) du dossier pointé
+action-core-folders-compute-palette_raw = Dossiers : calculer les palettes (données brutes) du dossier pointé
+action-plugin-darktable-compute_palettes = Dossiers : calculer les palettes des rendus Darktable du dossier pointé
+action-plugin-rapidraw-compute_palettes = Dossiers : calculer les palettes des rendus RapidRAW du dossier pointé
+action-plugin-rawtherapee-compute_palettes = Dossiers : calculer les palettes des rendus RawTherapee du dossier pointé
+action-plugin-art-compute_palettes = Dossiers : calculer les palettes des rendus ART du dossier pointé
+action-core-folders-compute-all = Dossiers : tout calculer pour le dossier pointé (ce qui manque)
+action-core-folders-compute-recreate_all = Dossiers : tout recalculer pour le dossier pointé, même ce qui est en cache
+action-core-file-compute-previews = Calculer les vignettes et aperçus boîtier de la sélection
+action-core-file-compute-raw = Calculer les rendus RAW de la sélection
+action-core-file-compute-exposure = Calculer les histogrammes de la sélection
+action-core-file-compute-sharpness = Calculer la netteté de la sélection
+action-core-file-compute-signatures = Calculer les empreintes des piles de la sélection
+action-core-file-compute-palette_camera = Calculer les palettes (JPEG boîtier) de la sélection
+action-core-file-compute-palette_raw = Calculer les palettes (données brutes) de la sélection
+action-plugin-darktable-compute_image_palettes = Calculer les palettes des rendus Darktable de la sélection
+action-plugin-rapidraw-compute_image_palettes = Calculer les palettes des rendus RapidRAW de la sélection
+action-plugin-rawtherapee-compute_image_palettes = Calculer les palettes des rendus RawTherapee de la sélection
+action-plugin-art-compute_image_palettes = Calculer les palettes des rendus ART de la sélection
+action-core-file-compute-all = Tout calculer pour la sélection (ce qui manque)
+action-core-file-compute-recreate_all = Tout recalculer pour la sélection, même ce qui est en cache
+compute-images = { $n ->
+    [one] 1 image
+   *[other] { $n } images
+}
+rating-dialog-notes = Notes
+rating-dialog-notes-choose = Sidecars, notes inscrites…
+rating-dialog-compute = Calculer
+rating-dialog-compute-choose = Aperçus, palettes…
+folder-group-compute = Calculer
+folder-menu-compute-palettes = Palettes
+folder-menu-compute-all = Tout calculer
+folder-menu-compute-recreate-all = Tout recalculer
+folder-menu-compute-recreate-all-tip = Même ce qui est déjà en cache
+compute-previews = Vignettes et aperçus boîtier
+compute-raw = Rendus RAW
+compute-exposure = Histogrammes
+compute-sharpness = Netteté
+compute-signatures = Empreintes des piles
+compute-palette-camera = Palettes  JPEG boîtier
+compute-palette-raw = Palettes  données brutes
+compute-palette-developed = Palettes  rendus { $engine }
+compute-task-progress = { $what } · { $name } : { $done }/{ $total }
+compute-task-cancel = Arrêter ce calcul
+compute-task-done = { $what } · { $name } : { $computed } calculées, { $cached } déjà en cache{ $failed ->
+    [0] {""}
+   *[other] , { $failed } en échec
+}
+compute-task-error = { $what } · { $name } : { $error }
+compute-task-cancelled = { $what } · { $name } : arrêté
+compute-task-running = { $what } est déjà en cours pour { $name }
 folder-group-develop = Développement
 folder-group-preferences = Préférences
 menu-group-inline = Mettre ce groupe au premier niveau du menu
