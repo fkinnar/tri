@@ -6249,9 +6249,14 @@ impl TriApp {
                                     for kind in self.compute_palette_kinds() {
                                         let label = crate::compute_tasks::kind_label(kind);
                                         // Sans « Palettes » devant : le sous-titre le dit.
+                                        // (« Palettes  données brutes » : « Données brutes ».)
                                         let short = label
                                             .split_once("  ")
                                             .map_or(label.clone(), |(_, s)| s.to_string());
+                                        let mut chars = short.chars();
+                                        let short = chars.next().map_or(short.clone(), |c| {
+                                            c.to_uppercase().chain(chars).collect()
+                                        });
                                         entry(ui, Action::FolderCompute(kind), short);
                                     }
                                     ui.separator();
@@ -36075,6 +36080,11 @@ mod tests {
         ] {
             assert!(h.query_by_label(&t!(id)).is_some(), "{id}");
         }
+        // Sous « Palettes », une majuscule : « Données brutes ».
+        let raw = t!("compute-palette-raw");
+        let raw = raw.split_once("  ").unwrap().1;
+        let raw: String = raw[..1].to_uppercase() + &raw[1..];
+        assert!(h.query_by_label(&raw).is_some(), "{raw}");
         h.get_by_label(&t!("compute-signatures")).click();
         h.run_steps(2);
         assert_eq!(h.state().compute_next, 1);
