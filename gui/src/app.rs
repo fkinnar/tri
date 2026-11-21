@@ -3976,14 +3976,14 @@ impl TriApp {
                             radius,
                             dialog.oklab[0],
                         ) {
-                            dialog.set(tri::palette::gamut_map(c));
+                            dialog.set(c);
                         }
                     }
                     let swatch = tri::palette::Swatch {
                         oklab: dialog.oklab,
                         share: 0.0,
                     };
-                    let at = crate::palette_view::wheel_pos(&swatch, rect.center(), radius);
+                    let at = crate::palette_view::picker_pos(dialog.oklab, rect.center(), radius);
                     ui.painter()
                         .circle_stroke(at, 6.0, egui::Stroke::new(2.0, Color32::WHITE));
                     ui.painter()
@@ -4031,7 +4031,13 @@ impl TriApp {
                         let mut l = dialog.oklab[0];
                         ui.add(FineSlider::new(&mut l, 0.0..=1.0).width(width));
                         if l != dialog.oklab[0] {
-                            dialog.set([l, dialog.oklab[1], dialog.oklab[2]]);
+                            // Plus clair ou plus sombre, la même saturation n'est pas
+                            // toujours affichable : ramenée dans le gamut.
+                            dialog.set(tri::palette::gamut_map([
+                                l,
+                                dialog.oklab[1],
+                                dialog.oklab[2],
+                            ]));
                         }
                         ui.add_space(8.0);
                         // R V B.

@@ -497,6 +497,14 @@ pub fn gamut_map(oklab: [f32; 3]) -> [f32; 3] {
     [l, a * lo, b * lo]
 }
 
+/// Chroma le plus fort affichable en sRGB à la clarté `lightness` et la teinte `hue`
+/// (radians) : le bord de la roue du sélecteur de couleur.
+pub fn max_chroma(lightness: f32, hue: f32) -> f32 {
+    let far = 0.5;
+    let [_, a, b] = gamut_map([lightness, far * hue.cos(), far * hue.sin()]);
+    a.hypot(b)
+}
+
 /// Un pixel 8 bits de l'espace de travail, en OKLab.
 pub fn working_to_oklab(rgb: [u8; 3]) -> [f32; 3] {
     let linear = rgb.map(|c| decode_srgb(f32::from(c) / 255.0));
