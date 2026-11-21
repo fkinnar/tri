@@ -92,6 +92,17 @@ image), searches in the Filter section (similar palettes, colour); see [gui.md](
 Sources (`SourceKind`): `camera`, `raw`, or a program (`darktable`…) for its
 developments; the former `developed` reads back as `darktable`.
 
+## Stacking by palette
+
+The user's idea (2026-11-21), after a trial on a real session: mixing the palette into
+the burst signature added no cut (between neighbours of one session, 0.01 to 0.03). As a
+**criterion of its own** ("Stack: by palette (series)", under "Stack automatically",
+kept per folder: `similarity::folder_by_palette`), it separates **series** (one light, one
+background) rather than bursts. `stack_links`: the distance of neighbouring palettes
+divided by `[palette] stack_scale` (0.5, capped at 1) takes the signatures' scale, which
+the stacks slider and its computed centre are set on; **without the time** (a series is
+one light, not one moment: fully left, everything joins); an unknown palette cuts. Without a chosen palette source, the camera JPEG.
+
 ## Command line
 
 `tri <folder> --palette [--source camera|raw|darktable|…]`: each image, its `#rrggbb`

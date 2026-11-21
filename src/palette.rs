@@ -165,6 +165,9 @@ pub struct PaletteSettings {
     pub mono_chroma: f32,
     /// Chroma au plus d'une image monochrome teintée (sépia, virage).
     pub mono_toned_chroma: f32,
+    /// Empiler par palette : distance entre palettes ramenée à l'échelle des empreintes
+    /// (divisée par cette valeur, bornée à 1), sur laquelle le curseur des piles est calé.
+    pub stack_scale: f32,
     /// Écart de teintes au plus (degrés) d'une image monochrome teintée : ses couleurs
     /// suivent une seule teinte.
     pub mono_hue_spread: f32,
@@ -186,6 +189,7 @@ impl Default for PaletteSettings {
             colour_min_share: 0.02,
             mono_chroma: 0.03,
             mono_toned_chroma: 0.08,
+            stack_scale: 0.5,
             mono_hue_spread: 15.0,
         }
     }
@@ -495,6 +499,37 @@ pub fn gamut_map(oklab: [f32; 3]) -> [f32; 3] {
         }
     }
     [l, a * lo, b * lo]
+}
+
+/// Liens entre images voisines pour **empiler par palette** (#492, idée de l'utilisateur,
+/// 21/11/2026 : séparer les séries, un éclairage, un fond, plutôt que les rafales) : la
+/// distance de leurs palettes ramenée à l'échelle des empreintes (`settings.stack_scale`),
+/// avec l'écart de temps de prise de vue (`times`, de leurs empreintes). Une palette
+/// inconnue : pas de lien (coupé, comme une empreinte manquante).
+pub fn stack_links(
+    palettes: &[Option<&Palette>],
+    times: &[Option<i64>],
+    settings: &PaletteSettings,
+) -> Vec<Option<crate::similarity::Link>> {
+    palettes
+        .windows(2)
+        .enumerate()
+        .map(|(i, w)| {
+            let (a, b) = (w[0]?, w[1]?);
+            let d = distance(a, b, settings.chroma_weight);
+            let gap_s = match (
+                times.get(i).copied().flatten(),
+                times.get(i + 1).copied().flatten(),
+            ) {
+                (Some(x), Some(y)) => Some((y - x).abs() as f32),
+                _ => None,
+            };
+            Some(crate::similarity::Link {
+                distance: (d / settings.stack_scale.max(1e-6)).min(1.0),
+                gap_s,
+            })
+        })
+        .collect()
 }
 
 /// Clé du seuil « palettes proches » retenu par dossier.
@@ -873,6 +908,25 @@ mod tests {
         );
         let grey = [0.5, 0.0, 0.0];
         assert_eq!(gamut_map(grey), grey, "déjà dedans");
+    }
+
+    #[test]
+    fn stack_links_scale_palette_distances_and_cut_on_unknown() {
+        let s = PaletteSettings::default();
+        let blue = extract(&bands(&[([30, 60, 200], 10)]), &s);
+        let red = extract(&bands(&[([220, 40, 40], 10)]), &s);
+        let links = stack_links(
+            &[Some(&blue), Some(&blue), Some(&red), None],
+            &[Some(0), Some(2), Some(100), None],
+            &s,
+        );
+        assert_eq!(links.len(), 3);
+        let l0 = links[0].unwrap();
+        assert_eq!((l0.distance, l0.gap_s), (0.0, Some(2.0)));
+        let l1 = links[1].unwrap();
+        assert!(l1.distance > 0.3 && l1.distance <= 1.0, "{l1:?}");
+        assert_eq!(l1.gap_s, Some(98.0));
+        assert!(links[2].is_none(), "palette inconnue : coupé");
     }
 
     #[test]

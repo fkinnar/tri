@@ -616,6 +616,12 @@ mono_toned_chroma = 0.08
 # Hue spread at most (degrees) of a toned monochrome image: its colours follow a single
 # hue.
 mono_hue_spread = 15.0
+# Stacking by palette: distance between palettes brought to the signatures' scale.
+#
+# Stacking by palette (series rather than bursts): the distance between two palettes,
+# divided by this value (capped at 1), takes the signatures' scale, which the stacks
+# slider is set on.
+stack_scale = 0.5
 
 [similarity]
 # Group similar images (bursts, series) into stacks in the background.
@@ -665,8 +671,8 @@ strictness_curve = 2.0
 # Bounds of the "Slider progression" slider: from 1 / strictness_curve_max to
 # strictness_curve_max.
 strictness_curve_max = 4.0
-# Capture time gap beyond which two neighbouring images are never
-# grouped (seconds; 0: no limit).
+# Capture time gap beyond which two neighbouring images are only
+# grouped fully to the left of the slider (seconds; 0: no limit).
 max_gap_s = 60.0
 # Weight of the pauses between two shots when stacking.
 #

@@ -23,7 +23,9 @@ mean colour difference (×4, capped: a 10 % difference is already very visible).
 
 Images are taken **in grid order** (that of the shoot): two neighbours belong to the same
 group if their distance is below the threshold (`threshold`, 0.25 by default) and their
-time gap below `max_gap_s` (60 s; 0: no limit). `distances` computes the links between
+time gap below `max_gap_s` (60 s; 0: no limit). In the interface, a link past the gap
+only joins fully to the left of the slider (`gap_last`, 2026-11-21: on a selection,
+neighbours are often more than 10 min apart, nothing joined). `distances` computes the links between
 neighbours once; `group` is then just a walk through the list: instantaneous, hence the
 live slider. An unknown link (signature not yet computed) breaks the group.
 
@@ -59,7 +61,8 @@ double-click: back to the middle.
   down to none; towards the left, up to `centre × span` (up to grouping everything since 2026-11-06,
   see below). Simulated on six real shoots:
   fully to the right, 9 to 40 stacks remained with the geometric threshold, none now.
-  Fewer than `min` links: `with_strictness`.
+  Fewer than `min` links: `with_strictness`, but the ends always reach "all joined"
+  and "nothing joined" (2026-11-21: 8 photos, stacks remained fully to the left).
 - `folder_strictness` / `remember_strictness`: the chosen strictness, remembered for each
   folder (key `group-strictness` of the folder's `tuning.json`, [store.md](store.md)); in
   the middle, it is forgotten. The
