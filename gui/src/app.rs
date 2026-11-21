@@ -9164,10 +9164,17 @@ impl TriApp {
 
     fn regroup(&mut self) {
         let s = &self.settings.similarity;
+        // Un développement prend l'empreinte de sa photo (retour du 21/11/2026 : sans
+        // empreinte, le lien du développement à la photo suivante était inconnu, donc coupé,
+        // et il restait des piles à fond à gauche).
         let signatures: Vec<Option<&tri::similarity::Signature>> = self
             .files
             .iter()
-            .map(|f| self.signatures.get(&f.path))
+            .map(|f| {
+                self.signatures.get(&f.path).or_else(|| {
+                    tri::developments::get(&f.path).and_then(|d| self.signatures.get(&d.photo))
+                })
+            })
             .collect();
         // Filtre « pile courante » (`f c`) : ses photos sont une seule pile. Regroupées à
         // part, avec un seuil recalculé sur elles seules, elles se coupaient (#163 : 11
@@ -9225,21 +9232,36 @@ impl TriApp {
             let camera = &self.camera_raw;
             let files = &self.files;
             let photo = |i: usize| camera_photo(camera, &files[i].path);
+            let same = |i: usize| photo(i) == photo(i + 1);
             let movable: Vec<Option<tri::similarity::Link>> = links
                 .iter()
                 .enumerate()
-                .map(|(i, l)| l.filter(|_| photo(i) != photo(i + 1)))
+                .map(|(i, l)| l.filter(|_| !same(i)))
                 .collect();
             // Centre calculé sur le contenu seul ; les pauses ne font que couper
-            // davantage (issue n° 306).
+            // davantage (issue n° 306). La cadence des pauses aussi, d'une photo à l'autre
+            // (les écarts nuls d'une photo à son développement la faussaient).
             self.group_centre = tri::similarity::suggested_threshold(&movable, s);
-            let links = tri::similarity::with_pauses(&links, self.group_pause_weight());
             let movable = tri::similarity::with_pauses(&movable, self.group_pause_weight());
             // Au-delà de l'écart de temps maximal : joints en dernier, à fond à gauche
             // seulement (retour du 21/11/2026).
-            let links = tri::similarity::gap_last(&links, self.group_gap);
             let movable = tri::similarity::gap_last(&movable, self.group_gap);
             self.group_distances = tri::similarity::distances_by_rank(&movable, 0.0);
+            // Une photo et son développement : toujours joints.
+            let links: Vec<Option<tri::similarity::Link>> = movable
+                .iter()
+                .enumerate()
+                .map(|(i, l)| {
+                    if same(i) {
+                        Some(tri::similarity::Link {
+                            distance: 0.0,
+                            gap_s: None,
+                        })
+                    } else {
+                        *l
+                    }
+                })
+                .collect();
             let ranges = tri::similarity::group(&links, self.group_threshold(), 0.0);
             if complete {
                 self.stacks_wait = None;
@@ -36261,6 +36283,51 @@ mod tests {
             h.state().filter_bar,
         );
         assert_eq!(after, before);
+    }
+
+    #[test]
+    fn fully_left_the_stacks_join_photos_and_their_developments_too() {
+        // Retour du 21/11/2026 : un développement n'a pas d'empreinte ; le lien vers la
+        // photo suivante était inconnu, donc coupé : il restait des piles à fond à gauche.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        for name in ["img0_01.jpg.xmp", "img1_01.jpg.xmp", "img2_01.jpg.xmp"] {
+            std::fs::write(
+                photos.join(name),
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
+            )
+            .unwrap();
+        }
+        h.state_mut().developers = fake_darktable();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 6);
+        let files = h.state().files.clone();
+        for (i, f) in files
+            .iter()
+            .filter(|f| !tri::media::is_development(&f.path))
+            .enumerate()
+        {
+            let sig = tri::similarity::Signature {
+                shape: (1u64 << (i * 7)) - 1,
+                colors: [90; 48],
+                time: Some(i as i64 * 3600),
+            };
+            h.state_mut().signatures.insert(f.path.clone(), sig);
+        }
+        h.state_mut().stacking = true;
+        h.state_mut().group_strictness = -1.0;
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(3);
+        assert_eq!(h.state().stacks.count(), 1, "tout empilé à fond à gauche");
+        h.state_mut().group_strictness = 1.0;
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(3);
+        assert_eq!(
+            h.state().stacks.count(),
+            3,
+            "une pile par photo à fond à droite"
+        );
     }
 
     #[test]
