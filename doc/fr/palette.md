@@ -95,6 +95,18 @@ sélectionnée), recherches dans la section Filtre (palettes proches, couleur) ;
 [gui.md](gui.md). Sources (`SourceKind`) : `camera`, `raw`, ou un logiciel (`darktable`…)
 pour ses développements ; `developed` d'avant se relit `darktable`.
 
+## Empiler par palette
+
+Idée de l'utilisateur (21/11/2026), après un essai sur une vraie séance : mêler la palette
+à l'empreinte des rafales n'ajoutait aucune coupure (entre voisines d'une même séance,
+0,01 à 0,03). En **critère à part** (« Empiler : par palette (séries) », sous « Empiler
+automatiquement », retenu par dossier : `similarity::folder_by_palette`), elle sépare les
+**séries** (un éclairage, un fond) plutôt que les rafales. `stack_links` : la distance des
+palettes voisines divisée par `[palette] stack_scale` (0,5, bornée à 1) prend l'échelle des
+empreintes, sur laquelle le curseur des piles et son centre calculé sont calés ; l'écart de
+temps vient des empreintes ; une palette inconnue coupe. Sans source de palette choisie,
+le JPEG boîtier.
+
 ## Ligne de commande
 
 `tri <dossier> --palette [--source camera|raw|darktable|…]` : chaque image, ses couleurs

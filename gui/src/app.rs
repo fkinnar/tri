@@ -426,6 +426,8 @@ struct Prepared {
     blur_strictness: Option<f32>,
     /// Seuil « palettes proches » et tolérance « couleur » retenus (#492).
     palette_threshold: Option<f32>,
+    /// Piles par palette (séries) plutôt que par ressemblance (#492).
+    stack_by_palette: bool,
     palette_radius: Option<f32>,
     clip_strictness: (Option<f32>, Option<f32>),
     pairs_decided: Option<bool>,
@@ -467,6 +469,7 @@ impl Prepared {
             group_gap: tri::similarity::folder_gap(data, dir),
             blur_strictness: tri::sharpness::folder_strictness(data, dir),
             palette_threshold: tri::palette::folder_threshold(data, dir),
+            stack_by_palette: tri::similarity::folder_by_palette(data, dir),
             palette_radius: tri::palette::folder_radius(data, dir),
             clip_strictness: (
                 clip(tri::exposure::Clip::Over),
@@ -1167,6 +1170,9 @@ pub struct TriApp {
     palettes: HashMap<(PathBuf, tri::palette::Source), Arc<Palette>>,
     /// « Palettes proches » en cours (#492).
     palette_like: Option<PaletteLike>,
+    /// Piles par palette, pour séparer les séries (#492, idée de l'utilisateur,
+    /// 21/11/2026), plutôt que par ressemblance (rafales) ; retenu par dossier.
+    stack_by_palette: bool,
     /// Seuil des palettes proches et tolérance de la couleur du dossier ouvert (retenus
     /// par dossier).
     palette_threshold: f32,
@@ -2204,6 +2210,7 @@ impl TriApp {
             palette_follow_grid: true,
             palettes: HashMap::new(),
             palette_like: None,
+            stack_by_palette: false,
             palette_threshold: settings.palette.similar_threshold,
             palette_radius: settings.palette.colour_radius,
             palette_refilter_pending: false,
@@ -2960,6 +2967,7 @@ impl TriApp {
             blur_strictness,
             palette_threshold,
             palette_radius,
+            stack_by_palette,
             clip_strictness,
             pairs_decided,
             stacks_memory,
@@ -2997,6 +3005,7 @@ impl TriApp {
                 let p = self.settings.palette;
                 self.palette_threshold = palette_threshold.unwrap_or(p.similar_threshold);
                 self.palette_radius = palette_radius.unwrap_or(p.colour_radius);
+                self.stack_by_palette = stack_by_palette;
                 self.clip_strictness = (
                     clip_strictness.0.unwrap_or(0.0),
                     clip_strictness.1.unwrap_or(0.0),
@@ -3779,6 +3788,25 @@ impl TriApp {
         let mut clicked: Vec<Action> = Vec::new();
         if self.stacking {
             ui.indent("stacks", |ui| {
+                // Par ressemblance (rafales) ou par palette (séries, #492).
+                let mut by_palette = self.stack_by_palette;
+                self.side_combo(
+                    ui,
+                    "stack_by",
+                    &mut by_palette,
+                    &[false, true],
+                    |p| {
+                        if p {
+                            t!("stack-by-palette").into()
+                        } else {
+                            t!("stack-by-similarity").into()
+                        }
+                    },
+                    Some(t!("stack-by-tip")),
+                );
+                if by_palette != self.stack_by_palette {
+                    self.set_stack_by_palette(by_palette);
+                }
                 let width = panel_slider_width(ui);
                 // Même logique que le flou (idée de l'utilisateur, 20/10/2026) : centre
                 // calculé d'après le dossier, à droite plus strict (petites piles).
@@ -4306,7 +4334,10 @@ impl TriApp {
         use crate::grid_render::GridRender;
         use tri::palette::SourceKind;
         if !self.palette_follow_grid {
-            return self.palette_manual;
+            // Empiler par palette en demande : le JPEG boîtier à défaut d'autre.
+            return self
+                .palette_manual
+                .or((self.stacking && self.stack_by_palette).then_some(SourceKind::Camera));
         }
         Some(match self.grid_render {
             GridRender::Embedded => SourceKind::Camera,
@@ -8978,16 +9009,70 @@ impl TriApp {
                 }))
     }
 
+    /// Empile par palette (séries) ou par ressemblance (rafales), retenu pour le dossier.
+    fn set_stack_by_palette(&mut self, on: bool) {
+        self.stack_by_palette = on;
+        self.stacks_dirty = true;
+        if !self.folder.is_none() {
+            let data = self.settings.data_dir();
+            let _ = tri::similarity::remember_by_palette(data.as_deref(), &self.folder.dir, on);
+        }
+        // La source des palettes en dépend (le JPEG boîtier à défaut d'autre).
+        let wanted = self.wanted_palette_source();
+        self.set_palette_source(wanted);
+    }
+
+    /// Vrai si les palettes de la source en vigueur sont toutes connues (annoncées par le
+    /// moteur, ou déjà là).
+    fn palettes_complete(&self) -> bool {
+        let p = self.progress[6];
+        let Some(kind) = self.palette_source else {
+            return true;
+        };
+        (p.total > 0 && p.done >= p.total)
+            || self.files.iter().all(|f| {
+                kind.source_for(f)
+                    .is_none_or(|src| self.palettes.contains_key(&(f.path.clone(), src)))
+            })
+    }
+
+    /// Liens entre images voisines pour empiler par palette (#492) : la distance de leurs
+    /// palettes, l'écart de temps tiré de leurs empreintes.
+    fn palette_stack_links(
+        &self,
+        signatures: &[Option<&tri::similarity::Signature>],
+    ) -> Vec<Option<tri::similarity::Link>> {
+        let Some(kind) = self.palette_source else {
+            return vec![None; self.files.len().saturating_sub(1)];
+        };
+        let palettes: Vec<Option<&Palette>> = self
+            .files
+            .iter()
+            .map(|f| {
+                let src = kind.source_for(f)?;
+                self.palettes
+                    .get(&(f.path.clone(), src))
+                    .map(|p| p.as_ref())
+            })
+            .collect();
+        let times: Vec<Option<i64>> = signatures.iter().map(|s| s.and_then(|s| s.time)).collect();
+        tri::palette::stack_links(&palettes, &times, &self.settings.palette)
+    }
+
     /// Empreinte de ce qui détermine les piles, en dehors des empreintes des images : la
     /// liste dans l'ordre de la grille, les curseurs et les réglages de similarité.
     fn stacks_key(&self) -> String {
         let params = format!(
-            "{:?}|{}|{}|{}|{}",
+            "{:?}|{}|{}|{}|{}|{}",
             self.settings.similarity,
             self.group_strictness,
             self.group_pauses,
             self.group_curve,
-            self.group_gap
+            self.group_gap,
+            match (self.stack_by_palette, self.palette_source) {
+                (true, Some(kind)) => format!("palette:{}", kind.id()),
+                _ => String::new(),
+            }
         );
         tri::similarity::stacks_key(self.files.iter().map(|f| f.path.as_path()), &params)
     }
@@ -9070,7 +9155,9 @@ impl TriApp {
         // Filtre « pile courante » (`f c`) : ses photos sont une seule pile. Regroupées à
         // part, avec un seuil recalculé sur elles seules, elles se coupaient (#163 : 11
         // photos en 1 + 10) ; le seuil du dossier reste celui de tout le dossier.
-        let complete = self.signatures_complete();
+        // Par palette (séries) : les palettes aussi, toutes là.
+        let by_palette = self.stack_by_palette && self.palette_source.is_some();
+        let complete = self.signatures_complete() && (!by_palette || self.palettes_complete());
         // Couvertures (notes, netteté) toutes connues : sinon, celles retenues.
         // (Netteté sans rien d'annoncé, analyse coupée : rien à attendre.)
         let settled = complete && self.loading.is_none() && {
@@ -9109,7 +9196,11 @@ impl TriApp {
             self.stacks_wait = None;
             ranges
         } else {
-            let links = tri::similarity::distances(&signatures, s.shape_weight);
+            let links = if by_palette {
+                self.palette_stack_links(&signatures)
+            } else {
+                tri::similarity::distances(&signatures, s.shape_weight)
+            };
             // Centre calculé sur le contenu seul ; les pauses ne font que couper
             // davantage (issue n° 306).
             self.group_centre = tri::similarity::suggested_threshold(&links, s);
@@ -10005,8 +10096,14 @@ impl TriApp {
         let mut scored = Vec::new();
         self.drain_engine(&mut scored);
         self.take_scores(scored);
-        if self.take_palette_reads() && self.palette_searching() {
-            self.palette_refilter_pending = true;
+        if self.take_palette_reads() {
+            if self.palette_searching() {
+                self.palette_refilter_pending = true;
+            }
+            // Piles par palette : refaites avec les palettes arrivées.
+            if self.stacking && self.stack_by_palette {
+                self.stacks_dirty = true;
+            }
         }
         self.palette_refilter();
         self.take_colour_pick();
@@ -26860,7 +26957,8 @@ mod tests {
         press(&mut h, Key::P, CMD | Modifiers::SHIFT);
         type_text(&mut h, "similarité");
         assert!(h.query_by_label(&t!("panel-grid-similarity")).is_some());
-        // La case, puis le curseur.
+        // La case, la liste « par ressemblance / par palette » (#492), puis le curseur.
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
         press(&mut h, Key::ArrowDown, Modifiers::NONE);
         press(&mut h, Key::ArrowDown, Modifiers::NONE);
         let before = h.state().group_strictness;
@@ -28551,6 +28649,45 @@ mod tests {
             .click();
         h.run_steps(3);
         assert!(h.state().palette_like.is_some(), "lancée de la barre");
+    }
+
+    #[test]
+    fn stacks_by_palette_separate_series_and_are_kept_per_folder() {
+        // #492, idée de l'utilisateur (21/11/2026) : empiler par palette, pour séparer les
+        // séries (éclairage, fond) plutôt que les rafales.
+        let colors = [
+            [30u8, 60, 200],
+            [32, 62, 202],
+            [220, 40, 40],
+            [222, 42, 40],
+            [30, 60, 200],
+        ];
+        let names = ["img0.jpg", "img1.jpg", "img2.jpg", "img3.jpg", "img4.jpg"];
+        let images = names
+            .iter()
+            .zip(colors)
+            .map(|(name, c)| (*name, image::RgbImage::from_pixel(64, 48, image::Rgb(c))))
+            .collect();
+        let (mut h, _dir) = harness_images(images);
+        h.run_steps(3);
+        h.state_mut().stacking = true;
+        h.state_mut().set_stack_by_palette(true);
+        assert_eq!(
+            h.state().palette_source,
+            Some(tri::palette::SourceKind::Camera),
+            "palettes de la grille"
+        );
+        // Les palettes toutes là (le mode palette ne prend aux empreintes que les heures).
+        run_until(&mut h, |app| app.palettes_complete() && !app.stacks_dirty);
+        h.run_steps(3);
+        assert_eq!(h.state().stacks.groups(), 3, "bleus, rouges, bleu");
+        // Rouvert : retenu.
+        let dir = h.state().folder.dir.clone();
+        h.state_mut().stack_by_palette = false;
+        h.state_mut().open_folder(&dir);
+        run_until(&mut h, |app| app.opening.is_none() && !app.files.is_empty());
+        h.run_steps(3);
+        assert!(h.state().stack_by_palette, "retenu pour le dossier");
     }
 
     #[test]

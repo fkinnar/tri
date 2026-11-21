@@ -339,6 +339,23 @@ pub fn group(
     groups
 }
 
+/// Clé du critère des piles retenu par dossier (1 : par palette, #492).
+const STACK_BY_PALETTE: &str = "stack-by-palette";
+
+/// Vrai si le dossier `dir` s'empile par palette (séries) plutôt que par ressemblance.
+pub fn folder_by_palette(data: Option<&std::path::Path>, dir: &std::path::Path) -> bool {
+    crate::store::value(data, dir, STACK_BY_PALETTE).is_some_and(|v| v > 0.5)
+}
+
+/// Retient le critère des piles de `dir` (par palette ou non).
+pub fn remember_by_palette(
+    data: Option<&std::path::Path>,
+    dir: &std::path::Path,
+    by_palette: bool,
+) -> std::io::Result<()> {
+    crate::store::set_value(data, dir, STACK_BY_PALETTE, by_palette.then_some(1.0))
+}
+
 /// Centre du curseur de sévérité pour les liens `links` d'un dossier : la coupure
 /// d'Otsu entre petites distances (même série) et grandes (changement de scène). Mesuré
 /// le 21/10/2026 sur trois vraies séances : 0,15 à 0,21 (seuil fixe : 0,25). Seuls

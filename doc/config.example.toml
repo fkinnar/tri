@@ -619,6 +619,12 @@ mono_toned_chroma = 0.08
 # Écart de teintes au plus (degrés) d'une image monochrome teintée : ses couleurs suivent
 # une seule teinte.
 mono_hue_spread = 15.0
+# Empiler par palette : distance entre palettes ramenée à l'échelle des empreintes.
+#
+# Empiler par palette (séries plutôt que rafales) : la distance entre deux palettes,
+# divisée par cette valeur (bornée à 1), prend l'échelle des empreintes, sur laquelle le
+# curseur des piles est calé.
+stack_scale = 0.5
 
 [similarity]
 # Regrouper en fond les images semblables (rafales, séries) en piles.
