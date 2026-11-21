@@ -1503,6 +1503,7 @@ palette-similar-count = { $n ->
 }
 palette-similar-end = Done
 palette-copy-tip = Click: copy
+palette-band = Palette colours
 palette-eyedropper = Eyedropper
 palette-eyedropper-tip = Then, on the image in full screen: click the colour to look for in the folder
 palette-eyedropper-view = In full screen only

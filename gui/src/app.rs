@@ -3887,15 +3887,17 @@ impl TriApp {
                 ui.add_space(4.0);
             }
         }
-        if picked.is_some() {
-            self.set_palette_colour(picked);
-        }
+        let main_path = self.files[main].path.clone();
+        // La couleur cliquée : cherchée tout à la fin, la recherche refiltre la liste et les
+        // rangs ci-dessus n'y vaudraient plus (plantage du 21/11/2026 : 17 images → 5).
         let Some(palette) = main_palette else {
             self.palette_like_controls(ui, None);
             self.palette_colour_controls(ui);
+            if picked.is_some() {
+                self.set_palette_colour(picked);
+            }
             return;
         };
-        let main_path = self.files[main].path.clone();
         let width = ui.available_width();
         ui.add_space(6.0);
         ui.horizontal_top(|ui| {
@@ -3932,6 +3934,9 @@ impl TriApp {
         });
         self.palette_like_controls(ui, Some((main_path, palette)));
         self.palette_colour_controls(ui);
+        if picked.is_some() {
+            self.set_palette_colour(picked);
+        }
     }
 
     /// « Contient cette couleur » (#492) : la pipette (en plein écran) ou l'invitation à
@@ -4052,6 +4057,10 @@ impl TriApp {
             vec2(ui.available_width(), crate::palette_view::BAND_HEIGHT),
             Sense::click(),
         );
+        // Nom accessible (lecteurs d'écran, tests).
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::Role::Button, true, t!("palette-band"))
+        });
         let rects = crate::palette_view::draw_band(ui.painter(), band, palette);
         // La couleur cherchée, entourée.
         if let Some(c) = &self.palette_colour {
@@ -27765,6 +27774,37 @@ mod tests {
             "{got:?} contre {red:?}"
         );
         assert!(!h.state().palette_eyedropper, "désarmée après le relevé");
+    }
+
+    #[test]
+    fn clicking_a_colour_of_the_band_with_the_last_image_selected_does_not_crash() {
+        // Plantage du 21/11/2026 : la recherche lancée par le clic refiltrait la liste au
+        // milieu de la section, qui lisait ensuite l'image à son ancien rang (17 sur 5).
+        use tri::palette::{Source, SourceKind};
+        let colors = [[30u8, 60, 200], [220, 40, 40], [40, 70, 210]];
+        let images = ["img0.jpg", "img1.jpg", "img2.jpg"]
+            .iter()
+            .zip(colors)
+            .map(|(name, c)| (*name, image::RgbImage::from_pixel(64, 48, image::Rgb(c))))
+            .collect();
+        let (mut h, _dir) = harness_images(images);
+        h.state_mut().metadata_panel = true;
+        h.set_size(vec2(1400.0, 1400.0));
+        h.run_steps(3);
+        h.state_mut().set_palette_source(Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        // La dernière image (bleue) : la recherche ne garde que deux images, son rang (2)
+        // sort de la liste.
+        h.state_mut().selected = 2;
+        h.run_steps(3);
+        h.get_by_label(&t!("palette-band")).click();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_some(), "recherche lancée");
+        assert_eq!(h.state().files.len(), 2);
     }
 
     #[test]

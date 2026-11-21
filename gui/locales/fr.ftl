@@ -1503,6 +1503,7 @@ palette-similar-count = { $n ->
 }
 palette-similar-end = Terminer
 palette-copy-tip = Clic : copier
+palette-band = Couleurs de la palette
 palette-eyedropper = Pipette
 palette-eyedropper-tip = Puis, sur l'image en plein écran : cliquer sur la couleur à chercher dans le dossier
 palette-eyedropper-view = En plein écran seulement
