@@ -604,6 +604,21 @@ chroma_weight = 2.0
 similar_threshold = 0.12
 # Palettes proches : seuil au bout du curseur.
 similar_max = 0.5
+# Contient cette couleur : tolérance de départ (distance d'une couleur de la palette à la
+# couleur cherchée).
+colour_radius = 0.1
+# Contient cette couleur : tolérance au bout du curseur.
+colour_radius_max = 0.4
+# Contient cette couleur : les couleurs plus petites que cette part de l'image ne comptent pas.
+colour_min_share = 0.02
+# Chroma sous lequel une couleur est un gris : une image toute en gris est en noir et blanc,
+# jamais mélangée aux images en couleur dans les recherches.
+mono_chroma = 0.03
+# Chroma au plus d'une image monochrome teintée (sépia, virage).
+mono_toned_chroma = 0.08
+# Écart de teintes au plus (degrés) d'une image monochrome teintée : ses couleurs suivent
+# une seule teinte.
+mono_hue_spread = 15.0
 
 [similarity]
 # Regrouper en fond les images semblables (rafales, séries) en piles.

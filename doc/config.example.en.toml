@@ -601,6 +601,21 @@ chroma_weight = 2.0
 similar_threshold = 0.12
 # Similar palettes: threshold at the end of the slider.
 similar_max = 0.5
+# Contains this colour: starting tolerance (distance from a palette colour to the colour
+# looked for).
+colour_radius = 0.1
+# Contains this colour: tolerance at the end of the slider.
+colour_radius_max = 0.4
+# Contains this colour: colours smaller than this share of the image don't count.
+colour_min_share = 0.02
+# Chroma under which a colour is a grey: an image all in greys is black and white, never
+# mixed with colour images in the searches.
+mono_chroma = 0.03
+# Chroma at most of a toned monochrome image (sepia, toning).
+mono_toned_chroma = 0.08
+# Hue spread at most (degrees) of a toned monochrome image: its colours follow a single
+# hue.
+mono_hue_spread = 15.0
 
 [similarity]
 # Group similar images (bursts, series) into stacks in the background.

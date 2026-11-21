@@ -53,7 +53,10 @@ kept at the end, those without a possible palette removed. Slider start and end:
 ## Share of a colour (`Palette::share_near`)
 
 The share of the image whose colour is within an OKLab radius of a given colour: "has
-enough of this blue" (the eyedropper already exists in the interface).
+enough of this blue". Measured like the distances between palettes (hue and saturation
+`chroma_weight` times). "Contains this colour" uses `Palette::nearest` instead: the distance of the closest
+palette colour, specks under `colour_min_share` (0.02) ignored; tolerance `colour_radius`
+(0.1), `colour_radius_max` (0.4).
 
 ## Cache
 
@@ -84,12 +87,14 @@ source), a finished render only exists for a development of the list.
 
 ## Interface
 
-"Palette" section of the right panel: source picker, band, wheel and colours of the
-selected image, progress in the status bar; see [gui.md](gui.md).
+"Palette" section of the right panel (source, band, wheel and colours of the selected
+image), searches in the Filter section (similar palettes, colour); see [gui.md](gui.md).
+Sources (`SourceKind`): `camera`, `raw`, or a program (`darktable`…) for its
+developments; the former `developed` reads back as `darktable`.
 
 ## Command line
 
-`tri <folder> --palette [--source camera|raw|developed]`: each image, its `#rrggbb`
+`tri <folder> --palette [--source camera|raw|darktable|…]`: each image, its `#rrggbb`
 colours and their share, stored in the cache as in the interface. Finished renders: only
 those already made by the interface (no software launched from the command line).
 

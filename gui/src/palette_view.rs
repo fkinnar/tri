@@ -49,6 +49,90 @@ pub fn wheel_pos(swatch: &Swatch, centre: Pos2, radius: f32) -> Pos2 {
     pos2(centre.x + r * a.cos(), centre.y - r * a.sin())
 }
 
+/// Teinte (degrés), saturation et valeur (0 à 1) vers sRGB 8 bits.
+pub fn hsv_to_rgb([h, s, v]: [f32; 3]) -> [u8; 3] {
+    let h = h.rem_euclid(360.0) / 60.0;
+    let c = v * s;
+    let x = c * (1.0 - (h % 2.0 - 1.0).abs());
+    let (r, g, b) = match h as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = v - c;
+    [r, g, b].map(|u| ((u + m).clamp(0.0, 1.0) * 255.0).round() as u8)
+}
+
+/// sRGB 8 bits vers teinte (degrés), saturation et valeur ; un gris garde la teinte
+/// `hue_if_grey` (sa teinte n'existe pas : la roue ne saute pas à zéro).
+pub fn rgb_to_hsv(rgb: [u8; 3], hue_if_grey: f32) -> [f32; 3] {
+    let [r, g, b] = rgb.map(|u| f32::from(u) / 255.0);
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let d = max - min;
+    let h = if d <= f32::EPSILON {
+        hue_if_grey
+    } else if max == r {
+        60.0 * ((g - b) / d).rem_euclid(6.0)
+    } else if max == g {
+        60.0 * ((b - r) / d + 2.0)
+    } else {
+        60.0 * ((r - g) / d + 4.0)
+    };
+    let s = if max <= f32::EPSILON { 0.0 } else { d / max };
+    [h, s, max]
+}
+
+/// Teinte et saturation au point `pos` de la roue TSV de centre `centre` et de rayon
+/// `radius` (rouge à droite, sens trigonométrique, gris au centre) ; `None` hors de la
+/// roue.
+pub fn hsv_at(pos: Pos2, centre: Pos2, radius: f32) -> Option<(f32, f32)> {
+    let d = pos - centre;
+    let s = d.length() / radius.max(1.0);
+    (s <= 1.0).then(|| ((-d.y).atan2(d.x).to_degrees().rem_euclid(360.0), s))
+}
+
+/// Place d'une teinte (degrés) et d'une saturation sur la roue TSV.
+pub fn hsv_pos(hue: f32, saturation: f32, centre: Pos2, radius: f32) -> Pos2 {
+    let a = hue.to_radians();
+    let r = radius * saturation.clamp(0.0, 1.0);
+    pos2(centre.x + r * a.cos(), centre.y - r * a.sin())
+}
+
+/// Roue TSV du sélecteur de couleur, à la valeur `value` (0 à 1).
+pub fn draw_hsv_wheel(painter: &Painter, rect: Rect, value: f32) {
+    let centre = rect.center();
+    let radius = rect.width().min(rect.height()) / 2.0;
+    let (rings, sectors) = (14usize, 72usize);
+    let mut mesh = egui::Mesh::default();
+    for ring in 0..=rings {
+        let s = ring as f32 / rings as f32;
+        for sector in 0..=sectors {
+            let hue = sector as f32 / sectors as f32 * 360.0;
+            let pos = hsv_pos(hue, s, centre, radius);
+            let [r, g, b] = hsv_to_rgb([hue, s, value]);
+            mesh.colored_vertex(pos, Color32::from_rgb(r, g, b));
+        }
+    }
+    let row = (sectors + 1) as u32;
+    for ring in 0..rings as u32 {
+        for sector in 0..sectors as u32 {
+            let i = ring * row + sector;
+            mesh.add_triangle(i, i + 1, i + row);
+            mesh.add_triangle(i + 1, i + row + 1, i + row);
+        }
+    }
+    painter.add(egui::Shape::mesh(mesh));
+    painter.circle_stroke(
+        centre,
+        radius,
+        Stroke::new(1.5, Color32::from_black_alpha(90)),
+    );
+}
+
 /// Dessine la roue : un cercle de teintes en bordure, et chaque pastille, d'autant plus
 /// grande que sa part.
 pub fn draw_wheel(painter: &Painter, rect: Rect, palette: &Palette, stroke: Color32) {
@@ -122,6 +206,30 @@ mod tests {
         assert_eq!(rects[0].width(), 150.0);
         assert_eq!(rects[1].left(), 150.0);
         assert_eq!(rects[1].right(), 200.0);
+    }
+
+    #[test]
+    fn hsv_round_trips_and_the_wheel_point_comes_back() {
+        for rgb in [
+            [255, 0, 0],
+            [12, 200, 90],
+            [3, 109, 255],
+            [128, 128, 128],
+            [0, 0, 0],
+        ] {
+            let hsv = rgb_to_hsv(rgb, 0.0);
+            assert_eq!(hsv_to_rgb(hsv), rgb, "{rgb:?} → {hsv:?}");
+        }
+        assert_eq!(
+            rgb_to_hsv([128, 128, 128], 200.0)[0],
+            200.0,
+            "le gris garde sa teinte"
+        );
+        let c = pos2(100.0, 100.0);
+        let at = hsv_pos(210.0, 0.7, c, 50.0);
+        let (h, s) = hsv_at(at, c, 50.0).unwrap();
+        assert!((h - 210.0).abs() < 0.01 && (s - 0.7).abs() < 1e-4);
+        assert!(hsv_at(pos2(160.0, 100.0), c, 50.0).is_none());
     }
 
     #[test]

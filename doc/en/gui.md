@@ -197,7 +197,9 @@ system one ("cold" measurements, experiments).
   below the photo in the list. Without stacks, a single bar. Two places (`place`):
   `overlay`, along the bottom of the image, hidden with the info on the image (`t`),
   duration `seconds` (-1: always); `panel`, a "Position" section under the histogram of
-  the right panel, always visible (while the histogram is computed, the previous one stays, `last_histogram`:
+  the right panel, always visible, in the grid too (a palette search started from full
+  screen goes to the grid: the panel does not shift; without result, histogram and
+  position keep their place) (while the histogram is computed, the previous one stays, `last_histogram`:
   otherwise it blinked and the bar jumped at each image; greyed if the computation
   takes longer than `[gui.metadata] histogram_stale_ms`, 400 ms, on a slow drive say). On the image, the notes and the bottom marks
   move up above it (`marks_area`). Never while cropping. A vertical bar for the place in
@@ -207,28 +209,54 @@ system one ("cold" measurements, experiments).
   `gui/src/position_bar.rs` (`Position::layout`, `split`), segments from
   `Stacks::photos_per_group` (developments counted with their photo). Thickness
   `thickness`.
-- **Colour palette** ("Palette" section of the right panel, #492, 2026-11-21), in the grid
-  and in full screen, at the bottom of the panel. A **source** to choose (`palette_source`
-  of the display state, remembered): none (default: nothing is computed), camera JPEG,
-  raw data (LibRaw), developments (their finished renders); once chosen, the folder's palettes are computed in
-  the background (`Scheduler::set_palette`, "palettes" progress in the status bar). For
-  the selected image: the colour **band**, each colour as wide as its share (hover:
-  `#rrggbb` and share; click: copy), the **colour wheel** (hue as angle, chroma as the
-  square root of the radius to spread a photo's low-saturation colours, size by share)
-  and the list of colours. With developments, **every one** of the photo
-  (software, clones, copies), each named with its band, even alone (feedback of
-  2026-11-21); the wheel
-  and list: the selected one, otherwise the first; a photo without development says so. Cache read in the background, newest request first (`palette_reads`), like the
-  histogram. Drawing in `gui/src/palette_view.rs`. **Similar palettes** (section button,
-  action `core.filter.palette`): the grid keeps only the images whose palette is within
-  the threshold of the image's (slider, double-click: starting value,
-  `[palette] similar_threshold` / `similar_max`), closest first; those not computed yet
-  stay, at the end (otherwise the background computation, which only sees the list,
-  would never do them); those without a possible palette (photo without finished render)
-  leave. With finished renders, every development is compared. Shown in the filter
-  summary; clearing the filters (`f d`) or "Done" ends it; so does changing source. All
-  the folder's palettes are read in the background as they arrive, the grid refiltered
-  from time to time (`analysis_refilter_ms`). Coming: "contains this colour".
+- **Colour palette** (#492, 2026-11-21). "Palette" section of the right panel, in the grid
+  and in full screen, at the bottom of the panel: mostly to look. The **source**: "Same as the
+  grid", checked by default, follows the thumbnails' render (camera JPEG, cover: each
+  development's render and the camera JPEG of photos without development, program, RAW);
+  unchecked, a list modelled on the shown render (`palette_source`, `palette_follow_grid`
+  of the display state, remembered): none (nothing is computed), "JPEG camera",
+  "Cover", each active development program (all its developments, clones included), "RAW
+  LibRaw". Once chosen, the folder's palettes are
+  computed in the background (`Scheduler::set_palette`, "palettes" progress in the status
+  bar). For the selected image: the colour **band**, each colour as wide as its share, the
+  **colour wheel** (hue as angle, chroma as the square root of the radius to spread a
+  photo's low-saturation colours, size by share) and the list of colours; with a program,
+  each of its developments of the photo with its band, named when there are several
+  (alone, the name repeated the source). A click on a colour (band,
+  wheel dot, list patch) finds the images that contain it; a click on a `#rrggbb` copies
+  it. Cache read in the background, newest request first (`palette_reads`). Drawing in
+  `gui/src/palette_view.rs`.
+- **Palette searches** (Filter section, under the other filters, same shape: checkbox,
+  icon, name; and in the top filter bar, with the others; greyed without a source;
+  feedback of 2026-11-21). Threshold and tolerance kept per folder like the other sliders
+  (`tri::palette::folder_threshold` / `folder_radius`, written when the slider is
+  released). **Similar palettes** (a
+  target, action `core.filter.palette`): the grid keeps only the images whose palette is
+  within the threshold of the image's (slider below, double-click: starting value,
+  `[palette] similar_threshold` / `similar_max`), closest first. **Colour** (eyedropper
+  icon, action `core.filter.palette_colour`: checked, the last colour looked for, otherwise
+  the choice box). Right of the name, the colour **patch**: a click opens the choice box
+  (feedback of 2026-11-21) — HSV wheel (hue as angle, saturation as radius, at the
+  current value; OKLab lightness, tried, did not speak), R G B, hue / saturation / value,
+  `#rrggbb`, and an **eyedropper**: the box hides, a click anywhere in the
+  window reads the colour (on a thumbnail or the full-screen image, the average colour of
+  a small area of the image the palette comes from, read in the background; elsewhere,
+  the pixel of a capture of the window), then the box comes back; "Search" starts the
+  filter. Or a click on a colour of the Palette section:
+  the images with a palette colour close enough, closest first (a single slider, the
+  tolerance, `colour_radius` / `colour_radius_max`; specks under `colour_min_share`
+  ignored). Common rules: one search at a time; images not computed yet stay, at the end
+  (otherwise the background computation, which only sees the list, would never do them);
+  those without a possible palette leave; **black and white and colour never mix**
+  (`Palette::is_monochrome`: every colour under `mono_chroma`, or toned — sepia, toning —
+  under `mono_toned_chroma` and within `mono_hue_spread` degrees of hue; the user's brown
+  colour series, hues over 26°, stays colour, a typical sepia, 14°, is monochrome).
+  Started from full screen, a search shows its results in the grid; the top of the panel
+  never moves, even without result. Shown in the filter summary; invertible like the other content filters (inverted: what
+  it leaves out, in the usual order); unchecking, clearing the filters (`f d`) or changing
+  source ends it. The folder's palettes are read in the
+  background as they arrive, the grid refiltered from time to time
+  (`analysis_refilter_ms`).
 - **End of the stack or of the list** (`[gui.end]`, #307, 2026-11-05): in full screen,
   ← / → that no longer move say so for a moment, in the same frame as the position mark
   ("End of the stack", "Start of the stack", "End of the selection", "Start of the

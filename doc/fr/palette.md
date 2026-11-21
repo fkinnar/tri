@@ -55,7 +55,10 @@ et bout du curseur : `similar_threshold` (0,12), `similar_max` (0,5).
 ## Part d'une couleur (`Palette::share_near`)
 
 La part de l'image dont la couleur est à moins d'un rayon OKLab d'une couleur donnée :
-« contient assez de ce bleu » (la pipette existe déjà dans l'interface).
+« contient assez de ce bleu ». Comptée comme les distances entre palettes (teinte et
+saturation `chroma_weight` fois). « Contient cette couleur » utilise plutôt `Palette::nearest` : la distance de la couleur
+de la palette la plus proche, miettes sous `colour_min_share` (0,02) ignorées ; tolérance
+`colour_radius` (0,1), `colour_radius_max` (0,4).
 
 ## Cache
 
@@ -87,12 +90,14 @@ n'existe que pour un développement de la liste.
 
 ## Interface
 
-Section « Palette » du panneau de droite : choix de la source, bande, roue et couleurs
-de l'image sélectionnée, avancement dans la barre d'état ; voir [gui.md](gui.md).
+Section « Palette » du panneau de droite (source, bande, roue et couleurs de l'image
+sélectionnée), recherches dans la section Filtre (palettes proches, couleur) ; voir
+[gui.md](gui.md). Sources (`SourceKind`) : `camera`, `raw`, ou un logiciel (`darktable`…)
+pour ses développements ; `developed` d'avant se relit `darktable`.
 
 ## Ligne de commande
 
-`tri <dossier> --palette [--source camera|raw|developed]` : chaque image, ses couleurs
+`tri <dossier> --palette [--source camera|raw|darktable|…]` : chaque image, ses couleurs
 `#rrggbb` et leur part, rangées dans le cache comme dans l'interface. Les rendus finis :
 seulement ceux déjà faits par l'interface (aucun logiciel lancé en ligne de commande).
 

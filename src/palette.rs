@@ -42,51 +42,87 @@ pub enum Source {
     Developed(crate::develop::Engine),
 }
 
-/// Source choisie dans l'interface ou en ligne de commande : le logiciel d'un rendu fini
-/// est celui de chaque développement. Dans un fichier : `"camera"`, `"raw"`,
-/// `"developed"`.
+/// Source choisie dans l'interface ou en ligne de commande (sur le modèle du rendu
+/// affiché, retour du 21/11/2026) : JPEG boîtier, un logiciel de développement (tous ses
+/// développements, clones compris), ou les données brutes. Dans un fichier :
+/// `"camera"`, `"raw"`, ou l'identifiant du logiciel (`"darktable"`…).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(from = "String", into = "String")]
 pub enum SourceKind {
     /// JPEG boîtier.
     #[default]
     Camera,
     /// Données brutes de LibRaw.
     Raw,
-    /// Rendus finis.
-    Developed,
+    /// Les développements de ce logiciel.
+    Developed(crate::develop::Engine),
+    /// Comme la couverture de la grille : le rendu de chaque développement, et pour une
+    /// photo sans développement, son JPEG boîtier.
+    Cover,
 }
 
 impl SourceKind {
-    /// Tous, dans l'ordre de l'interface.
-    pub const ALL: [SourceKind; 3] = [SourceKind::Camera, SourceKind::Raw, SourceKind::Developed];
+    /// Tous, dans l'ordre de l'interface (comme le rendu affiché : JPEG boîtier, les
+    /// logiciels, RAW).
+    pub fn all() -> Vec<SourceKind> {
+        std::iter::once(SourceKind::Camera)
+            .chain(std::iter::once(SourceKind::Cover))
+            .chain(crate::develop::Engine::ALL.map(SourceKind::Developed))
+            .chain(std::iter::once(SourceKind::Raw))
+            .collect()
+    }
 
     /// Nom dans la ligne de commande et le fichier de configuration.
     pub fn id(self) -> &'static str {
         match self {
             SourceKind::Camera => "camera",
             SourceKind::Raw => "raw",
-            SourceKind::Developed => "developed",
+            SourceKind::Cover => "cover",
+            SourceKind::Developed(engine) => engine.id(),
         }
     }
 
-    /// Lit [`SourceKind::id`].
+    /// Lit [`SourceKind::id`] ; `"developed"` (avant le choix par logiciel) : darktable.
     pub fn parse(text: &str) -> Option<SourceKind> {
-        Self::ALL.into_iter().find(|k| k.id() == text)
+        if text == "developed" {
+            return Some(SourceKind::Developed(crate::develop::Engine::Darktable));
+        }
+        Self::all().into_iter().find(|k| k.id() == text)
     }
 
     /// Source de la palette de `file` pour ce choix : une image plate n'a pas de données
-    /// brutes (son image) ; un rendu fini n'existe que pour un développement (`None`
-    /// sinon).
+    /// brutes (son image) ; un logiciel : seulement ses développements (`None` sinon).
     pub fn source_for(self, file: &crate::media::MediaFile) -> Option<Source> {
         match self {
             SourceKind::Camera => Some(Source::Camera),
             SourceKind::Raw if file.kind == crate::media::MediaKind::Raw => Some(Source::Raw),
             SourceKind::Raw => Some(Source::Camera),
-            SourceKind::Developed => {
-                crate::developments::get(&file.path).map(|d| Source::Developed(d.engine))
-            }
+            SourceKind::Developed(engine) => crate::developments::get(&file.path)
+                .filter(|d| d.engine == engine)
+                .map(|_| Source::Developed(engine)),
+            // Un développement : son rendu ; une photo qui en a : rien (ses développements
+            // portent ses palettes) ; sinon son JPEG boîtier.
+            SourceKind::Cover => match crate::developments::get(&file.path) {
+                Some(d) => Some(Source::Developed(d.engine)),
+                None if crate::developments::of(&file.path).is_empty() => Some(Source::Camera),
+                None => None,
+            },
         }
+    }
+}
+
+/// Écrit (état d'affichage) par son identifiant.
+impl From<SourceKind> for String {
+    fn from(kind: SourceKind) -> String {
+        kind.id().to_string()
+    }
+}
+
+/// Relu de son identifiant ; inconnu (logiciel retiré) : le JPEG boîtier, sans perdre le
+/// reste de l'état d'affichage.
+impl From<String> for SourceKind {
+    fn from(text: String) -> SourceKind {
+        SourceKind::parse(&text).unwrap_or_default()
     }
 }
 
@@ -115,6 +151,23 @@ pub struct PaletteSettings {
     pub similar_threshold: f32,
     /// « Palettes proches » : seuil au bout du curseur.
     pub similar_max: f32,
+    /// « Contient cette couleur » : tolérance de départ (distance d'une couleur de la
+    /// palette à la couleur cherchée, comptée comme [`distance`]).
+    pub colour_radius: f32,
+    /// « Contient cette couleur » : tolérance au bout du curseur.
+    pub colour_radius_max: f32,
+    /// « Contient cette couleur » : les couleurs de la palette plus petites que cette part
+    /// de l'image (0 à 1) ne comptent pas (miettes).
+    pub colour_min_share: f32,
+    /// Chroma (OKLab) sous lequel une couleur est un gris : une image dont toutes les
+    /// couleurs le sont est en noir et blanc, et les recherches ne la mélangent pas aux
+    /// images en couleur.
+    pub mono_chroma: f32,
+    /// Chroma au plus d'une image monochrome teintée (sépia, virage).
+    pub mono_toned_chroma: f32,
+    /// Écart de teintes au plus (degrés) d'une image monochrome teintée : ses couleurs
+    /// suivent une seule teinte.
+    pub mono_hue_spread: f32,
 }
 
 impl Default for PaletteSettings {
@@ -128,6 +181,12 @@ impl Default for PaletteSettings {
             chroma_weight: 2.0,
             similar_threshold: 0.12,
             similar_max: 0.5,
+            colour_radius: 0.1,
+            colour_radius_max: 0.4,
+            colour_min_share: 0.02,
+            mono_chroma: 0.03,
+            mono_toned_chroma: 0.08,
+            mono_hue_spread: 15.0,
         }
     }
 }
@@ -170,14 +229,46 @@ pub struct Palette {
 }
 
 impl Palette {
-    /// Part de l'image dont la couleur est à moins de `radius` (distance OKLab) de
-    /// `oklab` : « contient assez de ce bleu ».
-    pub fn share_near(&self, oklab: [f32; 3], radius: f32) -> f32 {
+    /// Part de l'image dont la couleur est à moins de `radius` de `oklab` (distance OKLab,
+    /// teinte et saturation comptées `chroma_weight` fois, comme [`distance`]) : « contient
+    /// assez de ce bleu ».
+    pub fn share_near(&self, oklab: [f32; 3], radius: f32, chroma_weight: f32) -> f32 {
         self.swatches
             .iter()
-            .filter(|s| oklab_distance(s.oklab, oklab) <= radius)
+            .filter(|s| weighted_distance(s.oklab, oklab, chroma_weight) <= radius)
             .map(|s| s.share)
             .sum()
+    }
+
+    /// Vrai si l'image est monochrome : en noir et blanc (toutes ses couleurs, sauf les
+    /// miettes sous `min_share`, ont un chroma sous `mono.chroma`), ou **teintée** (sépia,
+    /// virage : les couleurs plus saturées restent sous `mono.toned_chroma` et leurs
+    /// teintes dans `mono.hue_spread` degrés, alignées sur une seule teinte). Les recherches
+    /// ne mélangent pas monochromes et couleur (retours du 21/11/2026).
+    pub fn is_monochrome(&self, mono: Monochrome, min_share: f32) -> bool {
+        let mut hues = Vec::new();
+        for s in self.swatches.iter().filter(|s| s.share >= min_share) {
+            let (hue, chroma) = s.hue_chroma();
+            if chroma < mono.chroma {
+                continue;
+            }
+            if chroma >= mono.toned_chroma {
+                return false;
+            }
+            hues.push(hue);
+        }
+        hue_range(&mut hues) <= mono.hue_spread
+    }
+
+    /// Distance de la couleur de la palette la plus proche de `oklab` (comptée comme
+    /// [`distance`]), parmi celles d'au moins `min_share` de l'image ; `None` s'il n'y en a
+    /// aucune. « Contient cette couleur » : plus elle est petite, plus l'image la contient.
+    pub fn nearest(&self, oklab: [f32; 3], chroma_weight: f32, min_share: f32) -> Option<f32> {
+        self.swatches
+            .iter()
+            .filter(|s| s.share >= min_share)
+            .map(|s| weighted_distance(s.oklab, oklab, chroma_weight))
+            .min_by(f32::total_cmp)
     }
 
     /// Format binaire du cache d'analyse : version, nombre de couleurs, puis pour chacune
@@ -333,6 +424,42 @@ pub fn rank_similar<T>(
     known.into_iter().map(|(_, t)| t).chain(unknown).collect()
 }
 
+/// Seuils de « monochrome » (voir [`Palette::is_monochrome`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Monochrome {
+    /// Chroma sous lequel une couleur est un gris.
+    pub chroma: f32,
+    /// Chroma au plus d'une image teintée (sépia).
+    pub toned_chroma: f32,
+    /// Écart de teintes au plus d'une image teintée (degrés).
+    pub hue_spread: f32,
+}
+
+impl PaletteSettings {
+    /// Les seuils de « monochrome » de ces réglages.
+    pub fn monochrome(&self) -> Monochrome {
+        Monochrome {
+            chroma: self.mono_chroma,
+            toned_chroma: self.mono_toned_chroma,
+            hue_spread: self.mono_hue_spread,
+        }
+    }
+}
+
+/// Étendue de teintes (degrés) sur le cercle : le plus petit arc qui les contient toutes
+/// (0 sans teinte ou pour une seule).
+fn hue_range(hues: &mut [f32]) -> f32 {
+    if hues.len() < 2 {
+        return 0.0;
+    }
+    hues.sort_by(f32::total_cmp);
+    let mut largest_gap = 360.0 - (hues[hues.len() - 1] - hues[0]);
+    for w in hues.windows(2) {
+        largest_gap = largest_gap.max(w[1] - w[0]);
+    }
+    360.0 - largest_gap
+}
+
 /// Distance dans OKLab, a et b comptés `chroma_weight` fois.
 pub fn weighted_distance(a: [f32; 3], b: [f32; 3], chroma_weight: f32) -> f32 {
     let w = chroma_weight;
@@ -342,6 +469,65 @@ pub fn weighted_distance(a: [f32; 3], b: [f32; 3], chroma_weight: f32) -> f32 {
 /// Distance euclidienne dans OKLab.
 pub fn oklab_distance(a: [f32; 3], b: [f32; 3]) -> f32 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+}
+
+/// La couleur `oklab` ramenée dans le gamut sRGB en gardant sa clarté et sa teinte : son
+/// chroma réduit juste assez (une couleur trop saturée pour l'écran, coupée composante par
+/// composante, changeait de teinte et faisait des taches au bord de la roue du sélecteur).
+pub fn gamut_map(oklab: [f32; 3]) -> [f32; 3] {
+    let inside = |c: [f32; 3]| {
+        oklab_to_linear_srgb(c)
+            .iter()
+            .all(|v| (-1e-4..=1.0 + 1e-4).contains(v))
+    };
+    if inside(oklab) {
+        return oklab;
+    }
+    let [l, a, b] = oklab;
+    let l = l.clamp(0.0, 1.0);
+    let (mut lo, mut hi) = (0.0f32, 1.0f32);
+    for _ in 0..20 {
+        let mid = (lo + hi) / 2.0;
+        if inside([l, a * mid, b * mid]) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    [l, a * lo, b * lo]
+}
+
+/// Clé du seuil « palettes proches » retenu par dossier.
+const SIMILAR_KEY: &str = "palette-similar";
+/// Clé de la tolérance « contient cette couleur » retenue par dossier.
+const COLOUR_KEY: &str = "palette-colour";
+
+/// Seuil « palettes proches » retenu pour le dossier `dir` (comme les autres curseurs).
+pub fn folder_threshold(data: Option<&std::path::Path>, dir: &std::path::Path) -> Option<f32> {
+    crate::store::value(data, dir, SIMILAR_KEY)
+}
+
+/// Retient le seuil « palettes proches » pour `dir` ; `None` : l'oublie (valeur de départ).
+pub fn remember_threshold(
+    data: Option<&std::path::Path>,
+    dir: &std::path::Path,
+    value: Option<f32>,
+) -> std::io::Result<()> {
+    crate::store::set_value(data, dir, SIMILAR_KEY, value)
+}
+
+/// Tolérance « contient cette couleur » retenue pour le dossier `dir`.
+pub fn folder_radius(data: Option<&std::path::Path>, dir: &std::path::Path) -> Option<f32> {
+    crate::store::value(data, dir, COLOUR_KEY)
+}
+
+/// Retient la tolérance « contient cette couleur » pour `dir` ; `None` : l'oublie.
+pub fn remember_radius(
+    data: Option<&std::path::Path>,
+    dir: &std::path::Path,
+    value: Option<f32>,
+) -> std::io::Result<()> {
+    crate::store::set_value(data, dir, COLOUR_KEY, value)
 }
 
 /// Un pixel 8 bits de l'espace de travail, en OKLab.
@@ -625,14 +811,102 @@ mod tests {
     }
 
     #[test]
+    fn grey_and_toned_palettes_are_monochrome_a_warm_colour_one_is_not() {
+        let s = PaletteSettings::default();
+        let mono = s.monochrome();
+        let from = |hexes: &[(&str, f32)]| Palette {
+            swatches: hexes
+                .iter()
+                .map(|(h, share)| {
+                    let v = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).unwrap();
+                    Swatch {
+                        oklab: srgb_to_oklab([v(1), v(3), v(5)]),
+                        share: *share,
+                    }
+                })
+                .collect(),
+        };
+        let grey = from(&[("#e6e6e6", 0.6), ("#1e1e1e", 0.4)]);
+        assert!(grey.is_monochrome(mono, s.colour_min_share));
+        let speck = from(&[("#e6e6e6", 0.99), ("#c81e1e", 0.01)]);
+        assert!(
+            speck.is_monochrome(mono, s.colour_min_share),
+            "miette ignorée"
+        );
+        // Sépia : teintes de 64 à 78°.
+        let sepia = from(&[
+            ("#2b2118", 0.3),
+            ("#5e4a36", 0.3),
+            ("#a88b6a", 0.2),
+            ("#e0cdb0", 0.2),
+        ]);
+        assert!(sepia.is_monochrome(mono, s.colour_min_share), "sépia");
+        // Série brune en couleur (retour du 21/11/2026) : teintes de 32 à 58°.
+        let brown = from(&[
+            ("#151414", 0.51),
+            ("#272221", 0.14),
+            ("#655346", 0.11),
+            ("#433831", 0.09),
+            ("#d8a79d", 0.08),
+            ("#a67e66", 0.07),
+        ]);
+        assert!(
+            !brown.is_monochrome(mono, s.colour_min_share),
+            "brune en couleur"
+        );
+        let blue = from(&[("#e6e6e6", 0.6), ("#283cc8", 0.4)]);
+        assert!(!blue.is_monochrome(mono, s.colour_min_share));
+        assert_eq!(hue_range(&mut [350.0, 10.0]), 20.0, "autour de 0°");
+    }
+
+    #[test]
+    fn gamut_mapping_keeps_lightness_and_hue() {
+        let wild = [0.6, 0.3, -0.3];
+        let mapped = gamut_map(wild);
+        assert_eq!(mapped[0], 0.6);
+        let (h0, h1) = (wild[2].atan2(wild[1]), mapped[2].atan2(mapped[1]));
+        assert!((h0 - h1).abs() < 1e-4);
+        assert!(
+            oklab_to_linear_srgb(mapped)
+                .iter()
+                .all(|v| (-1e-3..=1.001).contains(v))
+        );
+        let grey = [0.5, 0.0, 0.0];
+        assert_eq!(gamut_map(grey), grey, "déjà dedans");
+    }
+
+    #[test]
+    fn nearest_colour_ignores_specks() {
+        let p = Palette {
+            swatches: vec![
+                Swatch {
+                    oklab: [0.5, 0.1, 0.0],
+                    share: 0.9,
+                },
+                Swatch {
+                    oklab: [0.5, -0.1, 0.0],
+                    share: 0.01,
+                },
+            ],
+        };
+        let target = [0.5, -0.1, 0.0];
+        assert_eq!(p.nearest(target, 1.0, 0.0), Some(0.0));
+        assert!(
+            (p.nearest(target, 1.0, 0.02).unwrap() - 0.2).abs() < 1e-6,
+            "la miette ignorée"
+        );
+        assert_eq!(Palette::default().nearest(target, 1.0, 0.0), None);
+    }
+
+    #[test]
     fn share_near_finds_a_colour() {
         let p = extract(
             &bands(&[([200, 40, 40], 70), ([40, 60, 200], 30)]),
             &PaletteSettings::default(),
         );
         let blue = working_to_oklab([45, 65, 195]);
-        assert!((p.share_near(blue, 0.05) - 0.3).abs() < 0.03);
-        assert_eq!(p.share_near(srgb_to_oklab([0, 255, 0]), 0.05), 0.0);
+        assert!((p.share_near(blue, 0.05, 1.0) - 0.3).abs() < 0.03);
+        assert_eq!(p.share_near(srgb_to_oklab([0, 255, 0]), 0.05, 2.0), 0.0);
     }
 
     #[test]

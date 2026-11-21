@@ -208,7 +208,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   liste. Sans piles, une seule barre. Deux places (`place`) : `overlay`, le long du bas de
   l'image, masquée avec les infos sur l'image (`t`), durée `seconds` (-1 : toujours) ;
   `panel`, une section « Position » sous l'histogramme du panneau de droite, toujours
-  visible (pendant le calcul de l'histogramme, le précédent reste affiché, `last_histogram` :
+  visible, en grille aussi (une recherche de palettes lancée du plein écran passe en
+  grille : le panneau ne remonte pas ; sans résultat, histogramme et position gardent
+  leur place) (pendant le calcul de l'histogramme, le précédent reste affiché, `last_histogram` :
   sinon il clignotait et la barre sautait à chaque image ; grisé si le calcul dépasse
   `[gui.metadata] histogram_stale_ms`, 400 ms, sur un disque lent par exemple). Sur l'image, les notes et les repères du bas remontent au-dessus d'elle
   (`marks_area`). Jamais pendant le recadrage. Une barre verticale de la place dans la pile a été
@@ -218,28 +220,54 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `gui/src/position_bar.rs` (`Position::layout`, `split`), segments par
   `Stacks::photos_per_group` (développements comptés avec leur photo). Épaisseur
   `thickness`.
-- **Palette de couleurs** (section « Palette » du panneau de droite, #492, 21/11/2026),
-  en grille et en plein écran, en bas du panneau. Une **source** au choix
-  (`palette_source` de l'état d'affichage, retenue) : aucune (par défaut : rien ne se
-  calcule), JPEG boîtier, données brutes (LibRaw), développements (leurs rendus finis) ; choisie, les palettes du
-  dossier se calculent en fond (`Scheduler::set_palette`, avancement « palettes » dans la
-  barre d'état). Pour l'image sélectionnée : la **bande** des couleurs, chacune aussi
-  large que sa part (survol : `#rrggbb` et part ; clic : copie), la **roue chromatique**
-  (teinte en angle, chroma en racine du rayon pour étaler les couleurs peu saturées d'une
-  photo, taille selon la part) et la liste des couleurs. Avec les développements, **tous ceux** de la photo
-  (logiciels, clones, copies), chacun nommé avec sa bande, même seul (retours du 21/11/2026) ; la roue et
-  la liste : celui sélectionné, sinon le premier ; une photo sans développement le dit. Lecture du cache en fond, la dernière demandée d'abord
-  (`palette_reads`), comme l'histogramme. Dessin dans `gui/src/palette_view.rs`. **Palettes proches** (bouton de la
-  section, action `core.filter.palette`) : la grille ne garde que les images dont la
-  palette est à moins du seuil de celle de l'image (curseur, double-clic : valeur de
+- **Palette de couleurs** (#492, 21/11/2026). Section « Palette » du panneau de droite,
+  en grille et en plein écran, en bas du panneau : surtout pour voir. La **source** : « Comme la
+  grille », coché par défaut, suit le rendu des vignettes (JPEG boîtier, couverture : le
+  rendu de chaque développement et le JPEG boîtier des photos sans développement,
+  logiciel, RAW) ; décoché, une liste sur le modèle du rendu affiché (`palette_source`,
+  `palette_follow_grid` de l'état d'affichage, retenus) : aucune (rien ne se calcule),
+  « JPEG boîtier », « Couverture », chaque logiciel de développement actif (tous ses
+  développements, clones compris), « RAW LibRaw ». Choisie,
+  les palettes du dossier se calculent en fond (`Scheduler::set_palette`, avancement
+  « palettes » dans la barre d'état). Pour l'image sélectionnée : la **bande** des
+  couleurs, chacune aussi large que sa part, la **roue chromatique** (teinte en angle,
+  chroma en racine du rayon pour étaler les couleurs peu saturées d'une photo, taille
+  selon la part) et la liste des couleurs ; avec un logiciel, chacun de ses développements
+  de la photo avec sa bande, nommés quand il y en a plusieurs (seul, le nom répétait la
+  source). Un clic sur une couleur (bande, point de la roue,
+  pastille de la liste) cherche les images qui la contiennent ; un clic sur un `#rrggbb` le
+  copie. Lecture du cache en fond, la dernière demandée d'abord (`palette_reads`).
+  Dessin dans `gui/src/palette_view.rs`.
+- **Recherches de palettes** (section Filtre, sous les autres filtres, même forme : case,
+  icône, nom ; et dans la barre des filtres du haut, avec les autres ; grisées sans source ;
+  retours du 21/11/2026). Seuil et tolérance retenus par dossier comme les autres curseurs
+  (`tri::palette::folder_threshold` / `folder_radius`, écrits au lâcher du curseur). **Palettes proches** (une
+  cible, action `core.filter.palette`) : la grille ne garde que les images dont la palette
+  est à moins du seuil de celle de l'image (curseur dessous, double-clic : valeur de
   départ, `[palette] similar_threshold` / `similar_max`), de la plus proche à la moins
-  proche ; celles pas encore calculées restent, à la fin (sinon le calcul en fond, qui ne
-  voit que la liste, ne les ferait jamais) ; celles sans palette possible (photo sans
-  rendu fini) partent. En rendus finis, chaque développement est comparé. Mentionnée dans
-  le résumé des filtres ; effacer les filtres (`f d`) ou « Terminer » y met fin ; changer de
-  source aussi. Toutes les palettes du dossier sont lues en fond à leur arrivée, la grille
-  refiltrée de temps en temps (`analysis_refilter_ms`). À venir : « contient cette
-  couleur ».
+  proche. **Couleur** (icône pipette, action `core.filter.palette_colour` : cochée, la dernière
+  couleur cherchée, sinon la boîte de choix). À droite du nom, la **pastille** de la
+  couleur : un clic ouvre la boîte de choix (retour du 21/11/2026) — roue TSV (teinte en
+  angle, saturation au rayon, à la valeur en cours ; la clarté d'OKLab, essayée, ne parlait
+  pas), R V B, teinte / saturation / valeur, `#rrggbb`, et une
+  **pipette** : la boîte se masque, un clic n'importe où dans la fenêtre relève la couleur
+  (sur une vignette ou l'image en plein écran, la couleur moyenne d'une petite zone de
+  l'image d'où la palette est tirée, lue en fond ; ailleurs, le pixel de la capture de la
+  fenêtre), puis la boîte revient ; « Chercher » lance le filtre. Ou un clic sur une couleur
+  de la section Palette : les images dont une couleur de la palette est assez proche, la plus
+  proche d'abord (un seul curseur, la tolérance, `colour_radius` / `colour_radius_max` ;
+  miettes sous `colour_min_share` ignorées). Règles communes : une recherche à la fois ;
+  celles pas encore calculées restent, à la fin (sinon le calcul en fond, qui ne voit que
+  la liste, ne les ferait jamais) ; celles sans palette possible partent ; **noir et blanc
+  et couleur ne se mélangent pas** (`Palette::is_monochrome` : toutes les couleurs sous
+  `mono_chroma`, ou teintées, sépia, virage, sous `mono_toned_chroma` et dans
+  `mono_hue_spread` degrés de teinte ; la série brune en couleur de l'utilisateur, teintes
+  sur 26°, reste en couleur, un sépia type, 14°, est monochrome). Lancée du plein écran, une
+  recherche montre ses résultats en grille ; le haut du panneau ne bouge pas, même sans
+  résultat. Mentionnée dans le résumé des filtres ; inversible comme les autres filtres sur le
+  contenu (inversée : ce qu'elle écarte, dans l'ordre habituel) ; décocher, effacer les
+  filtres (`f d`) ou changer de source y met fin. Les palettes du dossier sont lues en fond à leur
+  arrivée, la grille refiltrée de temps en temps (`analysis_refilter_ms`).
 - **Bout de la pile ou de la liste** (`[gui.end]`, #307, 05/11/2026) : en plein écran,
   ← / → qui ne bougent plus le disent un instant, dans le même cadre que le repère de
   position (« Fin de la pile », « Début de la pile », « Fin de la sélection », « Début
