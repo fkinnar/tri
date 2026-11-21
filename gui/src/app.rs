@@ -3021,6 +3021,12 @@ impl TriApp {
             self.histogram_section(ui);
             ui.separator();
         }
+        if self.mode == Mode::View
+            && self.crop.is_none()
+            && self.gui.position_bar.place == crate::settings::BarPlace::Panel
+        {
+            self.position_bar_section(ui);
+        }
     }
 
     /// Ajoute un élément pointable au panneau de droite (`title` : un titre de section) :
@@ -11983,9 +11989,9 @@ impl TriApp {
             });
     }
 
-    /// Barre de position le long du bas de l'image (#537) : la liste affichée par piles,
-    /// la photo, sa place dans la pile. Masquée avec les infos sur l'image et pendant le
-    /// recadrage.
+    /// Barre de position (#537) sur l'image, le long du bas : la liste affichée par piles
+    /// et la photo (`[gui.position_bar]`). Masquée avec les infos sur l'image et pendant
+    /// le recadrage ; rien ici si elle est dans le panneau de droite.
     fn position_bar(
         &mut self,
         ctx: &egui::Context,
@@ -11994,7 +12000,11 @@ impl TriApp {
         path: &Path,
     ) {
         let b = self.gui.position_bar;
-        if !self.image_info || b.seconds == 0.0 || self.crop.is_some() {
+        if !self.image_info
+            || b.seconds == 0.0
+            || self.crop.is_some()
+            || b.place != crate::settings::BarPlace::Overlay
+        {
             self.position_bar_key = None;
             return;
         }
@@ -12005,48 +12015,88 @@ impl TriApp {
         let Some(opacity) = mark_opacity(b.seconds, self.position_bar_since, ctx) else {
             return;
         };
-        let i = self.selected;
-        let position = match self.stacks.stack_number(i).filter(|_| self.stacking) {
-            Some(((g, _), (m, _))) => {
-                let segments = self.stacks.photos_per_group();
-                let before: usize = segments[..g - 1].iter().sum();
-                position_bar::Position {
-                    segments,
-                    stacked: true,
-                    photo: before + m - 1,
-                }
-            }
-            None => {
-                let (n, total) = self
-                    .stacks
-                    .photo_number(i)
-                    .unwrap_or((i + 1, self.files.len()));
-                position_bar::Position {
-                    segments: vec![total],
-                    stacked: false,
-                    photo: n - 1,
-                }
-            }
-        };
-        let Some(layout) = position.layout() else {
+        let Some(position) = self.bar_position() else {
             return;
         };
-        let c = &self.gui.colors;
-        let style = position_bar::Style {
-            thickness: b.thickness,
-            stack_length: b.stack_length,
-            track: Color32::from_white_alpha(70),
-            stack: c.accent_light.into(),
-            photo: c.accent.into(),
-        };
+        let style = self.bar_style(Color32::from_white_alpha(70), true);
         let margin = 16.0;
+        let height = position.height(b.shape, b.thickness);
+        let bottom = area.bottom() - margin / 2.0;
         let bar = Rect::from_x_y_ranges(
             area.left() + margin..=area.right() - margin,
-            area.bottom() - margin / 2.0 - b.thickness..=area.bottom() - margin / 2.0,
+            bottom - height..=bottom,
         );
         let mut painter = painter.clone();
         painter.multiply_opacity(opacity);
-        position_bar::draw(&painter, bar, &layout, &style);
+        position_bar::draw(&painter, bar, &position, b.shape, &style);
+    }
+
+    /// Barre de position dans le panneau de droite (`place = "panel"`), en plein écran,
+    /// sous l'histogramme : toujours visible, comme lui.
+    fn position_bar_section(&mut self, ui: &mut Ui) {
+        let b = self.gui.position_bar;
+        let Some(position) = self.bar_position() else {
+            return;
+        };
+        section_heading(ui, &t!("panel-section-position"), &self.gui.folders);
+        let height = position.height(b.shape, b.thickness);
+        let (rect, _) =
+            ui.allocate_exact_size(vec2(ui.available_width(), height + 4.0), Sense::hover());
+        let track = ui.visuals().widgets.inactive.bg_fill;
+        let style = self.bar_style(track, false);
+        position_bar::draw(
+            ui.painter(),
+            rect.shrink2(vec2(2.0, 2.0)),
+            &position,
+            b.shape,
+            &style,
+        );
+        ui.separator();
+    }
+
+    /// Couleurs de la barre de position, sur le fond `track`.
+    fn bar_style(&self, track: Color32, backdrop: bool) -> position_bar::Style {
+        let c = &self.gui.colors;
+        position_bar::Style {
+            thickness: self.gui.position_bar.thickness,
+            track,
+            stack: c.accent_light.into(),
+            photo: c.accent.into(),
+            backdrop: backdrop.then(|| Color32::from_black_alpha(110)),
+        }
+    }
+
+    /// Ce que montre la barre de position : les piles de la liste affichée (photos,
+    /// développements comptés avec leur photo) et le rang de la photo sélectionnée.
+    fn bar_position(&self) -> Option<position_bar::Position> {
+        let i = self.selected;
+        if i >= self.files.len() {
+            return None;
+        }
+        Some(
+            match self.stacks.stack_number(i).filter(|_| self.stacking) {
+                Some(((g, _), (m, _))) => {
+                    let segments = self.stacks.photos_per_group();
+                    let before: usize = segments[..g - 1].iter().sum();
+                    position_bar::Position {
+                        segments,
+                        stacked: true,
+                        photo: before + m - 1,
+                    }
+                }
+                None => {
+                    let (n, total) = self
+                        .stacks
+                        .photo_number(i)
+                        .unwrap_or((i + 1, self.files.len()));
+                    position_bar::Position {
+                        segments: vec![total],
+                        stacked: false,
+                        photo: n - 1,
+                    }
+                }
+            },
+        )
     }
 
     /// Texte du repère de position de l'image sélectionnée : « Photo 12 / 94 », avec les
@@ -29776,6 +29826,17 @@ mod tests {
         assert!(
             h.state().position_bar_key.is_none(),
             "masquée avec les infos"
+        );
+        // Dans le panneau de droite : plus sur l'image, une section « Position ».
+        act(&mut h, Action::ToggleImageInfo);
+        h.state_mut().metadata_panel = true;
+        h.state_mut().gui.position_bar.place = crate::settings::BarPlace::Panel;
+        h.run_steps(3);
+        assert!(h.state().position_bar_key.is_none(), "pas sur l'image");
+        let title = t!("panel-section-position").to_uppercase();
+        assert!(
+            h.query_all_by_label_contains(&title).next().is_some(),
+            "section du panneau"
         );
     }
 

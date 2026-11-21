@@ -543,6 +543,8 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
             "bottom-right",
             "bottom-left",
         ],
+        ("gui.position_bar", "shape") => &["segmented", "split"],
+        ("gui.position_bar", "place") => &["overlay", "panel"],
         ("cache", "location") => &["user", "disk", "folder"],
         // Tous les logiciels connus ; la liste n'affiche que ceux installés (`fits`).
         ("develop", "default") => &["auto", "darktable", "rapidraw", "rawtherapee", "art"],

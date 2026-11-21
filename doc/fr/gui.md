@@ -196,17 +196,22 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `bottom-right`, `bottom-left`).
 - **Barre de position** (`[gui.position_bar]`, #537, 21/11/2026, idée de l'utilisateur :
   en triant en plein écran, on ne sait plus où on en est, et personne ne regarde la barre
-  d'état) : le long du bas de l'image, la liste affichée (filtrée : ce que ← / → parcourent)
-  découpée en segments, un par pile, aussi large que la pile ; la pile en cours éclairée
-  (`accent_light`), la photo marquée (`accent`, 3 points au moins dans un grand dossier).
-  Au-dessus de la photo, une petite barre verticale dit sa place dans la pile, de bas en
-  haut (pile de plus d'une photo). Sans piles, une seule barre, sans segments ni barre
-  verticale. Position seulement (décidé le 21/11/2026 : colorer selon le tri viendra quand
-  on saura quoi y montrer d'utile ; l'utilisateur trie par passes d'étoiles, pas par
-  accepté / rejeté). Masquée avec les infos sur l'image (`t`) et pendant le recadrage.
-  Géométrie testable à part dans `gui/src/position_bar.rs` (`Position::layout`), segments
-  par `Stacks::photos_per_group` (développements comptés avec leur photo). `seconds` (-1 :
-  toujours ; comme le repère), `thickness`, `stack_length`.
+  d'état), sur la liste affichée (filtrée : ce que ← / → parcourent). Deux formes à
+  l'essai (`shape`) : `segmented`, une barre découpée en segments, un par pile, aussi
+  large que la pile, la pile en cours éclairée (`accent_light`) et la photo marquée
+  (`accent`, 3 points au moins dans un grand dossier) ; `split` (idée de l'utilisateur,
+  plus lisible avec de petites piles dans un grand dossier), trois barres : en haut la
+  photo dans la pile et la pile dans la liste, côte à côte, en dessous la photo dans la
+  liste. Sans piles, une seule barre. Deux places (`place`) : `overlay`, le long du bas de
+  l'image, masquée avec les infos sur l'image (`t`), durée `seconds` (-1 : toujours) ;
+  `panel`, une section « Position » sous l'histogramme du panneau de droite, toujours
+  visible. Jamais pendant le recadrage. Une barre verticale de la place dans la pile a été
+  essayée puis retirée (redondante avec la barre segmentée). Position seulement (décidé le
+  21/11/2026 : colorer selon le tri viendra quand on saura quoi y montrer d'utile ;
+  l'utilisateur trie par passes d'étoiles). Géométrie testable à part dans
+  `gui/src/position_bar.rs` (`Position::layout`, `split`), segments par
+  `Stacks::photos_per_group` (développements comptés avec leur photo). Épaisseur
+  `thickness`.
 - **Bout de la pile ou de la liste** (`[gui.end]`, #307, 05/11/2026) : en plein écran,
   ← / → qui ne bougent plus le disent un instant, dans le même cadre que le repère de
   position (« Fin de la pile », « Début de la pile », « Fin de la sélection », « Début

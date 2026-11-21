@@ -978,18 +978,45 @@ pub struct PositionBarSettings {
     /// Durée d'affichage (secondes) après un changement d'image ; 0 : jamais ; négatif
     /// (-1) : toujours.
     pub seconds: f32,
-    /// Épaisseur de la barre (points).
+    /// Forme : une barre segmentée par pile, ou trois barres.
+    pub shape: BarShape,
+    /// Où : sur l'image, ou dans le panneau de droite.
+    pub place: BarPlace,
+    /// Épaisseur d'une barre (points).
     pub thickness: f32,
-    /// Longueur de la barre verticale de la pile (points).
-    pub stack_length: f32,
+}
+
+/// Forme de la barre de position (#537, à l'essai). Dans le fichier : `"segmented"` ou
+/// `"split"`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BarShape {
+    /// Une barre, la liste découpée en un segment par pile.
+    #[default]
+    Segmented,
+    /// Trois barres : la photo dans la pile et la pile dans la liste, côte à côte, puis
+    /// la photo dans la liste.
+    Split,
+}
+
+/// Place de la barre de position. Dans le fichier : `"overlay"` ou `"panel"`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BarPlace {
+    /// Sur l'image, le long du bas.
+    #[default]
+    Overlay,
+    /// Dans le panneau de droite, sous l'histogramme.
+    Panel,
 }
 
 impl Default for PositionBarSettings {
     fn default() -> Self {
         Self {
             seconds: -1.0,
+            shape: BarShape::Segmented,
+            place: BarPlace::Overlay,
             thickness: 5.0,
-            stack_length: 48.0,
         }
     }
 }

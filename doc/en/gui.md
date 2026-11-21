@@ -186,18 +186,22 @@ system one ("cold" measurements, experiments).
   `development_number`). `[gui.position] seconds` (2; 0: never; -1: always; fades out at
   the end) and `place` (`center`, `top-left`, `top-right`, `bottom-right`, `bottom-left`).
 - **Position bar** (`[gui.position_bar]`, #537, 2026-11-21, user's idea: culling in full
-  screen, one loses track of where one is, and nobody looks at the status bar): along the
-  bottom of the image, the shown list (filtered: what ← / → browse) split into segments,
-  one per stack, as wide as the stack; the current stack lit (`accent_light`), the photo
-  marked (`accent`, at least 3 points wide in a large folder). Above the photo, a short
-  vertical bar gives its place in the stack, bottom to top (stacks of more than one
-  photo). Without stacks, a single bar, no segments and no vertical bar. Position only
+  screen, one loses track of where one is, and nobody looks at the status bar), over the
+  shown list (filtered: what ← / → browse). Two shapes on trial (`shape`): `segmented`,
+  one bar split into segments, one per stack, as wide as the stack, the current stack lit
+  (`accent_light`) and the photo marked (`accent`, at least 3 points wide in a large
+  folder); `split` (user's idea, easier to read with small stacks in a large folder),
+  three bars: on top the photo in the stack and the stack in the list, side by side,
+  below the photo in the list. Without stacks, a single bar. Two places (`place`):
+  `overlay`, along the bottom of the image, hidden with the info on the image (`t`),
+  duration `seconds` (-1: always); `panel`, a "Position" section under the histogram of
+  the right panel, always visible. Never while cropping. A vertical bar for the place in
+  the stack was tried, then removed (redundant with the segmented bar). Position only
   (decided 2026-11-21: colouring by culling state will come once we know what is useful
-  to show; the user culls in star passes, not accepted / rejected). Hidden with the info
-  on the image (`t`) and while cropping. Geometry testable on its own in
-  `gui/src/position_bar.rs` (`Position::layout`), segments from `Stacks::photos_per_group`
-  (developments counted with their photo). `seconds` (-1: always; like the mark),
-  `thickness`, `stack_length`.
+  to show; the user culls in star passes). Geometry testable on its own in
+  `gui/src/position_bar.rs` (`Position::layout`, `split`), segments from
+  `Stacks::photos_per_group` (developments counted with their photo). Thickness
+  `thickness`.
 - **End of the stack or of the list** (`[gui.end]`, #307, 2026-11-05): in full screen,
   ← / → that no longer move say so for a moment, in the same frame as the position mark
   ("End of the stack", "Start of the stack", "End of the selection", "Start of the

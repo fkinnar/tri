@@ -1226,18 +1226,23 @@ seconds = 2.0
 place = "top-left"
 
 [gui.position_bar]
-# Position bar along the bottom of the image in full screen: how long it shows.
+# Position bar in full screen: how long it shows on the image.
 #
-# "Where am I" bar along the bottom of the image in full screen: the shown list split
-# into segments, one per stack (as wide as the stack), the current stack lit and the
-# photo marked; above it, a short vertical bar for the place in the stack. Hidden with
-# the info on the image (<core.view.image_info>). Display time in seconds after a change
-# of image; 0: never; -1: always.
+# "Where am I" bar in full screen, over the shown list. On the image, hidden with the info
+# (<core.view.image_info>); display time in seconds after a change of image; 0: never;
+# -1: always (in the panel, always visible).
 seconds = -1.0
-# Thickness of the bar (points).
+# Shape: "segmented" (one bar, a segment per stack) or "split" (three bars).
+#
+# "segmented": one bar, the list split into segments, one per stack (as wide as the
+# stack), the current stack lit and the photo marked. "split": on top, the photo in the
+# stack and the stack in the list, side by side; below, the photo in the list (easier
+# to read with small stacks in a large folder). Without stacks, a single bar.
+shape = "segmented"
+# Where: "overlay" (on the image, along the bottom) or "panel" (right panel).
+place = "overlay"
+# Thickness of a bar (points).
 thickness = 5.0
-# Length of the vertical stack bar (points).
-stack_length = 48.0
 
 [gui.notes]
 # Ratings drawn on the image in full screen: how long they show.
