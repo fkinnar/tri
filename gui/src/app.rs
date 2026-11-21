@@ -4011,6 +4011,7 @@ impl TriApp {
                     ui.painter()
                         .circle_stroke(at, 7.5, egui::Stroke::new(1.0, Color32::BLACK));
                     ui.add_space(12.0);
+                    let wheel_bottom = rect.bottom();
                     ui.vertical(|ui| {
                         // La couleur, son `#rrggbb` et la pipette.
                         ui.horizontal(|ui| {
@@ -4107,11 +4108,19 @@ impl TriApp {
                         } else if (h, sp, vp) != before_hsv {
                             dialog.set_hsv([h, sp / 100.0, vp / 100.0]);
                         }
-                        ui.add_space(16.0);
-                        ui.horizontal(|ui| {
-                            search = ui.button(t!("palette-colour-search")).clicked();
-                            cancel = ui.button(t!("cancel")).clicked();
-                        });
+                        // Les boutons à droite des valeurs, sur le bas de la roue (retour du
+                        // 21/11/2026).
+                        let width = ui.min_rect().width();
+                        let row = ui.spacing().interact_size.y;
+                        let height = (wheel_bottom - ui.cursor().top()).max(row + 8.0);
+                        ui.allocate_ui_with_layout(
+                            vec2(width, height),
+                            egui::Layout::right_to_left(egui::Align::Max),
+                            |ui| {
+                                cancel = ui.button(t!("cancel")).clicked();
+                                search = ui.button(t!("palette-colour-search")).clicked();
+                            },
+                        );
                     });
                 });
             });
