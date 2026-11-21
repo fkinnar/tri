@@ -240,7 +240,10 @@ system one ("cold" measurements, experiments).
   2026-11-21: a minimum share as well was confusing, and sometimes left out the very
   image the colour was taken from). Started from full screen, a palette search shows its
   results in the grid; without result, the section stays (slider, "Done"); the colour looked for is outlined
-  in the band. One palette search at a time. Copy a colour: click its `#rrggbb` in the
+  in the band. One palette search at a time. **Black and white and colour
+  never mix** (feedback of 2026-11-21): a colour reference or colour leaves out the black
+  and white images (`Palette::is_monochrome`, every colour under `[palette] mono_chroma`),
+  and the other way round. Copy a colour: click its `#rrggbb` in the
   list.
 - **End of the stack or of the list** (`[gui.end]`, #307, 2026-11-05): in full screen,
   ← / → that no longer move say so for a moment, in the same frame as the position mark

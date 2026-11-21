@@ -251,7 +251,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   parfois l'image même où la couleur avait été prise). Lancée du plein écran, une
   recherche de palettes montre ses résultats en grille ; sans résultat, la section reste
   (curseur, « Terminer ») ; la couleur cherchée entourée dans
-  la bande. Une recherche de palettes à la fois. Copier une couleur : clic sur son
+  la bande. Une recherche de palettes à la fois. **Noir et blanc et
+  couleur ne se mélangent pas** (retour du 21/11/2026) : une référence ou une couleur en
+  couleur écarte les images en noir et blanc (`Palette::is_monochrome`, toutes les couleurs
+  sous `[palette] mono_chroma`), et inversement. Copier une couleur : clic sur son
   `#rrggbb` dans la liste.
 - **Bout de la pile ou de la liste** (`[gui.end]`, #307, 05/11/2026) : en plein écran,
   ← / → qui ne bougent plus le disent un instant, dans le même cadre que le repère de

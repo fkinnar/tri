@@ -3664,12 +3664,32 @@ impl TriApp {
                 .unwrap_or(f32::INFINITY),
             (None, None) => 0.0,
         };
+        // Noir et blanc et couleur ne se mélangent pas (retour du 21/11/2026) : une
+        // référence (ou une couleur) en couleur écarte les images en noir et blanc, et
+        // inversement.
+        let ps = self.settings.palette;
+        let mono = |p: &Palette| p.is_monochrome(ps.mono_chroma, ps.colour_min_share);
+        let reference_mono = match (like, colour) {
+            (Some(l), _) => mono(&l.reference),
+            (None, Some(c)) => {
+                let swatch = tri::palette::Swatch {
+                    oklab: c.oklab,
+                    share: 1.0,
+                };
+                swatch.hue_chroma().1 < ps.mono_chroma
+            }
+            (None, None) => false,
+        };
         let files: Vec<MediaFile> = groups.into_iter().flatten().collect();
         let ranked = tri::palette::rank_similar(
             files,
             |f| {
                 let source = kind.source_for(f)?;
-                Some(self.palettes.get(&(f.path.clone(), source)).map(|p| key(p)))
+                match self.palettes.get(&(f.path.clone(), source)) {
+                    Some(p) if mono(p) != reference_mono => None,
+                    Some(p) => Some(Some(key(p))),
+                    None => Some(None),
+                }
             },
             threshold,
         );
@@ -27918,6 +27938,55 @@ mod tests {
         h.run_steps(3);
         assert!(h.state().palette_colour.is_some(), "recherche lancée");
         assert_eq!(h.state().files.len(), 2);
+    }
+
+    #[test]
+    fn palette_searches_never_mix_black_and_white_with_colour() {
+        // Retour du 21/11/2026 : en élargissant, les noir et blanc et les couleurs
+        // arrivaient entremêlés.
+        use tri::palette::{Source, SourceKind};
+        let colors = [[30u8, 60, 200], [128, 128, 128], [200, 200, 200]];
+        let images = ["img0.jpg", "img1.jpg", "img2.jpg"]
+            .iter()
+            .zip(colors)
+            .map(|(name, c)| (*name, image::RgbImage::from_pixel(64, 48, image::Rgb(c))))
+            .collect();
+        let (mut h, _dir) = harness_images(images);
+        h.run_steps(3);
+        h.state_mut().set_palette_source(Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        let names = |h: &Harness<'static, TriApp>| -> Vec<String> {
+            h.state()
+                .files
+                .iter()
+                .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+                .collect()
+        };
+        let max = h.state().settings.palette;
+        // Palettes proches d'un gris, seuil au bout : les gris seulement.
+        h.state_mut().selected = 1;
+        act(&mut h, Action::FilterPalette);
+        if let Some(like) = &mut h.state_mut().palette_like {
+            like.threshold = max.similar_max;
+        }
+        h.state_mut().refilter(Reveal::Minimal);
+        h.run_steps(3);
+        assert_eq!(names(&h), ["img1.jpg", "img2.jpg"]);
+        // Le bleu, tolérance au bout : le bleu seulement.
+        let blue = h.state().palettes[&(h.state().folder.files[0].path.clone(), Source::Camera)]
+            .swatches[0]
+            .oklab;
+        h.state_mut().set_palette_colour(Some(blue));
+        if let Some(c) = &mut h.state_mut().palette_colour {
+            c.radius = max.colour_radius_max;
+        }
+        h.state_mut().refilter(Reveal::Minimal);
+        h.run_steps(3);
+        assert_eq!(names(&h), ["img0.jpg"]);
     }
 
     #[test]

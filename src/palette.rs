@@ -123,6 +123,10 @@ pub struct PaletteSettings {
     /// « Contient cette couleur » : les couleurs de la palette plus petites que cette part
     /// de l'image (0 à 1) ne comptent pas (miettes).
     pub colour_min_share: f32,
+    /// Chroma (OKLab) sous lequel une couleur est un gris : une image dont toutes les
+    /// couleurs le sont est en noir et blanc, et les recherches ne la mélangent pas aux
+    /// images en couleur.
+    pub mono_chroma: f32,
 }
 
 impl Default for PaletteSettings {
@@ -139,6 +143,7 @@ impl Default for PaletteSettings {
             colour_radius: 0.1,
             colour_radius_max: 0.4,
             colour_min_share: 0.02,
+            mono_chroma: 0.03,
         }
     }
 }
@@ -190,6 +195,16 @@ impl Palette {
             .filter(|s| weighted_distance(s.oklab, oklab, chroma_weight) <= radius)
             .map(|s| s.share)
             .sum()
+    }
+
+    /// Vrai si l'image est en noir et blanc : toutes ses couleurs (sauf les miettes sous
+    /// `min_share`) ont un chroma sous `max_chroma`. Les recherches ne mélangent pas noir et
+    /// blanc et couleur (retour du 21/11/2026 : en élargissant, ils arrivaient entremêlés).
+    pub fn is_monochrome(&self, max_chroma: f32, min_share: f32) -> bool {
+        self.swatches
+            .iter()
+            .filter(|s| s.share >= min_share)
+            .all(|s| s.hue_chroma().1 < max_chroma)
     }
 
     /// Distance de la couleur de la palette la plus proche de `oklab` (comptée comme
@@ -645,6 +660,17 @@ mod tests {
             _ => Some(Some(0.2)),
         };
         assert_eq!(rank_similar(items.to_vec(), distance, 0.1), ["c", "a", "d"]);
+    }
+
+    #[test]
+    fn grey_palettes_are_monochrome_and_a_speck_of_colour_does_not_change_that() {
+        let s = PaletteSettings::default();
+        let grey = extract(&bands(&[([230, 230, 230], 60), ([30, 30, 30], 40)]), &s);
+        assert!(grey.is_monochrome(s.mono_chroma, s.colour_min_share));
+        let speck = extract(&bands(&[([230, 230, 230], 99), ([200, 30, 30], 1)]), &s);
+        assert!(speck.is_monochrome(s.mono_chroma, s.colour_min_share));
+        let colour = extract(&bands(&[([230, 230, 230], 60), ([40, 60, 200], 40)]), &s);
+        assert!(!colour.is_monochrome(s.mono_chroma, s.colour_min_share));
     }
 
     #[test]

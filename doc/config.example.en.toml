@@ -608,6 +608,9 @@ colour_radius = 0.1
 colour_radius_max = 0.4
 # Contains this colour: colours smaller than this share of the image don't count.
 colour_min_share = 0.02
+# Chroma under which a colour is a grey: an image all in greys is black and white, never
+# mixed with colour images in the searches.
+mono_chroma = 0.03
 
 [similarity]
 # Group similar images (bursts, series) into stacks in the background.
