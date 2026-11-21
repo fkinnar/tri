@@ -209,6 +209,29 @@ pub fn to_render(
     }
 }
 
+/// Libellé dont la précision finale entre parenthèses est en gris (`weak`) :
+/// « Inscrire les notes dans les images (JPEG, PNG…) ». Sans parenthèses, tel quel.
+pub fn with_paren_note(text: &str, weak: eframe::egui::Color32) -> eframe::egui::WidgetText {
+    match text.rfind(" (") {
+        Some(i) if text.ends_with(')') => {
+            let mut job = eframe::egui::text::LayoutJob::default();
+            let font = eframe::egui::FontSelection::Default;
+            let style = eframe::egui::Style::default();
+            eframe::egui::RichText::new(&text[..i]).append_to(
+                &mut job,
+                &style,
+                font.clone(),
+                eframe::egui::Align::Center,
+            );
+            eframe::egui::RichText::new(&text[i..])
+                .color(weak)
+                .append_to(&mut job, &style, font, eframe::egui::Align::Center);
+            job.into()
+        }
+        _ => text.into(),
+    }
+}
+
 /// Nom d'un choix de liste suivi de sa précision en gris (`weak`) : « JPEG  boîtier »,
 /// « Par palette  séries ». Le nom prend la couleur de la liste.
 pub fn with_note(main: &str, note: &str, weak: eframe::egui::Color32) -> eframe::egui::WidgetText {

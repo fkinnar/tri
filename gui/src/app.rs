@@ -19498,176 +19498,184 @@ impl TriApp {
         // Développer avec : `Some(None)` le rendu RAW (LibRaw), `Some(Some(e))` un logiciel.
         let mut develop: Option<Option<tri::develop::Engine>> = None;
         let engines = self.developers.engines();
-        let modal = modal_at("rating_dialog", at).title(title).show(ctx, |ui| {
-            if !group.is_empty() {
-                ui.checkbox(&mut all, t!("rating-dialog-all", n = group.len()))
-                    .on_hover_text(t!("rating-dialog-all-tip"));
-            }
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                clicked = marks::controls(ui, &notes, &colors, size, &|a| self.action_tip(a))
-            });
-            ui.add_space(6.0);
-            ui.separator();
-            // Actions sur le fichier.
-            // Icônes carrées, libellé et raccourci au survol (retour du 17/10/2026).
-            let icon = self.gui.dialogs.icon_size;
-            ui.horizontal(|ui| {
-                for action in [
-                    Action::FileRename,
-                    Action::FileCopy,
-                    Action::FileMove,
-                    Action::FileDelete,
-                    Action::FileReveal,
-                    Action::FileEdit,
-                    Action::Send("plugin.airdrop.send"),
-                ]
-                .into_iter()
-                .filter(|a| a.available())
-                {
-                    // Actions sur les fichiers interdites : grisées, la bulle dit
-                    // pourquoi (30/10/2026). Renommer toute la sélection : par lot (#439).
-                    let enabled = !action.changes_files() || self.settings.files.allow_actions;
-                    let tip = if enabled {
-                        self.action_tip(action)
-                    } else {
-                        t!("files-actions-off")
-                    };
-                    let (rect, response) = ui
-                        .add_enabled_ui(enabled, |ui| {
-                            marks::icon_button(ui, icon, &action.label(), &tip)
-                        })
-                        .inner;
-                    let color = if enabled {
-                        ui.style().interact(&response).fg_stroke.color
-                    } else {
-                        ui.visuals().weak_text_color()
-                    };
-                    marks::file_action(ui.painter(), rect.shrink(icon * 0.22), action, color);
-                    if response.clicked() {
-                        file_action = Some(action);
-                    }
+        // Largeur du contenu (retour du 21/11/2026 : trop large à la largeur maximale).
+        let modal = modal_at("rating_dialog", at)
+            .title(title)
+            .free_width()
+            .show(ctx, |ui| {
+                if !group.is_empty() {
+                    ui.checkbox(&mut all, t!("rating-dialog-all", n = group.len()))
+                        .on_hover_text(t!("rating-dialog-all-tip"));
                 }
-            });
-            // Listes de texte, plus lisibles qu'une rangée d'icônes (retour du 21/11/2026) :
-            // notes (sidecars, notes inscrites), calculs (#555), développer avec.
-            ui.add_space(6.0);
-            let compute_kinds: Vec<tri::compute::Kind> = [
-                tri::compute::Kind::Previews,
-                tri::compute::Kind::Raw,
-                tri::compute::Kind::Exposure,
-                tri::compute::Kind::Sharpness,
-                tri::compute::Kind::Signatures,
-            ]
-            .into_iter()
-            .chain(self.compute_palette_kinds())
-            .collect();
-            egui::Grid::new("rating_dialog_lists")
-                .num_columns(2)
-                .spacing([8.0, 6.0])
-                .show(ui, |ui| {
-                    let mut item = |ui: &mut Ui, action: Action, text: String| {
-                        if ui
-                            .add(egui::Button::selectable(false, text))
-                            .on_hover_text(self.action_tip(action))
-                            .clicked()
-                        {
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    clicked = marks::controls(ui, &notes, &colors, size, &|a| self.action_tip(a))
+                });
+                ui.add_space(6.0);
+                ui.separator();
+                // Actions sur le fichier.
+                // Icônes carrées, libellé et raccourci au survol (retour du 17/10/2026).
+                let icon = self.gui.dialogs.icon_size;
+                ui.horizontal(|ui| {
+                    for action in [
+                        Action::FileRename,
+                        Action::FileCopy,
+                        Action::FileMove,
+                        Action::FileDelete,
+                        Action::FileReveal,
+                        Action::FileEdit,
+                        Action::Send("plugin.airdrop.send"),
+                    ]
+                    .into_iter()
+                    .filter(|a| a.available())
+                    {
+                        // Actions sur les fichiers interdites : grisées, la bulle dit
+                        // pourquoi (30/10/2026). Renommer toute la sélection : par lot (#439).
+                        let enabled = !action.changes_files() || self.settings.files.allow_actions;
+                        let tip = if enabled {
+                            self.action_tip(action)
+                        } else {
+                            t!("files-actions-off")
+                        };
+                        let (rect, response) = ui
+                            .add_enabled_ui(enabled, |ui| {
+                                marks::icon_button(ui, icon, &action.label(), &tip)
+                            })
+                            .inner;
+                        let color = if enabled {
+                            ui.style().interact(&response).fg_stroke.color
+                        } else {
+                            ui.visuals().weak_text_color()
+                        };
+                        marks::file_action(ui.painter(), rect.shrink(icon * 0.22), action, color);
+                        if response.clicked() {
                             file_action = Some(action);
                         }
-                    };
-                    ui.label(t!("rating-dialog-notes"));
-                    egui::ComboBox::from_id_salt("rating_dialog_notes")
-                        // Listes de même largeur, alignées.
-                        .width(200.0)
-                        .selected_text(t!("rating-dialog-notes-choose"))
-                        .show_ui(ui, |ui| {
-                            for action in
-                                [Action::Sidecars, Action::EmbedNotes, Action::ImportNotes]
-                            {
-                                item(ui, action, action.label());
-                            }
-                        })
-                        .response
-                        // Nom accessible : le texte montré (les tests la trouvent).
-                        .widget_info(|| {
-                            egui::WidgetInfo::labeled(
-                                egui::Role::ComboBox,
-                                true,
-                                t!("rating-dialog-notes-choose"),
-                            )
-                        });
-                    ui.end_row();
-                    ui.label(t!("rating-dialog-compute"));
-                    egui::ComboBox::from_id_salt("rating_dialog_compute")
-                        // Listes de même largeur, alignées.
-                        .width(200.0)
-                        .selected_text(t!("rating-dialog-compute-choose"))
-                        .show_ui(ui, |ui| {
-                            for &kind in &compute_kinds {
-                                let text = crate::compute_tasks::kind_label(kind);
-                                item(ui, Action::Compute(kind), text);
-                            }
-                            ui.separator();
-                            item(ui, Action::ComputeAll, t!("folder-menu-compute-all"));
-                            item(
-                                ui,
-                                Action::RecreateAll,
-                                t!("folder-menu-compute-recreate-all"),
-                            );
-                        })
-                        .response
-                        // Nom accessible : le texte montré (les tests la trouvent).
-                        .widget_info(|| {
-                            egui::WidgetInfo::labeled(
-                                egui::Role::ComboBox,
-                                true,
-                                t!("rating-dialog-compute-choose"),
-                            )
-                        });
-                    ui.end_row();
-                    // Développer avec (26/10/2026) : les logiciels installés, ou le rendu RAW.
-                    if !engines.is_empty() {
-                        ui.label(t!("develop-with"));
-                        egui::ComboBox::from_id_salt("develop_with")
-                            // Listes de même largeur, alignées.
-                            .width(200.0)
-                            .selected_text(t!("develop-with-choose"))
-                            .show_ui(ui, |ui| {
-                                for &engine in &engines {
-                                    let action = Action::DevelopWith(engine);
-                                    // Seulement ce qu'on y a développé (un `.rrdata` de
-                                    // notes seules donnait un rendu orphelin, hors de la
-                                    // pile : retour du 31/10/2026 ; puis darktable aussi,
-                                    // le soir : sans développement, rien à voir ; seul le
-                                    // rendu LibRaw est toujours là).
-                                    let developable = tri::develop::is_developed_in(&path, engine);
-                                    let tip = if developable {
-                                        self.action_tip(action)
-                                    } else {
-                                        t!("develop-with-not-developed", engine = engine.name())
-                                    };
-                                    if ui
-                                        .add_enabled(
-                                            developable,
-                                            egui::Button::selectable(false, engine.name()),
-                                        )
-                                        .on_hover_text(tip)
-                                        .clicked()
-                                    {
-                                        develop = Some(Some(engine));
-                                    }
-                                }
-                                if ui
-                                    .selectable_label(false, t!("develop-with-libraw"))
-                                    .clicked()
-                                {
-                                    develop = Some(None);
-                                }
-                            });
-                        ui.end_row();
                     }
                 });
-        });
+                // Listes de texte, plus lisibles qu'une rangée d'icônes (retour du 21/11/2026) :
+                // notes (sidecars, notes inscrites), calculs (#555), développer avec.
+                ui.add_space(6.0);
+                let compute_kinds: Vec<tri::compute::Kind> = [
+                    tri::compute::Kind::Previews,
+                    tri::compute::Kind::Raw,
+                    tri::compute::Kind::Exposure,
+                    tri::compute::Kind::Sharpness,
+                    tri::compute::Kind::Signatures,
+                ]
+                .into_iter()
+                .chain(self.compute_palette_kinds())
+                .collect();
+                egui::Grid::new("rating_dialog_lists")
+                    .num_columns(2)
+                    .spacing([8.0, 6.0])
+                    .show(ui, |ui| {
+                        // Précisions entre parenthèses en gris (retour du 21/11/2026).
+                        let weak = ui.visuals().weak_text_color();
+                        let mut item = |ui: &mut Ui, action: Action, text: String| {
+                            let text = crate::grid_render::with_paren_note(&text, weak);
+                            if ui
+                                .add(egui::Button::selectable(false, text))
+                                .on_hover_text(self.action_tip(action))
+                                .clicked()
+                            {
+                                file_action = Some(action);
+                            }
+                        };
+                        ui.label(t!("rating-dialog-notes"));
+                        egui::ComboBox::from_id_salt("rating_dialog_notes")
+                            // Listes de même largeur, alignées.
+                            .width(200.0)
+                            .selected_text(t!("rating-dialog-notes-choose"))
+                            .show_ui(ui, |ui| {
+                                for action in
+                                    [Action::Sidecars, Action::EmbedNotes, Action::ImportNotes]
+                                {
+                                    item(ui, action, action.label());
+                                }
+                            })
+                            .response
+                            // Nom accessible : le texte montré (les tests la trouvent).
+                            .widget_info(|| {
+                                egui::WidgetInfo::labeled(
+                                    egui::Role::ComboBox,
+                                    true,
+                                    t!("rating-dialog-notes-choose"),
+                                )
+                            });
+                        ui.end_row();
+                        ui.label(t!("rating-dialog-compute"));
+                        egui::ComboBox::from_id_salt("rating_dialog_compute")
+                            // Listes de même largeur, alignées.
+                            .width(200.0)
+                            .selected_text(t!("rating-dialog-compute-choose"))
+                            .show_ui(ui, |ui| {
+                                for &kind in &compute_kinds {
+                                    let text = crate::compute_tasks::kind_label(kind);
+                                    item(ui, Action::Compute(kind), text);
+                                }
+                                ui.separator();
+                                item(ui, Action::ComputeAll, t!("folder-menu-compute-all"));
+                                item(
+                                    ui,
+                                    Action::RecreateAll,
+                                    t!("folder-menu-compute-recreate-all"),
+                                );
+                            })
+                            .response
+                            // Nom accessible : le texte montré (les tests la trouvent).
+                            .widget_info(|| {
+                                egui::WidgetInfo::labeled(
+                                    egui::Role::ComboBox,
+                                    true,
+                                    t!("rating-dialog-compute-choose"),
+                                )
+                            });
+                        ui.end_row();
+                        // Développer avec (26/10/2026) : les logiciels installés, ou le rendu RAW.
+                        if !engines.is_empty() {
+                            ui.label(t!("develop-with"));
+                            egui::ComboBox::from_id_salt("develop_with")
+                                // Listes de même largeur, alignées.
+                                .width(200.0)
+                                .selected_text(t!("develop-with-choose"))
+                                .show_ui(ui, |ui| {
+                                    for &engine in &engines {
+                                        let action = Action::DevelopWith(engine);
+                                        // Seulement ce qu'on y a développé (un `.rrdata` de
+                                        // notes seules donnait un rendu orphelin, hors de la
+                                        // pile : retour du 31/10/2026 ; puis darktable aussi,
+                                        // le soir : sans développement, rien à voir ; seul le
+                                        // rendu LibRaw est toujours là).
+                                        let developable =
+                                            tri::develop::is_developed_in(&path, engine);
+                                        let tip = if developable {
+                                            self.action_tip(action)
+                                        } else {
+                                            t!("develop-with-not-developed", engine = engine.name())
+                                        };
+                                        if ui
+                                            .add_enabled(
+                                                developable,
+                                                egui::Button::selectable(false, engine.name()),
+                                            )
+                                            .on_hover_text(tip)
+                                            .clicked()
+                                        {
+                                            develop = Some(Some(engine));
+                                        }
+                                    }
+                                    if ui
+                                        .selectable_label(false, t!("develop-with-libraw"))
+                                        .clicked()
+                                    {
+                                        develop = Some(None);
+                                    }
+                                });
+                            ui.end_row();
+                        }
+                    });
+            });
         if let Some(choice) = develop {
             self.rating_dialog = None;
             if let Some(i) = self.files.iter().position(|f| f.path == path) {
