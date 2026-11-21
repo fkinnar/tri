@@ -4225,17 +4225,26 @@ impl TriApp {
             .fixed_pos(screen.min)
             .show(ctx, |ui| {
                 let response = ui.allocate_response(screen.size(), Sense::click());
-                ctx.set_cursor_icon(egui::CursorIcon::Crosshair);
-                // Sur une image (loupe fermée) : le collimateur, à la taille de la zone
-                // prélevée dans l'image entière.
-                if let Some(pos) = response.hover_pos()
-                    && !self.loupe_on
-                    && let Some(full) = self.image_under(pos).map(|(_, rect, uv)| {
-                        vec2(rect.width() / uv.width(), rect.height() / uv.height())
+                // Sur une image : le collimateur, à la taille de la zone prélevée dans
+                // l'image entière (dans la loupe quand elle est ouverte), sans le curseur
+                // du système (retour du 21/11/2026 : deux croix, l'une en retard).
+                let full = response.hover_pos().and_then(|pos| {
+                    self.image_under(pos).map(|(_, rect, uv)| {
+                        (
+                            pos,
+                            vec2(rect.width() / uv.width(), rect.height() / uv.height()),
+                        )
                     })
-                {
-                    let side = self.settings.palette.pick_area * full.x.max(full.y);
-                    eyedropper_reticle(ui.painter(), pos, side);
+                });
+                match full {
+                    Some((pos, full)) => {
+                        ctx.set_cursor_icon(egui::CursorIcon::None);
+                        if !self.loupe_on {
+                            let side = self.settings.palette.pick_area * full.x.max(full.y);
+                            eyedropper_reticle(ui.painter(), pos, side);
+                        }
+                    }
+                    None => ctx.set_cursor_icon(egui::CursorIcon::Crosshair),
                 }
                 response
                     .clicked()
@@ -12797,7 +12806,7 @@ impl TriApp {
             }
             if self.zoom.is_some() || (self.loupe_on && i == self.loupe_index) {
                 let developed = self.developed_level(&self.files[i].path);
-                let level = view::zoom_level(kind, self.source_for(&self.files[i]), developed);
+                let level = view::zoom_level(kind, self.loupe_source(&self.files[i]), developed);
                 // 100 % RAW : seulement une fois qu'on s'est arrêté sur l'image.
                 let expensive = level == Level::Full && kind == MediaKind::Raw;
                 if !expensive || self.focus_since.elapsed() >= self.gui.view.full_raw_dwell() {
@@ -13933,6 +13942,21 @@ impl TriApp {
             self.base_source = source;
         }
         self.source = source;
+    }
+
+    /// Source de la loupe (et du 1:1) pour `file` : en grille, celle de sa vignette
+    /// (retour du 21/11/2026 : grille en rendu darktable, la loupe montrait le rendu
+    /// LibRaw) ; ailleurs, la source affichée ([`TriApp::source_for`]).
+    fn loupe_source(&self, file: &MediaFile) -> Source {
+        if self.mode != Mode::Grid {
+            return self.source_for(file);
+        }
+        match self.grid_levels.get(&file.path) {
+            Some(Level::Developed(_)) => Source::Developed,
+            Some(Level::Standard) if file.kind == MediaKind::Raw => Source::Raw,
+            _ if file.kind == MediaKind::Raw => Source::Embedded,
+            _ => Source::Raw,
+        }
     }
 
     /// Source affichée pour `file` : la source choisie, sauf « développé » sur une image
@@ -16350,7 +16374,7 @@ impl TriApp {
         let file = &self.files[index];
         let level = view::zoom_level(
             file.kind,
-            self.source_for(file),
+            self.loupe_source(file),
             self.developed_level(&file.path),
         );
         let ppp = ctx.pixels_per_point();
@@ -29291,6 +29315,17 @@ mod tests {
             .map(|(_, r)| r.center())
             .expect("vignette dessinée");
         h.event(UiEvent::PointerMoved(at));
+        h.run_steps(2);
+        // Sur la vignette : le collimateur, sans la croix du système (retour du
+        // 21/11/2026 : deux croix, l'une en retard).
+        assert_eq!(
+            h.output().platform_output.cursor_icon,
+            egui::CursorIcon::None,
+            "curseur masqué sur l'image"
+        );
+        // La loupe y montrerait la source de la vignette (ici : l'image plate elle-même).
+        let file = h.state().files[img1].clone();
+        assert_eq!(h.state().loupe_source(&file), crate::view::Source::Raw);
         for pressed in [true, false] {
             h.event(UiEvent::PointerButton {
                 pos: at,

@@ -293,6 +293,20 @@ impl Coverage {
         near as f32 / self.total.max(1) as f32
     }
 
+    /// Part des pixels dont le chroma (saturation OKLab) dépasse `chroma`.
+    pub fn share_chroma_above(&self, chroma: f32) -> f32 {
+        let above: u32 = self
+            .bins
+            .iter()
+            .filter(|(bin, _)| {
+                let [_, a, b] = cover_centre(*bin);
+                a.hypot(b) > chroma
+            })
+            .map(|&(_, n)| u32::from(n))
+            .sum();
+        above as f32 / self.total.max(1) as f32
+    }
+
     /// Distance à `oklab` en deçà de laquelle se trouve au moins `min_share` de l'image
     /// (les miettes plus petites ne comptent pas) ; `None` sans point.
     pub fn reach(&self, oklab: [f32; 3], chroma_weight: f32, min_share: f32) -> Option<f32> {
@@ -366,6 +380,15 @@ impl Palette {
     /// teintes dans `mono.hue_spread` degrés, alignées sur une seule teinte). Les recherches
     /// ne mélangent pas monochromes et couleur (retours du 21/11/2026).
     pub fn is_monochrome(&self, mono: Monochrome, min_share: f32) -> bool {
+        // Les vrais pixels d'abord (retour du 21/11/2026, vidéo) : un portrait chaud et peu
+        // saturé, sur fond sombre, avait toutes ses couleurs moyennes sous le seuil des
+        // teintées, alignées ; jugé « sépia », il était écarté d'une recherche de couleur
+        // pipetée sur lui. Plus de `min_share` des pixels au-delà de ce seuil : en couleur.
+        if !self.coverage.is_empty()
+            && self.coverage.share_chroma_above(mono.toned_chroma) > min_share
+        {
+            return false;
+        }
         let mut hues = Vec::new();
         for s in self.swatches.iter().filter(|s| s.share >= min_share) {
             let (hue, chroma) = s.hue_chroma();
@@ -1135,6 +1158,47 @@ mod tests {
         let blue = working_to_oklab([30, 60, 200]);
         assert!(palette.nearest(blue, s.chroma_weight, 0.02).unwrap() > 0.3);
         assert!(palette.nearest(picked, s.chroma_weight, 0.2).unwrap() > reach);
+    }
+
+    #[test]
+    fn a_warm_portrait_is_not_taken_for_a_toned_monochrome() {
+        // Retour du 21/11/2026 (vidéo) : fond sombre, peau chaude peu saturée en moyenne ;
+        // la peau dans l'ombre, plus saturée, en fait une photo en couleur. Un vrai virage
+        // (sépia léger partout) reste monochrome.
+        let s = PaletteSettings {
+            colors: 3,
+            ..PaletteSettings::default()
+        };
+        let mono = s.monochrome();
+        let portrait = extract(
+            &bands(&[
+                ([20, 18, 17], 60),
+                ([130, 115, 105], 25),
+                ([121, 80, 50], 6),
+                ([90, 82, 76], 9),
+            ]),
+            &s,
+        );
+        // Ses couleurs moyennes seules la diraient virée (le cas de la vidéo)…
+        let averages_only = Palette {
+            coverage: Coverage::default(),
+            ..portrait.clone()
+        };
+        assert!(
+            averages_only.is_monochrome(mono, s.colour_min_share),
+            "{portrait:?}"
+        );
+        // … ses vrais pixels, non.
+        assert!(!portrait.is_monochrome(mono, s.colour_min_share));
+        let sepia = extract(
+            &bands(&[
+                ([40, 34, 28], 40),
+                ([110, 95, 80], 30),
+                ([180, 160, 140], 30),
+            ]),
+            &s,
+        );
+        assert!(sepia.is_monochrome(mono, s.colour_min_share));
     }
 
     #[test]
