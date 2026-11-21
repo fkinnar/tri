@@ -221,13 +221,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Palette de couleurs** (section « Palette » du panneau de droite, #492, 21/11/2026),
   en grille et en plein écran, en bas du panneau. Une **source** au choix
   (`palette_source` de l'état d'affichage, retenue) : aucune (par défaut : rien ne se
-  calcule), JPEG boîtier, données brutes (LibRaw), rendus finis ; choisie, les palettes du
+  calcule), JPEG boîtier, données brutes (LibRaw), développements (leurs rendus finis) ; choisie, les palettes du
   dossier se calculent en fond (`Scheduler::set_palette`, avancement « palettes » dans la
   barre d'état). Pour l'image sélectionnée : la **bande** des couleurs, chacune aussi
   large que sa part (survol : `#rrggbb` et part ; clic : copie), la **roue chromatique**
   (teinte en angle, chroma en racine du rayon pour étaler les couleurs peu saturées d'une
-  photo, taille selon la part) et la liste des couleurs. En rendus finis, **tous les développements** de la photo
-  (logiciels, clones, copies), chacun nommé avec sa bande (retour du 21/11/2026) ; la roue et
+  photo, taille selon la part) et la liste des couleurs. Avec les développements, **tous ceux** de la photo
+  (logiciels, clones, copies), chacun nommé avec sa bande, même seul (retours du 21/11/2026) ; la roue et
   la liste : celui sélectionné, sinon le premier ; une photo sans développement le dit. Lecture du cache en fond, la dernière demandée d'abord
   (`palette_reads`), comme l'histogramme. Dessin dans `gui/src/palette_view.rs`. **Palettes proches** (bouton de la
   section, action `core.filter.palette`) : la grille ne garde que les images dont la

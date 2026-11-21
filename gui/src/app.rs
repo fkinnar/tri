@@ -3731,9 +3731,12 @@ impl TriApp {
             targets[0]
         };
         let several = targets.len() > 1;
+        // Développements : toujours nommés, même seul (retour du 21/11/2026 : on
+        // s'attendait à lire « darktable »).
+        let named = kind == SourceKind::Developed;
         let mut main_palette = None;
         for &i in &targets {
-            if several {
+            if named {
                 let label = development_label(&self.files[i].path);
                 let text = egui::RichText::new(label);
                 ui.label(if i == main {
@@ -27432,7 +27435,7 @@ mod tests {
         let (mut h, dir) = harness();
         h.run_steps(3);
         let photos = dir.path().join("photos");
-        for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp"] {
+        for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp", "img1_01.jpg.xmp"] {
             std::fs::write(
                 photos.join(name),
                 r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
@@ -27441,7 +27444,7 @@ mod tests {
         }
         h.state_mut().developers = fake_darktable();
         h.state_mut().reload_folder(None);
-        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 6);
         assert_eq!(selected_name(&h), "img0.jpg");
         h.state_mut().metadata_panel = true;
         h.state_mut()
@@ -27451,14 +27454,34 @@ mod tests {
             .filter(|&i| tri::developments::get(&h.state().files[i].path).is_some())
             .map(|i| development_label(&h.state().files[i].path))
             .collect();
-        assert_eq!(labels.len(), 2, "{labels:?}");
-        for label in &labels {
+        assert_eq!(labels.len(), 3, "{labels:?}");
+        let img0: Vec<&String> = labels.iter().filter(|l| !l.is_empty()).take(2).collect();
+        for label in img0 {
             assert!(h.query_by_label(label).is_some(), "{label} montré");
         }
         assert!(
             h.query_by_label(&t!("palette-no-render")).is_none(),
             "la photo a des rendus finis"
         );
+        // Un seul développement (img1) : nommé aussi (retour du 21/11/2026).
+        let img1 = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path.ends_with("img1.jpg"))
+            .unwrap();
+        h.state_mut().selected = img1;
+        h.run_steps(3);
+        let dev = h
+            .state()
+            .files
+            .iter()
+            .find(|f| {
+                tri::developments::get(&f.path).is_some_and(|d| d.photo.ends_with("img1.jpg"))
+            })
+            .map(|f| development_label(&f.path))
+            .unwrap();
+        assert!(h.query_by_label(&dev).is_some(), "{dev} montré, même seul");
     }
 
     #[test]

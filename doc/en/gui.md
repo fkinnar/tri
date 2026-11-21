@@ -210,13 +210,14 @@ system one ("cold" measurements, experiments).
 - **Colour palette** ("Palette" section of the right panel, #492, 2026-11-21), in the grid
   and in full screen, at the bottom of the panel. A **source** to choose (`palette_source`
   of the display state, remembered): none (default: nothing is computed), camera JPEG,
-  raw data (LibRaw), finished renders; once chosen, the folder's palettes are computed in
+  raw data (LibRaw), developments (their finished renders); once chosen, the folder's palettes are computed in
   the background (`Scheduler::set_palette`, "palettes" progress in the status bar). For
   the selected image: the colour **band**, each colour as wide as its share (hover:
   `#rrggbb` and share; click: copy), the **colour wheel** (hue as angle, chroma as the
   square root of the radius to spread a photo's low-saturation colours, size by share)
-  and the list of colours. With finished renders, **every development** of the photo
-  (software, clones, copies), each named with its band (feedback of 2026-11-21); the wheel
+  and the list of colours. With developments, **every one** of the photo
+  (software, clones, copies), each named with its band, even alone (feedback of
+  2026-11-21); the wheel
   and list: the selected one, otherwise the first; a photo without development says so. Cache read in the background, newest request first (`palette_reads`), like the
   histogram. Drawing in `gui/src/palette_view.rs`. **Similar palettes** (section button,
   action `core.filter.palette`): the grid keeps only the images whose palette is within
