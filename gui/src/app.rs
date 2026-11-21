@@ -13045,7 +13045,7 @@ impl TriApp {
         {
             let level = view::zoom_level(
                 file.kind,
-                self.source_for(file),
+                self.loupe_source(file),
                 self.developed_level(&file.path),
             );
             let key = (file.path.clone(), level);
@@ -13079,7 +13079,8 @@ impl TriApp {
                 }
                 continue;
             }
-            let source = self.source_for(&self.files[index]);
+            // En grille (loupe) : la source de la vignette.
+            let source = self.loupe_source(&self.files[index]);
             let developed = self.developed_level(&self.files[index].path);
             let level = view::pick(kind, source, zoomed, developed, |l| self.ready(index, l));
             if let Some(level) = level.filter(|&l| l != Level::Thumbnail) {
@@ -16382,11 +16383,16 @@ impl TriApp {
         let full = self.big.get(&(file.path.clone(), level)).cloned();
         let (texture, px, loading) = match full {
             Some(b) => (b.texture.id(), b.original, false),
-            None => match self
-                .big
-                .get(&(file.path.clone(), Level::Standard))
-                .cloned()
-                .or_else(|| self.big.get(&(file.path.clone(), Level::Embedded)).cloned())
+            // En attendant : un rendu développé ne se remplace pas par une autre source
+            // (retour du 21/11/2026 : le JPEG boîtier, aux couleurs du boîtier).
+            None => match (!matches!(level, Level::Developed(_)))
+                .then(|| self.big.get(&(file.path.clone(), Level::Standard)).cloned())
+                .flatten()
+                .or_else(|| {
+                    (!matches!(level, Level::Developed(_)))
+                        .then(|| self.big.get(&(file.path.clone(), Level::Embedded)).cloned())
+                        .flatten()
+                })
                 // Dans la grille : la vignette, agrandie le temps du 1:1.
                 .or_else(|| {
                     self.textures.get(&file.path).map(|t| Big {
@@ -36285,6 +36291,41 @@ mod tests {
         run_until(&mut h, |app| app.compute_tasks.is_empty());
         let (text, _) = h.state().notice.clone().unwrap();
         assert!(text.contains(&t!("compute-images", n = 2)), "{text}");
+    }
+
+    #[test]
+    fn the_grid_loupe_asks_for_the_thumbnail_s_render() {
+        // Retour du 21/11/2026 (vidéo) : grille en rendu darktable, la loupe montrait le
+        // JPEG boîtier (« 100 % en cours… ») au lieu du développement.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert_eq!(h.state().mode, Mode::Grid);
+        let path = h.state().files[0].path.clone();
+        let darktable = Level::Developed(tri::develop::Engine::Darktable);
+        h.state_mut().grid_levels.insert(path.clone(), darktable);
+        let file = h.state().files[0].clone();
+        assert_eq!(
+            h.state().loupe_source(&file),
+            crate::view::Source::Developed
+        );
+        h.state_mut().loupe_on = true;
+        h.state_mut().loupe_index = 0;
+        h.state_mut().requested.clear();
+        h.state_mut().request_zoom();
+        assert!(
+            h.state().requested.contains(&(path.clone(), darktable)),
+            "{:?}",
+            h.state().requested
+        );
+        // Calculé : c'est lui que le chargeur prépare, pas le JPEG boîtier.
+        h.state_mut().status[0].developed = Avail::Ready;
+        let ctx = h.ctx.clone();
+        h.state_mut().update_loads(&ctx);
+        assert!(
+            h.state().wanted.contains(&(path, darktable)),
+            "{:?}",
+            h.state().wanted
+        );
     }
 
     #[test]
