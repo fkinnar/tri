@@ -208,7 +208,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   liste. Sans piles, une seule barre. Deux places (`place`) : `overlay`, le long du bas de
   l'image, masquée avec les infos sur l'image (`t`), durée `seconds` (-1 : toujours) ;
   `panel`, une section « Position » sous l'histogramme du panneau de droite, toujours
-  visible (pendant le calcul de l'histogramme, le précédent reste affiché, `last_histogram` :
+  visible, en grille aussi (une recherche de palettes lancée du plein écran passe en
+  grille : le panneau ne remonte pas ; sans résultat, histogramme et position gardent
+  leur place) (pendant le calcul de l'histogramme, le précédent reste affiché, `last_histogram` :
   sinon il clignotait et la barre sautait à chaque image ; grisé si le calcul dépasse
   `[gui.metadata] histogram_stale_ms`, 400 ms, sur un disque lent par exemple). Sur l'image, les notes et les repères du bas remontent au-dessus d'elle
   (`marks_area`). Jamais pendant le recadrage. Une barre verticale de la place dans la pile a été

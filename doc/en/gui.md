@@ -197,7 +197,9 @@ system one ("cold" measurements, experiments).
   below the photo in the list. Without stacks, a single bar. Two places (`place`):
   `overlay`, along the bottom of the image, hidden with the info on the image (`t`),
   duration `seconds` (-1: always); `panel`, a "Position" section under the histogram of
-  the right panel, always visible (while the histogram is computed, the previous one stays, `last_histogram`:
+  the right panel, always visible, in the grid too (a palette search started from full
+  screen goes to the grid: the panel does not shift; without result, histogram and
+  position keep their place) (while the histogram is computed, the previous one stays, `last_histogram`:
   otherwise it blinked and the bar jumped at each image; greyed if the computation
   takes longer than `[gui.metadata] histogram_stale_ms`, 400 ms, on a slow drive say). On the image, the notes and the bottom marks
   move up above it (`marks_area`). Never while cropping. A vertical bar for the place in

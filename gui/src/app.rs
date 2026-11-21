@@ -1466,6 +1466,8 @@ pub struct TriApp {
     /// Hauteur prise en bas de l'image par la barre de position dessinée dessus : les
     /// notes et les repères du bas remontent d'autant (retour du 21/11/2026).
     position_bar_reserved: f32,
+    /// Hauteur de la dernière barre de position du panneau, gardée sans image.
+    position_bar_height: f32,
     /// Dernier histogramme dessiné dans le panneau (exposition, réelle à côté, JPEG
     /// boîtier) : gardé à l'écran le temps que celui de l'image suivante se calcule
     /// (retour du 21/11/2026 : il disparaissait et réapparaissait à chaque image).
@@ -2277,6 +2279,7 @@ impl TriApp {
             position_bar_key: None,
             position_bar_since: Instant::now(),
             position_bar_reserved: 0.0,
+            position_bar_height: 0.0,
             last_histogram: None,
             histogram_wait: None,
             last_zoom_size: std::collections::HashMap::new(),
@@ -3089,16 +3092,18 @@ impl TriApp {
     /// 07/11/2026 ; le suivre demanderait un histogramme RAW recalculé sur la zone).
     fn side_panel_pinned(&mut self, ui: &mut Ui) {
         self.meta_has_histogram = false;
-        if self.gui.metadata.histogram
-            && self.histogram
-            && !self.files.is_empty()
-            && self.crop.is_none()
-        {
+        // Une recherche de palettes sans résultat garde le haut du panneau tel quel
+        // (retour du 21/11/2026 : l'histogramme et la position partaient, tout remontait).
+        let kept = !self.files.is_empty() || self.palette_searching();
+        if self.gui.metadata.histogram && self.histogram && kept && self.crop.is_none() {
             section_heading(ui, &t!("panel-section-histogram"), &self.gui.folders);
             self.histogram_section(ui);
             ui.separator();
         }
-        if self.mode == Mode::View
+        // En grille aussi (retour du 21/11/2026 : une recherche lancée du plein écran
+        // passe en grille, et le panneau remontait d'une ligne).
+        if matches!(self.mode, Mode::View | Mode::Grid)
+            && kept
             && self.crop.is_none()
             && self.gui.position_bar.place == crate::settings::BarPlace::Panel
         {
@@ -12752,13 +12757,22 @@ impl TriApp {
     /// sous l'histogramme : toujours visible, comme lui.
     fn position_bar_section(&mut self, ui: &mut Ui) {
         let b = self.gui.position_bar;
-        let Some(position) = self.bar_position() else {
-            return;
-        };
         section_heading(ui, &t!("panel-section-position"), &self.gui.folders);
-        let height = position.height(b.shape, b.thickness);
+        // Sans image (recherche sans résultat) : la place de la dernière barre, vide.
+        let position = self.bar_position();
+        let height = match &position {
+            Some(p) => {
+                self.position_bar_height = p.height(b.shape, b.thickness);
+                self.position_bar_height
+            }
+            None => self.position_bar_height.max(b.thickness),
+        };
         let (rect, _) =
             ui.allocate_exact_size(vec2(ui.available_width(), height + 4.0), Sense::hover());
+        let Some(position) = position else {
+            ui.separator();
+            return;
+        };
         let track = ui.visuals().widgets.inactive.bg_fill;
         let style = self.bar_style(track, false);
         position_bar::draw(
@@ -27781,10 +27795,16 @@ mod tests {
         assert!(!h.state().palette_eyedropper, "désarmée après le relevé");
         // Rien trouvé (un vert) : la section reste, avec « Terminer » (retour du
         // 21/11/2026 : on ne savait plus en sortir).
+        h.set_size(vec2(1400.0, 1400.0));
         h.state_mut()
             .set_palette_colour(Some(tri::palette::srgb_to_oklab([0, 255, 0])));
         h.run_steps(3);
         assert!(h.state().files.is_empty());
+        // Le haut du panneau ne bouge pas : histogramme et position gardés.
+        for title in ["panel-section-histogram", "panel-section-position"] {
+            let title = t!(title).to_uppercase();
+            assert!(h.query_by_label(&title).is_some(), "{title} gardé");
+        }
         h.get_by_label(&t!("palette-similar-end")).click();
         h.run_steps(3);
         assert!(h.state().palette_colour.is_none());
