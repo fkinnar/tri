@@ -3954,15 +3954,23 @@ impl TriApp {
         // inversement.
         let ps = self.settings.palette;
         let mono = |p: &Palette| p.is_monochrome(ps.monochrome(), ps.colour_min_share);
-        let reference_mono = match (like, colour) {
-            (Some(l), _) => mono(&l.reference),
-            (None, Some(c)) => {
-                let swatch = tri::palette::Swatch {
-                    oklab: c.oklab,
-                    share: 1.0,
-                };
-                swatch.hue_chroma().1 < ps.mono_chroma
+        let grey = |p: &Palette| p.is_grey(ps.monochrome(), ps.colour_min_share);
+        // Une couleur peu saturée (peau, sépia, beige : chroma entre les deux seuils) est
+        // ce que contient une image teintée : seules les images en noir et blanc pur sont
+        // alors écartées (retour du 21/11/2026 : une peau pipetée ne retrouvait qu'une des
+        // trois photos de la série, les deux autres jugées « teintées »).
+        let colour_chroma = colour.map(|c| {
+            tri::palette::Swatch {
+                oklab: c.oklab,
+                share: 1.0,
             }
+            .hue_chroma()
+            .1
+        });
+        let muted = colour_chroma.is_some_and(|c| c >= ps.mono_chroma && c < ps.mono_toned_chroma);
+        let reference_mono = match (like, colour_chroma) {
+            (Some(l), _) => mono(&l.reference),
+            (None, Some(c)) => c < ps.mono_chroma,
             (None, None) => false,
         };
         let files: Vec<MediaFile> = groups.into_iter().flatten().collect();
@@ -3971,7 +3979,8 @@ impl TriApp {
             |f| {
                 let source = kind.source_for(f)?;
                 match self.palettes.get(&(f.path.clone(), source)) {
-                    Some(p) if mono(p) != reference_mono => None,
+                    Some(p) if muted && grey(p) => None,
+                    Some(p) if !muted && mono(p) != reference_mono => None,
                     Some(p) => Some(Some(key(p))),
                     None => Some(None),
                 }
@@ -29458,6 +29467,63 @@ mod tests {
         h.state_mut().refilter(Reveal::Minimal);
         h.run_steps(3);
         assert_eq!(names(&h), ["img0.jpg"]);
+    }
+
+    #[test]
+    fn a_muted_colour_finds_toned_images_but_not_black_and_white() {
+        // Retour du 21/11/2026 (vidéo) : une peau pipetée ne retrouvait qu'une des trois
+        // photos d'une série chaude et peu saturée ; les deux autres, jugées « teintées »,
+        // étaient écartées comme le noir et blanc. Une couleur peu saturée les retrouve ;
+        // le noir et blanc pur reste écarté.
+        use tri::palette::{Source, SourceKind};
+        let colors = [[150u8, 118, 95], [128, 128, 128], [30, 60, 200]];
+        let images = ["warm.jpg", "grey.jpg", "blue.jpg"]
+            .iter()
+            .zip(colors)
+            .map(|(name, c)| (*name, image::RgbImage::from_pixel(64, 48, image::Rgb(c))))
+            .collect();
+        let (mut h, _dir) = harness_images(images);
+        h.run_steps(3);
+        choose_palette(&mut h, Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        let ps = h.state().settings.palette;
+        let warm_path = h
+            .state()
+            .folder
+            .files
+            .iter()
+            .find(|f| f.path.ends_with("warm.jpg"))
+            .unwrap()
+            .path
+            .clone();
+        let warm = h.state().palettes[&(warm_path, Source::Camera)].clone();
+        assert!(
+            warm.is_monochrome(ps.monochrome(), ps.colour_min_share),
+            "teintée : {warm:?}"
+        );
+        let colour = warm.swatches[0].oklab;
+        let chroma = warm.swatches[0].hue_chroma().1;
+        assert!(
+            chroma >= ps.mono_chroma && chroma < ps.mono_toned_chroma,
+            "couleur peu saturée : {chroma}"
+        );
+        h.state_mut().set_palette_colour(Some(colour));
+        if let Some(c) = &mut h.state_mut().palette_colour {
+            c.radius = ps.colour_radius_max;
+        }
+        h.state_mut().refilter(Reveal::Minimal);
+        h.run_steps(3);
+        let names: Vec<String> = h
+            .state()
+            .files
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["warm.jpg"], "ni le gris ni le bleu");
     }
 
     #[test]

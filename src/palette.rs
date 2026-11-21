@@ -374,6 +374,19 @@ impl Palette {
             .sum()
     }
 
+    /// Vrai si l'image est en **noir et blanc** pur : toutes ses couleurs (et ses vrais
+    /// pixels, sauf les miettes sous `min_share`) ont un chroma sous `mono.chroma`. Une
+    /// image teintée (sépia, virage) ne l'est pas.
+    pub fn is_grey(&self, mono: Monochrome, min_share: f32) -> bool {
+        if !self.coverage.is_empty() {
+            return self.coverage.share_chroma_above(mono.chroma) <= min_share;
+        }
+        self.swatches
+            .iter()
+            .filter(|s| s.share >= min_share)
+            .all(|s| s.hue_chroma().1 < mono.chroma)
+    }
+
     /// Vrai si l'image est monochrome : en noir et blanc (toutes ses couleurs, sauf les
     /// miettes sous `min_share`, ont un chroma sous `mono.chroma`), ou **teintée** (sépia,
     /// virage : les couleurs plus saturées restent sous `mono.toned_chroma` et leurs
@@ -1199,6 +1212,15 @@ mod tests {
             &s,
         );
         assert!(sepia.is_monochrome(mono, s.colour_min_share));
+    }
+
+    #[test]
+    fn grey_is_black_and_white_and_a_toning_is_not() {
+        let s = PaletteSettings::default();
+        let grey = extract(&bands(&[([30, 30, 30], 50), ([200, 200, 200], 50)]), &s);
+        assert!(grey.is_grey(s.monochrome(), s.colour_min_share));
+        let toned = extract(&bands(&[([60, 48, 38], 50), ([150, 118, 95], 50)]), &s);
+        assert!(!toned.is_grey(s.monochrome(), s.colour_min_share));
     }
 
     #[test]
