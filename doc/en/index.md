@@ -118,6 +118,13 @@ the watched roots will find it at its new place. A folder **that no longer exist
 never recorded as "seen empty" (reopened at launch after a rename, it erased everything
 the index knew about it): its photos stay, greyed.
 
+**Notes kept** (schema 4, feedback of 2026-11-22: "otherwise you cannot see they are no
+longer there"): stars, flag and colours of every reachable photo, in one integer
+(`paths.notes`), reported when read or changed (`index::note_notes`, from
+`TriApp::notes_changed`). An unreachable photo shows these notes (`NoteBook::set_known`,
+`Index::notes_in`): the filters find it, greyed. Going from schema 2 or 3 to 4 adds the
+columns (`ALTER TABLE`): nothing is lost.
+
 ## `[index]` settings
 
 | Key | Default | Role |

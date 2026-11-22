@@ -121,6 +121,13 @@ nouvelle place. Un dossier **qui n'existe plus** n'est jamais noté « vu vide �
 au lancement après un renommage, il effaçait tout ce que l'index en savait) : ses photos
 restent, grisées.
 
+**Notes gardées** (schéma 4, retour du 22/11/2026 : « sinon on ne voit pas qu'elles ne
+sont plus là ») : étoiles, drapeau et couleurs de chaque photo joignable, en un entier
+(`paths.notes`), signalés quand ils sont lus ou changés (`index::note_notes`, depuis
+`TriApp::notes_changed`). Une photo injoignable montre ces notes (`NoteBook::set_known`,
+`Index::notes_in`) : les filtres la trouvent, grisée. Passer d'un schéma 2 ou 3 au 4
+ajoute les colonnes (`ALTER TABLE`) : rien n'est perdu.
+
 ## Réglages `[index]`
 
 | Clé | Défaut | Rôle |

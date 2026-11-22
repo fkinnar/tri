@@ -3013,6 +3013,24 @@ impl TriApp {
             .find_map(|d| self.missing_dirs.get(d).map(|&u| (d.to_path_buf(), u)))
     }
 
+    /// Notes des photos des dossiers injoignables, lues dans l'index.
+    fn missing_notes(&self) -> Vec<(PathBuf, tri::xmp::Notes)> {
+        if self.missing_dirs.is_empty() {
+            return Vec::new();
+        }
+        let Some(index) = self
+            .settings
+            .data_dir()
+            .and_then(|data| tri::index::Index::open(&data.join("index.sqlite")).ok())
+        else {
+            return Vec::new();
+        };
+        self.missing_dirs
+            .keys()
+            .flat_map(|d| index.notes_in(d).unwrap_or_default())
+            .collect()
+    }
+
     /// Pourquoi « Retrouver son dossier » ne s'applique pas à `path` (`None` : il
     /// s'applique).
     fn locate_unusable(&self, path: Option<&Path>) -> Option<String> {
@@ -3304,19 +3322,26 @@ impl TriApp {
             .iter()
             .map(|d| (d.clone(), tri::locate::unplugged(d)))
             .collect();
+        // Leurs notes : celles que l'index connaissait (sinon vides, et un filtre les
+        // cacherait sans qu'on voie qu'elles manquent).
+        let known = self.missing_notes();
         let files = completed.files;
         if files == self.folder.files {
+            if !known.is_empty() {
+                self.folder.notes.set_known(known);
+                self.notes_changed();
+            }
             return;
         }
         trace(|| format!("toutes les photos complétées : {} images", files.len()));
         let selected = self.files.get(self.selected).map(|f| f.path.clone());
         let convention = self.settings.xmp.sidecar;
+        let mut notes =
+            tri::notes::NoteBook::pending(files.iter().map(|f| f.path.as_path()), convention);
+        notes.set_known(known);
         let folder = Folder {
             dir: self.folder.dir.clone(),
-            notes: tri::notes::NoteBook::pending(
-                files.iter().map(|f| f.path.as_path()),
-                convention,
-            ),
+            notes,
             files,
         };
         self.replace_folder(folder, selected);
@@ -3568,6 +3593,7 @@ impl TriApp {
                     // que pendant la lecture, où le fil d'écriture n'est pas encore là au
                     // lancement.
                     tri::index::seen(&self.folder.dir, self.folder_depth(), &self.folder.files);
+                    self.index_notes();
                 }
             }
             Err(e) => {
@@ -9841,6 +9867,7 @@ impl TriApp {
     /// sous un tri par note (31/10/2026 : l'image prend sa place tout de suite, la
     /// sélection la suit), refiltrée sous un filtre sur les notes.
     fn notes_changed(&mut self) {
+        self.index_notes();
         // Notes peut-être inscrites d'office dans les images : pas un changement venu
         // d'ailleurs pour la surveillance. Sans lire le disque (`TRI_IO_WATCH`) : réglage
         // du dossier pas encore connu, c'est le fil des écritures qui le fera
@@ -9859,6 +9886,27 @@ impl TriApp {
         } else if !self.notes_rule.is_empty() {
             self.refilter(Reveal::Minimal);
         }
+    }
+
+    /// Les notes des photos joignables, gardées dans l'index (#561) : montrées si la photo
+    /// devient injoignable. Pas pendant leur lecture (vides en attendant), ni pour une
+    /// photo injoignable (ses notes viennent de l'index).
+    fn index_notes(&self) {
+        if self.folder.notes.is_pending()
+            || (tri::folder::is_all_photos(&self.folder.dir)
+                && self.all_photos_completion.is_some())
+        {
+            return;
+        }
+        let notes: Vec<(PathBuf, tri::xmp::Notes)> = self
+            .folder
+            .files
+            .iter()
+            .filter(|f| !tri::media::is_development(&f.path))
+            .filter(|f| self.missing_dir(&f.path).is_none())
+            .map(|f| (f.path.clone(), self.folder.notes.notes(&f.path).clone()))
+            .collect();
+        tri::index::note_notes(notes);
     }
 
     /// Filtres et tri du dossier ouvert, tels qu'on les retient pour lui.
@@ -31414,11 +31462,30 @@ mod tests {
                 })
                 .collect();
             index.seen(&old, 1, &seen).unwrap();
+            // Leurs notes, gardées dans l'index (le sidecar est parti avec le dossier).
+            let three = tri::xmp::Notes {
+                stars: 3,
+                ..Default::default()
+            };
+            let notes: Vec<(PathBuf, tri::xmp::Notes)> = seen
+                .iter()
+                .map(|(p, _, _)| (p.clone(), three.clone()))
+                .collect();
+            index.record_notes(&notes).unwrap();
         }
         h.state_mut().locate_roots = Some(vec![dir.path().join("disque2")]);
         let ctx = h.ctx.clone();
+        // Un filtre « au moins 3 étoiles » : elles restent visibles, grisées (retour du
+        // 22/11/2026 : leurs notes perdues, le filtre les cachait).
+        h.state_mut().perform(&ctx, Action::FilterStars(3));
         h.state_mut().perform(&ctx, Action::AllPhotos);
-        run_until(&mut h, |app| app.missing_dirs.get(&old) == Some(&false));
+        run_until(&mut h, |app| {
+            app.missing_dirs.get(&old) == Some(&false)
+                && app.files.len() == 3
+                && app.files.iter().all(|f| f.path.starts_with(&old))
+        });
+        let first = h.state().files[0].path.clone();
+        assert_eq!(h.state().folder.notes.notes(&first).stars, 3);
         assert_eq!(h.state().action_unusable(Action::FileLocate), None);
         assert!(
             h.state()

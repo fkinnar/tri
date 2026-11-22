@@ -63,6 +63,9 @@ pub struct NoteBook {
     auto: crate::embedded::Auto,
     outside: Vec<PathBuf>,
     folder_embed: std::cell::RefCell<HashMap<PathBuf, Option<bool>>>,
+    /// Notes connues d'ailleurs (l'index) des photos injoignables (« Toutes les photos »,
+    /// dossier renommé, disque débranché) : montrées à la place des notes vides.
+    known: HashMap<PathBuf, Notes>,
 }
 
 /// Notes de `images` (toutes dans `dir`), lues avec une seule liste du dossier ; un
@@ -661,7 +664,16 @@ impl NoteBook {
 
     /// Notes de `image` (vides si elle est inconnue ou sans sidecar).
     pub fn notes(&self, image: &Path) -> &Notes {
+        if let Some(known) = self.known.get(image) {
+            return known;
+        }
         self.entries.get(image).map(|e| &e.notes).unwrap_or(&EMPTY)
+    }
+
+    /// Notes de photos injoignables, connues d'ailleurs (l'index) : montrées à la place de
+    /// leurs notes vides ([`NoteBook::notes`]).
+    pub fn set_known(&mut self, known: impl IntoIterator<Item = (PathBuf, Notes)>) {
+        self.known.extend(known);
     }
 
     /// Conflit entre les sources des notes de `image` (issue n° 368), à trancher.

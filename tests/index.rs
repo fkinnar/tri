@@ -110,6 +110,21 @@ fn computed_palettes_are_indexed_and_a_moved_photo_keeps_its_own() {
         signatures.iter().any(|(p, _)| p.ends_with("b/rouge.jpg")),
         "{signatures:?}"
     );
+    // Les notes signalées : gardées (une photo absente, non : ses notes sont vides).
+    let five = tri::xmp::Notes {
+        stars: 5,
+        ..Default::default()
+    };
+    tri::index::note_notes(vec![
+        (b.join("rouge.jpg"), five.clone()),
+        (b.join("absente.jpg"), five.clone()),
+    ]);
+    tri::index::flush(Duration::from_secs(30));
+    let b_abs = std::path::absolute(&b).unwrap();
+    assert_eq!(
+        index.notes_in(&b_abs).unwrap(),
+        vec![(b_abs.join("rouge.jpg"), five)]
+    );
     // Le dossier renommé dans le système, puis rouvert (vide) : rien d'oublié.
     let renamed = dir.path().join("b renommé");
     std::fs::rename(&b, &renamed).unwrap();

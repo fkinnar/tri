@@ -29,7 +29,7 @@ use crate::media::MediaFile;
 use crate::palette::{Palette, Source};
 
 /// Version du schéma : une autre version, la base est refaite (rien n'y est irremplaçable).
-const SCHEMA: i64 = 3;
+const SCHEMA: i64 = 4;
 
 /// Section `[index]` : index de recherche des palettes (#561).
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
@@ -154,7 +154,22 @@ impl Index {
 
     fn setup(db: Connection) -> rusqlite::Result<Index> {
         let version: i64 = db.pragma_query_value(None, "user_version", |r| r.get(0))?;
-        if version != SCHEMA {
+        // Les colonnes ajoutées depuis : la base gardée (tout ce qu'on a vu).
+        let added: &[&str] = match version {
+            2 => &[
+                "ALTER TABLE paths ADD COLUMN signature BLOB",
+                "ALTER TABLE paths ADD COLUMN signature_stamp TEXT",
+                "ALTER TABLE paths ADD COLUMN notes INTEGER",
+            ],
+            3 => &["ALTER TABLE paths ADD COLUMN notes INTEGER"],
+            _ => &[],
+        };
+        if !added.is_empty() {
+            for statement in added {
+                db.execute(statement, [])?;
+            }
+            db.pragma_update(None, "user_version", SCHEMA)?;
+        } else if version != SCHEMA {
             db.execute_batch(
                 "DROP TABLE IF EXISTS paths;
                  DROP TABLE IF EXISTS palettes;
@@ -164,7 +179,8 @@ impl Index {
                      modified INTEGER NOT NULL,
                      fingerprint BLOB,
                      signature BLOB,
-                     signature_stamp TEXT
+                     signature_stamp TEXT,
+                     notes INTEGER
                  );
                  CREATE INDEX paths_fingerprint ON paths(fingerprint);
                  CREATE TABLE palettes (
@@ -368,6 +384,45 @@ impl Index {
         tx.commit()
     }
 
+    /// Note les notes de photos (étoiles, drapeau, couleurs) : celles qu'on montrera si la
+    /// photo devient injoignable (dossier renommé, disque débranché). Les chemins
+    /// inconnus sont ignorés.
+    pub fn record_notes(&mut self, items: &[(PathBuf, crate::xmp::Notes)]) -> rusqlite::Result<()> {
+        let tx = self.db.transaction()?;
+        {
+            let mut update =
+                tx.prepare("UPDATE paths SET notes = ?2 WHERE path = ?1 AND notes IS NOT ?2")?;
+            for (path, notes) in items {
+                update.execute(params![path_bytes(path), pack_notes(notes)])?;
+            }
+        }
+        tx.commit()
+    }
+
+    /// Les notes connues des photos directement dans `dir`.
+    pub fn notes_in(&self, dir: &Path) -> rusqlite::Result<Vec<(PathBuf, crate::xmp::Notes)>> {
+        let low = path_bytes(dir);
+        let mut high = low.clone();
+        if let Some(last) = high.last_mut() {
+            *last += 1;
+        }
+        let mut stmt = self.db.prepare(
+            "SELECT path, notes FROM paths WHERE path >= ?1 AND path < ?2 AND notes IS NOT NULL",
+        )?;
+        let rows = stmt.query_map(params![low, high], |r| {
+            Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, i64>(1)?))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (bytes, packed) = row?;
+            let path = bytes_path(&bytes);
+            if path.parent() == Some(dir) {
+                out.push((path, unpack_notes(packed)));
+            }
+        }
+        Ok(out)
+    }
+
     /// Vrai si l'index a l'empreinte de similitude de `path` à cette taille, cette date et
     /// ces paramètres.
     pub fn has_signature(&self, path: &Path, size: u64, modified: u128, stamp: &str) -> bool {
@@ -556,6 +611,41 @@ impl Index {
 }
 
 /// Date en ns, dans un entier SQLite (jusqu'en 2262).
+/// Notes en un entier : étoiles (bits 0–3), drapeau (4–5), couleurs (une par bit, 8–12).
+fn pack_notes(notes: &crate::xmp::Notes) -> i64 {
+    use crate::xmp::{Color, Flag};
+    let flag = match notes.flag {
+        Flag::None => 0,
+        Flag::Accepted => 1,
+        Flag::Rejected => 2,
+    };
+    let colors = Color::ALL
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| notes.colors.contains(c))
+        .fold(0i64, |bits, (i, _)| bits | 1 << i);
+    i64::from(notes.stars.min(15)) | flag << 4 | colors << 8
+}
+
+/// L'inverse de [`pack_notes`].
+fn unpack_notes(packed: i64) -> crate::xmp::Notes {
+    use crate::xmp::{Color, Flag};
+    crate::xmp::Notes {
+        stars: (packed & 0xf) as u8,
+        flag: match (packed >> 4) & 3 {
+            1 => Flag::Accepted,
+            2 => Flag::Rejected,
+            _ => Flag::None,
+        },
+        colors: Color::ALL
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| packed >> 8 & 1 << i != 0)
+            .map(|(_, c)| *c)
+            .collect(),
+    }
+}
+
 fn ns(modified: u128) -> i64 {
     i64::try_from(modified).unwrap_or(i64::MAX)
 }
@@ -614,6 +704,8 @@ enum Message {
     Signature(MediaFile),
     /// Des fichiers déplacés ou copiés par `tri` ([`carry`]).
     Carry(Vec<(PathBuf, PathBuf)>, bool),
+    /// Des notes lues ou écrites ([`note_notes`]).
+    Notes(Vec<(PathBuf, crate::xmp::Notes)>),
     Seen {
         dir: PathBuf,
         depth: usize,
@@ -678,6 +770,18 @@ pub fn note_signature(file: &MediaFile) {
     }
 }
 
+/// Signale les notes lues ou écrites de photos joignables : gardées dans l'index, pour
+/// les montrer (et filtrer dessus) si la photo devient injoignable. Sans index démarré,
+/// rien.
+pub fn note_notes(notes: Vec<(PathBuf, crate::xmp::Notes)>) {
+    if notes.is_empty() {
+        return;
+    }
+    if let Some(tx) = WRITER.get() {
+        let _ = tx.send(Message::Notes(notes));
+    }
+}
+
 /// Signale des fichiers déplacés, renommés ou copiés (`copy`) par `tri` : l'index les
 /// suit en fond (« Toutes les photos » les garde à leur nouvelle place). Sans index
 /// démarré, rien.
@@ -730,6 +834,17 @@ fn write_loop(
             match message {
                 Message::Note(n) => notes.push(n),
                 Message::Signature(f) => signatures.push(f),
+                Message::Notes(notes) => {
+                    // Seulement des photos là (une injoignable n'a que des notes vides).
+                    let items: Vec<(PathBuf, crate::xmp::Notes)> = notes
+                        .into_iter()
+                        .filter(|(p, _)| p.is_file())
+                        .filter_map(|(p, n)| Some((std::path::absolute(&p).ok()?, n)))
+                        .collect();
+                    if let Err(e) = index.record_notes(&items) {
+                        crate::log::warning("index", &format!("notes not recorded: {e}"), "");
+                    }
+                }
                 Message::Carry(files, copy) => {
                     let items: Vec<Carried> = files
                         .into_iter()
@@ -1061,6 +1176,42 @@ mod tests {
             )
             .unwrap();
         assert_eq!(index.photos(None).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn notes_are_kept_and_an_older_index_is_migrated() {
+        use crate::xmp::{Color, Flag, Notes};
+        let mut index = Index::in_memory().unwrap();
+        let t = 1_700_000_000_000_000_000u128;
+        let p = PathBuf::from("/a/x.raf");
+        index
+            .seen(Path::new("/a"), 1, &[(p.clone(), 1, t)])
+            .unwrap();
+        let notes = Notes {
+            stars: 4,
+            flag: Flag::Rejected,
+            colors: vec![Color::Red, Color::Purple],
+        };
+        index.record_notes(&[(p.clone(), notes.clone())]).unwrap();
+        assert_eq!(
+            index.notes_in(Path::new("/a")).unwrap(),
+            vec![(p.clone(), notes)]
+        );
+        // Une base du schéma 2 : complétée, pas refaite.
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch(
+            "CREATE TABLE paths (path BLOB PRIMARY KEY, size INTEGER NOT NULL,
+                 modified INTEGER NOT NULL, fingerprint BLOB);
+             CREATE TABLE palettes (fingerprint BLOB NOT NULL, source TEXT NOT NULL,
+                 stamp TEXT NOT NULL, palette BLOB NOT NULL, PRIMARY KEY (fingerprint, source));
+             INSERT INTO paths VALUES (X'2F612F782E726166', 1, 1, NULL);",
+        )
+        .unwrap();
+        db.pragma_update(None, "user_version", 2).unwrap();
+        let mut old = Index::setup(db).unwrap();
+        assert_eq!(old.photos(None).unwrap().len(), 1, "gardée");
+        old.record_notes(&[(p.clone(), Notes::default())]).unwrap();
+        assert!(old.signatures().unwrap().is_empty());
     }
 
     #[test]
