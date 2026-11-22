@@ -49,7 +49,12 @@ pub fn unplugged(dir: &Path) -> bool {
         return true;
     };
     let mounts = ["/Volumes", "/media", "/run/media", "/mnt"];
-    if mounts.iter().any(|m| existing == Path::new(m)) {
+    // Sous un dossier de montage, ou sous un dossier de montage d'un autre système
+    // (`/Volumes` d'un index fait sur macOS, lu sous Linux).
+    if mounts
+        .iter()
+        .any(|m| existing == Path::new(m) || (dir.starts_with(m) && !Path::new(m).is_dir()))
+    {
         return true;
     }
     // `/media/<utilisateur>`, `/run/media/<utilisateur>` : un niveau de plus.
