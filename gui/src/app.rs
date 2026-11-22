@@ -1008,6 +1008,13 @@ pub struct TriApp {
     all_photos_completion: Option<(Arc<AtomicBool>, mpsc::Receiver<Vec<MediaFile>>)>,
     /// Recherche à poser une fois « Toutes les photos » ouvert (« chercher partout »).
     all_photos_search: Option<AllPhotosSearch>,
+    /// Photo de référence de « palettes proches » (et du futur « semblables ») : elle
+    /// reste tant qu'on ne l'efface pas ou ne la remplace pas (retour du 22/11/2026).
+    reference: Option<PathBuf>,
+    /// « Palettes proches » demandé, en attente de la palette de la référence.
+    reference_wanted: bool,
+    /// La référence en grand (clic sur son imagette).
+    reference_popup: bool,
     /// Vignettes visibles déjà signalées au moteur ([`Scheduler::set_visible`]).
     visible_sent: Option<(usize, usize)>,
     /// Attente de la liste d'un dossier avant de la lire en fond : `[gui.folders]
@@ -2184,6 +2191,9 @@ impl TriApp {
             all_photos_from: None,
             all_photos_completion: None,
             all_photos_search: None,
+            reference: None,
+            reference_wanted: false,
+            reference_popup: false,
             visible_sent: None,
             open_wait_override: cfg!(test).then(|| Duration::from_secs(60)),
             repaint: None,
@@ -2967,29 +2977,17 @@ impl TriApp {
                 self.all_photos_search = None;
                 self.set_palette_colour(Some(oklab));
             }
-            Some(AllPhotosSearch::Like(path, fallback)) => {
-                let here = self.files.iter().position(|f| f.path == path);
-                let palette = match here {
-                    Some(i) => match self.palette_of(i) {
-                        Some(p) if !p.swatches.is_empty() => p,
-                        Some(_) => fallback,
-                        // Pas encore lue (ou pas encore calculée ici) : à l'image suivante,
-                        // celle d'où l'on venait au bout d'un moment.
-                        None if self
-                            .opened_at
-                            .is_some_and(|t| t.elapsed() < Duration::from_secs(3)) =>
-                        {
-                            return;
-                        }
-                        None => fallback,
-                    },
-                    None => fallback,
-                };
+            Some(AllPhotosSearch::Like) => {
                 self.all_photos_search = None;
-                if let Some(i) = here {
+                if let Some(i) = self
+                    .reference
+                    .as_ref()
+                    .and_then(|r| self.files.iter().position(|f| &f.path == r))
+                {
                     self.selected = i;
                 }
-                self.set_palette_like(Some((path, palette)));
+                self.reference_wanted = true;
+                self.try_reference_filter();
             }
             None => {}
         }
@@ -3756,8 +3754,93 @@ impl TriApp {
     /// visible, ou plein écran) ou une sélection (retour du 22/11/2026 : sans elles, le
     /// filtre est grisé).
     fn has_palette_reference(&self) -> bool {
+        self.reference.is_some() || self.has_selected_photo()
+    }
+
+    /// Vrai si une photo est en surbrillance (sélectionnée, curseur visible).
+    fn has_selected_photo(&self) -> bool {
         !self.files.is_empty()
             && (self.mode != Mode::Grid || !self.cursor_hidden || !self.selection.is_empty())
+    }
+
+    /// La photo en surbrillance, comme référence : pour une source « développements », le
+    /// développement montré de la photo.
+    fn reference_from_selection(&self) -> Option<PathBuf> {
+        if !self.has_selected_photo() {
+            return None;
+        }
+        let index = self.selected.min(self.files.len() - 1);
+        if let Some(kind) = self.palette_source {
+            let (targets, main) = self.palette_targets(kind, index);
+            if targets.contains(&main) {
+                return Some(self.files[main].path.clone());
+            }
+        }
+        Some(self.files[index].path.clone())
+    }
+
+    /// La photo en surbrillance devient la référence ; « palettes proches » allumé la suit.
+    fn set_reference(&mut self) {
+        let Some(path) = self.reference_from_selection() else {
+            self.notice = Some((t!("palette-similar-no-photo"), false));
+            return;
+        };
+        self.reference = Some(path);
+        self.notice = Some((t!("palette-reference-set"), false));
+        if self.palette_like.is_some() {
+            self.reference_wanted = true;
+            self.try_reference_filter();
+        }
+    }
+
+    /// Palette de la référence dans la source choisie : celle de la liste, sinon lue dans
+    /// le cache en fond (une référence d'un autre dossier) ; `None` en attendant.
+    fn reference_palette(&mut self) -> Option<Arc<Palette>> {
+        let path = self.reference.clone()?;
+        let kind = self.palette_source?;
+        if let Some(i) = self.files.iter().position(|f| f.path == path) {
+            return self.palette_of(i).filter(|p| !p.swatches.is_empty());
+        }
+        let file = MediaFile {
+            kind: tri::media::kind_of(&tri::media::source(&path))?,
+            path: path.clone(),
+        };
+        let source = kind.source_for(&file)?;
+        self.take_palette_reads();
+        if let Some(p) = self.palettes.get(&(path.clone(), source)) {
+            return Some(p.clone()).filter(|p| !p.swatches.is_empty());
+        }
+        let engine = self.engine.as_mut()?;
+        let (cache, preview) = (engine.cache.clone(), engine.preview);
+        engine.palette_reads.request((path, source), move || {
+            preview::palette(&cache, &file, source, &preview).map(Arc::new)
+        });
+        None
+    }
+
+    /// « Palettes proches » demandé : posé dès que la palette de la référence est là.
+    fn try_reference_filter(&mut self) {
+        if !self.reference_wanted || self.palette_source.is_none() {
+            return;
+        }
+        let Some(path) = self.reference.clone() else {
+            self.reference_wanted = false;
+            return;
+        };
+        if let Some(palette) = self.reference_palette() {
+            self.reference_wanted = false;
+            self.set_palette_like(Some((path, palette)));
+        }
+    }
+
+    /// Oublie la référence (et « palettes proches » qui la suivait).
+    fn clear_reference(&mut self) {
+        self.reference = None;
+        self.reference_wanted = false;
+        self.reference_popup = false;
+        if self.palette_like.is_some() {
+            self.set_palette_like(None);
+        }
     }
 
     /// Recherches de palettes (#492) de la barre des filtres : (action, allumée,
@@ -3874,6 +3957,11 @@ impl TriApp {
                 Action::FilterPalette => t!("palette-similar"),
                 _ => t!("palette-colour"),
             };
+            // La référence, au-dessus des filtres qui la prennent (palettes proches, puis
+            // semblables) : commune à eux (retour du 22/11/2026).
+            if action == Action::FilterPalette {
+                self.reference_row(ui);
+            }
             let (item, key) = self.side_begin(false);
             let row = ui.add_enabled_ui(usable, |ui| {
                 ui.horizontal(|ui| {
@@ -3972,7 +4060,6 @@ impl TriApp {
                         if slider.drag_stopped() || reset {
                             self.remember_palette_levels();
                         }
-                        self.palette_reference_row(ui, &like.path);
                     }
                 }
                 _ => {
@@ -4189,72 +4276,96 @@ impl TriApp {
         }
     }
 
-    /// Sous « Palettes proches » allumé (#561) : la photo de référence (vignette si elle
-    /// est dans la liste, et son nom ; un clic y va), et « Prendre celle-ci » quand une
-    /// autre est sélectionnée. Dans « Toutes les photos », elle peut ne plus être affichée.
-    fn palette_reference_row(&mut self, ui: &mut Ui, reference: &Path) {
-        let here = self.files.iter().position(|f| f.path == reference);
-        let selected = self.files.get(self.selected).map(|f| f.path.clone());
-        let mut go = false;
-        let mut take = false;
+    /// Ligne « Référence » (retour du 22/11/2026) : l'imagette de la photo de référence
+    /// de « palettes proches » (et du futur « semblables ») ; un clic l'ouvre en grand,
+    /// avec « Supprimer la référence ». Sans référence : comment en définir une.
+    fn reference_row(&mut self, ui: &mut Ui) {
+        let side = ui.text_style_height(&egui::TextStyle::Body) * 2.0;
+        let mut open = false;
         ui.horizontal(|ui| {
             ui.weak(t!("palette-reference"));
-            let side = ui.text_style_height(&egui::TextStyle::Body) * 2.0;
-            if let Some(i) = here {
-                let deadline = Instant::now() + Duration::from_millis(2);
-                let ctx = ui.ctx().clone();
-                if let Some(texture) = self.thumbnail_texture(&ctx, i, deadline) {
+            let Some(reference) = self.reference.clone() else {
+                ui.weak(self.keymap.with_keys(&t!("palette-reference-none")));
+                return;
+            };
+            let tip = format!(
+                "{}\n{}",
+                t!("palette-reference-open-tip"),
+                reference.display()
+            );
+            match self.reference_texture(ui.ctx(), &reference) {
+                Some(texture) => {
                     let size = texture.size_vec2();
                     let scale = side / size.x.max(size.y).max(1.0);
                     let image =
                         egui::Image::new((texture.id(), size * scale)).sense(Sense::click());
-                    go |= ui
+                    open |= ui
                         .add(image)
                         .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .on_hover_text(t!("palette-reference-go-tip"))
+                        .on_hover_text(&tip)
+                        .clicked();
+                }
+                // Hors de la liste (un autre dossier) : son nom, faute d'imagette.
+                None => {
+                    open |= ui
+                        .add(
+                            egui::Label::new(file_name(&reference))
+                                .truncate()
+                                .sense(Sense::click()),
+                        )
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text(&tip)
                         .clicked();
                 }
             }
-            let name = file_name(reference);
-            go |= ui
-                .add(egui::Label::new(name).truncate().sense(Sense::click()))
-                .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .on_hover_text(format!(
-                    "{}\n{}",
-                    t!("palette-reference-go-tip"),
-                    reference.display()
-                ))
-                .clicked();
         });
-        if selected.as_deref().is_some_and(|s| s != reference)
-            && ui
-                .button(t!("palette-reference-take"))
-                .on_hover_text(t!("palette-reference-take-tip"))
-                .clicked()
-        {
-            take = true;
+        if open {
+            self.reference_popup = true;
         }
-        if go {
-            match here {
-                Some(i) => {
-                    self.selected = i;
-                    self.reveal = Some(Reveal::Minimal);
-                    self.tell_shown();
-                }
-                // Hors de la liste : son dossier, sur elle.
-                None => {
-                    if let Some(dir) = reference.parent() {
-                        self.start_select_path = Some(reference.to_path_buf());
-                        self.open_folder(dir);
-                    }
-                }
-            }
+    }
+
+    /// Vignette de la référence, si elle est dans la liste.
+    fn reference_texture(
+        &mut self,
+        ctx: &egui::Context,
+        reference: &Path,
+    ) -> Option<TextureHandle> {
+        let i = self.files.iter().position(|f| f.path == reference)?;
+        let deadline = Instant::now() + Duration::from_millis(2);
+        self.thumbnail_texture(ctx, i, deadline)
+    }
+
+    /// La référence en grand (clic sur son imagette) : « Supprimer la référence », ou
+    /// fermer.
+    fn reference_popup_ui(&mut self, ctx: &egui::Context) {
+        if !self.reference_popup {
+            return;
         }
-        if take {
-            match self.current_palette() {
-                Some(current) => self.set_palette_like(Some(current)),
-                None => self.notice = Some((t!("palette-computing"), false)),
+        let Some(reference) = self.reference.clone() else {
+            self.reference_popup = false;
+            return;
+        };
+        let texture = self.reference_texture(ctx, &reference);
+        let mut clear = false;
+        let mut close = false;
+        let modal = modal_at("reference_popup", CENTRED).show(ctx, |ui| {
+            ui.label(egui::RichText::new(t!("palette-reference")).strong());
+            if let Some(texture) = &texture {
+                let size = texture.size_vec2();
+                let side = 360.0;
+                let scale = side / size.x.max(size.y).max(1.0);
+                ui.image((texture.id(), size * scale));
             }
+            ui.weak(reference.display().to_string());
+            ui.horizontal(|ui| {
+                clear = ui.button(t!("palette-reference-clear")).clicked();
+                close = ui.button(t!("close")).clicked();
+            });
+        });
+        if clear {
+            self.clear_reference();
+        } else if close || modal.should_close() {
+            self.reference_popup = false;
         }
     }
 
@@ -4765,6 +4876,10 @@ impl TriApp {
         }
         // Une autre source : la recherche en cours n'a plus de sens.
         let like = self.palette_like.take().is_some();
+        // La référence reste : sa palette relue dans la nouvelle source.
+        if like {
+            self.reference_wanted = true;
+        }
         let colour = self.palette_colour.take().is_some();
         if like || colour {
             self.apply_filter();
@@ -4823,21 +4938,6 @@ impl TriApp {
             targets.first().copied().unwrap_or(index)
         };
         (targets, main)
-    }
-
-    /// Palette de l'image sélectionnée (celle de la roue), pour « palettes proches ».
-    fn current_palette(&mut self) -> Option<(PathBuf, Arc<Palette>)> {
-        let kind = self.palette_source?;
-        let index = self.selected;
-        if index >= self.files.len() {
-            return None;
-        }
-        let (targets, main) = self.palette_targets(kind, index);
-        if !targets.contains(&main) {
-            return None;
-        }
-        let palette = self.palette_of(main).filter(|p| !p.swatches.is_empty())?;
-        Some((self.files[main].path.clone(), palette))
     }
 
     /// Section « Palette » du panneau de droite (#492) : la source, puis la palette de
@@ -10851,6 +10951,7 @@ impl TriApp {
         self.set_palette_source(wanted);
         // Recherche « partout » en attente : posée une fois la source en place.
         self.apply_all_photos_search();
+        self.try_reference_filter();
         self.poll_all_photos_completion();
         let mut scored = Vec::new();
         self.drain_engine(&mut scored);
@@ -12523,14 +12624,14 @@ impl TriApp {
                 } else if !self.has_palette_reference() {
                     self.notice = Some((t!("palette-similar-no-photo"), false));
                 } else {
-                    match self.current_palette() {
-                        Some((path, palette)) => {
-                            self.open_all_photos(Some(AllPhotosSearch::Like(path, palette)));
-                        }
-                        None => self.notice = Some((t!("palette-computing"), false)),
+                    if self.reference.is_none() {
+                        self.reference = self.reference_from_selection();
                     }
+                    self.open_all_photos(Some(AllPhotosSearch::Like));
                 }
             }
+            // La photo sélectionnée devient la référence (retour du 22/11/2026).
+            Action::SetReference => self.set_reference(),
             Action::FilterPaletteColourEverywhere => {
                 let colour = self
                     .palette_colour
@@ -12543,7 +12644,8 @@ impl TriApp {
             }
             // Palettes proches (#492) : de l'image sélectionnée, ou fin de la recherche.
             Action::FilterPalette => {
-                if self.palette_like.is_some() {
+                if self.palette_like.is_some() || self.reference_wanted {
+                    self.reference_wanted = false;
                     self.set_palette_like(None);
                     return;
                 }
@@ -12555,9 +12657,14 @@ impl TriApp {
                     self.notice = Some((t!("palette-similar-no-photo"), false));
                     return;
                 }
-                match self.current_palette() {
-                    Some(current) => self.set_palette_like(Some(current)),
-                    None => self.notice = Some((t!("palette-computing"), false)),
+                // La référence, sinon la photo en surbrillance, qui le devient.
+                if self.reference.is_none() {
+                    self.reference = self.reference_from_selection();
+                }
+                self.reference_wanted = true;
+                self.try_reference_filter();
+                if self.reference_wanted {
+                    self.notice = Some((t!("palette-computing"), false));
                 }
             }
             Action::FilterDeveloped => {
@@ -20205,6 +20312,17 @@ impl TriApp {
                         }
                     }
                 });
+                // La photo comme référence de « palettes proches » (retour du 22/11/2026).
+                if Action::SetReference.available() {
+                    ui.add_space(6.0);
+                    if ui
+                        .button(Action::SetReference.label())
+                        .on_hover_text(self.action_tip(Action::SetReference))
+                        .clicked()
+                    {
+                        file_action = Some(Action::SetReference);
+                    }
+                }
                 // Listes de texte, plus lisibles qu'une rangée d'icônes (retour du 21/11/2026) :
                 // notes (sidecars, notes inscrites), calculs (#555), développer avec.
                 ui.add_space(6.0);
@@ -20355,6 +20473,11 @@ impl TriApp {
         }
         if let Some(action) = file_action {
             self.rating_dialog = None;
+            // Référence des palettes : la photo de la boîte (sélectionnée en l'ouvrant).
+            if action == Action::SetReference {
+                self.set_reference();
+                return;
+            }
             let paths = if on_all { group } else { vec![path] };
             self.file_action(action, paths, at);
             return;
@@ -25211,6 +25334,7 @@ impl eframe::App for TriApp {
         self.conflict_dialog(&ctx);
         self.mark_picker(&ctx);
         self.colour_dialog_ui(&ctx);
+        self.reference_popup_ui(&ctx);
         self.eyedropper_overlay(&ctx);
         self.develop_folder_dialog(&ctx);
         self.sidecars_dialog(&ctx);
@@ -25632,8 +25756,8 @@ pub(crate) fn folder_name(path: &Path) -> String {
 /// Recherche « partout » à poser dans « Toutes les photos » une fois ouvert (#561).
 #[derive(Clone)]
 enum AllPhotosSearch {
-    /// Palettes proches de cette photo (sa palette).
-    Like(PathBuf, Arc<Palette>),
+    /// Palettes proches de la référence.
+    Like,
     /// Contient cette couleur (OKLab).
     Colour([f32; 3]),
 }
@@ -30159,6 +30283,49 @@ mod tests {
         let path = h.state().files[0].path.clone();
         h.state_mut().selection.toggle(&path);
         assert!(usable(&h), "une sélection");
+    }
+
+    #[test]
+    fn the_reference_photo_stays_until_replaced_or_removed() {
+        // Retour du 22/11/2026 : sans référence, la photo en surbrillance le devient en
+        // allumant « palettes proches » ; elle reste quand on sélectionne ailleurs, en
+        // éteignant puis rallumant ; `f t` la remplace ; la fenêtre de la référence la
+        // supprime.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        choose_palette(&mut h, Some(tri::palette::SourceKind::Camera));
+        wait_usable(&mut h, Action::FilterPalette);
+        let path = |h: &Harness<'static, TriApp>, i: usize| h.state().files[i].path.clone();
+        h.state_mut().selected = 0;
+        act(&mut h, Action::FilterPalette);
+        run_until(&mut h, |app| app.palette_like.is_some());
+        let first = path(&h, 0);
+        assert_eq!(h.state().reference.as_ref(), Some(&first));
+        // Ailleurs, éteint puis rallumé : toujours la même.
+        h.state_mut().selected = 1;
+        act(&mut h, Action::FilterPalette);
+        assert!(h.state().palette_like.is_none());
+        act(&mut h, Action::FilterPalette);
+        run_until(&mut h, |app| app.palette_like.is_some());
+        assert_eq!(
+            h.state().palette_like.as_ref().map(|l| &l.path),
+            Some(&first)
+        );
+        // `f t` : la photo sélectionnée la remplace, le filtre la suit.
+        let current = h.state().files[h.state().selected].path.clone();
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::T, Modifiers::NONE);
+        assert_eq!(h.state().reference.as_ref(), Some(&current));
+        run_until(&mut h, |app| {
+            app.palette_like.as_ref().is_some_and(|l| l.path == current)
+        });
+        // La fenêtre de la référence : « Supprimer la référence » ; le filtre s'éteint.
+        h.state_mut().reference_popup = true;
+        h.run_steps(3);
+        h.get_by_label(&t!("palette-reference-clear")).click();
+        h.run_steps(2);
+        assert!(h.state().reference.is_none());
+        assert!(h.state().palette_like.is_none());
     }
 
     #[test]

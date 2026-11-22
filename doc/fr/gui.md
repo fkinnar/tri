@@ -1246,8 +1246,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`all_photos_from`). Actions `core.view.all_photos`, `core.filter.palette_everywhere`
   et `core.filter.palette_colour_everywhere` (sans touche par défaut) : la recherche
   posée là-bas (`AllPhotosSearch`), la photo de référence relue dans la source d'ici.
-  Sous « Palettes proches » allumé, la **référence** : sa vignette (si elle est dans la
-  liste) et son nom, un clic y va ; « Prendre celle-ci » pour la photo sélectionnée.
+  **Photo de référence** (retour du 22/11/2026), commune à « palettes proches » et au
+  futur « semblables » (`TriApp::reference`) : une ligne « Référence » au-dessus d'eux,
+  son imagette seule ; un clic l'ouvre en grand avec « Supprimer la référence ». Sans
+  référence, allumer le filtre prend la photo en surbrillance (grisé s'il n'y en a pas) ;
+  elle reste ensuite (autre dossier, autre source : sa palette relue,
+  `reference_palette`, lue dans le cache si elle n'est pas dans la liste) tant qu'on ne
+  l'efface ni ne la remplace : `f t` (`core.filter.reference`), bouton de la boîte du
+  clic droit.
 
 ## Plein écran
 

@@ -198,6 +198,9 @@ pub enum Action {
     FilterPaletteColourEverywhere,
     /// Ouvrir « Toutes les photos » (#561) : les photos vues dans tous les dossiers.
     AllPhotos,
+    /// La photo sélectionnée devient la référence de « palettes proches » (et du futur
+    /// « semblables »).
+    SetReference,
     /// Après un changement de filtre, repartir de la première image (`[gui]
     /// filter_restart`, bouton de la barre du bas ; retour du 16/11/2026).
     FilterRestart,
@@ -601,7 +604,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 281] = [
+    pub const ALL: [Action; 282] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -639,6 +642,7 @@ impl Action {
         Action::FilterPaletteEverywhere,
         Action::FilterPaletteColourEverywhere,
         Action::AllPhotos,
+        Action::SetReference,
         Action::FilterRestart,
         Action::FilterCount,
         Action::SortNext,
@@ -1007,7 +1011,8 @@ impl Action {
             Action::FilterPalette
             | Action::FilterPaletteColour
             | Action::FilterPaletteEverywhere
-            | Action::FilterPaletteColourEverywhere => Some(Tool::Palettes),
+            | Action::FilterPaletteColourEverywhere
+            | Action::SetReference => Some(Tool::Palettes),
             Action::FolderCompute(k) | Action::Compute(k) => kind(k),
             _ => None,
         }
@@ -1112,6 +1117,7 @@ impl Action {
             | FilterPaletteColour
             | FilterPaletteEverywhere
             | FilterPaletteColourEverywhere
+            | SetReference
             | FilterRestart
             | FilterCount
             | SortNext
@@ -1256,6 +1262,7 @@ impl Action {
             Action::FilterPaletteEverywhere => "core.filter.palette_everywhere",
             Action::FilterPaletteColourEverywhere => "core.filter.palette_colour_everywhere",
             Action::AllPhotos => "core.view.all_photos",
+            Action::SetReference => "core.filter.reference",
             Action::FilterRestart => "core.filter.restart",
             Action::FilterCount => "core.filter.count",
             Action::SortNext => "core.filter.sort",

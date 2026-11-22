@@ -1165,9 +1165,14 @@ system one ("cold" measurements, experiments).
   folder. Escape (grid, nothing left to close) returns to the folder you came from
   (`all_photos_from`). Actions `core.view.all_photos`, `core.filter.palette_everywhere`
   and `core.filter.palette_colour_everywhere` (no default key): the search is set there
-  (`AllPhotosSearch`), the reference photo read again in the source over there. Under
-  "Similar palettes" turned on, the **reference**: its thumbnail (if it is in the list)
-  and its name, a click goes to it; "Use this one" for the selected photo.
+  (`AllPhotosSearch`), the reference photo read again in the source over there.
+  **Reference photo** (feedback of 2026-11-22), shared by "similar palettes" and the
+  future "similar photos" (`TriApp::reference`): a "Reference" line above them, its
+  thumbnail only; a click opens it larger with "Remove the reference". Without a
+  reference, turning the filter on takes the highlighted photo (greyed if there is
+  none); it then stays (another folder, another source: its palette read again,
+  `reference_palette`, read from the cache when it is not in the list) until it is
+  removed or replaced: `f t` (`core.filter.reference`), a button in the right-click box.
 
 ## Full screen
 
