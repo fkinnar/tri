@@ -2933,8 +2933,13 @@ impl TriApp {
             return;
         }
         let from = (!self.folder.is_none()).then(|| self.folder.dir.clone());
-        // La photo où l'on en était, en surbrillance dès qu'elle est dans la liste.
-        self.select_after_open = self.all_photos_last.clone();
+        // La photo en surbrillance ici la reste là-bas (retour du 22/11/2026), sinon celle
+        // où l'on en était dans « Toutes les photos » ; dès qu'elle est dans la liste.
+        let here = self
+            .has_selected_photo()
+            .then(|| self.files.get(self.selected).map(|f| f.path.clone()))
+            .flatten();
+        self.select_after_open = here.or_else(|| self.all_photos_last.clone());
         self.open_folder(&tri::folder::all_photos_dir());
         // Après l'ouverture (qui l'oublie pour un vrai dossier).
         self.all_photos_from = from;
@@ -31002,6 +31007,36 @@ mod tests {
                 && app.select_after_open.is_none()
         });
         assert_eq!(h.state().files[h.state().selected].path, green_path);
+    }
+
+    #[test]
+    fn the_highlighted_photo_stays_highlighted_in_all_photos() {
+        // Retour du 22/11/2026 : dans un dossier, une photo en surbrillance, `g a` : elle
+        // l'est aussi dans « Toutes les photos ».
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        {
+            let db = dir.path().join("data").join("index.sqlite");
+            let mut index = tri::index::Index::open(&db).unwrap();
+            let seen: Vec<(PathBuf, u64, u128)> = tri::media::scan(&photos, 1)
+                .unwrap()
+                .into_iter()
+                .map(|f| (f.path, 1, 1))
+                .collect();
+            index.seen(&photos, 1, &seen).unwrap();
+        }
+        h.state_mut().selected = 2;
+        h.state_mut().cursor_hidden = false;
+        let target = h.state().files[2].path.clone();
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::A, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            tri::folder::is_all_photos(&app.folder.dir)
+                && app.opening.is_none()
+                && app.select_after_open.is_none()
+        });
+        assert_eq!(h.state().files[h.state().selected].path, target);
     }
 
     #[test]
