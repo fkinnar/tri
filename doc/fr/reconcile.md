@@ -34,6 +34,12 @@ Après une écriture par `tri` (noter, annuler, trancher), ce qu'il vient d'écr
 (`notes::remember`) : une source restée en retard (l'image, non réécrite) n'est pas un
 désaccord.
 
+**Une seule couleur** (retour du 22/11/2026) : le `.rrdata` de RapidRAW ne garde qu'une
+couleur. S'il porte l'une des couleurs connues (la mémoire, ou la source qui en a le
+plus), il est lu comme les portant toutes (`widen`) : jaune et vert dans le XMP, jaune
+dans le `.rrdata`, ce n'est pas un désaccord. Une autre couleur y reste un vrai
+changement.
+
 ## La mémoire : `notes.json`
 
 Un fichier par dossier, indexé par nom de fichier, parmi les données du dossier

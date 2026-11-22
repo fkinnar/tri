@@ -282,6 +282,27 @@ pub fn reconcile(
     memory: Option<&Remembered>,
     sources: &[Source],
 ) -> (Notes, Outcome, Option<Remembered>) {
+    // Un sidecar qui ne garde qu'une couleur (`.rrdata` de RapidRAW) porte l'une des
+    // couleurs connues : il dit tout ce qu'il peut dire, ce n'est pas un désaccord (retour
+    // du 22/11/2026 : jaune et vert dans le XMP, jaune dans le `.rrdata`, conflit).
+    let reference: Vec<Color> = match memory {
+        Some(m) => m.notes().colors,
+        None => sources
+            .iter()
+            .filter(|s| !s.silent && !single_colour(&s.name))
+            .map(|s| s.notes.colors.clone())
+            .max_by_key(Vec::len)
+            .unwrap_or_default(),
+    };
+    let widened: Vec<Source> = sources
+        .iter()
+        .map(|s| {
+            let mut s = s.clone();
+            widen(&s.name, &mut s.notes, &reference);
+            s
+        })
+        .collect();
+    let sources = &widened[..];
     // Les sources qui disent quelque chose.
     let speaking = || sources.iter().filter(|s| !s.silent);
     let Some(memory) = memory else {
@@ -331,7 +352,9 @@ pub fn reconcile(
             match memory.sources.get(&source.name) {
                 Some(seen) if seen.stamp == source.stamp => {}
                 Some(seen) => {
-                    if now != atom.of(&Notes::from(&seen.notes)) {
+                    let mut was = Notes::from(&seen.notes);
+                    widen(&source.name, &mut was, &reference);
+                    if now != atom.of(&was) {
                         changed.push((now, &source.name));
                     }
                 }
@@ -393,6 +416,24 @@ pub fn reconcile(
     };
     let keep = (remembered != *memory).then_some(remembered);
     (merged, outcome, keep)
+}
+
+/// Vrai pour un sidecar qui ne garde qu'une couleur (`.rrdata` de RapidRAW : une
+/// étiquette `color:…`).
+fn single_colour(name: &str) -> bool {
+    name.to_ascii_lowercase().ends_with(".rrdata")
+}
+
+/// Les couleurs d'un sidecar à une seule couleur, lues comme `reference` quand il en porte
+/// l'une ([`reconcile`]).
+fn widen(name: &str, notes: &mut Notes, reference: &[Color]) {
+    if single_colour(name)
+        && reference.len() > 1
+        && notes.colors.len() == 1
+        && reference.contains(&notes.colors[0])
+    {
+        notes.colors = reference.to_vec();
+    }
 }
 
 /// Champs sur lesquels `notes` ne s'accordent pas.
@@ -632,6 +673,48 @@ mod tests {
             notes: n.clone(),
             silent: false,
         }
+    }
+
+    #[test]
+    fn a_single_colour_sidecar_agrees_with_several_colours() {
+        // Retour du 22/11/2026 : jaune et vert dans le XMP, jaune dans le `.rrdata`.
+        let both = notes(4, Flag::None, &[Color::Yellow, Color::Green]);
+        let yellow = notes(4, Flag::None, &[Color::Yellow]);
+        let (shown, outcome, _) = reconcile(
+            None,
+            &[
+                source("a.xmp", 1, &both),
+                source("a.RAF.rrdata", 2, &yellow),
+            ],
+        );
+        assert_eq!(
+            (shown.colors, outcome),
+            (both.colors.clone(), Outcome::Same)
+        );
+        // Retenu d'accord, puis le `.rrdata` réécrit (un rendu) : toujours d'accord.
+        let memory = Remembered::agreed(
+            &both,
+            &[
+                source("a.xmp", 1, &both),
+                source("a.RAF.rrdata", 1, &yellow),
+            ],
+        );
+        let (shown, outcome, _) = reconcile(
+            Some(&memory),
+            &[
+                source("a.xmp", 1, &both),
+                source("a.RAF.rrdata", 5, &yellow),
+            ],
+        );
+        assert_eq!(shown.colors, both.colors);
+        assert!(!matches!(outcome, Outcome::Conflict(_)), "{outcome:?}");
+        // Une autre couleur dans RapidRAW : un vrai changement.
+        let red = notes(4, Flag::None, &[Color::Red]);
+        let (shown, _, _) = reconcile(
+            Some(&memory),
+            &[source("a.xmp", 1, &both), source("a.RAF.rrdata", 5, &red)],
+        );
+        assert_eq!(shown.colors, [Color::Red]);
     }
 
     /// Mémoire où les deux sources s'accordaient sur `n` (dates 1).

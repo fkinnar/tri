@@ -32,6 +32,11 @@ with the file's date and size ([`Stamp`]), and the ratings it settled on. On rea
 After a write by `tri` (rating, undo, resolving), what it just wrote is authoritative
 (`notes::remember`): a source left behind (the image, not rewritten) is no disagreement.
 
+**A single colour** (feedback of 2026-11-22): RapidRAW's `.rrdata` keeps only one colour.
+If it carries one of the known colours (the memory, or the source with the most), it is
+read as carrying them all (`widen`): yellow and green in the XMP, yellow in the
+`.rrdata`, is not a disagreement. Another colour there is still a real change.
+
 ## The memory: `notes.json`
 
 One file per folder, indexed by file name, among the folder's data

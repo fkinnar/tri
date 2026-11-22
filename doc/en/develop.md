@@ -101,6 +101,12 @@ configuration nor its library is touched, and darktable can stay open (no lock).
 `write_sidecar_files=never`: the sidecar is never rewritten, whatever the configuration;
 a test checks this on a real render (on a copy).
 
+**Sidecars kept during a render** (feedback of 2026-11-22): each render by external
+software goes through `SidecarGuard::protect` (scheduler), which keeps the photo's
+sidecars (`IMAGE.RAF.*`, `IMAGE.xmp`) and puts back, content and date, any the tool
+changed (a rewritten `.rrdata` made a notes conflict appear when switching renders);
+logged in `tri.log`.
+
 ## Opening a folder in the software (2026-10-28)
 
 `Developer::open_folder` gives the command that opens a folder in the software's
