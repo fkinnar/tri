@@ -175,6 +175,16 @@ pub fn run(
         if summary.cancelled {
             break;
         }
+        // Palette prête (calculée ou déjà en cache) : notée dans l'index de recherche (#561).
+        if failed.is_none()
+            && let Kind::Palette(_) = kind
+            && let Some(source) = kind.levels(file).into_iter().find_map(|l| match l {
+                Level::Palette(source) => Some(source),
+                _ => None,
+            })
+        {
+            crate::index::note(file, source);
+        }
         match failed {
             Some(e) => {
                 summary.failed += 1;

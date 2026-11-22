@@ -305,6 +305,13 @@ la corbeille de l'utilisateur.
 Dernier dossier mémorisé puis oublié s'il disparaît ; aucun dossier par défaut ; ouverture (chemin absolu, images, notes), filtres par type et
 par notes combinés, note relue après réouverture, dossier absent en erreur.
 
+### `index` (unitaires `src/index.rs`, intégration `tests/index.rs`)
+
+Index des palettes (#561) : photo déplacée qui garde sa palette, palette remplacée à
+d'autres réglages, empreinte limitée aux bouts du fichier, base refaite ; de bout en bout
+avec de vrais calculs. Mesure sur 100 000 palettes : `--ignored`, en `--release` (voir
+[index.md](index.md)).
+
 ### `media` + `filter` (intégration, `tests/media.rs`)
 
 Sur une fausse carte SD temporaire (paires RAW+JPEG, casse mixte, AppleDouble, `.xmp`,

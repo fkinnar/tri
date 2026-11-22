@@ -1116,6 +1116,16 @@ fn compute(
         )
         .into(),
     };
+    // Palettes notées dans l'index de recherche de tous les dossiers (#561).
+    let index = kinds
+        .iter()
+        .any(|k| matches!(k, tri::compute::Kind::Palette(_)));
+    if index && let Some(data) = settings.data_dir() {
+        let db = data.join("index.sqlite");
+        if let Err(e) = tri::index::start(&db, cache.clone(), producer.settings, settings.index) {
+            eprintln!("{}", t!("cli-error-detail", error = e.to_string()));
+        }
+    }
     let cancel = std::sync::atomic::AtomicBool::new(false);
     for &kind in kinds {
         if recreate {
@@ -1143,6 +1153,7 @@ fn compute(
             eprintln!("{}", t!("cli-error-detail", error = e));
         }
     }
+    tri::index::flush(Duration::from_secs(60));
     Ok(())
 }
 

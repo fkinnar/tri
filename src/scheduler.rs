@@ -1202,6 +1202,10 @@ fn finish(
     result: Result<(), Failure>,
 ) -> Vec<Event> {
     let generation = s.generation;
+    // Palette prête (calculée ou déjà en cache) : notée dans l'index de recherche (#561).
+    if let (Ok(()), Level::Palette(source)) = (&result, level) {
+        crate::index::note(&file, source);
+    }
     let path = file.path;
     let on_demand = s.on_demand.remove(&(index, level));
     let mut events = match result {

@@ -1236,6 +1236,7 @@ settings-section-files = Files
 settings-section-sharpness = Sharpness
 settings-section-similarity = Grouping
 settings-section-palette = Colour palettes
+settings-section-index = Search index
 settings-section-i18n = Language
 settings-section-data = Data
 settings-section-log = Application log

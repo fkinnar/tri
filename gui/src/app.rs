@@ -10424,6 +10424,20 @@ impl TriApp {
                 }
             });
         }
+        // Index de recherche des palettes de tous les dossiers (#561) : rempli au fil des
+        // palettes prêtes, dans le dossier des données. Jamais dans les tests (le dossier
+        // des données de l'utilisateur).
+        if !cfg!(test)
+            && let Some(data) = self.settings.data_dir()
+            && let Err(e) = tri::index::start(
+                &data.join("index.sqlite"),
+                cache.clone(),
+                preview,
+                self.settings.index,
+            )
+        {
+            trace(|| format!("index des palettes indisponible : {e}"));
+        }
         let (tx, rx) = mpsc::channel();
         let repaint = ctx.clone();
         // Logiciels de développement installés : rendus développés à la demande (leurs
