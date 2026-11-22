@@ -264,6 +264,9 @@ pub enum Action {
     FileDelete,
     /// Afficher l'image dans le gestionnaire de fichiers.
     FileReveal,
+    /// Depuis « Toutes les photos » (#561) : ouvrir le vrai dossier de l'image, elle en
+    /// surbrillance.
+    FileShowInFolder,
     /// Ouvrir l'image dans l'éditeur externe.
     FileEdit,
     /// Générer les sidecars de notes manquants (un logiciel ou tous) de la sélection ou
@@ -609,7 +612,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 284] = [
+    pub const ALL: [Action; 285] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -697,6 +700,7 @@ impl Action {
         Action::FileRename,
         Action::FileDelete,
         Action::FileReveal,
+        Action::FileShowInFolder,
         Action::FileEdit,
         Action::Sidecars,
         Action::EmbedNotes,
@@ -1117,10 +1121,10 @@ impl Action {
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders | AllPhotos => {
                 Group::Panels
             }
-            FileActionsAllow | FileRename | FileDelete | FileReveal | FileEdit | FileCopy
-            | FileMove | Sidecars | EmbedNotes | ImportNotes | FileDeleteStack
-            | FileDeletePhoto | FileCopyStack | FileExport | ExportReport | Send(_)
-            | Compute(_) | ComputeAll | RecreateAll => Group::Files,
+            FileActionsAllow | FileRename | FileDelete | FileReveal | FileShowInFolder
+            | FileEdit | FileCopy | FileMove | Sidecars | EmbedNotes | ImportNotes
+            | FileDeleteStack | FileDeletePhoto | FileCopyStack | FileExport | ExportReport
+            | Send(_) | Compute(_) | ComputeAll | RecreateAll => Group::Files,
             Undo | Redo | History => Group::Edit,
             StackToggle | StackOpen | StackClose | StacksAll | GroupingWindow | StackMode
             | StackChoose | StackFirst | StackLast | StackEnterToggle | DevToggle | DevNext
@@ -1471,6 +1475,7 @@ impl Action {
             Action::FileCopyStack => "core.file.copy_stack",
             Action::Send(id) => id,
             Action::FileReveal => "core.file.reveal",
+            Action::FileShowInFolder => "core.file.show_in_folder",
             Action::FileEdit => "core.file.edit",
             Action::Sidecars => "core.file.sidecars",
             Action::EmbedNotes => "core.file.embed_notes",

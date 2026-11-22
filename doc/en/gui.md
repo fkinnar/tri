@@ -1167,7 +1167,10 @@ system one ("cold" measurements, experiments).
   there back to the folder (feedback of 2026-11-22: rather than "everywhere" variants of
   each filter). Filters stay set when changing folders: a filter set here (`f l` similar
   palettes, `f o` colour, `f m` similar) then searches everywhere, the reference photo
-  read again in the source over there.
+  read again in the source over there. **Show in its folder**
+  (`core.file.show_in_folder`, `g f`, folder-and-target icon in the right-click box, only
+  from "All photos"): the image's real folder, the image highlighted in the grid
+  (`select_after_open`).
   **Reference photo** (feedback of 2026-11-22), shared by "similar palettes" and
   "similar" (`TriApp::reference`): in the Filters section, "Colour" first, then those two
   filters, the reference on their right (`reference_box`: its thumbnail, or an empty

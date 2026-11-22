@@ -737,6 +737,24 @@ pub fn file_action(painter: &Painter, rect: Rect, action: Action, color: Color32
             ));
             painter.line_segment([p(0.0, 0.4), p(1.0, 0.4)], stroke);
         }
+        Action::FileShowInFolder => {
+            // Son dossier (depuis « Toutes les photos ») : un dossier et, dedans, une cible
+            // (« elle est là »).
+            painter.add(Shape::closed_line(
+                vec![
+                    p(0.0, 0.12),
+                    p(0.38, 0.12),
+                    p(0.48, 0.26),
+                    p(1.0, 0.26),
+                    p(1.0, 0.92),
+                    p(0.0, 0.92),
+                ],
+                stroke,
+            ));
+            let c = p(0.5, 0.6);
+            painter.circle_stroke(c, w * 0.2, stroke);
+            painter.circle_filled(c, w * 0.07, color);
+        }
         Action::FileCopy => {
             // Deux feuilles décalées : celle de derrière seulement en partie visible.
             painter.add(Shape::line(

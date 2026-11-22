@@ -612,6 +612,9 @@ pub struct TriApp {
     start_select: Option<usize>,
     /// Image passée en argument (#250) : ouverte en plein écran une fois son dossier lu.
     start_select_path: Option<PathBuf>,
+    /// Image à mettre en surbrillance une fois le dossier ouvert, en grille (« Montrer dans
+    /// son dossier », depuis « Toutes les photos », #561).
+    select_after_open: Option<PathBuf>,
     /// Mode concentration à la première image (`--focus`, ou une image en argument avec
     /// `[gui] image_focus`).
     start_focus: bool,
@@ -2032,6 +2035,7 @@ impl TriApp {
             start_dir: None,
             start_select: None,
             start_select_path: None,
+            select_after_open: None,
             start_focus: false,
             eject_failed: None,
             eject_dialog: None,
@@ -2924,6 +2928,21 @@ impl TriApp {
         self.all_photos_from = from;
     }
 
+    /// Depuis « Toutes les photos » : ouvre le vrai dossier de l'image `path`, elle en
+    /// surbrillance (retour du 22/11/2026).
+    fn show_in_folder(&mut self, path: &Path) {
+        if !tri::folder::is_all_photos(&self.folder.dir) {
+            self.notice = Some((t!("show-in-folder-all-only"), false));
+            return;
+        }
+        let Some(dir) = tri::media::source(path).parent().map(Path::to_path_buf) else {
+            return;
+        };
+        self.select_after_open = Some(path.to_path_buf());
+        self.mode = Mode::Grid;
+        self.open_folder(&dir);
+    }
+
     /// Lance la complétion en fond de « Toutes les photos » : chaque dossier joignable
     /// relu (développements, photos ajoutées) ; le résultat remplace la liste
     /// ([`TriApp::poll_all_photos_completion`]).
@@ -3251,6 +3270,21 @@ impl TriApp {
         self.ask_pairs(pairs_decided);
         if let Some(i) = self.start_select.take() {
             self.selected = i.min(self.files.len().saturating_sub(1));
+        }
+        // « Montrer dans son dossier » : elle en surbrillance, en grille (sa photo si le
+        // développement est replié dans sa pile).
+        if let Some(path) = self.select_after_open.take() {
+            let photo = tri::media::source(&path).into_owned();
+            if let Some(i) = self
+                .files
+                .iter()
+                .position(|f| f.path == path)
+                .or_else(|| self.files.iter().position(|f| f.path == photo))
+            {
+                self.selected = i;
+                self.cursor_hidden = false;
+                self.reveal = Some(Reveal::Minimal);
+            }
         }
         // Une image en argument (#250) : ouverte en plein écran, comme une visionneuse
         // (retour du 31/10/2026 : sélectionnée seulement, « ça n'ouvre pas l'image »).
@@ -3688,6 +3722,9 @@ impl TriApp {
             _ => {}
         }
         match action {
+            Action::FileShowInFolder if !tri::folder::is_all_photos(&self.folder.dir) => {
+                Some(t!("show-in-folder-all-only"))
+            }
             Action::FilterDeveloped if !self.developed_on && !self.any_developed => {
                 Some(t!("filter-developed-unusable"))
             }
@@ -12797,6 +12834,11 @@ impl TriApp {
             // « Toutes les photos » (#561), et les recherches « partout » : le filtre posé
             // là-bas, la photo ou la couleur d'ici.
             Action::AllPhotos => self.toggle_all_photos(),
+            Action::FileShowInFolder => {
+                if let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) {
+                    self.show_in_folder(&path);
+                }
+            }
             // La photo sélectionnée devient la référence (retour du 22/11/2026).
             Action::SetReference => self.set_reference(),
             // Semblables à la référence (retour du 22/11/2026), ou fin de la recherche.
@@ -20456,12 +20498,17 @@ impl TriApp {
                         Action::FileMove,
                         Action::FileDelete,
                         Action::FileReveal,
+                        Action::FileShowInFolder,
                         Action::FileEdit,
                         Action::Send("plugin.airdrop.send"),
                     ]
                     .into_iter()
                     .filter(|a| a.available())
-                    {
+                    // Son dossier : seulement depuis « Toutes les photos » (#561).
+                    .filter(|&a| {
+                        a != Action::FileShowInFolder
+                            || tri::folder::is_all_photos(&self.folder.dir)
+                    }) {
                         // Actions sur les fichiers interdites : grisées, la bulle dit
                         // pourquoi (30/10/2026). Renommer toute la sélection : par lot (#439).
                         let enabled = !action.changes_files() || self.settings.files.allow_actions;
@@ -20650,6 +20697,10 @@ impl TriApp {
             // Référence des palettes : la photo de la boîte (sélectionnée en l'ouvrant).
             if action == Action::SetReference {
                 self.set_reference();
+                return;
+            }
+            if action == Action::FileShowInFolder {
+                self.show_in_folder(&path);
                 return;
             }
             let paths = if on_all { group } else { vec![path] };
@@ -30845,6 +30896,45 @@ mod tests {
         run_until(&mut h, |app| {
             app.opening.is_none() && app.folder.dir == photos
         });
+        // De nouveau dans « Toutes les photos » : une photo d'ailleurs, dans son dossier.
+        h.state_mut().set_palette_colour(None);
+        h.state_mut().perform(&ctx, Action::AllPhotos);
+        run_until(&mut h, |app| {
+            tri::folder::is_all_photos(&app.folder.dir)
+                && app.opening.is_none()
+                && app.all_photos_completion.is_none()
+                && app.files.len() == 4
+        });
+        let green = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path.ends_with("ailleurs/vert.jpg"))
+            .expect("la photo d'ailleurs");
+        // Clic droit : « Montrer dans son dossier » (seulement ici) ; `g f` l'ouvre, elle en
+        // surbrillance.
+        h.state_mut().selected = green;
+        let green_path = h.state().files[green].path.clone();
+        h.state_mut().rating_dialog = Some((green_path.clone(), CENTRED));
+        h.run_steps(3);
+        assert!(
+            h.query_by_label(&Action::FileShowInFolder.label())
+                .is_some()
+        );
+        h.state_mut().rating_dialog = None;
+        h.run_steps(1);
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::F, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.opening.is_none() && app.folder.dir == elsewhere
+        });
+        assert_eq!(h.state().files[h.state().selected].path, green_path);
+        assert!(
+            h.state()
+                .action_unusable(Action::FileShowInFolder)
+                .is_some(),
+            "ici, grisée"
+        );
     }
 
     #[test]

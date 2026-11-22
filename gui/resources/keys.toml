@@ -271,6 +271,9 @@ loupe = "m"
 # Cmd+E: export, like Lightroom; Cmd+Shift+E: the export report.
 "core.file.edit" = ["e"]
 "core.file.reveal" = ["Shift+e"]
+# From "All photos" (#561): the image in its own folder, highlighted. "g f" like
+# "go folder".
+"core.file.show_in_folder" = ["g f"]
 "core.file.export" = ["Cmd+e"]
 "core.file.export.report" = ["Cmd+Shift+e"]
 # Delete: Delete, or the "delete" key of Mac keyboards (Backspace); a confirmation
