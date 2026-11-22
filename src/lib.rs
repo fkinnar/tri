@@ -68,6 +68,7 @@ pub mod raw;
 pub mod reconcile;
 pub mod remote;
 pub mod reset;
+pub mod roots;
 pub mod rrdata;
 pub mod scheduler;
 pub mod selection;

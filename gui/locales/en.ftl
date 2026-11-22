@@ -309,6 +309,7 @@ action-core-folders-rename = Folders: rename the folder
 action-core-folders-delete = Folders: delete the folder
 action-core-folders-favorite = Folders: add to or remove from favourites
 action-core-folders-favorite_name = Folders: name the favourite
+action-core-folders-watch = Folders: watch the folder or stop watching it
 action-core-folders-connect = Folders: connect to a network share
 action-core-folders-forget = Folders: forget the remembered network share
 action-core-folders-cache_clear = Folders: clear the cache kept in the folder or drive
@@ -1366,6 +1367,13 @@ watch-notes = { $count ->
    *[other] Notes of { $count } images changed elsewhere: reloaded
 }
 folder-menu-favorite-add = Add to favourites
+folder-menu-watch-add = Watch this folder
+folder-menu-watch-remove = Stop watching this folder
+folders-watched = Watched: walked in the background for "All photos"
+folders-watch-added = "{ $name }" is watched
+folders-watch-removed = "{ $name }" is no longer watched
+roots-walking = Watching: { $name } ({ $n } folders)
+roots-found = Watched folders: { $folders } folders recognised, { $photos } photos found again
 folder-menu-favorite-remove = Remove from favourites
 folder-menu-favorite-name = Name the favourite…
 favorite-name-title = Name of the favourite "{ $name }"

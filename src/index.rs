@@ -32,7 +32,7 @@ use crate::palette::{Palette, Source};
 const SCHEMA: i64 = 4;
 
 /// Section `[index]` : index de recherche des palettes (#561).
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct IndexSettings {
     /// Noter les palettes dans l'index (recherche dans tous les dossiers).
@@ -41,6 +41,19 @@ pub struct IndexSettings {
     pub fingerprint_kb: u32,
     /// Palettes notées par écriture (une transaction) au plus.
     pub batch: usize,
+    /// Racines surveillées ([`crate::roots`]) : dossiers parcourus en fond (`~/…`
+    /// accepté).
+    pub roots: Vec<String>,
+    /// Parcourir les racines au lancement.
+    pub walk_at_launch: bool,
+    /// Parcourir un disque amovible quand on le branche (jamais une carte d'appareil).
+    pub walk_plugged: bool,
+    /// Reparcourir les racines après tant de minutes sans rien faire (0 : jamais).
+    pub walk_idle_minutes: u64,
+    /// Niveaux de dossiers au plus sous une racine.
+    pub walk_depth: usize,
+    /// Pause entre deux dossiers d'un parcours (ms), pour ne rien gêner.
+    pub walk_pause_ms: u64,
 }
 
 impl Default for IndexSettings {
@@ -49,6 +62,12 @@ impl Default for IndexSettings {
             enabled: true,
             fingerprint_kb: 32,
             batch: 256,
+            roots: Vec::new(),
+            walk_at_launch: true,
+            walk_plugged: true,
+            walk_idle_minutes: 10,
+            walk_depth: 16,
+            walk_pause_ms: 2,
         }
     }
 }

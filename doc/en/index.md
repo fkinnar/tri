@@ -135,6 +135,32 @@ exists** (`TEST3`): it is that folder, renamed or moved outside `tri`. Everythin
 notes kept by `tri`, cached computations, index; a message says so. An old folder that is
 still there is not taken (a copy is not a rename).
 
+## Watched roots (`tri::roots`, 2026-11-22)
+
+Folders `tri` walks by itself, in the background (`roots::walk`, thread `tri-roots`), so
+that "All photos" knows what they hold without opening them, and to repair the index when
+photos moved outside `tri`. Chosen with `[index] roots` or from a folder's right-click,
+**Watch this folder** (`core.folders.watch`, `w` in the folder panel), which rewrites the
+configuration; an eye marks it in the tree.
+
+**When** (owner's choice, 2026-11-22: "taking care not to slow anything down"): at launch
+(`walk_at_launch`), after `walk_idle_minutes` doing nothing, and for a removable disk when
+plugged in (`walk_plugged`), **never a camera card** (a `DCIM`: raw files, before they
+are copied elsewhere). A pause between two folders (`walk_pause_ms`); a line in the
+status bar, cancellable.
+
+**What it does**, folder by folder (`walk_depth` levels, hidden folders and cards left
+out):
+- an unknown folder: maybe a known folder renamed or moved (`locate::recognise`);
+- an unknown photo: maybe a photo **moved on its own** (same name, same size, same
+  content if the fingerprint is known, old path gone): the index follows it
+  (`Index::carry`) with its notes, palettes and fingerprints, and `tri`'s notes memory
+  too (`reconcile::carry`). This is how a photo moved on its own outside `tri` is found
+  again (owner's choice: no greyed thumbnail for it);
+- the photos seen are recorded; those that disappeared are only forgotten **at the end**
+  of the walk (a photo that left a folder walked before the one it arrived in must still
+  be known), and never if the walk is interrupted.
+
 ## `[index]` settings
 
 | Key | Default | Role |

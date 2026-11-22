@@ -655,6 +655,22 @@ enabled = true
 fingerprint_kb = 32
 # Palettes recorded per database write, at most.
 batch = 256
+# Watched roots: folders walked in the background.
+#
+# "All photos" then knows everything they hold, and a folder renamed or a photo moved
+# outside `tri` is found there again (notes and palettes kept). Also from a folder's
+# right-click: "Watch this folder". Example: ["~/Pictures/Photos"].
+roots = []
+# Walk the roots when `tri` starts.
+walk_at_launch = true
+# Walk a removable disk when it is plugged in (never a camera card).
+walk_plugged = true
+# Walk the roots again after this many minutes doing nothing (0: never).
+walk_idle_minutes = 10
+# Folder levels at most under a root.
+walk_depth = 16
+# Pause between two folders of a walk (ms), so nothing is slowed down.
+walk_pause_ms = 2
 
 [similarity]
 # Long side of the small image the fingerprint is taken from (pixels): being small, it

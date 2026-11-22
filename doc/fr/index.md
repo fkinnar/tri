@@ -137,6 +137,34 @@ taille, `Index::with_sizes`, puis `locate::verify`) sont celles d'un dossier con
 notes gardées par `tri`, calculs du cache, index ; un message le dit. Un ancien dossier
 encore là n'est pas pris (une copie n'est pas un renommage).
 
+## Racines surveillées (`tri::roots`, 22/11/2026)
+
+Des dossiers que `tri` parcourt de lui-même, en fond (`roots::walk`, fil `tri-roots`),
+pour que « Toutes les photos » sache ce qu'ils contiennent sans qu'on les ouvre, et pour
+réparer l'index quand des photos ont bougé hors de `tri`. Choisis par `[index] roots`
+ou au clic droit d'un dossier, **Surveiller ce dossier** (`core.folders.watch`, `w`
+dans le panneau des dossiers), qui réécrit la configuration ; un œil le marque dans
+l'arborescence.
+
+**Quand** (choix de l'utilisateur, 22/11/2026 : « en prenant soin de rien gêner ») : au
+lancement (`walk_at_launch`), après `walk_idle_minutes` sans rien faire, et pour un
+disque amovible qu'on branche (`walk_plugged`), **jamais une carte d'appareil** (un
+`DCIM` : des fichiers bruts, avant leur copie ailleurs). Une pause entre deux dossiers
+(`walk_pause_ms`) ; une ligne dans la barre d'état, interruptible.
+
+**Ce qu'il fait**, dossier par dossier (`walk_depth` niveaux, dossiers cachés et cartes
+écartés) :
+- un dossier inconnu : peut-être un dossier connu renommé ou déplacé
+  (`locate::recognise`) ;
+- une photo inconnue : peut-être une photo **déplacée seule** (même nom, même taille,
+  même contenu si l'empreinte est connue, ancien chemin disparu) : l'index la suit
+  (`Index::carry`) avec ses notes, palettes et empreintes, la mémoire des notes de `tri`
+  aussi (`reconcile::carry`). C'est ainsi qu'est retrouvée une photo déplacée seule hors
+  de `tri` (choix de l'utilisateur : pas de vignette grise pour elle) ;
+- les photos vues sont notées ; celles qui ont disparu ne sont oubliées **qu'à la fin**
+  du parcours (une photo partie d'un dossier parcouru avant celui où elle est arrivée
+  doit encore être connue), et jamais si le parcours est interrompu.
+
 ## Réglages `[index]`
 
 | Clé | Défaut | Rôle |

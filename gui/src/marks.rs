@@ -1598,6 +1598,25 @@ pub fn color_controls(
     clicked
 }
 
+/// Œil (dossier surveillé, #561) : une amande et sa pupille.
+pub fn eye(painter: &Painter, rect: Rect, color: Color32) {
+    let stroke = Stroke::new((rect.width() / 12.0).max(1.0), color);
+    let (c, w, h) = (rect.center(), rect.width() * 0.48, rect.height() * 0.28);
+    let arc = |up: f32| -> Vec<Pos2> {
+        (0..=12)
+            .map(|k| {
+                let t = k as f32 / 12.0;
+                let x = c.x - w + 2.0 * w * t;
+                let y = c.y + up * h * (1.0 - (2.0 * t - 1.0).powi(2));
+                pos2(x, y)
+            })
+            .collect()
+    };
+    painter.add(Shape::line(arc(-1.0), stroke));
+    painter.add(Shape::line(arc(1.0), stroke));
+    painter.circle_filled(c, rect.width() * 0.13, color);
+}
+
 /// Icône « disque externe » dans `rect` : boîtier arrondi et voyant.
 pub fn drive(painter: &Painter, rect: Rect, color: Color32) {
     let body = Rect::from_center_size(

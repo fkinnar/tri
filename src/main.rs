@@ -1122,7 +1122,12 @@ fn compute(
         .any(|k| matches!(k, tri::compute::Kind::Palette(_)));
     if index && let Some(data) = settings.data_dir() {
         let db = data.join("index.sqlite");
-        if let Err(e) = tri::index::start(&db, cache.clone(), producer.settings, settings.index) {
+        if let Err(e) = tri::index::start(
+            &db,
+            cache.clone(),
+            producer.settings,
+            settings.index.clone(),
+        ) {
             eprintln!("{}", t!("cli-error-detail", error = e.to_string()));
         }
     }
