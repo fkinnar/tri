@@ -1281,9 +1281,43 @@ pub(crate) fn command_line(command: &Command) -> String {
         .join(" ")
 }
 
+/// Ligne d'erreur d'une sortie de logiciel : la première qui contient « ERROR », sinon
+/// la dernière non vide. Retour du 22/11/2026 : l'AppImage de darktable finit par des
+/// avertissements sans conséquence (« Failed to load module… libgvfsdbus.so ») ; la vraie
+/// raison (« ERROR: can't acquire database lock ») était plus haut.
+pub(crate) fn error_line(output: &str) -> Option<&str> {
+    let mut lines = output.lines().map(str::trim).filter(|l| !l.is_empty());
+    let all: Vec<&str> = lines.by_ref().collect();
+    all.iter()
+        .find(|l| l.contains("ERROR"))
+        .or(all.last())
+        .copied()
+}
+
+/// Un seul `darktable-cli` à la fois (retour du 22/11/2026) : tous partagent le dossier de
+/// configuration de `tri`, dont darktable verrouille la base (« database is locked,
+/// probably another process is already using it »). Un rendu de la grille et le
+/// développement d'un dossier lancés ensemble échouaient.
+static DARKTABLE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Attend le tour de `darktable-cli` ([`DARKTABLE`]) ; `None` si `cancel` est levé avant.
+pub(crate) fn darktable_turn(cancel: &AtomicBool) -> Option<std::sync::MutexGuard<'static, ()>> {
+    loop {
+        match DARKTABLE.try_lock() {
+            Ok(guard) => return Some(guard),
+            Err(std::sync::TryLockError::Poisoned(e)) => return Some(e.into_inner()),
+            Err(std::sync::TryLockError::WouldBlock) => {}
+        }
+        if cancel.load(Ordering::Relaxed) {
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
 /// Un logiciel de développement a échoué (issue n° 398) : tout le détail au journal
-/// (image, commande, code de sortie, messages complets) ; l'erreur ne garde que la
-/// dernière ligne des messages, sinon `fallback` (le nom de l'outil).
+/// (image, commande, code de sortie, messages complets) ; l'erreur ne garde que la ligne
+/// d'erreur des messages ([`error_line`]), sinon `fallback` (le nom de l'outil).
 pub(crate) fn tool_failed(
     engine: Engine,
     image: Option<&Path>,
@@ -1292,13 +1326,7 @@ pub(crate) fn tool_failed(
     output: &str,
     fallback: &str,
 ) -> DevelopError {
-    let last = output
-        .lines()
-        .rev()
-        .find(|l| !l.trim().is_empty())
-        .unwrap_or(fallback)
-        .trim()
-        .to_string();
+    let last = error_line(output).unwrap_or(fallback).to_string();
     let mut detail = String::new();
     if let Some(image) = image {
         detail.push_str(&format!("image: {}\n", image.display()));
@@ -1377,6 +1405,10 @@ fn render_darktable(
     side: u32,
     cancel: &AtomicBool,
 ) -> Result<(), DevelopError> {
+    // Un seul darktable-cli à la fois (même configuration).
+    let Some(_turn) = darktable_turn(cancel) else {
+        return Err(DevelopError::Cancelled);
+    };
     std::fs::create_dir_all(&dt.config_dir)
         .map_err(|e| DevelopError::Failed(Engine::Darktable, e.to_string()))?;
     let _ = std::fs::remove_file(out);
@@ -2566,6 +2598,71 @@ mod tests {
             std::fs::write(&profile, "[General]\nRank=3\n").unwrap();
             crate::cache::forget_stamps([profile.as_path()]);
             assert_eq!(engine.sidecar(&image), None, "notes seules : rien à rendre");
+        }
+    }
+
+    #[test]
+    fn the_error_line_is_the_error_not_the_last_warning() {
+        // Retour du 22/11/2026 : sortie de l'AppImage de darktable, base verrouillée.
+        let output =
+            "     0,0415 [init] database is locked, probably another process is already using it
+     0,0416 ERROR: can't acquire database lock, aborting.
+Gtk-Message: 12:13:52.185: Failed to load module \"xapp-gtk3-module\"
+Failed to load module: /usr/lib/x86_64-linux-gnu/gio/modules/libgvfsdbus.so
+";
+        assert_eq!(
+            error_line(output),
+            Some("0,0416 ERROR: can't acquire database lock, aborting.")
+        );
+        assert_eq!(error_line("rien\n  dernier  \n\n"), Some("dernier"));
+        assert_eq!(error_line("  \n"), None);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn darktable_renders_take_turns() {
+        // Retour du 22/11/2026 : deux darktable-cli ensemble (rendu de la grille,
+        // développement du dossier) se disputaient la base de la configuration de tri ;
+        // le second échouait. Le faux darktable échoue s'il n'est pas seul.
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let jpeg = dir.path().join("rendu.jpg");
+        std::fs::write(&jpeg, b"\xff\xd8 rendu").unwrap();
+        let lock = dir.path().join("lock");
+        let script = dir.path().join("darktable-cli");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\n[ -e '{lock}' ] && {{ echo 'ERROR: database is locked'; exit 1; }}\ntouch '{lock}'\nsleep 0.3\ncp '{jpeg}' \"$3\"\nrm '{lock}'\n",
+                lock = lock.display(),
+                jpeg = jpeg.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let dt = Darktable {
+            cli: Cli::native(script),
+            config_dir: dir.path().join("config"),
+            high_quality: false,
+        };
+        let image = dir.path().join("DSCF0001.RAF");
+        let sidecar = dir.path().join("DSCF0001.RAF.xmp");
+        std::fs::write(&image, b"raw").unwrap();
+        std::fs::write(&sidecar, b"xmp").unwrap();
+        let results: Vec<Result<(), DevelopError>> = std::thread::scope(|s| {
+            let handles: Vec<_> = (0..2)
+                .map(|i| {
+                    let (dt, image, sidecar) = (&dt, &image, &sidecar);
+                    let out = dir.path().join(format!("out{i}.jpg"));
+                    s.spawn(move || {
+                        render_darktable(dt, image, sidecar, &out, 100, &AtomicBool::new(false))
+                    })
+                })
+                .collect();
+            handles.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        for r in results {
+            r.unwrap();
         }
     }
 
