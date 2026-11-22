@@ -91,8 +91,9 @@ raison au survol : **disque débranché** (le premier parent qui existe est un d
 montage, `/Volumes`, `/media/<utilisateur>`… : `locate::unplugged`, il suffit de le
 rebrancher) ou **introuvable** (déplacé ou renommé sur un disque présent).
 
-**Retrouver son dossier** (`core.file.locate`, `g l`, clic droit, icône dossier et
-loupe) cherche en fond (`locate::find`) sous les disques, le dossier personnel et les
+**Retrouver son dossier** (`core.file.locate`, `g l`, clic droit, ou l'icône dossier
+et loupe **au centre de chaque vignette grise**, retour du 22/11/2026 : à la souris
+aussi ; un disque débranché y montre un disque, sans clic) cherche en fond (`locate::find`) sous les disques, le dossier personnel et les
 favoris :
 1. l'ancien chemin posé sur chaque racine, de sa fin vers son début
    (`…/2026-11-18_Sarah`, `…/2026/2026-11-18_Sarah`…) : un dossier déplacé d'un disque

@@ -89,7 +89,9 @@ unplugged** (the first existing parent is a mount folder, `/Volumes`,
 `/media/<user>`…: `locate::unplugged`, plugging it back in is enough) or **not found**
 (moved or renamed on a disk that is there).
 
-**Find its folder** (`core.file.locate`, `g l`, right-click, folder-and-magnifier icon)
+**Find its folder** (`core.file.locate`, `g l`, right-click, or the folder-and-magnifier
+icon **in the middle of each greyed thumbnail**, feedback of 2026-11-22: with the mouse
+too; an unplugged disk shows a disk there, not clickable)
 searches in the background (`locate::find`) under the disks, the home folder and the
 favourites:
 1. the old path placed on each root, from its end towards its start

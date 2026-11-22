@@ -22623,6 +22623,50 @@ impl TriApp {
             }
             (None, _) => {} // en attente : cellule vide
         }
+        // Dossier injoignable (#561) : au centre, de quoi le retrouver à la souris (retour du
+        // 22/11/2026 : « tout le monde n'est pas fan du clavier ») ; un disque débranché :
+        // son icône, sans clic (il suffit de le rebrancher).
+        if let Some((_, unplugged)) = &missing {
+            let side = g.marks * 2.4;
+            let zone = Rect::from_center_size(image_area.center(), vec2(side, side));
+            let sense = if *unplugged {
+                Sense::hover()
+            } else {
+                Sense::click()
+            };
+            let hit = ui.interact(zone, response.id.with("locate"), sense);
+            let alpha = if hit.hovered() && !*unplugged {
+                220
+            } else {
+                160
+            };
+            ui.painter()
+                .rect_filled(zone.expand(4.0), 6.0, Color32::from_black_alpha(alpha));
+            let icon = zone.shrink(side * 0.12);
+            if *unplugged {
+                marks::drive(ui.painter(), icon, Color32::from_gray(220));
+                hit.on_hover_text(t!("folder-unplugged"));
+            } else {
+                marks::file_action(
+                    ui.painter(),
+                    icon,
+                    Action::FileLocate,
+                    Color32::from_gray(235),
+                );
+                let label = Action::FileLocate.label();
+                hit.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, &label)
+                });
+                let hit = hit
+                    .on_hover_cursor(egui::CursorIcon::PointingHand)
+                    .on_hover_text(self.action_tip(Action::FileLocate));
+                if hit.clicked() {
+                    self.select(index);
+                    let path = file.path.clone();
+                    self.locate(&path);
+                }
+            }
+        }
 
         if !info {
             return;
@@ -31537,7 +31581,14 @@ mod tests {
                 .action_unusable(Action::FileShowInFolder)
                 .is_some()
         );
-        h.state_mut().perform(&ctx, Action::FileLocate);
+        // À la souris : l'icône au centre de la vignette grise.
+        h.run_steps(2);
+        let label = Action::FileLocate.label();
+        assert!(
+            h.query_all_by_label(&label).count() >= 3,
+            "une par vignette"
+        );
+        h.query_all_by_label(&label).next().unwrap().click();
         run_until(&mut h, |app| {
             app.missing_dirs.is_empty()
                 && !app.files.is_empty()
@@ -31563,7 +31614,7 @@ mod tests {
         let old = dir.path().join("TEST3");
         let new = dir.path().join("TEST4");
         std::fs::create_dir_all(&old).unwrap();
-        for f in tri::media::scan(&dir.path().join("photos"), 1).unwrap() {
+        for f in tri::media::scan(dir.path().join("photos"), 1).unwrap() {
             std::fs::copy(&f.path, old.join(f.path.file_name().unwrap())).unwrap();
         }
         {
