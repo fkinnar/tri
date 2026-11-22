@@ -123,20 +123,26 @@ impl Folder {
 /// descendre : chaque dossier joignable est relu ([`media::scan`], un niveau) — ses
 /// développements, ses photos ajoutées, sans celles qui n'y sont plus — et noté dans
 /// l'index ; un dossier injoignable (disque débranché) garde ce que l'index en savait.
-/// `stop` interrompt (la liste d'avant est rendue telle quelle).
-pub fn complete_from_disk(files: &[MediaFile], stop: &AtomicBool) -> Vec<MediaFile> {
+/// `stop` interrompt (la liste d'avant est rendue telle quelle). Rend aussi les dossiers
+/// injoignables (« Retrouver… », #561).
+pub fn complete_from_disk(files: &[MediaFile], stop: &AtomicBool) -> Completed {
     let mut dirs: std::collections::BTreeMap<PathBuf, Vec<MediaFile>> = Default::default();
     for f in files {
         let dir = f.path.parent().map(Path::to_path_buf).unwrap_or_default();
         dirs.entry(dir).or_default().push(f.clone());
     }
     let mut out = Vec::with_capacity(files.len());
+    let mut missing = Vec::new();
     for (dir, known) in dirs {
         if stop.load(Ordering::Relaxed) {
-            return files.to_vec();
+            return Completed {
+                files: files.to_vec(),
+                missing: Vec::new(),
+            };
         }
         if !dir.is_dir() {
             out.extend(known);
+            missing.push(dir);
             continue;
         }
         // Les relevés tirés de l'index sont oubliés : relus sur le disque.
@@ -150,7 +156,20 @@ pub fn complete_from_disk(files: &[MediaFile], stop: &AtomicBool) -> Vec<MediaFi
         }
     }
     out.sort_by(media::compare);
-    out
+    Completed {
+        files: out,
+        missing,
+    }
+}
+
+/// Ce que rend [`complete_from_disk`].
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Completed {
+    /// La liste complétée.
+    pub files: Vec<MediaFile>,
+    /// Les dossiers injoignables (disque débranché, dossier déplacé) : leurs photos sont
+    /// gardées telles que l'index les connaissait.
+    pub missing: Vec<PathBuf>,
 }
 
 /// Met en ordre les données de tri ([`crate::store::settle`]) de `dir` et des dossiers de

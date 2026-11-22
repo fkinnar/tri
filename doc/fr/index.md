@@ -77,7 +77,39 @@ même date, avec la palette aux mêmes paramètres, ne coûte qu'une lecture de 
 sinon l'empreinte est calculée (au plus 2 × 32 Ko lus) et la palette relue dans le cache.
 `index::flush` attend que tout soit écrit (ligne de commande, avant de quitter).
 L'interface démarre l'index avec le moteur (jamais dans les tests) ; `--compute` aussi,
-quand il calcule des palettes.
+quand il calcule des palettes. Le dossier ouvert au lancement, lu avant le fil
+d'écriture, est noté quand le moteur démarre.
+
+**Cartes d'appareil jamais indexées** (retour du 22/11/2026 : des fichiers bruts, avant
+leur copie ailleurs) : rien sous un dossier `DCIM` (`locate::is_camera_card`).
+
+## Retrouver un dossier déplacé (`tri::locate`)
+
+Dans « Toutes les photos », la complétion depuis le disque (`folder::complete_from_disk`)
+rend aussi les dossiers **injoignables** ; leurs photos restent, **grisées**, avec la
+raison au survol : **disque débranché** (le premier parent qui existe est un dossier de
+montage, `/Volumes`, `/media/<utilisateur>`… : `locate::unplugged`, il suffit de le
+rebrancher) ou **introuvable** (déplacé ou renommé sur un disque présent).
+
+**Retrouver son dossier** (`core.file.locate`, `g l`, clic droit, icône dossier et
+loupe) cherche en fond (`locate::find`) sous les disques, le dossier personnel et les
+favoris :
+1. l'ancien chemin posé sur chaque racine, de sa fin vers son début
+   (`…/2026-11-18_Sarah`, `…/2026/2026-11-18_Sarah`…) : un dossier déplacé d'un disque
+   à l'autre garde souvent sa structure, et ces essais ne coûtent rien ;
+2. puis les dossiers du même nom, à la profondeur des sous-dossiers de la grille
+   (`[gui.folders] subfolders_depth`, retour du 22/11/2026 : le même réglage), dossiers
+   cachés et cartes écartés.
+
+Chaque candidat est **vérifié** dès qu'il se présente (`locate::verify`) : trois photos
+témoins de l'ancien dossier (première, milieu, dernière par nom, `Index::photos_in`)
+doivent y être, à la même taille, et au même contenu quand l'index en a l'empreinte. Pas
+trouvé : une boîte demande où il est (complétion par Tab, « Parcourir… »), vérifié de
+même (« Ce dossier n'a pas les mêmes photos »). Retrouvé, **tout suit**
+(`locate::relocate`) : l'index (`Index::relocate`, sous-dossiers compris, empreintes et
+palettes gardées), le cache (`Cache::relocate`) et les données de tri gardées sur la
+machine (`store::relocate`) ; « Toutes les photos » est relue. Un dossier déplacé ou
+renommé **dans `tri`** emmène aussi son index.
 
 ## Réglages `[index]`
 

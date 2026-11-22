@@ -78,7 +78,13 @@ fn all_photos_come_from_the_index_then_from_the_reachable_folders() {
     // Ajoutée depuis : trouvée en relisant son dossier.
     jpeg(&here.join("c.jpg"));
     let stop = std::sync::atomic::AtomicBool::new(false);
-    let names: Vec<String> = tri::folder::complete_from_disk(&folder.files, &stop)
+    let completed = tri::folder::complete_from_disk(&folder.files, &stop);
+    assert_eq!(
+        completed.missing,
+        vec![gone.parent().unwrap().to_path_buf()]
+    );
+    let names: Vec<String> = completed
+        .files
         .iter()
         .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
         .collect();

@@ -1025,7 +1025,18 @@ pub struct TriApp {
     all_photos_last: Option<PathBuf>,
     /// Complétion en fond de « Toutes les photos » : la liste relue dossier par dossier
     /// ([`tri::folder::complete_from_disk`]), et son arrêt.
-    all_photos_completion: Option<(Arc<AtomicBool>, mpsc::Receiver<Vec<MediaFile>>)>,
+    all_photos_completion: Option<(Arc<AtomicBool>, mpsc::Receiver<tri::folder::Completed>)>,
+    /// « Toutes les photos » : les dossiers injoignables, et s'ils sont sur un disque
+    /// débranché (vrai) ou introuvables (faux, « Retrouver… », #561).
+    missing_dirs: HashMap<PathBuf, bool>,
+    /// « Retrouver son dossier » en cours : le dossier cherché, l'arrêt, la réponse
+    /// (`None` : pas trouvé automatiquement, la boîte s'ouvre).
+    locating: Option<Locating>,
+    /// La boîte « Retrouver… » (pas trouvé automatiquement).
+    locate_dialog: Option<crate::locate_dialog::LocateDialog>,
+    /// Tests : les racines où « Retrouver » cherche (sinon les emplacements du panneau).
+    #[cfg(test)]
+    locate_roots: Option<Vec<PathBuf>>,
     /// Photo de référence de « palettes proches » (et du futur « semblables ») : elle
     /// reste tant qu'on ne l'efface pas ou ne la remplace pas (retour du 22/11/2026).
     reference: Option<PathBuf>,
@@ -2215,6 +2226,11 @@ impl TriApp {
             all_photos_from: None,
             all_photos_last: None,
             all_photos_signatures: None,
+            missing_dirs: HashMap::new(),
+            locating: None,
+            locate_dialog: None,
+            #[cfg(test)]
+            locate_roots: None,
             all_photos_completion: None,
             reference: None,
             reference_wanted: false,
@@ -2881,10 +2897,6 @@ impl TriApp {
                 Folder::scan_counting(&target, depth, convention, slow, &stop_scan, &found_scan)
             };
             let result = listed.map(|folder| {
-                // Vues : notées dans l'index (« Toutes les photos », #561).
-                if !all_photos {
-                    tri::index::seen(&folder.dir, depth, &folder.files);
-                }
                 stage_scan.store(OPEN_NOTES, Ordering::Relaxed);
                 let mut opened = Opened::read(folder, depth, watching, deadline);
                 stage_scan.store(OPEN_DATA, Ordering::Relaxed);
@@ -2984,6 +2996,191 @@ impl TriApp {
             {
                 self.select_after_open = None;
             }
+            None => {}
+        }
+    }
+
+    /// « Toutes les photos » : le dossier de `path` s'il est injoignable, et vrai si c'est
+    /// son disque qui est débranché (faux : introuvable, « Retrouver son dossier »).
+    fn missing_dir(&self, path: &Path) -> Option<(PathBuf, bool)> {
+        if self.missing_dirs.is_empty() {
+            return None;
+        }
+        let source = tri::media::source(path);
+        [path, source.as_ref()]
+            .iter()
+            .filter_map(|p| p.parent())
+            .find_map(|d| self.missing_dirs.get(d).map(|&u| (d.to_path_buf(), u)))
+    }
+
+    /// Pourquoi « Retrouver son dossier » ne s'applique pas à `path` (`None` : il
+    /// s'applique).
+    fn locate_unusable(&self, path: Option<&Path>) -> Option<String> {
+        if !tri::folder::is_all_photos(&self.folder.dir) {
+            return Some(t!("show-in-folder-all-only"));
+        }
+        match path.and_then(|p| self.missing_dir(p)) {
+            None => Some(t!("folder-is-there")),
+            Some((_, true)) => Some(t!("folder-unplugged")),
+            Some((_, false)) => None,
+        }
+    }
+
+    /// « Retrouver son dossier » (#561) : cherche en fond le dossier introuvable de
+    /// `path` (sur les disques, le dossier personnel et les favoris, à la profondeur des
+    /// sous-dossiers), vérifié par quelques photos témoins ; trouvé, l'index, le cache et
+    /// les notes suivent ; sinon la boîte demande où il est.
+    fn locate(&mut self, path: &Path) {
+        if let Some(why) = self.locate_unusable(Some(path)) {
+            self.notice = Some((why, false));
+            return;
+        }
+        let Some((dir, _)) = self.missing_dir(path) else {
+            return;
+        };
+        if let Some(previous) = self.locating.take() {
+            previous.stop.store(true, Ordering::Relaxed);
+        }
+        let samples = self.locate_samples(&dir);
+        let mut roots: Vec<PathBuf> = Vec::new();
+        for place in self.tree.places() {
+            if matches!(
+                place.kind,
+                tri::places::PlaceKind::Volume
+                    | tri::places::PlaceKind::Network
+                    | tri::places::PlaceKind::Home
+                    | tri::places::PlaceKind::Favorite
+            ) && place.path.is_dir()
+                && !roots.contains(&place.path)
+            {
+                roots.push(place.path.clone());
+            }
+        }
+        #[cfg(test)]
+        if let Some(test_roots) = &self.locate_roots {
+            roots = test_roots.clone();
+        }
+        let depth = self.gui.folders.subfolders_depth;
+        let chunk = self.settings.index.fingerprint_kb as usize * 1024;
+        let stop = Arc::new(AtomicBool::new(false));
+        let (tx, rx) = mpsc::channel();
+        let (data, cache) = self.locate_targets();
+        let repaint = self.repaint.clone();
+        let (old, stopped) = (dir.clone(), stop.clone());
+        std::thread::Builder::new()
+            .name("tri-locate".into())
+            .spawn(move || {
+                let found = tri::locate::find(&old, &samples, &roots, depth, chunk, &stopped);
+                let answer = found.map(|new| {
+                    let moved = tri::locate::relocate(data.as_deref(), cache.as_ref(), &old, &new);
+                    (new, moved)
+                });
+                let _ = tx.send(answer);
+                if let Some(ctx) = repaint {
+                    ctx.request_repaint();
+                }
+            })
+            .ok();
+        self.notice = Some((t!("locate-searching", name = folder_name(&dir)), false));
+        self.locating = Some(Locating { dir, stop, rx });
+    }
+
+    /// Les photos témoins du dossier `dir` connues de l'index.
+    fn locate_samples(&self, dir: &Path) -> Vec<tri::locate::Sample> {
+        let photos = self
+            .settings
+            .data_dir()
+            .and_then(|data| tri::index::Index::open(&data.join("index.sqlite")).ok())
+            .and_then(|index| index.photos_in(dir).ok())
+            .unwrap_or_default();
+        tri::locate::pick_samples(photos)
+    }
+
+    /// Ce qui suit un dossier retrouvé : le dossier de données (index, notes) et le cache.
+    fn locate_targets(&self) -> (Option<PathBuf>, Option<tri::cache::Cache>) {
+        (
+            self.settings.data_dir(),
+            self.engine.as_ref().map(|e| e.cache.clone()),
+        )
+    }
+
+    /// Recherche finie : retrouvé, « Toutes les photos » relue (les photos à leur
+    /// nouvelle place) ; sinon la boîte.
+    fn poll_locating(&mut self) {
+        let Some(locating) = &self.locating else {
+            return;
+        };
+        let Ok(answer) = locating.rx.try_recv() else {
+            return;
+        };
+        let dir = locating.dir.clone();
+        self.locating = None;
+        match answer {
+            Some((new, moved)) => {
+                let new: PathBuf = new;
+                self.located(&dir, &new, moved);
+            }
+            None => {
+                self.notice = None;
+                self.locate_dialog = Some(crate::locate_dialog::LocateDialog::new(dir));
+            }
+        }
+    }
+
+    /// Le dossier `old` est en `new` (index, cache et notes déplacés : `moved`).
+    fn located(&mut self, old: &Path, new: &Path, moved: Result<usize, String>) {
+        let name = folder_name(old);
+        trace(|| {
+            format!(
+                "retrouvé : {} → {} ({moved:?})",
+                old.display(),
+                new.display()
+            )
+        });
+        self.notice = Some(match moved {
+            Ok(_) => (
+                t!(
+                    "locate-found",
+                    name = &name,
+                    path = new.display().to_string()
+                ),
+                false,
+            ),
+            Err(error) => (t!("locate-failed", name = &name, error = error), true),
+        });
+        self.missing_dirs.remove(old);
+        let keep = self.files.get(self.selected).map(|f| {
+            f.path
+                .strip_prefix(old)
+                .map(|rest| new.join(rest))
+                .unwrap_or_else(|_| f.path.clone())
+        });
+        if tri::folder::is_all_photos(&self.folder.dir) {
+            self.reload_folder(keep);
+        }
+    }
+
+    /// La boîte « Retrouver… » : le dossier tapé est vérifié, puis suivi.
+    fn locate_dialog(&mut self, ctx: &egui::Context) {
+        let Some(dialog) = &mut self.locate_dialog else {
+            return;
+        };
+        match dialog.show(ctx) {
+            Some(crate::locate_dialog::Request::Locate { old, new }) => {
+                let samples = self.locate_samples(&old);
+                let chunk = self.settings.index.fingerprint_kb as usize * 1024;
+                if !tri::locate::verify(&new, &samples, chunk) {
+                    if let Some(dialog) = &mut self.locate_dialog {
+                        dialog.error = Some(t!("locate-wrong"));
+                    }
+                    return;
+                }
+                self.locate_dialog = None;
+                let (data, cache) = self.locate_targets();
+                let moved = tri::locate::relocate(data.as_deref(), cache.as_ref(), &old, &new);
+                self.located(&old, &new, moved);
+            }
+            Some(crate::locate_dialog::Request::Close) => self.locate_dialog = None,
             None => {}
         }
     }
@@ -3096,9 +3293,19 @@ impl TriApp {
         let Some((_, rx)) = &self.all_photos_completion else {
             return;
         };
-        let Ok(files) = rx.try_recv() else { return };
+        let Ok(completed) = rx.try_recv() else { return };
         self.all_photos_completion = None;
-        if !tri::folder::is_all_photos(&self.folder.dir) || files == self.folder.files {
+        if !tri::folder::is_all_photos(&self.folder.dir) {
+            return;
+        }
+        // Les dossiers injoignables : leurs photos grisées, « Retrouver… ».
+        self.missing_dirs = completed
+            .missing
+            .iter()
+            .map(|d| (d.clone(), tri::locate::unplugged(d)))
+            .collect();
+        let files = completed.files;
+        if files == self.folder.files {
             return;
         }
         trace(|| format!("toutes les photos complétées : {} images", files.len()));
@@ -3292,6 +3499,7 @@ impl TriApp {
                 if !all_photos {
                     self.all_photos_from = None;
                 }
+                self.missing_dirs.clear();
                 // Mémorisé pour le prochain lancement (sans conséquence en cas d'échec) ;
                 // pas « Toutes les photos ».
                 if let Some(data) = self.settings.data_dir().filter(|_| !all_photos) {
@@ -3355,6 +3563,11 @@ impl TriApp {
                 if all_photos {
                     self.start_all_photos_completion();
                     self.read_all_photos_signatures();
+                } else {
+                    // Vu : noté dans l'index (« Toutes les photos », #561) ; ici plutôt
+                    // que pendant la lecture, où le fil d'écriture n'est pas encore là au
+                    // lancement.
+                    tri::index::seen(&self.folder.dir, self.folder_depth(), &self.folder.files);
                 }
             }
             Err(e) => {
@@ -3833,6 +4046,20 @@ impl TriApp {
         match action {
             Action::FileShowInFolder if !tri::folder::is_all_photos(&self.folder.dir) => {
                 Some(t!("show-in-folder-all-only"))
+            }
+            Action::FileShowInFolder => self
+                .files
+                .get(self.selected)
+                .and_then(|f| self.missing_dir(&f.path))
+                .map(|(_, unplugged)| {
+                    if unplugged {
+                        t!("folder-unplugged")
+                    } else {
+                        t!("folder-not-found")
+                    }
+                }),
+            Action::FileLocate => {
+                self.locate_unusable(self.files.get(self.selected).map(|f| f.path.as_path()))
             }
             Action::FilterDeveloped if !self.developed_on && !self.any_developed => {
                 Some(t!("filter-developed-unusable"))
@@ -11127,6 +11354,11 @@ impl TriApp {
         {
             trace(|| format!("index des palettes indisponible : {e}"));
         }
+        // Le dossier ouvert au lancement a été lu avant le fil d'écriture : noté
+        // maintenant (sinon jamais dans « Toutes les photos »).
+        if !tri::folder::is_all_photos(&self.folder.dir) && !self.folder.files.is_empty() {
+            tri::index::seen(&self.folder.dir, self.folder_depth(), &self.folder.files);
+        }
         let (tx, rx) = mpsc::channel();
         let repaint = ctx.clone();
         // Logiciels de développement installés : rendus développés à la demande (leurs
@@ -11276,6 +11508,7 @@ impl TriApp {
         self.try_similar_filter();
         self.select_pending();
         self.poll_all_photos_signatures();
+        self.poll_locating();
         self.poll_all_photos_completion();
         let mut scored = Vec::new();
         self.drain_engine(&mut scored);
@@ -12948,6 +13181,11 @@ impl TriApp {
             Action::FileShowInFolder => {
                 if let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) {
                     self.show_in_folder(&path);
+                }
+            }
+            Action::FileLocate => {
+                if let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) {
+                    self.locate(&path);
                 }
             }
             // La photo sélectionnée devient la référence (retour du 22/11/2026).
@@ -19916,6 +20154,14 @@ impl TriApp {
             self.cache_job(move |cache| {
                 if let Some(data) = &data {
                     tri::store::relocate(data, &from, &to);
+                    // L'index suit aussi (« Toutes les photos », #561).
+                    let db = data.join("index.sqlite");
+                    if db.exists()
+                        && let Err(e) =
+                            tri::index::Index::open(&db).and_then(|mut i| i.relocate(&from, &to))
+                    {
+                        tri::log::warning("index", &format!("folder not moved: {e}"), "");
+                    }
                 }
                 // Cache gardé avec les photos, vers une destination qui ne garde pas le
                 // sien : gardé avec le dossier à sa nouvelle place, pour qu'il le suive
@@ -20611,6 +20857,7 @@ impl TriApp {
                         Action::FileDelete,
                         Action::FileReveal,
                         Action::FileShowInFolder,
+                        Action::FileLocate,
                         Action::FileEdit,
                         Action::Send("plugin.airdrop.send"),
                     ]
@@ -20620,7 +20867,10 @@ impl TriApp {
                     .filter(|&a| {
                         a != Action::FileShowInFolder
                             || tri::folder::is_all_photos(&self.folder.dir)
-                    }) {
+                    })
+                    // Retrouver : seulement une photo au dossier introuvable.
+                    .filter(|&a| a != Action::FileLocate || self.missing_dir(&path).is_some())
+                    {
                         // Actions sur les fichiers interdites : grisées, la bulle dit
                         // pourquoi (30/10/2026). Renommer toute la sélection : par lot (#439).
                         let enabled = !action.changes_files() || self.settings.files.allow_actions;
@@ -20813,6 +21063,10 @@ impl TriApp {
             }
             if action == Action::FileShowInFolder {
                 self.show_in_folder(&path);
+                return;
+            }
+            if action == Action::FileLocate {
+                self.locate(&path);
                 return;
             }
             let paths = if on_all { group } else { vec![path] };
@@ -22239,6 +22493,14 @@ impl TriApp {
         }
         // Infos masquées (Maj+T) : la vignette prend aussi la place du texte.
         let file = self.files[index].clone();
+        let missing = self.missing_dir(&file.path);
+        if let Some((_, unplugged)) = &missing {
+            response.clone().on_hover_text(if *unplugged {
+                t!("folder-unplugged")
+            } else {
+                t!("folder-not-found")
+            });
+        }
         match (
             self.thumbnail_texture(ctx, index, deadline),
             &self.status[index].thumbnail,
@@ -22248,11 +22510,15 @@ impl TriApp {
                 let scale = (image_area.width() / size.x).min(image_area.height() / size.y);
                 let dest = Rect::from_center_size(image_area.center(), size * scale);
                 let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
-                // Photo rejetée : estompée, comme dans Lightroom.
-                let tint = match self.folder.notes.notes(&file.path).flag {
+                // Photo rejetée : estompée, comme dans Lightroom. Dossier injoignable
+                // (« Toutes les photos ») : grisée aussi.
+                let mut tint = match self.folder.notes.notes(&file.path).flag {
                     Flag::Rejected => Color32::WHITE.gamma_multiply(g.rejected_opacity),
                     _ => Color32::WHITE,
                 };
+                if missing.is_some() {
+                    tint = tint.gamma_multiply(g.rejected_opacity);
+                }
                 ui.painter()
                     .set(image_slot, egui::Shape::image(texture.id(), dest, uv, tint));
                 self.grid_images.push((index, dest));
@@ -25703,6 +25969,7 @@ impl eframe::App for TriApp {
         self.version_delete_dialog(&ctx);
         self.reset_dialog(&ctx);
         self.pairs_dialog(&ctx);
+        self.locate_dialog(&ctx);
         self.remote_dialog(&ctx);
         self.login_dialog(&ctx);
         self.update_dialog(&ctx);
@@ -26087,6 +26354,17 @@ fn file_name(path: &Path) -> String {
         || path.display().to_string(),
         |n| n.to_string_lossy().into_owned(),
     )
+}
+
+/// « Retrouver son dossier » en cours ([`TriApp::locate`]).
+struct Locating {
+    /// Le dossier introuvable.
+    dir: PathBuf,
+    /// Arrêt de la recherche (une autre la remplace).
+    stop: Arc<AtomicBool>,
+    /// Retrouvé (nouvelle place, et ce qu'a donné le déplacement de l'index, du cache et
+    /// des notes), ou `None`.
+    rx: mpsc::Receiver<Option<(PathBuf, Result<usize, String>)>>,
 }
 
 /// Taille lisible : « 812 Mo », « 38,2 Go », « 60,0 To » (unités et virgule selon la
@@ -31109,6 +31387,112 @@ mod tests {
                 && app.select_after_open.is_none()
         });
         assert_eq!(h.state().files[h.state().selected].path, target);
+    }
+
+    #[test]
+    fn a_moved_folder_is_greyed_then_found_and_followed() {
+        // « Retrouver son dossier » (#561) : un dossier déplacé sur un autre disque, ses
+        // photos grisées dans « Toutes les photos », retrouvé par la structure de son
+        // chemin, puis l'index suit.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let old = dir.path().join("disque1/2026/Séance");
+        let new = dir.path().join("disque2/2026/Séance");
+        std::fs::create_dir_all(&new).unwrap();
+        let files = tri::media::scan(&photos, 1).unwrap();
+        let db = dir.path().join("data").join("index.sqlite");
+        {
+            let mut index = tri::index::Index::open(&db).unwrap();
+            let seen: Vec<(PathBuf, u64, u128)> = files
+                .iter()
+                .map(|f| {
+                    let name = f.path.file_name().unwrap();
+                    std::fs::copy(&f.path, new.join(name)).unwrap();
+                    let size = std::fs::metadata(&f.path).unwrap().len();
+                    (old.join(name), size, 1)
+                })
+                .collect();
+            index.seen(&old, 1, &seen).unwrap();
+        }
+        h.state_mut().locate_roots = Some(vec![dir.path().join("disque2")]);
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::AllPhotos);
+        run_until(&mut h, |app| app.missing_dirs.get(&old) == Some(&false));
+        assert_eq!(h.state().action_unusable(Action::FileLocate), None);
+        assert!(
+            h.state()
+                .action_unusable(Action::FileShowInFolder)
+                .is_some()
+        );
+        h.state_mut().perform(&ctx, Action::FileLocate);
+        run_until(&mut h, |app| {
+            app.missing_dirs.is_empty()
+                && !app.files.is_empty()
+                && app.files.iter().all(|f| f.path.starts_with(&new))
+        });
+        let index = tri::index::Index::open(&db).unwrap();
+        assert!(
+            index
+                .photos(None)
+                .unwrap()
+                .iter()
+                .all(|(p, _, _)| p.starts_with(&new))
+        );
+    }
+
+    #[test]
+    fn a_folder_not_found_is_asked_for_and_checked() {
+        // Pas trouvé tout seul : la boîte demande où il est, refuse un dossier aux autres
+        // photos, prend le bon.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let old = dir.path().join("ancien/Séance");
+        let new = dir.path().join("rangé/ailleurs/Autre nom");
+        std::fs::create_dir_all(&new).unwrap();
+        let files = tri::media::scan(&photos, 1).unwrap();
+        {
+            let db = dir.path().join("data").join("index.sqlite");
+            let mut index = tri::index::Index::open(&db).unwrap();
+            let seen: Vec<(PathBuf, u64, u128)> = files
+                .iter()
+                .map(|f| {
+                    let name = f.path.file_name().unwrap();
+                    std::fs::copy(&f.path, new.join(name)).unwrap();
+                    let size = std::fs::metadata(&f.path).unwrap().len();
+                    (old.join(name), size, 1)
+                })
+                .collect();
+            index.seen(&old, 1, &seen).unwrap();
+        }
+        h.state_mut().locate_roots = Some(Vec::new());
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::AllPhotos);
+        run_until(&mut h, |app| app.missing_dirs.contains_key(&old));
+        h.state_mut().perform(&ctx, Action::FileLocate);
+        run_until(&mut h, |app| app.locate_dialog.is_some());
+        let ok = t!("locate-ok");
+        h.state_mut().locate_dialog.as_mut().unwrap().text =
+            dir.path().join("data").to_string_lossy().into_owned();
+        h.run_steps(2);
+        h.get_by_label(&ok).click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .locate_dialog
+                .as_ref()
+                .and_then(|d| d.error.clone()),
+            Some(t!("locate-wrong"))
+        );
+        h.state_mut().locate_dialog.as_mut().unwrap().text = new.to_string_lossy().into_owned();
+        h.run_steps(2);
+        h.get_by_label(&ok).click();
+        run_until(&mut h, |app| {
+            app.locate_dialog.is_none()
+                && !app.files.is_empty()
+                && app.files.iter().all(|f| f.path.starts_with(&new))
+        });
     }
 
     #[test]

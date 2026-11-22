@@ -53,6 +53,7 @@ mod grid_render;
 mod histogram;
 mod i18n;
 mod loader;
+mod locate_dialog;
 mod log_view;
 mod markdown;
 mod marks;

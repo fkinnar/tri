@@ -1257,7 +1257,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   photo de référence relue dans la source de là-bas. **Montrer dans son dossier**
   (`core.file.show_in_folder`, `g f`, icône dossier et cible dans la boîte du clic
   droit, seulement depuis « Toutes les photos ») : le vrai dossier de l'image, elle en
-  surbrillance en grille (`select_after_open`).
+  surbrillance en grille (`select_after_open`). **Retrouver son dossier**
+  (`core.file.locate`, `g l`, icône dossier et loupe) : photos d'un dossier
+  injoignable grisées, recherche et réparation décrites dans `index.md`
+  (`TriApp::locate`, boîte `locate_dialog.rs`).
   **Photo de référence** (retour du 22/11/2026), commune à « palettes proches » et à
   « semblables » (`TriApp::reference`) : dans la section Filtres, « Couleur » d'abord,
   puis ces deux filtres, la référence à leur droite (`reference_box` : son imagette, ou

@@ -267,6 +267,9 @@ pub enum Action {
     /// Depuis « Toutes les photos » (#561) : ouvrir le vrai dossier de l'image, elle en
     /// surbrillance.
     FileShowInFolder,
+    /// Depuis « Toutes les photos » (#561) : chercher le dossier introuvable de l'image
+    /// (déplacé, renommé), puis l'index, le cache et les notes suivent.
+    FileLocate,
     /// Ouvrir l'image dans l'éditeur externe.
     FileEdit,
     /// Générer les sidecars de notes manquants (un logiciel ou tous) de la sélection ou
@@ -612,7 +615,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 285] = [
+    pub const ALL: [Action; 286] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -701,6 +704,7 @@ impl Action {
         Action::FileDelete,
         Action::FileReveal,
         Action::FileShowInFolder,
+        Action::FileLocate,
         Action::FileEdit,
         Action::Sidecars,
         Action::EmbedNotes,
@@ -1122,7 +1126,7 @@ impl Action {
                 Group::Panels
             }
             FileActionsAllow | FileRename | FileDelete | FileReveal | FileShowInFolder
-            | FileEdit | FileCopy | FileMove | Sidecars | EmbedNotes | ImportNotes
+            | FileLocate | FileEdit | FileCopy | FileMove | Sidecars | EmbedNotes | ImportNotes
             | FileDeleteStack | FileDeletePhoto | FileCopyStack | FileExport | ExportReport
             | Send(_) | Compute(_) | ComputeAll | RecreateAll => Group::Files,
             Undo | Redo | History => Group::Edit,
@@ -1476,6 +1480,7 @@ impl Action {
             Action::Send(id) => id,
             Action::FileReveal => "core.file.reveal",
             Action::FileShowInFolder => "core.file.show_in_folder",
+            Action::FileLocate => "core.file.locate",
             Action::FileEdit => "core.file.edit",
             Action::Sidecars => "core.file.sidecars",
             Action::EmbedNotes => "core.file.embed_notes",
