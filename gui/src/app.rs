@@ -2941,6 +2941,9 @@ impl TriApp {
         self.select_after_open = Some(path.to_path_buf());
         self.mode = Mode::Grid;
         self.open_folder(&dir);
+        // L'arborescence s'ouvre jusqu'à lui (retour du 22/11/2026), comme au lancement.
+        self.tree.reveal(&dir);
+        self.reveal_folder = true;
     }
 
     /// Lance la complétion en fond de « Toutes les photos » : chaque dossier joignable
@@ -30922,6 +30925,16 @@ mod tests {
                 .is_some()
         );
         h.state_mut().rating_dialog = None;
+        // Un emplacement qui contient le dossier, sa section repliée : `g f` déplie tout.
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut()
+            .tree
+            .set_folded(tri::places::Section::Personal, true);
         h.run_steps(1);
         press(&mut h, Key::G, Modifiers::NONE);
         press(&mut h, Key::F, Modifiers::NONE);
@@ -30929,6 +30942,11 @@ mod tests {
             app.opening.is_none() && app.folder.dir == elsewhere
         });
         assert_eq!(h.state().files[h.state().selected].path, green_path);
+        // L'arborescence ouverte jusqu'à lui : sa ligne est visible.
+        assert!(
+            h.state().tree.rows().iter().any(|r| r.path == elsewhere),
+            "dossier montré dans l'arborescence"
+        );
         assert!(
             h.state()
                 .action_unusable(Action::FileShowInFolder)

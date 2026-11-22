@@ -1812,6 +1812,16 @@ impl Tree {
             self.open_in(false, dir);
         }
         self.settle();
+        // Sa section aussi, si elle était repliée (retour du 22/11/2026 : « Montrer dans
+        // son dossier » dépliait le chemin dans une section repliée, on ne voyait rien).
+        if let Some(section) = self
+            .all_rows()
+            .iter()
+            .find(|r| r.path == root)
+            .map(|r| r.section)
+        {
+            self.folded.remove(&section);
+        }
         true
     }
 
