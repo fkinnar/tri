@@ -4021,6 +4021,19 @@ impl TriApp {
         });
     }
 
+    /// Valeur d'un curseur `0..=max` du panneau après la touche `key` (pointé au clavier) :
+    /// ← / → d'un pas (`[gui.metadata] slider_step`, sur la même échelle que les curseurs
+    /// de sévérité), Entrée : `default`.
+    fn keyed(&self, value: f32, key: Option<SideKey>, max: f32, default: f32) -> f32 {
+        let step = self.gui.metadata.slider_step * max / 2.0;
+        match key {
+            Some(SideKey::Left) => (value - step).max(0.0),
+            Some(SideKey::Right) => (value + step).min(max),
+            Some(SideKey::Activate) => default,
+            None => value,
+        }
+    }
+
     /// Une ligne de recherche du panneau (couleur, palettes proches, semblables) : case,
     /// icône, nom ; allumée, son curseur dessous.
     fn search_filter_row(&mut self, ui: &mut Ui, action: Action) {
@@ -4131,12 +4144,15 @@ impl TriApp {
             Action::FilterSimilar => {
                 if let Some(similar) = self.similar.clone() {
                     let max = self.settings.similarity.filter_max.max(0.01);
-                    let mut threshold = similar.threshold;
+                    let default = self.settings.similarity.filter_threshold;
+                    let (item, key) = self.side_begin(false);
+                    let mut threshold = self.keyed(similar.threshold, key, max, default);
                     let slider = ui
                         .add(FineSlider::new(&mut threshold, 0.0..=max).width(width))
                         .on_hover_text(t!("similar-threshold"));
+                    self.side_end(ui, item, slider.rect, slider.drag_started());
                     if slider.double_clicked_slider(ui) {
-                        threshold = self.settings.similarity.filter_threshold;
+                        threshold = default;
                     }
                     if threshold != similar.threshold {
                         if let Some(s) = &mut self.similar {
@@ -4148,17 +4164,18 @@ impl TriApp {
             }
             Action::FilterPalette => {
                 if let Some(like) = self.palette_like.clone() {
-                    let mut threshold = like.threshold;
+                    let max = p.similar_max.max(0.01);
+                    let (item, key) = self.side_begin(false);
+                    let mut threshold = self.keyed(like.threshold, key, max, p.similar_threshold);
                     let slider = ui
-                        .add(
-                            FineSlider::new(&mut threshold, 0.0..=p.similar_max.max(0.01))
-                                .width(width),
-                        )
+                        .add(FineSlider::new(&mut threshold, 0.0..=max).width(width))
                         .on_hover_text(t!("palette-similar-threshold"));
+                    self.side_end(ui, item, slider.rect, slider.drag_started());
                     let reset = slider.double_clicked_slider(ui);
                     if reset {
                         threshold = p.similar_threshold;
                     }
+                    let reset = reset || key.is_some();
                     if threshold != like.threshold {
                         self.palette_threshold = threshold;
                         if let Some(l) = &mut self.palette_like {
@@ -4173,17 +4190,18 @@ impl TriApp {
             }
             _ => {
                 if let Some(colour) = self.palette_colour {
-                    let mut radius = colour.radius;
+                    let max = p.colour_radius_max.max(0.01);
+                    let (item, key) = self.side_begin(false);
+                    let mut radius = self.keyed(colour.radius, key, max, p.colour_radius);
                     let slider = ui
-                        .add(
-                            FineSlider::new(&mut radius, 0.0..=p.colour_radius_max.max(0.01))
-                                .width(width),
-                        )
+                        .add(FineSlider::new(&mut radius, 0.0..=max).width(width))
                         .on_hover_text(t!("palette-colour-radius"));
+                    self.side_end(ui, item, slider.rect, slider.drag_started());
                     let reset = slider.double_clicked_slider(ui);
                     if reset {
                         radius = p.colour_radius;
                     }
+                    let reset = reset || key.is_some();
                     if radius != colour.radius {
                         self.palette_radius = radius;
                         if let Some(c) = &mut self.palette_colour {
@@ -34691,6 +34709,47 @@ mod tests {
         let (text, error) = h.state().notice.clone().expect("message");
         assert!(error, "{text}");
         assert!(text.contains("X-T4"), "{text}");
+    }
+
+    #[test]
+    fn the_search_sliders_move_from_the_keyboard() {
+        // Retour du 22/11/2026 : les curseurs des recherches (couleur, palettes proches,
+        // semblables) ne se réglaient pas au clavier : → les pousse d'un pas, Entrée les
+        // remet à leur valeur par défaut.
+        use crate::actions::Scope;
+        let (mut h, _dir) = harness();
+        h.set_size(vec2(1400.0, 1200.0));
+        h.run_steps(3);
+        choose_palette(&mut h, Some(tri::palette::SourceKind::Camera));
+        h.state_mut().set_palette_colour(Some([0.6, 0.1, 0.05]));
+        h.run_steps(2);
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::L, Modifiers::NONE);
+        assert_eq!(h.state().focus, Scope::Metadata);
+        let radius = |h: &Harness<'static, TriApp>| h.state().palette_colour.unwrap().radius;
+        let start = radius(&h);
+        // Ligne par ligne jusqu'au curseur de la couleur : → le pousse.
+        let mut moved = false;
+        for _ in 0..60 {
+            press(&mut h, Key::ArrowDown, Modifiers::NONE);
+            press(&mut h, Key::ArrowRight, Modifiers::NONE);
+            h.run_steps(1);
+            if radius(&h) != start {
+                moved = true;
+                break;
+            }
+        }
+        assert!(moved, "→ sur le curseur de la couleur");
+        let max = h.state().settings.palette.colour_radius_max;
+        let step = h.state().gui.metadata.slider_step * max / 2.0;
+        assert!((radius(&h) - (start + step)).abs() < 1e-5);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(1);
+        assert_eq!(
+            radius(&h),
+            h.state().settings.palette.colour_radius,
+            "Entrée : défaut"
+        );
     }
 
     #[test]

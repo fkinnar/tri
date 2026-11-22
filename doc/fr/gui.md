@@ -1256,7 +1256,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   l'empreinte (celle des piles) est proche de celle de la référence, de la plus proche
   à la plus lointaine (`rank_by_similarity`, un développement a l'empreinte de sa
   photo), seuil au curseur (`[similarity] filter_threshold`, `filter_max`) ; une
-  recherche à la fois avec les palettes. Sans
+  recherche à la fois avec les palettes. Leurs curseurs (et celui de la couleur) se
+  pointent au clavier comme les autres réglages du panneau : ← / → d'un pas, Entrée la
+  valeur par défaut (`TriApp::keyed`). Sans
   référence, allumer le filtre prend la photo en surbrillance (grisé s'il n'y en a pas) ;
   elle reste ensuite (autre dossier, autre source : sa palette relue,
   `reference_palette`, lue dans le cache si elle n'est pas dans la liste) tant qu'on ne

@@ -1175,7 +1175,9 @@ system one ("cold" measurements, experiments).
   reference". **Similar** (`core.filter.similar`): the photos whose fingerprint (the
   stacks' one) is close to the reference's, closest first (`rank_by_similarity`, a
   development has its photo's fingerprint), threshold on the slider (`[similarity]
-  filter_threshold`, `filter_max`); one search at a time with the palettes. Without a
+  filter_threshold`, `filter_max`); one search at a time with the palettes. Their sliders
+  (and the colour one) are pointed from the keyboard like the panel's other settings:
+  ← / → by one step, Enter the default value (`TriApp::keyed`). Without a
   reference, turning the filter on takes the highlighted photo (greyed if there is
   none); it then stays (another folder, another source: its palette read again,
   `reference_palette`, read from the cache when it is not in the list) until it is
