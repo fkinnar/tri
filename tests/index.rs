@@ -75,6 +75,26 @@ fn computed_palettes_are_indexed_and_a_moved_photo_keeps_its_own() {
         .find(|p| p.paths.iter().any(|(p, _, _)| p.ends_with("b/rouge.jpg")))
         .expect("nouveau chemin noté");
     assert_eq!(red.paths.len(), 2, "{:?}", red.paths);
+    // Dossiers ouverts (#561, « Toutes les photos ») : chaque photo vue est notée ; l'ancien
+    // chemin de la photo déplacée, absent de `a`, est oublié.
+    tri::index::seen(&a, 1, &tri::media::scan(&a, 1).unwrap());
+    tri::index::seen(&b, 1, &tri::media::scan(&b, 1).unwrap());
+    tri::index::flush(Duration::from_secs(30));
+    let mut photos: Vec<String> = index
+        .photos(Some(dir.path()))
+        .unwrap()
+        .into_iter()
+        .map(|(p, _, _)| p.file_name().unwrap().to_string_lossy().into_owned())
+        .collect();
+    photos.sort();
+    assert_eq!(photos, ["bleu.jpg", "rouge.jpg"]);
+    let red = index
+        .palettes(Source::Camera)
+        .unwrap()
+        .into_iter()
+        .find(|p| p.paths.iter().any(|(p, _, _)| p.ends_with("b/rouge.jpg")))
+        .unwrap();
+    assert_eq!(red.paths.len(), 1, "l'ancien chemin oublié");
 }
 
 /// Petit générateur pseudo-aléatoire (reproductible, sans dépendance).

@@ -2818,6 +2818,8 @@ impl TriApp {
             let result =
                 Folder::scan_counting(&target, depth, convention, slow, &stop_scan, &found_scan)
                     .map(|folder| {
+                        // Vues : notées dans l'index (« Toutes les photos », #561).
+                        tri::index::seen(&folder.dir, depth, &folder.files);
                         stage_scan.store(OPEN_NOTES, Ordering::Relaxed);
                         let mut opened = Opened::read(folder, depth, watching, deadline);
                         stage_scan.store(OPEN_DATA, Ordering::Relaxed);
@@ -19744,6 +19746,7 @@ impl TriApp {
             self.settings.xmp.sidecar,
         ) {
             Ok(mut folder) => {
+                tri::index::seen(&folder.dir, self.folder_depth(), &folder.files);
                 // Les notes connues en attendant la relecture en fond.
                 folder.notes.seed(&self.folder.notes);
                 self.folder = folder;

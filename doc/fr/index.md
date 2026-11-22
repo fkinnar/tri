@@ -33,12 +33,25 @@ pendant qu'on écrit. Deux tables :
 
 | Table | Clé | Contenu |
 |---|---|---|
-| `paths` | chemin (octets du système ; UTF-16 sous Windows) | taille, date de modification (ns, celle des clés du cache), empreinte |
+| `paths` | chemin (octets du système ; UTF-16 sous Windows) | taille, date de modification (ns, celle des clés du cache), empreinte (vide tant qu'aucune palette n'a été calculée) |
 | `palettes` | (empreinte, source) | tampon des paramètres, palette (format du cache, `Palette::to_bytes`) |
 
 La taille et la date gardées avec chaque chemin permettront de retrouver la vignette d'un
 résultat dans le cache **sans relire le fichier** (rapide sur un NAS ou un disque
 débranché). Une base d'un autre schéma (`user_version`) ou illisible est refaite.
+
+## Toutes les photos vues (#561, schéma 2)
+
+Pour « Toutes les photos » (une racine virtuelle au-dessus de tous les emplacements, où les
+filtres font office de recherche), l'index note **chaque photo vue**, pas seulement celles
+qui ont une palette : `index::seen(dossier, niveaux, images)` à l'ouverture d'un dossier
+(interface) et au calcul d'un dossier (« Calculer »). Chemin, taille et date seulement :
+l'empreinte n'est lue qu'au calcul d'une palette. Les photos de ces niveaux qui n'y sont
+plus sont oubliées (supprimées, ou déplacées : revues ailleurs, elles y seront notées) ;
+une photo modifiée (autre taille ou date) perd son empreinte. Les développements
+(`IMG@dt-01.RAF`) ne sont pas des fichiers : pas notés, ils se retrouvent en relisant le
+dossier. `Index::photos(sous)` les liste, sans parcourir de dossier. Le passage au
+schéma 2 refait la base une fois : les palettes déjà en cache s'y renotent d'elles-mêmes.
 
 ## Remplissage
 

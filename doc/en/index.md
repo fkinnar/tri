@@ -32,12 +32,25 @@ while writing. Two tables:
 
 | Table | Key | Content |
 |---|---|---|
-| `paths` | path (system bytes; UTF-16 on Windows) | size, modification date (ns, as in the cache keys), fingerprint |
+| `paths` | path (system bytes; UTF-16 on Windows) | size, modification date (ns, as in the cache keys), fingerprint (empty until a palette is computed) |
 | `palettes` | (fingerprint, source) | parameters stamp, palette (cache format, `Palette::to_bytes`) |
 
 The size and date kept with each path will let a result's thumbnail be found in the cache
 **without reading the file again** (fast on a NAS or an unplugged drive). A database of
 another schema (`user_version`) or an unreadable one is rebuilt.
+
+## Every photo seen (#561, schema 2)
+
+For "All photos" (a virtual root above every location, where the filters act as searches),
+the index records **every photo seen**, not only those with a palette:
+`index::seen(folder, levels, images)` when a folder is opened (interface) and when a
+folder is computed ("Compute"). Path, size and date only: the fingerprint is read only
+when a palette is computed. Photos of those levels that are no longer there are forgotten
+(deleted, or moved: seen elsewhere, they will be recorded there); a modified photo (other
+size or date) loses its fingerprint. Developments (`IMG@dt-01.RAF`) are not files: not
+recorded, they are found again by reading the folder. `Index::photos(under)` lists them
+without walking any folder. Moving to schema 2 rebuilds the database once: palettes
+already cached are recorded again by themselves.
 
 ## Filling
 

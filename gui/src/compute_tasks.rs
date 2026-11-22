@@ -52,7 +52,10 @@ impl ComputeTask {
                         tri::compute::clear(&producer.cache, &dir, kind)
                             .map_err(|e| e.to_string())?;
                     }
-                    tri::media::scan(&dir, 1).map_err(|e| e.to_string())?
+                    let files = tri::media::scan(&dir, 1).map_err(|e| e.to_string())?;
+                    // Vues : notées dans l'index (« Toutes les photos », #561).
+                    tri::index::seen(&dir, 1, &files);
+                    files
                 }
                 Target::Images { files, .. } => {
                     if recreate {
