@@ -4,7 +4,7 @@ Ajouté le 22/10/2026. L'ordre des images d'un dossier, au choix :
 
 | Clé (`SortKey`) | Ordre | Usage |
 |---|---|---|
-| `Name` (défaut) | nom de fichier, celui de `media::scan` | l'ordre du boîtier |
+| `Name` (défaut) | nom de fichier, quel que soit le dossier (22/11/2026 : « Toutes les photos » et les sous-dossiers étaient rangés dossier par dossier), puis le chemin | l'ordre du boîtier |
 | `Captured` | date de prise de vue (EXIF) | plusieurs boîtiers dans une séance, numérotation repartie à 0001, fichiers renommés |
 | `Modified` | date de modification du fichier | exports, images retouchées |
 | `Stars` (31/10/2026) | étoiles, une rejetée sous 0 (comme `xmp:Rating = -1`) | les meilleures en tête (décroissant) |

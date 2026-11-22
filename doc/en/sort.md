@@ -4,7 +4,7 @@ Added on 2026-10-22. The order of a folder's images, to choose from:
 
 | Key (`SortKey`) | Order | Use |
 |---|---|---|
-| `Name` (default) | file name, that of `media::scan` | the camera's order |
+| `Name` (default) | file name, whatever the folder (2026-11-22: "All photos" and subfolders were ordered folder by folder), then the path | the camera's order |
 | `Captured` | shooting date (EXIF) | several cameras in a session, numbering restarted at 0001, renamed files |
 | `Modified` | file modification date | exports, retouched images |
 | `Stars` (2026-10-31) | stars, a rejected one below 0 (like `xmp:Rating = -1`) | the best first (descending) |
