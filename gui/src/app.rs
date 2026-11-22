@@ -7758,10 +7758,13 @@ impl TriApp {
                             response.on_hover_text(&text);
                         }
                         if self.is_watched(&row.path) {
+                            // Un peu d'air après le nom (retour du 22/11/2026 : l'œil, plus
+                            // large que l'étoile, le touchait presque).
+                            ui.add_space(3.0);
                             let (rect, response) =
                                 ui.allocate_exact_size(vec2(size, size), Sense::hover());
                             let color = ui.visuals().weak_text_color();
-                            marks::eye(ui.painter(), rect, color);
+                            marks::eye(ui.painter(), rect.shrink(size * 0.06), color);
                             response.on_hover_text(format!(
                                 "{}\n{}",
                                 t!("folders-watched"),
