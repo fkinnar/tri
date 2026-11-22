@@ -166,6 +166,8 @@ loupe = "m"
 "core.view.image_info" = ["t"]
 "core.view.grid_info" = ["Shift+t"]
 "core.view.refresh_folders" = ["F5"]
+# "All photos" (#561): the photos seen in every folder, as one folder.
+"core.view.all_photos" = []
 
 # --- Filters (f) ---
 # Prefix "f", followed by the matching rating key. "f f" changes the file type,
@@ -207,6 +209,9 @@ loupe = "m"
 "core.filter.conflicts" = ["f c"]
 "core.filter.palette" = []
 "core.filter.palette_colour" = []
+# The same in "All photos" (#561): searching every folder seen.
+"core.filter.palette_everywhere" = []
+"core.filter.palette_colour_everywhere" = []
 # After a filter change, start again from the first image (on / off): "g", like "g g".
 "core.filter.restart" = ["f g"]
 # f k ("count"): the filters in use and the number of photos left, large, in the middle.

@@ -47,3 +47,40 @@ fn a_missing_folder_is_an_error() {
     let dir = tempfile::tempdir().unwrap();
     assert!(Folder::open(&dir.path().join("absent"), 1, Convention::Darktable).is_err());
 }
+
+/// « Toutes les photos » (#561) : les photos de l'index tout de suite, puis complétées
+/// dossier par dossier (photo ajoutée vue) ; un dossier injoignable garde ce que l'index
+/// en savait.
+#[test]
+fn all_photos_come_from_the_index_then_from_the_reachable_folders() {
+    let dir = tempfile::tempdir().unwrap();
+    let here = dir.path().join("ici");
+    fs::create_dir(&here).unwrap();
+    let jpeg = |path: &std::path::Path| {
+        image::RgbImage::from_pixel(8, 8, image::Rgb([90, 90, 90]))
+            .save(path)
+            .unwrap()
+    };
+    jpeg(&here.join("a.jpg"));
+    let gone = dir.path().join("debranche").join("b.jpg");
+    let db = dir.path().join("index.sqlite");
+    {
+        let mut index = tri::index::Index::open(&db).unwrap();
+        let stamp = |p: &std::path::Path| (p.to_path_buf(), 10, 1_700_000_000_000_000_000);
+        index.seen(&here, 1, &[stamp(&here.join("a.jpg"))]).unwrap();
+        index
+            .seen(gone.parent().unwrap(), 1, &[stamp(&gone)])
+            .unwrap();
+    }
+    let folder = Folder::all_photos(&db, Convention::Darktable).unwrap();
+    assert!(tri::folder::is_all_photos(&folder.dir));
+    assert_eq!(folder.files.len(), 2);
+    // Ajoutée depuis : trouvée en relisant son dossier.
+    jpeg(&here.join("c.jpg"));
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    let names: Vec<String> = tri::folder::complete_from_disk(&folder.files, &stop)
+        .iter()
+        .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, ["b.jpg", "a.jpg", "c.jpg"]);
+}

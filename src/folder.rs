@@ -77,6 +77,82 @@ impl Folder {
     }
 }
 
+/// « Toutes les photos » (#561) : un dossier virtuel au-dessus de tous les emplacements,
+/// fait des photos que l'index a vues ([`crate::index`]). Son chemin est ce marqueur, qui
+/// ne peut pas être un vrai chemin (un octet nul).
+pub fn all_photos_dir() -> PathBuf {
+    PathBuf::from("\0tri-all-photos")
+}
+
+/// Vrai si `dir` est « Toutes les photos » ([`all_photos_dir`]).
+pub fn is_all_photos(dir: &Path) -> bool {
+    dir == all_photos_dir()
+}
+
+impl Folder {
+    /// « Toutes les photos » : les photos que l'index `db` connaît, tout de suite, sans
+    /// parcourir de dossier ; notes à lire en fond ([`Loading`]). Leurs tailles et dates
+    /// connues servent aux clés du cache sans relevé (vignettes d'un disque lent ou
+    /// débranché) ; [`complete_from_disk`] complète ensuite ce qui est joignable.
+    pub fn all_photos(db: &Path, convention: Convention) -> io::Result<Folder> {
+        let index = crate::index::Index::open(db).map_err(io::Error::other)?;
+        let photos = index.photos(None).map_err(io::Error::other)?;
+        crate::cache::seed_stamps(
+            photos
+                .iter()
+                .map(|(p, size, modified)| (p.as_path(), *size, *modified)),
+        );
+        let mut files: Vec<MediaFile> = photos
+            .into_iter()
+            .filter_map(|(path, _, _)| {
+                let kind = media::kind_of(&path)?;
+                Some(MediaFile { path, kind })
+            })
+            .collect();
+        files.sort_by(media::compare);
+        let notes = NoteBook::pending(files.iter().map(|f| f.path.as_path()), convention);
+        Ok(Folder {
+            dir: all_photos_dir(),
+            files,
+            notes,
+        })
+    }
+}
+
+/// Complète la liste de « Toutes les photos » (`files`) dossier par dossier, sans
+/// descendre : chaque dossier joignable est relu ([`media::scan`], un niveau) — ses
+/// développements, ses photos ajoutées, sans celles qui n'y sont plus — et noté dans
+/// l'index ; un dossier injoignable (disque débranché) garde ce que l'index en savait.
+/// `stop` interrompt (la liste d'avant est rendue telle quelle).
+pub fn complete_from_disk(files: &[MediaFile], stop: &AtomicBool) -> Vec<MediaFile> {
+    let mut dirs: std::collections::BTreeMap<PathBuf, Vec<MediaFile>> = Default::default();
+    for f in files {
+        let dir = f.path.parent().map(Path::to_path_buf).unwrap_or_default();
+        dirs.entry(dir).or_default().push(f.clone());
+    }
+    let mut out = Vec::with_capacity(files.len());
+    for (dir, known) in dirs {
+        if stop.load(Ordering::Relaxed) {
+            return files.to_vec();
+        }
+        if !dir.is_dir() {
+            out.extend(known);
+            continue;
+        }
+        // Les relevés tirés de l'index sont oubliés : relus sur le disque.
+        crate::cache::forget_stamps(known.iter().map(|f| f.path.as_path()));
+        match media::scan(&dir, 1) {
+            Ok(found) => {
+                crate::index::seen(&dir, 1, &found);
+                out.extend(found);
+            }
+            Err(_) => out.extend(known),
+        }
+    }
+    out.sort_by(media::compare);
+    out
+}
+
 /// Met en ordre les données de tri ([`crate::store::settle`]) de `dir` et des dossiers de
 /// `files` (sous-dossiers parcourus), avant d'en lire les notes.
 fn settle(dir: &Path, files: &[MediaFile]) {

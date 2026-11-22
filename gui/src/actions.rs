@@ -191,6 +191,13 @@ pub enum Action {
     /// « Contient cette couleur » : la pipette des palettes en plein écran, ou fin de la
     /// recherche (#492).
     FilterPaletteColour,
+    /// « Palettes proches » de l'image sélectionnée dans « Toutes les photos » (#561).
+    FilterPaletteEverywhere,
+    /// « Contient cette couleur » dans « Toutes les photos » (#561) : la couleur cherchée
+    /// (ou la dernière).
+    FilterPaletteColourEverywhere,
+    /// Ouvrir « Toutes les photos » (#561) : les photos vues dans tous les dossiers.
+    AllPhotos,
     /// Après un changement de filtre, repartir de la première image (`[gui]
     /// filter_restart`, bouton de la barre du bas ; retour du 16/11/2026).
     FilterRestart,
@@ -594,7 +601,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 278] = [
+    pub const ALL: [Action; 281] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -629,6 +636,9 @@ impl Action {
         Action::FilterConflicts,
         Action::FilterPalette,
         Action::FilterPaletteColour,
+        Action::FilterPaletteEverywhere,
+        Action::FilterPaletteColourEverywhere,
+        Action::AllPhotos,
         Action::FilterRestart,
         Action::FilterCount,
         Action::SortNext,
@@ -994,7 +1004,10 @@ impl Action {
             | Action::GroupingWindow
             | Action::FilterStack
             | Action::StackEnterToggle => Some(Tool::Stacks),
-            Action::FilterPalette | Action::FilterPaletteColour => Some(Tool::Palettes),
+            Action::FilterPalette
+            | Action::FilterPaletteColour
+            | Action::FilterPaletteEverywhere
+            | Action::FilterPaletteColourEverywhere => Some(Tool::Palettes),
             Action::FolderCompute(k) | Action::Compute(k) => kind(k),
             _ => None,
         }
@@ -1082,13 +1095,35 @@ impl Action {
             | VersionName | VersionSavePreset | VersionReset | VersionsCompare
             | VersionsOriginal | VersionsExportAll => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
-            FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
-            | FilterColorsAll | FilterClear | FilterBlurry | FilterWellExposed | FilterStack
-            | FilterInvert | FilterDeveloped | FilterConflicts | FilterPalette
-            | FilterPaletteColour | FilterRestart | FilterCount | SortNext | SortReverse
-            | SortBy(_) | FilterKind(_) | GridRenderNext | Render(_) => Group::Filters,
+            FilterCycle
+            | FilterStars(_)
+            | FilterStarsOp
+            | FilterFlag(_)
+            | FilterColor(_)
+            | FilterColorsAll
+            | FilterClear
+            | FilterBlurry
+            | FilterWellExposed
+            | FilterStack
+            | FilterInvert
+            | FilterDeveloped
+            | FilterConflicts
+            | FilterPalette
+            | FilterPaletteColour
+            | FilterPaletteEverywhere
+            | FilterPaletteColourEverywhere
+            | FilterRestart
+            | FilterCount
+            | SortNext
+            | SortReverse
+            | SortBy(_)
+            | FilterKind(_)
+            | GridRenderNext
+            | Render(_) => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
-            | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
+            | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders | AllPhotos => {
+                Group::Panels
+            }
             FileActionsAllow | FileRename | FileDelete | FileReveal | FileEdit | FileCopy
             | FileMove | Sidecars | EmbedNotes | ImportNotes | FileDeleteStack
             | FileDeletePhoto | FileCopyStack | FileExport | ExportReport | Send(_)
@@ -1218,6 +1253,9 @@ impl Action {
             Action::FilterConflicts => "core.filter.conflicts",
             Action::FilterPalette => "core.filter.palette",
             Action::FilterPaletteColour => "core.filter.palette_colour",
+            Action::FilterPaletteEverywhere => "core.filter.palette_everywhere",
+            Action::FilterPaletteColourEverywhere => "core.filter.palette_colour_everywhere",
+            Action::AllPhotos => "core.view.all_photos",
             Action::FilterRestart => "core.filter.restart",
             Action::FilterCount => "core.filter.count",
             Action::SortNext => "core.filter.sort",

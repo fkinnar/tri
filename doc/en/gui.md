@@ -1154,6 +1154,20 @@ system one ("cold" measurements, experiments).
 - Dark theme by default.
 
 - **Full screen** (Enter or double-click): see below.
+- **"All photos"** (#561, design in the issue): a virtual folder at the top of the folders
+  panel, above every location, made of the photos the index has seen
+  (`tri::folder::all_photos`, marker path `all_photos_dir`). No search box: the filters
+  search, on this list. It opens at once from the index (known sizes and dates: cached
+  thumbnails without touching the disk, `cache::seed_stamps`), then completes in the
+  background folder by folder (`folder::complete_from_disk`: developments, added photos,
+  those gone; an unplugged drive keeps what the index knew), the list replaced as the
+  folder watch does (`TriApp::replace_folder`). Not watched, not remembered as the last
+  folder. Escape (grid, nothing left to close) returns to the folder you came from
+  (`all_photos_from`). Actions `core.view.all_photos`, `core.filter.palette_everywhere`
+  and `core.filter.palette_colour_everywhere` (no default key): the search is set there
+  (`AllPhotosSearch`), the reference photo read again in the source over there. Under
+  "Similar palettes" turned on, the **reference**: its thumbnail (if it is in the list)
+  and its name, a click goes to it; "Use this one" for the selected photo.
 
 ## Full screen
 

@@ -1001,6 +1001,13 @@ pub struct TriApp {
     neighbour_tried: bool,
     /// Ouverture d'un dossier lent en cours.
     opening: Option<Opening>,
+    /// « Toutes les photos » (#561) : dossier d'où l'on y est venu (Échap y ramène).
+    all_photos_from: Option<PathBuf>,
+    /// Complétion en fond de « Toutes les photos » : la liste relue dossier par dossier
+    /// ([`tri::folder::complete_from_disk`]), et son arrêt.
+    all_photos_completion: Option<(Arc<AtomicBool>, mpsc::Receiver<Vec<MediaFile>>)>,
+    /// Recherche à poser une fois « Toutes les photos » ouvert (« chercher partout »).
+    all_photos_search: Option<AllPhotosSearch>,
     /// Vignettes visibles déjà signalées au moteur ([`Scheduler::set_visible`]).
     visible_sent: Option<(usize, usize)>,
     /// Attente de la liste d'un dossier avant de la lire en fond : `[gui.folders]
@@ -2174,6 +2181,9 @@ impl TriApp {
             neighbour_browser: None,
             neighbour_tried: cfg!(test),
             opening: None,
+            all_photos_from: None,
+            all_photos_completion: None,
+            all_photos_search: None,
             visible_sent: None,
             open_wait_override: cfg!(test).then(|| Duration::from_secs(60)),
             repaint: None,
@@ -2804,7 +2814,9 @@ impl TriApp {
         // Ses notes aussi, dans le délai d'attente (un peu avant, pour arriver à temps).
         let wait = self.open_wait();
         let deadline = Instant::now() + wait.saturating_sub(wait / 5);
+        let all_photos = tri::folder::is_all_photos(dir);
         let watching = self.settings.watch.interval_ms > 0
+            && !all_photos
             && !self.watch.as_ref().is_some_and(|(w, _, _)| w.dir() == dir);
         std::thread::spawn(move || {
             writes.flush(Duration::from_secs(30));
@@ -2815,23 +2827,33 @@ impl TriApp {
                 .and_then(|v| v.subfolders)
                 .unwrap_or(default_subfolders);
             let depth = if subfolders { depths.1 } else { depths.0 };
-            let result =
+            // « Toutes les photos » (#561) : la liste de l'index, sans parcours ; complétée
+            // ensuite dossier par dossier (`start_all_photos_completion`).
+            let listed = if all_photos {
+                match data.as_deref() {
+                    Some(data) => Folder::all_photos(&data.join("index.sqlite"), convention),
+                    None => Err(std::io::ErrorKind::NotFound.into()),
+                }
+            } else {
                 Folder::scan_counting(&target, depth, convention, slow, &stop_scan, &found_scan)
-                    .map(|folder| {
-                        // Vues : notées dans l'index (« Toutes les photos », #561).
-                        tri::index::seen(&folder.dir, depth, &folder.files);
-                        stage_scan.store(OPEN_NOTES, Ordering::Relaxed);
-                        let mut opened = Opened::read(folder, depth, watching, deadline);
-                        stage_scan.store(OPEN_DATA, Ordering::Relaxed);
-                        opened.prepared = Prepared::read(
-                            data.as_deref(),
-                            &opened.folder,
-                            cache.as_ref(),
-                            view,
-                            subfolders,
-                        );
-                        opened
-                    });
+            };
+            let result = listed.map(|folder| {
+                // Vues : notées dans l'index (« Toutes les photos », #561).
+                if !all_photos {
+                    tri::index::seen(&folder.dir, depth, &folder.files);
+                }
+                stage_scan.store(OPEN_NOTES, Ordering::Relaxed);
+                let mut opened = Opened::read(folder, depth, watching, deadline);
+                stage_scan.store(OPEN_DATA, Ordering::Relaxed);
+                opened.prepared = Prepared::read(
+                    data.as_deref(),
+                    &opened.folder,
+                    cache.as_ref(),
+                    view,
+                    subfolders,
+                );
+                opened
+            });
             let _ = tx.send(result);
             if let Some(ctx) = repaint {
                 ctx.request_repaint();
@@ -2857,6 +2879,119 @@ impl TriApp {
                     started: Instant::now(),
                 });
             }
+        }
+    }
+
+    /// Ouvre « Toutes les photos » (#561), en retenant le dossier d'où l'on vient (Échap
+    /// y ramène) ; `search` : la recherche à y poser (« chercher partout »).
+    fn open_all_photos(&mut self, search: Option<AllPhotosSearch>) {
+        self.all_photos_search = search;
+        if tri::folder::is_all_photos(&self.folder.dir) {
+            self.apply_all_photos_search();
+            return;
+        }
+        let from = (!self.folder.is_none()).then(|| self.folder.dir.clone());
+        self.open_folder(&tri::folder::all_photos_dir());
+        // Après l'ouverture (qui l'oublie pour un vrai dossier).
+        self.all_photos_from = from;
+    }
+
+    /// Lance la complétion en fond de « Toutes les photos » : chaque dossier joignable
+    /// relu (développements, photos ajoutées) ; le résultat remplace la liste
+    /// ([`TriApp::poll_all_photos_completion`]).
+    fn start_all_photos_completion(&mut self) {
+        if let Some((stop, _)) = self.all_photos_completion.take() {
+            stop.store(true, Ordering::Relaxed);
+        }
+        let files = self.folder.files.clone();
+        let stop = Arc::new(AtomicBool::new(false));
+        let (tx, rx) = mpsc::channel();
+        let (stopped, repaint) = (stop.clone(), self.repaint.clone());
+        std::thread::Builder::new()
+            .name("tri-all-photos".into())
+            .spawn(move || {
+                let done = tri::folder::complete_from_disk(&files, &stopped);
+                if !stopped.load(Ordering::Relaxed) {
+                    let _ = tx.send(done);
+                    if let Some(ctx) = repaint {
+                        ctx.request_repaint();
+                    }
+                }
+            })
+            .ok();
+        self.all_photos_completion = Some((stop, rx));
+    }
+
+    /// Complétion de « Toutes les photos » arrivée : la liste est remplacée (notes connues
+    /// gardées, relues en fond), la sélection reste.
+    fn poll_all_photos_completion(&mut self) {
+        let Some((_, rx)) = &self.all_photos_completion else {
+            return;
+        };
+        let Ok(files) = rx.try_recv() else { return };
+        self.all_photos_completion = None;
+        if !tri::folder::is_all_photos(&self.folder.dir) || files == self.folder.files {
+            return;
+        }
+        trace(|| format!("toutes les photos complétées : {} images", files.len()));
+        let selected = self.files.get(self.selected).map(|f| f.path.clone());
+        let convention = self.settings.xmp.sidecar;
+        let folder = Folder {
+            dir: self.folder.dir.clone(),
+            notes: tri::notes::NoteBook::pending(
+                files.iter().map(|f| f.path.as_path()),
+                convention,
+            ),
+            files,
+        };
+        self.replace_folder(folder, selected);
+    }
+
+    /// Pose la recherche « partout » en attente, dans « Toutes les photos » ouvert et sa
+    /// source de palettes en place. La référence de « palettes proches » : sa palette dans
+    /// la source d'ici (la même photo, vue par l'index), sinon celle d'où l'on venait.
+    fn apply_all_photos_search(&mut self) {
+        if self.all_photos_search.is_none()
+            || !tri::folder::is_all_photos(&self.folder.dir)
+            || self.opening.is_some()
+        {
+            return;
+        }
+        if self.palette_source.is_none() {
+            self.all_photos_search = None;
+            self.notice = Some((t!("palette-choose"), false));
+            return;
+        }
+        match self.all_photos_search.clone() {
+            Some(AllPhotosSearch::Colour(oklab)) => {
+                self.all_photos_search = None;
+                self.set_palette_colour(Some(oklab));
+            }
+            Some(AllPhotosSearch::Like(path, fallback)) => {
+                let here = self.files.iter().position(|f| f.path == path);
+                let palette = match here {
+                    Some(i) => match self.palette_of(i) {
+                        Some(p) if !p.swatches.is_empty() => p,
+                        Some(_) => fallback,
+                        // Pas encore lue (ou pas encore calculée ici) : à l'image suivante,
+                        // celle d'où l'on venait au bout d'un moment.
+                        None if self
+                            .opened_at
+                            .is_some_and(|t| t.elapsed() < Duration::from_secs(3)) =>
+                        {
+                            return;
+                        }
+                        None => fallback,
+                    },
+                    None => fallback,
+                };
+                self.all_photos_search = None;
+                if let Some(i) = here {
+                    self.selected = i;
+                }
+                self.set_palette_like(Some((path, palette)));
+            }
+            None => {}
         }
     }
 
@@ -3033,8 +3168,14 @@ impl TriApp {
         match result {
             Ok(folder) => {
                 trace(|| format!("dossier ouvert : {}", folder.dir.display()));
-                // Mémorisé pour le prochain lancement (sans conséquence en cas d'échec).
-                if let Some(data) = self.settings.data_dir() {
+                let all_photos = tri::folder::is_all_photos(&folder.dir);
+                if !all_photos {
+                    self.all_photos_from = None;
+                    self.all_photos_search = None;
+                }
+                // Mémorisé pour le prochain lancement (sans conséquence en cas d'échec) ;
+                // pas « Toutes les photos ».
+                if let Some(data) = self.settings.data_dir().filter(|_| !all_photos) {
                     let _ = tri::folder::remember(&data, &folder.dir);
                 }
                 self.chosen = chosen;
@@ -3092,6 +3233,9 @@ impl TriApp {
                 }
                 self.apply_sort();
                 self.error = None;
+                if all_photos {
+                    self.start_all_photos_completion();
+                }
             }
             Err(e) => {
                 self.folder = Folder::default();
@@ -3828,6 +3972,7 @@ impl TriApp {
                         if slider.drag_stopped() || reset {
                             self.remember_palette_levels();
                         }
+                        self.palette_reference_row(ui, &like.path);
                     }
                 }
                 _ => {
@@ -4040,6 +4185,75 @@ impl TriApp {
             self.palette_refilter_pending = false;
             if self.palette_searching() {
                 self.refilter(Reveal::Minimal);
+            }
+        }
+    }
+
+    /// Sous « Palettes proches » allumé (#561) : la photo de référence (vignette si elle
+    /// est dans la liste, et son nom ; un clic y va), et « Prendre celle-ci » quand une
+    /// autre est sélectionnée. Dans « Toutes les photos », elle peut ne plus être affichée.
+    fn palette_reference_row(&mut self, ui: &mut Ui, reference: &Path) {
+        let here = self.files.iter().position(|f| f.path == reference);
+        let selected = self.files.get(self.selected).map(|f| f.path.clone());
+        let mut go = false;
+        let mut take = false;
+        ui.horizontal(|ui| {
+            ui.weak(t!("palette-reference"));
+            let side = ui.text_style_height(&egui::TextStyle::Body) * 2.0;
+            if let Some(i) = here {
+                let deadline = Instant::now() + Duration::from_millis(2);
+                let ctx = ui.ctx().clone();
+                if let Some(texture) = self.thumbnail_texture(&ctx, i, deadline) {
+                    let size = texture.size_vec2();
+                    let scale = side / size.x.max(size.y).max(1.0);
+                    let image =
+                        egui::Image::new((texture.id(), size * scale)).sense(Sense::click());
+                    go |= ui
+                        .add(image)
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text(t!("palette-reference-go-tip"))
+                        .clicked();
+                }
+            }
+            let name = file_name(reference);
+            go |= ui
+                .add(egui::Label::new(name).truncate().sense(Sense::click()))
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .on_hover_text(format!(
+                    "{}\n{}",
+                    t!("palette-reference-go-tip"),
+                    reference.display()
+                ))
+                .clicked();
+        });
+        if selected.as_deref().is_some_and(|s| s != reference)
+            && ui
+                .button(t!("palette-reference-take"))
+                .on_hover_text(t!("palette-reference-take-tip"))
+                .clicked()
+        {
+            take = true;
+        }
+        if go {
+            match here {
+                Some(i) => {
+                    self.selected = i;
+                    self.reveal = Some(Reveal::Minimal);
+                    self.tell_shown();
+                }
+                // Hors de la liste : son dossier, sur elle.
+                None => {
+                    if let Some(dir) = reference.parent() {
+                        self.start_select_path = Some(reference.to_path_buf());
+                        self.open_folder(dir);
+                    }
+                }
+            }
+        }
+        if take {
+            match self.current_palette() {
+                Some(current) => self.set_palette_like(Some(current)),
+                None => self.notice = Some((t!("palette-computing"), false)),
             }
         }
     }
@@ -5847,7 +6061,8 @@ impl TriApp {
     /// modifiés par un autre logiciel : seules leurs notes sont relues.
     fn watch_folder(&mut self, ctx: &egui::Context) {
         let interval = self.settings.watch.interval_ms;
-        if self.folder.is_none() || interval == 0 {
+        // « Toutes les photos » : pas de dossier à surveiller (complété en fond).
+        if self.folder.is_none() || interval == 0 || tri::folder::is_all_photos(&self.folder.dir) {
             self.watch = None;
             return;
         }
@@ -6036,6 +6251,32 @@ impl TriApp {
         // recherche, les résultats remplacent l'arborescence.
         if self.folder_search_ui(ui) {
             return;
+        }
+        ui.separator();
+        // « Toutes les photos » (#561) : au-dessus de tous les emplacements, comme une
+        // racine ; à l'accent quand il est ouvert.
+        {
+            let open_here = tri::folder::is_all_photos(&self.folder.dir);
+            let text = egui::RichText::new(t!("all-photos")).strong();
+            let text = if open_here {
+                text.color(Color32::from(self.gui.title_color()))
+            } else {
+                text
+            };
+            let tip = format!(
+                "{}\n{}",
+                self.action_tip(Action::AllPhotos),
+                t!("all-photos-tip")
+            );
+            if ui
+                .add(egui::Label::new(text).sense(Sense::click()))
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .on_hover_text(tip)
+                .clicked()
+                && !open_here
+            {
+                self.open_all_photos(None);
+            }
         }
         ui.separator();
         // Dossier ouvert montré à sa première ligne (son favori en tête, s'il en est un).
@@ -10602,6 +10843,9 @@ impl TriApp {
         // Source des palettes : suit le rendu de la grille (« Comme la grille »).
         let wanted = self.wanted_palette_source();
         self.set_palette_source(wanted);
+        // Recherche « partout » en attente : posée une fois la source en place.
+        self.apply_all_photos_search();
+        self.poll_all_photos_completion();
         let mut scored = Vec::new();
         self.drain_engine(&mut scored);
         self.take_scores(scored);
@@ -11528,6 +11772,12 @@ impl TriApp {
                     self.zoom = None;
                     self.zoom_anchor = None;
                     self.reveal = Some(Reveal::Minimal);
+                } else if self.mode == Mode::Grid
+                    && tri::folder::is_all_photos(&self.folder.dir)
+                    && let Some(from) = self.all_photos_from.take()
+                {
+                    // « Toutes les photos » : retour au dossier d'où l'on venait (#561).
+                    self.open_folder(&from);
                 } else if self.mode == Mode::Grid {
                     // Plus rien à fermer : le curseur se masque (vue d'ensemble).
                     self.cursor_hidden = true;
@@ -12256,6 +12506,33 @@ impl TriApp {
                     self.set_palette_colour(Some(last));
                 } else {
                     self.open_colour_dialog();
+                }
+            }
+            // « Toutes les photos » (#561), et les recherches « partout » : le filtre posé
+            // là-bas, la photo ou la couleur d'ici.
+            Action::AllPhotos => self.open_all_photos(None),
+            Action::FilterPaletteEverywhere => {
+                if self.palette_source.is_none() {
+                    self.notice = Some((t!("palette-choose"), false));
+                } else if !self.has_palette_reference() {
+                    self.notice = Some((t!("palette-similar-no-photo"), false));
+                } else {
+                    match self.current_palette() {
+                        Some((path, palette)) => {
+                            self.open_all_photos(Some(AllPhotosSearch::Like(path, palette)));
+                        }
+                        None => self.notice = Some((t!("palette-computing"), false)),
+                    }
+                }
+            }
+            Action::FilterPaletteColourEverywhere => {
+                let colour = self
+                    .palette_colour
+                    .map(|c| c.oklab)
+                    .or(self.palette_colour_last);
+                match colour {
+                    Some(oklab) => self.open_all_photos(Some(AllPhotosSearch::Colour(oklab))),
+                    None => self.notice = Some((t!("palette-colour-first"), false)),
                 }
             }
             // Palettes proches (#492) : de l'image sélectionnée, ou fin de la recherche.
@@ -19737,29 +20014,52 @@ impl TriApp {
     /// ou plein écran, zoom) ; `select` : image à sélectionner (nouveau nom), sinon la
     /// sélection garde sa place (l'image suivante, après une suppression).
     fn reload_folder(&mut self, select: Option<PathBuf>) {
+        let all_photos = tri::folder::is_all_photos(&self.folder.dir);
+        let read = if all_photos {
+            // « Toutes les photos » : l'index, puis complété en fond.
+            match self.settings.data_dir() {
+                Some(data) => {
+                    Folder::all_photos(&data.join("index.sqlite"), self.settings.xmp.sidecar)
+                }
+                None => Err(std::io::ErrorKind::NotFound.into()),
+            }
+        } else {
+            Folder::scan(
+                &self.folder.dir,
+                self.folder_depth(),
+                self.settings.xmp.sidecar,
+            )
+        };
+        match read {
+            Ok(folder) => {
+                if !all_photos {
+                    tri::index::seen(&folder.dir, self.folder_depth(), &folder.files);
+                }
+                self.replace_folder(folder, select);
+                if all_photos {
+                    self.start_all_photos_completion();
+                }
+            }
+            Err(e) => {
+                self.file_error = Some(format!("{} : {e}", folder_name(&self.folder.dir)));
+            }
+        }
+    }
+
+    /// Remplace la liste du dossier ouvert par `folder` (le même dossier relu), en gardant
+    /// les notes connues (relues en fond) et la vue ; `select` : image à sélectionner,
+    /// sinon la sélection garde sa place.
+    fn replace_folder(&mut self, mut folder: Folder, select: Option<PathBuf>) {
         self.versions.clear();
         self.versions_epoch += 1;
         self.forget_grid_versions();
-        match Folder::scan(
-            &self.folder.dir,
-            self.folder_depth(),
-            self.settings.xmp.sidecar,
-        ) {
-            Ok(mut folder) => {
-                tri::index::seen(&folder.dir, self.folder_depth(), &folder.files);
-                // Les notes connues en attendant la relecture en fond.
-                folder.notes.seed(&self.folder.notes);
-                self.folder = folder;
-                self.refresh_any_developed();
-                self.apply_sidecar_policy();
-                self.start_loading();
-                self.apply_sort();
-            }
-            Err(e) => {
-                self.file_error = Some(format!("{} : {e}", self.folder.dir.display()));
-                return;
-            }
-        }
+        // Les notes connues en attendant la relecture en fond.
+        folder.notes.seed(&self.folder.notes);
+        self.folder = folder;
+        self.refresh_any_developed();
+        self.apply_sidecar_policy();
+        self.start_loading();
+        self.apply_sort();
         // Dossier relu : la surveillance repart de cet état (un changement fait par tri
         // lui-même n'est pas signalé une seconde fois).
         if let Some((watch, rx, _)) = &self.watch {
@@ -25317,7 +25617,19 @@ fn size_label(bytes: u64) -> String {
 }
 
 pub(crate) fn folder_name(path: &Path) -> String {
+    if tri::folder::is_all_photos(path) {
+        return t!("all-photos");
+    }
     file_name(path)
+}
+
+/// Recherche « partout » à poser dans « Toutes les photos » une fois ouvert (#561).
+#[derive(Clone)]
+enum AllPhotosSearch {
+    /// Palettes proches de cette photo (sa palette).
+    Like(PathBuf, Arc<Palette>),
+    /// Contient cette couleur (OKLab).
+    Colour([f32; 3]),
 }
 
 /// Une tâche de fond, pour la barre globale (issue n° 36).
@@ -30032,6 +30344,71 @@ mod tests {
             .map(|f| development_label(&f.path))
             .unwrap();
         assert!(h.query_by_label(&dev).is_none(), "{dev} pas répété, seul");
+    }
+
+    #[test]
+    fn all_photos_opens_every_folder_seen_and_escape_comes_back() {
+        // #561 : « Toutes les photos », un dossier virtuel fait des photos de l'index (ici
+        // celles de deux dossiers) ; Échap ramène au dossier d'où l'on venait ; « contient
+        // cette couleur, partout » y pose le filtre.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let elsewhere = dir.path().join("ailleurs");
+        std::fs::create_dir(&elsewhere).unwrap();
+        image::RgbImage::from_pixel(32, 24, image::Rgb([20, 200, 40]))
+            .save(elsewhere.join("vert.jpg"))
+            .unwrap();
+        let stamps = |d: &Path| -> Vec<(PathBuf, u64, u128)> {
+            tri::media::scan(d, 1)
+                .unwrap()
+                .into_iter()
+                .map(|f| {
+                    let m = std::fs::metadata(&f.path).unwrap();
+                    let t = m
+                        .modified()
+                        .unwrap()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap();
+                    (f.path, m.len(), t.as_nanos())
+                })
+                .collect()
+        };
+        {
+            let db = dir.path().join("data").join("index.sqlite");
+            let mut index = tri::index::Index::open(&db).unwrap();
+            index.seen(&photos, 1, &stamps(&photos)).unwrap();
+            index.seen(&elsewhere, 1, &stamps(&elsewhere)).unwrap();
+        }
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::AllPhotos);
+        run_until(&mut h, |app| {
+            tri::folder::is_all_photos(&app.folder.dir)
+                && app.opening.is_none()
+                && app.all_photos_completion.is_none()
+                && app.files.len() == 4
+        });
+        assert_eq!(folder_name(&h.state().folder.dir), t!("all-photos"));
+        assert!(
+            h.state()
+                .files
+                .iter()
+                .any(|f| f.path.ends_with("ailleurs/vert.jpg"))
+        );
+        // Échap : retour au dossier d'origine.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.opening.is_none() && app.folder.dir == photos
+        });
+        // « Contient cette couleur, partout » : la dernière couleur, posée là-bas.
+        let green = tri::palette::srgb_to_oklab([20, 200, 40]);
+        h.state_mut().palette_colour_last = Some(green);
+        h.state_mut()
+            .perform(&ctx, Action::FilterPaletteColourEverywhere);
+        run_until(&mut h, |app| {
+            tri::folder::is_all_photos(&app.folder.dir) && app.palette_colour.is_some()
+        });
+        assert_eq!(h.state().all_photos_from.as_deref(), Some(photos.as_path()));
     }
 
     #[test]

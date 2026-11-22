@@ -341,6 +341,18 @@ fn read_stamp(path: &Path) -> Option<(u64, u128)> {
     read
 }
 
+/// Retient des relevés (taille, date en ns) déjà connus ailleurs (l'index, #561), pour
+/// les fichiers pas encore relevés : leurs clés se calculent sans accès au disque (un
+/// disque débranché garde ses vignettes en cache). Un relevé déjà fait l'emporte.
+pub fn seed_stamps<'a>(known: impl IntoIterator<Item = (&'a Path, u64, u128)>) {
+    let mut stamps = stamps().lock().unwrap_or_else(|e| e.into_inner());
+    for (path, size, modified) in known {
+        stamps
+            .entry(path.to_path_buf())
+            .or_insert(Some((size, modified)));
+    }
+}
+
 /// Oublie les relevés de `paths` ([`stamp`]) : fichiers changés, ajoutés ou retirés.
 pub fn forget_stamps<'a>(paths: impl IntoIterator<Item = &'a Path>) {
     let mut known = stamps().lock().unwrap_or_else(|e| e.into_inner());

@@ -1233,6 +1233,21 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - Thème sombre par défaut.
 
 - **Plein écran** (Entrée ou double-clic) : voir plus bas.
+- **« Toutes les photos »** (#561, conception dans l'issue) : un dossier virtuel en tête
+  du panneau des dossiers, au-dessus de tous les emplacements, fait des photos que
+  l'index a vues (`tri::folder::all_photos`, chemin marqueur `all_photos_dir`). Pas de
+  boîte de recherche : ce sont les filtres qui cherchent, sur cette liste. Il s'ouvre
+  tout de suite sur l'index (tailles et dates connues : vignettes en cache sans accès au
+  disque, `cache::seed_stamps`), puis se complète en fond dossier par dossier
+  (`folder::complete_from_disk` : développements, photos ajoutées, celles qui n'y sont
+  plus ; un disque débranché garde ce que l'index en savait), la liste remplacée comme
+  par la surveillance (`TriApp::replace_folder`). Pas surveillé, pas retenu comme
+  dernier dossier. Échap (grille, plus rien à fermer) ramène au dossier d'où l'on venait
+  (`all_photos_from`). Actions `core.view.all_photos`, `core.filter.palette_everywhere`
+  et `core.filter.palette_colour_everywhere` (sans touche par défaut) : la recherche
+  posée là-bas (`AllPhotosSearch`), la photo de référence relue dans la source d'ici.
+  Sous « Palettes proches » allumé, la **référence** : sa vignette (si elle est dans la
+  liste) et son nom, un clic y va ; « Prendre celle-ci » pour la photo sélectionnée.
 
 ## Plein écran
 
