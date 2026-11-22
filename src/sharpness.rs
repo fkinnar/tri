@@ -84,8 +84,8 @@ pub struct SharpnessSettings {
     /// `strictness_span` à la puissance de la sévérité, ×0,5 à ×2 par défaut (voir
     /// [`SharpnessSettings::with_strictness`]).
     pub strictness_span: f32,
-    /// Calcul du score de tout le dossier en fond (cache d'analyse).
-    pub background: bool,
+    /// Ancienne clé (avant #564) : `false` vaut `[analysis] sharpness = "on-demand"`.
+    pub background: Option<bool>,
 }
 
 impl Default for SharpnessSettings {
@@ -106,7 +106,7 @@ impl Default for SharpnessSettings {
             group_ratio: 0.8,
             group_threshold: 0.45,
             strictness_span: 2.0,
-            background: true,
+            background: None,
         }
     }
 }

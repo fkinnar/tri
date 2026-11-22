@@ -21,7 +21,7 @@ use serde::de::{self, DeserializeOwned, Deserializer, Visitor};
 use crate::cache::{self, Cache};
 use crate::preview::{self, Sizes};
 use crate::raw::RenderOptions;
-use crate::scheduler::{self, RawPreviews};
+use crate::scheduler::{self, Analysis, RawPreviews};
 
 /// Valeur déterminée à l'exécution (`"auto"` dans le fichier) ou fixée (un entier).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -95,6 +95,8 @@ pub struct EngineSettings {
     pub cache: CacheSection,
     /// Travail en tâche de fond.
     pub scheduler: SchedulerSection,
+    /// Analyses de tout le dossier : en fond, à la demande, ou retirées (#564).
+    pub analysis: AnalysisSection,
     /// Notes dans les sidecars XMP.
     pub xmp: XmpSection,
     /// Sidecars des logiciels de développement (`.rrdata`) : création quand on note.
@@ -291,17 +293,19 @@ pub struct SchedulerSection {
     pub light_workers: Auto<usize>,
     /// Vignettes d'abord, puis aperçus boîtier, puis rendus RAW.
     pub thumbnails_first: bool,
-    /// Analyser l'exposition de tout le dossier en fond (histogrammes, badges de la
-    /// grille) ; sinon seulement l'image affichée et ses voisines.
-    pub exposure: bool,
+    /// Ancienne clé (avant #564) : `false` vaut `[analysis] exposure = "on-demand"`.
+    pub exposure: Option<bool>,
 }
+
+/// Section `[analysis]` (#564) : voir [`scheduler::Analyses`].
+pub type AnalysisSection = scheduler::Analyses;
 
 impl Default for SchedulerSection {
     fn default() -> Self {
         Self {
             light_workers: Auto::Auto,
             thumbnails_first: scheduler::Config::default().thumbnails_first,
-            exposure: scheduler::Config::default().exposure,
+            exposure: None,
         }
     }
 }
@@ -343,11 +347,29 @@ impl EngineSettings {
                 .max(1),
             thumbnails_first: self.scheduler.thumbnails_first,
             raw_previews,
-            exposure: self.scheduler.exposure,
-            sharpness: self.sharpness.background,
-            similarity: self.similarity.background,
+            exposure: self.analysis().exposure,
+            sharpness: self.analysis().sharpness,
+            similarity: self.analysis().stacks,
+            palettes: self.analysis().palettes,
             // Choisie dans l'interface des palettes, ou en ligne de commande.
             palette: None,
+        }
+    }
+
+    /// Analyses de tout le dossier (`[analysis]`), avec les anciennes clés : `[scheduler]
+    /// exposure`, `[sharpness] background`, `[similarity] background` à `false` valent « à
+    /// la demande » (avant #564, l'analyse n'était plus faite en fond).
+    pub fn analysis(&self) -> AnalysisSection {
+        let legacy = |mode: Analysis, old: Option<bool>| match (mode, old) {
+            (Analysis::Background, Some(false)) => Analysis::OnDemand,
+            _ => mode,
+        };
+        let a = self.analysis;
+        AnalysisSection {
+            exposure: legacy(a.exposure, self.scheduler.exposure),
+            sharpness: legacy(a.sharpness, self.sharpness.background),
+            stacks: legacy(a.stacks, self.similarity.background),
+            palettes: a.palettes,
         }
     }
 
@@ -845,6 +867,30 @@ mod tests {
             c.thumbnails_first,
             scheduler::Config::default().thumbnails_first
         );
+    }
+
+    #[test]
+    fn analyses_are_read_with_the_old_keys() {
+        let s: EngineSettings =
+            parse("[analysis]\npalettes = \"off\"\nstacks = \"on-demand\"").unwrap();
+        let config = s.scheduler(RawPreviews::OnDemand);
+        assert_eq!(config.palettes, Analysis::Off);
+        assert_eq!(config.similarity, Analysis::OnDemand);
+        assert_eq!(config.exposure, Analysis::Background);
+        // Avant #564 : `false` arrêtait le calcul de fond.
+        let s: EngineSettings = parse(
+            "[scheduler]\nexposure = false\n[sharpness]\nbackground = false\n\
+             [similarity]\nbackground = true",
+        )
+        .unwrap();
+        let a = s.analysis();
+        assert_eq!(a.exposure, Analysis::OnDemand);
+        assert_eq!(a.sharpness, Analysis::OnDemand);
+        assert_eq!(a.stacks, Analysis::Background);
+        // La nouvelle clé l'emporte.
+        let s: EngineSettings =
+            parse("[scheduler]\nexposure = false\n[analysis]\nexposure = \"off\"").unwrap();
+        assert_eq!(s.analysis().exposure, Analysis::Off);
     }
 
     #[test]

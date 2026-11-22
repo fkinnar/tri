@@ -81,6 +81,12 @@ sort-color = Couleur
 sort-flag = Drapeau
 sort-notice = Ordre : { $key }, { $direction }
 filter-analysis-computing = Analyse en cours ({ $done } / { $total }) : ce filtre sera disponible à la fin du calcul.
+filter-analysis-on-demand = { $missing ->
+    [0] Lecture du cache en cours…
+    [one] Analyse à la demande (réglages) : 1 image pas encore calculée. Clic droit sur le dossier, puis Calculer.
+   *[other] Analyse à la demande (réglages) : { $missing } images pas encore calculées. Clic droit sur le dossier, puis Calculer.
+}
+analysis-removed = Outil retiré dans les réglages (Analyses du dossier).
 filter-analysis-partial = Analyses en cours : filtre appliqué aux { $done } / { $total } photos déjà analysées ; la grille se complète au fil du calcul.
 sort-ascending = croissant
 sort-descending = décroissant
@@ -1157,6 +1163,19 @@ cache-size-kb = { $n } Ko
 cache-size-mb = { $n } Mo
 cache-size-gb = { $n } Go
 settings-section-scheduler = Calculs en arrière-plan
+settings-section-analysis = Analyses du dossier
+settings-choice-analysis-exposure-background = En fond
+settings-choice-analysis-exposure-on-demand = À la demande
+settings-choice-analysis-exposure-off = Retirée
+settings-choice-analysis-sharpness-background = En fond
+settings-choice-analysis-sharpness-on-demand = À la demande
+settings-choice-analysis-sharpness-off = Retirée
+settings-choice-analysis-stacks-background = En fond
+settings-choice-analysis-stacks-on-demand = À la demande
+settings-choice-analysis-stacks-off = Retirée
+settings-choice-analysis-palettes-background = En fond
+settings-choice-analysis-palettes-on-demand = À la demande
+settings-choice-analysis-palettes-off = Retirée
 settings-section-xmp = Notes (XMP)
 settings-choice-xmp-sidecar-darktable = Darktable
 settings-choice-xmp-sidecar-darktable-hint = IMAGE.RAF.xmp

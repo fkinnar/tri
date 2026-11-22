@@ -27,18 +27,29 @@ File de travail en tâche de fond qui remplit le cache pour un dossier.
   encore en attente. Voir [palette.md](palette.md).
 
   **Score de netteté** (`Level::Sharpness`, 17/10/2026) : calculé en fond pour tout le
-  dossier (`[sharpness] background`), par les **workers légers** (JPEG boîtier réduit,
+  dossier (`[analysis] sharpness`), par les **workers légers** (JPEG boîtier réduit,
   ~120 ms), même classe de priorité que l'analyse d'exposition ; progression
   « netteté ». Voir [sharpness.md](sharpness.md).
 
   **Analyse d'exposition** (`Level::Exposure`, 17/10/2026) : calculée en fond pour tout le
-  dossier (`[scheduler] exposure`, défaut vrai), RAW comme images plates ; celle d'un RAW
+  dossier (`[analysis] exposure`, défaut `"background"`), RAW comme images plates ; celle d'un RAW
   passe par le **worker lourd** (décompression LibRaw, déjà parallélisée en interne,
   voir [exposure.md](exposure.md)), celle d'une image plate par les workers légers.
   Comme les rendus de fond, elle attend la fin des vignettes et des aperçus boîtier.
   Mesuré sur 24 RAF : histogrammes terminés ~10 s après les aperçus boîtier
   (~0,45 s par image). Piste non faite : le rendu RAW décompresse aussi le fichier, il
   pourrait produire l'analyse au passage.
+
+  **Analyses en fond, à la demande ou retirées** (`[analysis]`, #564) : exposition,
+  netteté, empreintes des piles et palettes, chacune `"background"` (tout le dossier en
+  fond), `"on-demand"` ou `"off"` (`scheduler::Analysis`). « À la demande », ses tâches
+  du dossier sont bien mises en file, mais **seulement lues dans le cache** : le balayeur
+  livre celles qui y sont (`Event::Ready`) et signale les autres (`Event::Missing`, comptées
+  dans l'avancement) ; aucun worker ne les prend. Une demande (`Scheduler::request`, l'image
+  affichée) est toujours calculée. Retirée : aucune tâche. Les anciennes clés
+  (`[scheduler] exposure`, `[sharpness] background`, `[similarity] background`) à `false`
+  valent `"on-demand"`. Changées dans la fenêtre de réglages : `Scheduler::set_analyses`,
+  puis le dossier est relu.
 
   Le rendu ajusté passe devant le 1:1 pour que l'aspect RAW apparaisse vite ; le 1:1 de
   l'image affichée passe devant le préchargement des voisines pour que la netteté de

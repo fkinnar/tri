@@ -71,9 +71,22 @@ location = "user"
 light_workers = "auto"
 # Vignettes d'abord, puis aperçus boîtier, puis rendus RAW (false : tout mélangé).
 thumbnails_first = true
-# Analyser l'exposition de tout le dossier en fond (histogrammes, badges de la grille),
-# après vignettes et aperçus boîtier ; false : seulement l'image affichée et ses voisines.
-exposure = true
+
+[analysis]
+# Exposition de tout le dossier : en fond, à la demande, ou retirée.
+#
+# Analyses de tout le dossier (#564) : "background" (calculée en fond, par défaut),
+# "on-demand" (rien en fond : l'outil reste grisé tant que le dossier n'est pas calculé,
+# clic droit sur le dossier > Calculer ; l'image affichée garde ce qu'il lui faut) ou
+# "off" (l'outil disparaît des barres, panneaux et menus). Exposition : histogrammes,
+# zones, badges, filtre « bien exposées ».
+exposure = "background"
+# Netteté : scores, badges, filtre « floues » (même choix).
+sharpness = "background"
+# Piles : empreintes de regroupement (même choix).
+stacks = "background"
+# Palettes de couleurs : recherches par palette et par couleur, pipette (même choix).
+palettes = "background"
 
 [xmp]
 # Nom des nouveaux sidecars : façon darktable, façon Adobe, ou les deux.
@@ -575,8 +588,6 @@ group_threshold = 0.45
 # strictness_span, tout à gauche (plus souple) divisés par lui (sans dépasser 1). Le
 # réglage est retenu par dossier.
 strictness_span = 2.0
-# Scores de tout le dossier calculés en fond (cache d'analyse).
-background = true
 
 [palette]
 # Palettes de couleurs : nombre de couleurs cherchées par image.
@@ -637,12 +648,6 @@ stack_scale = 0.5
 pick_area = 0.02
 
 [similarity]
-# Regrouper en fond les images semblables (rafales, séries) en piles.
-#
-# Regroupement des images semblables (rafales, séries d'une même scène) en piles.
-# Empreintes de tout le dossier calculées en fond (cache d'analyse, juste après les
-# vignettes) ; false : pas de regroupement.
-background = true
 # Côté long de la petite image d'où l'empreinte est tirée (pixels) : petite, elle ne
 # regarde que la composition et les couleurs, pas les détails.
 side = 64

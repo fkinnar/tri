@@ -33,7 +33,8 @@ cannot change without updating its documentation.
 | `[preview]` | Sizes (thumbnail, preview "auto" or fixed), `half_size` rule, acceptance thresholds for the camera preview | engine |
 | `[render]` | LibRaw development: white balance, brightness, automatic brightness | engine |
 | `[cache]` | Folder, JPEG quality, maximum size of 1:1 previews (least recently used eviction) | engine |
-| `[scheduler]` | Light workers ("auto" = half the cores), thumbnails first, background exposure analysis | engine |
+| `[scheduler]` | Light workers ("auto" = half the cores), thumbnails first | engine |
+| `[analysis]` | Folder analyses (exposure, sharpness, stacks, palettes): in the background, on demand, or removed with their tools (#564) | engine |
 | `[xmp]` | Convention for a new sidecar (`darktable` / `adobe`), one or several colors, ratings written into the images by themselves (`embed`) | engine |
 | `[sidecars.<software>]` | Creation of a software's missing sidecar when rating (`auto` / `always` / `never`, `sidecars.md`) | engine |
 | `[sort]` | Order of the colours for the sort by colour (`color_order`, `sort.md`) | engine |

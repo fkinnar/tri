@@ -98,7 +98,7 @@ Enseignements :
 
 **Circuit** : niveau de cache d'analyse `Level::Sharpness` (entrée binaire, `Score::to_bytes`,
 ~1 Ko, version `SCORE_VERSION` dans la clé), calculé en fond par le scheduler pour tout le
-dossier (`[sharpness] background`, workers légers, après vignettes et aperçus boîtier),
+dossier (`[analysis] sharpness`, workers légers, après vignettes et aperçus boîtier),
 lu par `preview::sharpness`. Filtre `BlurFilter` (trait `Filter`, comme les autres) : une
 photo sans score encore calculé est gardée.
 
@@ -142,7 +142,6 @@ accentué ; le bruit à ISO très élevé ressemble à du détail.
 | | `blur_ratio` | 0.5 | floue sous cette fraction de la médiane du dossier |
 | | `neighbours` | 3 | voisines comparées de chaque côté (0 : aucune) |
 | | `neighbour_ratio` | 0.8 | floue sous cette fraction de la médiane des voisines |
-| | `background` | `true` | scores de tout le dossier en fond |
 | `[gui.sharpness]` | `visible` | `false` | carte affichée au démarrage |
 | | `colors` | rouge, vert, bleu | couleurs de la rotation |
 | | `opacity` | 1.0 | opacité des contours |
@@ -217,7 +216,7 @@ vertes) et les 19 photos libres :
 | dossier + pile, seuil 0,25 | 12 / 15 | 0 | 1 |
 | **dossier + pile, seuil 0,45** | **14 / 15** | **0** | **1** |
 
-Sans empreintes (`[similarity] background = false`), le jugement d'avant (dossier +
+Sans empreintes (`[analysis] stacks = "off"`), le jugement d'avant (dossier +
 voisines). La photo restante des photos libres est sous 0,5 × la médiane du dossier :
 seule une analyse du contenu (sujet, flou d'arrière-plan voulu) la distinguerait.
 

@@ -944,11 +944,49 @@ impl Action {
     }
 
     /// Faux pour l'action d'un plugin indisponible sur cette machine (AirDrop hors
-    /// macOS) : ni dans l'aide, ni dans les réglages, ni en bouton.
+    /// macOS), ou d'un outil retiré dans les réglages (`[analysis]`, #564) : ni dans
+    /// l'aide, ni dans les réglages, ni en bouton, ni au clavier.
     pub fn available(self) -> bool {
+        if self.tool().is_some_and(removed) {
+            return false;
+        }
         match self {
             Action::Send(_) => self.sender().is_some_and(|s| s.available()),
             _ => true,
+        }
+    }
+
+    /// L'analyse de tout le dossier dont l'action est un outil (#564) : retirée dans les
+    /// réglages, l'action disparaît ; « à la demande », elle attend que le dossier soit
+    /// calculé (pour les filtres et les piles).
+    pub fn tool(self) -> Option<Tool> {
+        use tri::compute::Kind;
+        let kind = |k: Kind| match k {
+            Kind::Exposure => Some(Tool::Exposure),
+            Kind::Sharpness => Some(Tool::Sharpness),
+            Kind::Signatures => Some(Tool::Stacks),
+            Kind::Palette(_) => Some(Tool::Palettes),
+            Kind::Previews | Kind::Raw => None,
+        };
+        match self {
+            Action::FilterWellExposed => Some(Tool::Exposure),
+            Action::FilterBlurry | Action::SharpnessLenient | Action::SharpnessStrict => {
+                Some(Tool::Sharpness)
+            }
+            Action::StackToggle
+            | Action::StackOpen
+            | Action::StackClose
+            | Action::StacksAll
+            | Action::GroupingWindow
+            | Action::StackMode
+            | Action::StackChoose
+            | Action::StackFirst
+            | Action::StackLast
+            | Action::StackEnterToggle
+            | Action::FilterStack => Some(Tool::Stacks),
+            Action::FilterPalette | Action::FilterPaletteColour => Some(Tool::Palettes),
+            Action::FolderCompute(k) | Action::Compute(k) => kind(k),
+            _ => None,
         }
     }
 
@@ -1757,6 +1795,71 @@ const KEYS_FILE: &str = "keys.toml";
 
 /// Raccourcis par défaut chargés (une fois, au premier usage) et les problèmes à
 /// signaler.
+/// Les outils qui dépendent d'une analyse de tout le dossier (`[analysis]`, #564).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tool {
+    /// Exposition : filtre « bien exposées », badges.
+    Exposure,
+    /// Netteté : filtre « floues », sévérité, badges.
+    Sharpness,
+    /// Piles.
+    Stacks,
+    /// Palettes de couleurs : recherches, section Palette.
+    Palettes,
+}
+
+impl Tool {
+    /// Tous.
+    pub const ALL: [Tool; 4] = [
+        Tool::Exposure,
+        Tool::Sharpness,
+        Tool::Stacks,
+        Tool::Palettes,
+    ];
+
+    /// Son réglage dans `analyses`.
+    pub fn mode(self, analyses: &tri::scheduler::Analyses) -> tri::scheduler::Analysis {
+        match self {
+            Tool::Exposure => analyses.exposure,
+            Tool::Sharpness => analyses.sharpness,
+            Tool::Stacks => analyses.stacks,
+            Tool::Palettes => analyses.palettes,
+        }
+    }
+
+    /// Case d'avancement de son analyse (`TriApp::progress`).
+    pub fn slot(self) -> usize {
+        match self {
+            Tool::Exposure => 3,
+            Tool::Sharpness => 4,
+            Tool::Stacks => 5,
+            Tool::Palettes => 6,
+        }
+    }
+}
+
+thread_local! {
+    /// Outils retirés dans les réglages (#564), un bit par [`Tool`]. Propre au fil : celui
+    /// de l'interface (chaque test d'interface a le sien).
+    static REMOVED: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
+}
+
+/// Retire les outils dont l'analyse est `Off` dans `analyses` (réglages appliqués).
+pub fn set_removed_tools(analyses: &tri::scheduler::Analyses) {
+    let bits = Tool::ALL
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| !t.mode(analyses).is_on())
+        .fold(0u8, |bits, (i, _)| bits | 1 << i);
+    REMOVED.with(|r| r.set(bits));
+}
+
+/// Vrai si `tool` est retiré dans les réglages.
+pub fn removed(tool: Tool) -> bool {
+    let i = Tool::ALL.iter().position(|&t| t == tool).unwrap_or(0);
+    REMOVED.with(|r| r.get() & (1 << i) != 0)
+}
+
 static DEFAULTS: std::sync::OnceLock<(Defaults, Vec<String>)> = std::sync::OnceLock::new();
 
 impl Defaults {

@@ -706,7 +706,7 @@ system one ("cold" measurements, experiments).
   next (`[gui.colors] stack_band`, `stack_band_alt`), as while adjusting the slider.
   Grid **not grouped at startup** (feedback of 2026-10-19): `[gui.grid] stacks`
   (false by default); fingerprints are computed in the background anyway
-  (`[similarity] background`), `Ctrl+S` groups at once.
+  (`[analysis] stacks`), `Ctrl+S` groups at once.
   Fourth feedback: an isolated photo is a group of one image, with its own background too
   (two neighbouring isolated photos no longer blend together): stacks active, each group
   alternates, two cases instead of three.
@@ -1974,7 +1974,15 @@ blurry background among landscapes), it wrongly flagged sharp photos.
   2026-11-22, the filters of an analysis in progress — sharpness, exposure, similar
   palettes, colour — and "Stack automatically" (signatures, palettes when stacking by
   palette) are **greyed out** until it is done, the tip says how far it is; turned on,
-  they can always be turned off, `TriApp::action_unusable`); ◐ (`f i`) shows what the **content**
+  they can always be turned off, `TriApp::action_unusable`. **Analyses on demand or
+  removed** (`[analysis]`, #564): on demand, nothing is computed in the background, the
+  tool stays greyed while an image of the folder is missing from the cache
+  (`TriApp::analysis_missing`, counted from `Event::Missing`) and comes back after
+  "Compute" on the folder; removed, the tool leaves the bars, the panel (Palette section,
+  stacks, "by palette" choice), the "Compute" menus, the help and the keyboard
+  (`Action::tool`, `Action::available`; removed tools are per UI thread,
+  `actions::set_removed_tools`); the histogram, zones and sharpness map of the shown image
+  stay (computed for it alone); applied at once, folder read again); ◐ (`f i`) shows what the **content**
   filters (ratings, sharpness, exposure) remove, file type and name search still
   applied (`tri::filter::invert`): "blurry only" is "sharp" inverted, the drop and `f B`
   are gone. Triangle and sun in the accent when on, grey otherwise.

@@ -33,7 +33,8 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[preview]` | Tailles (vignette, aperçu « auto » ou fixe), règle `half_size`, seuils d'acceptation de l'aperçu boîtier | moteur |
 | `[render]` | Développement LibRaw : balance des blancs, luminosité, luminosité automatique | moteur |
 | `[cache]` | Dossier, qualité JPEG, taille maximale des 1:1 (éviction des moins récemment utilisés) | moteur |
-| `[scheduler]` | Workers légers (« auto » = moitié des cœurs), vignettes d'abord, analyse d'exposition en fond | moteur |
+| `[scheduler]` | Workers légers (« auto » = moitié des cœurs), vignettes d'abord | moteur |
+| `[analysis]` | Analyses du dossier (exposition, netteté, piles, palettes) : en fond, à la demande ou retirées avec leurs outils (#564) | moteur |
 | `[xmp]` | Convention d'un nouveau sidecar (`darktable` / `adobe`), une ou plusieurs couleurs, notes inscrites d'office dans les images (`embed`) | moteur |
 | `[sidecars.<logiciel>]` | Création du sidecar manquant d'un logiciel quand on note (`auto` / `always` / `never`, `sidecars.md`) | moteur |
 | `[sort]` | Ordre des couleurs pour le tri par couleur (`color_order`, `sort.md`) | moteur |
