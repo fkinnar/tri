@@ -27277,6 +27277,12 @@ mod tests {
     }
 
     /// Une action sans touche par défaut.
+    /// Attend que `action` soit utilisable : son analyse finie (filtres et piles grisés
+    /// pendant le calcul, #563).
+    fn wait_usable(h: &mut Harness<'static, TriApp>, action: Action) {
+        run_until(h, |app| app.action_unusable(action).is_none());
+    }
+
     fn act(h: &mut Harness<'_, TriApp>, action: Action) {
         let ctx = h.ctx.clone();
         h.state_mut().perform(&ctx, action);
@@ -29055,6 +29061,7 @@ mod tests {
                 .iter()
                 .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
         });
+        wait_usable(&mut h, Action::FilterPalette);
         // La référence : img2.
         let img2 = h
             .state()
@@ -29250,6 +29257,7 @@ mod tests {
         h.run_steps(3);
         assert_eq!(h.state().palette_threshold, 0.21);
         assert_eq!(h.state().palette_radius, 0.17);
+        wait_usable(&mut h, Action::FilterPalette);
         // Lancée, la recherche part de ce seuil.
         act(&mut h, Action::FilterPalette);
         assert_eq!(
@@ -29427,6 +29435,7 @@ mod tests {
                 .iter()
                 .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
         });
+        wait_usable(&mut h, Action::FilterPalette);
         assert_eq!(h.state().mode, Mode::Grid);
         // Cocher « Couleur » sans couleur encore cherchée : la boîte de choix s'ouvre (pas
         // de pipette armée d'office).
@@ -29629,6 +29638,8 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         choose_palette(&mut h, Some(tri::palette::SourceKind::Camera));
+        // Les palettes calculées d'abord (#563 : grisé pendant le calcul).
+        wait_usable(&mut h, Action::FilterPalette);
         let usable = |h: &Harness<'static, TriApp>| {
             h.state()
                 .palette_toggles()
@@ -34448,6 +34459,7 @@ mod tests {
         // simulé tombait encore à côté sur la CI Ubuntu le 08/11/2026, après le 07/11 :
         // voir les autres tests d'interface).
         assert!(h.query_by_label(&t!("panel-grid-stacks-on")).is_some());
+        wait_usable(&mut h, Action::StackMode);
         act(&mut h, Action::StackMode);
         h.run_steps(3);
         assert!(h.state().stacking, "la section « Vue » allume les piles");
