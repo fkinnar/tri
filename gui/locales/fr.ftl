@@ -80,6 +80,7 @@ sort-stars = Étoiles
 sort-color = Couleur
 sort-flag = Drapeau
 sort-notice = Ordre : { $key }, { $direction }
+filter-analysis-computing = Analyse en cours ({ $done } / { $total }) : ce filtre sera disponible à la fin du calcul.
 filter-analysis-partial = Analyses en cours : filtre appliqué aux { $done } / { $total } photos déjà analysées ; la grille se complète au fil du calcul.
 sort-ascending = croissant
 sort-descending = décroissant

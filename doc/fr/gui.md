@@ -2078,8 +2078,11 @@ photos nettes.
   (`tri::exposure::ClipFilter` ; parts lues dans le cache d'analyse pour tout le dossier,
   une image pas encore analysée reste ; grille refiltrée quand les histogrammes sont
   finis, et depuis le 25/10/2026 au fil du calcul, au plus toutes les `[gui]
-  analysis_refilter_ms` (5 s), netteté comprise ; allumer le filtre pendant les analyses
-  le dit dans la barre d'état, issue n° 73) ; ◐ (`f i`) montre ce que les filtres sur le **contenu** (notes, netteté,
+  analysis_refilter_ms` (5 s), netteté comprise ; depuis le 22/11/2026, les filtres d'une analyse
+  en cours — netteté, exposition, palettes proches, couleur — et « Empiler
+  automatiquement » (empreintes, palettes empilées par palette) sont **grisés** jusqu'à la
+  fin du calcul, la bulle dit où il en est ; allumés, ils s'éteignent toujours,
+  `TriApp::action_unusable`) ; ◐ (`f i`) montre ce que les filtres sur le **contenu** (notes, netteté,
   exposition) retirent, type de fichier et recherche par nom restant appliqués
   (`tri::filter::invert`) : « floues seulement » est « nettes » inversé, la goutte et
   `f B` sont retirées. Triangle et soleil à l'accent quand ils sont allumés, gris sinon.
