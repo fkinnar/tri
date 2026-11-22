@@ -672,6 +672,10 @@ fn write_loop(
             match message {
                 Message::Note(n) => notes.push(n),
                 Message::Signature(f) => signatures.push(f),
+                // Un dossier qui n'existe plus (renommé, disque débranché) n'est pas « vu
+                // vide » : ses photos restent, grisées dans « Toutes les photos » (retour du
+                // 22/11/2026 : rouvert au lancement, il effaçait tout ce qu'on en savait).
+                Message::Seen { dir, .. } if !dir.is_dir() => {}
                 Message::Seen { dir, depth, files } => {
                     let photos: Vec<(PathBuf, u64, u128)> = files
                         .iter()

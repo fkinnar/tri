@@ -110,6 +110,19 @@ fn computed_palettes_are_indexed_and_a_moved_photo_keeps_its_own() {
         signatures.iter().any(|(p, _)| p.ends_with("b/rouge.jpg")),
         "{signatures:?}"
     );
+    // Le dossier renommé dans le système, puis rouvert (vide) : rien d'oublié.
+    let renamed = dir.path().join("b renommé");
+    std::fs::rename(&b, &renamed).unwrap();
+    tri::index::seen(&b, 1, &[]);
+    tri::index::flush(Duration::from_secs(30));
+    assert!(
+        index
+            .photos(None)
+            .unwrap()
+            .iter()
+            .any(|(p, _, _)| p.ends_with("b/rouge.jpg")),
+        "gardée, pour être grisée puis retrouvée"
+    );
 }
 
 /// Petit générateur pseudo-aléatoire (reproductible, sans dépendance).
