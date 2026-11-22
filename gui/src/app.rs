@@ -1017,6 +1017,9 @@ pub struct TriApp {
     opening: Option<Opening>,
     /// « Toutes les photos » (#561) : dossier d'où l'on y est venu (Échap y ramène).
     all_photos_from: Option<PathBuf>,
+    /// La photo où l'on en était en quittant « Toutes les photos » : on y revient (retour
+    /// du 22/11/2026 : `g f` puis `g a` repartait du début de la grille).
+    all_photos_last: Option<PathBuf>,
     /// Complétion en fond de « Toutes les photos » : la liste relue dossier par dossier
     /// ([`tri::folder::complete_from_disk`]), et son arrêt.
     all_photos_completion: Option<(Arc<AtomicBool>, mpsc::Receiver<Vec<MediaFile>>)>,
@@ -2207,6 +2210,7 @@ impl TriApp {
             neighbour_tried: cfg!(test),
             opening: None,
             all_photos_from: None,
+            all_photos_last: None,
             all_photos_completion: None,
             reference: None,
             reference_wanted: false,
@@ -2789,6 +2793,12 @@ impl TriApp {
     /// filtres sont gardés ; la sélection repart de la première image. En cas d'erreur, le
     /// message remplace la grille, le panneau reste là pour choisir un autre dossier.
     fn open_folder(&mut self, dir: &Path) {
+        // On quitte « Toutes les photos » : sa photo courante, pour y revenir.
+        if tri::folder::is_all_photos(&self.folder.dir)
+            && let Some(file) = self.files.get(self.selected)
+        {
+            self.all_photos_last = Some(file.path.clone());
+        }
         // Le dossier quitté garde l'image où l'on en était (#414) ; puis la case
         // « Sous-dossiers » du dossier ouvert, qui décide de ce qu'on lit.
         // Tout se lit et s'écrit dans le fil d'ouverture : sur un dossier lent (iCloud, NAS),
@@ -2923,6 +2933,8 @@ impl TriApp {
             return;
         }
         let from = (!self.folder.is_none()).then(|| self.folder.dir.clone());
+        // La photo où l'on en était, en surbrillance dès qu'elle est dans la liste.
+        self.select_after_open = self.all_photos_last.clone();
         self.open_folder(&tri::folder::all_photos_dir());
         // Après l'ouverture (qui l'oublie pour un vrai dossier).
         self.all_photos_from = from;
@@ -30980,6 +30992,16 @@ mod tests {
                 .is_some(),
             "ici, grisée"
         );
+        // `g a` : retour dans « Toutes les photos », sur la photo d'où l'on était parti
+        // (retour du 22/11/2026 : la grille repartait du début).
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::A, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            tri::folder::is_all_photos(&app.folder.dir)
+                && app.opening.is_none()
+                && app.select_after_open.is_none()
+        });
+        assert_eq!(h.state().files[h.state().selected].path, green_path);
     }
 
     #[test]
