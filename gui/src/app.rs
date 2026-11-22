@@ -1830,6 +1830,12 @@ impl TriApp {
             w.set_developers(developers.engines(), developers.found());
         }
         self.developers = developers;
+        // Autres logiciels : les rendus en échec sont réessayés.
+        for s in &mut self.status {
+            if matches!(s.developed, Avail::Failed(_)) {
+                s.developed = Avail::Pending;
+            }
+        }
         self.fit_grid_render();
         self.refresh_any_developed();
         // #395 : le filtre « Développées » ne reste pas allumé sans logiciel à montrer.
@@ -4583,10 +4589,9 @@ impl TriApp {
     fn palette_targets(&self, kind: tri::palette::SourceKind, index: usize) -> (Vec<usize>, usize) {
         let candidates = match kind {
             tri::palette::SourceKind::Developed(_) => self
-                .stacks
                 .developments_of(index)
                 .cloned()
-                .unwrap_or(index..index + 1),
+                .unwrap_or(index..(index + 1).min(self.files.len())),
             _ => index..index + 1,
         };
         let targets: Vec<usize> = candidates
@@ -5062,10 +5067,9 @@ impl TriApp {
         // est celui du JPEG d'une paire) et sa clé de couverture, s'il peut l'être.
         let photo = self.stack_photo(&file.path);
         let range = self
-            .stacks
             .developments_of(self.selected)
             .cloned()
-            .unwrap_or(self.selected..self.selected + 1);
+            .unwrap_or(self.selected..(self.selected + 1).min(self.files.len()));
         // Le JPEG boîtier : le JPEG d'une paire regroupée, une image plate elle-même, sinon
         // celui qu'embarque le RAW.
         let photo_raw = self
@@ -5330,10 +5334,9 @@ impl TriApp {
     fn view_render_choices(&self) -> Vec<ViewRender> {
         use crate::grid_render::GridRender;
         let range = self
-            .stacks
             .developments_of(self.selected)
             .cloned()
-            .unwrap_or(self.selected..self.selected + 1);
+            .unwrap_or(self.selected..(self.selected + 1).min(self.files.len()));
         let developments: Vec<(usize, tri::develop::Engine)> = range
             .filter_map(|i| tri::developments::get(&self.files[i].path).map(|d| (i, d.engine)))
             .collect();
@@ -5386,10 +5389,9 @@ impl TriApp {
         };
         let photo = self.stack_photo(&file.path);
         let range = self
-            .stacks
             .developments_of(self.selected)
             .cloned()
-            .unwrap_or(self.selected..self.selected + 1);
+            .unwrap_or(self.selected..(self.selected + 1).min(self.files.len()));
         let member = range.clone().find(|&i| {
             let path = &self.files[i].path;
             match choice {
@@ -9431,6 +9433,16 @@ impl TriApp {
                 }))
     }
 
+    /// Pile de développements de l'image `index` ([`crate::stacks::Stacks::developments_of`]),
+    /// seulement si elle tient dans la liste actuelle : les piles peuvent avoir une image de
+    /// retard sur une liste qui vient de changer (recherche, filtre ; plantage du
+    /// 21/11/2026 : image 17 d'une liste de 5 dans la section Palette).
+    fn developments_of(&self, index: usize) -> Option<&std::ops::Range<usize>> {
+        self.stacks
+            .developments_of(index)
+            .filter(|r| r.end <= self.files.len() && r.contains(&index))
+    }
+
     /// Empile par palette (séries) ou par ressemblance (rafales), retenu pour le dossier.
     /// Empiler par palette, en vigueur : pas avec les palettes retirées dans les réglages
     /// (#564 ; le choix du dossier reste retenu).
@@ -9858,7 +9870,7 @@ impl TriApp {
         // Un développement, ou une photo avec développements, piles de rafale inactives
         // (ou la pile de rafale réduite à cette photo) : le développement préféré, couverture
         // de la pile de la photo.
-        let photo_stack = self.stacks.developments_of(self.selected).cloned();
+        let photo_stack = self.developments_of(self.selected).cloned();
         let burst = self
             .stacks
             .range_of(self.selected)
@@ -9922,10 +9934,9 @@ impl TriApp {
     /// et le JPEG boîtier de la photo ([`camera_key`]).
     fn cover_keys(&self, index: usize) -> Vec<PathBuf> {
         let range = self
-            .stacks
             .developments_of(index)
             .cloned()
-            .unwrap_or(index..index + 1);
+            .unwrap_or(index..(index + 1).min(self.files.len()));
         let mut keys: Vec<PathBuf> = range.map(|i| self.files[i].path.clone()).collect();
         keys.push(camera_key(&self.stack_photo(&self.files[index].path)));
         keys
@@ -10059,7 +10070,7 @@ impl TriApp {
     /// Déplie ou replie la pile de développements de l'image sélectionnée
     /// (`core.dev.toggle`, sans touche par défaut depuis le 31/10/2026 : `s` le fait).
     fn toggle_developments(&mut self) {
-        let Some(range) = self.stacks.developments_of(self.selected).cloned() else {
+        let Some(range) = self.developments_of(self.selected).cloned() else {
             self.hint = Some(t!("dev-none"));
             return;
         };
@@ -10109,7 +10120,7 @@ impl TriApp {
     /// actives et qu'elle compte plusieurs photos, sinon la pile de développements de la
     /// photo ; un développement vise toujours celle de sa photo.
     fn applicable_stack(&self, index: usize) -> Option<StackKind> {
-        let developments = self.stacks.developments_of(index).cloned();
+        let developments = self.developments_of(index).cloned();
         let is_development = self
             .files
             .get(index)
@@ -10333,7 +10344,7 @@ impl TriApp {
     /// `((` : ouvre le niveau suivant — la pile de rafale si elle est repliée, sinon les
     /// développements de la photo.
     fn open_stack_level(&mut self) {
-        let developments = self.stacks.developments_of(self.selected).cloned();
+        let developments = self.developments_of(self.selected).cloned();
         let burst = self
             .stacks
             .range_of(self.selected)
@@ -10357,7 +10368,7 @@ impl TriApp {
     /// `))` : ferme le niveau le plus intérieur ouvert — les développements, sinon la
     /// pile de rafale.
     fn close_stack_level(&mut self) {
-        let developments = self.stacks.developments_of(self.selected).cloned();
+        let developments = self.developments_of(self.selected).cloned();
         let burst = self
             .stacks
             .range_of(self.selected)
@@ -10384,7 +10395,7 @@ impl TriApp {
         if self.expanded.is_empty() && self.dev_unfolded.is_empty() {
             self.expanded = self.files.iter().map(|f| f.path.clone()).collect();
             self.dev_unfolded = (0..self.files.len())
-                .filter(|&i| self.stacks.developments_of(i).is_some())
+                .filter(|&i| self.developments_of(i).is_some())
                 .map(|i| self.stack_photo(&self.files[i].path))
                 .collect();
         } else {
@@ -12619,7 +12630,10 @@ impl TriApp {
 
     /// Demande une image au scheduler, une seule fois tant qu'elle n'est pas arrivée.
     fn request(&mut self, index: usize, level: Level) {
-        if self.ready(index, level) {
+        // En échec : pas redemandée à chaque image (journal du 16/11/2026 : un rendu
+        // darktable impossible relancé toutes les 16 ms, des milliers de fois). Une action
+        // explicite (développer) ou d'autres logiciels la remettent en attente.
+        if self.ready(index, level) || self.failed(index, level) {
             return;
         }
         let key = (self.files[index].path.clone(), level);
@@ -12727,7 +12741,7 @@ impl TriApp {
             // Une pile de développements : toutes ses images ; une rafale : ce que la
             // grille montrerait dépliée, chaque photo par la couverture de sa pile de
             // développements (ou tous, dépliée).
-            let developments = self.stacks.developments_of(self.selected) == Some(&r);
+            let developments = self.developments_of(self.selected) == Some(&r);
             let mut seen = HashSet::new();
             targets = r
                 .map(|i| {
@@ -12830,7 +12844,7 @@ impl TriApp {
             .range_of(self.selected)
             .filter(|_| self.stacking)
             .cloned();
-        let developments = self.stacks.developments_of(self.selected).cloned();
+        let developments = self.developments_of(self.selected).cloned();
         // Une rafale réduite à la photo et ses développements : ce sont eux qu'on compare.
         if burst.is_some()
             && burst != developments
@@ -12890,7 +12904,6 @@ impl TriApp {
         // de la couverture (comme Maj+W), on reste dessus.
         let visible = self.stacks.visible(self.selected);
         let in_developments = self
-            .stacks
             .developments_of(self.selected)
             .is_some_and(|r| r.contains(&visible));
         if visible != self.selected && in_developments {
@@ -13043,6 +13056,28 @@ impl TriApp {
         for (_, i, level) in wanted {
             self.request(i, level);
         }
+    }
+
+    /// Vrai si le calcul du niveau a échoué pour l'image `index`.
+    fn failed(&self, index: usize, level: Level) -> bool {
+        matches!(self.avail(index, level), Some(Avail::Failed(_)))
+    }
+
+    /// État de l'image `index` au niveau `level`.
+    fn avail(&self, index: usize, level: Level) -> Option<&Avail> {
+        let s = self.status.get(index)?;
+        Some(match level {
+            Level::Thumbnail => &s.thumbnail,
+            Level::Embedded => &s.embedded,
+            Level::Standard => &s.standard,
+            Level::EmbeddedFull => &s.embedded_full,
+            Level::Full => &s.full,
+            Level::Exposure => &s.exposure,
+            Level::Sharpness => &s.sharpness,
+            Level::Similarity => &s.similarity,
+            Level::Developed(_) => &s.developed,
+            Level::Palette(_) => &s.palette,
+        })
     }
 
     /// Vrai si le niveau est calculé (dans le cache) pour l'image `index`.
@@ -15575,8 +15610,12 @@ impl TriApp {
             self.mode = Mode::View;
         }
         self.set_source(Source::Developed);
-        // Périmé (sidecar modifié depuis) : oublié ici, donc recalculé.
+        // Périmé (sidecar modifié depuis) : oublié ici, donc recalculé. En échec : demandé
+        // explicitement, on réessaie.
         self.developed_ready(self.selected);
+        if matches!(self.status[self.selected].developed, Avail::Failed(_)) {
+            self.status[self.selected].developed = Avail::Pending;
+        }
         let level = self.developed_level(&self.files[self.selected].path);
         self.request(self.selected, level);
         self.request_zoom();
@@ -20219,7 +20258,7 @@ impl TriApp {
                 }
                 // Développements de la photo (30/10/2026) : précédent / suivant, grisés
                 // quand elle n'en a pas.
-                let developments = self.stacks.developments_of(self.selected).is_some();
+                let developments = self.developments_of(self.selected).is_some();
                 if self.mode == Mode::View {
                     // De droite à gauche dans la barre : le suivant d'abord, pour que le
                     // précédent soit à gauche (retour du 31/10/2026).
@@ -21349,7 +21388,7 @@ impl TriApp {
         // qui prend toute la case).
         if self.grid_info_shown()
             && self.stacks.folded_count(index).is_some()
-            && let Some(range) = self.stacks.developments_of(index)
+            && let Some(range) = self.developments_of(index)
         {
             let n = range
                 .clone()
@@ -29990,6 +30029,77 @@ mod tests {
             .map(|f| development_label(&f.path))
             .unwrap();
         assert!(h.query_by_label(&dev).is_none(), "{dev} pas répété, seul");
+    }
+
+    #[test]
+    fn a_failed_development_render_is_not_asked_again_every_frame() {
+        // Journal du 16/11/2026 : deux développements darktable affichés (et voisins),
+        // darktable introuvable ; leur rendu était redemandé toutes les 16 ms, des milliers
+        // de fois.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp"] {
+            std::fs::write(
+                photos.join(name),
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
+            )
+            .unwrap();
+        }
+        h.state_mut().developers = fake_darktable();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
+        let index = h
+            .state()
+            .files
+            .iter()
+            .position(|f| tri::media::is_development(&f.path))
+            .unwrap();
+        h.state_mut().selected = index;
+        h.state_mut().mode = Mode::View;
+        run_until(&mut h, |app| {
+            matches!(app.status[index].developed, Avail::Failed(_))
+        });
+        let path = h.state().files[index].path.clone();
+        let level = h.state().developed_level(&path);
+        h.run_steps(5);
+        assert!(
+            !h.state().requested.contains(&(path, level)),
+            "pas redemandé après l'échec"
+        );
+    }
+
+    #[test]
+    fn stacks_one_list_behind_never_index_past_the_list() {
+        // Plantage du 21/11/2026 (section Palette) : « index out of bounds: the len is 5
+        // but the index is 17 ». Les piles de développements avaient une image de retard
+        // sur une liste qui venait de rétrécir (recherche de palettes).
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp"] {
+            std::fs::write(
+                photos.join(name),
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
+            )
+            .unwrap();
+        }
+        h.state_mut().developers = fake_darktable();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
+        assert!(
+            h.state().developments_of(0).is_some(),
+            "img0 et ses développements"
+        );
+        // La liste rétrécit, les piles ne sont pas encore regroupées.
+        h.state_mut().files.truncate(2);
+        h.state_mut().selected = 0;
+        assert!(
+            h.state().developments_of(0).is_none(),
+            "plage hors de la liste"
+        );
+        h.state_mut().metadata_panel = true;
+        h.run_steps(2);
     }
 
     #[test]
@@ -42373,6 +42483,19 @@ mod tests {
             unreachable!()
         };
         assert!(reason.contains("Darktable"), "{reason}");
+        // En échec : plus redemandée à chaque image (journal du 16/11/2026 : relancé
+        // toutes les 16 ms) ; développer à nouveau la réessaie.
+        let path = h.state().files[0].path.clone();
+        let developed = h.state().developed_level(&path);
+        h.run_steps(5);
+        assert!(!h.state().requested.contains(&(path.clone(), developed)));
+        assert!(matches!(h.state().status[0].developed, Avail::Failed(_)));
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::Develop);
+        assert!(h.state().requested.contains(&(path, developed)), "réessayé");
+        run_until(&mut h, |app| {
+            matches!(app.status[0].developed, Avail::Failed(_))
+        });
         // Sans développement, l'image se montre dans la source d'avant, et elle zoome
         // (retour du 20/10/2026 : après un Maj+B, plus aucune image ne zoomait).
         let file = h.state().files[0].clone();

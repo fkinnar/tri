@@ -892,7 +892,11 @@ pub fn export(
                 .unwrap_or_else(|| output_pattern(&dir, NAME).expect("{name}")),
         );
         let first = report.written.len();
-        run(cmd, &dir, &mut report)?;
+        {
+            // Un seul darktable-cli à la fois (même configuration que les rendus).
+            let _turn = crate::develop::darktable_turn(&AtomicBool::new(false));
+            run(cmd, &dir, &mut report)?;
+        }
         if pattern.is_none() {
             rename_written(&mut report, first, &group, req);
         }
@@ -912,17 +916,17 @@ pub fn export(
         let mut cmd = dt.cli.command();
         let dir = out.parent().map(Path::to_path_buf).unwrap_or_default();
         cmd.arg(&clone.photo).arg(&clone.sidecar).arg(out);
+        let _turn = crate::develop::darktable_turn(&AtomicBool::new(false));
         run(cmd, &dir, &mut report)?;
     }
     if report.written.is_empty() && !errors.is_empty() {
         let last = errors
             .iter()
             .rev()
-            .flat_map(|m| m.lines().rev())
-            .find(|l| !l.trim().is_empty());
+            .find_map(|m| crate::develop::error_line(m));
         return Err(DevelopError::Failed(
             Engine::Darktable,
-            last.unwrap_or("darktable-cli").trim().to_string(),
+            last.unwrap_or("darktable-cli").to_string(),
         ));
     }
     report.failed = total.saturating_sub(report.written.len());

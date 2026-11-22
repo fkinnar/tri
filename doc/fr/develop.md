@@ -59,7 +59,15 @@ règle `default = "darktable"`, sans que le plus récent passe devant.
   le sidecar est le leur (ils ont leur vignette), la photo reste le rendu neutre.
 - `Darktable::render` : `darktable-cli image sidecar sortie --width --height --hq
   --core --configdir <cache>/darktable --library :memory: --conf
-  write_sidecar_files=never`, annulable (le programme est arrêté).
+  write_sidecar_files=never`, annulable (le programme est arrêté). **Un seul
+  `darktable-cli` à la fois** (`develop::darktable_turn`, export compris ; retour du
+  22/11/2026) : tous partagent la configuration de `tri`, dont darktable verrouille la
+  base ; un rendu de la grille et le développement d'un dossier lancés ensemble
+  échouaient (« database is locked »). L'erreur retenue est la ligne « ERROR » de la
+  sortie, pas la dernière (`develop::error_line` : l'AppImage finit par des
+  avertissements sans conséquence). Un rendu en échec n'est plus redemandé à chaque image
+  (journal du 16/11/2026 : relancé toutes les 16 ms) ; « Développer » ou d'autres
+  logiciels le réessaient.
 
 ## RapidRAW (26/10/2026, #114)
 

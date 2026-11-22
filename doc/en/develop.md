@@ -58,7 +58,14 @@ choice: someone working in darktable who tries another software sets
   sidecar is theirs (they have their thumbnail), the photo remains the neutral render.
 - `Darktable::render`: `darktable-cli image sidecar sortie --width --height --hq
   --core --configdir <cache>/darktable --library :memory: --conf
-  write_sidecar_files=never`, cancellable (the program is stopped).
+  write_sidecar_files=never`, cancellable (the program is stopped). **One
+  `darktable-cli` at a time** (`develop::darktable_turn`, exports included; feedback of
+  2026-11-22): they all share `tri`'s configuration, whose database darktable locks; a
+  grid render and a folder development started together failed ("database is locked").
+  The error kept is the output's "ERROR" line, not the last one (`develop::error_line`:
+  the AppImage ends with harmless warnings). A failed render is no longer asked again on
+  every frame (log of 2026-11-16: relaunched every 16 ms); "Develop" or other software
+  retry it.
 
 ## RapidRAW (2026-10-26, #114)
 
