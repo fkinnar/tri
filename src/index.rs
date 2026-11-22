@@ -206,10 +206,10 @@ impl Index {
             photos.iter().map(|(p, _, _)| path_bytes(p)).collect();
         let tx = self.db.transaction()?;
         {
-            // Sous `dir` : les chemins qui commencent par `dir` et un séparateur.
-            let mut prefix = dir.as_os_str().to_owned();
-            prefix.push(std::path::MAIN_SEPARATOR_STR);
-            let low = path_bytes(Path::new(&prefix));
+            // Sous `dir` : les chemins qui commencent par les octets de `dir`, puis gardés
+            // composant par composant (`Path::starts_with` : `/ab` n'est pas sous `/a`, et
+            // sous Windows `/` et `\` se valent).
+            let low = path_bytes(dir);
             let mut high = low.clone();
             if let Some(last) = high.last_mut() {
                 *last += 1;
@@ -221,10 +221,11 @@ impl Index {
             let mut forget = tx.prepare("DELETE FROM paths WHERE path = ?1")?;
             for bytes in below {
                 let path = bytes_path(&bytes);
-                let levels = path
-                    .strip_prefix(dir)
-                    .map_or(usize::MAX, |r| r.components().count());
-                if levels <= depth && !keep.contains(&bytes) {
+                let Ok(rest) = path.strip_prefix(dir) else {
+                    continue;
+                };
+                let levels = rest.components().count();
+                if levels >= 1 && levels <= depth && !keep.contains(&bytes) {
                     forget.execute(params![bytes])?;
                 }
             }
