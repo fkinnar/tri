@@ -34294,6 +34294,13 @@ mod tests {
     fn double_clicking_a_slider_resets_it() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
+        // Les analyses finies d'abord : sinon le curseur du flou est encore grisé (#563)
+        // et le premier clic n'y fait rien (CI Windows, 22/11/2026).
+        run_until(&mut h, |app| {
+            app.progress[3..=6]
+                .iter()
+                .all(|p| p.done >= p.total && p.total > 0)
+        });
         // Curseur du flou, montré avec un filtre sur la netteté.
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::B, Modifiers::NONE);
