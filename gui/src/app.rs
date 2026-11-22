@@ -1043,9 +1043,17 @@ pub struct TriApp {
     /// Tests : les racines où « Retrouver » cherche (sinon les emplacements du panneau).
     #[cfg(test)]
     locate_roots: Option<Vec<PathBuf>>,
-    /// Tests : reconnaître les dossiers renommés à l'ouverture (jamais sinon : l'index des
-    /// tests n'est pas démarré).
-    recognise_in_tests: bool,
+    /// Tests : l'index comme hors des tests (dossiers reconnus à l'ouverture, racines
+    /// surveillées) ; jamais sinon, l'index des tests n'est pas démarré.
+    index_in_tests: bool,
+    /// Parcours des racines surveillées en cours (#561).
+    roots_walk: Option<RootsWalk>,
+    /// Racines à parcourir après celui en cours (un disque branché pendant un parcours).
+    roots_pending: Vec<PathBuf>,
+    /// Fin du dernier parcours (reparcourir après une période d'inactivité).
+    roots_last_walk: Option<Instant>,
+    /// Dernière action de l'utilisateur (clavier, souris).
+    last_activity: Instant,
     /// Photo de référence de « palettes proches » (et du futur « semblables ») : elle
     /// reste tant qu'on ne l'efface pas ou ne la remplace pas (retour du 22/11/2026).
     reference: Option<PathBuf>,
@@ -2240,7 +2248,11 @@ impl TriApp {
             locate_dialog: None,
             #[cfg(test)]
             locate_roots: None,
-            recognise_in_tests: false,
+            index_in_tests: false,
+            roots_walk: None,
+            roots_pending: Vec::new(),
+            roots_last_walk: None,
+            last_activity: Instant::now(),
             all_photos_completion: None,
             reference: None,
             reference_wanted: false,
@@ -2888,7 +2900,7 @@ impl TriApp {
             && !all_photos
             && !self.watch.as_ref().is_some_and(|(w, _, _)| w.dir() == dir);
         let chunk = self.settings.index.fingerprint_kb as usize * 1024;
-        let index_on = self.settings.index.enabled && !cfg!(test) || self.recognise_in_tests;
+        let index_on = self.settings.index.enabled && !cfg!(test) || self.index_in_tests;
         std::thread::spawn(move || {
             writes.flush(Duration::from_secs(30));
             let mut view = remember
@@ -3041,6 +3053,165 @@ impl TriApp {
             .iter()
             .filter_map(|p| p.parent())
             .find_map(|d| self.missing_dirs.get(d).map(|&u| (d.to_path_buf(), u)))
+    }
+
+    /// Les racines surveillées (`[index] roots`), chemins complets.
+    fn watched_roots(&self) -> Vec<PathBuf> {
+        self.settings
+            .index
+            .roots
+            .iter()
+            .map(|r| tri::settings::expand_home(r))
+            .collect()
+    }
+
+    /// Vrai si `path` est une racine surveillée.
+    fn is_watched(&self, path: &Path) -> bool {
+        self.watched_roots().iter().any(|r| r == path)
+    }
+
+    /// Parcourt `roots` en fond ([`tri::roots::walk`]) ; un parcours déjà en cours : à la
+    /// suite. Jamais dans les tests (sauf `index_in_tests`).
+    fn start_roots_walk(&mut self, roots: Vec<PathBuf>) {
+        if roots.is_empty() || (cfg!(test) && !self.index_in_tests) || !self.settings.index.enabled
+        {
+            return;
+        }
+        if self.roots_walk.is_some() {
+            for root in roots {
+                if !self.roots_pending.contains(&root) {
+                    self.roots_pending.push(root);
+                }
+            }
+            return;
+        }
+        let Some(data) = self.settings.data_dir() else {
+            return;
+        };
+        let cache = self.engine.as_ref().map(|e| e.cache.clone());
+        let index = &self.settings.index;
+        let walk = tri::roots::Walk {
+            depth: index.walk_depth,
+            pause: Duration::from_millis(index.walk_pause_ms),
+            chunk: index.fingerprint_kb as usize * 1024,
+        };
+        let stop = Arc::new(AtomicBool::new(false));
+        let current = Arc::new(std::sync::Mutex::new((PathBuf::new(), 0)));
+        let (tx, rx) = mpsc::channel();
+        let (stopped, shown, repaint) = (stop.clone(), current.clone(), self.repaint.clone());
+        trace(|| format!("racines surveillées : {roots:?}"));
+        std::thread::Builder::new()
+            .name("tri-roots".into())
+            .spawn(move || {
+                let summary =
+                    tri::roots::walk(&data, cache.as_ref(), &roots, walk, &stopped, &mut |dir| {
+                        if let Ok(mut c) = shown.lock() {
+                            *c = (dir.to_path_buf(), c.1 + 1);
+                        }
+                    });
+                let _ = tx.send(summary);
+                if let Some(ctx) = repaint {
+                    ctx.request_repaint();
+                }
+            })
+            .ok();
+        self.roots_walk = Some(RootsWalk { stop, rx, current });
+    }
+
+    /// Chaque image : activité de l'utilisateur, parcours fini, reparcours après une
+    /// période d'inactivité.
+    fn roots_tick(&mut self, ctx: &egui::Context) {
+        if ctx.input(|i| !i.events.is_empty() || i.pointer.is_moving()) {
+            self.last_activity = Instant::now();
+        }
+        if let Some(walk) = &self.roots_walk
+            && let Ok(summary) = walk.rx.try_recv()
+        {
+            self.roots_walk = None;
+            self.roots_last_walk = Some(Instant::now());
+            trace(|| format!("racines parcourues : {summary:?}"));
+            if summary.repaired_anything() {
+                self.notice = Some((
+                    t!(
+                        "roots-found",
+                        folders = summary.recognised.len(),
+                        photos = summary.repaired.len()
+                    ),
+                    false,
+                ));
+                for (old, _) in &summary.recognised {
+                    self.missing_dirs.remove(old);
+                }
+                if tri::folder::is_all_photos(&self.folder.dir) {
+                    let keep = self.files.get(self.selected).map(|f| f.path.clone());
+                    self.reload_folder(keep);
+                }
+            }
+            let pending = std::mem::take(&mut self.roots_pending);
+            self.start_roots_walk(pending);
+        }
+        let idle = self.settings.index.walk_idle_minutes;
+        if idle == 0 || self.settings.index.roots.is_empty() {
+            return;
+        }
+        let idle = Duration::from_secs(idle * 60);
+        if self.roots_walk.is_none()
+            && self.last_activity.elapsed() >= idle
+            && self.roots_last_walk.is_none_or(|t| t.elapsed() >= idle)
+        {
+            let roots = self.watched_roots();
+            self.start_roots_walk(roots);
+        }
+        ctx.request_repaint_after(Duration::from_secs(60));
+    }
+
+    /// Surveiller le dossier `path`, ou ne plus le surveiller : `[index] roots` réécrit ;
+    /// ajouté, il est parcouru tout de suite.
+    fn toggle_watch(&mut self, path: PathBuf) {
+        let name = folder_name(&path);
+        let on = !self.is_watched(&path);
+        let mut roots: Vec<String> = self
+            .settings
+            .index
+            .roots
+            .iter()
+            .filter(|r| tri::settings::expand_home(r) != path)
+            .cloned()
+            .collect();
+        if on {
+            roots.push(path.to_string_lossy().into_owned());
+        }
+        let Some(config) = self
+            .config_path
+            .clone()
+            .or_else(tri::settings::default_path)
+        else {
+            self.notice = Some((t!("settings-no-path"), true));
+            return;
+        };
+        let list = tri::config_edit::Value::Strings(roots.clone());
+        let result = tri::config_edit::ConfigFile::open(&config).and_then(|mut file| {
+            file.set("index", "roots", &list)?;
+            tri::settings::parse::<AppSettings>(&file.text())?;
+            file.save()
+                .map_err(|e| format!("{} : {e}", config.display()))
+        });
+        if let Err(e) = result {
+            self.notice = Some((e, true));
+            return;
+        }
+        self.settings.index.roots = roots;
+        self.notice = Some((
+            if on {
+                t!("folders-watch-added", name = &name)
+            } else {
+                t!("folders-watch-removed", name = &name)
+            },
+            false,
+        ));
+        if on {
+            self.start_roots_walk(vec![path]);
+        }
     }
 
     /// Notes des photos des dossiers injoignables, lues dans l'index.
@@ -6715,6 +6886,16 @@ impl TriApp {
             .map(|r| r.path)
             .filter(|p| !before.contains(p))
             .collect();
+        // Un disque branché : parcouru en fond (#561), jamais une carte d'appareil (des
+        // fichiers bruts, avant leur copie ailleurs).
+        if self.settings.index.walk_plugged {
+            let disks: Vec<PathBuf> = arrived
+                .iter()
+                .filter(|p| !p.join("DCIM").is_dir())
+                .cloned()
+                .collect();
+            self.start_roots_walk(disks);
+        }
         for card in arrived {
             match &mut self.offload {
                 Some(dialog) => {
@@ -7300,6 +7481,12 @@ impl TriApp {
                                         t!("folder-menu-favorite-add")
                                     };
                                     entry(ui, Action::FolderFavorite, favorite);
+                                    let watch = if self.is_watched(&row.path) {
+                                        t!("folder-menu-watch-remove")
+                                    } else {
+                                        t!("folder-menu-watch-add")
+                                    };
+                                    entry(ui, Action::FolderWatch, watch);
                                     if row.favorite {
                                         entry(
                                             ui,
@@ -7570,6 +7757,20 @@ impl TriApp {
                             });
                             response.on_hover_text(&text);
                         }
+                        if self.is_watched(&row.path) {
+                            // Un peu d'air après le nom (retour du 22/11/2026 : l'œil, plus
+                            // large que l'étoile, le touchait presque).
+                            ui.add_space(3.0);
+                            let (rect, response) =
+                                ui.allocate_exact_size(vec2(size, size), Sense::hover());
+                            let color = ui.visuals().weak_text_color();
+                            marks::eye(ui.painter(), rect.shrink(size * 0.06), color);
+                            response.on_hover_text(format!(
+                                "{}\n{}",
+                                t!("folders-watched"),
+                                self.action_tip(Action::FolderWatch)
+                            ));
+                        }
                         if row.favorite {
                             let (rect, response) =
                                 ui.allocate_exact_size(vec2(size, size), Sense::hover());
@@ -7759,6 +7960,7 @@ impl TriApp {
                 // « Ajouter aux favoris » ouvrait la boîte de suppression (cas par défaut
                 // de `folder_edit_action`), corrigé le 20/10/2026.
                 Action::FolderFavorite => self.toggle_favorite(),
+                Action::FolderWatch => self.toggle_watch(path),
                 Action::PairsToggle => self.toggle_pairs(),
                 Action::FolderFavoriteName => self.name_favorite(&ctx),
                 Action::FolderForget => self.forget_server(&path),
@@ -11445,10 +11647,15 @@ impl TriApp {
                 &data.join("index.sqlite"),
                 cache.clone(),
                 preview,
-                self.settings.index,
+                self.settings.index.clone(),
             )
         {
             trace(|| format!("index des palettes indisponible : {e}"));
+        }
+        // Racines surveillées : parcourues en fond dès le lancement.
+        if self.settings.index.walk_at_launch {
+            let roots = self.watched_roots();
+            self.start_roots_walk(roots);
         }
         // Le dossier ouvert au lancement a été lu avant le fil d'écriture : noté
         // maintenant (sinon jamais dans « Toutes les photos »).
@@ -12434,6 +12641,11 @@ impl TriApp {
                 self.folder_edit_action(ctx, action)
             }
             Action::FolderFavorite => self.toggle_favorite(),
+            Action::FolderWatch => {
+                if let Some(path) = self.tree.cursor_path() {
+                    self.toggle_watch(path);
+                }
+            }
             Action::FolderFavoriteName => self.name_favorite(ctx),
             Action::FolderConnect => self.start_server_search(ctx),
             Action::FolderForget => {
@@ -18867,6 +19079,23 @@ impl TriApp {
                     cancel: Some((t!("develop-batch-cancel"), StatusClick::CancelDevelop)),
                 });
             }
+        }
+        // Parcours des racines surveillées (#561).
+        if let Some(walk) = &self.roots_walk
+            && let Ok(current) = walk.current.lock()
+            && current.1 > 0
+        {
+            tasks.push(Task {
+                text: t!(
+                    "roots-walking",
+                    name = folder_name(&current.0),
+                    n = current.1
+                ),
+                fraction: 0.0,
+                tip: Some(current.0.display().to_string()),
+                click: None,
+                cancel: Some((t!("compute-task-cancel"), StatusClick::CancelRootsWalk)),
+            });
         }
         // Calculs choisis sur des dossiers (#555) : une ligne chacun.
         for task in &self.compute_tasks {
@@ -25690,6 +25919,7 @@ impl eframe::App for TriApp {
             trace(|| "moteur démarré".into());
         }
         self.drain_events();
+        self.roots_tick(&ctx);
         self.poll_note_writes();
         self.poll_embed();
         // Notes fusionnées depuis d'autres logiciels (issue n° 368) : dit, discrètement.
@@ -25816,6 +26046,12 @@ impl eframe::App for TriApp {
                 if let Some(batch) = &self.develop_batch {
                     batch.cancel();
                 }
+            }
+            Some(StatusClick::CancelRootsWalk) => {
+                if let Some(walk) = &self.roots_walk {
+                    walk.stop.store(true, Ordering::Relaxed);
+                }
+                self.roots_pending.clear();
             }
             Some(StatusClick::CancelCompute(id)) => {
                 if let Some(task) = self.compute_tasks.iter().find(|t| t.id == id) {
@@ -26496,6 +26732,14 @@ fn file_name(path: &Path) -> String {
     )
 }
 
+/// Parcours des racines surveillées en cours ([`TriApp::start_roots_walk`]).
+struct RootsWalk {
+    stop: Arc<AtomicBool>,
+    rx: mpsc::Receiver<tri::roots::Summary>,
+    /// Le dossier parcouru, et combien l'ont été.
+    current: Arc<std::sync::Mutex<(PathBuf, usize)>>,
+}
+
 /// « Retrouver son dossier » en cours ([`TriApp::locate`]).
 struct Locating {
     /// Le dossier introuvable.
@@ -26574,6 +26818,8 @@ enum StatusClick {
     CancelDevelop,
     /// Arrêter un calcul choisi sur un dossier (#555).
     CancelCompute(u64),
+    /// Arrêter le parcours des racines surveillées (#561).
+    CancelRootsWalk,
     /// Progression d'une copie en arrière-plan : réafficher sa boîte.
     RevealTransfer,
     /// Ouvrir la séance déchargée en arrière-plan.
@@ -31635,7 +31881,7 @@ mod tests {
         };
         crate::state::remember_folder_view(Some(&data), &old, &view).unwrap();
         std::fs::rename(&old, &new).unwrap();
-        h.state_mut().recognise_in_tests = true;
+        h.state_mut().index_in_tests = true;
         h.state_mut().open_folder(&new);
         run_until(&mut h, |app| app.folder.dir == new && app.notice.is_some());
         assert!(h.state().notice.as_ref().unwrap().0.contains("TEST3"));
@@ -31644,6 +31890,43 @@ mod tests {
             tri::filter::KindFilter::RawOnly,
             "sa vue a suivi"
         );
+    }
+
+    #[test]
+    fn a_watched_folder_is_walked_and_shown_in_all_photos() {
+        // Racines surveillées (#561) : « Surveiller ce dossier » l'écrit dans la
+        // configuration (celle du test) et le parcourt ; « Toutes les photos » montre ses
+        // photos sans qu'on ait ouvert ses dossiers.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let root = dir.path().join("Archives");
+        for (sub, f) in tri::media::scan(dir.path().join("photos"), 1)
+            .unwrap()
+            .iter()
+            .enumerate()
+        {
+            let to = root.join(format!("2026/séance-{sub}"));
+            std::fs::create_dir_all(&to).unwrap();
+            std::fs::copy(&f.path, to.join(f.path.file_name().unwrap())).unwrap();
+        }
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "").unwrap();
+        h.state_mut().config_path = Some(config.clone());
+        h.state_mut().index_in_tests = true;
+        h.state_mut().toggle_watch(root.clone());
+        assert!(h.state().is_watched(&root));
+        assert!(std::fs::read_to_string(&config).unwrap().contains("roots"));
+        run_until(&mut h, |app| {
+            app.roots_walk.is_none() && app.roots_last_walk.is_some()
+        });
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::AllPhotos);
+        run_until(&mut h, |app| {
+            app.files.len() == 3 && app.files.iter().all(|f| f.path.starts_with(&root))
+        });
+        // Ne plus le surveiller : retiré de la configuration.
+        h.state_mut().toggle_watch(root.clone());
+        assert!(!h.state().is_watched(&root));
     }
 
     #[test]
@@ -34011,6 +34294,13 @@ mod tests {
     fn double_clicking_a_slider_resets_it() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
+        // Les analyses finies d'abord : sinon le curseur du flou est encore grisé (#563)
+        // et le premier clic n'y fait rien (CI Windows, 22/11/2026).
+        run_until(&mut h, |app| {
+            app.progress[3..=6]
+                .iter()
+                .all(|p| p.done >= p.total && p.total > 0)
+        });
         // Curseur du flou, montré avec un filtre sur la netteté.
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::B, Modifiers::NONE);

@@ -109,7 +109,7 @@ impl AppSettings {
             sharpness: self.sharpness,
             similarity: self.similarity,
             palette: self.palette,
-            index: self.index,
+            index: self.index.clone(),
             i18n: self.i18n,
             update: self.update.clone(),
             remote: self.remote.clone(),

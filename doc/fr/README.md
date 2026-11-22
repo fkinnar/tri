@@ -29,7 +29,7 @@ existe.
 | [jpeg.md](jpeg.md) | Module `tri::jpeg` : JPEG rapide (libjpeg-turbo, repli pur Rust) |
 | [exposure.md](exposure.md) | Module `tri::exposure` : histogrammes sur les données du capteur, saturés / bouchés, masque |
 | [i18n.md](i18n.md) | Module `tri::i18n` : langues (Fluent), catalogues `.ftl`, pluriels, `t!` |
-| [index.md](index.md) | Module `tri::index` : index de recherche des palettes de tous les dossiers (SQLite, empreintes) ; `tri::locate` : retrouver un dossier déplacé |
+| [index.md](index.md) | Module `tri::index` : index de recherche des palettes de tous les dossiers (SQLite, empreintes) ; `tri::locate` : retrouver un dossier déplacé ; `tri::roots` : racines surveillées |
 | [palette.md](palette.md) | Module `tri::palette` : palettes de couleurs (OKLab, k-moyennes), distances, part d'une couleur |
 | [similarity.md](similarity.md) | Module `tri::similarity` : empreintes, distances, regroupement en piles (rafales, séries) |
 | [sort.md](sort.md) | Module `tri::sort` : ordre des images (nom, date de prise de vue, de modification) |

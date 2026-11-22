@@ -369,6 +369,8 @@ pub enum Action {
     FolderFavorite,
     /// Panneau des dossiers : nommer le favori pointé (vide : nom du dossier).
     FolderFavoriteName,
+    /// Surveiller le dossier pointé (racine parcourue en fond, #561), ou plus.
+    FolderWatch,
     /// Panneau des dossiers : se connecter à un partage réseau (`\\nas\photo`,
     /// `smb://nas/photo`), tapé dans le champ de recherche (28/10/2026).
     FolderConnect,
@@ -615,7 +617,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 286] = [
+    pub const ALL: [Action; 287] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -796,6 +798,7 @@ impl Action {
         Action::FolderDelete,
         Action::FolderFavorite,
         Action::FolderFavoriteName,
+        Action::FolderWatch,
         Action::FolderConnect,
         Action::FolderForget,
         Action::FolderCacheClear,
@@ -1136,12 +1139,12 @@ impl Action {
             FocusLeft | FocusRight | FocusNext | FocusSources | FocusImages | FocusTools
             | FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
             | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
-            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderConnect | FolderForget
-            | FolderCacheClear | FolderReset | FolderOpenIn(_) | FolderCompute(_)
-            | FolderComputeAll | FolderRecreateAll | FolderCopy | FolderMove | MetaUp
-            | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll
-            | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft | PanelRight
-            | FolderSectionNext | FolderSectionPrev => Group::Panels,
+            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderWatch | FolderConnect
+            | FolderForget | FolderCacheClear | FolderReset | FolderOpenIn(_)
+            | FolderCompute(_) | FolderComputeAll | FolderRecreateAll | FolderCopy | FolderMove
+            | MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
+            | MetaCopyAll | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft
+            | PanelRight | FolderSectionNext | FolderSectionPrev => Group::Panels,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | HelpHere | Palette | Settings | CheckUpdate | ReportIssue | Log | Quit => {
                 Group::App
@@ -1387,6 +1390,7 @@ impl Action {
             Action::FolderDelete => "core.folders.delete",
             Action::FolderFavorite => "core.folders.favorite",
             Action::FolderFavoriteName => "core.folders.favorite_name",
+            Action::FolderWatch => "core.folders.watch",
             Action::FolderConnect => "core.folders.connect",
             Action::FolderForget => "core.folders.forget",
             Action::FolderCacheClear => "core.folders.cache_clear",
@@ -1636,9 +1640,9 @@ impl Action {
         match self {
             FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
             | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
-            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderConnect | FolderForget
-            | FolderCacheClear | FolderReset | FolderOpenIn(_) | FolderCompute(_)
-            | FolderComputeAll | FolderRecreateAll | FolderCopy | FolderMove
+            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderWatch | FolderConnect
+            | FolderForget | FolderCacheClear | FolderReset | FolderOpenIn(_)
+            | FolderCompute(_) | FolderComputeAll | FolderRecreateAll | FolderCopy | FolderMove
             | FolderSectionNext | FolderSectionPrev => Some(Scope::Folders),
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft

@@ -309,6 +309,7 @@ action-core-folders-rename = Dossiers : renommer le dossier
 action-core-folders-delete = Dossiers : supprimer le dossier
 action-core-folders-favorite = Dossiers : ajouter aux favoris ou en retirer
 action-core-folders-favorite_name = Dossiers : nommer le favori
+action-core-folders-watch = Dossiers : surveiller le dossier ou ne plus le surveiller
 action-core-folders-connect = Dossiers : se connecter à un partage réseau
 action-core-folders-forget = Dossiers : oublier le partage réseau mémorisé
 action-core-folders-cache_clear = Dossiers : vider le cache gardé dans le dossier ou le disque
@@ -1366,6 +1367,13 @@ watch-notes = { $count ->
    *[other] Notes de { $count } images modifiées ailleurs : relues
 }
 folder-menu-favorite-add = Ajouter aux favoris
+folder-menu-watch-add = Surveiller ce dossier
+folder-menu-watch-remove = Ne plus surveiller ce dossier
+folders-watched = Surveillé : parcouru en fond pour « Toutes les photos »
+folders-watch-added = « { $name } » est surveillé
+folders-watch-removed = « { $name } » n'est plus surveillé
+roots-walking = Surveillance : { $name } ({ $n } dossiers)
+roots-found = Surveillance : { $folders } dossiers reconnus, { $photos } photos retrouvées
 folder-menu-favorite-remove = Retirer des favoris
 folder-menu-favorite-name = Nommer le favori…
 favorite-name-title = Nom du favori « { $name } »

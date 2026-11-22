@@ -659,6 +659,22 @@ enabled = true
 fingerprint_kb = 32
 # Palettes notées par écriture dans la base, au plus.
 batch = 256
+# Racines surveillées : dossiers parcourus en fond.
+#
+# « Toutes les photos » connaît alors tout ce qu'elles contiennent, et un dossier renommé
+# ou une photo déplacée hors de `tri` y sont retrouvés (notes, palettes gardées). Aussi au
+# clic droit d'un dossier : « Surveiller ce dossier ». Exemple : ["~/Pictures/Photos"].
+roots = []
+# Parcourir les racines au lancement de `tri`.
+walk_at_launch = true
+# Parcourir un disque amovible quand on le branche (jamais une carte d'appareil).
+walk_plugged = true
+# Reparcourir les racines après tant de minutes sans rien faire (0 : jamais).
+walk_idle_minutes = 10
+# Niveaux de dossiers au plus sous une racine.
+walk_depth = 16
+# Pause entre deux dossiers d'un parcours (ms), pour ne rien gêner.
+walk_pause_ms = 2
 
 [similarity]
 # Côté long de la petite image d'où l'empreinte est tirée (pixels) : petite, elle ne

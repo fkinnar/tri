@@ -320,6 +320,8 @@ loupe = "m"
 "core.folders.open" = ["Enter"]
 # Name the favourite: "n".
 "core.folders.favorite_name" = ["n"]
+# Watch the folder (walked in the background for "All photos"): "w" like "watch".
+"core.folders.watch" = ["w"]
 # Connect to a network share: "c" (connect); forget it: Shift+C.
 "core.folders.connect" = ["c"]
 "core.folders.forget" = ["Shift+c"]
