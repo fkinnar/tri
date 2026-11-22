@@ -3140,7 +3140,10 @@ impl TriApp {
             .data_dir()
             .and_then(|data| tri::index::Index::open(&data.join("index.sqlite")).ok())
             .and_then(|index| index.photos_in(dir).ok())
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|s| !tri::developments::looks_like(&s.name))
+            .collect();
         tri::locate::pick_samples(photos)
     }
 

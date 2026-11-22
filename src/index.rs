@@ -770,8 +770,10 @@ pub fn start(
 /// fond. Sans index démarré, rien.
 pub fn note(file: &MediaFile, source: Source) {
     // Une carte d'appareil n'est pas indexée (retour du 22/11/2026 : des fichiers bruts,
-    // avant leur copie ailleurs).
-    if crate::locate::is_camera_card(&file.path) {
+    // avant leur copie ailleurs) ; un développement non plus (un chemin virtuel, qui
+    // n'existe pas sur le disque : pris comme photo témoin, il faisait échouer la
+    // reconnaissance d'un dossier renommé).
+    if crate::locate::is_camera_card(&file.path) || crate::media::is_development(&file.path) {
         return;
     }
     if let Some(tx) = WRITER.get() {

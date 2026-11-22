@@ -71,26 +71,29 @@ pub fn pick_samples(mut photos: Vec<Sample>) -> Vec<Sample> {
     picked.into_iter().map(|i| photos[i].clone()).collect()
 }
 
-/// Vrai si le dossier `candidate` contient les photos témoins `samples` : même nom, même
-/// taille, et même contenu quand l'empreinte est connue (`chunk` : octets lus à chaque
-/// bout, comme l'index). Sans témoin : faux (rien pour en juger).
+/// Vrai si le dossier `candidate` contient les photos témoins `samples` : au moins les
+/// deux tiers d'entre elles (une photo supprimée entre-temps n'empêche rien), au même
+/// nom, à la même taille, et au même contenu quand l'empreinte est connue (`chunk` :
+/// octets lus à chaque bout, comme l'index) ; une seule présente mais **différente**
+/// suffit à refuser. Sans témoin : faux (rien pour en juger).
 pub fn verify(candidate: &Path, samples: &[Sample], chunk: usize) -> bool {
-    !samples.is_empty()
-        && samples.iter().all(|s| {
-            let path = candidate.join(&s.name);
-            let Ok(meta) = std::fs::metadata(&path) else {
-                return false;
-            };
-            if !meta.is_file() || meta.len() != s.size {
-                return false;
-            }
-            match s.fingerprint {
-                Some(fp) => {
-                    crate::index::fingerprint(&path, chunk).is_ok_and(|(_, found)| found == fp)
-                }
-                None => true,
-            }
-        })
+    let mut found = 0;
+    for s in samples {
+        let path = candidate.join(&s.name);
+        let Ok(meta) = std::fs::metadata(&path) else {
+            continue;
+        };
+        if !meta.is_file() || meta.len() != s.size {
+            return false;
+        }
+        if let Some(fp) = s.fingerprint
+            && !crate::index::fingerprint(&path, chunk).is_ok_and(|(_, read)| read == fp)
+        {
+            return false;
+        }
+        found += 1;
+    }
+    !samples.is_empty() && found * 3 >= samples.len() * 2
 }
 
 /// Cherche l'ancien dossier `old` (ses témoins `samples`) sous les racines `roots`, les
@@ -223,14 +226,40 @@ pub fn recognise(
         .collect();
     olds.sort();
     olds.dedup();
+    if olds.is_empty() {
+        return None;
+    }
+    let mut why = Vec::new();
     let old = olds.into_iter().find(|old| {
-        !old.is_dir()
-            && verify(
-                &dir,
-                &pick_samples(index.photos_in(old).unwrap_or_default()),
-                chunk,
-            )
-    })?;
+        if old.is_dir() {
+            why.push(format!("{} still exists", old.display()));
+            return false;
+        }
+        let samples: Vec<Sample> = index
+            .photos_in(old)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|s| !crate::developments::looks_like(&s.name))
+            .collect();
+        let ok = verify(&dir, &pick_samples(samples), chunk);
+        if !ok {
+            why.push(format!("{}: other photos", old.display()));
+        }
+        ok
+    });
+    let Some(old) = old else {
+        crate::log::info(
+            "index",
+            &format!("{} not recognised", dir.display()),
+            &why.join("; "),
+        );
+        return None;
+    };
+    crate::log::info(
+        "index",
+        &format!("{} recognised as {}", dir.display(), old.display()),
+        "",
+    );
     drop(index);
     if let Err(e) = relocate(Some(data), cache, &old, &dir) {
         crate::log::warning("index", &format!("folder not followed: {e}"), "");
@@ -286,6 +315,15 @@ mod tests {
             size: bytes.len() as u64,
             fingerprint: None,
         }
+    }
+
+    #[test]
+    fn development_names_are_told_apart() {
+        use crate::developments::looks_like;
+        assert!(looks_like("DSCF0001@dt.RAF".as_ref()));
+        assert!(looks_like("DSCF0001@art-02.RAF".as_ref()));
+        assert!(!looks_like("DSCF0001.RAF".as_ref()));
+        assert!(!looks_like("moi@home.jpg".as_ref()));
     }
 
     #[test]
@@ -345,7 +383,14 @@ mod tests {
         assert!(verify(&candidate, std::slice::from_ref(&s), 1024));
         // Même taille, autre contenu.
         write(&candidate.join("A.RAF"), b"abce");
-        assert!(!verify(&candidate, &[s], 1024));
+        assert!(!verify(&candidate, std::slice::from_ref(&s), 1024));
+        // Deux témoins sur trois suffisent (une photo supprimée avant le renommage).
+        write(&candidate.join("A.RAF"), b"abcd");
+        write(&candidate.join("B.RAF"), b"bb");
+        let three = [s.clone(), sample("B.RAF", b"bb"), sample("C.RAF", b"cc")];
+        assert!(verify(&candidate, &three, 1024));
+        let two_missing = [s, sample("D.RAF", b"dd"), sample("C.RAF", b"cc")];
+        assert!(!verify(&candidate, &two_missing, 1024));
         assert!(
             !verify(&candidate, &[], 1024),
             "sans témoin, rien n'est pris"
