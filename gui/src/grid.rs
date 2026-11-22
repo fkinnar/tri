@@ -108,8 +108,6 @@ pub fn navigate(
         | Action::FilterConflicts
         | Action::FilterPalette
         | Action::FilterPaletteColour
-        | Action::FilterPaletteEverywhere
-        | Action::FilterPaletteColourEverywhere
         | Action::AllPhotos
         | Action::SetReference
         | Action::FilterSimilar

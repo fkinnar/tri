@@ -1017,8 +1017,6 @@ pub struct TriApp {
     /// Complétion en fond de « Toutes les photos » : la liste relue dossier par dossier
     /// ([`tri::folder::complete_from_disk`]), et son arrêt.
     all_photos_completion: Option<(Arc<AtomicBool>, mpsc::Receiver<Vec<MediaFile>>)>,
-    /// Recherche à poser une fois « Toutes les photos » ouvert (« chercher partout »).
-    all_photos_search: Option<AllPhotosSearch>,
     /// Photo de référence de « palettes proches » (et du futur « semblables ») : elle
     /// reste tant qu'on ne l'efface pas ou ne la remplace pas (retour du 22/11/2026).
     reference: Option<PathBuf>,
@@ -2206,7 +2204,6 @@ impl TriApp {
             opening: None,
             all_photos_from: None,
             all_photos_completion: None,
-            all_photos_search: None,
             reference: None,
             reference_wanted: false,
             reference_popup: false,
@@ -2910,12 +2907,15 @@ impl TriApp {
         }
     }
 
-    /// Ouvre « Toutes les photos » (#561), en retenant le dossier d'où l'on vient (Échap
-    /// y ramène) ; `search` : la recherche à y poser (« chercher partout »).
-    fn open_all_photos(&mut self, search: Option<AllPhotosSearch>) {
-        self.all_photos_search = search;
+    /// « Toutes les photos » (#561) : y va en retenant le dossier d'où l'on vient ; de
+    /// là, y retourne (bascule, retour du 22/11/2026). Les filtres restent posés : un
+    /// filtre posé ici cherche ensuite partout.
+    fn toggle_all_photos(&mut self) {
         if tri::folder::is_all_photos(&self.folder.dir) {
-            self.apply_all_photos_search();
+            match self.all_photos_from.take() {
+                Some(from) => self.open_folder(&from),
+                None => self.notice = Some((t!("all-photos-no-way-back"), false)),
+            }
             return;
         }
         let from = (!self.folder.is_none()).then(|| self.folder.dir.clone());
@@ -2973,42 +2973,6 @@ impl TriApp {
             files,
         };
         self.replace_folder(folder, selected);
-    }
-
-    /// Pose la recherche « partout » en attente, dans « Toutes les photos » ouvert et sa
-    /// source de palettes en place. La référence de « palettes proches » : sa palette dans
-    /// la source d'ici (la même photo, vue par l'index), sinon celle d'où l'on venait.
-    fn apply_all_photos_search(&mut self) {
-        if self.all_photos_search.is_none()
-            || !tri::folder::is_all_photos(&self.folder.dir)
-            || self.opening.is_some()
-        {
-            return;
-        }
-        if self.palette_source.is_none() {
-            self.all_photos_search = None;
-            self.notice = Some((t!("palette-choose"), false));
-            return;
-        }
-        match self.all_photos_search.clone() {
-            Some(AllPhotosSearch::Colour(oklab)) => {
-                self.all_photos_search = None;
-                self.set_palette_colour(Some(oklab));
-            }
-            Some(AllPhotosSearch::Like) => {
-                self.all_photos_search = None;
-                if let Some(i) = self
-                    .reference
-                    .as_ref()
-                    .and_then(|r| self.files.iter().position(|f| &f.path == r))
-                {
-                    self.selected = i;
-                }
-                self.reference_wanted = true;
-                self.try_reference_filter();
-            }
-            None => {}
-        }
     }
 
     /// Attente de la liste d'un dossier avant de la lire en fond.
@@ -3187,7 +3151,6 @@ impl TriApp {
                 let all_photos = tri::folder::is_all_photos(&folder.dir);
                 if !all_photos {
                     self.all_photos_from = None;
-                    self.all_photos_search = None;
                 }
                 // Mémorisé pour le prochain lancement (sans conséquence en cas d'échec) ;
                 // pas « Toutes les photos ».
@@ -6570,7 +6533,7 @@ impl TriApp {
                 })
                 .inner;
             if clicked && !open_here {
-                self.open_all_photos(None);
+                self.toggle_all_photos();
             }
             ui.add_space(gap);
         }
@@ -11139,8 +11102,6 @@ impl TriApp {
         // Source des palettes : suit le rendu de la grille (« Comme la grille »).
         let wanted = self.wanted_palette_source();
         self.set_palette_source(wanted);
-        // Recherche « partout » en attente : posée une fois la source en place.
-        self.apply_all_photos_search();
         self.try_reference_filter();
         self.try_similar_filter();
         self.poll_all_photos_completion();
@@ -12808,19 +12769,7 @@ impl TriApp {
             }
             // « Toutes les photos » (#561), et les recherches « partout » : le filtre posé
             // là-bas, la photo ou la couleur d'ici.
-            Action::AllPhotos => self.open_all_photos(None),
-            Action::FilterPaletteEverywhere => {
-                if self.palette_source.is_none() {
-                    self.notice = Some((t!("palette-choose"), false));
-                } else if !self.has_palette_reference() {
-                    self.notice = Some((t!("palette-similar-no-photo"), false));
-                } else {
-                    if self.reference.is_none() {
-                        self.reference = self.reference_from_selection();
-                    }
-                    self.open_all_photos(Some(AllPhotosSearch::Like));
-                }
-            }
+            Action::AllPhotos => self.toggle_all_photos(),
             // La photo sélectionnée devient la référence (retour du 22/11/2026).
             Action::SetReference => self.set_reference(),
             // Semblables à la référence (retour du 22/11/2026), ou fin de la recherche.
@@ -12838,16 +12787,6 @@ impl TriApp {
                     }
                     self.similar_wanted = true;
                     self.try_similar_filter();
-                }
-            }
-            Action::FilterPaletteColourEverywhere => {
-                let colour = self
-                    .palette_colour
-                    .map(|c| c.oklab)
-                    .or(self.palette_colour_last);
-                match colour {
-                    Some(oklab) => self.open_all_photos(Some(AllPhotosSearch::Colour(oklab))),
-                    None => self.notice = Some((t!("palette-colour-first"), false)),
                 }
             }
             // Palettes proches (#492) : de l'image sélectionnée, ou fin de la recherche.
@@ -25961,15 +25900,6 @@ pub(crate) fn folder_name(path: &Path) -> String {
     file_name(path)
 }
 
-/// Recherche « partout » à poser dans « Toutes les photos » une fois ouvert (#561).
-#[derive(Clone)]
-enum AllPhotosSearch {
-    /// Palettes proches de la référence.
-    Like,
-    /// Contient cette couleur (OKLab).
-    Colour([f32; 3]),
-}
-
 /// Une tâche de fond, pour la barre globale (issue n° 36).
 /// Export qui attend son tour (#400) : tout est décidé à la demande, changer la
 /// sélection ensuite n'y change rien.
@@ -30834,15 +30764,23 @@ mod tests {
         run_until(&mut h, |app| {
             app.opening.is_none() && app.folder.dir == photos
         });
-        // « Contient cette couleur, partout » : la dernière couleur, posée là-bas.
+        // Un filtre posé ici reste posé là-bas (retour du 22/11/2026 : `g a` bascule) :
+        // il y cherche partout ; `g a` à nouveau ramène au dossier.
         let green = tri::palette::srgb_to_oklab([20, 200, 40]);
-        h.state_mut().palette_colour_last = Some(green);
-        h.state_mut()
-            .perform(&ctx, Action::FilterPaletteColourEverywhere);
+        choose_palette(&mut h, Some(tri::palette::SourceKind::Camera));
+        h.state_mut().set_palette_colour(Some(green));
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::A, Modifiers::NONE);
         run_until(&mut h, |app| {
-            tri::folder::is_all_photos(&app.folder.dir) && app.palette_colour.is_some()
+            tri::folder::is_all_photos(&app.folder.dir) && app.opening.is_none()
         });
+        assert!(h.state().palette_colour.is_some(), "le filtre reste posé");
         assert_eq!(h.state().all_photos_from.as_deref(), Some(photos.as_path()));
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::A, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.opening.is_none() && app.folder.dir == photos
+        });
     }
 
     #[test]

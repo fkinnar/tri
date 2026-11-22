@@ -166,8 +166,9 @@ loupe = "m"
 "core.view.image_info" = ["t"]
 "core.view.grid_info" = ["Shift+t"]
 "core.view.refresh_folders" = ["F5"]
-# "All photos" (#561): the photos seen in every folder, as one folder.
-"core.view.all_photos" = []
+# "All photos" (#561): the photos seen in every folder, as one folder; again, back to
+# the folder you came from. "g a" like "go all".
+"core.view.all_photos" = ["g a"]
 
 # --- Filters (f) ---
 # Prefix "f", followed by the matching rating key. "f f" changes the file type,
@@ -210,9 +211,6 @@ loupe = "m"
 # Similar palettes: "l" like palette; contains this colour: "o" like colour.
 "core.filter.palette" = ["f l"]
 "core.filter.palette_colour" = ["f o"]
-# The same in "All photos" (#561), searching every folder seen: with Shift.
-"core.filter.palette_everywhere" = ["f Shift+l"]
-"core.filter.palette_colour_everywhere" = ["f Shift+o"]
 # The selected photo becomes the reference of similar palettes ("t" like the target).
 "core.filter.reference" = ["f t"]
 # Photos similar to the reference (fingerprints, as in stacks): "m" like similar.

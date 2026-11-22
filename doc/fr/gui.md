@@ -1243,9 +1243,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   plus ; un disque débranché garde ce que l'index en savait), la liste remplacée comme
   par la surveillance (`TriApp::replace_folder`). Pas surveillé, pas retenu comme
   dernier dossier. Échap (grille, plus rien à fermer) ramène au dossier d'où l'on venait
-  (`all_photos_from`). Actions `core.view.all_photos`, `core.filter.palette_everywhere`
-  et `core.filter.palette_colour_everywhere` (`f Maj+l`, `f Maj+o` ; les filtres eux-mêmes : `f l`, `f o`, semblables `f m`) : la recherche
-  posée là-bas (`AllPhotosSearch`), la photo de référence relue dans la source d'ici.
+  (`all_photos_from`). **`g a`** (`core.view.all_photos`) bascule : y va, et de là
+  ramène au dossier (retour du 22/11/2026 : plutôt que des variantes « partout » de
+  chaque filtre). Les filtres restent posés en changeant de dossier : un filtre posé ici
+  (`f l` palettes proches, `f o` couleur, `f m` semblables) cherche ensuite partout, la
+  photo de référence relue dans la source de là-bas.
   **Photo de référence** (retour du 22/11/2026), commune à « palettes proches » et à
   « semblables » (`TriApp::reference`) : dans la section Filtres, « Couleur » d'abord,
   puis ces deux filtres, la référence à leur droite (`reference_box` : son imagette, ou

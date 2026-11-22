@@ -1163,9 +1163,11 @@ system one ("cold" measurements, experiments).
   those gone; an unplugged drive keeps what the index knew), the list replaced as the
   folder watch does (`TriApp::replace_folder`). Not watched, not remembered as the last
   folder. Escape (grid, nothing left to close) returns to the folder you came from
-  (`all_photos_from`). Actions `core.view.all_photos`, `core.filter.palette_everywhere`
-  and `core.filter.palette_colour_everywhere` (`f Shift+l`, `f Shift+o`; the filters themselves: `f l`, `f o`, similar `f m`): the search is set there
-  (`AllPhotosSearch`), the reference photo read again in the source over there.
+  (`all_photos_from`). **`g a`** (`core.view.all_photos`) toggles: goes there, and from
+  there back to the folder (feedback of 2026-11-22: rather than "everywhere" variants of
+  each filter). Filters stay set when changing folders: a filter set here (`f l` similar
+  palettes, `f o` colour, `f m` similar) then searches everywhere, the reference photo
+  read again in the source over there.
   **Reference photo** (feedback of 2026-11-22), shared by "similar palettes" and
   "similar" (`TriApp::reference`): in the Filters section, "Colour" first, then those two
   filters, the reference on their right (`reference_box`: its thumbnail, or an empty
