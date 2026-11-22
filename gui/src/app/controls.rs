@@ -89,15 +89,25 @@ impl TriApp {
             Control::Render => self.render_control(ui),
             Control::Stacks => {
                 let mut stacking = self.stacking;
-                if self
-                    .side_checkbox(ui, &mut stacking, t!("panel-grid-stacks-on"))
-                    .on_hover_text(format!(
+                // Empreintes en calcul : grisée, la bulle dit où on en est (22/11/2026).
+                let unusable = self.action_unusable(Action::StackMode);
+                let tip = match &unusable {
+                    Some(why) => why.clone(),
+                    None => format!(
                         "{}\n{}",
                         t!("panel-grid-stacks-tip"),
                         self.action_tip(Action::StackMode)
-                    ))
-                    .changed()
-                {
+                    ),
+                };
+                let changed = ui
+                    .add_enabled_ui(unusable.is_none(), |ui| {
+                        self.side_checkbox(ui, &mut stacking, t!("panel-grid-stacks-on"))
+                    })
+                    .inner
+                    .on_hover_text(&tip)
+                    .on_disabled_hover_text(&tip)
+                    .changed();
+                if changed {
                     let ctx = ui.ctx().clone();
                     self.perform(&ctx, Action::StackMode);
                 }
@@ -311,13 +321,19 @@ impl TriApp {
             _ => t!("panel-filter-developed"),
         };
         let size = self.gui.grid.marks + 4.0;
-        let tip = self.action_tip(action);
+        // Grisé : pourquoi (analyse en cours…), sinon l'action.
+        let tip = match self.action_unusable(action).filter(|_| !enabled) {
+            Some(why) => format!("{}\n{why}", self.action_tip(action)),
+            None => self.action_tip(action),
+        };
         let (item, key) = self.side_begin(false);
         let row = ui.horizontal(|ui| {
             if !enabled {
                 ui.disable();
             }
             let mut checked = on;
+            // La bulle de la case sert aussi de nom (accessibilité, tests) : la même, grisée
+            // ou non ; le libellé dit pourquoi elle est grisée.
             let check = ui.checkbox(&mut checked, "").on_hover_text(&tip);
             let (rect, icon) = marks::clickable(ui, size, &tip);
             let color = if on {
@@ -328,7 +344,8 @@ impl TriApp {
             filter_icon(ui.painter(), rect, action, color);
             let label = ui
                 .add(egui::Label::new(name).sense(Sense::click()))
-                .on_hover_text(&tip);
+                .on_hover_text(&tip)
+                .on_disabled_hover_text(&tip);
             check.changed() || icon.clicked() || label.clicked()
         });
         self.side_end(ui, item, row.response.rect, row.inner);

@@ -3470,6 +3470,37 @@ impl TriApp {
     /// développée dans le dossier, s'allumait par la palette ou `f r`). Éteindre reste
     /// toujours possible.
     fn action_unusable(&self, action: Action) -> Option<String> {
+        // Filtres sur une analyse en cours de calcul : grisés jusqu'à la fin (retour du
+        // 22/11/2026 : un filtre allumé trop tôt triait sur des données incomplètes) ; les
+        // éteindre reste possible.
+        let pending = |slot: usize| {
+            let p = self.progress[slot];
+            (p.total > 0 && p.done < p.total)
+                .then(|| t!("filter-analysis-computing", done = p.done, total = p.total))
+        };
+        match action {
+            Action::FilterBlurry if self.blur_rule.is_none() => return pending(4),
+            // Piles : les empreintes (et les palettes, empilées par palette).
+            Action::StackMode if !self.stacking => {
+                return pending(5).or_else(|| {
+                    (self.stack_by_palette && self.palette_source.is_some())
+                        .then(|| pending(6))
+                        .flatten()
+                });
+            }
+            Action::FilterWellExposed if !self.well_exposed => return pending(3),
+            Action::FilterPalette if self.palette_like.is_none() => {
+                if let Some(why) = pending(6) {
+                    return Some(why);
+                }
+            }
+            Action::FilterPaletteColour if self.palette_colour.is_none() => {
+                if let Some(why) = pending(6) {
+                    return Some(why);
+                }
+            }
+            _ => {}
+        }
         match action {
             Action::FilterDeveloped if !self.developed_on && !self.any_developed => {
                 Some(t!("filter-developed-unusable"))
@@ -3497,8 +3528,16 @@ impl TriApp {
     /// utilisable que si le dossier a un développement (#305), ou pour l'éteindre.
     fn content_toggles(&self) -> Vec<(Action, bool, bool)> {
         let mut toggles = vec![
-            (Action::FilterBlurry, self.blur_rule.is_some(), true),
-            (Action::FilterWellExposed, self.well_exposed, true),
+            (
+                Action::FilterBlurry,
+                self.blur_rule.is_some(),
+                self.action_unusable(Action::FilterBlurry).is_none(),
+            ),
+            (
+                Action::FilterWellExposed,
+                self.well_exposed,
+                self.action_unusable(Action::FilterWellExposed).is_none(),
+            ),
         ];
         if !self.developers.is_empty() || self.developed_on {
             toggles.push((
@@ -3524,16 +3563,19 @@ impl TriApp {
     fn palette_toggles(&self) -> Vec<(Action, bool, bool)> {
         let ready = self.palette_source.is_some();
         let like = self.palette_like.is_some();
+        let computing = |a: Action| self.action_unusable(a).is_some();
         vec![
             (
                 Action::FilterPalette,
                 like,
-                like || (ready && self.has_palette_reference()),
+                like || (ready
+                    && self.has_palette_reference()
+                    && !computing(Action::FilterPalette)),
             ),
             (
                 Action::FilterPaletteColour,
                 self.palette_colour.is_some(),
-                ready,
+                self.palette_colour.is_some() || (ready && !computing(Action::FilterPaletteColour)),
             ),
         ]
     }
@@ -3607,11 +3649,14 @@ impl TriApp {
             // Palettes proches : il faut aussi une photo de départ (sauf pour l'éteindre).
             let no_reference =
                 action == Action::FilterPalette && !on && !self.has_palette_reference();
-            let usable = ready && !no_reference;
+            let computing = self.action_unusable(action);
+            let usable = on || (ready && !no_reference && computing.is_none());
             let tip = if !ready {
                 t!("palette-choose")
             } else if no_reference {
                 t!("palette-similar-no-photo")
+            } else if let Some(why) = computing.filter(|_| !on) {
+                why
             } else {
                 action.label()
             };
@@ -10964,6 +11009,18 @@ impl TriApp {
     /// Fait l'action `action` (voir [`TriApp::perform`]).
     fn perform_action(&mut self, ctx: &egui::Context, action: Action) {
         self.hint = None;
+        // Filtre d'une analyse encore en calcul : refusé, le message dit où on en est.
+        if matches!(
+            action,
+            Action::FilterBlurry
+                | Action::FilterWellExposed
+                | Action::FilterPalette
+                | Action::FilterPaletteColour
+        ) && let Some(why) = self.action_unusable(action)
+        {
+            self.notice = Some((why, false));
+            return;
+        }
         if self.mode == Mode::Compare
             && self.versions_compare.is_some()
             && self.versions_perform(ctx, action)
@@ -11349,6 +11406,10 @@ impl TriApp {
             // Un seul interrupteur (retour du 18/10/2026) : piles en grille, et en plein
             // écran ← / → dans la pile, ↑ / ↓ de pile en pile ; sans piles, de photo en photo.
             Action::StackMode => {
+                if let Some(why) = self.action_unusable(action) {
+                    self.notice = Some((why, false));
+                    return;
+                }
                 self.stacking = !self.stacking;
                 self.stacks_dirty = true;
             }
@@ -20085,6 +20146,7 @@ impl TriApp {
                         (action.label(), self.action_tip(action))
                     };
                     let usable = match action {
+                        Action::StackMode => self.action_unusable(action).is_none(),
                         Action::NavDown | Action::NavUp | Action::StackEnterToggle => self.stacking,
                         Action::DevNext | Action::DevPrev => developments,
                         _ => true,
@@ -20605,7 +20667,11 @@ impl TriApp {
                 .into_iter()
                 .chain(self.palette_toggles());
             for (action, on, enabled) in toggles {
-                let tip = format!("{}\n{settings_tip}", self.action_tip(action));
+                // Grisé : pourquoi (analyse en cours…), sinon l'action.
+                let tip = match self.action_unusable(action).filter(|_| !enabled) {
+                    Some(why) => format!("{}\n{why}", self.action_tip(action)),
+                    None => format!("{}\n{settings_tip}", self.action_tip(action)),
+                };
                 let (rect, response) = marks::clickable(ui, size, &tip);
                 // Pas de développement dans le dossier : grisé, sans effet (#305).
                 let response = if enabled {
@@ -22763,7 +22829,12 @@ impl TriApp {
         {
             self.group_strictness = strictness;
             self.group_gap = gap;
-            self.stacking = stacking;
+            // Les empreintes encore en calcul : pas de piles tout de suite (22/11/2026).
+            let refused = stacking && !self.stacking;
+            match self.action_unusable(Action::StackMode).filter(|_| refused) {
+                Some(why) => self.notice = Some((why, false)),
+                None => self.stacking = stacking,
+            }
             self.group_pauses = pauses;
             self.group_curve = curve;
             self.stacks_dirty = true;
@@ -27206,6 +27277,12 @@ mod tests {
     }
 
     /// Une action sans touche par défaut.
+    /// Attend que `action` soit utilisable : son analyse finie (filtres et piles grisés
+    /// pendant le calcul, #563).
+    fn wait_usable(h: &mut Harness<'static, TriApp>, action: Action) {
+        run_until(h, |app| app.action_unusable(action).is_none());
+    }
+
     fn act(h: &mut Harness<'_, TriApp>, action: Action) {
         let ctx = h.ctx.clone();
         h.state_mut().perform(&ctx, action);
@@ -28984,6 +29061,7 @@ mod tests {
                 .iter()
                 .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
         });
+        wait_usable(&mut h, Action::FilterPalette);
         // La référence : img2.
         let img2 = h
             .state()
@@ -29179,6 +29257,7 @@ mod tests {
         h.run_steps(3);
         assert_eq!(h.state().palette_threshold, 0.21);
         assert_eq!(h.state().palette_radius, 0.17);
+        wait_usable(&mut h, Action::FilterPalette);
         // Lancée, la recherche part de ce seuil.
         act(&mut h, Action::FilterPalette);
         assert_eq!(
@@ -29356,6 +29435,7 @@ mod tests {
                 .iter()
                 .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
         });
+        wait_usable(&mut h, Action::FilterPalette);
         assert_eq!(h.state().mode, Mode::Grid);
         // Cocher « Couleur » sans couleur encore cherchée : la boîte de choix s'ouvre (pas
         // de pipette armée d'office).
@@ -29499,12 +29579,67 @@ mod tests {
     }
 
     #[test]
+    fn computed_filters_and_stacks_wait_for_their_analysis() {
+        // Retour du 22/11/2026 : netteté, exposition, palettes, couleur et piles
+        // automatiques grisées tant que leur calcul n'est pas fini (les éteindre reste
+        // possible).
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        choose_palette(&mut h, Some(tri::palette::SourceKind::Camera));
+        let half = Progress { done: 1, total: 3 };
+        let full = Progress { done: 3, total: 3 };
+        for slot in [3, 4, 5, 6] {
+            h.state_mut().progress[slot] = half;
+        }
+        h.state_mut().stacking = false;
+        for action in [
+            Action::FilterBlurry,
+            Action::FilterWellExposed,
+            Action::FilterPalette,
+            Action::FilterPaletteColour,
+            Action::StackMode,
+        ] {
+            assert!(h.state().action_unusable(action).is_some(), "{action:?}");
+        }
+        assert!(
+            h.state()
+                .content_toggles()
+                .iter()
+                .all(|(_, _, usable)| !usable)
+        );
+        assert!(
+            h.state()
+                .palette_toggles()
+                .iter()
+                .all(|(_, _, usable)| !usable)
+        );
+        act(&mut h, Action::FilterBlurry);
+        act(&mut h, Action::StackMode);
+        assert!(h.state().blur_rule.is_none() && !h.state().stacking);
+        assert!(h.state().notice.is_some(), "le message dit où on en est");
+        for slot in [3, 4, 5, 6] {
+            h.state_mut().progress[slot] = full;
+        }
+        act(&mut h, Action::FilterBlurry);
+        act(&mut h, Action::StackMode);
+        assert!(h.state().blur_rule.is_some() && h.state().stacking);
+        // Allumés, ils s'éteignent même si un calcul reprend.
+        h.state_mut().progress[4] = half;
+        h.state_mut().progress[5] = half;
+        act(&mut h, Action::FilterBlurry);
+        act(&mut h, Action::StackMode);
+        assert!(h.state().blur_rule.is_none() && !h.state().stacking);
+    }
+
+    #[test]
     fn similar_palettes_need_a_photo_to_start_from() {
         // Retour du 22/11/2026 : sans image pointée ni sélection, « palettes proches » est
         // grisé (il part de l'image courante).
         let (mut h, _dir) = harness();
         h.run_steps(3);
         choose_palette(&mut h, Some(tri::palette::SourceKind::Camera));
+        // Les palettes calculées d'abord (#563 : grisé pendant le calcul).
+        wait_usable(&mut h, Action::FilterPalette);
         let usable = |h: &Harness<'static, TriApp>| {
             h.state()
                 .palette_toggles()
@@ -34324,6 +34459,7 @@ mod tests {
         // simulé tombait encore à côté sur la CI Ubuntu le 08/11/2026, après le 07/11 :
         // voir les autres tests d'interface).
         assert!(h.query_by_label(&t!("panel-grid-stacks-on")).is_some());
+        wait_usable(&mut h, Action::StackMode);
         act(&mut h, Action::StackMode);
         h.run_steps(3);
         assert!(h.state().stacking, "la section « Vue » allume les piles");
@@ -39932,8 +40068,15 @@ mod tests {
         h.run_steps(3);
         assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().adjust_eyedropper, "armed");
-        mouse_click(&mut h, egui::pos2(360.0, 700.0));
-        h.run_steps(3);
+        // Un clic simulé n'est parfois pas vu sur la CI (Ubuntu, 22/11/2026) : retenté tant
+        // que la pipette reste armée, trois fois au plus.
+        for _ in 0..3 {
+            mouse_click(&mut h, egui::pos2(360.0, 700.0));
+            h.run_steps(3);
+            if !h.state().adjust_eyedropper {
+                break;
+            }
+        }
         assert!(!h.state().adjust_eyedropper, "used once");
         let notice = h.state().notice.clone().unwrap().0;
         assert!(notice.starts_with("Pipette"), "{notice}");
@@ -39947,28 +40090,33 @@ mod tests {
         h.run_steps(2);
         assert!(h.state().adjust_eyedropper, "armed again");
         let (from, to) = (egui::pos2(300.0, 650.0), egui::pos2(420.0, 760.0));
-        h.event(UiEvent::PointerMoved(from));
-        h.run_steps(1);
-        h.event(UiEvent::PointerButton {
-            pos: from,
-            button: egui::PointerButton::Primary,
-            pressed: true,
-            modifiers: Modifiers::NONE,
-        });
-        h.run_steps(1);
-        for step in 1..=6 {
-            h.event(UiEvent::PointerMoved(
-                from + (to - from) * step as f32 / 6.0,
-            ));
+        for _ in 0..3 {
+            h.event(UiEvent::PointerMoved(from));
             h.run_steps(1);
+            h.event(UiEvent::PointerButton {
+                pos: from,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            });
+            h.run_steps(1);
+            for step in 1..=6 {
+                h.event(UiEvent::PointerMoved(
+                    from + (to - from) * step as f32 / 6.0,
+                ));
+                h.run_steps(1);
+            }
+            h.event(UiEvent::PointerButton {
+                pos: to,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: Modifiers::NONE,
+            });
+            h.run_steps(2);
+            if !h.state().adjust_eyedropper {
+                break;
+            }
         }
-        h.event(UiEvent::PointerButton {
-            pos: to,
-            button: egui::PointerButton::Primary,
-            pressed: false,
-            modifiers: Modifiers::NONE,
-        });
-        h.run_steps(2);
         assert!(!h.state().adjust_eyedropper, "the frame is enough");
         let framed = tri::adjust::read(&path).unwrap().expect("balance set");
         assert_ne!(

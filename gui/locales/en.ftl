@@ -80,6 +80,7 @@ sort-stars = Stars
 sort-color = Colour
 sort-flag = Flag
 sort-notice = Order: { $key }, { $direction }
+filter-analysis-computing = Analysis in progress ({ $done } / { $total }): this filter will be available once it is done.
 filter-analysis-partial = Analyses in progress: filter applied to the { $done } / { $total } photos already analysed; the grid fills in as they are computed.
 sort-ascending = ascending
 sort-descending = descending
