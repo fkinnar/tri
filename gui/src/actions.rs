@@ -329,6 +329,12 @@ pub enum Action {
     FocusRight,
     /// Clavier au panneau suivant.
     FocusNext,
+    /// Clavier au panneau des sources (dossiers), directement (retour du 22/11/2026).
+    FocusSources,
+    /// Clavier à la grille (ou à l'image en plein écran), directement.
+    FocusImages,
+    /// Clavier au panneau des outils (droite), directement.
+    FocusTools,
     /// Panneau des dossiers : dossier du dessus.
     FolderUp,
     /// Panneau des dossiers : dossier du dessous.
@@ -603,7 +609,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 281] = [
+    pub const ALL: [Action; 284] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -765,6 +771,9 @@ impl Action {
         Action::FocusLeft,
         Action::FocusRight,
         Action::FocusNext,
+        Action::FocusSources,
+        Action::FocusImages,
+        Action::FocusTools,
         Action::FolderUp,
         Action::FolderDown,
         Action::FolderExpand,
@@ -1116,15 +1125,15 @@ impl Action {
             StackToggle | StackOpen | StackClose | StacksAll | GroupingWindow | StackMode
             | StackChoose | StackFirst | StackLast | StackEnterToggle | DevToggle | DevNext
             | DevPrev | DevFoldAll | PairsToggle => Group::Selection,
-            FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
-            | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
-            | FolderEject | FolderCreate | FolderRename | FolderDelete | FolderFavorite
-            | FolderFavoriteName | FolderConnect | FolderForget | FolderCacheClear
-            | FolderReset | FolderOpenIn(_) | FolderCompute(_) | FolderComputeAll
-            | FolderRecreateAll | FolderCopy | FolderMove | MetaUp | MetaDown | MetaCopy
-            | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll | PanelSectionNext
-            | PanelSectionPrev | PanelActivate | PanelLeft | PanelRight | FolderSectionNext
-            | FolderSectionPrev => Group::Panels,
+            FocusLeft | FocusRight | FocusNext | FocusSources | FocusImages | FocusTools
+            | FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
+            | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
+            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderConnect | FolderForget
+            | FolderCacheClear | FolderReset | FolderOpenIn(_) | FolderCompute(_)
+            | FolderComputeAll | FolderRecreateAll | FolderCopy | FolderMove | MetaUp
+            | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll
+            | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft | PanelRight
+            | FolderSectionNext | FolderSectionPrev => Group::Panels,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | HelpHere | Palette | Settings | CheckUpdate | ReportIssue | Log | Quit => {
                 Group::App
@@ -1353,6 +1362,9 @@ impl Action {
             Action::FocusLeft => "core.panel.left",
             Action::FocusRight => "core.panel.right",
             Action::FocusNext => "core.panel.next",
+            Action::FocusSources => "core.panel.sources",
+            Action::FocusImages => "core.panel.grid",
+            Action::FocusTools => "core.panel.tools",
             Action::FolderUp => "core.folders.up",
             Action::FolderDown => "core.folders.down",
             Action::FolderExpand => "core.folders.expand",

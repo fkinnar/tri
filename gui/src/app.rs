@@ -11829,6 +11829,9 @@ impl TriApp {
                 self.export_report_since = ctx.cumulative_pass_nr();
             }
             Action::FocusLeft | Action::FocusRight | Action::FocusNext => self.move_focus(action),
+            Action::FocusSources => self.focus_on(crate::actions::Scope::Folders),
+            Action::FocusImages => self.focus_on(crate::actions::Scope::Images),
+            Action::FocusTools => self.focus_on(crate::actions::Scope::Metadata),
             Action::FolderUp => self.tree_cursor(|t| t.move_cursor(-1)),
             Action::FolderDown => self.tree_cursor(|t| t.move_cursor(1)),
             Action::FolderExpand => self.tree_cursor(Tree::cursor_right),
@@ -22575,7 +22578,20 @@ impl TriApp {
             Action::FocusRight => (i + 1).min(order.len() - 1),
             _ => (i + 1) % order.len(),
         };
-        self.focus = order[next];
+        self.focus_on(order[next]);
+    }
+
+    /// Le clavier au panneau `scope` (leader puis s / g / t, retour du 22/11/2026) ; un
+    /// panneau masqué s'affiche. Les sources (dossiers) n'existent qu'en grille, les outils
+    /// qu'avec un dossier ouvert : sinon, rien.
+    fn focus_on(&mut self, scope: crate::actions::Scope) {
+        use crate::actions::Scope;
+        match scope {
+            Scope::Folders if self.mode != Mode::Grid => return,
+            Scope::Metadata if self.folder.is_none() => return,
+            _ => {}
+        }
+        self.focus = scope;
         match self.focus {
             Scope::Folders => {
                 self.folder_panel = true;
@@ -25459,6 +25475,15 @@ impl eframe::App for TriApp {
             self.develop_toast(ui);
             self.export_toasts(ui);
         });
+        // La grille (ou l'image) a le clavier, un panneau à côté : son repère, le même que
+        // celui des panneaux, dans la marge du coin (sur une vignette sélectionnée, de la
+        // couleur d'accent, il ne se voyait pas).
+        if self.focus == crate::actions::Scope::Images
+            && !self.focus_mode
+            && (self.folder_panel || self.metadata_panel)
+        {
+            focus_mark(ui.painter(), center.response.rect, &self.gui.dialogs);
+        }
         self.click_focus(&ctx, folders_rect, metadata_rect, center.response.rect);
         self.position_mark(&ctx, center.response.rect);
         self.end_mark(&ctx, center.response.rect);
@@ -26662,11 +26687,26 @@ fn panel_focus_fill(ui: &Ui, dialogs: &crate::settings::DialogSettings) {
     );
     let clip = ui.clip_rect();
     ui.painter().rect_filled(clip, 0.0, fill);
-    if dialogs.focus_line_width > 0.0 {
-        let color = dialogs.focus_line.resolve(marks::accent_mark(ui.ctx()));
-        let line = Rect::from_min_size(clip.min, vec2(clip.width(), dialogs.focus_line_width));
-        ui.painter().rect_filled(line, 0.0, color);
+    focus_mark(ui.painter(), clip, dialogs);
+}
+
+/// Repère du panneau qui a le clavier (retour du 22/11/2026) : un court trait d'accent
+/// dans le coin en haut à gauche de `area`, le même dans les trois panneaux (toute la
+/// largeur si `focus_line_length` vaut 0).
+fn focus_mark(painter: &egui::Painter, area: Rect, dialogs: &crate::settings::DialogSettings) {
+    if dialogs.focus_line_width <= 0.0 {
+        return;
     }
+    let color = dialogs
+        .focus_line
+        .resolve(marks::accent_mark(painter.ctx()));
+    let length = if dialogs.focus_line_length > 0.0 {
+        dialogs.focus_line_length.min(area.width())
+    } else {
+        area.width()
+    };
+    let line = Rect::from_min_size(area.min, vec2(length, dialogs.focus_line_width));
+    painter.rect_filled(line, 0.0, color);
 }
 
 /// Ligne pointée au clavier dans un panneau ou une liste : une bande de la couleur du
@@ -34709,6 +34749,32 @@ mod tests {
         let (text, error) = h.state().notice.clone().expect("message");
         assert!(error, "{text}");
         assert!(text.contains("X-T4"), "{text}");
+    }
+
+    #[test]
+    fn the_leader_goes_straight_to_a_panel() {
+        // Retour du 22/11/2026 : leader puis s (sources), g (grille), t (outils), un
+        // panneau masqué s'affichant.
+        use crate::actions::Scope;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().folder_panel = false;
+        h.state_mut().metadata_panel = false;
+        for (key, scope) in [
+            (Key::S, Scope::Folders),
+            (Key::T, Scope::Metadata),
+            (Key::G, Scope::Images),
+            (Key::T, Scope::Metadata),
+        ] {
+            press(&mut h, Key::B, Modifiers::CTRL);
+            press(&mut h, key, Modifiers::NONE);
+            h.run_steps(1);
+            assert_eq!(h.state().focus, scope, "{key:?}");
+        }
+        assert!(
+            h.state().folder_panel && h.state().metadata_panel,
+            "affichés"
+        );
     }
 
     #[test]

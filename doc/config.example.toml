@@ -1244,6 +1244,9 @@ cursor_tint = 0.12
 # "#rrggbb", et son épaisseur en points (0 : aucun trait).
 focus_line = "accent"
 focus_line_width = 2.0
+# Longueur de ce trait, dans le coin en haut à gauche du panneau (points ; 0 : toute la
+# largeur). Le même repère sur la grille quand elle a le clavier.
+focus_line_length = 24.0
 # Côté des boutons à icône (actions sur le fichier, dans la boîte du clic droit), en points.
 icon_size = 34.0
 # Largeur de l'aide (<core.app.help>), en points (au plus 90 % de la fenêtre).

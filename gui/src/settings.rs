@@ -811,6 +811,9 @@ pub struct DialogSettings {
     pub focus_line: ThemeColor,
     /// Épaisseur de ce trait (points) ; 0 : aucun.
     pub focus_line_width: f32,
+    /// Longueur de ce trait, dans le coin en haut à gauche (points) ; 0 : toute la
+    /// largeur. Le même repère dans les trois panneaux (retour du 22/11/2026).
+    pub focus_line_length: f32,
     /// Côté des boutons à icône (actions sur le fichier de la boîte du clic droit).
     pub icon_size: f32,
     /// Largeur de l'aide (F1), points (au plus 90 % de la fenêtre).
@@ -895,6 +898,7 @@ impl Default for DialogSettings {
             cursor_tint: 0.12,
             focus_line: ThemeColor::Accent,
             focus_line_width: 2.0,
+            focus_line_length: 24.0,
             icon_size: 34.0,
             help_width: 1200.0,
             help_label_width: 480.0,

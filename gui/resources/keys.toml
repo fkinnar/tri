@@ -538,6 +538,11 @@ loupe = "m"
 "core.panel.left" = ["h", "Left"]
 "core.panel.right" = ["l", "Right"]
 "core.panel.next" = ["o"]
+# Or straight to one (feedback of 2026-11-22): s the sources (folders), g the grid (or
+# the image in full screen), t the tools (right panel).
+"core.panel.sources" = ["s"]
+"core.panel.grid" = ["g"]
+"core.panel.tools" = ["t"]
 "core.view.folders" = ["Shift+h", "Shift+Left"]
 "core.view.metadata" = ["Shift+l", "Shift+Right"]
 "core.view.filter_bar" = ["Shift+k", "Shift+Up"]

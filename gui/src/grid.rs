@@ -205,6 +205,9 @@ pub fn navigate(
         | Action::FocusLeft
         | Action::FocusRight
         | Action::FocusNext
+        | Action::FocusSources
+        | Action::FocusImages
+        | Action::FocusTools
         | Action::FolderUp
         | Action::FolderDown
         | Action::FolderExpand

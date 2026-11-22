@@ -769,7 +769,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   accent, le double cadre alourdissait ; le curseur des métadonnées n'encadre plus
   l'histogramme, issue n° 77) et un **trait en haut** (26/10/2026, #77 : le fond seul
   ne se voyait pas assez ; `focus_line` = `"accent"` ou `"#rrggbb"`, `focus_line_width`,
-  0 pour aucun), la barre d'état le dit ; la ligne pointée au clavier
+  0 pour aucun) ; depuis le 22/11/2026, un **court trait dans le coin en haut à gauche**
+  (`focus_line_length`, 24 points ; 0 : toute la largeur), le même sur la **grille ou
+  l'image** quand elles ont le clavier et qu'un panneau latéral est affiché (dans la
+  marge du coin du panneau central : sur une vignette sélectionnée, de la couleur
+  d'accent, il ne se voyait pas). **`<leader> s` / `g` / `t`** vont directement aux
+  sources (dossiers), à la grille (ou à l'image) et aux outils (panneau de droite), un
+  panneau masqué s'affichant (`TriApp::focus_on`) ; `h` / `l` / `o` restent. La barre
+  d'état le dit ; la ligne pointée au clavier
   (dossiers, métadonnées, résultats de recherche) est une **bande grise discrète** sur
   toute la largeur (`[gui.dialogs] cursor_tint`, `cursor_row` ; cadre d'accent avant le
   25/10/2026, trop voyant et coupé à gauche quand le panneau défilait). **Le survol
