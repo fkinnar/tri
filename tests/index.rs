@@ -123,6 +123,29 @@ fn computed_palettes_are_indexed_and_a_moved_photo_keeps_its_own() {
             .any(|(p, _, _)| p.ends_with("b/rouge.jpg")),
         "gardée, pour être grisée puis retrouvée"
     );
+    // Une photo déplacée par `tri` vers un dossier jamais ouvert : l'index la suit.
+    let elsewhere = dir.path().join("jamais ouvert");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let plan = tri::files::plan_transfer(
+        &[a.join("bleu.jpg")],
+        &elsewhere,
+        tri::files::TransferMode::Move,
+        &tri::files::FileSettings::default(),
+    )
+    .unwrap();
+    tri::files::transfer(&plan, |_, _| {}).unwrap();
+    tri::index::flush(Duration::from_secs(30));
+    let paths: Vec<std::path::PathBuf> = index
+        .photos(None)
+        .unwrap()
+        .into_iter()
+        .map(|e| e.0)
+        .collect();
+    assert!(
+        paths.iter().any(|p| p.ends_with("jamais ouvert/bleu.jpg"))
+            && !paths.iter().any(|p| p.ends_with("a/bleu.jpg")),
+        "{paths:?}"
+    );
 }
 
 /// Petit générateur pseudo-aléatoire (reproductible, sans dépendance).

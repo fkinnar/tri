@@ -111,6 +111,16 @@ palettes gardées), le cache (`Cache::relocate`) et les données de tri gardées
 machine (`store::relocate`) ; « Toutes les photos » est relue. Un dossier déplacé ou
 renommé **dans `tri`** emmène aussi son index.
 
+**Photos déplacées, renommées ou copiées par `tri`** (`files::rename`, `files::transfer`,
+comme les notes, `reconcile::carry`) : l'index les suit (`index::carry`,
+`Index::carry`), même vers un dossier jamais ouvert. Déplacée, une photo garde tout ;
+copiée, la copie prend l'empreinte de contenu de l'original (ses palettes suivent).
+Une photo déplacée **hors de `tri`**, seule, quitte « Toutes les photos » : son dossier
+est là, relu, et elle n'y est plus ; les racines surveillées la retrouveront à sa
+nouvelle place. Un dossier **qui n'existe plus** n'est jamais noté « vu vide » (rouvert
+au lancement après un renommage, il effaçait tout ce que l'index en savait) : ses photos
+restent, grisées.
+
 ## Réglages `[index]`
 
 | Clé | Défaut | Rôle |

@@ -522,8 +522,9 @@ pub fn rename(plan: &Rename) -> Result<()> {
         }
         done.push((from, to));
     }
-    // Ce que `tri` retenait des notes suit (issue n° 368).
+    // Ce que `tri` retenait des notes suit (issue n° 368), et l'index (#561).
     crate::reconcile::carry(&plan.moves, false);
+    crate::index::carry(&plan.moves, false);
     Ok(())
 }
 
@@ -1082,6 +1083,7 @@ pub fn transfer(plan: &Transfer, mut progress: impl FnMut(usize, usize)) -> Resu
     // Ce que `tri` retenait des notes suit (issue n° 368).
     let carried: Vec<(PathBuf, PathBuf)> = plan.files.iter().chain(&plan.shared).cloned().collect();
     crate::reconcile::carry(&carried, plan.mode == TransferMode::Copy);
+    crate::index::carry(&carried, plan.mode == TransferMode::Copy);
     Ok(())
 }
 

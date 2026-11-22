@@ -109,6 +109,15 @@ palettes kept), the cache (`Cache::relocate`) and the sorting data kept on the m
 (`store::relocate`); "All photos" is read again. A folder moved or renamed **inside
 `tri`** takes its index along too.
 
+**Photos moved, renamed or copied by `tri`** (`files::rename`, `files::transfer`, like the
+notes, `reconcile::carry`): the index follows them (`index::carry`, `Index::carry`), even
+into a folder never opened. Moved, a photo keeps everything; copied, the copy takes the
+original's content fingerprint (its palettes follow). A photo moved **outside `tri`** on
+its own leaves "All photos": its folder is there, read again, and it is no longer in it;
+the watched roots will find it at its new place. A folder **that no longer exists** is
+never recorded as "seen empty" (reopened at launch after a rename, it erased everything
+the index knew about it): its photos stay, greyed.
+
 ## `[index]` settings
 
 | Key | Default | Role |

@@ -322,7 +322,7 @@ pub fn defer_job(id: String, job: impl FnOnce() + Send + 'static) {
 }
 
 /// Relève `path` sur le disque et le retient.
-fn read_stamp(path: &Path) -> Option<(u64, u128)> {
+pub(crate) fn read_stamp(path: &Path) -> Option<(u64, u128)> {
     // Clone darktable : le fichier de l'image d'origine.
     crate::io_watch::access("relevé d'un fichier", path);
     let read = fs::metadata(crate::media::source(path)).ok().map(|meta| {
