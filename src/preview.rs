@@ -253,10 +253,12 @@ pub fn grid_key(file: &MediaFile, level: Level, settings: &Settings, side: u32) 
     )
 }
 
-fn key_with(file: &MediaFile, level: Level, settings: &Settings, extra: &str) -> io::Result<Key> {
+/// Paramètres complets de l'entrée de `file` au niveau `level` : ceux des réglages
+/// ([`params`]) et, pour un rendu développé ou sa palette, l'état du développement dans le
+/// sidecar. Ce qui, avec le contenu du fichier, décide de l'entrée (index des palettes,
+/// #561 : deux palettes au même tampon sont les mêmes).
+pub fn stamp(file: &MediaFile, level: Level, settings: &Settings) -> String {
     let mut params = params(level, settings);
-    // Développé : le développement du sidecar aussi (modifié dans le logiciel : le rendu
-    // est refait ; une note posée par `tri` dans le même fichier ne compte pas).
     if let Level::Developed(engine) | Level::Palette(crate::palette::Source::Developed(engine)) =
         level
     {
@@ -265,6 +267,14 @@ fn key_with(file: &MediaFile, level: Level, settings: &Settings, extra: &str) ->
             .map_or_else(|| "aucun".to_string(), |s| crate::develop::render_stamp(&s));
         params.push_str(&format!(";xmp={stamp}"));
     }
+    params
+}
+
+fn key_with(file: &MediaFile, level: Level, settings: &Settings, extra: &str) -> io::Result<Key> {
+    let mut params = stamp(file, level, settings);
+    // Développé : le développement du sidecar aussi (modifié dans le logiciel : le rendu
+    // est refait ; une note posée par `tri` dans le même fichier ne compte pas), dans
+    // `stamp`.
     params.push_str(extra);
     Key::new(&file.path, level, &params)
 }

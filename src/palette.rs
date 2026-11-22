@@ -42,6 +42,26 @@ pub enum Source {
     Developed(crate::develop::Engine),
 }
 
+impl Source {
+    /// Identifiant (index des palettes, #561) : `camera`, `raw`, ou celui du logiciel.
+    pub fn id(self) -> &'static str {
+        match self {
+            Source::Camera => "camera",
+            Source::Raw => "raw",
+            Source::Developed(engine) => engine.id(),
+        }
+    }
+
+    /// Source d'après son identifiant ([`Source::id`]).
+    pub fn parse(id: &str) -> Option<Source> {
+        match id {
+            "camera" => Some(Source::Camera),
+            "raw" => Some(Source::Raw),
+            id => crate::develop::Engine::from_id(id).map(Source::Developed),
+        }
+    }
+}
+
 /// Source choisie dans l'interface ou en ligne de commande (sur le modèle du rendu
 /// affiché, retour du 21/11/2026) : JPEG boîtier, un logiciel de développement (tous ses
 /// développements, clones compris), ou les données brutes. Dans un fichier :

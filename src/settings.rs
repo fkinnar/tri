@@ -125,6 +125,8 @@ pub struct EngineSettings {
     pub similarity: crate::similarity::SimilaritySettings,
     /// Palettes de couleurs (#492).
     pub palette: crate::palette::PaletteSettings,
+    /// Index de recherche des palettes de tous les dossiers (#561).
+    pub index: crate::index::IndexSettings,
     /// Langue des textes.
     pub i18n: crate::i18n::I18nSettings,
     /// Recherche d'une nouvelle version (sur demande).

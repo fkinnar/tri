@@ -301,6 +301,13 @@ temporary folder (`[files] trash = false`): never the user's trash.
 Last folder remembered then forgotten if it disappears; no default folder; opening (absolute path, images, notes), type and
 note filters combined, note read back after reopening, missing folder as an error.
 
+### `index` (unit `src/index.rs`, integration `tests/index.rs`)
+
+Palette index (#561): moved photo keeping its palette, palette replaced with other
+settings, fingerprint limited to the ends of the file, database rebuilt; end to end with
+real computations. Measurement on 100,000 palettes: `--ignored`, in `--release` (see
+[index.md](index.md)).
+
 ### `media` + `filter` (integration, `tests/media.rs`)
 
 On a temporary fake SD card (RAW+JPEG pairs, mixed case, AppleDouble, `.xmp`,

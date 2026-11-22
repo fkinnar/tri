@@ -66,6 +66,8 @@ pub struct AppSettings {
     pub similarity: tri::similarity::SimilaritySettings,
     /// `[palette]` (moteur) : palettes de couleurs.
     pub palette: tri::palette::PaletteSettings,
+    /// `[index]` (moteur) : index de recherche des palettes (#561).
+    pub index: tri::index::IndexSettings,
     /// `[i18n]` (moteur) : langue des textes.
     pub i18n: tri::i18n::I18nSettings,
     /// `[update]` (moteur) : recherche d'une nouvelle version.
@@ -107,6 +109,7 @@ impl AppSettings {
             sharpness: self.sharpness,
             similarity: self.similarity,
             palette: self.palette,
+            index: self.index,
             i18n: self.i18n,
             update: self.update.clone(),
             remote: self.remote.clone(),

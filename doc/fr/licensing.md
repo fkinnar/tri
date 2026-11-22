@@ -83,7 +83,12 @@ Apache-2.0 ; `mdns-sd` — voisinage réseau (Bonjour / mDNS), pur Rust sans run
 asynchrone, keepsimple1/mdns-sd, actif (0.21.6 du 19/10/2026), sans ses options par
 défaut — sous Apache-2.0 OR MIT, avec `flume` sous Apache-2.0 / MIT, `if-addrs` sous MIT
 OR BSD-3-Clause, `socket-pktinfo` sous MIT, `mio`, `socket2`, `fastrand` sous MIT (OR
-Apache-2.0)) : les 89 crates
+Apache-2.0) ; `rusqlite` — index de recherche des palettes de tous les dossiers
+(`tri::index`, #561), rusqlite/rusqlite, très actif (0.41.1 du 28/10/2026 ; la dernière,
+d'une semaine, pas retenue), sans ses options par défaut, SQLite **compilée dans le
+binaire** (`bundled`, rien à installer ; SQLite elle-même est dans le **domaine public**) —
+sous MIT, avec `libsqlite3-sys` sous MIT, `fallible-iterator`,
+`fallible-streaming-iterator`, `bitflags`, `smallvec` sous MIT OR Apache-2.0) : les 89 crates
 de l'arbre de
 dépendances du moteur sur macOS (`cargo tree -p tri -e normal,build`, recompté le
 17/10/2026) sont sous licences

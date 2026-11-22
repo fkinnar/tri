@@ -647,6 +647,19 @@ stack_scale = 0.5
 # de l'image), montrée par le collimateur sous le pointeur et dans la loupe.
 pick_area = 0.02
 
+[index]
+# Noter les palettes dans l'index de recherche de tous les dossiers.
+#
+# Index de recherche des palettes (#561) : chaque palette calculée (ou trouvée dans le
+# cache) est notée dans une base du dossier des données de tri, avec une empreinte du
+# contenu de la photo (une photo déplacée garde sa palette). Effaçable à tout moment :
+# rien n'y est irremplaçable.
+enabled = true
+# Empreinte d'une photo : Ko lus au début et à la fin du fichier.
+fingerprint_kb = 32
+# Palettes notées par écriture dans la base, au plus.
+batch = 256
+
 [similarity]
 # Côté long de la petite image d'où l'empreinte est tirée (pixels) : petite, elle ne
 # regarde que la composition et les couleurs, pas les détails.

@@ -644,6 +644,18 @@ stack_scale = 0.5
 # long side), shown by the reticle under the pointer and in the loupe.
 pick_area = 0.02
 
+[index]
+# Record the palettes in the search index of all folders.
+#
+# Palette search index (#561): every palette computed (or found in the cache) is recorded
+# in a database in tri's data folder, with a fingerprint of the photo's content (a moved
+# photo keeps its palette). Can be deleted at any time: nothing in it is irreplaceable.
+enabled = true
+# A photo's fingerprint: KB read at the start and at the end of the file.
+fingerprint_kb = 32
+# Palettes recorded per database write, at most.
+batch = 256
+
 [similarity]
 # Long side of the small image the fingerprint is taken from (pixels): being small, it
 # only looks at composition and colours, not details.

@@ -169,6 +169,7 @@ pub fn needs_restart(section: &str, key: &str) -> bool {
             | "exposure"
             | "sharpness"
             | "similarity"
+            | "index"
             | "places"
             | "data"
     ) || (section, key) == ("gui", "window")
@@ -230,6 +231,7 @@ const CATEGORIES: [&[&str]; 6] = [
         "sort",
         "similarity",
         "palette",
+        "index",
         "sharpness",
         "exposure",
     ],

@@ -22,6 +22,9 @@ img-parts = "0.4"
 moxcms = "0.8"
 libheif-rs = { version = "3", default-features = false, features = ["v1_17"], optional = true }
 quick-xml = "0.42"
+# Index de recherche des palettes de tous les dossiers (#561) : SQLite compilée avec le
+# projet (domaine public), rien à installer ; rusqlite/rusqlite, très actif.
+rusqlite = { version = "0.41.1", default-features = false, features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 # Versions (recadrages) dans le XMP : un objet JSON par élément de `tri:Versions`.
 serde_json = { version = "1", features = ["preserve_order"] }
