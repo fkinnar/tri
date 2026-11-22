@@ -75,7 +75,65 @@ and date, with the palette at the same parameters, only costs a database read; o
 the fingerprint is computed (at most 2 × 32 KB read) and the palette read back from the
 cache. `index::flush` waits until everything is written (command line, before exiting).
 The interface starts the index with the engine (never in tests); `--compute` too, when it
-computes palettes.
+computes palettes. The folder opened at launch, read before the writer thread exists, is
+recorded when the engine starts.
+
+**Camera cards are never indexed** (feedback of 2026-11-22: raw files, before they are
+copied elsewhere): nothing under a `DCIM` folder (`locate::is_camera_card`).
+
+## Finding a moved folder (`tri::locate`)
+
+In "All photos", the completion from disk (`folder::complete_from_disk`) also returns the
+**unreachable** folders; their photos stay, **greyed**, with the reason on hover: **disk
+unplugged** (the first existing parent is a mount folder, `/Volumes`,
+`/media/<user>`…: `locate::unplugged`, plugging it back in is enough) or **not found**
+(moved or renamed on a disk that is there).
+
+**Find its folder** (`core.file.locate`, `g l`, right-click, or the folder-and-magnifier
+icon **in the middle of each greyed thumbnail**, feedback of 2026-11-22: with the mouse
+too; an unplugged disk shows a disk there, not clickable)
+searches in the background (`locate::find`) under the disks, the home folder and the
+favourites:
+1. the old path placed on each root, from its end towards its start
+   (`…/2026-11-18_Sarah`, `…/2026/2026-11-18_Sarah`…): a folder moved from one disk to
+   another often keeps its structure, and these tries cost nothing;
+2. then the folders with the same name, down to the grid's subfolder depth
+   (`[gui.folders] subfolders_depth`, feedback of 2026-11-22: the same setting), hidden
+   folders and cards left out.
+
+Each candidate is **checked** as soon as it comes up (`locate::verify`): three sample
+photos of the old folder (first, middle, last by name, `Index::photos_in`) must be there,
+at the same size, and with the same content when the index has its fingerprint. Not
+found: a box asks where it is (Tab completion, "Browse…"), checked the same way ("This
+folder does not hold the same photos"). Once found, **everything follows**
+(`locate::relocate`): the index (`Index::relocate`, subfolders included, fingerprints and
+palettes kept), the cache (`Cache::relocate`) and the sorting data kept on the machine
+(`store::relocate`); "All photos" is read again. A folder moved or renamed **inside
+`tri`** takes its index along too.
+
+**Photos moved, renamed or copied by `tri`** (`files::rename`, `files::transfer`, like the
+notes, `reconcile::carry`): the index follows them (`index::carry`, `Index::carry`), even
+into a folder never opened. Moved, a photo keeps everything; copied, the copy takes the
+original's content fingerprint (its palettes follow). A photo moved **outside `tri`** on
+its own leaves "All photos": its folder is there, read again, and it is no longer in it;
+the watched roots will find it at its new place. A folder **that no longer exists** is
+never recorded as "seen empty" (reopened at launch after a rename, it erased everything
+the index knew about it): its photos stay, greyed.
+
+**Notes kept** (schema 4, feedback of 2026-11-22: "otherwise you cannot see they are no
+longer there"): stars, flag and colours of every reachable photo, in one integer
+(`paths.notes`), reported when read or changed (`index::note_notes`, from
+`TriApp::notes_changed`). An unreachable photo shows these notes (`NoteBook::set_known`,
+`Index::notes_in`): the filters find it, greyed. Going from schema 2 or 3 to 4 adds the
+columns (`ALTER TABLE`): nothing is lost.
+
+**Folder recognised when opened** (`locate::recognise`, idea of 2026-11-22): opening a
+folder the index does not know (`TEST4`) whose sample photos (same name, same size,
+`Index::with_sizes`, then `locate::verify`) are those of a known folder **that no longer
+exists** (`TEST3`): it is that folder, renamed or moved outside `tri`. Everything follows
+(`locate::relocate`) before its view is read, in the opening thread: remembered view,
+notes kept by `tri`, cached computations, index; a message says so. An old folder that is
+still there is not taken (a copy is not a rename).
 
 ## `[index]` settings
 

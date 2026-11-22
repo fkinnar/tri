@@ -110,6 +110,57 @@ fn computed_palettes_are_indexed_and_a_moved_photo_keeps_its_own() {
         signatures.iter().any(|(p, _)| p.ends_with("b/rouge.jpg")),
         "{signatures:?}"
     );
+    // Les notes signalées : gardées (une photo absente, non : ses notes sont vides).
+    let five = tri::xmp::Notes {
+        stars: 5,
+        ..Default::default()
+    };
+    tri::index::note_notes(vec![
+        (b.join("rouge.jpg"), five.clone()),
+        (b.join("absente.jpg"), five.clone()),
+    ]);
+    tri::index::flush(Duration::from_secs(30));
+    let b_abs = std::path::absolute(&b).unwrap();
+    assert_eq!(
+        index.notes_in(&b_abs).unwrap(),
+        vec![(b_abs.join("rouge.jpg"), five)]
+    );
+    // Le dossier renommé dans le système, puis rouvert (vide) : rien d'oublié.
+    let renamed = dir.path().join("b renommé");
+    std::fs::rename(&b, &renamed).unwrap();
+    tri::index::seen(&b, 1, &[]);
+    tri::index::flush(Duration::from_secs(30));
+    assert!(
+        index
+            .photos(None)
+            .unwrap()
+            .iter()
+            .any(|(p, _, _)| p.ends_with("b/rouge.jpg")),
+        "gardée, pour être grisée puis retrouvée"
+    );
+    // Une photo déplacée par `tri` vers un dossier jamais ouvert : l'index la suit.
+    let elsewhere = dir.path().join("jamais ouvert");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let plan = tri::files::plan_transfer(
+        &[a.join("bleu.jpg")],
+        &elsewhere,
+        tri::files::TransferMode::Move,
+        &tri::files::FileSettings::default(),
+    )
+    .unwrap();
+    tri::files::transfer(&plan, |_, _| {}).unwrap();
+    tri::index::flush(Duration::from_secs(30));
+    let paths: Vec<std::path::PathBuf> = index
+        .photos(None)
+        .unwrap()
+        .into_iter()
+        .map(|e| e.0)
+        .collect();
+    assert!(
+        paths.iter().any(|p| p.ends_with("jamais ouvert/bleu.jpg"))
+            && !paths.iter().any(|p| p.ends_with("a/bleu.jpg")),
+        "{paths:?}"
+    );
 }
 
 /// Petit générateur pseudo-aléatoire (reproductible, sans dépendance).

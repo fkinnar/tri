@@ -211,6 +211,17 @@ pub fn set_for(photo: &Path, developments: &[Development]) {
     }
 }
 
+/// Vrai si `name` a la forme d'un chemin de développement (`DSCF0001@dt-01.RAF`, voir
+/// [`Development::path`]), même inconnu du registre (le dossier de la photo a disparu).
+pub fn looks_like(name: &std::ffi::OsStr) -> bool {
+    let name = name.to_string_lossy();
+    let stem = name.rsplit_once('.').map_or(&*name, |(s, _)| s);
+    stem.rsplit_once(MARK).is_some_and(|(_, tail)| {
+        let engine = tail.split('-').next().unwrap_or_default();
+        ["dt", "rr", "rt", "art"].contains(&engine)
+    })
+}
+
 /// Le développement de chemin propre `path`, s'il est connu.
 pub fn get(path: &Path) -> Option<Development> {
     REGISTRY.read().ok()?.known.get(path).cloned()

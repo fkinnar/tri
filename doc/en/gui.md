@@ -1170,7 +1170,9 @@ system one ("cold" measurements, experiments).
   read again in the source over there. **Show in its folder**
   (`core.file.show_in_folder`, `g f`, folder-and-target icon in the right-click box, only
   from "All photos"): the image's real folder, the image highlighted in the grid
-  (`select_after_open`).
+  (`select_after_open`). **Find its folder** (`core.file.locate`, `g l`,
+  folder-and-magnifier icon): photos of an unreachable folder greyed, search and repair
+  described in `index.md` (`TriApp::locate`, box `locate_dialog.rs`).
   **Reference photo** (feedback of 2026-11-22), shared by "similar palettes" and
   "similar" (`TriApp::reference`): in the Filters section, "Colour" first, then those two
   filters, the reference on their right (`reference_box`: its thumbnail, or an empty

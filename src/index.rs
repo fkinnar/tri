@@ -29,7 +29,7 @@ use crate::media::MediaFile;
 use crate::palette::{Palette, Source};
 
 /// Version du schéma : une autre version, la base est refaite (rien n'y est irremplaçable).
-const SCHEMA: i64 = 3;
+const SCHEMA: i64 = 4;
 
 /// Section `[index]` : index de recherche des palettes (#561).
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
@@ -143,6 +143,8 @@ impl Index {
 
     fn try_open(path: &Path) -> rusqlite::Result<Index> {
         let db = Connection::open(path)?;
+        // Écrit aussi ailleurs (le fil d'écriture, une réparation) : on attend son tour.
+        db.busy_timeout(Duration::from_secs(5))?;
         // Écritures en fond pendant les lectures (recherche) ; rien d'irremplaçable : une
         // écriture perdue à une coupure de courant est refaite au prochain calcul.
         db.pragma_update(None, "journal_mode", "WAL")?;
@@ -152,7 +154,26 @@ impl Index {
 
     fn setup(db: Connection) -> rusqlite::Result<Index> {
         let version: i64 = db.pragma_query_value(None, "user_version", |r| r.get(0))?;
-        if version != SCHEMA {
+        // Les colonnes ajoutées depuis : la base gardée (tout ce qu'on a vu).
+        let added: &[&str] = match version {
+            2 => &[
+                "ALTER TABLE paths ADD COLUMN signature BLOB",
+                "ALTER TABLE paths ADD COLUMN signature_stamp TEXT",
+                "ALTER TABLE paths ADD COLUMN notes INTEGER",
+                "CREATE INDEX paths_size ON paths(size)",
+            ],
+            3 => &[
+                "ALTER TABLE paths ADD COLUMN notes INTEGER",
+                "CREATE INDEX paths_size ON paths(size)",
+            ],
+            _ => &[],
+        };
+        if !added.is_empty() {
+            for statement in added {
+                db.execute(statement, [])?;
+            }
+            db.pragma_update(None, "user_version", SCHEMA)?;
+        } else if version != SCHEMA {
             db.execute_batch(
                 "DROP TABLE IF EXISTS paths;
                  DROP TABLE IF EXISTS palettes;
@@ -162,9 +183,11 @@ impl Index {
                      modified INTEGER NOT NULL,
                      fingerprint BLOB,
                      signature BLOB,
-                     signature_stamp TEXT
+                     signature_stamp TEXT,
+                     notes INTEGER
                  );
                  CREATE INDEX paths_fingerprint ON paths(fingerprint);
+                 CREATE INDEX paths_size ON paths(size);
                  CREATE TABLE palettes (
                      fingerprint BLOB NOT NULL,
                      source TEXT NOT NULL,
@@ -244,6 +267,184 @@ impl Index {
             }
         }
         tx.commit()
+    }
+
+    /// Les photos connues directement dans `dir` (pas ses sous-dossiers) : nom, taille,
+    /// empreinte de contenu si elle a été lue. Pour vérifier qu'un dossier retrouvé est
+    /// bien le même ([`crate::locate::verify`]).
+    pub fn photos_in(&self, dir: &Path) -> rusqlite::Result<Vec<crate::locate::Sample>> {
+        let low = path_bytes(dir);
+        let mut high = low.clone();
+        if let Some(last) = high.last_mut() {
+            *last += 1;
+        }
+        let mut stmt = self
+            .db
+            .prepare("SELECT path, size, fingerprint FROM paths WHERE path >= ?1 AND path < ?2")?;
+        let rows = stmt.query_map(params![low, high], |r| {
+            Ok((
+                r.get::<_, Vec<u8>>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, Option<Vec<u8>>>(2)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (bytes, size, fp) = row?;
+            let path = bytes_path(&bytes);
+            if path.parent() != Some(dir) {
+                continue;
+            }
+            let Some(name) = path.file_name() else {
+                continue;
+            };
+            out.push(crate::locate::Sample {
+                name: name.to_os_string(),
+                size: size as u64,
+                fingerprint: fp.and_then(|f| f.try_into().ok()),
+            });
+        }
+        Ok(out)
+    }
+
+    /// Les chemins connus dont la taille est l'une de `sizes` (pour reconnaître un dossier
+    /// déplacé à ses photos, [`crate::locate::recognise`]).
+    pub fn with_sizes(&self, sizes: &[u64]) -> rusqlite::Result<Vec<(PathBuf, u64)>> {
+        let mut out = Vec::new();
+        let mut stmt = self
+            .db
+            .prepare("SELECT path, size FROM paths WHERE size = ?1")?;
+        for &size in sizes {
+            let rows = stmt.query_map(params![size as i64], |r| {
+                Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, i64>(1)?))
+            })?;
+            for row in rows {
+                let (bytes, size) = row?;
+                out.push((bytes_path(&bytes), size as u64));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Un dossier déplacé (`from` → `to`, « Retrouver… », #561) : ses chemins et ceux de
+    /// ses sous-dossiers suivent, avec leurs empreintes (palettes, similitude) ; un chemin
+    /// déjà connu à la nouvelle place garde la sienne. Renvoie le nombre de chemins
+    /// déplacés.
+    pub fn relocate(&mut self, from: &Path, to: &Path) -> rusqlite::Result<usize> {
+        let low = path_bytes(from);
+        let mut high = low.clone();
+        if let Some(last) = high.last_mut() {
+            *last += 1;
+        }
+        let tx = self.db.transaction()?;
+        let mut moved = 0;
+        {
+            let mut stmt = tx.prepare("SELECT path FROM paths WHERE path >= ?1 AND path < ?2")?;
+            let below: Vec<Vec<u8>> = stmt
+                .query_map(params![low, high], |r| r.get(0))?
+                .collect::<rusqlite::Result<_>>()?;
+            let mut exists = tx.prepare("SELECT 1 FROM paths WHERE path = ?1")?;
+            let mut update = tx.prepare("UPDATE paths SET path = ?2 WHERE path = ?1")?;
+            let mut forget = tx.prepare("DELETE FROM paths WHERE path = ?1")?;
+            for bytes in below {
+                let path = bytes_path(&bytes);
+                let Ok(rest) = path.strip_prefix(from) else {
+                    continue;
+                };
+                let new = path_bytes(&to.join(rest));
+                if exists.exists(params![new])? {
+                    forget.execute(params![bytes])?;
+                } else {
+                    update.execute(params![bytes, new])?;
+                }
+                moved += 1;
+            }
+        }
+        tx.commit()?;
+        Ok(moved)
+    }
+
+    /// Des photos déplacées ou copiées par `tri` (`copy`) : (avant, après, taille et date
+    /// de l'après). Déplacée, la photo garde tout ce que l'index en savait ; copiée, la
+    /// copie est notée avec l'empreinte de contenu de l'original (ses palettes suivent,
+    /// son empreinte de similitude sera recalculée). Les chemins inconnus sont ignorés.
+    pub fn carry(&mut self, items: &[Carried], copy: bool) -> rusqlite::Result<()> {
+        let tx = self.db.transaction()?;
+        {
+            let mut fingerprint_of = tx.prepare("SELECT fingerprint FROM paths WHERE path = ?1")?;
+            let mut forget = tx.prepare("DELETE FROM paths WHERE path = ?1")?;
+            let mut update = tx.prepare(
+                "UPDATE paths SET path = ?2,
+                     size = COALESCE(?3, size), modified = COALESCE(?4, modified)
+                 WHERE path = ?1",
+            )?;
+            let mut insert = tx.prepare(
+                "INSERT OR REPLACE INTO paths (path, size, modified, fingerprint)
+                 VALUES (?1, ?2, ?3, ?4)",
+            )?;
+            for (from, to, stamp) in items {
+                let (from_b, to_b) = (path_bytes(from), path_bytes(to));
+                let Some(fp) = fingerprint_of
+                    .query_row(params![from_b], |r| r.get::<_, Option<Vec<u8>>>(0))
+                    .optional()?
+                else {
+                    continue;
+                };
+                if copy {
+                    if let Some((size, modified)) = stamp {
+                        insert.execute(params![to_b, *size as i64, ns(*modified), fp])?;
+                    }
+                } else {
+                    forget.execute(params![to_b])?;
+                    update.execute(params![
+                        from_b,
+                        to_b,
+                        stamp.map(|s| s.0 as i64),
+                        stamp.map(|s| ns(s.1))
+                    ])?;
+                }
+            }
+        }
+        tx.commit()
+    }
+
+    /// Note les notes de photos (étoiles, drapeau, couleurs) : celles qu'on montrera si la
+    /// photo devient injoignable (dossier renommé, disque débranché). Les chemins
+    /// inconnus sont ignorés.
+    pub fn record_notes(&mut self, items: &[(PathBuf, crate::xmp::Notes)]) -> rusqlite::Result<()> {
+        let tx = self.db.transaction()?;
+        {
+            let mut update =
+                tx.prepare("UPDATE paths SET notes = ?2 WHERE path = ?1 AND notes IS NOT ?2")?;
+            for (path, notes) in items {
+                update.execute(params![path_bytes(path), pack_notes(notes)])?;
+            }
+        }
+        tx.commit()
+    }
+
+    /// Les notes connues des photos directement dans `dir`.
+    pub fn notes_in(&self, dir: &Path) -> rusqlite::Result<Vec<(PathBuf, crate::xmp::Notes)>> {
+        let low = path_bytes(dir);
+        let mut high = low.clone();
+        if let Some(last) = high.last_mut() {
+            *last += 1;
+        }
+        let mut stmt = self.db.prepare(
+            "SELECT path, notes FROM paths WHERE path >= ?1 AND path < ?2 AND notes IS NOT NULL",
+        )?;
+        let rows = stmt.query_map(params![low, high], |r| {
+            Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, i64>(1)?))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (bytes, packed) = row?;
+            let path = bytes_path(&bytes);
+            if path.parent() == Some(dir) {
+                out.push((path, unpack_notes(packed)));
+            }
+        }
+        Ok(out)
     }
 
     /// Vrai si l'index a l'empreinte de similitude de `path` à cette taille, cette date et
@@ -434,6 +635,41 @@ impl Index {
 }
 
 /// Date en ns, dans un entier SQLite (jusqu'en 2262).
+/// Notes en un entier : étoiles (bits 0–3), drapeau (4–5), couleurs (une par bit, 8–12).
+fn pack_notes(notes: &crate::xmp::Notes) -> i64 {
+    use crate::xmp::{Color, Flag};
+    let flag = match notes.flag {
+        Flag::None => 0,
+        Flag::Accepted => 1,
+        Flag::Rejected => 2,
+    };
+    let colors = Color::ALL
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| notes.colors.contains(c))
+        .fold(0i64, |bits, (i, _)| bits | 1 << i);
+    i64::from(notes.stars.min(15)) | flag << 4 | colors << 8
+}
+
+/// L'inverse de [`pack_notes`].
+fn unpack_notes(packed: i64) -> crate::xmp::Notes {
+    use crate::xmp::{Color, Flag};
+    crate::xmp::Notes {
+        stars: (packed & 0xf) as u8,
+        flag: match (packed >> 4) & 3 {
+            1 => Flag::Accepted,
+            2 => Flag::Rejected,
+            _ => Flag::None,
+        },
+        colors: Color::ALL
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| packed >> 8 & 1 << i != 0)
+            .map(|(_, c)| *c)
+            .collect(),
+    }
+}
+
 fn ns(modified: u128) -> i64 {
     i64::try_from(modified).unwrap_or(i64::MAX)
 }
@@ -475,6 +711,9 @@ fn bytes_path(bytes: &[u8]) -> PathBuf {
     }
 }
 
+/// Un fichier suivi par [`Index::carry`] : avant, après, taille et date de l'après.
+pub type Carried = (PathBuf, PathBuf, Option<(u64, u128)>);
+
 /// Une palette prête à noter (fil d'écriture).
 struct Note {
     file: MediaFile,
@@ -487,6 +726,10 @@ enum Message {
     Note(Note),
     /// Une empreinte de similitude prête (dans le cache).
     Signature(MediaFile),
+    /// Des fichiers déplacés ou copiés par `tri` ([`carry`]).
+    Carry(Vec<(PathBuf, PathBuf)>, bool),
+    /// Des notes lues ou écrites ([`note_notes`]).
+    Notes(Vec<(PathBuf, crate::xmp::Notes)>),
     Seen {
         dir: PathBuf,
         depth: usize,
@@ -526,6 +769,13 @@ pub fn start(
 /// Signale une palette prête (calculée ou trouvée dans le cache) : notée dans l'index en
 /// fond. Sans index démarré, rien.
 pub fn note(file: &MediaFile, source: Source) {
+    // Une carte d'appareil n'est pas indexée (retour du 22/11/2026 : des fichiers bruts,
+    // avant leur copie ailleurs) ; un développement non plus (un chemin virtuel, qui
+    // n'existe pas sur le disque : pris comme photo témoin, il faisait échouer la
+    // reconnaissance d'un dossier renommé).
+    if crate::locate::is_camera_card(&file.path) || crate::media::is_development(&file.path) {
+        return;
+    }
     if let Some(tx) = WRITER.get() {
         let _ = tx.send(Message::Note(Note {
             file: file.clone(),
@@ -538,7 +788,7 @@ pub fn note(file: &MediaFile, source: Source) {
 /// dans l'index en fond (« semblables » dans « Toutes les photos »). Sans index démarré,
 /// ou pour un développement (il a celle de sa photo), rien.
 pub fn note_signature(file: &MediaFile) {
-    if crate::media::is_development(&file.path) {
+    if crate::media::is_development(&file.path) || crate::locate::is_camera_card(&file.path) {
         return;
     }
     if let Some(tx) = WRITER.get() {
@@ -546,10 +796,34 @@ pub fn note_signature(file: &MediaFile) {
     }
 }
 
+/// Signale les notes lues ou écrites de photos joignables : gardées dans l'index, pour
+/// les montrer (et filtrer dessus) si la photo devient injoignable. Sans index démarré,
+/// rien.
+pub fn note_notes(notes: Vec<(PathBuf, crate::xmp::Notes)>) {
+    if notes.is_empty() {
+        return;
+    }
+    if let Some(tx) = WRITER.get() {
+        let _ = tx.send(Message::Notes(notes));
+    }
+}
+
+/// Signale des fichiers déplacés, renommés ou copiés (`copy`) par `tri` : l'index les
+/// suit en fond (« Toutes les photos » les garde à leur nouvelle place). Sans index
+/// démarré, rien.
+pub fn carry(files: &[(PathBuf, PathBuf)], copy: bool) {
+    if let Some(tx) = WRITER.get() {
+        let _ = tx.send(Message::Carry(files.to_vec(), copy));
+    }
+}
+
 /// Signale les images d'un dossier ouvert ou calculé (`dir`, `depth` niveaux) : notées
 /// dans l'index en fond (« Toutes les photos », #561), celles qui n'y sont plus oubliées.
 /// Sans index démarré, rien.
 pub fn seen(dir: &Path, depth: usize, files: &[MediaFile]) {
+    if crate::locate::is_camera_card(dir) {
+        return;
+    }
     if let Some(tx) = WRITER.get() {
         let _ = tx.send(Message::Seen {
             dir: dir.to_path_buf(),
@@ -586,6 +860,36 @@ fn write_loop(
             match message {
                 Message::Note(n) => notes.push(n),
                 Message::Signature(f) => signatures.push(f),
+                Message::Notes(notes) => {
+                    // Seulement des photos là (une injoignable n'a que des notes vides).
+                    let items: Vec<(PathBuf, crate::xmp::Notes)> = notes
+                        .into_iter()
+                        .filter(|(p, _)| p.is_file())
+                        .filter_map(|(p, n)| Some((std::path::absolute(&p).ok()?, n)))
+                        .collect();
+                    if let Err(e) = index.record_notes(&items) {
+                        crate::log::warning("index", &format!("notes not recorded: {e}"), "");
+                    }
+                }
+                Message::Carry(files, copy) => {
+                    let items: Vec<Carried> = files
+                        .into_iter()
+                        .filter(|(_, to)| !crate::locate::is_camera_card(to))
+                        .filter_map(|(from, to)| {
+                            let from = std::path::absolute(&from).ok()?;
+                            let to = std::path::absolute(&to).ok()?;
+                            let stamp = crate::cache::read_stamp(&to);
+                            Some((from, to, stamp))
+                        })
+                        .collect();
+                    if let Err(e) = index.carry(&items, copy) {
+                        crate::log::warning("index", &format!("files not followed: {e}"), "");
+                    }
+                }
+                // Un dossier qui n'existe plus (renommé, disque débranché) n'est pas « vu
+                // vide » : ses photos restent, grisées dans « Toutes les photos » (retour du
+                // 22/11/2026 : rouvert au lancement, il effaçait tout ce qu'on en savait).
+                Message::Seen { dir, .. } if !dir.is_dir() => {}
                 Message::Seen { dir, depth, files } => {
                     let photos: Vec<(PathBuf, u64, u128)> = files
                         .iter()
@@ -841,6 +1145,150 @@ mod tests {
             .seen(Path::new("/a"), 1, &[(p.clone(), 101, t)])
             .unwrap();
         assert!(index.signatures().unwrap().is_empty());
+    }
+
+    #[test]
+    fn moved_photos_keep_everything_and_copies_share_the_fingerprint() {
+        let mut index = Index::in_memory().unwrap();
+        let red = palette(0.5);
+        index
+            .record(&[entry("/a/x.raf", 7, Source::Camera, "s", &red)])
+            .unwrap();
+        let t = 1_700_000_000_000_000_000u128;
+        index
+            .record_signatures(&[(PathBuf::from("/a/x.raf"), 100, t, "s".into(), vec![9])])
+            .unwrap();
+        index
+            .carry(
+                &[(PathBuf::from("/a/x.raf"), PathBuf::from("/b/x.raf"), None)],
+                false,
+            )
+            .unwrap();
+        assert_eq!(
+            index.signatures().unwrap(),
+            vec![(PathBuf::from("/b/x.raf"), vec![9])]
+        );
+        index
+            .carry(
+                &[(
+                    PathBuf::from("/b/x.raf"),
+                    PathBuf::from("/c/x.raf"),
+                    Some((100, t)),
+                )],
+                true,
+            )
+            .unwrap();
+        let mut all: Vec<PathBuf> = index
+            .photos(None)
+            .unwrap()
+            .into_iter()
+            .map(|e| e.0)
+            .collect();
+        all.sort();
+        assert_eq!(
+            all,
+            vec![PathBuf::from("/b/x.raf"), PathBuf::from("/c/x.raf")]
+        );
+        assert_eq!(
+            index.palettes(Source::Camera).unwrap().len(),
+            1,
+            "une palette, deux chemins"
+        );
+        // Inconnu : ignoré.
+        index
+            .carry(
+                &[(PathBuf::from("/z.raf"), PathBuf::from("/y.raf"), None)],
+                false,
+            )
+            .unwrap();
+        assert_eq!(index.photos(None).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn notes_are_kept_and_an_older_index_is_migrated() {
+        use crate::xmp::{Color, Flag, Notes};
+        let mut index = Index::in_memory().unwrap();
+        let t = 1_700_000_000_000_000_000u128;
+        let p = PathBuf::from("/a/x.raf");
+        index
+            .seen(Path::new("/a"), 1, &[(p.clone(), 1, t)])
+            .unwrap();
+        let notes = Notes {
+            stars: 4,
+            flag: Flag::Rejected,
+            colors: vec![Color::Red, Color::Purple],
+        };
+        index.record_notes(&[(p.clone(), notes.clone())]).unwrap();
+        assert_eq!(
+            index.notes_in(Path::new("/a")).unwrap(),
+            vec![(p.clone(), notes)]
+        );
+        // Une base du schéma 2 : complétée, pas refaite.
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch(
+            "CREATE TABLE paths (path BLOB PRIMARY KEY, size INTEGER NOT NULL,
+                 modified INTEGER NOT NULL, fingerprint BLOB);
+             CREATE TABLE palettes (fingerprint BLOB NOT NULL, source TEXT NOT NULL,
+                 stamp TEXT NOT NULL, palette BLOB NOT NULL, PRIMARY KEY (fingerprint, source));
+             INSERT INTO paths VALUES (X'2F612F782E726166', 1, 1, NULL);",
+        )
+        .unwrap();
+        db.pragma_update(None, "user_version", 2).unwrap();
+        let mut old = Index::setup(db).unwrap();
+        assert_eq!(old.photos(None).unwrap().len(), 1, "gardée");
+        old.record_notes(&[(p.clone(), Notes::default())]).unwrap();
+        assert!(old.signatures().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_moved_folder_takes_its_paths_and_their_data_along() {
+        let mut index = Index::in_memory().unwrap();
+        let red = palette(0.5);
+        index
+            .record(&[
+                entry("/old/x.raf", 1, Source::Camera, "s", &red),
+                entry("/old/sub/y.raf", 2, Source::Camera, "s", &red),
+                entry("/older/z.raf", 3, Source::Camera, "s", &red),
+            ])
+            .unwrap();
+        let t = 1_700_000_000_000_000_000u128;
+        index
+            .record_signatures(&[(PathBuf::from("/old/x.raf"), 100, t, "s".into(), vec![9])])
+            .unwrap();
+        let samples = index.photos_in(Path::new("/old")).unwrap();
+        assert_eq!(samples.len(), 1, "le dossier seul");
+        assert_eq!(samples[0].fingerprint, Some([1; 16]));
+        assert_eq!(
+            index
+                .relocate(Path::new("/old"), Path::new("/new"))
+                .unwrap(),
+            2
+        );
+        let mut all: Vec<PathBuf> = index
+            .photos(None)
+            .unwrap()
+            .into_iter()
+            .map(|e| e.0)
+            .collect();
+        all.sort();
+        assert_eq!(
+            all,
+            vec![
+                PathBuf::from("/new/sub/y.raf"),
+                PathBuf::from("/new/x.raf"),
+                PathBuf::from("/older/z.raf")
+            ],
+            "/older n'est pas sous /old"
+        );
+        assert_eq!(
+            index.signatures().unwrap(),
+            vec![(PathBuf::from("/new/x.raf"), vec![9])]
+        );
+        assert_eq!(
+            index.palettes(Source::Camera).unwrap().len(),
+            3,
+            "palettes suivies"
+        );
     }
 
     #[test]

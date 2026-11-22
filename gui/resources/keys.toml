@@ -274,6 +274,9 @@ loupe = "m"
 # From "All photos" (#561): the image in its own folder, highlighted. "g f" like
 # "go folder".
 "core.file.show_in_folder" = ["g f"]
+# From "All photos" (#561): look for the folder of an image that is no longer where it
+# was (moved, renamed); the index, cache and notes follow. "g l" like "go locate".
+"core.file.locate" = ["g l"]
 "core.file.export" = ["Cmd+e"]
 "core.file.export.report" = ["Cmd+Shift+e"]
 # Delete: Delete, or the "delete" key of Mac keyboards (Backspace); a confirmation
