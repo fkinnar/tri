@@ -29,7 +29,7 @@ use crate::media::MediaFile;
 use crate::palette::{Palette, Source};
 
 /// Version du schéma : une autre version, la base est refaite (rien n'y est irremplaçable).
-const SCHEMA: i64 = 2;
+const SCHEMA: i64 = 3;
 
 /// Section `[index]` : index de recherche des palettes (#561).
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
@@ -160,7 +160,9 @@ impl Index {
                      path BLOB PRIMARY KEY,
                      size INTEGER NOT NULL,
                      modified INTEGER NOT NULL,
-                     fingerprint BLOB
+                     fingerprint BLOB,
+                     signature BLOB,
+                     signature_stamp TEXT
                  );
                  CREATE INDEX paths_fingerprint ON paths(fingerprint);
                  CREATE TABLE palettes (
@@ -233,13 +235,73 @@ impl Index {
                 "INSERT INTO paths (path, size, modified, fingerprint) VALUES (?1, ?2, ?3, NULL)
                  ON CONFLICT(path) DO UPDATE SET size = ?2, modified = ?3,
                      fingerprint = CASE WHEN size = ?2 AND modified = ?3
-                                        THEN fingerprint ELSE NULL END",
+                                        THEN fingerprint ELSE NULL END,
+                     signature = CASE WHEN size = ?2 AND modified = ?3
+                                      THEN signature ELSE NULL END",
             )?;
             for (path, size, modified) in photos {
                 upsert.execute(params![path_bytes(path), *size as i64, ns(*modified)])?;
             }
         }
         tx.commit()
+    }
+
+    /// Vrai si l'index a l'empreinte de similitude de `path` à cette taille, cette date et
+    /// ces paramètres.
+    pub fn has_signature(&self, path: &Path, size: u64, modified: u128, stamp: &str) -> bool {
+        self.db
+            .query_row(
+                "SELECT 1 FROM paths WHERE path = ?1 AND size = ?2 AND modified = ?3
+                 AND signature IS NOT NULL AND signature_stamp = ?4",
+                params![path_bytes(path), size as i64, ns(modified), stamp],
+                |_| Ok(()),
+            )
+            .optional()
+            .ok()
+            .flatten()
+            .is_some()
+    }
+
+    /// Note des empreintes de similitude (une transaction) : (chemin, taille, date,
+    /// paramètres, empreinte au format du cache). Le chemin est noté s'il ne l'était pas ;
+    /// son empreinte de contenu reste si le fichier n'a pas changé.
+    pub fn record_signatures(
+        &mut self,
+        items: &[(PathBuf, u64, u128, String, Vec<u8>)],
+    ) -> rusqlite::Result<()> {
+        let tx = self.db.transaction()?;
+        {
+            let mut upsert = tx.prepare(
+                "INSERT INTO paths (path, size, modified, fingerprint, signature, signature_stamp)
+                 VALUES (?1, ?2, ?3, NULL, ?4, ?5)
+                 ON CONFLICT(path) DO UPDATE SET
+                     fingerprint = CASE WHEN size = ?2 AND modified = ?3
+                                        THEN fingerprint ELSE NULL END,
+                     size = ?2, modified = ?3, signature = ?4, signature_stamp = ?5",
+            )?;
+            for (path, size, modified, stamp, bytes) in items {
+                upsert.execute(params![
+                    path_bytes(path),
+                    *size as i64,
+                    ns(*modified),
+                    bytes,
+                    stamp
+                ])?;
+            }
+        }
+        tx.commit()
+    }
+
+    /// Les empreintes de similitude connues (chemin, empreinte au format du cache), pour
+    /// « Toutes les photos » : « semblables » partout sans relire le cache.
+    pub fn signatures(&self) -> rusqlite::Result<Vec<(PathBuf, Vec<u8>)>> {
+        let mut stmt = self
+            .db
+            .prepare("SELECT path, signature FROM paths WHERE signature IS NOT NULL")?;
+        let rows = stmt.query_map([], |r| {
+            Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?))
+        })?;
+        rows.map(|r| r.map(|(p, s)| (bytes_path(&p), s))).collect()
     }
 
     /// Les photos connues, sous `under` s'il est donné (tous niveaux), sinon toutes :
@@ -284,9 +346,14 @@ impl Index {
     pub fn record(&mut self, entries: &[Entry]) -> rusqlite::Result<()> {
         let tx = self.db.transaction()?;
         {
+            // Le chemin : son empreinte de contenu ; son empreinte de similitude reste si le
+            // fichier n'a pas changé.
             let mut path = tx.prepare(
-                "INSERT OR REPLACE INTO paths (path, size, modified, fingerprint)
-                 VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO paths (path, size, modified, fingerprint) VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(path) DO UPDATE SET
+                     signature = CASE WHEN size = ?2 AND modified = ?3
+                                      THEN signature ELSE NULL END,
+                     size = ?2, modified = ?3, fingerprint = ?4",
             )?;
             let mut palette = tx.prepare(
                 "INSERT OR REPLACE INTO palettes (fingerprint, source, stamp, palette)
@@ -418,6 +485,8 @@ struct Note {
 /// précède est écrit » ([`flush`]).
 enum Message {
     Note(Note),
+    /// Une empreinte de similitude prête (dans le cache).
+    Signature(MediaFile),
     Seen {
         dir: PathBuf,
         depth: usize,
@@ -465,6 +534,18 @@ pub fn note(file: &MediaFile, source: Source) {
     }
 }
 
+/// Signale une empreinte de similitude prête (calculée ou trouvée dans le cache) : notée
+/// dans l'index en fond (« semblables » dans « Toutes les photos »). Sans index démarré,
+/// ou pour un développement (il a celle de sa photo), rien.
+pub fn note_signature(file: &MediaFile) {
+    if crate::media::is_development(&file.path) {
+        return;
+    }
+    if let Some(tx) = WRITER.get() {
+        let _ = tx.send(Message::Signature(file.clone()));
+    }
+}
+
 /// Signale les images d'un dossier ouvert ou calculé (`dir`, `depth` niveaux) : notées
 /// dans l'index en fond (« Toutes les photos », #561), celles qui n'y sont plus oubliées.
 /// Sans index démarré, rien.
@@ -498,11 +579,13 @@ fn write_loop(
     while let Ok(first) = rx.recv() {
         // Par lots : un dossier déjà calculé annonce toutes ses palettes d'un coup.
         let mut notes = Vec::new();
+        let mut signatures: Vec<MediaFile> = Vec::new();
         let mut flushes = Vec::new();
         let mut next = Some(first);
         while let Some(message) = next.take() {
             match message {
                 Message::Note(n) => notes.push(n),
+                Message::Signature(f) => signatures.push(f),
                 Message::Seen { dir, depth, files } => {
                     let photos: Vec<(PathBuf, u64, u128)> = files
                         .iter()
@@ -524,7 +607,7 @@ fn write_loop(
                     break;
                 }
             }
-            if notes.len() >= settings.batch.max(1) {
+            if notes.len() + signatures.len() >= settings.batch.max(1) {
                 break;
             }
             next = rx.recv_timeout(Duration::from_millis(50)).ok();
@@ -538,10 +621,38 @@ fn write_loop(
         {
             crate::log::warning("index", &format!("palettes not recorded: {e}"), "");
         }
+        let items: Vec<(PathBuf, u64, u128, String, Vec<u8>)> = signatures
+            .iter()
+            .filter_map(|f| signature_item(&index, f, cache, preview))
+            .collect();
+        if !items.is_empty()
+            && let Err(e) = index.record_signatures(&items)
+        {
+            crate::log::warning("index", &format!("signatures not recorded: {e}"), "");
+        }
         for done in flushes {
             let _ = done.send(());
         }
     }
+}
+
+/// L'empreinte de similitude de `file` à noter, `None` si l'index l'a déjà (même fichier,
+/// mêmes paramètres) ou si elle ne se lit pas.
+fn signature_item(
+    index: &Index,
+    file: &MediaFile,
+    cache: &Cache,
+    preview: &crate::preview::Settings,
+) -> Option<(PathBuf, u64, u128, String, Vec<u8>)> {
+    let path = std::path::absolute(&file.path).ok()?;
+    let (size, modified) = crate::cache::lookup_stamp(&path)??;
+    let stamp = crate::preview::stamp(file, Level::Similarity, preview);
+    if index.has_signature(&path, size, modified, &stamp) {
+        return None;
+    }
+    let key = crate::preview::key(file, Level::Similarity, preview).ok()?;
+    let bytes = cache.get_bytes(&key)?;
+    Some((path, size, modified, stamp, bytes))
 }
 
 /// L'entrée à noter pour `note`, `None` si l'index l'a déjà (même chemin, même fichier,
@@ -702,6 +813,34 @@ mod tests {
         );
         assert!(index.palettes(Source::Camera).unwrap().is_empty());
         assert_eq!(index.photos(None).unwrap().len(), 1, "toujours vue");
+    }
+
+    #[test]
+    fn signatures_are_kept_while_the_file_is_the_same() {
+        let mut index = Index::in_memory().unwrap();
+        let t = 1_700_000_000_000_000_000u128;
+        let p = PathBuf::from("/a/x.raf");
+        index
+            .record_signatures(&[(p.clone(), 100, t, "s".into(), vec![1, 2, 3])])
+            .unwrap();
+        assert!(index.has_signature(&p, 100, t, "s"));
+        assert!(!index.has_signature(&p, 100, t, "autres réglages"));
+        // Une palette notée ensuite, puis le dossier revu tel quel : l'empreinte reste.
+        index
+            .record(&[entry("/a/x.raf", 1, Source::Camera, "p", &palette(0.5))])
+            .unwrap();
+        index
+            .seen(Path::new("/a"), 1, &[(p.clone(), 100, t)])
+            .unwrap();
+        assert_eq!(
+            index.signatures().unwrap(),
+            vec![(p.clone(), vec![1, 2, 3])]
+        );
+        // Le fichier change : oubliée.
+        index
+            .seen(Path::new("/a"), 1, &[(p.clone(), 101, t)])
+            .unwrap();
+        assert!(index.signatures().unwrap().is_empty());
     }
 
     #[test]
