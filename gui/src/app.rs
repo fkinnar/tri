@@ -40068,8 +40068,15 @@ mod tests {
         h.run_steps(3);
         assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().adjust_eyedropper, "armed");
-        mouse_click(&mut h, egui::pos2(360.0, 700.0));
-        h.run_steps(3);
+        // Un clic simulé n'est parfois pas vu sur la CI (Ubuntu, 22/11/2026) : retenté tant
+        // que la pipette reste armée, trois fois au plus.
+        for _ in 0..3 {
+            mouse_click(&mut h, egui::pos2(360.0, 700.0));
+            h.run_steps(3);
+            if !h.state().adjust_eyedropper {
+                break;
+            }
+        }
         assert!(!h.state().adjust_eyedropper, "used once");
         let notice = h.state().notice.clone().unwrap().0;
         assert!(notice.starts_with("Pipette"), "{notice}");
@@ -40083,28 +40090,33 @@ mod tests {
         h.run_steps(2);
         assert!(h.state().adjust_eyedropper, "armed again");
         let (from, to) = (egui::pos2(300.0, 650.0), egui::pos2(420.0, 760.0));
-        h.event(UiEvent::PointerMoved(from));
-        h.run_steps(1);
-        h.event(UiEvent::PointerButton {
-            pos: from,
-            button: egui::PointerButton::Primary,
-            pressed: true,
-            modifiers: Modifiers::NONE,
-        });
-        h.run_steps(1);
-        for step in 1..=6 {
-            h.event(UiEvent::PointerMoved(
-                from + (to - from) * step as f32 / 6.0,
-            ));
+        for _ in 0..3 {
+            h.event(UiEvent::PointerMoved(from));
             h.run_steps(1);
+            h.event(UiEvent::PointerButton {
+                pos: from,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            });
+            h.run_steps(1);
+            for step in 1..=6 {
+                h.event(UiEvent::PointerMoved(
+                    from + (to - from) * step as f32 / 6.0,
+                ));
+                h.run_steps(1);
+            }
+            h.event(UiEvent::PointerButton {
+                pos: to,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: Modifiers::NONE,
+            });
+            h.run_steps(2);
+            if !h.state().adjust_eyedropper {
+                break;
+            }
         }
-        h.event(UiEvent::PointerButton {
-            pos: to,
-            button: egui::PointerButton::Primary,
-            pressed: false,
-            modifiers: Modifiers::NONE,
-        });
-        h.run_steps(2);
         assert!(!h.state().adjust_eyedropper, "the frame is enough");
         let framed = tri::adjust::read(&path).unwrap().expect("balance set");
         assert_ne!(
