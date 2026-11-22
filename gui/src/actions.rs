@@ -198,9 +198,12 @@ pub enum Action {
     FilterPaletteColourEverywhere,
     /// Ouvrir « Toutes les photos » (#561) : les photos vues dans tous les dossiers.
     AllPhotos,
-    /// La photo sélectionnée devient la référence de « palettes proches » (et du futur
-    /// « semblables »).
+    /// La photo sélectionnée devient la référence de « palettes proches » et de
+    /// « semblables ».
     SetReference,
+    /// « Semblables » : les photos semblables à la référence (empreintes, comme les
+    /// piles), de la plus proche à la plus lointaine.
+    FilterSimilar,
     /// Après un changement de filtre, repartir de la première image (`[gui]
     /// filter_restart`, bouton de la barre du bas ; retour du 16/11/2026).
     FilterRestart,
@@ -604,7 +607,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 282] = [
+    pub const ALL: [Action; 283] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -643,6 +646,7 @@ impl Action {
         Action::FilterPaletteColourEverywhere,
         Action::AllPhotos,
         Action::SetReference,
+        Action::FilterSimilar,
         Action::FilterRestart,
         Action::FilterCount,
         Action::SortNext,
@@ -1007,7 +1011,8 @@ impl Action {
             Action::StackMode
             | Action::GroupingWindow
             | Action::FilterStack
-            | Action::StackEnterToggle => Some(Tool::Stacks),
+            | Action::StackEnterToggle
+            | Action::FilterSimilar => Some(Tool::Stacks),
             Action::FilterPalette
             | Action::FilterPaletteColour
             | Action::FilterPaletteEverywhere
@@ -1118,6 +1123,7 @@ impl Action {
             | FilterPaletteEverywhere
             | FilterPaletteColourEverywhere
             | SetReference
+            | FilterSimilar
             | FilterRestart
             | FilterCount
             | SortNext
@@ -1219,6 +1225,7 @@ impl Action {
                 | FilterConflicts
                 | FilterPalette
                 | FilterPaletteColour
+                | FilterSimilar
                 | FilterKind(_)
         )
     }
@@ -1263,6 +1270,7 @@ impl Action {
             Action::FilterPaletteColourEverywhere => "core.filter.palette_colour_everywhere",
             Action::AllPhotos => "core.view.all_photos",
             Action::SetReference => "core.filter.reference",
+            Action::FilterSimilar => "core.filter.similar",
             Action::FilterRestart => "core.filter.restart",
             Action::FilterCount => "core.filter.count",
             Action::SortNext => "core.filter.sort",

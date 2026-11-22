@@ -112,6 +112,7 @@ pub fn navigate(
         | Action::FilterPaletteColourEverywhere
         | Action::AllPhotos
         | Action::SetReference
+        | Action::FilterSimilar
         | Action::FilterRestart
         | Action::FilterCount
         | Action::SortNext

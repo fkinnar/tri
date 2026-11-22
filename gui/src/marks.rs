@@ -1900,6 +1900,18 @@ pub fn cover_mark(painter: &Painter, rect: Rect, on: bool, color: Color32) {
     }
 }
 
+/// Icône « semblables » (retour du 22/11/2026) : deux cadres qui se chevauchent, une photo
+/// et sa semblable.
+pub fn similar_icon(painter: &egui::Painter, rect: Rect, color: Color32) {
+    let stroke = Stroke::new((rect.width() * 0.09).max(1.2), color);
+    let side = rect.width() * 0.62;
+    let back = Rect::from_min_size(rect.min, vec2(side, side));
+    let front = Rect::from_min_size(rect.max - vec2(side, side), vec2(side, side));
+    painter.rect_stroke(back, side * 0.12, stroke, egui::StrokeKind::Inside);
+    painter.rect_filled(front, side * 0.12, color.gamma_multiply(0.35));
+    painter.rect_stroke(front, side * 0.12, stroke, egui::StrokeKind::Inside);
+}
+
 /// Icône « palettes proches » (#492) : une cible, trois anneaux et le centre.
 pub fn target_icon(painter: &Painter, rect: Rect, color: Color32) {
     let c = rect.center();

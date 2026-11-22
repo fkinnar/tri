@@ -712,6 +712,13 @@ pause_weight = 0.1
 # "Weight of pauses" slider fully to the right: pause_weight multiplied by this value
 # (fully to the left: pauses ignored).
 pause_range = 5.0
+# "Similar" filter: starting threshold of the slider (distance between fingerprints).
+#
+# "Similar" filter (photos similar to the reference, as in stacks): the distance between
+# fingerprints at the start of the slider.
+filter_threshold = 0.25
+# "Similar" filter: threshold at the end of the slider.
+filter_max = 1.0
 
 [i18n]
 # Language of the texts (interface, command line, messages): "auto" (system language;

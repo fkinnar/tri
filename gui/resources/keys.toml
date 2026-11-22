@@ -214,6 +214,8 @@ loupe = "m"
 "core.filter.palette_colour_everywhere" = []
 # The selected photo becomes the reference of similar palettes ("t" like the target).
 "core.filter.reference" = ["f t"]
+# Photos similar to the reference (fingerprints, as in stacks).
+"core.filter.similar" = []
 # After a filter change, start again from the first image (on / off): "g", like "g g".
 "core.filter.restart" = ["f g"]
 # f k ("count"): the filters in use and the number of photos left, large, in the middle.

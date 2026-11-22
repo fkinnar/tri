@@ -717,6 +717,13 @@ pause_weight = 0.1
 # Curseur « Importance des pauses » à fond à droite : pause_weight multiplié par cette
 # valeur (à fond à gauche : pauses ignorées).
 pause_range = 5.0
+# Filtre « Semblables » : seuil de départ du curseur (distance entre empreintes).
+#
+# Filtre « Semblables » (photos semblables à la référence, comme dans les piles) : la
+# distance entre empreintes au départ du curseur.
+filter_threshold = 0.25
+# Filtre « Semblables » : seuil au bout du curseur.
+filter_max = 1.0
 
 [i18n]
 # Langue des textes (interface, ligne de commande, messages) : "auto" (langue du système ;

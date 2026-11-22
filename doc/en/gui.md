@@ -1166,9 +1166,14 @@ system one ("cold" measurements, experiments).
   (`all_photos_from`). Actions `core.view.all_photos`, `core.filter.palette_everywhere`
   and `core.filter.palette_colour_everywhere` (no default key): the search is set there
   (`AllPhotosSearch`), the reference photo read again in the source over there.
-  **Reference photo** (feedback of 2026-11-22), shared by "similar palettes" and the
-  future "similar photos" (`TriApp::reference`): a "Reference" line above them, its
-  thumbnail only; a click opens it larger with "Remove the reference". Without a
+  **Reference photo** (feedback of 2026-11-22), shared by "similar palettes" and
+  "similar" (`TriApp::reference`): in the Filters section, "Colour" first, then those two
+  filters, the reference on their right (`reference_box`: its thumbnail, or an empty
+  frame); a click opens it larger (photo centred, buttons on the right) with "Remove the
+  reference". **Similar** (`core.filter.similar`): the photos whose fingerprint (the
+  stacks' one) is close to the reference's, closest first (`rank_by_similarity`, a
+  development has its photo's fingerprint), threshold on the slider (`[similarity]
+  filter_threshold`, `filter_max`); one search at a time with the palettes. Without a
   reference, turning the filter on takes the highlighted photo (greyed if there is
   none); it then stays (another folder, another source: its palette read again,
   `reference_palette`, read from the cache when it is not in the list) until it is
