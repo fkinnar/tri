@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Event, Key, Modifiers, RichText, ScrollArea, Ui, vec2};
 
-use crate::actions::{Action, Chord, Group, Keymap, keys_spec, parse_keys};
+use crate::actions::{Action, Chord, Group, Keymap, Tool, keys_spec, parse_keys};
 use tri::config_edit::{ConfigFile, Entry, Schema, Value, parse_color};
 
 use crate::settings::{AppSettings, Colors};
@@ -366,10 +366,52 @@ fn listed_of(schema: &Schema, i: usize) -> usize {
     }
 }
 
+/// Analyse dont toute la section est un réglage (#564) : retirée, la page garde son titre
+/// et le dit, sans ses réglages.
+pub fn section_tool(section: &str) -> Option<Tool> {
+    match section {
+        "exposure" | "gui.histogram" => Some(Tool::Exposure),
+        "similarity" => Some(Tool::Stacks),
+        "palette" | "index" => Some(Tool::Palettes),
+        _ => None,
+    }
+}
+
+/// Analyse dont un réglage dépend (#564), section entière ([`section_tool`]) ou ligne
+/// parmi d'autres sans rapport (« seulement la ligne », retour du 22/11/2026). La carte de
+/// netteté (`[sharpness] threshold`…) et la palette de commandes (`[gui.dialogs]
+/// palette_*`) ne dépendent d'aucune.
+pub fn setting_tool(section: &str, key: &str) -> Option<Tool> {
+    section_tool(section).or(match (section, key) {
+        (
+            "sharpness",
+            "score_side" | "score_tiles" | "score_top_share" | "score_stretch" | "score_min_range"
+            | "blur_ratio" | "neighbours" | "neighbour_ratio" | "group_min" | "group_ratio"
+            | "group_threshold" | "strictness_span",
+        )
+        | ("gui.grid", "blur_badge")
+        | ("gui.colors", "blur_drop") => Some(Tool::Sharpness),
+        // Pas les couleurs ni le défilement des piles : aussi ceux des développements.
+        ("gui.grid", "stacks" | "stacks_wait_ms" | "stacks_overlay_from")
+        | ("gui.view", "stack_enter") => Some(Tool::Stacks),
+        ("gui.metadata", "histogram" | "histogram_height" | "histogram_stale_ms")
+        | (
+            "gui.colors",
+            "clip_over" | "clip_red" | "clip_green" | "clip_blue" | "clip_under" | "analysis_over"
+            | "analysis_under",
+        ) => Some(Tool::Exposure),
+        _ => None,
+    })
+}
+
 /// Réglage masqué faute du logiciel de développement installé qu'il concerne (voir
-/// [`SettingsWindow::hidden`]), `engines` : ceux qui sont installés.
+/// [`SettingsWindow::hidden`]), `engines` : ceux qui sont installés ; ou d'une analyse
+/// retirée dans les réglages (#564).
 fn hidden_for(engines: &[tri::develop::Engine], section: &str, key: &str) -> bool {
     use tri::develop::Engine;
+    if setting_tool(section, key).is_some_and(crate::actions::removed) {
+        return true;
+    }
     let missing = |e: Engine| !engines.contains(&e);
     if NEED_A_DEVELOPER.contains(&(section, key)) {
         return engines.is_empty();
@@ -950,6 +992,10 @@ impl SettingsWindow {
     /// Section dont tous les réglages sont masqués ([`SettingsWindow::hidden`]) : absente de
     /// la liste.
     fn section_hidden(&self, section: &tri::config_edit::Section) -> bool {
+        // Analyse retirée : la page reste, elle le dit (retour du 22/11/2026).
+        if section_tool(&section.name).is_some() {
+            return false;
+        }
         let mut entries = section.groups.iter().flat_map(|g| &g.entries).peekable();
         entries.peek().is_some() && entries.all(|e| self.hidden(&section.name, &e.key))
     }
@@ -1517,6 +1563,16 @@ impl SettingsWindow {
             }
             if needs_restart(&section.name, "") {
                 ui.label(t!("settings-section-restart"));
+            }
+            // Analyse retirée (#564) : dit, avec le chemin pour la remettre ; ses réglages
+            // sont masqués.
+            if section_tool(&section.name).is_some_and(crate::actions::removed) {
+                ui.add_space(6.0);
+                ui.weak(t!("settings-analysis-removed"));
+                if ui.link(section_label("analysis")).clicked() {
+                    self.show_section("analysis");
+                }
+                return None;
             }
             ui.add_space(6.0);
             if section.name == "keys" {

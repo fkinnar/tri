@@ -2087,10 +2087,17 @@ photos nettes.
   dossier manque au cache (`TriApp::analysis_missing`, compté par `Event::Missing`) et se
   dégrise après « Calculer » sur le dossier ; « retirée », l'outil disparaît des barres, du
   panneau (section Palette, piles, choix « par palette »), des menus « Calculer », de
-  l'aide et du clavier (`Action::tool`, `Action::available` ; outils retirés propres au
-  fil de l'interface, `actions::set_removed_tools`) ; l'histogramme, les zones et la
-  carte de netteté de l'image affichée restent (calculés pour elle seule) ; réglage
-  appliqué à chaud, dossier relu) ; ◐ (`f i`) montre ce que les filtres sur le **contenu** (notes, netteté,
+  l'aide, de `?`, de `:` et du clavier (`Action::tool`, `Action::available` ; outils
+  retirés propres au fil de l'interface, `actions::set_removed_tools`). Exposition
+  retirée : l'histogramme, le grand histogramme et les zones aussi (retour du
+  22/11/2026 : « sinon ce n'est pas logique »). Piles retirées : l'interrupteur, la
+  fenêtre de regroupement, « pile courante » et l'entrée dans les piles ; les touches de
+  pile restent, elles servent aussi aux développements d'une photo. La carte de netteté
+  reste (pas une analyse du dossier). Leurs **réglages** aussi sont masqués, dans la
+  fenêtre et dans `:` (`settings_window::setting_tool`) : une page qui n'est qu'à
+  l'analyse garde son titre, dit « Analyse retirée » et mène à *Analyses du dossier* ;
+  une ligne parmi d'autres sans rapport part seule. Réglage appliqué à chaud, dossier
+  relu) ; ◐ (`f i`) montre ce que les filtres sur le **contenu** (notes, netteté,
   exposition) retirent, type de fichier et recherche par nom restant appliqués
   (`tri::filter::invert`) : « floues seulement » est « nettes » inversé, la goutte et
   `f B` sont retirées. Triangle et soleil à l'accent quand ils sont allumés, gris sinon.
