@@ -2928,6 +2928,45 @@ impl TriApp {
         self.all_photos_from = from;
     }
 
+    /// « Montrer dans son dossier » : l'image attendue en surbrillance dès qu'elle est dans
+    /// la liste (sa photo si le développement est replié dans sa pile). Vidéo du
+    /// 22/11/2026 : sous un filtre de notes, la liste reste vide le temps de lire les notes
+    /// (iCloud) ; l'image n'y était pas encore à l'ouverture. Abandonnée une fois les notes
+    /// lues si elle n'y est toujours pas (un filtre l'écarte).
+    fn select_pending(&mut self) {
+        let Some(path) = self.select_after_open.clone() else {
+            return;
+        };
+        if self.opening.is_some() {
+            return;
+        }
+        let photo = tri::media::source(&path).into_owned();
+        let found = self
+            .files
+            .iter()
+            .position(|f| f.path == path)
+            .or_else(|| self.files.iter().position(|f| f.path == photo));
+        match found {
+            Some(i) => {
+                self.select_after_open = None;
+                self.selected = i;
+                self.cursor_hidden = false;
+                self.hold_selection = false;
+                self.reveal = Some(Reveal::Minimal);
+                self.tell_shown();
+            }
+            // Notes lues (et la liste refiltrée, une seconde plus tard) : elle n'y est pas.
+            None if self.loading.is_none()
+                && self
+                    .opened_at
+                    .is_none_or(|t| t.elapsed() > Duration::from_secs(1)) =>
+            {
+                self.select_after_open = None;
+            }
+            None => {}
+        }
+    }
+
     /// Depuis « Toutes les photos » : ouvre le vrai dossier de l'image `path`, elle en
     /// surbrillance (retour du 22/11/2026).
     fn show_in_folder(&mut self, path: &Path) {
@@ -3274,21 +3313,8 @@ impl TriApp {
         if let Some(i) = self.start_select.take() {
             self.selected = i.min(self.files.len().saturating_sub(1));
         }
-        // « Montrer dans son dossier » : elle en surbrillance, en grille (sa photo si le
-        // développement est replié dans sa pile).
-        if let Some(path) = self.select_after_open.take() {
-            let photo = tri::media::source(&path).into_owned();
-            if let Some(i) = self
-                .files
-                .iter()
-                .position(|f| f.path == path)
-                .or_else(|| self.files.iter().position(|f| f.path == photo))
-            {
-                self.selected = i;
-                self.cursor_hidden = false;
-                self.reveal = Some(Reveal::Minimal);
-            }
-        }
+        // « Montrer dans son dossier » : elle en surbrillance (`select_pending`).
+        self.select_pending();
         // Une image en argument (#250) : ouverte en plein écran, comme une visionneuse
         // (retour du 31/10/2026 : sélectionnée seulement, « ça n'ouvre pas l'image »).
         if let Some(path) = self.start_select_path.take()
@@ -11168,6 +11194,7 @@ impl TriApp {
         self.set_palette_source(wanted);
         self.try_reference_filter();
         self.try_similar_filter();
+        self.select_pending();
         self.poll_all_photos_completion();
         let mut scored = Vec::new();
         self.drain_engine(&mut scored);
@@ -30953,6 +30980,30 @@ mod tests {
                 .is_some(),
             "ici, grisée"
         );
+    }
+
+    #[test]
+    fn the_photo_to_show_waits_until_it_is_in_the_list() {
+        // Vidéo du 22/11/2026 : « Montrer dans son dossier » sous un filtre de notes ; la
+        // liste était vide le temps de lire les notes, la photo pas mise en surbrillance.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        let ctx = h.ctx.clone();
+        let target = h.state().files[2].path.clone();
+        // Personne n'a 3 étoiles : liste vide, la photo attend.
+        h.state_mut().perform(&ctx, Action::FilterStars(3));
+        h.run_steps(2);
+        assert!(h.state().files.is_empty());
+        h.state_mut().opened_at = Some(Instant::now());
+        h.state_mut().select_after_open = Some(target.clone());
+        h.run_steps(2);
+        assert!(h.state().select_after_open.is_some(), "toujours attendue");
+        // Elle arrive dans la liste : en surbrillance.
+        h.state_mut().perform(&ctx, Action::FilterStars(0));
+        h.run_steps(2);
+        assert!(h.state().select_after_open.is_none());
+        assert_eq!(h.state().files[h.state().selected].path, target);
+        assert!(!h.state().cursor_hidden);
     }
 
     #[test]
