@@ -739,7 +739,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`[gui.colors] stack_band`, `stack_band_alt`), comme pendant le réglage du curseur.
   Grille **non groupée au démarrage** (retour du 19/10/2026) : `[gui.grid] stacks`
   (faux par défaut) ; les empreintes se calculent en fond quand même
-  (`[similarity] background`), `Ctrl+S` regroupe aussitôt.
+  (`[analysis] stacks`), `Ctrl+S` regroupe aussitôt.
   Quatrième retour : une photo isolée est un groupe d'une image, avec son fond aussi
   (deux photos isolées voisines ne se confondent plus) : piles actives, chaque groupe
   alterne, deux cas au lieu de trois.
@@ -2082,7 +2082,15 @@ photos nettes.
   en cours — netteté, exposition, palettes proches, couleur — et « Empiler
   automatiquement » (empreintes, palettes empilées par palette) sont **grisés** jusqu'à la
   fin du calcul, la bulle dit où il en est ; allumés, ils s'éteignent toujours,
-  `TriApp::action_unusable`) ; ◐ (`f i`) montre ce que les filtres sur le **contenu** (notes, netteté,
+  `TriApp::action_unusable`. **Analyses à la demande ou retirées** (`[analysis]`, #564) :
+  « à la demande », rien n'est calculé en fond, l'outil reste grisé tant qu'une image du
+  dossier manque au cache (`TriApp::analysis_missing`, compté par `Event::Missing`) et se
+  dégrise après « Calculer » sur le dossier ; « retirée », l'outil disparaît des barres, du
+  panneau (section Palette, piles, choix « par palette »), des menus « Calculer », de
+  l'aide et du clavier (`Action::tool`, `Action::available` ; outils retirés propres au
+  fil de l'interface, `actions::set_removed_tools`) ; l'histogramme, les zones et la
+  carte de netteté de l'image affichée restent (calculés pour elle seule) ; réglage
+  appliqué à chaud, dossier relu) ; ◐ (`f i`) montre ce que les filtres sur le **contenu** (notes, netteté,
   exposition) retirent, type de fichier et recherche par nom restant appliqués
   (`tri::filter::invert`) : « floues seulement » est « nettes » inversé, la goutte et
   `f B` sont retirées. Triangle et soleil à l'accent quand ils sont allumés, gris sinon.

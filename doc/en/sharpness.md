@@ -97,7 +97,7 @@ Lessons:
 
 **Pipeline**: analysis cache level `Level::Sharpness` (binary entry, `Score::to_bytes`,
 ~1 KB, version `SCORE_VERSION` in the key), computed in the background by the scheduler for the whole
-folder (`[sharpness] background`, light workers, after thumbnails and camera previews),
+folder (`[analysis] sharpness`, light workers, after thumbnails and camera previews),
 read by `preview::sharpness`. Filter `BlurFilter` (trait `Filter`, like the others): a
 photo with no score computed yet is kept.
 
@@ -141,7 +141,6 @@ sharpened; noise at very high ISO looks like detail.
 | | `blur_ratio` | 0.5 | blurry below this fraction of the folder median |
 | | `neighbours` | 3 | neighbours compared on each side (0: none) |
 | | `neighbour_ratio` | 0.8 | blurry below this fraction of the neighbours' median |
-| | `background` | `true` | scores of the whole folder in the background |
 | `[gui.sharpness]` | `visible` | `false` | map shown at startup |
 | | `colors` | red, green, blue | colours of the cycle |
 | | `opacity` | 1.0 | edge opacity |
@@ -216,7 +215,7 @@ greens) and the 19 free photos:
 | folder + stack, threshold 0.25 | 12 / 15 | 0 | 1 |
 | **folder + stack, threshold 0.45** | **14 / 15** | **0** | **1** |
 
-Without fingerprints (`[similarity] background = false`), the previous judgement (folder +
+Without fingerprints (`[analysis] stacks = "off"`), the previous judgement (folder +
 neighbours). The remaining free photo is below 0.5 × the folder median:
 only an analysis of the content (subject, intended background blur) would tell it apart.
 

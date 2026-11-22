@@ -27,18 +27,28 @@ Background work queue that fills the cache for a folder.
   [palette.md](palette.md).
 
   **Sharpness score** (`Level::Sharpness`, 2026-10-17): computed in the background for the
-  whole folder (`[sharpness] background`), by the **light workers** (downscaled camera
+  whole folder (`[analysis] sharpness`), by the **light workers** (downscaled camera
   JPEG, ~120 ms), same priority class as the exposure analysis; "sharpness" progress. See
   [sharpness.md](sharpness.md).
 
   **Exposure analysis** (`Level::Exposure`, 2026-10-17): computed in the background for the
-  whole folder (`[scheduler] exposure`, default true), RAWs as well as flat images; a RAW's
+  whole folder (`[analysis] exposure`, default `"background"`), RAWs as well as flat images; a RAW's
   goes through the **heavy worker** (LibRaw decompression, already parallelised
   internally, see [exposure.md](exposure.md)), a flat image's through the light workers.
   Like the background renders, it waits for the thumbnails and camera previews to finish.
   Measured on 24 RAFs: histograms done ~10 s after the camera previews (~0.45 s per
   image). Lead not pursued: the RAW render also decompresses the file, it could produce the
   analysis along the way.
+
+  **Analyses in the background, on demand or removed** (`[analysis]`, #564): exposure,
+  sharpness, stack fingerprints and palettes, each `"background"` (the whole folder in the
+  background), `"on-demand"` or `"off"` (`scheduler::Analysis`). On demand, the folder's
+  tasks are still queued, but **only read from the cache**: the sweeper delivers those it
+  finds (`Event::Ready`) and reports the others (`Event::Missing`, counted in the
+  progress); no worker takes them. A request (`Scheduler::request`, the shown image) is
+  always computed. Removed: no task. The old keys (`[scheduler] exposure`, `[sharpness]
+  background`, `[similarity] background`) set to `false` mean `"on-demand"`. Changed in
+  the settings window: `Scheduler::set_analyses`, then the folder is read again.
 
   The fitted render goes before the 1:1 so that the RAW look appears quickly; the 1:1 of
   the displayed image goes before the neighbours' preloading so that the sharpness of the

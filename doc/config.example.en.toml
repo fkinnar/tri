@@ -71,9 +71,22 @@ location = "user"
 light_workers = "auto"
 # Thumbnails first, then camera renders, then RAW renders (false: all mixed).
 thumbnails_first = true
-# Analyse the exposure of the whole folder in the background (histograms, grid badges),
-# after thumbnails and camera renders; false: only the displayed image and its neighbours.
-exposure = true
+
+[analysis]
+# Exposure of the whole folder: in the background, on demand, or removed.
+#
+# Analyses of the whole folder (#564): "background" (computed in the background, the
+# default), "on-demand" (nothing in the background: the tool stays greyed until the folder
+# is computed, folder right-click > Compute; the shown image keeps what it needs) or
+# "off" (the tool leaves the bars, panels and menus). Exposure: histograms, zones,
+# badges, "well exposed" filter.
+exposure = "background"
+# Sharpness: scores, badges, "blurry" filter (same choice).
+sharpness = "background"
+# Stacks: grouping fingerprints (same choice).
+stacks = "background"
+# Colour palettes: palette and colour searches, eyedropper (same choice).
+palettes = "background"
 
 [xmp]
 # Name of new sidecars: darktable style, Adobe style, or both.
@@ -573,8 +586,6 @@ group_threshold = 0.45
 # strictness_span, far left (more lenient) divided by it (without exceeding 1). The
 # setting is remembered per folder.
 strictness_span = 2.0
-# Scores of the whole folder computed in the background (analysis cache).
-background = true
 
 [palette]
 # Colour palettes: number of colours looked for in each image.
@@ -634,12 +645,6 @@ stack_scale = 0.5
 pick_area = 0.02
 
 [similarity]
-# Group similar images (bursts, series) into stacks in the background.
-#
-# Grouping of similar images (bursts, series of the same scene) into stacks.
-# Fingerprints of the whole folder computed in the background (analysis cache, right after
-# the thumbnails); false: no grouping.
-background = true
 # Long side of the small image the fingerprint is taken from (pixels): being small, it
 # only looks at composition and colours, not details.
 side = 64

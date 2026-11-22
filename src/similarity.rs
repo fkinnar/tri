@@ -24,8 +24,8 @@ const GRID: usize = 4;
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SimilaritySettings {
-    /// Empreintes de tout le dossier calculées en fond (sinon pas de regroupement).
-    pub background: bool,
+    /// Ancienne clé (avant #564) : `false` vaut `[analysis] stacks = "on-demand"`.
+    pub background: Option<bool>,
     /// Côté long de l'image d'où l'empreinte est tirée (pixels) : petite, l'empreinte ne
     /// regarde que la composition, pas les détails.
     pub side: u32,
@@ -75,7 +75,7 @@ pub struct SimilaritySettings {
 impl Default for SimilaritySettings {
     fn default() -> Self {
         Self {
-            background: true,
+            background: None,
             side: 64,
             shape_weight: 0.5,
             threshold: 0.25,

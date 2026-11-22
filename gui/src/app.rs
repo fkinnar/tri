@@ -989,6 +989,9 @@ pub struct TriApp {
     files: Vec<MediaFile>,
     status: Vec<Status>,
     progress: [Progress; 7],
+    /// Analyses « à la demande » absentes du cache, par case de `progress` (#564) : l'outil
+    /// reste grisé tant qu'il en manque.
+    analysis_missing: [usize; 7],
     engine: Option<Engine>,
     /// Voisinage réseau : serveurs annoncés (mDNS), et leur écoute (démarrée à la
     /// première image si `[neighbourhood] enabled` ; jamais dans les tests, qui ne
@@ -1767,6 +1770,27 @@ impl TriApp {
         // Logiciels de développement cherchés à nouveau (05/11/2026 : Auto / Manuel /
         // Désactivé comptait seulement au prochain lancement) : interface, moteur et
         // fenêtre de réglages à jour tout de suite.
+        // Analyses du dossier (#564) : le moteur les prend au dossier relu ; les outils
+        // retirés ou grisés suivent tout de suite.
+        if new.analysis != self.settings.analysis {
+            self.settings.analysis = new.analysis;
+            self.settings.scheduler.exposure = None;
+            self.settings.sharpness.background = None;
+            self.settings.similarity.background = None;
+            if let Some(engine) = &self.engine {
+                engine.scheduler.set_analyses(self.settings.analysis());
+            }
+            crate::actions::set_removed_tools(&self.settings.analysis());
+            self.help_lines = None;
+            self.help_widths = None;
+            if !self.settings.analysis().stacks.is_on() {
+                self.stacking = false;
+            }
+            self.stacks_dirty = true;
+            if !self.folder.dir.as_os_str().is_empty() {
+                self.reload_folder(None);
+            }
+        }
         if new.develop != self.settings.develop {
             self.settings.develop = new.develop;
             self.find_developers();
@@ -1911,6 +1935,9 @@ impl TriApp {
     /// image), avec les réglages `settings`. `warning` : problème de configuration à
     /// afficher.
     pub fn new(dir: Option<PathBuf>, settings: AppSettings, warning: Option<String>) -> TriApp {
+        // Outils des analyses retirées dans les réglages (#564) : hors de l'aide, des
+        // barres et du clavier.
+        crate::actions::set_removed_tools(&settings.engine().analysis());
         let gui = settings.gui.clone();
         let data = settings.engine().data_dir();
         // Le dossier du lancement (en argument, sinon le dernier) est lu comme un dossier
@@ -2135,6 +2162,7 @@ impl TriApp {
             files: Vec::new(),
             status: Vec::new(),
             progress: [Progress::default(); 7],
+            analysis_missing: [0; 7],
             engine: None,
             neighbourhood: Default::default(),
             neighbour_browser: None,
@@ -2265,7 +2293,7 @@ impl TriApp {
             stacks_wait: None,
             opened_at: None,
             // Grille non groupée par défaut (retour du 19/10/2026) : `[gui.grid] stacks`.
-            stacking: settings.similarity.background && gui.grid.stacks,
+            stacking: settings.engine().analysis().stacks.is_on() && gui.grid.stacks,
             group_strictness: 0.0,
             group_pauses: 0.0,
             group_curve: settings.similarity.strictness_curve,
@@ -3176,6 +3204,7 @@ impl TriApp {
         if matches!(self.mode, Mode::Grid | Mode::View)
             && self.crop.is_none()
             && (!self.files.is_empty() || self.palette_searching())
+            && !crate::actions::removed(crate::actions::Tool::Palettes)
         {
             ui.separator();
             if self.panel_section(ui, "palette", t!("panel-section-palette")) {
@@ -3473,8 +3502,22 @@ impl TriApp {
         // Filtres sur une analyse en cours de calcul : grisés jusqu'à la fin (retour du
         // 22/11/2026 : un filtre allumé trop tôt triait sur des données incomplètes) ; les
         // éteindre reste possible.
+        // Outil retiré dans les réglages (#564) : rien (il n'est pas non plus montré).
+        if action.tool().is_some_and(crate::actions::removed) {
+            return Some(t!("analysis-removed"));
+        }
+        let analyses = self.settings.analysis();
         let pending = |slot: usize| {
             let p = self.progress[slot];
+            // Analyse « à la demande » (#564) : rien en fond ; grisé tant que le dossier
+            // n'est pas entièrement dans le cache.
+            let missing = self.analysis_missing[slot];
+            let on_demand = crate::actions::Tool::ALL.iter().any(|t| {
+                t.slot() == slot && t.mode(&analyses) == tri::scheduler::Analysis::OnDemand
+            });
+            if on_demand && (missing > 0 || p.done < p.total) {
+                return Some(t!("filter-analysis-on-demand", missing = missing));
+            }
             (p.total > 0 && p.done < p.total)
                 .then(|| t!("filter-analysis-computing", done = p.done, total = p.total))
         };
@@ -3483,7 +3526,7 @@ impl TriApp {
             // Piles : les empreintes (et les palettes, empilées par palette).
             Action::StackMode if !self.stacking => {
                 return pending(5).or_else(|| {
-                    (self.stack_by_palette && self.palette_source.is_some())
+                    (self.stacks_by_palette() && self.palette_source.is_some())
                         .then(|| pending(6))
                         .flatten()
                 });
@@ -3539,6 +3582,8 @@ impl TriApp {
                 self.action_unusable(Action::FilterWellExposed).is_none(),
             ),
         ];
+        // Outils retirés dans les réglages (#564) : ni dans la barre, ni dans le panneau.
+        toggles.retain(|(action, _, _)| action.available());
         if !self.developers.is_empty() || self.developed_on {
             toggles.push((
                 Action::FilterDeveloped,
@@ -3561,6 +3606,10 @@ impl TriApp {
     /// utilisable) ; grisées sans source de palette. Dans le panneau, leurs lignes à part
     /// (`palette_filter_rows`).
     fn palette_toggles(&self) -> Vec<(Action, bool, bool)> {
+        // Palettes retirées dans les réglages (#564).
+        if crate::actions::removed(crate::actions::Tool::Palettes) {
+            return Vec::new();
+        }
         let ready = self.palette_source.is_some();
         let like = self.palette_like.is_some();
         let computing = |a: Action| self.action_unusable(a).is_some();
@@ -3638,6 +3687,9 @@ impl TriApp {
     /// pipette, en grille comme en plein écran), même forme que les autres filtres ;
     /// allumées, leur curseur dessous. Sans source de palette : grisées.
     fn palette_filter_rows(&mut self, ui: &mut Ui) {
+        if crate::actions::removed(crate::actions::Tool::Palettes) {
+            return;
+        }
         let ready = self.palette_source.is_some();
         let size = self.gui.grid.marks + 4.0;
         let p = self.settings.palette;
@@ -3848,9 +3900,12 @@ impl TriApp {
         self.control(ui, Control::Sort, Host::Panel);
         self.render_heading(ui);
         self.control(ui, Control::Render, Host::Panel);
-        // Piles : l'interrupteur, puis leurs réglages quand elles sont actives.
-        self.subheading(ui, t!("panel-grid-stacks"));
-        self.control(ui, Control::Stacks, Host::Panel);
+        // Piles : l'interrupteur, puis leurs réglages quand elles sont actives (retirées
+        // dans les réglages, #564 : rien).
+        if Action::StackMode.available() {
+            self.subheading(ui, t!("panel-grid-stacks"));
+            self.control(ui, Control::Stacks, Host::Panel);
+        }
         self.file_actions_switch(ui);
     }
 
@@ -3860,30 +3915,34 @@ impl TriApp {
         let mut clicked: Vec<Action> = Vec::new();
         if self.stacking {
             ui.indent("stacks", |ui| {
-                // Par ressemblance (rafales) ou par palette (séries, #492).
+                // Par ressemblance (rafales) ou par palette (séries, #492) ; sans le choix
+                // avec les palettes retirées dans les réglages (#564).
                 let mut by_palette = self.stack_by_palette;
+                let palettes = !crate::actions::removed(crate::actions::Tool::Palettes);
                 // La précision en gris, comme dans « Rendu affiché » (retour du 21/11/2026).
                 let weak = ui.visuals().weak_text_color();
-                self.side_combo(
-                    ui,
-                    "stack_by",
-                    &mut by_palette,
-                    &[false, true],
-                    |p| {
-                        let (main, note) = if p {
-                            (t!("stack-by-palette"), t!("stack-by-palette-note"))
-                        } else {
-                            (t!("stack-by-similarity"), t!("stack-by-similarity-note"))
-                        };
-                        crate::grid_render::with_note(&main, &note, weak)
-                    },
-                    Some(t!("stack-by-tip")),
-                );
-                if by_palette != self.stack_by_palette {
-                    self.set_stack_by_palette(by_palette);
+                if palettes {
+                    self.side_combo(
+                        ui,
+                        "stack_by",
+                        &mut by_palette,
+                        &[false, true],
+                        |p| {
+                            let (main, note) = if p {
+                                (t!("stack-by-palette"), t!("stack-by-palette-note"))
+                            } else {
+                                (t!("stack-by-similarity"), t!("stack-by-similarity-note"))
+                            };
+                            crate::grid_render::with_note(&main, &note, weak)
+                        },
+                        Some(t!("stack-by-tip")),
+                    );
+                    if by_palette != self.stack_by_palette {
+                        self.set_stack_by_palette(by_palette);
+                    }
+                    // Un peu d'air entre la liste et le curseur (retour du 21/11/2026).
+                    ui.add_space(4.0);
                 }
-                // Un peu d'air entre la liste et le curseur (retour du 21/11/2026).
-                ui.add_space(4.0);
                 let width = panel_slider_width(ui);
                 // Même logique que le flou (idée de l'utilisateur, 20/10/2026) : centre
                 // calculé d'après le dossier, à droite plus strict (petites piles).
@@ -4456,7 +4515,7 @@ impl TriApp {
             // Empiler par palette en demande : le JPEG boîtier à défaut d'autre.
             return self
                 .palette_manual
-                .or((self.stacking && self.stack_by_palette).then_some(SourceKind::Camera));
+                .or((self.stacking && self.stacks_by_palette()).then_some(SourceKind::Camera));
         }
         Some(match self.grid_render {
             GridRender::Embedded => SourceKind::Camera,
@@ -4947,8 +5006,10 @@ impl TriApp {
         if !self.developers.is_empty() {
             self.view_developments(ui);
         }
-        self.subheading(ui, t!("panel-grid-stacks"));
-        self.control(ui, Control::Stacks, Host::Panel);
+        if Action::StackMode.available() {
+            self.subheading(ui, t!("panel-grid-stacks"));
+            self.control(ui, Control::Stacks, Host::Panel);
+        }
         self.file_actions_switch(ui);
     }
 
@@ -6347,15 +6408,24 @@ impl TriApp {
                                         Kind::Exposure,
                                         Kind::Sharpness,
                                         Kind::Signatures,
-                                    ] {
+                                    ]
+                                    .into_iter()
+                                    .filter(|&k| Action::FolderCompute(k).available())
+                                    {
                                         entry(
                                             ui,
                                             Action::FolderCompute(kind),
                                             crate::compute_tasks::kind_label(kind),
                                         );
                                     }
-                                    menu_groups::subtitle(ui, &t!("folder-menu-compute-palettes"));
-                                    for kind in self.compute_palette_kinds() {
+                                    let palettes = self.compute_palette_kinds();
+                                    if !palettes.is_empty() {
+                                        menu_groups::subtitle(
+                                            ui,
+                                            &t!("folder-menu-compute-palettes"),
+                                        );
+                                    }
+                                    for kind in palettes {
                                         let label = crate::compute_tasks::kind_label(kind);
                                         // Sans « Palettes » devant : le sous-titre le dit.
                                         // (« Palettes  données brutes » : « Données brutes ».)
@@ -7222,6 +7292,8 @@ impl TriApp {
         let engines = self.developers.engines();
         Kind::all()
             .into_iter()
+            // Palettes retirées dans les réglages (#564) : aucune.
+            .filter(|&k| Action::Compute(k).available())
             .filter(|k| match k {
                 Kind::Palette(SourceKind::Developed(e)) => engines.contains(e),
                 Kind::Palette(_) => true,
@@ -7253,6 +7325,8 @@ impl TriApp {
                     Kind::Signatures,
                 ];
                 kinds.extend(self.compute_palette_kinds());
+                // Analyses retirées dans les réglages (#564) : pas dans « tout ».
+                kinds.retain(|&k| Action::Compute(k).available());
                 let recreate = matches!(action, Action::FolderRecreateAll | Action::RecreateAll);
                 (kinds, recreate)
             }
@@ -7332,7 +7406,15 @@ impl TriApp {
             }
             None => true,
         });
+        let mut reread = false;
         for (folder, name, kind, result) in finished {
+            // Analyse « à la demande » du dossier ouvert (#564) : relue dans le cache, son
+            // outil se dégrise s'il ne manque plus rien.
+            let analyses = self.settings.analysis();
+            reread |= folder == self.folder.dir
+                && Action::Compute(kind)
+                    .tool()
+                    .is_some_and(|t| t.mode(&analyses) == tri::scheduler::Analysis::OnDemand);
             let what = crate::compute_tasks::kind_label(kind);
             self.notice = Some(match result {
                 Ok(s) if s.cancelled => (
@@ -7376,6 +7458,9 @@ impl TriApp {
             && let Some(engine) = &self.engine
         {
             engine.scheduler.set_background_paused(false);
+        }
+        if reread {
+            self.refilter(Reveal::Anchor);
         }
     }
 
@@ -8503,6 +8588,7 @@ impl TriApp {
             .collect();
         self.requested.clear();
         self.progress = [Progress::default(); 7];
+        self.analysis_missing = [0; 7];
         let delay = Duration::from_millis(self.gui.progress_delay_ms);
         self.progress_hidden_until = Some(Instant::now() + delay);
         // Garder la même image sélectionnée si elle reste visible.
@@ -9049,8 +9135,8 @@ impl TriApp {
         }
         // « Empiler automatiquement » du dossier (11/11/2026) ; sans rien de retenu, celui
         // de la configuration, comme le rendu.
-        let stacking =
-            self.settings.similarity.background && view.stacking.unwrap_or(self.gui.grid.stacks);
+        let stacking = self.settings.analysis().stacks.is_on()
+            && view.stacking.unwrap_or(self.gui.grid.stacks);
         if stacking != self.stacking {
             self.stacking = stacking;
             self.stacks_dirty = true;
@@ -9304,7 +9390,7 @@ impl TriApp {
             .map(|f| (f.path.clone(), self.scores.get(&f.path).copied()))
             .collect();
         let s = &self.settings;
-        let groups = if s.similarity.background && !self.signatures.is_empty() {
+        let groups = if s.analysis().stacks.is_on() && !self.signatures.is_empty() {
             let sigs: Vec<Option<&tri::similarity::Signature>> =
                 files.iter().map(|f| self.signatures.get(&f.path)).collect();
             let links = tri::similarity::distances(&sigs, s.similarity.shape_weight);
@@ -9330,8 +9416,9 @@ impl TriApp {
     /// Toutes les empreintes de similarité de la liste sont là (lues ou calculées).
     fn signatures_complete(&self) -> bool {
         let p = self.progress[5];
-        // Annoncées toutes par le moteur, ou déjà toutes là (un développement n'en a pas).
-        (p.total > 0 && p.done >= p.total)
+        // Annoncées toutes par le moteur (sans absente du cache, analyse « à la demande »,
+        // #564), ou déjà toutes là (un développement n'en a pas).
+        (p.total > 0 && p.done >= p.total && self.analysis_missing[5] == 0)
             || (!self.files.is_empty()
                 && self.files.iter().all(|f| {
                     tri::media::is_development(&f.path) || self.signatures.contains_key(&f.path)
@@ -9339,6 +9426,12 @@ impl TriApp {
     }
 
     /// Empile par palette (séries) ou par ressemblance (rafales), retenu pour le dossier.
+    /// Empiler par palette, en vigueur : pas avec les palettes retirées dans les réglages
+    /// (#564 ; le choix du dossier reste retenu).
+    fn stacks_by_palette(&self) -> bool {
+        self.stack_by_palette && !crate::actions::removed(crate::actions::Tool::Palettes)
+    }
+
     fn set_stack_by_palette(&mut self, on: bool) {
         self.stack_by_palette = on;
         self.stacks_dirty = true;
@@ -9358,7 +9451,7 @@ impl TriApp {
         let Some(kind) = self.palette_source else {
             return true;
         };
-        (p.total > 0 && p.done >= p.total)
+        (p.total > 0 && p.done >= p.total && self.analysis_missing[6] == 0)
             || self.files.iter().all(|f| {
                 kind.source_for(f)
                     .is_none_or(|src| self.palettes.contains_key(&(f.path.clone(), src)))
@@ -9412,7 +9505,7 @@ impl TriApp {
             self.group_pauses,
             self.group_curve,
             self.group_gap,
-            match (self.stack_by_palette, self.palette_source) {
+            match (self.stacks_by_palette(), self.palette_source) {
                 (true, Some(kind)) => format!("palette:{}", kind.id()),
                 _ => String::new(),
             }
@@ -9506,7 +9599,7 @@ impl TriApp {
         // part, avec un seuil recalculé sur elles seules, elles se coupaient (#163 : 11
         // photos en 1 + 10) ; le seuil du dossier reste celui de tout le dossier.
         // Par palette (séries) : les palettes aussi, toutes là.
-        let by_palette = self.stack_by_palette && self.palette_source.is_some();
+        let by_palette = self.stacks_by_palette() && self.palette_source.is_some();
         let complete = self.signatures_complete() && (!by_palette || self.palettes_complete());
         // Couvertures (notes, netteté) toutes connues : sinon, celles retenues.
         // (Netteté sans rien d'annoncé, analyse coupée : rien à attendre.)
@@ -10427,7 +10520,8 @@ impl TriApp {
 
     /// Vrai si l'image `path` est jugée floue (score connu).
     fn is_blurry(&self, path: &Path) -> bool {
-        self.judgements.get(path).is_some_and(|j| j.blurry)
+        !crate::actions::removed(crate::actions::Tool::Sharpness)
+            && self.judgements.get(path).is_some_and(|j| j.blurry)
     }
 
     /// Lit les scores de netteté arrivés dans le cache ; filtre « masquer les floues »
@@ -10483,7 +10577,7 @@ impl TriApp {
                 self.palette_refilter_pending = true;
             }
             // Piles par palette : refaites avec les palettes arrivées.
-            if self.stacking && self.stack_by_palette {
+            if self.stacking && self.stacks_by_palette() {
                 self.stacks_dirty = true;
             }
         }
@@ -10581,6 +10675,16 @@ impl TriApp {
                     }
                     if progress.total > 0 && progress.done == progress.total {
                         trace(|| format!("fond : {level:?} fini ({} images)", progress.total));
+                    }
+                }
+                // Analyse « à la demande » absente du cache (#564) : l'outil attend.
+                Event::Missing {
+                    generation: g,
+                    level,
+                    ..
+                } if g == generation => {
+                    if let Some(i) = tracked(level) {
+                        self.analysis_missing[i] += 1;
                     }
                 }
                 Event::Dropped {
@@ -17194,6 +17298,10 @@ impl TriApp {
     /// Parts de pixels saturés / bouchés de l'image `index` (badges de la grille), lues
     /// dans le cache si l'analyse est prête et que le budget de l'image le permet.
     fn clip_fractions(&mut self, index: usize, deadline: Instant) -> Option<(f64, f64)> {
+        // Exposition retirée dans les réglages (#564) : pas de badges.
+        if crate::actions::removed(crate::actions::Tool::Exposure) {
+            return None;
+        }
         // Image réglée, badges qui suivent les réglages (#420) : l'analyse décalée.
         if let Some(fractions) = self.adjusted_clip_fractions(index) {
             return Some(fractions);
@@ -19737,6 +19845,7 @@ impl TriApp {
                     tri::compute::Kind::Signatures,
                 ]
                 .into_iter()
+                .filter(|&k| Action::Compute(k).available())
                 .chain(self.compute_palette_kinds())
                 .collect();
                 egui::Grid::new("rating_dialog_lists")
@@ -20116,6 +20225,8 @@ impl TriApp {
                     }
                     ui.separator();
                 }
+                // Outils retirés dans les réglages (#564).
+                actions.retain(|a| a.available());
                 for action in actions {
                     let (name, tip) = if action == Action::Back {
                         let keys = self.keys_text(Action::Back);
@@ -20696,8 +20807,9 @@ impl TriApp {
             // Pile courante seulement (`f c`) : allumé à l'accent quand on regarde une
             // pile (retour du 06/11/2026 : rien ne le disait), grisé si l'image n'est pas
             // dans une pile ou sans les piles (toujours là : retour du 18/11/2026, il
-            // faisait bouger la suite de la barre en apparaissant).
-            {
+            // faisait bouger la suite de la barre en apparaissant). Piles retirées dans les
+            // réglages (#564) : absent.
+            if Action::FilterStack.available() {
                 let on = self.stack_only.is_some();
                 let enabled = on
                     || self.stacking
@@ -27213,7 +27325,7 @@ mod tests {
         settings.files.allow_actions = true;
         // Pas de piles : les images de test, des aplats de couleurs proches, seraient
         // groupées (le test des piles les active).
-        settings.similarity.background = false;
+        settings.analysis.stacks = tri::scheduler::Analysis::OnDemand;
         // Un réglage écrit pendant un test (bouton, case) : dans le dossier temporaire,
         // jamais la configuration de l'utilisateur (sans chemin, ce serait elle).
         tune(&mut settings, dir.path());
@@ -27539,6 +27651,7 @@ mod tests {
         // Proposition du 07/11/2026 (idée de l'utilisateur) : sous une action, le même
         // contrôle que dans le panneau, son état, changeable sans quitter la palette.
         let (mut h, _dir) = harness();
+        allow_stacks(&mut h);
         h.run_steps(3);
         h.state_mut().metadata_panel = false;
         press(&mut h, Key::P, CMD | Modifiers::SHIFT);
@@ -27997,8 +28110,13 @@ mod tests {
         let rapidraw = dir.path().join("rapidraw");
         std::fs::write(&darktable, "").unwrap();
         std::fs::write(&rapidraw, "").unwrap();
+        // Analyses du harnais gardées (#564 : les changer relit le dossier).
+        let analysis = h.state().settings.analysis;
         let develop = |rapidraw: &str| {
-            let mut settings = AppSettings::default();
+            let mut settings = AppSettings {
+                analysis,
+                ..AppSettings::default()
+            };
             settings.develop.darktable = darktable.to_string_lossy().into_owned();
             settings.develop.rapidraw = rapidraw.to_string();
             settings.develop.rawtherapee = String::new();
@@ -28188,6 +28306,7 @@ mod tests {
         // section « Grille » du panneau de droite ; un clic sur un titre replie la section,
         // retenu d'une session à l'autre.
         let (mut h, _dir) = harness();
+        allow_stacks(&mut h);
         h.state_mut().metadata_panel = true;
         // Les noms d'ordre sont aussi des lignes des Exif (« Nom ») : section repliée.
         h.state_mut().panel_folded.insert("exif".to_string());
@@ -29584,6 +29703,7 @@ mod tests {
         // automatiques grisées tant que leur calcul n'est pas fini (les éteindre reste
         // possible).
         let (mut h, _dir) = harness();
+        allow_stacks(&mut h);
         h.run_steps(3);
         choose_palette(&mut h, Some(tri::palette::SourceKind::Camera));
         let half = Progress { done: 1, total: 3 };
@@ -29854,6 +29974,7 @@ mod tests {
         // Harmonisation du 31/10/2026 : sans pile de rafale, `s`, `((`, `))`, `(`, `)` et le
         // mode pile visent la pile de développements de la photo.
         let (mut h, dir) = harness();
+        allow_stacks(&mut h);
         h.run_steps(3);
         let photos = dir.path().join("photos");
         for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp"] {
@@ -30042,7 +30163,7 @@ mod tests {
         h.state_mut().reload_folder(None);
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
         h.state_mut().stacking = true;
-        h.state_mut().settings.similarity.background = true;
+        h.state_mut().settings.analysis.stacks = tri::scheduler::Analysis::Background;
         let files = h.state().files.clone();
         let preview = tri::preview::Settings::default();
         let cancel = std::sync::atomic::AtomicBool::new(false);
@@ -32345,6 +32466,7 @@ mod tests {
         // Retour du 26/10/2026 (#62) : en grille aussi, pour voir l'état. Sans les piles,
         // il reste là, grisé (retour du 18/11/2026 : rien ne bouge dans la barre).
         let (mut h, _dir) = harness();
+        allow_stacks(&mut h);
         h.state_mut().rating_bar = true;
         h.run_steps(3);
         let label = Action::StackEnterToggle.label();
@@ -32715,6 +32837,7 @@ mod tests {
     fn full_screen_says_when_the_list_or_the_stack_ends() {
         // #307 : au bout de la pile ou du dossier, le défilement s'arrêtait sans rien dire.
         let (mut h, _dir) = harness();
+        allow_stacks(&mut h);
         h.run_steps(3);
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
@@ -34437,6 +34560,7 @@ mod tests {
         // Retour du 30/10/2026 : on note par passes (1 étoile, filtre, 2 étoiles…) sans
         // repasser par la grille pour changer de filtre.
         let (mut h, _dir) = harness();
+        allow_stacks(&mut h);
         h.run_steps(3);
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
@@ -34514,7 +34638,7 @@ mod tests {
         open(&mut h, &photos);
         assert_eq!(h.state().grid_render, GridRender::LibRaw, "repris");
         // « Empiler automatiquement » aussi (11/11/2026).
-        h.state_mut().settings.similarity.background = true;
+        h.state_mut().settings.analysis.stacks = tri::scheduler::Analysis::Background;
         let default = h.state().gui.grid.stacks;
         h.state_mut().stacking = !default;
         h.run_steps(2);
@@ -34551,7 +34675,7 @@ mod tests {
         let (mut h, dir) = harness_images(images);
         let photos = dir.path().join("photos");
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 3);
-        h.state_mut().settings.similarity.background = true;
+        h.state_mut().settings.analysis.stacks = tri::scheduler::Analysis::Background;
         h.state_mut().stacking = true;
         let files = h.state().files.clone();
         let preview = tri::preview::Settings::default();
@@ -37188,6 +37312,7 @@ mod tests {
     #[test]
     fn the_grouping_dialog_gives_the_keyboard_to_its_checkbox() {
         let (mut h, _dir) = harness();
+        allow_stacks(&mut h);
         h.run_steps(3);
         assert!(!h.state().stacking);
         press(&mut h, Key::S, CMD);
@@ -37789,7 +37914,7 @@ mod tests {
         ];
         let (mut h, _dir) = harness_images(images);
         h.state_mut().stacking = true;
-        h.state_mut().settings.similarity.background = true;
+        h.state_mut().settings.analysis.stacks = tri::scheduler::Analysis::Background;
         // Toutes les empreintes là : les piles sont prêtes, la grille n'attend pas (CI du
         // 11/11/2026 : elle restait vide les 2 s de `stacks_wait_ms` sur une machine lente).
         h.state_mut().gui.grid.stacks_wait_ms = 60_000;
@@ -38414,6 +38539,17 @@ mod tests {
     fn waiting(limit: Duration) -> impl Iterator<Item = ()> {
         let deadline = Instant::now() + limit;
         std::iter::from_fn(move || (Instant::now() < deadline).then_some(()))
+    }
+
+    /// Piles utilisables dans un test (#564) : les tests partent de piles « à la
+    /// demande » sans rien dans le cache (images proches, qui se grouperaient) ; une fois
+    /// le cache lu, elles passent « en fond » côté interface, sans empreinte calculée.
+    fn allow_stacks(h: &mut Harness<'_, TriApp>) {
+        run_until(h, |app| {
+            let p = app.progress[5];
+            p.total > 0 && p.done == p.total
+        });
+        h.state_mut().settings.analysis.stacks = tri::scheduler::Analysis::Background;
     }
 
     fn run_until(h: &mut Harness<'_, TriApp>, done: impl Fn(&TriApp) -> bool) {
@@ -42566,5 +42702,97 @@ mod tests {
         app.notice = None;
         app.analysis_partial_notice(Progress { done: 3, total: 3 });
         assert!(app.notice.is_none(), "tout analysé : rien à dire");
+    }
+
+    #[test]
+    fn removed_analyses_take_their_tools_away() {
+        // #564 : palettes, piles et netteté retirées dans les réglages : ni filtre, ni
+        // interrupteur, ni calcul proposé, ni aide ; l'exposition reste.
+        use tri::scheduler::Analysis;
+        let images = (0..2)
+            .map(|i| {
+                let name = ["a.jpg", "b.jpg"][i];
+                (
+                    name,
+                    image::RgbImage::from_pixel(32, 24, image::Rgb([200, 40, 40])),
+                )
+            })
+            .collect();
+        let (mut h, _dir) = harness_tuned(images, |s, _| {
+            s.analysis.palettes = Analysis::Off;
+            s.analysis.stacks = Analysis::Off;
+            s.analysis.sharpness = Analysis::Off;
+        });
+        h.run_steps(3);
+        let app = h.state();
+        assert!(app.palette_toggles().is_empty());
+        let toggles: Vec<Action> = app.content_toggles().iter().map(|t| t.0).collect();
+        assert!(!toggles.contains(&Action::FilterBlurry), "{toggles:?}");
+        assert!(toggles.contains(&Action::FilterWellExposed), "{toggles:?}");
+        for action in [
+            Action::FilterPalette,
+            Action::FilterPaletteColour,
+            Action::StackMode,
+            Action::GroupingWindow,
+            Action::FilterBlurry,
+            Action::FolderCompute(tri::compute::Kind::Signatures),
+            Action::Compute(tri::compute::Kind::Palette(tri::palette::SourceKind::Raw)),
+        ] {
+            assert!(!action.available(), "{action:?}");
+            assert!(app.action_unusable(action).is_some(), "{action:?}");
+        }
+        assert!(Action::FilterWellExposed.available());
+        assert!(Action::FolderCompute(tri::compute::Kind::Exposure).available());
+        assert!(app.compute_palette_kinds().is_empty());
+        assert!(!app.stacking);
+        // Ni dans le panneau (section Palette, interrupteur des piles).
+        assert!(h.query_by_label(&t!("panel-section-palette")).is_none());
+        assert!(h.query_by_label(&t!("panel-grid-stacks-on")).is_none());
+        // Ni dans l'aide.
+        let help = help_rows(&h.state().keymap, "");
+        assert!(help.iter().all(|(a, _)| a.available()));
+        assert!(!help.iter().any(|(a, _)| *a == Action::StackMode));
+        // Remises dans les réglages : de retour tout de suite.
+        let mut settings = AppSettings::default();
+        settings.analysis = h.state().settings.analysis;
+        settings.analysis.palettes = Analysis::Background;
+        let ctx = h.ctx.clone();
+        h.state_mut().apply_settings(&ctx, settings);
+        h.run_steps(3);
+        assert!(Action::FilterPalette.available());
+        assert_eq!(h.state().palette_toggles().len(), 2);
+        assert!(!Action::StackMode.available(), "les piles restent retirées");
+    }
+
+    #[test]
+    fn an_on_demand_analysis_waits_for_the_folder_to_be_computed() {
+        // #564 : netteté « à la demande » : rien en fond, le filtre « floues » grisé tant
+        // que le dossier n'est pas dans le cache ; « Calculer » sur le dossier le dégrise.
+        use tri::scheduler::Analysis;
+        let images = (0..3)
+            .map(|i| {
+                let name = ["a.jpg", "b.jpg", "c.jpg"][i];
+                let pixel = image::Rgb([(60 * i) as u8, 100, 160]);
+                (name, image::RgbImage::from_pixel(32, 24, pixel))
+            })
+            .collect();
+        let (mut h, dir) = harness_tuned(images, |s, _| {
+            s.analysis.sharpness = Analysis::OnDemand;
+        });
+        run_until(&mut h, |app| app.analysis_missing[4] == 3);
+        let why = h.state().action_unusable(Action::FilterBlurry);
+        assert_eq!(why, Some(t!("filter-analysis-on-demand", missing = 3)));
+        assert!(Action::FilterBlurry.available(), "grisé, pas retiré");
+        let ctx = h.ctx.clone();
+        let photos = dir.path().join("photos");
+        h.state_mut().compute_action(
+            &ctx,
+            Action::FolderCompute(tri::compute::Kind::Sharpness),
+            crate::compute_tasks::Target::Folder(photos),
+        );
+        run_until(&mut h, |app| {
+            app.compute_tasks.is_empty() && app.action_unusable(Action::FilterBlurry).is_none()
+        });
+        assert_eq!(h.state().analysis_missing[4], 0);
     }
 }

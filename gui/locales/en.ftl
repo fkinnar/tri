@@ -81,6 +81,12 @@ sort-color = Colour
 sort-flag = Flag
 sort-notice = Order: { $key }, { $direction }
 filter-analysis-computing = Analysis in progress ({ $done } / { $total }): this filter will be available once it is done.
+filter-analysis-on-demand = { $missing ->
+    [0] Reading the cache…
+    [one] Analysis on demand (settings): 1 image not computed yet. Right-click the folder, then Compute.
+   *[other] Analysis on demand (settings): { $missing } images not computed yet. Right-click the folder, then Compute.
+}
+analysis-removed = Tool removed in the settings (Folder analyses).
 filter-analysis-partial = Analyses in progress: filter applied to the { $done } / { $total } photos already analysed; the grid fills in as they are computed.
 sort-ascending = ascending
 sort-descending = descending
@@ -1157,6 +1163,19 @@ cache-size-kb = { $n } KB
 cache-size-mb = { $n } MB
 cache-size-gb = { $n } GB
 settings-section-scheduler = Background work
+settings-section-analysis = Folder analyses
+settings-choice-analysis-exposure-background = In the background
+settings-choice-analysis-exposure-on-demand = On demand
+settings-choice-analysis-exposure-off = Removed
+settings-choice-analysis-sharpness-background = In the background
+settings-choice-analysis-sharpness-on-demand = On demand
+settings-choice-analysis-sharpness-off = Removed
+settings-choice-analysis-stacks-background = In the background
+settings-choice-analysis-stacks-on-demand = On demand
+settings-choice-analysis-stacks-off = Removed
+settings-choice-analysis-palettes-background = In the background
+settings-choice-analysis-palettes-on-demand = On demand
+settings-choice-analysis-palettes-off = Removed
 settings-section-xmp = Ratings (XMP)
 settings-choice-xmp-sidecar-darktable = Darktable
 settings-choice-xmp-sidecar-darktable-hint = IMAGE.RAF.xmp

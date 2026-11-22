@@ -12,7 +12,9 @@ use std::time::{Duration, Instant};
 
 use tri::cache::Level;
 use tri::media::{MediaFile, MediaKind};
-use tri::scheduler::{Config, Event, Failure, Producer, Progress, RawPreviews, Scheduler};
+use tri::scheduler::{
+    Analysis, Config, Event, Failure, Producer, Progress, RawPreviews, Scheduler,
+};
 
 const LONG: Duration = Duration::from_secs(10);
 
@@ -152,9 +154,10 @@ fn start(fake: &Fake, light_workers: usize) -> (Scheduler, Events) {
         Config {
             light_workers,
             thumbnails_first: false,
-            exposure: false,
-            sharpness: false,
-            similarity: false,
+            exposure: Analysis::Off,
+            sharpness: Analysis::Off,
+            similarity: Analysis::Off,
+            palettes: Analysis::Background,
             palette: None,
             ..Config::default()
         },
@@ -303,9 +306,10 @@ fn cached_analyses_do_not_wait_for_thumbnails_being_recomputed() {
         Config {
             light_workers: 1,
             thumbnails_first: true,
-            exposure: false,
-            sharpness: true,
-            similarity: true,
+            exposure: Analysis::Off,
+            sharpness: Analysis::Background,
+            similarity: Analysis::Background,
+            palettes: Analysis::Background,
             palette: None,
             ..Config::default()
         },
@@ -353,9 +357,10 @@ fn a_request_already_in_cache_does_not_wait_for_the_busy_worker() {
         Config {
             light_workers: 1,
             raw_previews: RawPreviews::Background,
-            exposure: false,
-            sharpness: false,
-            similarity: false,
+            exposure: Analysis::Off,
+            sharpness: Analysis::Off,
+            similarity: Analysis::Off,
+            palettes: Analysis::Background,
             palette: None,
             ..Config::default()
         },
@@ -439,9 +444,10 @@ fn thumbnails_first_holds_background_previews_until_the_grid_is_done() {
         Config {
             light_workers: 2,
             thumbnails_first: true,
-            exposure: false,
-            sharpness: false,
-            similarity: false,
+            exposure: Analysis::Off,
+            sharpness: Analysis::Off,
+            similarity: Analysis::Off,
+            palettes: Analysis::Background,
             palette: None,
             ..Config::default()
         },
@@ -502,9 +508,10 @@ fn raw_renders_wait_for_embedded_previews_in_thumbnails_first_mode() {
         Config {
             light_workers: 1, // ordre des tâches légères déterministe
             thumbnails_first: true,
-            exposure: false,
-            sharpness: false,
-            similarity: false,
+            exposure: Analysis::Off,
+            sharpness: Analysis::Off,
+            similarity: Analysis::Off,
+            palettes: Analysis::Background,
             palette: None,
             ..Config::default()
         },
@@ -719,9 +726,10 @@ fn on_demand_policy_leaves_raw_renders_to_requests() {
             light_workers: 2,
             thumbnails_first: true,
             raw_previews: RawPreviews::OnDemand,
-            exposure: false,
-            sharpness: false,
-            similarity: false,
+            exposure: Analysis::Off,
+            sharpness: Analysis::Off,
+            similarity: Analysis::Off,
+            palettes: Analysis::Background,
             palette: None,
         },
     );
@@ -770,9 +778,10 @@ fn the_raw_render_policy_changes_with_the_next_folder() {
             light_workers: 2,
             thumbnails_first: true,
             raw_previews: RawPreviews::OnDemand,
-            exposure: false,
-            sharpness: false,
-            similarity: false,
+            exposure: Analysis::Off,
+            sharpness: Analysis::Off,
+            similarity: Analysis::Off,
+            palettes: Analysis::Background,
             palette: None,
         },
     );
@@ -796,9 +805,10 @@ fn moving_focus_drops_requests_that_are_no_longer_near() {
             light_workers: 1,
             thumbnails_first: true,
             raw_previews: RawPreviews::OnDemand,
-            exposure: false,
-            sharpness: false,
-            similarity: false,
+            exposure: Analysis::Off,
+            sharpness: Analysis::Off,
+            similarity: Analysis::Off,
+            palettes: Analysis::Background,
             palette: None,
         },
     );
@@ -924,9 +934,10 @@ fn real_previews_fill_the_cache_and_are_reused() {
         let scheduler = Scheduler::new(
             producer,
             Config {
-                exposure: false,
-                sharpness: false,
-                similarity: false,
+                exposure: Analysis::Off,
+                sharpness: Analysis::Off,
+                similarity: Analysis::Off,
+                palettes: Analysis::Background,
                 palette: None,
                 ..Config::default()
             },
@@ -995,9 +1006,10 @@ fn real_previews_fill_the_cache_and_are_reused() {
         let scheduler = Scheduler::new(
             producer,
             Config {
-                exposure: false,
-                sharpness: false,
-                similarity: false,
+                exposure: Analysis::Off,
+                sharpness: Analysis::Off,
+                similarity: Analysis::Off,
+                palettes: Analysis::Background,
                 palette: None,
                 ..Config::default()
             },
@@ -1038,9 +1050,10 @@ fn exposure_analyses_run_after_previews_of_the_grid_and_before_raw_renders() {
             light_workers: 2,
             thumbnails_first: true,
             raw_previews: RawPreviews::Background,
-            exposure: true,
-            sharpness: false,
-            similarity: false,
+            exposure: Analysis::Background,
+            sharpness: Analysis::Off,
+            similarity: Analysis::Off,
+            palettes: Analysis::Background,
             palette: None,
         },
     );
@@ -1167,9 +1180,10 @@ fn palettes_follow_the_chosen_source_in_the_background() {
             light_workers: 2,
             thumbnails_first: true,
             raw_previews: RawPreviews::OnDemand,
-            exposure: false,
-            sharpness: false,
-            similarity: false,
+            exposure: Analysis::Off,
+            sharpness: Analysis::Off,
+            similarity: Analysis::Off,
+            palettes: Analysis::Background,
             palette: None,
         },
     );
@@ -1197,4 +1211,65 @@ fn palettes_follow_the_chosen_source_in_the_background() {
         3,
         "rien de plus"
     );
+}
+
+/// #564 : une analyse « à la demande » n'est pas calculée en fond ; ce qui est en cache est
+/// livré, ce qui manque signalé ; une demande pour l'image affichée est calculée ; une
+/// analyse retirée n'est même pas regardée.
+#[test]
+fn on_demand_analyses_are_only_read_from_the_cache_and_off_ones_are_left_out() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let all = files(4, MediaKind::Flat);
+    fake.mark_all_cached(&all[..2], &[Level::Sharpness]);
+    let (scheduler, events) = start_with(
+        &fake,
+        Config {
+            light_workers: 2,
+            thumbnails_first: false,
+            exposure: Analysis::Off,
+            sharpness: Analysis::OnDemand,
+            similarity: Analysis::Off,
+            palettes: Analysis::Background,
+            palette: None,
+            ..Config::default()
+        },
+    );
+    let generation = scheduler.set_folder(all.clone());
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(
+        fake.order(Level::Sharpness),
+        Vec::<String>::new(),
+        "rien calculé"
+    );
+    assert!(fake.order(Level::Exposure).is_empty());
+    let mut cached = ready(&events, generation, Level::Sharpness);
+    cached.sort();
+    assert_eq!(cached, vec![0, 1], "en cache : livrées");
+    let mut missing: Vec<usize> = events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|e| match e {
+            Event::Missing {
+                generation: g,
+                index,
+                level: Level::Sharpness,
+                ..
+            } if *g == generation => Some(*index),
+            _ => None,
+        })
+        .collect();
+    missing.sort();
+    assert_eq!(missing, vec![2, 3], "absentes : signalées");
+    assert_eq!(scheduler.progress(Level::Sharpness), complete(4));
+    assert_eq!(
+        scheduler.progress(Level::Exposure),
+        Some(Progress { done: 0, total: 0 }),
+        "retirée : rien"
+    );
+    // L'image affichée : sa demande est calculée.
+    scheduler.set_focus(3);
+    scheduler.request(3, Level::Sharpness);
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(fake.order(Level::Sharpness), vec!["img3.JPG".to_string()]);
 }

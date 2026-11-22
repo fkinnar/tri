@@ -257,7 +257,7 @@ const CATEGORIES: [&[&str]; 6] = [
         "versions.presets",
         "gui.crop",
     ],
-    &["preview", "render", "cache", "scheduler"],
+    &["preview", "render", "cache", "scheduler", "analysis"],
 ];
 
 /// Place de la section `name` dans la liste : (catégorie, rang dans la catégorie). Une
@@ -530,6 +530,9 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
         ("gui", "theme") => &["dark", "light", "system", "neutral"],
         ("gui", "sort") => &["name", "captured", "modified", "stars", "color", "flag"],
         ("gui", "raw_previews") => &["on-demand", "background"],
+        ("analysis", "exposure" | "sharpness" | "stacks" | "palettes") => {
+            &["background", "on-demand", "off"]
+        }
         ("xmp", "sidecar") => &["darktable", "adobe", "both"],
         ("xmp", "embed") => &["never", "internal", "everywhere"],
         ("files", "group_pairs") => &["ask", "separate", "grouped"],

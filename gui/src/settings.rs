@@ -30,6 +30,8 @@ pub struct AppSettings {
     pub cache: CacheSection,
     /// `[scheduler]` (moteur).
     pub scheduler: SchedulerSection,
+    /// `[analysis]` (moteur) : analyses de tout le dossier (#564).
+    pub analysis: tri::settings::AnalysisSection,
     /// `[xmp]` (moteur).
     pub xmp: XmpSection,
     /// `[sidecars]` (moteur) : création des sidecars des logiciels quand on note.
@@ -87,6 +89,7 @@ impl AppSettings {
             render: self.render,
             cache: self.cache.clone(),
             scheduler: self.scheduler,
+            analysis: self.analysis,
             xmp: self.xmp,
             sidecars: self.sidecars,
             places: self.places.clone(),

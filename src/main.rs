@@ -761,7 +761,7 @@ fn follow_previews(
             Ok(Event::Failed {
                 path, level, error, ..
             }) => failures.push(format!("{level:?} {} : {error}", path.display())),
-            Ok(Event::Ready { .. } | Event::Dropped { .. }) => {}
+            Ok(Event::Ready { .. } | Event::Dropped { .. } | Event::Missing { .. }) => {}
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
@@ -789,9 +789,9 @@ fn follow_previews(
         if finished(thumbs, n)
             && finished(embedded, raws)
             && finished(standards, n)
-            && finished(exposures, analyses(config.exposure))
-            && finished(sharpnesses, analyses(config.sharpness))
-            && finished(similarities, analyses(config.similarity))
+            && finished(exposures, analyses(config.exposure.is_on()))
+            && finished(sharpnesses, analyses(config.sharpness.is_on()))
+            && finished(similarities, analyses(config.similarity.is_on()))
         {
             break;
         }
@@ -1186,7 +1186,7 @@ fn sharpness(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyR
         signatures.iter().map(Option::as_ref).collect();
     let sim = &settings.similarity;
     let links = tri::similarity::distances(&refs, sim.shape_weight);
-    let groups = if sim.background {
+    let groups = if settings.analysis().stacks.is_on() {
         tri::similarity::group(&links, settings.sharpness.group_threshold, sim.max_gap_s)
     } else {
         Vec::new()

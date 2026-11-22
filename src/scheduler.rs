@@ -161,6 +161,18 @@ pub enum Event {
         /// Niveau concerné.
         level: Level,
     },
+    /// Une analyse seulement lue dans le cache ([`Analysis::OnDemand`]) n'y est pas : elle
+    /// n'est pas calculée (elle compte quand même dans l'avancement).
+    Missing {
+        /// Dossier concerné.
+        generation: u64,
+        /// Position du fichier.
+        index: usize,
+        /// Chemin du fichier.
+        path: PathBuf,
+        /// Niveau concerné.
+        level: Level,
+    },
     /// Avancement d'un niveau calculé en fond (vignettes ou aperçus standard).
     Progress {
         /// Dossier concerné.
@@ -206,20 +218,73 @@ pub struct Config {
     /// Rendus RAW (aperçus standard des RAW) : tout le dossier en fond, ou seulement à la
     /// demande ([`Scheduler::request`]).
     pub raw_previews: RawPreviews,
-    /// Analyse d'exposition ([`Level::Exposure`]) de tout le dossier en fond, après
-    /// vignettes et aperçus boîtier et avant les rendus RAW de fond ; sinon seulement à
-    /// la demande.
-    pub exposure: bool,
-    /// Score de netteté ([`Level::Sharpness`]) de tout le dossier en fond (workers
-    /// légers : JPEG boîtier), après vignettes et aperçus boîtier ; sinon à la demande.
-    pub sharpness: bool,
-    /// Empreintes de regroupement ([`Level::Similarity`]) de tout le dossier en fond
-    /// (workers légers), juste après les vignettes.
-    pub similarity: bool,
-    /// Palettes de couleurs ([`Level::Palette`]) de tout le dossier en fond, tirées de
-    /// cette source (#492) ; `None` : aucune (choisie dans l'interface des palettes, voir
-    /// [`Scheduler::set_palette`]).
+    /// Analyse d'exposition ([`Level::Exposure`]) de tout le dossier : en fond, après
+    /// vignettes et aperçus boîtier et avant les rendus RAW de fond ; ou seulement lue
+    /// dans le cache ([`Analysis`]).
+    pub exposure: Analysis,
+    /// Score de netteté ([`Level::Sharpness`]) de tout le dossier (workers légers : JPEG
+    /// boîtier), après vignettes et aperçus boîtier.
+    pub sharpness: Analysis,
+    /// Empreintes de regroupement ([`Level::Similarity`]) de tout le dossier (workers
+    /// légers), juste après les vignettes.
+    pub similarity: Analysis,
+    /// Palettes de couleurs ([`Level::Palette`]) de tout le dossier, tirées de la source
+    /// [`Config::palette`].
+    pub palettes: Analysis,
+    /// Source des palettes de tout le dossier (#492) ; `None` : aucune (choisie dans
+    /// l'interface des palettes, voir [`Scheduler::set_palette`]).
     pub palette: Option<crate::palette::SourceKind>,
+}
+
+/// Une analyse sur tout le dossier (#564) : calculée en fond, seulement lue dans le
+/// cache, ou rien du tout.
+///
+/// Dans le fichier de configuration (`[analysis]`) : `"background"`, `"on-demand"` ou
+/// `"off"`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Analysis {
+    /// Tout le dossier calculé en fond.
+    #[default]
+    Background,
+    /// Rien n'est calculé en fond : ce qui est déjà dans le cache est livré
+    /// ([`Event::Ready`]), ce qui manque est signalé ([`Event::Missing`]). Une demande
+    /// ([`Scheduler::request`]) est toujours calculée.
+    OnDemand,
+    /// Rien : ni calcul ni lecture du cache pour le dossier (l'interface retire l'outil).
+    Off,
+}
+
+/// Les analyses de tout le dossier (section `[analysis]`, #564) : chacune calculée en
+/// fond, seulement lue dans le cache (« à la demande » : l'outil reste grisé tant que le
+/// dossier n'est pas calculé), ou retirée avec ses outils.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Analyses {
+    /// Exposition : histogrammes, zones, badges, filtre « bien exposées ».
+    pub exposure: Analysis,
+    /// Netteté : scores, badges, filtre « floues ».
+    pub sharpness: Analysis,
+    /// Piles : empreintes de regroupement.
+    pub stacks: Analysis,
+    /// Palettes de couleurs : recherches par palette et par couleur.
+    pub palettes: Analysis,
+}
+
+impl Analysis {
+    /// Vrai sauf [`Analysis::Off`].
+    pub fn is_on(self) -> bool {
+        self != Analysis::Off
+    }
+
+    /// Identifiant du fichier de configuration.
+    pub fn id(self) -> &'static str {
+        match self {
+            Analysis::Background => "background",
+            Analysis::OnDemand => "on-demand",
+            Analysis::Off => "off",
+        }
+    }
 }
 
 /// Politique de calcul des rendus RAW (aperçus standard des RAW). Les aperçus des images
@@ -244,9 +309,10 @@ impl Default for Config {
             light_workers: (cores / 2).max(1),
             thumbnails_first: true,
             raw_previews: RawPreviews::default(),
-            exposure: true,
-            sharpness: true,
-            similarity: true,
+            exposure: Analysis::Background,
+            sharpness: Analysis::Background,
+            similarity: Analysis::Background,
+            palettes: Analysis::Background,
             palette: None,
         }
     }
@@ -274,11 +340,12 @@ fn tracked_slot(level: Level) -> Option<usize> {
 
 /// Niveaux calculés en fond pour un fichier : l'aperçu boîtier n'existe que pour les RAW,
 /// leur rendu RAW dépend de la politique, les analyses des réglages `exposure` et
-/// `sharpness`.
+/// `sharpness` (une analyse seulement lue dans le cache en fait partie : le balayeur la
+/// livre, [`sweeper`]).
 fn background_levels(
     kind: MediaKind,
     raw_previews: RawPreviews,
-    (exposure, sharpness): (bool, bool),
+    (exposure, sharpness): (Analysis, Analysis),
 ) -> Vec<Level> {
     let mut levels = match (kind, raw_previews) {
         (MediaKind::Raw, RawPreviews::Background) => {
@@ -287,10 +354,10 @@ fn background_levels(
         (MediaKind::Raw, RawPreviews::OnDemand) => vec![Level::Thumbnail, Level::Embedded],
         (MediaKind::Flat, _) => vec![Level::Thumbnail, Level::Standard],
     };
-    if exposure {
+    if exposure.is_on() {
         levels.push(Level::Exposure);
     }
-    if sharpness {
+    if sharpness.is_on() {
         levels.push(Level::Sharpness);
     }
     levels
@@ -433,9 +500,10 @@ struct Running {
 struct State {
     thumbnails_first: bool,
     raw_previews: RawPreviews,
-    exposure: bool,
-    sharpness: bool,
-    similarity: bool,
+    exposure: Analysis,
+    sharpness: Analysis,
+    similarity: Analysis,
+    palettes: Analysis,
     palette: Option<crate::palette::SourceKind>,
     /// Tâches demandées hors du travail de fond ([`Scheduler::request`]) : elles ne
     /// comptent pas dans la progression.
@@ -472,13 +540,30 @@ impl State {
             self.raw_previews,
             (self.exposure, self.sharpness),
         );
-        if self.similarity {
+        if self.similarity.is_on() {
             levels.push(Level::Similarity);
         }
-        if let Some(source) = self.palette.and_then(|k| k.source_for(file)) {
+        if let Some(source) = self
+            .palette
+            .filter(|_| self.palettes.is_on())
+            .and_then(|k| k.source_for(file))
+        {
             levels.push(Level::Palette(source));
         }
         levels
+    }
+
+    /// Vrai si `job` est seulement à lire dans le cache : une analyse [`Analysis::OnDemand`]
+    /// du travail de fond (une demande, elle, est calculée).
+    fn cache_only(&self, job: &Job) -> bool {
+        let mode = match job.1 {
+            Level::Exposure => self.exposure,
+            Level::Sharpness => self.sharpness,
+            Level::Similarity => self.similarity,
+            Level::Palette(_) => self.palettes,
+            _ => return false,
+        };
+        mode == Analysis::OnDemand && !self.on_demand.contains(job)
     }
 
     /// Prend la tâche la plus prioritaire pour ce type de worker.
@@ -505,6 +590,7 @@ impl State {
             .pending
             .iter()
             .filter(|(i, l)| is_heavy(self.files[*i].kind, *l) == heavy)
+            .filter(|job| !self.cache_only(job))
             .filter(|job| {
                 let class = priority_in(**job, focus, group, visible).0;
                 !blocked(class) && !(background_paused && class >= EMBEDDED_BACKGROUND)
@@ -577,6 +663,7 @@ impl Scheduler {
                 exposure: config.exposure,
                 sharpness: config.sharpness,
                 similarity: config.similarity,
+                palettes: config.palettes,
                 palette: config.palette,
                 ..State::default()
             }),
@@ -683,6 +770,16 @@ impl Scheduler {
         generation
     }
 
+    /// Change les analyses de tout le dossier (réglages appliqués, #564) ; elles valent au
+    /// prochain [`Scheduler::set_folder`].
+    pub fn set_analyses(&self, analyses: Analyses) {
+        let mut s = self.shared.lock();
+        s.exposure = analyses.exposure;
+        s.sharpness = analyses.sharpness;
+        s.similarity = analyses.stacks;
+        s.palettes = analyses.palettes;
+    }
+
     /// Change la politique des rendus RAW de fond (la grille montre les rendus LibRaw,
     /// #114) ; elle vaut au prochain [`Scheduler::set_folder`].
     pub fn set_raw_previews(&self, raw_previews: RawPreviews) {
@@ -706,6 +803,7 @@ impl Scheduler {
             .files
             .iter()
             .enumerate()
+            .filter(|_| s.palettes.is_on())
             .filter_map(|(i, f)| Some((i, Level::Palette(kind?.source_for(f)?))))
             .collect();
         // Avancement des palettes : celles de cette source, à partir de zéro.
@@ -1012,21 +1110,28 @@ fn sweeper(shared: &Shared, producer: &dyn Producer) {
                 s.files[job.0].clone()
             };
             let done = producer.is_done(&file, job.1);
-            {
+            let missing = {
                 let mut s = shared.lock();
                 // Toujours la même tâche, toujours en attente : sinon un worker s'en charge.
                 if s.generation != generation || !s.pending.contains(&job) {
                     continue;
                 }
+                let missing = !done && s.cache_only(&job);
                 if done {
                     s.pending.remove(&job);
                     let events = finish(&mut s, job, file, Ok(()));
                     s.outbox.extend(events);
+                } else if missing {
+                    // Seulement lue dans le cache : absente, elle n'est pas calculée.
+                    s.pending.remove(&job);
+                    let events = missing_events(&mut s, job, file);
+                    s.outbox.extend(events);
                 } else {
                     s.checked.insert(job);
                 }
-            }
-            if done {
+                missing
+            };
+            if done || missing {
                 shared.work.notify_all();
                 deliver(shared);
             }
@@ -1066,6 +1171,27 @@ fn deliver(shared: &Shared) {
         let _end = EndOfCallback(shared);
         (shared.on_event)(event);
     }
+}
+
+/// Une analyse seulement lue dans le cache, absente ([`Analysis::OnDemand`]) : comptée
+/// comme terminée, signalée par [`Event::Missing`].
+fn missing_events(s: &mut State, (index, level): Job, file: MediaFile) -> Vec<Event> {
+    let generation = s.generation;
+    let mut events = vec![Event::Missing {
+        generation,
+        index,
+        path: file.path,
+        level,
+    }];
+    if let Some(i) = tracked_slot(level) {
+        s.progress[i].done += 1;
+        events.push(Event::Progress {
+            generation,
+            level,
+            progress: s.progress[i],
+        });
+    }
+    events
 }
 
 /// Met à jour l'état après une tâche et prépare les événements à émettre.
@@ -1127,6 +1253,9 @@ fn finish(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const ON: Analysis = Analysis::Background;
+    const OFF: Analysis = Analysis::Off;
 
     #[test]
     fn visible_thumbnails_come_first_then_by_distance() {
@@ -1223,15 +1352,14 @@ mod tests {
     fn embedded_previews_only_for_raw_files() {
         use RawPreviews::*;
         assert!(
-            background_levels(MediaKind::Raw, Background, (true, false)).contains(&Level::Embedded)
+            background_levels(MediaKind::Raw, Background, (ON, OFF)).contains(&Level::Embedded)
         );
         assert!(
-            !background_levels(MediaKind::Flat, Background, (true, false))
-                .contains(&Level::Embedded)
+            !background_levels(MediaKind::Flat, Background, (ON, OFF)).contains(&Level::Embedded)
         );
         for kind in [MediaKind::Raw, MediaKind::Flat] {
             for policy in [Background, OnDemand] {
-                let levels = background_levels(kind, policy, (true, false));
+                let levels = background_levels(kind, policy, (ON, OFF));
                 assert!(!levels.contains(&Level::Full), "1:1 à la demande");
                 assert!(!levels.contains(&Level::EmbeddedFull), "1:1 à la demande");
             }
@@ -1242,13 +1370,11 @@ mod tests {
     fn on_demand_policy_keeps_raw_renders_out_of_the_background() {
         use RawPreviews::*;
         assert!(
-            background_levels(MediaKind::Raw, Background, (true, false)).contains(&Level::Standard)
+            background_levels(MediaKind::Raw, Background, (ON, OFF)).contains(&Level::Standard)
         );
+        assert!(!background_levels(MediaKind::Raw, OnDemand, (ON, OFF)).contains(&Level::Standard));
         assert!(
-            !background_levels(MediaKind::Raw, OnDemand, (true, false)).contains(&Level::Standard)
-        );
-        assert!(
-            background_levels(MediaKind::Flat, OnDemand, (true, false)).contains(&Level::Standard),
+            background_levels(MediaKind::Flat, OnDemand, (ON, OFF)).contains(&Level::Standard),
             "les images plates gardent leur aperçu"
         );
         assert!(
@@ -1266,8 +1392,8 @@ mod tests {
     fn sharpness_scores_are_light_background_work() {
         use RawPreviews::*;
         for kind in [MediaKind::Raw, MediaKind::Flat] {
-            assert!(background_levels(kind, OnDemand, (false, true)).contains(&Level::Sharpness));
-            assert!(!background_levels(kind, OnDemand, (false, false)).contains(&Level::Sharpness));
+            assert!(background_levels(kind, OnDemand, (OFF, ON)).contains(&Level::Sharpness));
+            assert!(!background_levels(kind, OnDemand, (OFF, OFF)).contains(&Level::Sharpness));
             assert!(
                 !is_heavy(kind, Level::Sharpness),
                 "JPEG boîtier : workers légers"
@@ -1283,16 +1409,13 @@ mod tests {
         use RawPreviews::*;
         for policy in [Background, OnDemand] {
             assert!(
-                background_levels(MediaKind::Raw, policy, (true, false)).contains(&Level::Exposure)
+                background_levels(MediaKind::Raw, policy, (ON, OFF)).contains(&Level::Exposure)
             );
             assert!(
-                !background_levels(MediaKind::Raw, policy, (false, false))
-                    .contains(&Level::Exposure)
+                !background_levels(MediaKind::Raw, policy, (OFF, OFF)).contains(&Level::Exposure)
             );
         }
-        assert!(
-            background_levels(MediaKind::Flat, OnDemand, (true, false)).contains(&Level::Exposure)
-        );
+        assert!(background_levels(MediaKind::Flat, OnDemand, (ON, OFF)).contains(&Level::Exposure));
         assert!(
             is_heavy(MediaKind::Raw, Level::Exposure),
             "décompression LibRaw"
