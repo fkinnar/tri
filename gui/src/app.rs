@@ -6254,29 +6254,35 @@ impl TriApp {
         }
         ui.separator();
         // « Toutes les photos » (#561) : au-dessus de tous les emplacements, comme une
-        // racine ; à l'accent quand il est ouvert.
+        // racine ; ouvert, la même surbrillance que les dossiers (retour du 22/11/2026),
+        // avec un demi-interligne au-dessus et au-dessous pour la détacher.
         {
             let open_here = tri::folder::is_all_photos(&self.folder.dir);
-            let text = egui::RichText::new(t!("all-photos")).strong();
-            let text = if open_here {
-                text.color(Color32::from(self.gui.title_color()))
-            } else {
-                text
-            };
+            let gap = ui.text_style_height(&egui::TextStyle::Body) * 0.5;
+            ui.add_space(gap);
             let tip = format!(
                 "{}\n{}",
                 self.action_tip(Action::AllPhotos),
                 t!("all-photos-tip")
             );
-            if ui
-                .add(egui::Label::new(text).sense(Sense::click()))
-                .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .on_hover_text(tip)
-                .clicked()
-                && !open_here
-            {
+            let clicked = ui
+                .horizontal(|ui| {
+                    let widgets = &mut ui.visuals_mut().widgets;
+                    for w in [&mut widgets.hovered, &mut widgets.active] {
+                        w.weak_bg_fill = Color32::TRANSPARENT;
+                        w.bg_fill = Color32::TRANSPARENT;
+                        w.bg_stroke = egui::Stroke::NONE;
+                    }
+                    ui.selectable_label(open_here, t!("all-photos"))
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text(&tip)
+                        .clicked()
+                })
+                .inner;
+            if clicked && !open_here {
                 self.open_all_photos(None);
             }
+            ui.add_space(gap);
         }
         ui.separator();
         // Dossier ouvert montré à sa première ligne (son favori en tête, s'il en est un).
