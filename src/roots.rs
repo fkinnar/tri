@@ -319,7 +319,7 @@ mod tests {
                 ..Default::default()
             };
             index
-                .record_notes(&[(root.join("a/A.jpg"), notes)])
+                .record_notes(&[(root.join("a").join("A.jpg"), notes)])
                 .unwrap();
         }
         // Déplacée seule, hors de `tri`, dans un autre dossier de la racine.
