@@ -4406,7 +4406,13 @@ impl TriApp {
     /// imagette, cliquable (en grand, « Supprimer la référence ») ; un cadre vide sans
     /// référence.
     fn reference_box(&mut self, ui: &mut Ui, side: f32) {
-        let (rect, response) = ui.allocate_exact_size(vec2(side, side), Sense::click());
+        // Sans référence, rien à cliquer : pas de main, la bulle seule.
+        let sense = if self.reference.is_some() {
+            Sense::click()
+        } else {
+            Sense::hover()
+        };
+        let (rect, response) = ui.allocate_exact_size(vec2(side, side), sense);
         let weak = ui.visuals().weak_text_color();
         let Some(reference) = self.reference.clone() else {
             ui.painter().rect_stroke(
