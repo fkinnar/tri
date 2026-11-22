@@ -185,6 +185,9 @@ pub fn run(
         {
             crate::index::note(file, source);
         }
+        if failed.is_none() && kind == Kind::Signatures {
+            crate::index::note_signature(file);
+        }
         match failed {
             Some(e) => {
                 summary.failed += 1;

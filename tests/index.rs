@@ -95,6 +95,21 @@ fn computed_palettes_are_indexed_and_a_moved_photo_keeps_its_own() {
         .find(|p| p.paths.iter().any(|(p, _, _)| p.ends_with("b/rouge.jpg")))
         .unwrap();
     assert_eq!(red.paths.len(), 1, "l'ancien chemin oublié");
+    // Empreintes de similitude calculées : notées aussi (« semblables » partout).
+    let files = tri::media::scan(&b, 1).unwrap();
+    tri::compute::run(
+        &files,
+        Kind::Signatures,
+        &producer,
+        &AtomicBool::new(false),
+        &|_, _| {},
+    );
+    tri::index::flush(Duration::from_secs(30));
+    let signatures = index.signatures().unwrap();
+    assert!(
+        signatures.iter().any(|(p, _)| p.ends_with("b/rouge.jpg")),
+        "{signatures:?}"
+    );
 }
 
 /// Petit générateur pseudo-aléatoire (reproductible, sans dépendance).

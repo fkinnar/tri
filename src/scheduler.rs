@@ -1206,6 +1206,10 @@ fn finish(
     if let (Ok(()), Level::Palette(source)) = (&result, level) {
         crate::index::note(&file, source);
     }
+    // Empreinte de similitude prête : notée aussi (« semblables » partout).
+    if let (Ok(()), Level::Similarity) = (&result, level) {
+        crate::index::note_signature(&file);
+    }
     let path = file.path;
     let on_demand = s.on_demand.remove(&(index, level));
     let mut events = match result {

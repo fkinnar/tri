@@ -1017,6 +1017,9 @@ pub struct TriApp {
     opening: Option<Opening>,
     /// « Toutes les photos » (#561) : dossier d'où l'on y est venu (Échap y ramène).
     all_photos_from: Option<PathBuf>,
+    /// Empreintes de similitude de « Toutes les photos », lues d'un coup dans l'index
+    /// (« semblables » partout sans relire le cache photo par photo).
+    all_photos_signatures: Option<mpsc::Receiver<Vec<(PathBuf, tri::similarity::Signature)>>>,
     /// La photo où l'on en était en quittant « Toutes les photos » : on y revient (retour
     /// du 22/11/2026 : `g f` puis `g a` repartait du début de la grille).
     all_photos_last: Option<PathBuf>,
@@ -2211,6 +2214,7 @@ impl TriApp {
             opening: None,
             all_photos_from: None,
             all_photos_last: None,
+            all_photos_signatures: None,
             all_photos_completion: None,
             reference: None,
             reference_wanted: false,
@@ -3002,6 +3006,64 @@ impl TriApp {
         self.reveal_folder = true;
     }
 
+    /// Lit en fond les empreintes de similitude de l'index, pour « Toutes les photos »
+    /// ([`TriApp::poll_all_photos_signatures`]).
+    fn read_all_photos_signatures(&mut self) {
+        let Some(data) = self.settings.data_dir() else {
+            return;
+        };
+        let (tx, rx) = mpsc::channel();
+        let repaint = self.repaint.clone();
+        std::thread::Builder::new()
+            .name("tri-all-signatures".into())
+            .spawn(move || {
+                let read = tri::index::Index::open(&data.join("index.sqlite"))
+                    .and_then(|index| index.signatures())
+                    .unwrap_or_default();
+                let signatures: Vec<(PathBuf, tri::similarity::Signature)> = read
+                    .into_iter()
+                    .filter_map(|(path, bytes)| {
+                        Some((path, tri::similarity::Signature::from_bytes(&bytes)?))
+                    })
+                    .collect();
+                let _ = tx.send(signatures);
+                if let Some(ctx) = repaint {
+                    ctx.request_repaint();
+                }
+            })
+            .ok();
+        self.all_photos_signatures = Some(rx);
+    }
+
+    /// Empreintes de l'index arrivées : celles qui manquaient sont prises (piles et
+    /// « semblables » à revoir).
+    fn poll_all_photos_signatures(&mut self) {
+        let Some(rx) = &self.all_photos_signatures else {
+            return;
+        };
+        let Ok(signatures) = rx.try_recv() else {
+            return;
+        };
+        self.all_photos_signatures = None;
+        if !tri::folder::is_all_photos(&self.folder.dir) {
+            return;
+        }
+        let mut new = 0;
+        for (path, signature) in signatures {
+            if let std::collections::hash_map::Entry::Vacant(e) = self.signatures.entry(path) {
+                e.insert(signature);
+                new += 1;
+            }
+        }
+        trace(|| format!("toutes les photos : {new} empreintes de l'index"));
+        if new > 0 {
+            self.stacks_dirty = true;
+            if self.similar.is_some() {
+                self.refilter(Reveal::Minimal);
+            }
+        }
+    }
+
     /// Lance la complétion en fond de « Toutes les photos » : chaque dossier joignable
     /// relu (développements, photos ajoutées) ; le résultat remplace la liste
     /// ([`TriApp::poll_all_photos_completion`]).
@@ -3292,6 +3354,7 @@ impl TriApp {
                 self.error = None;
                 if all_photos {
                     self.start_all_photos_completion();
+                    self.read_all_photos_signatures();
                 }
             }
             Err(e) => {
@@ -11212,6 +11275,7 @@ impl TriApp {
         self.try_reference_filter();
         self.try_similar_filter();
         self.select_pending();
+        self.poll_all_photos_signatures();
         self.poll_all_photos_completion();
         let mut scored = Vec::new();
         self.drain_engine(&mut scored);
@@ -20414,6 +20478,7 @@ impl TriApp {
                 self.replace_folder(folder, select);
                 if all_photos {
                     self.start_all_photos_completion();
+                    self.read_all_photos_signatures();
                 }
             }
             Err(e) => {
@@ -31037,6 +31102,39 @@ mod tests {
                 && app.select_after_open.is_none()
         });
         assert_eq!(h.state().files[h.state().selected].path, target);
+    }
+
+    #[test]
+    fn all_photos_take_the_signatures_from_the_index() {
+        // « Semblables » partout : les empreintes de l'index, lues d'un coup (piles « à la
+        // demande » ici : rien ne serait calculé ni lu photo par photo).
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let files = tri::media::scan(&photos, 1).unwrap();
+        {
+            let db = dir.path().join("data").join("index.sqlite");
+            let mut index = tri::index::Index::open(&db).unwrap();
+            let seen: Vec<(PathBuf, u64, u128)> =
+                files.iter().map(|f| (f.path.clone(), 1, 1)).collect();
+            index.seen(&photos, 1, &seen).unwrap();
+            let preview = tri::preview::Settings::default();
+            let cancel = std::sync::atomic::AtomicBool::new(false);
+            let items: Vec<(PathBuf, u64, u128, String, Vec<u8>)> = files
+                .iter()
+                .map(|f| {
+                    let sig = tri::preview::compute_signature(f, &preview, &cancel).unwrap();
+                    (f.path.clone(), 1, 1, "s".to_string(), sig.to_bytes())
+                })
+                .collect();
+            index.record_signatures(&items).unwrap();
+        }
+        assert!(h.state().signatures.is_empty(), "piles à la demande : rien");
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::AllPhotos);
+        run_until(&mut h, |app| {
+            tri::folder::is_all_photos(&app.folder.dir) && app.signatures.len() == 3
+        });
     }
 
     #[test]

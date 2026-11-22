@@ -52,6 +52,15 @@ recorded, they are found again by reading the folder. `Index::photos(under)` lis
 without walking any folder. Moving to schema 2 rebuilds the database once: palettes
 already cached are recorded again by themselves.
 
+## Similarity fingerprints (schema 3)
+
+The stacks' fingerprints (`similarity::Signature`, ~70 bytes) are recorded with each path
+(`paths.signature`, and `signature_stamp`: their parameters) as soon as they are ready
+(`index::note_signature`, scheduler and "Compute"). They follow the file: a modified file
+loses them, a repaired folder keeps them. "All photos" loads them all at once when it
+opens (`Index::signatures`): "similar" everywhere without reading the cache photo by
+photo (100,000 photos: ~7 MB). Moving to schema 3 rebuilds the database once.
+
 ## Filling
 
 Every **ready** palette, computed or found in the cache, is reported through

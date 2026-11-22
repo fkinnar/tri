@@ -53,6 +53,16 @@ une photo modifiée (autre taille ou date) perd son empreinte. Les développemen
 dossier. `Index::photos(sous)` les liste, sans parcourir de dossier. Le passage au
 schéma 2 refait la base une fois : les palettes déjà en cache s'y renotent d'elles-mêmes.
 
+## Empreintes de similitude (schéma 3)
+
+Les empreintes des piles (`similarity::Signature`, ~70 octets) sont notées avec chaque
+chemin (`paths.signature`, et `signature_stamp` : leurs paramètres), dès qu'elles sont
+prêtes (`index::note_signature`, planificateur et « Calculer »). Elles suivent le
+fichier : un fichier modifié les perd, un dossier réparé les garde. « Toutes les
+photos » les charge d'un coup à l'ouverture (`Index::signatures`) : « semblables »
+partout sans relire le cache photo par photo (100 000 photos : ~7 Mo). Le passage au
+schéma 3 refait la base une fois.
+
 ## Remplissage
 
 Toute palette **prête**, calculée ou trouvée dans le cache, est signalée par
