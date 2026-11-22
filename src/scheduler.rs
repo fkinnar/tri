@@ -84,14 +84,17 @@ impl CachedPreviews {
             std::process::id(),
             std::thread::current().id()
         ));
-        tool.render(
+        // Ses sidecars remis à l'identique si le logiciel y touche (un rendu ne note rien).
+        let guard = crate::develop::SidecarGuard::protect(&file.path);
+        let rendered = tool.render(
             &file.path,
             &sidecar,
             &out,
             self.settings.sizes.standard,
             cancel,
-        )
-        .map_err(failure)?;
+        );
+        drop(guard);
+        rendered.map_err(failure)?;
         let bytes = std::fs::read(&out).map_err(|e| Failure::Error(e.to_string()));
         let _ = std::fs::remove_file(&out);
         self.cache

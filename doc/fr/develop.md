@@ -103,6 +103,12 @@ configuration ni la bibliothèque de darktable ne sont touchées, et darktable p
 ouvert (pas de verrou). `write_sidecar_files=never` : le sidecar n'est jamais réécrit,
 quelle que soit la configuration ; un test le vérifie sur un vrai rendu (sur une copie).
 
+**Sidecars gardés pendant un rendu** (retour du 22/11/2026) : chaque rendu par un
+logiciel externe passe par `SidecarGuard::protect` (planificateur), qui garde les
+sidecars de la photo (`IMAGE.RAF.*`, `IMAGE.xmp`) et remet à l'identique, contenu et
+date, ceux que l'outil aurait changés (un `.rrdata` réécrit faisait apparaître un
+conflit de notes en changeant de rendu) ; noté dans `tri.log`.
+
 ## Ouvrir un dossier dans le logiciel (28/10/2026)
 
 `Developer::open_folder` donne la commande qui ouvre un dossier dans l'interface du

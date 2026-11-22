@@ -813,6 +813,71 @@ pub fn find_rapidraw(setting: &str) -> Option<Cli> {
         .or_else(|| flatpak_app(RAPIDRAW_FLATPAK, None))
 }
 
+/// Sidecars de la photo de `image` gardés tels quels pendant un rendu par un logiciel
+/// externe ([`SidecarGuard::protect`]) : ceux qui ont changé sont remis à l'identique,
+/// contenu et date, quand le garde disparaît. Retour du 22/11/2026 : changer de rendu
+/// faisait apparaître un conflit de notes (`.rrdata` réécrit au moment du rendu). Un
+/// rendu ne change jamais les fichiers de l'utilisateur.
+pub struct SidecarGuard {
+    kept: Vec<(PathBuf, Vec<u8>, Option<std::time::SystemTime>)>,
+}
+
+/// Taille au-delà de laquelle un fichier n'est pas un sidecar à garder (8 Mo).
+const SIDECAR_MAX: u64 = 8 << 20;
+
+impl SidecarGuard {
+    /// Garde les sidecars de la photo de `image` (un développement : sa photo) : les
+    /// fichiers de son dossier nommés `IMAGE.EXT.*` ou `IMAGE.xmp`, petits.
+    pub fn protect(image: &Path) -> SidecarGuard {
+        let photo = crate::developments::get(image).map_or(image.to_path_buf(), |d| d.photo);
+        let (Some(dir), Some(name), Some(stem)) =
+            (photo.parent(), photo.file_name(), photo.file_stem())
+        else {
+            return SidecarGuard { kept: Vec::new() };
+        };
+        let (name, stem) = (name.to_string_lossy(), stem.to_string_lossy());
+        let prefix = format!("{name}.");
+        let adobe = format!("{stem}.xmp");
+        let kept = std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| {
+                let n = e.file_name().to_string_lossy().into_owned();
+                n.starts_with(&prefix) || n.eq_ignore_ascii_case(&adobe)
+            })
+            .filter_map(|e| {
+                let meta = e.metadata().ok()?;
+                (meta.is_file() && meta.len() <= SIDECAR_MAX).then_some(())?;
+                let bytes = std::fs::read(e.path()).ok()?;
+                Some((e.path(), bytes, meta.modified().ok()))
+            })
+            .collect();
+        SidecarGuard { kept }
+    }
+}
+
+impl Drop for SidecarGuard {
+    fn drop(&mut self) {
+        for (path, bytes, modified) in &self.kept {
+            if std::fs::read(path).is_ok_and(|now| now == *bytes) {
+                continue;
+            }
+            crate::log::warning(
+                "develop",
+                &format!("sidecar changed by a render, put back: {}", path.display()),
+                "",
+            );
+            if std::fs::write(path, bytes).is_ok()
+                && let Some(modified) = modified
+                && let Ok(file) = std::fs::File::options().write(true).open(path)
+            {
+                let _ = file.set_modified(*modified);
+            }
+        }
+    }
+}
+
 /// Sidecar RapidRAW de `image` (`IMAGE.RAF.rrdata`, à côté de l'image), s'il existe :
 /// RapidRAW l'écrit dès qu'on règle l'image. Ses copies virtuelles
 /// (`IMAGE.RAF.<id>.rrdata`) ne sont pas lues.
@@ -1955,6 +2020,38 @@ fn shrink(from: &Path, to: &Path, side: u32) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_render_never_changes_the_sidecars() {
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("DSCF0001.RAF");
+        let rr = dir.path().join("DSCF0001.RAF.rrdata");
+        let xmp = dir.path().join("DSCF0001.xmp");
+        let other = dir.path().join("DSCF0002.RAF.rrdata");
+        for (p, text) in [
+            (&image, "raw"),
+            (&rr, "jaune, vert"),
+            (&xmp, "x"),
+            (&other, "o"),
+        ] {
+            std::fs::write(p, text).unwrap();
+        }
+        let before = std::fs::metadata(&rr).unwrap().modified().unwrap();
+        {
+            let _guard = SidecarGuard::protect(&image);
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            std::fs::write(&rr, "jaune").unwrap();
+            std::fs::write(&other, "autre photo").unwrap();
+        }
+        assert_eq!(std::fs::read_to_string(&rr).unwrap(), "jaune, vert");
+        assert_eq!(std::fs::metadata(&rr).unwrap().modified().unwrap(), before);
+        assert_eq!(
+            std::fs::read_to_string(&other).unwrap(),
+            "autre photo",
+            "pas la sienne"
+        );
+        assert_eq!(std::fs::read_to_string(&image).unwrap(), "raw");
+    }
 
     #[test]
     fn the_darktable_interface_is_found_next_to_its_cli() {
