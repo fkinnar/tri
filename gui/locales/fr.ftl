@@ -1164,6 +1164,7 @@ cache-size-mb = { $n } Mo
 cache-size-gb = { $n } Go
 settings-section-scheduler = Calculs en arrière-plan
 settings-section-analysis = Analyses du dossier
+settings-analysis-removed = Analyse retirée : ses réglages sont masqués. Pour la remettre :
 settings-choice-analysis-exposure-background = En fond
 settings-choice-analysis-exposure-on-demand = À la demande
 settings-choice-analysis-exposure-off = Retirée

@@ -1164,6 +1164,7 @@ cache-size-mb = { $n } MB
 cache-size-gb = { $n } GB
 settings-section-scheduler = Background work
 settings-section-analysis = Folder analyses
+settings-analysis-removed = Analysis removed: its settings are hidden. To bring it back:
 settings-choice-analysis-exposure-background = In the background
 settings-choice-analysis-exposure-on-demand = On demand
 settings-choice-analysis-exposure-off = Removed

@@ -3230,7 +3230,13 @@ impl TriApp {
         // Une recherche de palettes sans résultat garde le haut du panneau tel quel
         // (retour du 21/11/2026 : l'histogramme et la position partaient, tout remontait).
         let kept = !self.files.is_empty() || self.palette_searching();
-        if self.gui.metadata.histogram && self.histogram && kept && self.crop.is_none() {
+        // Exposition retirée dans les réglages (#564) : pas d'histogramme.
+        if self.gui.metadata.histogram
+            && self.histogram
+            && kept
+            && self.crop.is_none()
+            && !crate::actions::removed(crate::actions::Tool::Exposure)
+        {
             section_heading(ui, &t!("panel-section-histogram"), &self.gui.folders);
             self.histogram_section(ui);
             ui.separator();
@@ -11020,7 +11026,8 @@ impl TriApp {
                 continue;
             }
             // Grand histogramme : échelle, fermeture (Échap, même touche).
-            if self.histogram_large {
+            // Exposition retirée (#564) : plus de grand histogramme, il ne prend rien.
+            if self.histogram_large && !crate::actions::removed(crate::actions::Tool::Exposure) {
                 match action {
                     Action::Back | Action::HistogramLarge => self.histogram_large = false,
                     Action::HistogramScale
@@ -15916,6 +15923,7 @@ impl TriApp {
                 self.draw_focus_point(&ctx, &painter, &file, sensor.then_some(image_rect));
                 if self.clipping
                     && sensor
+                    && !crate::actions::removed(crate::actions::Tool::Exposure)
                     && let Some(mask) = self.mask_texture(&ctx, index)
                 {
                     let opacity = self.gui.histogram.clipping_opacity;
@@ -16836,6 +16844,7 @@ impl TriApp {
             // Zones saturées / bouchées, étirées sur l'image (aussi zoomée). Pas sur le
             // développé : recadré, il ne correspond plus au capteur.
             if self.clipping
+                && !crate::actions::removed(crate::actions::Tool::Exposure)
                 && !matches!(shown, Some(Level::Developed(_)))
                 && shown_crop.is_none()
                 && let Some(texture) = self.mask_texture(&ctx, index)
@@ -18603,7 +18612,7 @@ impl TriApp {
     }
 
     fn histogram_dialog(&mut self, ctx: &egui::Context) {
-        if !self.histogram_large {
+        if !self.histogram_large || crate::actions::removed(crate::actions::Tool::Exposure) {
             return;
         }
         let shown = self.shown_exposure(self.selected);
@@ -42762,6 +42771,75 @@ mod tests {
         assert!(Action::FilterPalette.available());
         assert_eq!(h.state().palette_toggles().len(), 2);
         assert!(!Action::StackMode.available(), "les piles restent retirées");
+    }
+
+    #[test]
+    fn a_removed_analysis_leaves_the_help_and_the_settings_too() {
+        // Retours du 22/11/2026 : exposition retirée, tout part (histogrammes, zones) ;
+        // dans l'aide, `?` et `:`, ses actions et ses réglages aussi ; une page de réglages
+        // qui n'est qu'à elle garde son titre et le dit ; une ligne parmi d'autres sans
+        // rapport part seule. Les touches de pile servent aussi aux développements :
+        // elles restent sans les piles automatiques.
+        use tri::scheduler::Analysis;
+        let images = vec![(
+            "a.jpg",
+            image::RgbImage::from_pixel(32, 24, image::Rgb([200, 40, 40])),
+        )];
+        let (mut h, dir) = harness_tuned(images, |s, _| {
+            s.analysis.exposure = Analysis::Off;
+            s.analysis.stacks = Analysis::Off;
+            s.analysis.palettes = Analysis::Off;
+        });
+        h.state_mut().metadata_panel = true;
+        h.run_steps(3);
+        for action in [
+            Action::ToggleHistogram,
+            Action::HistogramLarge,
+            Action::ToggleClipping,
+            Action::FilterWellExposed,
+            Action::StackMode,
+        ] {
+            assert!(!action.available(), "{action:?}");
+        }
+        for action in [Action::StackOpen, Action::StackClose, Action::StackChoose] {
+            assert!(action.available(), "développements : {action:?}");
+        }
+        assert!(h.query_by_label(&t!("panel-section-histogram")).is_none());
+        h.state_mut().histogram_large = true;
+        h.run_steps(2);
+        assert!(h.query_by_label(&Action::HistogramScale.label()).is_none());
+        // Réglages de `:` : ni les sections des analyses retirées, ni leurs lignes isolées ;
+        // le reste, si.
+        let listed = crate::settings_window::settings_list(&[]);
+        let has =
+            |section: &str, key: &str| listed.iter().any(|r| r.section == section && r.key == key);
+        assert!(
+            !listed
+                .iter()
+                .any(|r| r.section == "exposure" || r.section == "palette")
+        );
+        assert!(!has("gui.histogram", "scale"));
+        assert!(!has("gui.metadata", "histogram"));
+        assert!(!has("gui.grid", "stacks"));
+        assert!(has("gui.metadata", "group_gap"), "ligne sans rapport");
+        assert!(has("sharpness", "threshold"), "carte de netteté");
+        assert!(has("gui.dialogs", "palette_max"), "palette de commandes");
+        // Page à elle : titre et mention, pas ses réglages.
+        h.state_mut().config_path = Some(dir.path().join("config.toml"));
+        press(&mut h, Key::Comma, CMD);
+        h.state_mut()
+            .settings_window
+            .as_mut()
+            .unwrap()
+            .show_section("palette");
+        h.run_steps(3);
+        assert!(h.query_by_label(&t!("settings-analysis-removed")).is_some());
+        h.get_by_label(&t!("settings-section-analysis")).click();
+        h.run_steps(3);
+        assert_eq!(
+            h.state().settings_window.as_ref().unwrap().section_name(),
+            "analysis"
+        );
     }
 
     #[test]

@@ -969,21 +969,31 @@ impl Action {
             Kind::Previews | Kind::Raw => None,
         };
         match self {
-            Action::FilterWellExposed => Some(Tool::Exposure),
+            // L'histogramme et les zones aussi (retour du 22/11/2026 : exposition retirée,
+            // tout ce qui s'y rapporte part).
+            Action::FilterWellExposed
+            | Action::ToggleHistogram
+            | Action::HistogramScale
+            | Action::HistogramLarge
+            | Action::HistogramChannel
+            | Action::HistogramRed
+            | Action::HistogramGreen
+            | Action::HistogramBlue
+            | Action::HistogramAll
+            | Action::HistogramLuminance
+            | Action::HistogramPhoto
+            | Action::HistogramCamera
+            | Action::HistogramAfter
+            | Action::ToggleClipping => Some(Tool::Exposure),
             Action::FilterBlurry | Action::SharpnessLenient | Action::SharpnessStrict => {
                 Some(Tool::Sharpness)
             }
-            Action::StackToggle
-            | Action::StackOpen
-            | Action::StackClose
-            | Action::StacksAll
+            // Seulement ce qui tient aux piles automatiques : les touches de pile (`((`,
+            // `))`, `(`, `)`, couverture…) servent aussi aux développements d'une photo.
+            Action::StackMode
             | Action::GroupingWindow
-            | Action::StackMode
-            | Action::StackChoose
-            | Action::StackFirst
-            | Action::StackLast
-            | Action::StackEnterToggle
-            | Action::FilterStack => Some(Tool::Stacks),
+            | Action::FilterStack
+            | Action::StackEnterToggle => Some(Tool::Stacks),
             Action::FilterPalette | Action::FilterPaletteColour => Some(Tool::Palettes),
             Action::FolderCompute(k) | Action::Compute(k) => kind(k),
             _ => None,

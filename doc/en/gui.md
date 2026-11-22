@@ -1979,10 +1979,16 @@ blurry background among landscapes), it wrongly flagged sharp photos.
   tool stays greyed while an image of the folder is missing from the cache
   (`TriApp::analysis_missing`, counted from `Event::Missing`) and comes back after
   "Compute" on the folder; removed, the tool leaves the bars, the panel (Palette section,
-  stacks, "by palette" choice), the "Compute" menus, the help and the keyboard
+  stacks, "by palette" choice), the "Compute" menus, the help, `?`, `:` and the keyboard
   (`Action::tool`, `Action::available`; removed tools are per UI thread,
-  `actions::set_removed_tools`); the histogram, zones and sharpness map of the shown image
-  stay (computed for it alone); applied at once, folder read again); ◐ (`f i`) shows what the **content**
+  `actions::set_removed_tools`). Exposure removed: the histogram, the large histogram and
+  the zones too (feedback of 2026-11-22: "otherwise it is not logical"). Stacks removed:
+  the switch, the grouping window, "current stack" and entering stacks; the stack keys
+  stay, they also serve a photo's developments. The sharpness map stays (not a folder
+  analysis). Their **settings** are hidden too, in the window and in `:`
+  (`settings_window::setting_tool`): a page that belongs only to the analysis keeps its
+  title, says "Analysis removed" and leads to *Folder analyses*; a line among unrelated
+  ones goes alone. Applied at once, folder read again); ◐ (`f i`) shows what the **content**
   filters (ratings, sharpness, exposure) remove, file type and name search still
   applied (`tri::filter::invert`): "blurry only" is "sharp" inverted, the drop and `f B`
   are gone. Triangle and sun in the accent when on, grey otherwise.
