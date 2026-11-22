@@ -207,15 +207,16 @@ loupe = "m"
 "core.filter.developed" = ["f r"]
 # In conflict (ratings that disagree between programs): "c".
 "core.filter.conflicts" = ["f c"]
-"core.filter.palette" = []
-"core.filter.palette_colour" = []
-# The same in "All photos" (#561): searching every folder seen.
-"core.filter.palette_everywhere" = []
-"core.filter.palette_colour_everywhere" = []
+# Similar palettes: "l" like palette; contains this colour: "o" like colour.
+"core.filter.palette" = ["f l"]
+"core.filter.palette_colour" = ["f o"]
+# The same in "All photos" (#561), searching every folder seen: with Shift.
+"core.filter.palette_everywhere" = ["f Shift+l"]
+"core.filter.palette_colour_everywhere" = ["f Shift+o"]
 # The selected photo becomes the reference of similar palettes ("t" like the target).
 "core.filter.reference" = ["f t"]
-# Photos similar to the reference (fingerprints, as in stacks).
-"core.filter.similar" = []
+# Photos similar to the reference (fingerprints, as in stacks): "m" like similar.
+"core.filter.similar" = ["f m"]
 # After a filter change, start again from the first image (on / off): "g", like "g g".
 "core.filter.restart" = ["f g"]
 # f k ("count"): the filters in use and the number of photos left, large, in the middle.

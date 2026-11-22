@@ -1164,7 +1164,7 @@ system one ("cold" measurements, experiments).
   folder watch does (`TriApp::replace_folder`). Not watched, not remembered as the last
   folder. Escape (grid, nothing left to close) returns to the folder you came from
   (`all_photos_from`). Actions `core.view.all_photos`, `core.filter.palette_everywhere`
-  and `core.filter.palette_colour_everywhere` (no default key): the search is set there
+  and `core.filter.palette_colour_everywhere` (`f Shift+l`, `f Shift+o`; the filters themselves: `f l`, `f o`, similar `f m`): the search is set there
   (`AllPhotosSearch`), the reference photo read again in the source over there.
   **Reference photo** (feedback of 2026-11-22), shared by "similar palettes" and
   "similar" (`TriApp::reference`): in the Filters section, "Colour" first, then those two
