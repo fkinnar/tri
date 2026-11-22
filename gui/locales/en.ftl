@@ -1600,6 +1600,7 @@ locate-failed = "{ $name }" found, but the cache did not follow: { $error }
 locate-title = Find "{ $name }"
 locate-not-found = Not found automatically. Where is it now?
 locate-wrong = This folder does not hold the same photos
+folder-recognised = "{ $new }" is "{ $old }", renamed or moved: its notes, view and computations follow it
 locate-ok = Find
 palette-colour-first = Choose a colour first ("Contains this colour" filter)
 palette-reference = Reference

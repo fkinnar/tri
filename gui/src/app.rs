@@ -416,6 +416,9 @@ struct Opened {
     snapshot: Option<tri::watch::Snapshot>,
     /// Données de tri du dossier, lues dans le même fil.
     prepared: Prepared,
+    /// Le dossier connu, devenu injoignable, que celui-ci s'est révélé être (renommé ou
+    /// déplacé hors de `tri`, #561) : ses données l'ont suivi.
+    recognised: Option<PathBuf>,
 }
 
 /// Données de tri d'un dossier qui s'ouvre (vue retenue, curseurs, couvertures…), lues
@@ -506,6 +509,7 @@ impl Opened {
                 loading: None,
                 snapshot: None,
                 prepared: Prepared::default(),
+                recognised: None,
             };
         }
         let loading = tri::folder::Loading::start(&folder, depth, watching);
@@ -517,6 +521,7 @@ impl Opened {
                     loading: None,
                     snapshot: loaded.snapshot,
                     prepared: Prepared::default(),
+                    recognised: None,
                 };
             }
             if Instant::now() >= deadline {
@@ -525,6 +530,7 @@ impl Opened {
                     loading: Some(loading),
                     snapshot: None,
                     prepared: Prepared::default(),
+                    recognised: None,
                 };
             }
             std::thread::sleep(Duration::from_millis(2));
@@ -1037,6 +1043,9 @@ pub struct TriApp {
     /// Tests : les racines où « Retrouver » cherche (sinon les emplacements du panneau).
     #[cfg(test)]
     locate_roots: Option<Vec<PathBuf>>,
+    /// Tests : reconnaître les dossiers renommés à l'ouverture (jamais sinon : l'index des
+    /// tests n'est pas démarré).
+    recognise_in_tests: bool,
     /// Photo de référence de « palettes proches » (et du futur « semblables ») : elle
     /// reste tant qu'on ne l'efface pas ou ne la remplace pas (retour du 22/11/2026).
     reference: Option<PathBuf>,
@@ -2231,6 +2240,7 @@ impl TriApp {
             locate_dialog: None,
             #[cfg(test)]
             locate_roots: None,
+            recognise_in_tests: false,
             all_photos_completion: None,
             reference: None,
             reference_wanted: false,
@@ -2877,9 +2887,11 @@ impl TriApp {
         let watching = self.settings.watch.interval_ms > 0
             && !all_photos
             && !self.watch.as_ref().is_some_and(|(w, _, _)| w.dir() == dir);
+        let chunk = self.settings.index.fingerprint_kb as usize * 1024;
+        let index_on = self.settings.index.enabled && !cfg!(test) || self.recognise_in_tests;
         std::thread::spawn(move || {
             writes.flush(Duration::from_secs(30));
-            let view = remember
+            let mut view = remember
                 .then(|| crate::state::folder_view(data.as_deref(), &target).unwrap_or_default());
             let subfolders = view
                 .as_ref()
@@ -2897,8 +2909,26 @@ impl TriApp {
                 Folder::scan_counting(&target, depth, convention, slow, &stop_scan, &found_scan)
             };
             let result = listed.map(|folder| {
+                // Un dossier connu, renommé ou déplacé hors de `tri`, reconnu à ses photos :
+                // ses données le suivent, sa vue aussi (#561).
+                let recognised = match data.as_deref() {
+                    Some(data) if index_on && !all_photos => tri::locate::recognise(
+                        data,
+                        cache.as_ref(),
+                        &folder.dir,
+                        &folder.files,
+                        chunk,
+                    ),
+                    _ => None,
+                };
+                if recognised.is_some() && remember {
+                    view = Some(
+                        crate::state::folder_view(data.as_deref(), &folder.dir).unwrap_or_default(),
+                    );
+                }
                 stage_scan.store(OPEN_NOTES, Ordering::Relaxed);
                 let mut opened = Opened::read(folder, depth, watching, deadline);
+                opened.recognised = recognised;
                 stage_scan.store(OPEN_DATA, Ordering::Relaxed);
                 opened.prepared = Prepared::read(
                     data.as_deref(),
@@ -3476,6 +3506,21 @@ impl TriApp {
         // Les notes du dossier quitté finissent de s'écrire, sans toucher à celui-ci.
         if let Some(writes) = &mut self.note_writes {
             writes.new_folder();
+        }
+        if let Ok(Opened {
+            recognised: Some(old),
+            ..
+        }) = &result
+        {
+            self.notice = Some((
+                t!(
+                    "folder-recognised",
+                    old = folder_name(old),
+                    new = folder_name(dir)
+                ),
+                false,
+            ));
+            self.missing_dirs.remove(old);
         }
         let (result, loading, snapshot, prepared) = match result {
             Ok(opened) => (
@@ -31505,6 +31550,45 @@ mod tests {
                 .unwrap()
                 .iter()
                 .all(|(p, _, _)| p.starts_with(&new))
+        );
+    }
+
+    #[test]
+    fn a_folder_renamed_outside_is_recognised_when_opened() {
+        // Retour du 22/11/2026 : TEST3 renommé TEST4 hors de `tri` ; ouvrir TEST4 le
+        // reconnaît, sa vue retenue suit (elle repassait aux réglages par défaut).
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let data = dir.path().join("data");
+        let old = dir.path().join("TEST3");
+        let new = dir.path().join("TEST4");
+        std::fs::create_dir_all(&old).unwrap();
+        for f in tri::media::scan(&dir.path().join("photos"), 1).unwrap() {
+            std::fs::copy(&f.path, old.join(f.path.file_name().unwrap())).unwrap();
+        }
+        {
+            let mut index = tri::index::Index::open(&data.join("index.sqlite")).unwrap();
+            let seen: Vec<(PathBuf, u64, u128)> = tri::media::scan(&old, 1)
+                .unwrap()
+                .iter()
+                .map(|f| (f.path.clone(), std::fs::metadata(&f.path).unwrap().len(), 1))
+                .collect();
+            index.seen(&old, 1, &seen).unwrap();
+        }
+        let view = crate::state::FolderView {
+            kind: tri::filter::KindFilter::RawOnly,
+            ..Default::default()
+        };
+        crate::state::remember_folder_view(Some(&data), &old, &view).unwrap();
+        std::fs::rename(&old, &new).unwrap();
+        h.state_mut().recognise_in_tests = true;
+        h.state_mut().open_folder(&new);
+        run_until(&mut h, |app| app.folder.dir == new && app.notice.is_some());
+        assert!(h.state().notice.as_ref().unwrap().0.contains("TEST3"));
+        assert_eq!(
+            h.state().filter,
+            tri::filter::KindFilter::RawOnly,
+            "sa vue a suivi"
         );
     }
 

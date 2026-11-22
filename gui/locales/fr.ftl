@@ -1600,6 +1600,7 @@ locate-failed = « { $name } » retrouvé, mais le cache n'a pas suivi : { $erro
 locate-title = Retrouver « { $name } »
 locate-not-found = Pas trouvé automatiquement. Où est-il maintenant ?
 locate-wrong = Ce dossier n'a pas les mêmes photos
+folder-recognised = « { $new } » est « { $old } », renommé ou déplacé : ses notes, sa vue et ses calculs le suivent
 locate-ok = Retrouver
 palette-colour-first = Choisissez d'abord une couleur (filtre « Contient cette couleur »)
 palette-reference = Référence

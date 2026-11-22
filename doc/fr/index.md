@@ -128,6 +128,14 @@ sont plus là ») : étoiles, drapeau et couleurs de chaque photo joignable, en 
 `Index::notes_in`) : les filtres la trouvent, grisée. Passer d'un schéma 2 ou 3 au 4
 ajoute les colonnes (`ALTER TABLE`) : rien n'est perdu.
 
+**Dossier reconnu à l'ouverture** (`locate::recognise`, idée du 22/11/2026) : ouvrir un
+dossier que l'index ne connaît pas (`TEST4`) dont les photos témoins (même nom, même
+taille, `Index::with_sizes`, puis `locate::verify`) sont celles d'un dossier connu
+**qui n'existe plus** (`TEST3`) : c'est lui, renommé ou déplacé hors de `tri`. Tout suit
+(`locate::relocate`) avant que sa vue ne soit lue, dans le fil d'ouverture : vue retenue,
+notes gardées par `tri`, calculs du cache, index ; un message le dit. Un ancien dossier
+encore là n'est pas pris (une copie n'est pas un renommage).
+
 ## Réglages `[index]`
 
 | Clé | Défaut | Rôle |

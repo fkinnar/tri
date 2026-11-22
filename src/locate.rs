@@ -161,6 +161,83 @@ pub fn find(
     None
 }
 
+/// Un dossier ouvert que l'index ne connaît pas encore (`dir`, ses photos `files`) est-il
+/// un dossier connu devenu injoignable (renommé ou déplacé hors de `tri`) ? Cherche, parmi
+/// les photos connues de même taille et de même nom, un ancien dossier qui n'existe plus
+/// et dont les photos témoins sont toutes dans `dir` ([`verify`]) ; si oui, l'index, le
+/// cache et les données de tri le suivent ([`relocate`]) et l'ancien dossier est rendu.
+/// `data` : dossier de données (l'index y est), `chunk` : comme [`verify`].
+pub fn recognise(
+    data: &Path,
+    cache: Option<&crate::cache::Cache>,
+    dir: &Path,
+    files: &[crate::media::MediaFile],
+    chunk: usize,
+) -> Option<PathBuf> {
+    let db = data.join("index.sqlite");
+    if !db.exists() || is_camera_card(dir) {
+        return None;
+    }
+    let dir = std::path::absolute(dir).ok()?;
+    let index = crate::index::Index::open(&db).ok()?;
+    if !index.photos_in(&dir).ok()?.is_empty() {
+        return None;
+    }
+    // Quelques photos du dossier ouvert : leur nom et leur taille.
+    let mut mine: Vec<(OsString, u64)> = files
+        .iter()
+        .filter(|f| !crate::media::is_development(&f.path))
+        .filter_map(|f| {
+            let path = std::path::absolute(&f.path).ok()?;
+            if path.parent() != Some(dir.as_path()) {
+                return None;
+            }
+            let size = std::fs::metadata(&path).ok()?.len();
+            Some((path.file_name()?.to_os_string(), size))
+        })
+        .collect();
+    mine.sort();
+    let sample: Vec<(OsString, u64)> = pick_samples(
+        mine.iter()
+            .map(|(name, size)| Sample {
+                name: name.clone(),
+                size: *size,
+                fingerprint: None,
+            })
+            .collect(),
+    )
+    .into_iter()
+    .map(|s| (s.name, s.size))
+    .collect();
+    let sizes: Vec<u64> = sample.iter().map(|s| s.1).collect();
+    let mut olds: Vec<PathBuf> = index
+        .with_sizes(&sizes)
+        .ok()?
+        .into_iter()
+        .filter(|(p, size)| {
+            p.file_name()
+                .is_some_and(|n| sample.iter().any(|(m, s)| m == n && s == size))
+        })
+        .filter_map(|(p, _)| p.parent().map(Path::to_path_buf))
+        .filter(|old| *old != dir)
+        .collect();
+    olds.sort();
+    olds.dedup();
+    let old = olds.into_iter().find(|old| {
+        !old.is_dir()
+            && verify(
+                &dir,
+                &pick_samples(index.photos_in(old).unwrap_or_default()),
+                chunk,
+            )
+    })?;
+    drop(index);
+    if let Err(e) = relocate(Some(data), cache, &old, &dir) {
+        crate::log::warning("index", &format!("folder not followed: {e}"), "");
+    }
+    Some(old)
+}
+
 /// Le dossier `from` retrouvé en `to` : l'index (`data/index.sqlite`), le cache et les
 /// données de tri gardées sur la machine (`data`) suivent, sous-dossiers compris. Renvoie
 /// le nombre de photos de l'index déplacées, ou la première erreur (le reste est quand
@@ -307,6 +384,44 @@ mod tests {
             .map(|e| e.0)
             .collect();
         assert_eq!(photos, vec![PathBuf::from("/new/a.raf")]);
+    }
+
+    #[test]
+    fn a_renamed_folder_is_recognised_when_opened() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path().join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        let old = dir.path().join("TEST3");
+        let new = dir.path().join("TEST4");
+        write(&old.join("A.RAF"), b"photo a");
+        write(&old.join("B.RAF"), b"photo bb");
+        let files = |d: &Path| crate::media::scan(d, 1).unwrap();
+        {
+            let mut index = crate::index::Index::open(&data.join("index.sqlite")).unwrap();
+            let seen: Vec<(PathBuf, u64, u128)> = files(&old)
+                .iter()
+                .map(|f| (f.path.clone(), std::fs::metadata(&f.path).unwrap().len(), 1))
+                .collect();
+            index.seen(&old, 1, &seen).unwrap();
+        }
+        // Tant que l'ancien existe : rien (une copie n'est pas un renommage).
+        std::fs::create_dir_all(&new).unwrap();
+        for name in ["A.RAF", "B.RAF"] {
+            std::fs::copy(old.join(name), new.join(name)).unwrap();
+        }
+        assert_eq!(recognise(&data, None, &new, &files(&new), 1024), None);
+        std::fs::remove_dir_all(&old).unwrap();
+        assert_eq!(
+            recognise(&data, None, &new, &files(&new), 1024),
+            Some(old.clone())
+        );
+        let index = crate::index::Index::open(&data.join("index.sqlite")).unwrap();
+        assert_eq!(index.photos_in(&new).unwrap().len(), 2, "l'index a suivi");
+        assert_eq!(
+            recognise(&data, None, &new, &files(&new), 1024),
+            None,
+            "déjà connu"
+        );
     }
 
     #[test]

@@ -125,6 +125,14 @@ longer there"): stars, flag and colours of every reachable photo, in one integer
 `Index::notes_in`): the filters find it, greyed. Going from schema 2 or 3 to 4 adds the
 columns (`ALTER TABLE`): nothing is lost.
 
+**Folder recognised when opened** (`locate::recognise`, idea of 2026-11-22): opening a
+folder the index does not know (`TEST4`) whose sample photos (same name, same size,
+`Index::with_sizes`, then `locate::verify`) are those of a known folder **that no longer
+exists** (`TEST3`): it is that folder, renamed or moved outside `tri`. Everything follows
+(`locate::relocate`) before its view is read, in the opening thread: remembered view,
+notes kept by `tri`, cached computations, index; a message says so. An old folder that is
+still there is not taken (a copy is not a rename).
+
 ## `[index]` settings
 
 | Key | Default | Role |

@@ -160,8 +160,12 @@ impl Index {
                 "ALTER TABLE paths ADD COLUMN signature BLOB",
                 "ALTER TABLE paths ADD COLUMN signature_stamp TEXT",
                 "ALTER TABLE paths ADD COLUMN notes INTEGER",
+                "CREATE INDEX paths_size ON paths(size)",
             ],
-            3 => &["ALTER TABLE paths ADD COLUMN notes INTEGER"],
+            3 => &[
+                "ALTER TABLE paths ADD COLUMN notes INTEGER",
+                "CREATE INDEX paths_size ON paths(size)",
+            ],
             _ => &[],
         };
         if !added.is_empty() {
@@ -183,6 +187,7 @@ impl Index {
                      notes INTEGER
                  );
                  CREATE INDEX paths_fingerprint ON paths(fingerprint);
+                 CREATE INDEX paths_size ON paths(size);
                  CREATE TABLE palettes (
                      fingerprint BLOB NOT NULL,
                      source TEXT NOT NULL,
@@ -298,6 +303,25 @@ impl Index {
                 size: size as u64,
                 fingerprint: fp.and_then(|f| f.try_into().ok()),
             });
+        }
+        Ok(out)
+    }
+
+    /// Les chemins connus dont la taille est l'une de `sizes` (pour reconnaître un dossier
+    /// déplacé à ses photos, [`crate::locate::recognise`]).
+    pub fn with_sizes(&self, sizes: &[u64]) -> rusqlite::Result<Vec<(PathBuf, u64)>> {
+        let mut out = Vec::new();
+        let mut stmt = self
+            .db
+            .prepare("SELECT path, size FROM paths WHERE size = ?1")?;
+        for &size in sizes {
+            let rows = stmt.query_map(params![size as i64], |r| {
+                Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, i64>(1)?))
+            })?;
+            for row in rows {
+                let (bytes, size) = row?;
+                out.push((bytes_path(&bytes), size as u64));
+            }
         }
         Ok(out)
     }
