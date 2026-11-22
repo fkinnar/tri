@@ -730,7 +730,7 @@ system one ("cold" measurements, experiments).
   the left / right panel, `o` to the next one (leader then `b`: report a problem,
   2026-10-22; the help writes it `<leader> h`, #175, since it can be changed) (folders,
   images, metadata; a hidden panel
-  is shown, folders only exist in the grid). The active panel has a slightly lighter background (darker in the light theme, `[gui.dialogs] focus_panel_tint`; an accent outline until 2026-10-25, issue #78: with the accent cursor, the double frame was heavy; the metadata cursor no longer frames the histogram, issue #77) and a **line at the top** (2026-10-26, #77: the background alone did not show enough; `focus_line` = `"accent"` or `"#rrggbb"`, `focus_line_width`, 0 for none); the line under the keyboard cursor (folders, metadata, search results) is a **discreet grey band** across the whole width (`[gui.dialogs] cursor_tint`, `cursor_row`; an accent frame before 2026-10-25, too loud and cut on the left when the panel scrolled). **Hovering points** (2026-11-09, #383, #385): the mouse moving over a row of the folders or the EXIF puts the band there (a single band, the keyboard carries on from it); in a panel without the keyboard, the band follows the mouse. The open folder keeps its accent background, separately; no more egui background or frame around the hovered name. Everywhere, a hovered control no longer has a white frame, only its light grey background, like the bar icons (`Theme::apply`); the
+  is shown, folders only exist in the grid). The active panel has a slightly lighter background (darker in the light theme, `[gui.dialogs] focus_panel_tint`; an accent outline until 2026-10-25, issue #78: with the accent cursor, the double frame was heavy; the metadata cursor no longer frames the histogram, issue #77) and a **mark at the top** (2026-10-26, #77: the background alone did not show enough; `focus_line` = `"accent"` or `"#rrggbb"`, `focus_line_width`, 0 for none). Since 2026-11-22 it is a **short line in the top left corner** (`focus_line_length`, 24 points; 0: the whole width), the same on the **grid or image** when they have the keyboard and a side panel is shown (in the margin of the central panel's corner: on a selected thumbnail, the accent colour hid it). **`<leader> s` / `g` / `t`** go straight to the sources (folders), the grid (or the image) and the tools (right panel), showing a hidden panel (`TriApp::focus_on`); `h` / `l` / `o` remain; the line under the keyboard cursor (folders, metadata, search results) is a **discreet grey band** across the whole width (`[gui.dialogs] cursor_tint`, `cursor_row`; an accent frame before 2026-10-25, too loud and cut on the left when the panel scrolled). **Hovering points** (2026-11-09, #383, #385): the mouse moving over a row of the folders or the EXIF puts the band there (a single band, the keyboard carries on from it); in a panel without the keyboard, the band follows the mouse. The open folder keeps its accent background, separately; no more egui background or frame around the hovered name. Everywhere, a hovered control no longer has a white frame, only its light grey background, like the bar icons (`Theme::apply`); the
   status bar says so; a click in a panel gives it the keyboard, a click in the images
   area gives it back to them (`TriApp::click_focus`, 2026-10-22; dialogs opened on top
   do not count). **Its keys go first, the others keep their effect** (user's
@@ -1154,6 +1154,37 @@ system one ("cold" measurements, experiments).
 - Dark theme by default.
 
 - **Full screen** (Enter or double-click): see below.
+- **"All photos"** (#561, design in the issue): a virtual folder at the top of the folders
+  panel, above every location, made of the photos the index has seen
+  (`tri::folder::all_photos`, marker path `all_photos_dir`). No search box: the filters
+  search, on this list. It opens at once from the index (known sizes and dates: cached
+  thumbnails without touching the disk, `cache::seed_stamps`), then completes in the
+  background folder by folder (`folder::complete_from_disk`: developments, added photos,
+  those gone; an unplugged drive keeps what the index knew), the list replaced as the
+  folder watch does (`TriApp::replace_folder`). Not watched, not remembered as the last
+  folder. Escape (grid, nothing left to close) returns to the folder you came from
+  (`all_photos_from`). **`g a`** (`core.view.all_photos`) toggles: goes there, and from
+  there back to the folder (feedback of 2026-11-22: rather than "everywhere" variants of
+  each filter). Filters stay set when changing folders: a filter set here (`f l` similar
+  palettes, `f o` colour, `f m` similar) then searches everywhere, the reference photo
+  read again in the source over there. **Show in its folder**
+  (`core.file.show_in_folder`, `g f`, folder-and-target icon in the right-click box, only
+  from "All photos"): the image's real folder, the image highlighted in the grid
+  (`select_after_open`).
+  **Reference photo** (feedback of 2026-11-22), shared by "similar palettes" and
+  "similar" (`TriApp::reference`): in the Filters section, "Colour" first, then those two
+  filters, the reference on their right (`reference_box`: its thumbnail, or an empty
+  frame); a click opens it larger (photo centred, buttons on the right) with "Remove the
+  reference". **Similar** (`core.filter.similar`): the photos whose fingerprint (the
+  stacks' one) is close to the reference's, closest first (`rank_by_similarity`, a
+  development has its photo's fingerprint), threshold on the slider (`[similarity]
+  filter_threshold`, `filter_max`); one search at a time with the palettes. Their sliders
+  (and the colour one) are pointed from the keyboard like the panel's other settings:
+  ← / → by one step, Enter the default value (`TriApp::keyed`). Without a
+  reference, turning the filter on takes the highlighted photo (greyed if there is
+  none); it then stays (another folder, another source: its palette read again,
+  `reference_palette`, read from the cache when it is not in the list) until it is
+  removed or replaced: `f t` (`core.filter.reference`), a button in the right-click box.
 
 ## Full screen
 

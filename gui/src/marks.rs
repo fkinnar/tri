@@ -737,6 +737,24 @@ pub fn file_action(painter: &Painter, rect: Rect, action: Action, color: Color32
             ));
             painter.line_segment([p(0.0, 0.4), p(1.0, 0.4)], stroke);
         }
+        Action::FileShowInFolder => {
+            // Son dossier (depuis « Toutes les photos ») : un dossier et, dedans, une cible
+            // (« elle est là »).
+            painter.add(Shape::closed_line(
+                vec![
+                    p(0.0, 0.12),
+                    p(0.38, 0.12),
+                    p(0.48, 0.26),
+                    p(1.0, 0.26),
+                    p(1.0, 0.92),
+                    p(0.0, 0.92),
+                ],
+                stroke,
+            ));
+            let c = p(0.5, 0.6);
+            painter.circle_stroke(c, w * 0.2, stroke);
+            painter.circle_filled(c, w * 0.07, color);
+        }
         Action::FileCopy => {
             // Deux feuilles décalées : celle de derrière seulement en partie visible.
             painter.add(Shape::line(
@@ -1898,6 +1916,18 @@ pub fn cover_mark(painter: &Painter, rect: Rect, on: bool, color: Color32) {
             Stroke::new(1.2, color),
         ));
     }
+}
+
+/// Icône « semblables » (retour du 22/11/2026) : deux cadres qui se chevauchent, une photo
+/// et sa semblable.
+pub fn similar_icon(painter: &egui::Painter, rect: Rect, color: Color32) {
+    let stroke = Stroke::new((rect.width() * 0.09).max(1.2), color);
+    let side = rect.width() * 0.62;
+    let back = Rect::from_min_size(rect.min, vec2(side, side));
+    let front = Rect::from_min_size(rect.max - vec2(side, side), vec2(side, side));
+    painter.rect_stroke(back, side * 0.12, stroke, egui::StrokeKind::Inside);
+    painter.rect_filled(front, side * 0.12, color.gamma_multiply(0.35));
+    painter.rect_stroke(front, side * 0.12, stroke, egui::StrokeKind::Inside);
 }
 
 /// Icône « palettes proches » (#492) : une cible, trois anneaux et le centre.

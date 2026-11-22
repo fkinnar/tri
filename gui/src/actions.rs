@@ -191,6 +191,15 @@ pub enum Action {
     /// « Contient cette couleur » : la pipette des palettes en plein écran, ou fin de la
     /// recherche (#492).
     FilterPaletteColour,
+    /// « Toutes les photos » (#561), les photos vues dans tous les dossiers ; de là, retour
+    /// au dossier d'où l'on venait (bascule).
+    AllPhotos,
+    /// La photo sélectionnée devient la référence de « palettes proches » et de
+    /// « semblables ».
+    SetReference,
+    /// « Semblables » : les photos semblables à la référence (empreintes, comme les
+    /// piles), de la plus proche à la plus lointaine.
+    FilterSimilar,
     /// Après un changement de filtre, repartir de la première image (`[gui]
     /// filter_restart`, bouton de la barre du bas ; retour du 16/11/2026).
     FilterRestart,
@@ -255,6 +264,9 @@ pub enum Action {
     FileDelete,
     /// Afficher l'image dans le gestionnaire de fichiers.
     FileReveal,
+    /// Depuis « Toutes les photos » (#561) : ouvrir le vrai dossier de l'image, elle en
+    /// surbrillance.
+    FileShowInFolder,
     /// Ouvrir l'image dans l'éditeur externe.
     FileEdit,
     /// Générer les sidecars de notes manquants (un logiciel ou tous) de la sélection ou
@@ -320,6 +332,12 @@ pub enum Action {
     FocusRight,
     /// Clavier au panneau suivant.
     FocusNext,
+    /// Clavier au panneau des sources (dossiers), directement (retour du 22/11/2026).
+    FocusSources,
+    /// Clavier à la grille (ou à l'image en plein écran), directement.
+    FocusImages,
+    /// Clavier au panneau des outils (droite), directement.
+    FocusTools,
     /// Panneau des dossiers : dossier du dessus.
     FolderUp,
     /// Panneau des dossiers : dossier du dessous.
@@ -594,7 +612,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 278] = [
+    pub const ALL: [Action; 285] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -629,6 +647,9 @@ impl Action {
         Action::FilterConflicts,
         Action::FilterPalette,
         Action::FilterPaletteColour,
+        Action::AllPhotos,
+        Action::SetReference,
+        Action::FilterSimilar,
         Action::FilterRestart,
         Action::FilterCount,
         Action::SortNext,
@@ -679,6 +700,7 @@ impl Action {
         Action::FileRename,
         Action::FileDelete,
         Action::FileReveal,
+        Action::FileShowInFolder,
         Action::FileEdit,
         Action::Sidecars,
         Action::EmbedNotes,
@@ -753,6 +775,9 @@ impl Action {
         Action::FocusLeft,
         Action::FocusRight,
         Action::FocusNext,
+        Action::FocusSources,
+        Action::FocusImages,
+        Action::FocusTools,
         Action::FolderUp,
         Action::FolderDown,
         Action::FolderExpand,
@@ -993,8 +1018,11 @@ impl Action {
             Action::StackMode
             | Action::GroupingWindow
             | Action::FilterStack
-            | Action::StackEnterToggle => Some(Tool::Stacks),
-            Action::FilterPalette | Action::FilterPaletteColour => Some(Tool::Palettes),
+            | Action::StackEnterToggle
+            | Action::FilterSimilar => Some(Tool::Stacks),
+            Action::FilterPalette | Action::FilterPaletteColour | Action::SetReference => {
+                Some(Tool::Palettes)
+            }
             Action::FolderCompute(k) | Action::Compute(k) => kind(k),
             _ => None,
         }
@@ -1085,27 +1113,31 @@ impl Action {
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterColorsAll | FilterClear | FilterBlurry | FilterWellExposed | FilterStack
             | FilterInvert | FilterDeveloped | FilterConflicts | FilterPalette
-            | FilterPaletteColour | FilterRestart | FilterCount | SortNext | SortReverse
-            | SortBy(_) | FilterKind(_) | GridRenderNext | Render(_) => Group::Filters,
+            | FilterPaletteColour | SetReference | FilterSimilar | FilterRestart | FilterCount
+            | SortNext | SortReverse | SortBy(_) | FilterKind(_) | GridRenderNext | Render(_) => {
+                Group::Filters
+            }
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
-            | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
-            FileActionsAllow | FileRename | FileDelete | FileReveal | FileEdit | FileCopy
-            | FileMove | Sidecars | EmbedNotes | ImportNotes | FileDeleteStack
-            | FileDeletePhoto | FileCopyStack | FileExport | ExportReport | Send(_)
-            | Compute(_) | ComputeAll | RecreateAll => Group::Files,
+            | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders | AllPhotos => {
+                Group::Panels
+            }
+            FileActionsAllow | FileRename | FileDelete | FileReveal | FileShowInFolder
+            | FileEdit | FileCopy | FileMove | Sidecars | EmbedNotes | ImportNotes
+            | FileDeleteStack | FileDeletePhoto | FileCopyStack | FileExport | ExportReport
+            | Send(_) | Compute(_) | ComputeAll | RecreateAll => Group::Files,
             Undo | Redo | History => Group::Edit,
             StackToggle | StackOpen | StackClose | StacksAll | GroupingWindow | StackMode
             | StackChoose | StackFirst | StackLast | StackEnterToggle | DevToggle | DevNext
             | DevPrev | DevFoldAll | PairsToggle => Group::Selection,
-            FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
-            | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
-            | FolderEject | FolderCreate | FolderRename | FolderDelete | FolderFavorite
-            | FolderFavoriteName | FolderConnect | FolderForget | FolderCacheClear
-            | FolderReset | FolderOpenIn(_) | FolderCompute(_) | FolderComputeAll
-            | FolderRecreateAll | FolderCopy | FolderMove | MetaUp | MetaDown | MetaCopy
-            | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll | PanelSectionNext
-            | PanelSectionPrev | PanelActivate | PanelLeft | PanelRight | FolderSectionNext
-            | FolderSectionPrev => Group::Panels,
+            FocusLeft | FocusRight | FocusNext | FocusSources | FocusImages | FocusTools
+            | FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
+            | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
+            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderConnect | FolderForget
+            | FolderCacheClear | FolderReset | FolderOpenIn(_) | FolderCompute(_)
+            | FolderComputeAll | FolderRecreateAll | FolderCopy | FolderMove | MetaUp
+            | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll
+            | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft | PanelRight
+            | FolderSectionNext | FolderSectionPrev => Group::Panels,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | HelpHere | Palette | Settings | CheckUpdate | ReportIssue | Log | Quit => {
                 Group::App
@@ -1178,6 +1210,7 @@ impl Action {
                 | FilterConflicts
                 | FilterPalette
                 | FilterPaletteColour
+                | FilterSimilar
                 | FilterKind(_)
         )
     }
@@ -1218,6 +1251,9 @@ impl Action {
             Action::FilterConflicts => "core.filter.conflicts",
             Action::FilterPalette => "core.filter.palette",
             Action::FilterPaletteColour => "core.filter.palette_colour",
+            Action::AllPhotos => "core.view.all_photos",
+            Action::SetReference => "core.filter.reference",
+            Action::FilterSimilar => "core.filter.similar",
             Action::FilterRestart => "core.filter.restart",
             Action::FilterCount => "core.filter.count",
             Action::SortNext => "core.filter.sort",
@@ -1330,6 +1366,9 @@ impl Action {
             Action::FocusLeft => "core.panel.left",
             Action::FocusRight => "core.panel.right",
             Action::FocusNext => "core.panel.next",
+            Action::FocusSources => "core.panel.sources",
+            Action::FocusImages => "core.panel.grid",
+            Action::FocusTools => "core.panel.tools",
             Action::FolderUp => "core.folders.up",
             Action::FolderDown => "core.folders.down",
             Action::FolderExpand => "core.folders.expand",
@@ -1436,6 +1475,7 @@ impl Action {
             Action::FileCopyStack => "core.file.copy_stack",
             Action::Send(id) => id,
             Action::FileReveal => "core.file.reveal",
+            Action::FileShowInFolder => "core.file.show_in_folder",
             Action::FileEdit => "core.file.edit",
             Action::Sidecars => "core.file.sidecars",
             Action::EmbedNotes => "core.file.embed_notes",

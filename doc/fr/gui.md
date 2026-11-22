@@ -769,7 +769,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   accent, le double cadre alourdissait ; le curseur des métadonnées n'encadre plus
   l'histogramme, issue n° 77) et un **trait en haut** (26/10/2026, #77 : le fond seul
   ne se voyait pas assez ; `focus_line` = `"accent"` ou `"#rrggbb"`, `focus_line_width`,
-  0 pour aucun), la barre d'état le dit ; la ligne pointée au clavier
+  0 pour aucun) ; depuis le 22/11/2026, un **court trait dans le coin en haut à gauche**
+  (`focus_line_length`, 24 points ; 0 : toute la largeur), le même sur la **grille ou
+  l'image** quand elles ont le clavier et qu'un panneau latéral est affiché (dans la
+  marge du coin du panneau central : sur une vignette sélectionnée, de la couleur
+  d'accent, il ne se voyait pas). **`<leader> s` / `g` / `t`** vont directement aux
+  sources (dossiers), à la grille (ou à l'image) et aux outils (panneau de droite), un
+  panneau masqué s'affichant (`TriApp::focus_on`) ; `h` / `l` / `o` restent. La barre
+  d'état le dit ; la ligne pointée au clavier
   (dossiers, métadonnées, résultats de recherche) est une **bande grise discrète** sur
   toute la largeur (`[gui.dialogs] cursor_tint`, `cursor_row` ; cadre d'accent avant le
   25/10/2026, trop voyant et coupé à gauche quand le panneau défilait). **Le survol
@@ -1233,6 +1240,40 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - Thème sombre par défaut.
 
 - **Plein écran** (Entrée ou double-clic) : voir plus bas.
+- **« Toutes les photos »** (#561, conception dans l'issue) : un dossier virtuel en tête
+  du panneau des dossiers, au-dessus de tous les emplacements, fait des photos que
+  l'index a vues (`tri::folder::all_photos`, chemin marqueur `all_photos_dir`). Pas de
+  boîte de recherche : ce sont les filtres qui cherchent, sur cette liste. Il s'ouvre
+  tout de suite sur l'index (tailles et dates connues : vignettes en cache sans accès au
+  disque, `cache::seed_stamps`), puis se complète en fond dossier par dossier
+  (`folder::complete_from_disk` : développements, photos ajoutées, celles qui n'y sont
+  plus ; un disque débranché garde ce que l'index en savait), la liste remplacée comme
+  par la surveillance (`TriApp::replace_folder`). Pas surveillé, pas retenu comme
+  dernier dossier. Échap (grille, plus rien à fermer) ramène au dossier d'où l'on venait
+  (`all_photos_from`). **`g a`** (`core.view.all_photos`) bascule : y va, et de là
+  ramène au dossier (retour du 22/11/2026 : plutôt que des variantes « partout » de
+  chaque filtre). Les filtres restent posés en changeant de dossier : un filtre posé ici
+  (`f l` palettes proches, `f o` couleur, `f m` semblables) cherche ensuite partout, la
+  photo de référence relue dans la source de là-bas. **Montrer dans son dossier**
+  (`core.file.show_in_folder`, `g f`, icône dossier et cible dans la boîte du clic
+  droit, seulement depuis « Toutes les photos ») : le vrai dossier de l'image, elle en
+  surbrillance en grille (`select_after_open`).
+  **Photo de référence** (retour du 22/11/2026), commune à « palettes proches » et à
+  « semblables » (`TriApp::reference`) : dans la section Filtres, « Couleur » d'abord,
+  puis ces deux filtres, la référence à leur droite (`reference_box` : son imagette, ou
+  un cadre vide) ; un clic l'ouvre en grand (photo au centre, boutons à droite) avec
+  « Supprimer la référence ». **Semblables** (`core.filter.similar`) : les photos dont
+  l'empreinte (celle des piles) est proche de celle de la référence, de la plus proche
+  à la plus lointaine (`rank_by_similarity`, un développement a l'empreinte de sa
+  photo), seuil au curseur (`[similarity] filter_threshold`, `filter_max`) ; une
+  recherche à la fois avec les palettes. Leurs curseurs (et celui de la couleur) se
+  pointent au clavier comme les autres réglages du panneau : ← / → d'un pas, Entrée la
+  valeur par défaut (`TriApp::keyed`). Sans
+  référence, allumer le filtre prend la photo en surbrillance (grisé s'il n'y en a pas) ;
+  elle reste ensuite (autre dossier, autre source : sa palette relue,
+  `reference_palette`, lue dans le cache si elle n'est pas dans la liste) tant qu'on ne
+  l'efface ni ne la remplace : `f t` (`core.filter.reference`), bouton de la boîte du
+  clic droit.
 
 ## Plein écran
 

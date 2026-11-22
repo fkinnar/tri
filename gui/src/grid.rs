@@ -108,6 +108,9 @@ pub fn navigate(
         | Action::FilterConflicts
         | Action::FilterPalette
         | Action::FilterPaletteColour
+        | Action::AllPhotos
+        | Action::SetReference
+        | Action::FilterSimilar
         | Action::FilterRestart
         | Action::FilterCount
         | Action::SortNext
@@ -137,6 +140,7 @@ pub fn navigate(
         | Action::FileRename
         | Action::FileDelete
         | Action::FileReveal
+        | Action::FileShowInFolder
         | Action::FileEdit
         | Action::FileCopy
         | Action::FileMove
@@ -202,6 +206,9 @@ pub fn navigate(
         | Action::FocusLeft
         | Action::FocusRight
         | Action::FocusNext
+        | Action::FocusSources
+        | Action::FocusImages
+        | Action::FocusTools
         | Action::FolderUp
         | Action::FolderDown
         | Action::FolderExpand

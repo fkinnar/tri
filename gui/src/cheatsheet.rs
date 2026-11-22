@@ -52,7 +52,15 @@ pub fn applies(action: Action, place: Place) -> bool {
     // Partout : se repérer, changer de panneau, l'aide, quitter.
     if matches!(
         action,
-        Back | Help | HelpHere | Quit | FocusLeft | FocusRight | FocusNext
+        Back | Help
+            | HelpHere
+            | Quit
+            | FocusLeft
+            | FocusRight
+            | FocusNext
+            | FocusSources
+            | FocusImages
+            | FocusTools
     ) {
         return true;
     }

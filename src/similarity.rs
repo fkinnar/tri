@@ -70,6 +70,10 @@ pub struct SimilaritySettings {
     /// Curseur « importance des pauses » à fond à droite : `pause_weight` multiplié par
     /// cette valeur (à fond à gauche : 0, pauses ignorées).
     pub pause_range: f32,
+    /// Filtre « semblables » : distance de départ du curseur (empreintes, comme les piles).
+    pub filter_threshold: f32,
+    /// Filtre « semblables » : distance au bout du curseur.
+    pub filter_max: f32,
 }
 
 impl Default for SimilaritySettings {
@@ -89,6 +93,8 @@ impl Default for SimilaritySettings {
             max_gap_s: 60.0,
             pause_weight: 0.1,
             pause_range: 5.0,
+            filter_threshold: 0.25,
+            filter_max: 1.0,
         }
     }
 }

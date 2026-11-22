@@ -166,6 +166,9 @@ loupe = "m"
 "core.view.image_info" = ["t"]
 "core.view.grid_info" = ["Shift+t"]
 "core.view.refresh_folders" = ["F5"]
+# "All photos" (#561): the photos seen in every folder, as one folder; again, back to
+# the folder you came from. "g a" like "go all".
+"core.view.all_photos" = ["g a"]
 
 # --- Filters (f) ---
 # Prefix "f", followed by the matching rating key. "f f" changes the file type,
@@ -205,8 +208,13 @@ loupe = "m"
 "core.filter.developed" = ["f r"]
 # In conflict (ratings that disagree between programs): "c".
 "core.filter.conflicts" = ["f c"]
-"core.filter.palette" = []
-"core.filter.palette_colour" = []
+# Similar palettes: "l" like palette; contains this colour: "o" like colour.
+"core.filter.palette" = ["f l"]
+"core.filter.palette_colour" = ["f o"]
+# The selected photo becomes the reference of similar palettes ("t" like the target).
+"core.filter.reference" = ["f t"]
+# Photos similar to the reference (fingerprints, as in stacks): "m" like similar.
+"core.filter.similar" = ["f m"]
 # After a filter change, start again from the first image (on / off): "g", like "g g".
 "core.filter.restart" = ["f g"]
 # f k ("count"): the filters in use and the number of photos left, large, in the middle.
@@ -263,6 +271,9 @@ loupe = "m"
 # Cmd+E: export, like Lightroom; Cmd+Shift+E: the export report.
 "core.file.edit" = ["e"]
 "core.file.reveal" = ["Shift+e"]
+# From "All photos" (#561): the image in its own folder, highlighted. "g f" like
+# "go folder".
+"core.file.show_in_folder" = ["g f"]
 "core.file.export" = ["Cmd+e"]
 "core.file.export.report" = ["Cmd+Shift+e"]
 # Delete: Delete, or the "delete" key of Mac keyboards (Backspace); a confirmation
@@ -530,6 +541,11 @@ loupe = "m"
 "core.panel.left" = ["h", "Left"]
 "core.panel.right" = ["l", "Right"]
 "core.panel.next" = ["o"]
+# Or straight to one (feedback of 2026-11-22): s the sources (folders), g the grid (or
+# the image in full screen), t the tools (right panel).
+"core.panel.sources" = ["s"]
+"core.panel.grid" = ["g"]
+"core.panel.tools" = ["t"]
 "core.view.folders" = ["Shift+h", "Shift+Left"]
 "core.view.metadata" = ["Shift+l", "Shift+Right"]
 "core.view.filter_bar" = ["Shift+k", "Shift+Up"]

@@ -712,6 +712,13 @@ pause_weight = 0.1
 # "Weight of pauses" slider fully to the right: pause_weight multiplied by this value
 # (fully to the left: pauses ignored).
 pause_range = 5.0
+# "Similar" filter: starting threshold of the slider (distance between fingerprints).
+#
+# "Similar" filter (photos similar to the reference, as in stacks): the distance between
+# fingerprints at the start of the slider.
+filter_threshold = 0.25
+# "Similar" filter: threshold at the end of the slider.
+filter_max = 1.0
 
 [i18n]
 # Language of the texts (interface, command line, messages): "auto" (system language;
@@ -1224,6 +1231,9 @@ cursor_tint = 0.12
 # colour) or "#rrggbb", and its thickness in points (0: no line).
 focus_line = "accent"
 focus_line_width = 2.0
+# Length of that line, in the top left corner of the panel (points; 0: the whole
+# width). The same mark on the grid when it has the keyboard.
+focus_line_length = 24.0
 # Side of the icon buttons (file actions, in the right-click dialog), in points.
 icon_size = 34.0
 # Width of the help (<core.app.help>), in points (at most 90% of the window).

@@ -146,7 +146,7 @@ pub fn sort(
     settings: &SortSettings,
 ) {
     // D'abord l'ordre des noms (paires : RAW puis JPEG), qui départage aussi.
-    files.sort_by(crate::media::compare);
+    files.sort_by(by_name);
     if order.key == SortKey::Name {
         if order.descending {
             reverse_pairs(files);
@@ -195,16 +195,76 @@ pub fn sort(
 fn reverse_pairs(files: &mut [MediaFile]) {
     let stem = |f: &MediaFile| crate::media::source(&f.path).with_extension("");
     files.sort_by(|a, b| {
-        stem(b)
-            .cmp(&stem(a))
+        name(b)
+            .cmp(&name(a))
+            .then_with(|| stem(b).cmp(&stem(a)))
             .then_with(|| crate::media::compare(a, b))
     });
+}
+
+/// Nom d'une image pour le tri : celui de sa photo (un développement), sans extension ni
+/// dossier.
+fn name(f: &MediaFile) -> std::ffi::OsString {
+    crate::media::source(&f.path)
+        .file_stem()
+        .unwrap_or_default()
+        .to_os_string()
+}
+
+/// Ordre des noms (retour du 22/11/2026, « Toutes les photos ») : le **nom** de fichier
+/// d'abord, quel que soit le dossier, puis l'ordre des chemins ([`crate::media::compare`] :
+/// une paire RAW+JPEG et les développements restent ensemble). Dans un seul dossier, c'est
+/// l'ordre des chemins ; avec des sous-dossiers ou tous les dossiers, les noms se suivent
+/// au lieu d'être rangés dossier par dossier.
+fn by_name(a: &MediaFile, b: &MediaFile) -> std::cmp::Ordering {
+    name(a)
+        .cmp(&name(b))
+        .then_with(|| crate::media::compare(a, b))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::media::MediaKind;
+
+    #[test]
+    fn names_sort_across_folders_and_pairs_stay_together() {
+        // Retour du 22/11/2026 (« Toutes les photos ») : rangées par nom, pas dossier par
+        // dossier.
+        let f = |p: &str, kind| MediaFile {
+            path: PathBuf::from(p),
+            kind,
+        };
+        let mut files = vec![
+            f("/b/DSCF6671.RAF", MediaKind::Raw),
+            f("/a/DSCF4352.RAF", MediaKind::Raw),
+            f("/b/DSCF4352.JPG", MediaKind::Flat),
+            f("/b/DSCF4352.RAF", MediaKind::Raw),
+            f("/a/DSCF6696.RAF", MediaKind::Raw),
+        ];
+        let order = Order {
+            key: SortKey::Name,
+            descending: false,
+        };
+        sort(
+            &mut files,
+            order,
+            |_| None,
+            |_| Notes::default(),
+            &SortSettings::default(),
+        );
+        let paths: Vec<&str> = files.iter().map(|f| f.path.to_str().unwrap()).collect();
+        assert_eq!(
+            paths,
+            [
+                "/a/DSCF4352.RAF",
+                "/b/DSCF4352.RAF",
+                "/b/DSCF4352.JPG",
+                "/b/DSCF6671.RAF",
+                "/a/DSCF6696.RAF"
+            ]
+        );
+    }
 
     fn file(name: &str) -> MediaFile {
         let kind = if name.ends_with(".RAF") {
