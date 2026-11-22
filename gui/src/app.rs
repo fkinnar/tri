@@ -30581,6 +30581,13 @@ mod tests {
         allow_stacks(&mut h);
         h.run_steps(3);
         choose_palette(&mut h, Some(tri::palette::SourceKind::Camera));
+        // Les vraies analyses finies d'abord : sinon un avancement du moteur arrivé entre
+        // deux étapes écrase celui posé ici (CI Windows, 22/11/2026).
+        run_until(&mut h, |app| {
+            app.progress[3..=6]
+                .iter()
+                .all(|p| p.done >= p.total && p.total > 0)
+        });
         let half = Progress { done: 1, total: 3 };
         let full = Progress { done: 3, total: 3 };
         for slot in [3, 4, 5, 6] {
