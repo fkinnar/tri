@@ -659,6 +659,11 @@ colour_proximity = 0.25
 # Search by the average colour of an image: small, a dark photo with a blue cast stays
 # "blue on average" against a light blue.
 mean_lightness = 0.3
+# Contains these colours, hierarchical: tolerance widened at each rank.
+#
+# The first colour more precise than the last: the second one's tolerance is 1.25 times
+# the slider's, the third 1.5 times… (0: the same for all).
+colour_widen = 0.25
 
 [index]
 # Record the palettes in the search index of all folders.

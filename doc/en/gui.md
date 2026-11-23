@@ -273,7 +273,12 @@ system one ("cold" measurements, experiments).
   (feedback of 2026-11-23: changing a slot other than the base detached it, and selecting
   counted as changing); it only detaches by clicking its icon again, or storing or
   clearing a slot.
-  Screenshot: `TRI_GUI_ACTIONS=colour_dialog:#2050c0,harmony:triad`. An image must
+  Screenshot: `TRI_GUI_ACTIONS=colour_dialog:#2050c0,harmony:triad`. At the
+  bottom of the box (feedback of 2026-11-23): the **tolerance**, the same slider as the
+  panel's (kept per folder, double-click: starting value), and the **number of photos**
+  found by the live preview. In hierarchical mode, the tolerance **widens rank by rank**
+  (`[palette] colour_widen`, 0.25: the second colour ×1.25, the third ×1.5…): the first
+  colour more precise than the last. An image must
   contain **all** of them (one tolerance for all: one per colour would be unmanageable).
   On the right, **Absolute** (all count the same: the mean of the distances) or
   **Hierarchical** (the first counts the most, each next one `[palette] colour_hierarchy`

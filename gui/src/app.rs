@@ -5477,6 +5477,7 @@ impl TriApp {
             hierarchy: (mode == ColourMode::Hierarchical)
                 .then_some(self.settings.palette.colour_hierarchy),
             proximity: self.settings.palette.colour_proximity,
+            widen: self.settings.palette.colour_widen,
             mean: (mode == ColourMode::Mean).then_some(self.settings.palette.mean_lightness),
         });
         let threshold = match &query {
@@ -5716,6 +5717,17 @@ impl TriApp {
         let mut own: Option<Vec<String>> = None;
         let mut mode: Option<crate::settings::ColourMode> = None;
         let mut wheel: Option<crate::settings::ColourWheel> = None;
+        // La tolérance (celle du panneau) et le nombre de photos trouvées.
+        let p = self.settings.palette;
+        let (radius_max, radius_default) = (p.colour_radius_max.max(0.01), p.colour_radius);
+        let before_radius = self
+            .palette_colour
+            .as_ref()
+            .map_or(self.palette_radius, |c| c.radius);
+        let mut radius = before_radius;
+        let mut radius_done = false;
+        let found = self.palette_colour.is_some().then_some(self.files.len());
+        let weak = ctx.global_style().visuals.weak_text_color();
         dialog.ryb = self.gui.colour_search.wheel == crate::settings::ColourWheel::Ryb;
         dialog.max = self.gui.colour_search.max.max(1);
         let title = t!("palette-colour-title");
@@ -5855,12 +5867,39 @@ impl TriApp {
                     {
                         dialog.reset();
                     }
+                    // La tolérance, comme celle du panneau (retour du 23/11/2026), et ce
+                    // que la recherche trouve.
+                    ui.add_space(12.0);
+                    ui.label(egui::RichText::new(t!("palette-colour-tolerance")).color(weak));
+                    let slider = ui
+                        .add(FineSlider::new(&mut radius, 0.0..=radius_max).width(140.0))
+                        .on_hover_text(t!("palette-colour-radius"));
+                    if slider.double_clicked_slider(ui) {
+                        radius = radius_default;
+                    }
+                    radius_done = slider.drag_stopped() || slider.double_clicked_slider(ui);
+                    ui.add_space(8.0);
+                    let found = match found {
+                        Some(n) => t!("palette-colour-found", n = n),
+                        None => "—".to_string(),
+                    };
+                    ui.label(egui::RichText::new(found).color(weak));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Max), |ui| {
                         cancel = ui.button(t!("cancel")).clicked();
                         search = ui.button(t!("palette-colour-search")).clicked();
                     });
                 });
             });
+        if radius != before_radius {
+            self.palette_radius = radius;
+            if let Some(c) = &mut self.palette_colour {
+                c.radius = radius;
+                self.refilter(Reveal::Minimal);
+            }
+        }
+        if radius_done {
+            self.remember_palette_levels();
+        }
         if let Some(own) = own {
             self.set_own_swatches(own);
         }
@@ -32256,6 +32295,9 @@ mod tests {
         }
         run_until(&mut h, |app| app.palette_colour.is_some());
         assert_eq!(h.state().files.len(), 1, "la grille suit");
+        // Ce qu'elle trouve, dit dans la boîte.
+        h.run_steps(2);
+        h.get_by_label("1 photo");
         h.get_by_label(&t!("cancel")).click();
         h.run_steps(3);
         assert!(h.state().colour_dialog.is_none());

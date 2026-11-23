@@ -84,6 +84,11 @@ palette-swatch-clear = Vider
 palette-colour-search = Valider
 palette-colour-reset = Réinitialiser
 palette-colour-reset-tip = Vide les couleurs cherchées, remet la roue au gris et arrête la recherche
+palette-colour-tolerance = Tolérance
+palette-colour-found = { $n ->
+    [one] { $n } photo
+   *[other] { $n } photos
+}
 palette-colour-h = T
 palette-colour-s = S
 palette-colour-v = V

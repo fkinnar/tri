@@ -662,6 +662,11 @@ colour_proximity = 0.25
 # Recherche de la couleur moyenne d'une image : petit, une photo sombre à dominante bleue
 # reste « bleue en moyenne » face à un bleu clair.
 mean_lightness = 0.3
+# Contient ces couleurs, hiérarchique : tolérance élargie à chaque rang.
+#
+# La première couleur plus précise que la dernière : la tolérance de la deuxième est 1,25
+# fois celle du curseur, la troisième 1,5 fois… (0 : la même pour toutes).
+colour_widen = 0.25
 
 [index]
 # Noter les palettes dans l'index de recherche de tous les dossiers.

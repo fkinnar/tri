@@ -84,6 +84,11 @@ palette-swatch-clear = Clear
 palette-colour-search = OK
 palette-colour-reset = Reset
 palette-colour-reset-tip = Clears the colours looked for, puts the wheel back to grey and stops the search
+palette-colour-tolerance = Tolerance
+palette-colour-found = { $n ->
+    [one] { $n } photo
+   *[other] { $n } photos
+}
 palette-colour-h = H
 palette-colour-s = S
 palette-colour-v = V

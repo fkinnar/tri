@@ -2329,6 +2329,7 @@ fn run() -> AnyResult<()> {
                 .hierarchical
                 .then_some(settings.palette.colour_hierarchy),
             proximity: settings.palette.colour_proximity,
+            widen: settings.palette.colour_widen,
             mean: args.mean.then_some(settings.palette.mean_lightness),
         });
         return palettes(

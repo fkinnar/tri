@@ -286,7 +286,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   pipette) fait tourner l'harmonie (retour du 23/11/2026 : retoucher un autre emplacement
   que la base la détachait, et choisir revenait à retoucher) ; elle ne se détache qu'en
   recliquant son icône, ou en rangeant ou vidant un emplacement.
-  Capture : `TRI_GUI_ACTIONS=colour_dialog:#2050c0,harmony:triad`. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
+  Capture : `TRI_GUI_ACTIONS=colour_dialog:#2050c0,harmony:triad`. En bas
+  de la boîte (retours du 23/11/2026) : la **tolérance**, le même curseur que celui du
+  panneau (retenue par dossier, double-clic : valeur de départ), et le **nombre de photos**
+  trouvées par l'aperçu en direct. En hiérarchique, la tolérance **s'élargit de rang en
+  rang** (`[palette] colour_widen`, 0,25 : la deuxième couleur ×1,25, la troisième ×1,5…) :
+  la première couleur plus précise que la dernière. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
   couleur serait ingérable). À droite, **Absolue** (toutes comptent pareil : la moyenne des
   distances) ou **Hiérarchique** (la première compte le plus, chaque suivante
   `[palette] colour_hierarchy` fois la précédente, d'après sa présence dans l'image, la
