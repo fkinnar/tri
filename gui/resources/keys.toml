@@ -149,7 +149,9 @@ loupe = "m"
 # --- On the image ---
 # i: the histogram; Shift+I: the large one. Its scale and channel: after the leader.
 "core.view.histogram" = ["i"]
-"core.view.histogram_large" = ["Shift+i"]
+# The large histogram: "g i" like "go histogram", as "g p" for the large palette
+# (2026-11-23, Shift+I until then).
+"core.view.histogram_large" = ["g i"]
 # The large palette (#492): "g p" like "go palette" (Shift+L, the palette's letter, pans
 # in the vim profile).
 "core.view.palette" = ["g p"]

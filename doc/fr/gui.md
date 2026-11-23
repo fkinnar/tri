@@ -316,7 +316,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   Palette, sous la palette de la photo) : ses couleurs principales (les plus présentes, sans
   les miettes sous `colour_min_share`, au plus `max`) dans la boîte, cherchées tout de
   suite, à ajuster ; « Annuler » rend la recherche d'avant. **Palette en grand** (à côté,
-  action `core.view.palette`, `g p` ; un clic sur la bande ou la roue de la palette du
+  action `core.view.palette`, `g p`, comme `g i` pour le grand histogramme depuis le
+  23/11/2026 (`Maj+I` jusque-là ; dedans, `g` reste le canal vert, Échap le ferme) ; un clic sur la bande ou la roue de la palette du
   panneau l'ouvre aussi, comme l'histogramme ; idée de l'utilisateur du 23/11/2026) : une boîte déplaçable
   comme le grand histogramme, pour voir les **rapports de masses** de la photo en
   surbrillance (l'image d'où vient sa palette) ; à droite de l'image (retour du

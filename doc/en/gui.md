@@ -301,7 +301,8 @@ system one ("cold" measurements, experiments).
   photo's palette): its main colours (the most present, without specks under
   `colour_min_share`, at most `max`) in the box, searched right away, to adjust; "Cancel"
   brings back the previous search. **Large palette** (next to it, action
-  `core.view.palette`, `g p`; a click on the band or the wheel of the panel's palette
+  `core.view.palette`, `g p`, like `g i` for the large histogram since 2026-11-23
+  (`Shift+I` until then; inside it, `g` stays the green channel, Escape closes it); a click on the band or the wheel of the panel's palette
   opens it too, like the histogram; user's idea of 2026-11-23): a movable box like the large histogram,
   to see the **balance of masses** of the highlighted photo (the image its palette comes
   from); right of the image (feedback of 2026-11-23: below, the box was unbalanced), a

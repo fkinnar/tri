@@ -43697,8 +43697,9 @@ mod tests {
             !h.state().histogram_large,
             "<leader> i c : le canal change, le grand histogramme reste fermé"
         );
-        press(&mut h, Key::I, Modifiers::SHIFT);
-        assert!(h.state().histogram_large, "Maj+I l'ouvre");
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::I, Modifiers::NONE);
+        assert!(h.state().histogram_large, "g i l'ouvre");
         assert_eq!(h.state().histogram_channel, Some(0));
         // L'image d'analyse de tous les canaux peut encore être là (CI macOS) : attendre
         // celle du rouge.
@@ -44782,7 +44783,8 @@ mod tests {
         );
         run_until(&mut h, |app| app.after_pending.is_empty() && !measured(app));
         // `e` dans le grand histogramme rebascule sur le réel.
-        press(&mut h, Key::I, Modifiers::SHIFT);
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::I, Modifiers::NONE);
         press(&mut h, Key::E, Modifiers::NONE);
         assert!(!h.state().gui.histogram.after_auto, "e : retour au réel");
         assert!(h.state_mut().shown_exposure(0).unwrap().1.is_none());
@@ -44881,8 +44883,9 @@ mod tests {
     #[test]
     fn the_large_histogram_opens_and_closes() {
         let (mut h, _dir) = harness();
-        press(&mut h, Key::I, Modifiers::SHIFT);
-        assert!(h.state().histogram_large, "Maj+E l'ouvre");
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::I, Modifiers::NONE);
+        assert!(h.state().histogram_large, "g i l'ouvre");
         // L'échelle est une icône dans l'histogramme (19/10/2026), plus un bouton texte
         // à côté de « Fermer ».
         assert!(h.query_by_label("Échelle linéaire").is_none());
@@ -44931,9 +44934,13 @@ mod tests {
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().histogram_large, "Échap la ferme");
         assert_eq!(h.state().mode, Mode::Grid);
-        press(&mut h, Key::I, Modifiers::SHIFT);
-        press(&mut h, Key::I, Modifiers::SHIFT);
-        assert!(!h.state().histogram_large, "la même touche la ferme");
+        // Depuis le 23/11/2026, « g i » l'ouvre ; dedans, `g` est le canal vert (comme
+        // `r g b a l`) : Échap la ferme.
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::I, Modifiers::NONE);
+        assert!(h.state().histogram_large);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(!h.state().histogram_large, "Échap la ferme");
     }
 
     #[test]
