@@ -316,7 +316,11 @@ system one ("cold" measurements, experiments).
   colours adapted to the light of their surround, areas that stand out weighing more
   (`palette::posterize_with`, settings `[palette] perceived_*`); at step 0, the image "as
   seen", with its perceived palette (`[palette] colors` colours). Neither the cache nor the search use it (to be decided with use). Computed in the
-  background, on demand; changing image (arrows) follows, Escape closes it. Screenshot:
+  background, on demand; changing image (arrows) follows, Escape closes it. Its title, like
+  the large histogram's, names a development by its photo and software, "DSCF6228
+  (Darktable)" (`image_title`). The colour box opened on colours (clicked in a palette, or
+  the previous search) searches them at once, in the grid even from full screen; "Cancel"
+  goes back where one came from (full screen on the same photo, large palette). Screenshot:
   `TRI_GUI_ACTIONS=core.view.palette,palette_k:4f`. **Keyboard** (feedback of 2026-11-23: the box was
   mouse-only, and behind it the arrows moved the grid's selection): the grid receives
   nothing while the box is open; outside a text field, `1`–`5` select a colour (an empty

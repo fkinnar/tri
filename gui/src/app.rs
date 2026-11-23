@@ -666,6 +666,11 @@ struct ColourLive {
     like: Option<PaletteLike>,
     similar: Option<SimilarSearch>,
     similar_wanted: bool,
+    /// Ouverte depuis le plein écran, sur cette photo : « Annuler » y ramène (la recherche
+    /// passe en grille).
+    from_view: Option<PathBuf>,
+    /// Ouverte depuis la palette en grand : « Annuler » la rouvre.
+    from_palette_view: bool,
     /// Une recherche a été appliquée depuis l'ouverture (sinon, rien à rendre).
     changed: bool,
     applied: Vec<[f32; 3]>,
@@ -2219,6 +2224,20 @@ pub fn development_label(path: &Path) -> String {
             }
         }
         None => tri::media::display_stem(path),
+    }
+}
+
+/// Titre d'une boîte sur une image (palette et histogramme en grand) : un développement
+/// par sa photo et son logiciel, « DSCF6228 (darktable) » (retour du 23/11/2026 :
+/// « DSCF6228@dt.RAF » ne parlait pas) ; sinon le nom du fichier.
+fn image_title(path: &Path) -> String {
+    match tri::developments::get(path) {
+        Some(d) => format!(
+            "{} ({})",
+            tri::media::display_stem(&d.photo),
+            development_label(path)
+        ),
+        None => file_name(path),
     }
 }
 
@@ -5932,16 +5951,32 @@ impl TriApp {
     /// Montre la boîte des couleurs `dialog`, la recherche en cours retenue pour
     /// « Annuler » (aperçu en direct).
     fn show_colour_dialog(&mut self, dialog: ColourDialog) {
+        let from_view = (self.mode == Mode::View)
+            .then(|| self.files.get(self.selected).map(|f| f.path.clone()))
+            .flatten();
         self.colour_live = Some(ColourLive {
             colour: self.palette_colour.clone(),
             last: self.palette_colour_last.clone(),
             like: self.palette_like.clone(),
             similar: self.similar.clone(),
             similar_wanted: self.similar_wanted,
+            from_view,
+            from_palette_view: false,
             changed: false,
             applied: dialog.colours(),
             at: Instant::now(),
         });
+        // Des couleurs rangées : cherchées tout de suite, la grille filtrée derrière
+        // (retour du 23/11/2026 : on ne voyait pas le résultat) ; depuis le plein écran, en
+        // grille. Déjà cherchées (la recherche en cours) : rien ne bouge.
+        let colours = dialog.colours();
+        let current = self.palette_colour.as_ref().map(|c| &c.colours);
+        if !dialog.slots.is_empty() && current != Some(&colours) {
+            self.set_palette_colours(Some(colours));
+            if let Some(live) = &mut self.colour_live {
+                live.changed = true;
+            }
+        }
         self.colour_dialog = Some(dialog);
     }
 
@@ -5979,6 +6014,10 @@ impl TriApp {
         let Some(live) = self.colour_live.take() else {
             return;
         };
+        // Venue de la palette en grand : rouverte (retour du 23/11/2026).
+        if live.from_palette_view {
+            self.palette_view = true;
+        }
         if !live.changed {
             return;
         }
@@ -5989,6 +6028,15 @@ impl TriApp {
         self.similar_wanted = live.similar_wanted;
         self.palette_refilter_pending = false;
         self.apply_filter();
+        // Venue du plein écran : on y retourne, sur la même photo.
+        if let Some(path) = live.from_view
+            && let Some(i) = self.files.iter().position(|f| f.path == path)
+        {
+            self.selected = i;
+            if self.mode != Mode::View {
+                self.open_view();
+            }
+        }
     }
 
     /// Boîte de choix de la couleur cherchée (#492, retour du 21/11/2026) : la roue
@@ -7240,14 +7288,6 @@ impl TriApp {
                 {
                     these = Some(palette);
                 }
-                // La palette en grand (#492).
-                if ui
-                    .selectable_label(self.palette_view, t!("palette-view-open"))
-                    .on_hover_text(self.action_tip(Action::PaletteView))
-                    .clicked()
-                {
-                    open_view = true;
-                }
             });
         }
         if let Some(palette) = these {
@@ -7277,13 +7317,8 @@ impl TriApp {
         if colours.is_empty() {
             return;
         }
+        // La boîte, sur elles, les cherche tout de suite.
         self.show_colour_dialog(ColourDialog::new(&colours));
-        self.set_palette_colours(Some(colours.clone()));
-        if let Some(live) = &mut self.colour_live {
-            live.applied = colours;
-            live.changed = true;
-            live.at = Instant::now();
-        }
     }
 
     /// Roue chromatique et liste des couleurs d'une palette : un clic sur un point de la
@@ -21452,7 +21487,7 @@ impl TriApp {
             .and_then(|(f, s)| self.palettes.get(&(f.path.clone(), s)).cloned());
         let name = file
             .as_ref()
-            .map(|f| file_name(&f.path))
+            .map(|f| image_title(&f.path))
             .unwrap_or_default();
         let side = self.gui.palette_view.side.max(120.0);
         let mut k = self.palette_view_k;
@@ -21582,6 +21617,9 @@ impl TriApp {
         if let Some(c) = picked {
             self.palette_view = false;
             self.show_colour_dialog(ColourDialog::new(&[c]));
+            if let Some(live) = &mut self.colour_live {
+                live.from_palette_view = true;
+            }
         }
     }
 
@@ -21707,7 +21745,7 @@ impl TriApp {
         let name = self
             .files
             .get(self.selected)
-            .map(|f| file_name(&f.path))
+            .map(|f| image_title(&f.path))
             .unwrap_or_default();
         let screen = ctx.content_rect().size();
         let fraction = self.gui.histogram.large.clamp(0.2, 1.0);
@@ -32642,10 +32680,9 @@ mod tests {
         // La pastille ouvre la boîte ; sa pipette, puis un clic sur l'image (retour du
         // 21/11/2026).
         // La boîte le temps de s'ouvrir (fondu) avant de prendre un clic.
-        h.state_mut().open_colour_dialog();
-        // La boîte s'ouvre sur la recherche d'avant ; une couleur relevée s'y ajouterait
-        // (retour du 23/11/2026) : réinitialisée, elle ne cherche que celle-là.
-        h.state_mut().colour_dialog.as_mut().unwrap().reset();
+        // Vide (la recherche d'avant, rouverte, partirait aussitôt en grille) : elle ne
+        // cherchera que la couleur relevée.
+        h.state_mut().show_colour_dialog(ColourDialog::new(&[]));
         h.run_steps(10);
         h.get_by_label(&t!("palette-eyedropper-name")).click();
         h.run_steps(2);
@@ -33552,7 +33589,27 @@ mod tests {
             .as_ref()
             .expect("la boîte des couleurs");
         assert_eq!(d.slots.len(), 1);
-        assert!(h.state().palette_colour.is_none(), "rien cherché encore");
+        assert!(h.state().palette_colour.is_some(), "cherchée tout de suite");
+        // « Annuler » : la recherche d'avant (aucune), et la palette en grand rouverte.
+        h.get_by_label(&t!("cancel")).click();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_none());
+        assert!(h.state().palette_view, "rouverte");
+    }
+
+    #[test]
+    fn dialog_titles_name_a_development_by_its_photo_and_software() {
+        // Retour du 23/11/2026 : « DSCF6228@dt.RAF » ne parlait pas.
+        // Un développement connu (comme le dossier lu les enregistre).
+        let dev = tri::developments::Development {
+            engine: tri::develop::Engine::Darktable,
+            copy: tri::developments::Copy::Main,
+            photo: PathBuf::from("/s/DSCF6228.RAF"),
+            sidecar: PathBuf::from("/s/DSCF6228.RAF.xmp"),
+        };
+        tri::developments::register(&dev);
+        assert_eq!(image_title(&dev.path()), "DSCF6228 (Darktable)");
+        assert_eq!(image_title(Path::new("/s/DSCF6228.RAF")), "DSCF6228.RAF");
     }
 
     #[test]

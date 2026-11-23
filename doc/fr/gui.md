@@ -333,7 +333,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`palette::posterize_with`, réglages `[palette] perceived_*`) ; au cran 0, l'image
   « telle que vue », avec sa palette perçue (`[palette] colors` couleurs). Ni le cache ni la recherche n'en tiennent compte (à décider à
   l'usage). Calculé en fond, à la demande ; changer d'image (flèches) la suit, Échap la
-  ferme. Capture : `TRI_GUI_ACTIONS=core.view.palette,palette_k:4f`. **Clavier** (retour du
+  ferme. Son titre, comme celui du grand histogramme, nomme un développement par sa photo
+  et son logiciel, « DSCF6228 (Darktable) » (`image_title`). La boîte des couleurs ouverte
+  sur des couleurs (cliquées dans une palette, ou la recherche d'avant) les cherche tout
+  de suite, en grille même depuis le plein écran ; « Annuler » ramène d'où l'on vient
+  (plein écran sur la même photo, palette en grand). Capture : `TRI_GUI_ACTIONS=core.view.palette,palette_k:4f`. **Clavier** (retour du
   23/11/2026 : la boîte ne se pilotait qu'à la souris, et derrière elle les flèches
   déplaçaient la sélection) : la grille ne reçoit plus rien tant que la boîte est ouverte ;
   hors saisie dans un champ, `1`–`5` choisissent une couleur (un vide : plus rien de

@@ -102,7 +102,6 @@ palette-view-false = False colours
 palette-view-false-tip = Clearly distinct colours instead of the real ones, to see the masses when they are close
 palette-view-perceived = Perceived colours
 palette-view-perceived-tip = Experiment: the colours as the eye sees them, adapted to the light of their surround; areas that stand out count more
-palette-view-open = Large palette
 palette-search-these = Search these colours
 palette-search-these-tip = The main colours of this photo in the colour box, searched right away, to adjust
 palette-eyedropper-name = Eyedropper
