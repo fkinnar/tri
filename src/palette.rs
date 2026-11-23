@@ -218,6 +218,8 @@ pub struct PaletteSettings {
     pub perceived_surround: f32,
     /// Couleurs perçues : poids des zones qui tranchent sur leur entourage.
     pub perceived_salience: f32,
+    /// Couleurs perçues : saturation rendue après l'adaptation (1 : telle quelle).
+    pub perceived_saturation: f32,
 }
 
 impl Default for PaletteSettings {
@@ -247,6 +249,7 @@ impl Default for PaletteSettings {
             perceived_adaptation: 0.8,
             perceived_surround: 0.2,
             perceived_salience: 1.0,
+            perceived_saturation: 1.4,
         }
     }
 }
@@ -1081,12 +1084,16 @@ fn posterize_perceived(
     let around_a = box_blur(&box_blur(&a, w, h, radius), w, h, radius);
     let around_b = box_blur(&box_blur(&b, w, h, radius), w, h, radius);
     let adapt = settings.perceived_adaptation.clamp(0.0, 1.0);
+    // Retirer la lumière dominante ôte aussi de la couleur à tout le reste : rendue par
+    // `perceived_saturation` (retour du 23/11/2026 : « infiniment plus naturel », mais
+    // terne).
+    let saturation = settings.perceived_saturation.max(0.0);
     let perceived: Vec<[f32; 3]> = (0..n)
         .map(|i| {
             [
                 lab[i][0],
-                lab[i][1] - adapt * around_a[i],
-                lab[i][2] - adapt * around_b[i],
+                saturation * (lab[i][1] - adapt * around_a[i]),
+                saturation * (lab[i][2] - adapt * around_b[i]),
             ]
         })
         .collect();

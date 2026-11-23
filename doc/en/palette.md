@@ -146,7 +146,9 @@ shares decreasing. About 10 ms for a thumbnail.
 In **perceived colours** (`posterize_with(…, true)`, experiment): the image in OKLab, a
 and b blurred over a square of `perceived_surround` (0.2) of the long side (two passes of
 running means, `box_blur`) give the surround's hue; each pixel loses the
-`perceived_adaptation` share of it (0.8; the eye adapting to the dominant light); in the
+`perceived_adaptation` share of it (0.8; the eye adapting to the dominant light), then a
+and b are multiplied by `perceived_saturation` (1.4: removing the dominant light took
+colour away from everything else, "infinitely more natural" but dull; 1.8 was garish); in the
 k-means (weighted, `cluster_weighted`), a point weighs `1 + perceived_salience × gap to its
 surround / 0.1`. On the user's photo under violet light, the face comes out orange from 2
 colours (pinkish beige in raw values).

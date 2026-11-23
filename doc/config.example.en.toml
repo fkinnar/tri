@@ -673,6 +673,10 @@ perceived_adaptation = 0.8
 perceived_surround = 0.2
 # Perceived colours: weight of the areas that stand out from their surround.
 perceived_salience = 1.0
+# Perceived colours: saturation given back after the adaptation (1: as is).
+#
+# Removing the dominant light also takes colour away from everything else.
+perceived_saturation = 1.4
 
 [index]
 # Record the palettes in the search index of all folders.

@@ -676,6 +676,10 @@ perceived_adaptation = 0.8
 perceived_surround = 0.2
 # Couleurs perçues : poids des zones qui tranchent sur leur entourage.
 perceived_salience = 1.0
+# Couleurs perçues : saturation rendue après l'adaptation (1 : telle quelle).
+#
+# Retirer la lumière dominante ôte aussi de la couleur à tout le reste.
+perceived_saturation = 1.4
 
 [index]
 # Noter les palettes dans l'index de recherche de tous les dossiers.
