@@ -267,7 +267,9 @@ system one ("cold" measurements, experiments).
   the cross bring back the previous one (or none) and the previous sort. **Reset**
   (bottom left) clears the slots, puts the wheel back to grey and stops the search; "OK"
   right after leaves the grid without a search.
-  **Wheel and harmonies** (user's idea, 2026-11-23, like Adobe Color): under the wheel,
+  **Wheel and harmonies** (user's idea, 2026-11-23, like Adobe Color; the wheel always at
+  full brightness, the value in the V field: drawn at the current colour's value, it
+  changed look from one colour to another): under the wheel,
   the **painters' wheel** (RYB: red, yellow, blue; complement of blue: orange,
   `palette_view::RYB_TO_RGB`, piecewise) or the **screen wheel** (RGB, HSV; complement of
   blue: yellow), `[gui.colour_search] wheel`; and seven **harmonies** as icons

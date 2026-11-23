@@ -281,7 +281,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   garde la recherche, « Annuler » ou la croix rendent celle d'avant (ou aucune) et le
   tri d'avant. **Réinitialiser** (en bas à gauche) vide les emplacements, remet la roue au
   gris et arrête la recherche ; « Valider » juste après laisse la grille sans recherche.
-  **Roue et harmonies** (idée de l'utilisateur, 23/11/2026, comme Adobe Color) : sous la
+  **Roue et harmonies** (idée de l'utilisateur, 23/11/2026, comme Adobe Color ; la roue
+  toujours en pleine luminosité, la valeur au champ V : dessinée à la valeur de la couleur
+  réglée, elle changeait d'aspect d'une couleur à l'autre) : sous la
   roue, la **roue des peintres** (RJB : rouge, jaune, bleu ; complémentaire du bleu :
   l'orange, `palette_view::RYB_TO_RGB`, par paliers) ou la **roue de l'écran** (RVB, TSV ;
   complémentaire du bleu : le jaune), `[gui.colour_search] wheel` ; et sept

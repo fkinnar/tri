@@ -6404,7 +6404,10 @@ impl TriApp {
         let side = 200.0;
         let (rect, response) = ui.allocate_exact_size(vec2(side, side), Sense::click_and_drag());
         let (centre, radius, ryb) = (rect.center(), side / 2.0, dialog.ryb);
-        draw_hsv_wheel(ui.painter(), rect, dialog.hsv[2], ryb);
+        // Toujours en pleine luminosité (retour du 23/11/2026 : dessinée à la valeur de la
+        // couleur réglée, elle changeait d'aspect d'une couleur à l'autre) ; la valeur se
+        // règle au champ V (ou Maj+↑ ↓), chaque point garde sa vraie couleur.
+        draw_hsv_wheel(ui.painter(), rect, 1.0, ryb);
         let marker = |hsv: [f32; 3]| hsv_pos(hsv[0], hsv[1], centre, radius, ryb);
         if let Some(pos) = response.interact_pointer_pos()
             && (response.clicked() || response.dragged())
