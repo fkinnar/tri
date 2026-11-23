@@ -99,20 +99,20 @@ loupe = "m"
 "core.view.loupe_zoom_out" = ["Cmd+j"]
 
 # --- Rating ---
-# Designed for AZERTY keyboards too: digits with or without Shift (top row of an
-# AZERTY with Shift, numeric keypad without). Purple on "°" (AZERTY), "," and "." (the
+# Digits are characters: the same "3" from the top row (Shift on AZERTY, none on QWERTY)
+# or the numeric keypad. Purple on "°" (AZERTY), "," and "." (the
 # keypad decimal separator depends on the system). Flags on Shift+P / X / U, like
 # Lightroom (pick, reject, unflag).
-"core.rate.star.0" = ["0", "Shift+0"]
-"core.rate.star.1" = ["1", "Shift+1"]
-"core.rate.star.2" = ["2", "Shift+2"]
-"core.rate.star.3" = ["3", "Shift+3"]
-"core.rate.star.4" = ["4", "Shift+4"]
-"core.rate.star.5" = ["5", "Shift+5"]
-"core.rate.color.red" = ["6", "Shift+6"]
-"core.rate.color.yellow" = ["7", "Shift+7"]
-"core.rate.color.green" = ["8", "Shift+8"]
-"core.rate.color.blue" = ["9", "Shift+9"]
+"core.rate.star.0" = ["0"]
+"core.rate.star.1" = ["1"]
+"core.rate.star.2" = ["2"]
+"core.rate.star.3" = ["3"]
+"core.rate.star.4" = ["4"]
+"core.rate.star.5" = ["5"]
+"core.rate.color.red" = ["6"]
+"core.rate.color.yellow" = ["7"]
+"core.rate.color.green" = ["8"]
+"core.rate.color.blue" = ["9"]
 # Keypad decimal separator: "," on macOS, "." on Linux Mint.
 "core.rate.color.purple" = ["°", ",", "."]
 "core.flag.accept" = ["Shift+p"]
@@ -149,7 +149,12 @@ loupe = "m"
 # --- On the image ---
 # i: the histogram; Shift+I: the large one. Its scale and channel: after the leader.
 "core.view.histogram" = ["i"]
-"core.view.histogram_large" = ["Shift+i"]
+# The large histogram: "g i" like "go histogram", as "g c" for the large colours view
+# (2026-11-23, Shift+I until then).
+"core.view.histogram_large" = ["g i"]
+# The colours in large (#492): "g c" like "go colours" ("p" is sharpness: "<leader> c"
+# stays free for the colour settings, like "<leader> i" for the histogram).
+"core.view.colours" = ["g c"]
 # w: clipped / blocked areas (warnings).
 "core.view.clipping" = ["w"]
 # p: the sharpness map (peaking). Its colour and strictness: after the leader.
@@ -180,21 +185,21 @@ loupe = "m"
 "core.filter.kind.all" = []
 "core.filter.kind.raw" = []
 "core.filter.kind.flat" = []
-"core.filter.stars.0" = ["f 0", "f Shift+0"]
-"core.filter.stars.1" = ["f 1", "f Shift+1"]
-"core.filter.stars.2" = ["f 2", "f Shift+2"]
-"core.filter.stars.3" = ["f 3", "f Shift+3"]
-"core.filter.stars.4" = ["f 4", "f Shift+4"]
-"core.filter.stars.5" = ["f 5", "f Shift+5"]
+"core.filter.stars.0" = ["f 0"]
+"core.filter.stars.1" = ["f 1"]
+"core.filter.stars.2" = ["f 2"]
+"core.filter.stars.3" = ["f 3"]
+"core.filter.stars.4" = ["f 4"]
+"core.filter.stars.5" = ["f 5"]
 # Comparison: at least, exactly, at most (issue #165).
 "core.filter.stars.op" = ["f ="]
 "core.filter.flag.accepted" = ["f p", "f Shift+p"]
 "core.filter.flag.not_rejected" = ["f u", "f Shift+u"]
 "core.filter.flag.rejected" = ["f x", "f Shift+x"]
-"core.filter.color.red" = ["f 6", "f Shift+6"]
-"core.filter.color.yellow" = ["f 7", "f Shift+7"]
-"core.filter.color.green" = ["f 8", "f Shift+8"]
-"core.filter.color.blue" = ["f 9", "f Shift+9"]
+"core.filter.color.red" = ["f 6"]
+"core.filter.color.yellow" = ["f 7"]
+"core.filter.color.green" = ["f 8"]
+"core.filter.color.blue" = ["f 9"]
 "core.filter.color.purple" = ["f °", "f ,", "f ."]
 "core.filter.colors.all" = []
 "core.filter.clear" = ["f d"]
@@ -208,10 +213,10 @@ loupe = "m"
 "core.filter.developed" = ["f r"]
 # In conflict (ratings that disagree between programs): "c".
 "core.filter.conflicts" = ["f c"]
-# Similar palettes: "l" like palette; contains this colour: "o" like colour.
-"core.filter.palette" = ["f l"]
-"core.filter.palette_colour" = ["f o"]
-# The selected photo becomes the reference of similar palettes ("t" like the target).
+# Similar colours: "l" (the former "palette"); contains this colour: "o" like colour.
+"core.filter.similar_colours" = ["f l"]
+"core.filter.colour" = ["f o"]
+# The selected photo becomes the reference of similar colours ("t" like the target).
 "core.filter.reference" = ["f t"]
 # Photos similar to the reference (fingerprints, as in stacks): "m" like similar.
 "core.filter.similar" = ["f m"]
@@ -298,14 +303,14 @@ loupe = "m"
 "core.file.compute.exposure" = []
 "core.file.compute.sharpness" = []
 "core.file.compute.signatures" = []
-"core.file.compute.palette_camera" = []
-"core.file.compute.palette_raw" = []
+"core.file.compute.colours_camera" = []
+"core.file.compute.colours_raw" = []
 "core.file.compute.all" = []
 "core.file.compute.recreate_all" = []
-"plugin.darktable.compute_image_palettes" = []
-"plugin.rapidraw.compute_image_palettes" = []
-"plugin.rawtherapee.compute_image_palettes" = []
-"plugin.art.compute_image_palettes" = []
+"plugin.darktable.compute_image_colours" = []
+"plugin.rapidraw.compute_image_colours" = []
+"plugin.rawtherapee.compute_image_colours" = []
+"plugin.art.compute_image_colours" = []
 # Read the ratings written inside the images (changed in another program) into the
 # sidecars.
 "core.file.import_notes" = []
@@ -335,8 +340,8 @@ loupe = "m"
 "core.folders.compute.exposure" = []
 "core.folders.compute.sharpness" = []
 "core.folders.compute.signatures" = []
-"core.folders.compute.palette_camera" = []
-"core.folders.compute.palette_raw" = []
+"core.folders.compute.colours_camera" = []
+"core.folders.compute.colours_raw" = []
 "core.folders.compute.all" = []
 "core.folders.compute.recreate_all" = []
 # Removable drive under the cursor: offload, eject (a dialog confirms).
@@ -372,13 +377,13 @@ loupe = "m"
 # --- Crop (while cropping) ---
 # Digits for the ratio (with or without Shift, for AZERTY), "x" for the orientation
 # (like Lightroom), Enter to save; o / Shift+O keep the overlays (guides on the frame).
-"core.version.ratio.free" = ["1", "Shift+1"]
-"core.version.ratio.original" = ["2", "Shift+2"]
-"core.version.ratio.square" = ["3", "Shift+3"]
-"core.version.ratio.5_4" = ["4", "Shift+4"]
-"core.version.ratio.3_2" = ["5", "Shift+5"]
-"core.version.ratio.16_9" = ["6", "Shift+6"]
-"core.version.ratio.4_3" = ["7", "Shift+7"]
+"core.version.ratio.free" = ["1"]
+"core.version.ratio.original" = ["2"]
+"core.version.ratio.square" = ["3"]
+"core.version.ratio.5_4" = ["4"]
+"core.version.ratio.3_2" = ["5"]
+"core.version.ratio.16_9" = ["6"]
+"core.version.ratio.4_3" = ["7"]
 "core.version.rotate" = ["x"]
 "core.version.save" = ["Enter"]
 # Each part of the version bar from the keyboard (2026-11-07): v / Shift+V (or Tab /
@@ -402,7 +407,7 @@ loupe = "m"
 "core.version.save_preset" = ["Cmd+s"]
 # 0 (next to the ratios 1 to 7): back to the original frame, the whole image; also
 # Ctrl+click (Cmd+click on macOS) on "Original" in the ratio list.
-"core.version.reset" = ["0", "Shift+0"]
+"core.version.reset" = ["0"]
 
 [classic]
 
@@ -576,10 +581,10 @@ loupe = "m"
 "plugin.darktable.open_folder" = ["r d"]
 "plugin.rawtherapee.open_folder" = ["r t"]
 "plugin.art.open_folder" = ["r a"]
-"plugin.darktable.compute_palettes" = []
-"plugin.rapidraw.compute_palettes" = []
-"plugin.rawtherapee.compute_palettes" = []
-"plugin.art.compute_palettes" = []
+"plugin.darktable.compute_colours" = []
+"plugin.rapidraw.compute_colours" = []
+"plugin.rawtherapee.compute_colours" = []
+"plugin.art.compute_colours" = []
 # i: the histogram. s: the scale (EV / linear); c: the next channel; r, g, b, a, l:
 # red, green, blue, all, luminance.
 "core.view.histogram_scale" = ["i s"]
@@ -590,6 +595,18 @@ loupe = "m"
 "core.histogram.all" = ["i a"]
 "core.histogram.luminance" = ["i l"]
 "core.histogram.after" = ["i e"]
+# c: the colours in large. 0 to 8: the number of colours (0 the image, 1 its average);
+# p: perceived colours or not. The view opens if it is closed.
+"core.colours.step.0" = ["c 0"]
+"core.colours.step.1" = ["c 1"]
+"core.colours.step.2" = ["c 2"]
+"core.colours.step.3" = ["c 3"]
+"core.colours.step.4" = ["c 4"]
+"core.colours.step.5" = ["c 5"]
+"core.colours.step.6" = ["c 6"]
+"core.colours.step.7" = ["c 7"]
+"core.colours.step.8" = ["c 8"]
+"core.colours.perceived" = ["c p"]
 # p: the sharpness map. c: its colour; j / k (or Down / Up): more lenient / stricter.
 # z then a number, without Enter: the full-screen zoom (same rules as m below); z again
 # (before any digit): 100 %; / (fit, as without the leader): fitted.
@@ -617,5 +634,6 @@ loupe = "m"
 "y" = "copy"
 "d" = "delete"
 "<leader> i" = "histogram"
+"<leader> c" = "colours"
 "<leader> p" = "peaking"
 "<leader> r" = "render"

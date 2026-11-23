@@ -148,16 +148,21 @@ struct Args {
     metadata: bool,
     sharpness: bool,
     groups: bool,
-    /// Palettes de couleurs (`--palette`), de la source `--source` (#492).
+    /// Palettes de couleurs (`--colours`), de la source `--source` (#492).
     palette: bool,
     palette_source: Option<tri::palette::SourceKind>,
-    /// « Contient ces couleurs » (`--colours "#rrggbb,#rrggbb"`, #492), et
+    /// « Contient ces couleurs » (`--find "#rrggbb,#rrggbb"`, #492), et
     /// `--hierarchical`.
     colours: Vec<[u8; 3]>,
     hierarchical: bool,
     /// `--mean` : la couleur moyenne de chaque image comparée à la première couleur.
     mean: bool,
-    /// Calculs choisis (`--compute previews,palette-raw…`, #555), et `--recreate`.
+    /// `--posterize K` : chaque image en K couleurs (vue par palette, #492), écrite dans
+    /// `--to`.
+    posterize: Option<usize>,
+    /// `--perceived` : avec `--posterize`, en couleurs perçues (expérience).
+    perceived: bool,
+    /// Calculs choisis (`--compute previews,colours-raw…`, #555), et `--recreate`.
     compute: Vec<tri::compute::Kind>,
     recreate: bool,
     threshold: Option<f32>,
@@ -491,8 +496,8 @@ fn parse() -> AnyResult<Args> {
             "--metadata" => args.metadata = true,
             "--sharpness" => args.sharpness = true,
             "--groups" => args.groups = true,
-            "--palette" => args.palette = true,
-            "--colours" => {
+            "--colours" => args.palette = true,
+            "--find" => {
                 let text = value()?;
                 for part in text.split(',').filter(|p| !p.trim().is_empty()) {
                     let rgb = tri::palette::parse_hex(part.trim())
@@ -502,6 +507,8 @@ fn parse() -> AnyResult<Args> {
             }
             "--hierarchical" => args.hierarchical = true,
             "--mean" => args.mean = true,
+            "--posterize" => args.posterize = Some(value()?.parse()?),
+            "--perceived" => args.perceived = true,
             "--compute" => {
                 let text = value()?;
                 for part in text.split(',').filter(|p| !p.trim().is_empty()) {
@@ -1066,6 +1073,7 @@ fn palettes(
     files: &[tri::media::MediaFile],
     kind: tri::palette::SourceKind,
     query: Option<&tri::palette::ColourQuery>,
+    posterize: Option<(usize, PathBuf, bool)>,
 ) -> AnyResult<()> {
     let mut found: Vec<(String, tri::palette::Palette)> = Vec::new();
     use tri::scheduler::Producer;
@@ -1094,6 +1102,30 @@ fn palettes(
             });
         match read {
             Ok(p) => {
+                // Vue par palette (#492) : l'image d'où vient la palette, en K couleurs,
+                // écrite en sRGB (`NOM-pK.jpg`).
+                if let Some((k, to, perceived)) = &posterize
+                    && let Ok(key) =
+                        tri::preview::key(file, tri::preview::palette_input(source), &preview)
+                    && let Some(image) = cache.get(&key)
+                {
+                    let (out, swatches) =
+                        tri::palette::posterize_with(&image, *k, &settings.palette, *perceived);
+                    let srgb: std::collections::HashMap<[u8; 3], [u8; 3]> =
+                        swatches.iter().map(|s| (s.working(), s.srgb())).collect();
+                    let mut out = out;
+                    for px in out.data.as_chunks_mut::<3>().0 {
+                        if let Some(c) = srgb.get(px) {
+                            *px = *c;
+                        }
+                    }
+                    let stem = file.path.file_stem().unwrap_or_default().to_string_lossy();
+                    let suffix = if *perceived { "v" } else { "" };
+                    let path = to.join(format!("{stem}-p{k}{suffix}.jpg"));
+                    let bytes = tri::jpeg::encode(&out, 92, tri::jpeg::Chroma::Full)?;
+                    std::fs::create_dir_all(to)?;
+                    std::fs::write(&path, bytes)?;
+                }
                 if query.is_some() {
                     found.push((name.to_string(), p.clone()));
                 }
@@ -2332,11 +2364,19 @@ fn run() -> AnyResult<()> {
             widen: settings.palette.colour_widen,
             mean: args.mean.then_some(settings.palette.mean_lightness),
         });
+        let posterize = args.posterize.map(|k| {
+            (
+                k,
+                args.to.clone().unwrap_or_else(|| ".".into()),
+                args.perceived,
+            )
+        });
         return palettes(
             &settings,
             &files,
             args.palette_source.unwrap_or_default(),
             query.as_ref(),
+            posterize,
         );
     }
     if let Some(target) = args.convert {

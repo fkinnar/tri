@@ -162,7 +162,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     indifférentes, `f p` acceptées, `f u` sans les rejetées, `f x` rejetées (la même
     séquence retire le filtre), `f 6`…`f 9`, `f °`, `f ,`, `f .` couleurs (ajouter / retirer),
     `f d` tout effacer (Échap ne fait que fermer le menu). Aussi après le leader
-    (`<leader> f 3`) : son menu les range sous « f ». Chiffres et lettres avec ou sans Maj.
+    (`<leader> f 3`) : son menu les range sous « f ». Chiffres : le caractère tapé.
   - Souris : **barre de filtres** en haut de la grille (`Maj+F` l'affiche ou la masque,
     `[gui] filter_bar`) : chaque clic déclenche la même action que le clavier (recliquer
     l'étoile active efface le filtre d'étoiles). Des filtres plus complexes (fenêtre ou
@@ -220,7 +220,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `gui/src/position_bar.rs` (`Position::layout`, `split`), segments par
   `Stacks::photos_per_group` (développements comptés avec leur photo). Épaisseur
   `thickness`.
-- **Palette de couleurs** (#492, 21/11/2026). Section « Palette » du panneau de droite,
+- **Palette de couleurs** (#492, 21/11/2026). Section « Couleurs » du panneau de droite,
   en grille et en plein écran, en bas du panneau : surtout pour voir. La **source** : « Comme la
   grille », coché par défaut, suit le rendu des vignettes (JPEG boîtier, couverture : le
   rendu de chaque développement et le JPEG boîtier des photos sans développement,
@@ -241,11 +241,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Recherches de palettes** (section Filtre, sous les autres filtres, même forme : case,
   icône, nom ; et dans la barre des filtres du haut, avec les autres ; grisées sans source ;
   retours du 21/11/2026). Seuil et tolérance retenus par dossier comme les autres curseurs
-  (`tri::palette::folder_threshold` / `folder_radius`, écrits au lâcher du curseur). **Palettes proches** (une
-  cible, action `core.filter.palette`) : la grille ne garde que les images dont la palette
+  (`tri::palette::folder_threshold` / `folder_radius`, écrits au lâcher du curseur). **Couleurs proches** (une
+  cible, action `core.filter.similar_colours`) : la grille ne garde que les images dont la palette
   est à moins du seuil de celle de l'image (curseur dessous, double-clic : valeur de
-  départ, `[palette] similar_threshold` / `similar_max`), de la plus proche à la moins
-  proche. **Couleur** (icône pipette, action `core.filter.palette_colour` : cochée, la dernière
+  départ, `[colours] similar_threshold` / `similar_max`), de la plus proche à la moins
+  proche. **Couleur** (icône pipette, action `core.filter.colour` : cochée, la dernière
   couleur cherchée, sinon la boîte de choix). À droite du nom, la **pastille** de la
   couleur : un clic ouvre la boîte de choix (retour du 21/11/2026) — roue TSV (teinte en
   angle, saturation au rayon, à la valeur en cours ; la clarté d'OKLab, essayée, ne parlait
@@ -254,7 +254,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (sur une vignette ou l'image en plein écran, la couleur moyenne d'une petite zone de
   l'image d'où la palette est tirée, lue en fond ; ailleurs, le pixel de la capture de la
   fenêtre), puis la boîte revient ; sur une image, un **collimateur** montre la zone
-  moyennée (`[palette] pick_area`, 2 % du grand côté), et la loupe (`m` maintenue)
+  moyennée (`[colours] pick_area`, 2 % du grand côté), et la loupe (`m` maintenue)
   l'agrandit pour viser juste (idée de l'utilisateur, 21/11/2026) ; « Valider » garde la recherche.
   **Plusieurs couleurs** (#492, idée de l'utilisateur, 23/11/2026) : en haut de la boîte,
   les couleurs cherchées, en pastilles comme les autres (`[gui.colour_search] max`
@@ -311,11 +311,37 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   de la boîte (retours du 23/11/2026) : la **tolérance**, le même curseur que celui du
   panneau (retenue par dossier, double-clic : valeur de départ), et le **nombre de photos**
   trouvées par l'aperçu en direct. En hiérarchique, la tolérance **s'élargit de rang en
-  rang** (`[palette] colour_widen`, 0,25 : la deuxième couleur ×1,25, la troisième ×1,5…) :
-  la première couleur plus précise que la dernière. **Chercher ces couleurs** (section
-  Palette, sous la palette de la photo) : ses couleurs principales (les plus présentes, sans
+  rang** (`[colours] colour_widen`, 0,25 : la deuxième couleur ×1,25, la troisième ×1,5…) :
+  la première couleur plus précise que la dernière. **Chercher ces couleurs** (les
+  jumelles à droite de la source, section Couleurs, depuis le 24/11/2026 ; un bouton sous
+  la palette avant) : celles du cran affiché, ses couleurs principales (les plus présentes, sans
   les miettes sous `colour_min_share`, au plus `max`) dans la boîte, cherchées tout de
-  suite, à ajuster ; « Annuler » rend la recherche d'avant. **Clavier** (retour du
+  suite, à ajuster ; « Annuler » rend la recherche d'avant. **Couleurs en grand** (à côté,
+  action `core.view.colours`, `g c`, comme `g i` pour le grand histogramme depuis le
+  23/11/2026 (`Maj+I` jusque-là ; dedans, `g` reste le canal vert, Échap le ferme) ; `<leader> c 0`…`8` choisit le cran (0 l'image, 1 la moyenne), `<leader> c p` les couleurs perçues (actions `core.colours.step.N`, `core.colours.perceived`) : la palette du **panneau** suit aussi, sans ouvrir la boîte (cran rappelé sous la source ; au cran 0 sans couleurs perçues, la palette du dossier ; `palette_step`, même calcul en fond que la boîte ; en attendant un cran, celui d'avant reste, de la même photo ou, en changeant de photo, au même nombre de couleurs, plutôt que la palette du dossier ; crans gardés, `[gui.colours_view] cache`). À droite du sous-titre « Source » (idée de l'utilisateur, 24/11/2026) : un **œil** (couleurs perçues) ou **quatre pixels** (couleurs mesurées, celles du fichier), un clic bascule ; des **jumelles** ouvrent la boîte de recherche des couleurs (`palette_source_icons`, `marks::pixels`, `marks::binoculars`) ; un clic sur la bande ou la roue de la palette du
+  panneau l'ouvre aussi, comme l'histogramme ; idée de l'utilisateur du 23/11/2026) : une boîte déplaçable
+  comme le grand histogramme, pour voir les **rapports de masses** de la photo en
+  surbrillance (l'image d'où vient sa palette) ; à droite de l'image (retour du
+  23/11/2026 : dessous, la boîte était déséquilibrée), un curseur à crans : 0
+  l'image telle quelle, 1 sa couleur moyenne (la dominante), n l'image en n couleurs (chaque
+  pixel remplacé par la plus proche, `palette::posterize`), jusqu'à `[gui.colours_view]
+  max` (8) ; **fausses couleurs** au choix (`false_colours`, la plus présente d'abord, avec
+  leur légende face aux vraies) ; à droite, la palette du cran (un clic sur une couleur la
+  ferme et ouvre la boîte des couleurs sur elle, sans chercher encore ; la main seulement
+  sur ce qui se clique). Dans le panneau aussi, une couleur de la liste ouvre la boîte
+  des couleurs plutôt que de filtrer (retours du 23/11/2026 : la couleurs en grand restait
+  ouverte sur une grille vide). **Couleurs perçues** (expérience du 23/11/2026, idée de l'utilisateur : sous
+  une lumière violette, un visage beige rosé paraît orange) : les couleurs adaptées à la
+  lumière de leur entourage, les zones qui tranchent pesant plus
+  (`palette::posterize_with`, réglages `[colours] perceived_*`) ; au cran 0, l'image
+  « telle que vue », avec la palette perçue du cran `[colours] colors` (6), saturation
+  comprise, l'image restant intacte (retour du 23/11/2026 : les deux différaient). Ni le cache ni la recherche n'en tiennent compte (à décider à
+  l'usage). Calculé en fond, à la demande ; changer d'image (flèches) la suit, Échap la
+  ferme. Son titre, comme celui du grand histogramme, nomme un développement par sa photo
+  et son logiciel, « DSCF6228 (Darktable) » (`image_title`). La boîte des couleurs ouverte
+  sur des couleurs (cliquées dans une palette, ou la recherche d'avant) les cherche tout
+  de suite, en grille même depuis le plein écran ; « Annuler » ramène d'où l'on vient
+  (plein écran sur la même photo, couleurs en grand). Capture : `TRI_GUI_ACTIONS=core.view.colours,palette_k:4f`. **Clavier** (retour du
   23/11/2026 : la boîte ne se pilotait qu'à la souris, et derrière elle les flèches
   déplaçaient la sélection) : la grille ne reçoit plus rien tant que la boîte est ouverte ;
   hors saisie dans un champ, `1`–`5` choisissent une couleur (un vide : plus rien de
@@ -328,7 +354,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   bulles des boutons. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
   couleur serait ingérable). À droite, **Absolue** (toutes comptent pareil : la moyenne des
   distances) ou **Hiérarchique** (la première compte le plus, chaque suivante
-  `[palette] colour_hierarchy` fois la précédente, d'après sa présence dans l'image, la
+  `[colours] colour_hierarchy` fois la précédente, d'après sa présence dans l'image, la
   proximité départageant : l'image où la première couleur occupe le plus de place passe
   devant ; deux recherches aux mêmes couleurs dans un autre ordre gardent les mêmes images,
   dans un autre ordre ; un ordre exigé des
@@ -336,7 +362,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `[gui.colour_search] mode`. Troisième mode, **Moyenne** (idée de l'utilisateur,
   23/11/2026) : la couleur moyenne de chaque image (celles de sa palette, pondérées par leur
   part) comparée à la première couleur, la teinte et la saturation surtout (clarté comptée
-  `[palette] mean_lightness` fois) : les photos à dominante de cette couleur, pas celles
+  `[colours] mean_lightness` fois) : les photos à dominante de cette couleur, pas celles
   qui en ont un peu (une photo bleue avec un peu de peau sort d'une recherche de la peau,
   pas d'une recherche de la peau en moyenne) ; une photo bicolore a une moyenne grise et
   ne sort qu'en recherche ordinaire. Les autres emplacements sont cachés (retour du
@@ -353,7 +379,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   écrites dans la configuration) ; un clic sur une pastille pleine la prend pour la
   couleur réglée. La pastille du filtre montre les couleurs côte à côte. Capture :
   `TRI_GUI_ACTIONS=colour_dialog:#d03020 #2050c0`. Ou un clic sur une couleur
-  de la section Palette : les images dont une couleur de la palette est assez proche, la plus
+  de la section Couleurs : les images dont une couleur de la palette est assez proche, la plus
   proche d'abord (un seul curseur, la tolérance, `colour_radius` / `colour_radius_max` ;
   miettes sous `colour_min_share` ignorées). Règles communes : une recherche à la fois ;
   celles pas encore calculées restent, à la fin (sinon le calcul en fond, qui ne voit que
@@ -366,7 +392,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   sépia, retour du 21/11/2026). Selon la couleur cherchée (22/11/2026) : **grise**, le noir et
   blanc pur seulement (`Palette::is_grey`) ; **peu saturée** (chroma entre `mono_chroma`
   et `mono_toned_chroma` : peau, beige, sépia), tout sauf lui (c'est ce que contient une
-  image teintée) ; **saturée**, ni noir et blanc ni teintées. Palettes proches :
+  image teintée) ; **saturée**, ni noir et blanc ni teintées. Couleurs proches :
   le noir et blanc pur d'un côté, le reste de l'autre (la distance départage teintées et
   couleur). Lancée du plein écran, une
   recherche montre ses résultats en grille ; le haut du panneau ne bouge pas, même sans
@@ -1354,7 +1380,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`all_photos_from`). **`g a`** (`core.view.all_photos`) bascule : y va, et de là
   ramène au dossier (retour du 22/11/2026 : plutôt que des variantes « partout » de
   chaque filtre). Les filtres restent posés en changeant de dossier : un filtre posé ici
-  (`f l` palettes proches, `f o` couleur, `f m` semblables) cherche ensuite partout, la
+  (`f l` couleurs proches, `f o` couleur, `f m` semblables) cherche ensuite partout, la
   photo de référence relue dans la source de là-bas. **Montrer dans son dossier**
   (`core.file.show_in_folder`, `g f`, icône dossier et cible dans la boîte du clic
   droit, seulement depuis « Toutes les photos ») : le vrai dossier de l'image, elle en
@@ -1362,7 +1388,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`core.file.locate`, `g l`, icône dossier et loupe) : photos d'un dossier
   injoignable grisées, recherche et réparation décrites dans `index.md`
   (`TriApp::locate`, boîte `locate_dialog.rs`).
-  **Photo de référence** (retour du 22/11/2026), commune à « palettes proches » et à
+  **Photo de référence** (retour du 22/11/2026), commune à « couleurs proches » et à
   « semblables » (`TriApp::reference`) : dans la section Filtres, « Couleur » d'abord,
   puis ces deux filtres, la référence à leur droite (`reference_box` : son imagette, ou
   un cadre vide ; elle tient sur les deux lignes, surbrillance comprise, `[gui.grid]
@@ -1896,13 +1922,17 @@ Notation, commune aux deux profils (17/10/2026, pensée aussi pour l'AZERTY) :
 
 | Action | Touches |
 |---|---|
-| `core.rate.star.0` … `core.rate.star.5` | 0 … 5, avec ou sans Maj |
-| `core.rate.color.red` / `yellow` / `green` / `blue` | 6 / 7 / 8 / 9, avec ou sans Maj |
+| `core.rate.star.0` … `core.rate.star.5` | 0 … 5 (le caractère, d'où qu'il vienne) |
+| `core.rate.color.red` / `yellow` / `green` / `blue` | 6 / 7 / 8 / 9 (idem) |
 | `core.rate.color.purple` | ° / , / . |
 | `core.flag.accept` / `reject` / `none` | Maj+P / Maj+X / Maj+U |
 
-Pourquoi : sur l'AZERTY, les chiffres de la rangée du haut demandent Maj, ceux du pavé
-numérique non ; egui-winit traduit la touche *logique* et, s'il ne la connaît pas (« & »,
+Depuis le 23/11/2026 (retour de l'utilisateur), un chiffre de `keys.toml` est le
+**caractère** tapé, comme `+ - * /` : rangée du haut (Maj en AZERTY, sans en QWERTY) ou
+pavé numérique, sans les doublons `Maj+3` d'avant, qui ne valaient qu'en AZERTY (en
+QWERTY, Maj+3 tape « # ») ; `f 3`, `c 3` (couleurs en grand) aussi. La touche suivie de
+son caractère lié est laissée de côté (`chords_repeated`). Historique : sur l'AZERTY, les
+chiffres de la rangée du haut demandent Maj, ceux du pavé numérique non ; egui-winit traduit la touche *logique* et, s'il ne la connaît pas (« & »,
 « é »), la touche *physique* : les deux donnent `Num1`… Exception : le 6 non majuscule de
 l'AZERTY est « - », reconnu comme `Minus`, d'où Maj sur la rangée du haut. Le violet est sur
 « ° » (Maj + la touche à droite du 0 en AZERTY), qu'egui ne nomme pas : c'est un
@@ -2226,14 +2256,14 @@ photos nettes.
   une image pas encore analysée reste ; grille refiltrée quand les histogrammes sont
   finis, et depuis le 25/10/2026 au fil du calcul, au plus toutes les `[gui]
   analysis_refilter_ms` (5 s), netteté comprise ; depuis le 22/11/2026, les filtres d'une analyse
-  en cours — netteté, exposition, palettes proches, couleur — et « Empiler
+  en cours — netteté, exposition, couleurs proches, couleur — et « Empiler
   automatiquement » (empreintes, palettes empilées par palette) sont **grisés** jusqu'à la
   fin du calcul, la bulle dit où il en est ; allumés, ils s'éteignent toujours,
   `TriApp::action_unusable`. **Analyses à la demande ou retirées** (`[analysis]`, #564) :
   « à la demande », rien n'est calculé en fond, l'outil reste grisé tant qu'une image du
   dossier manque au cache (`TriApp::analysis_missing`, compté par `Event::Missing`) et se
   dégrise après « Calculer » sur le dossier ; « retirée », l'outil disparaît des barres, du
-  panneau (section Palette, piles, choix « par palette »), des menus « Calculer », de
+  panneau (section Couleurs, piles, choix « par palette »), des menus « Calculer », de
   l'aide, de `?`, de `:` et du clavier (`Action::tool`, `Action::available` ; outils
   retirés propres au fil de l'interface, `actions::set_removed_tools`). Exposition
   retirée : l'histogramme, le grand histogramme et les zones aussi (retour du

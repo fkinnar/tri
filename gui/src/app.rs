@@ -666,6 +666,13 @@ struct ColourLive {
     like: Option<PaletteLike>,
     similar: Option<SimilarSearch>,
     similar_wanted: bool,
+    /// Ouverte depuis le plein écran : « Annuler » y ramène (la recherche passe en grille).
+    from_view: bool,
+    /// La photo en surbrillance à l'ouverture : elle le reste dans le premier résultat si
+    /// elle en est, et « Annuler » y revient (retour du 23/11/2026).
+    origin: Option<PathBuf>,
+    /// Ouverte depuis la palette en grand : « Annuler » la rouvre.
+    from_palette_view: bool,
     /// Une recherche a été appliquée depuis l'ouverture (sinon, rien à rendre).
     changed: bool,
     applied: Vec<[f32; 3]>,
@@ -747,6 +754,28 @@ struct ColourKeys {
     /// Tolérance à ajouter (négatif : à retirer).
     radius: f32,
     ok: bool,
+}
+
+/// Ce que montre la palette en grand : l'image, la source, le cran, les fausses couleurs.
+type PaletteViewKey = (PathBuf, tri::palette::Source, usize, bool, bool);
+
+/// L'image de la palette en grand, prête pour l'écran, et ses couleurs.
+type PaletteViewImage = (egui::ColorImage, Vec<tri::palette::Swatch>);
+
+/// La palette en grand, montrée.
+#[derive(Clone)]
+struct PaletteViewShown {
+    key: PaletteViewKey,
+    texture: TextureHandle,
+    swatches: Vec<tri::palette::Swatch>,
+}
+
+/// Un clic dans le détail d'une palette (roue, liste) : rien, la palette en grand (roue du
+/// panneau), ou une couleur (sa pastille ; la boîte des couleurs s'ouvre sur elle).
+enum DetailClick {
+    None,
+    Open,
+    Colour([f32; 3]),
 }
 
 /// Taille d'une pastille de la boîte des couleurs.
@@ -1630,6 +1659,20 @@ pub struct TriApp {
     histogram: bool,
     /// Grand histogramme, en boîte modale au milieu de l'écran.
     histogram_large: bool,
+    /// La palette en grand (#492), ouverte.
+    palette_view: bool,
+    /// Son cran : 0 l'image, 1 sa moyenne, n : n couleurs (gardé d'une image à l'autre).
+    palette_view_k: usize,
+    /// Fausses couleurs (`[gui.colours_view] false_colours`).
+    palette_view_false: bool,
+    /// Couleurs perçues (adaptées à la lumière de l'entourage ; expérience).
+    palette_view_perceived: bool,
+    /// Ce qu'elle montre, et ce qui se calcule en fond.
+    palette_view_shown: Option<PaletteViewShown>,
+    /// Crans déjà calculés, le plus récent à la fin (`[gui.colours_view] cache`) : revenir à
+    /// un cran (couleurs perçues surtout, plus lentes) ne le recalcule pas.
+    palette_view_cache: Vec<PaletteViewShown>,
+    palette_view_rx: Option<(PaletteViewKey, mpsc::Receiver<Option<PaletteViewImage>>)>,
     /// Grand histogramme : photo d'analyse affichée à sa droite (`p`).
     histogram_photo: bool,
     /// Courbe du JPEG boîtier d'un RAW sur l'histogramme (`j` en grand, retenue).
@@ -2187,6 +2230,20 @@ pub fn development_label(path: &Path) -> String {
             }
         }
         None => tri::media::display_stem(path),
+    }
+}
+
+/// Titre d'une boîte sur une image (palette et histogramme en grand) : un développement
+/// par sa photo et son logiciel, « DSCF6228 (darktable) » (retour du 23/11/2026 :
+/// « DSCF6228@dt.RAF » ne parlait pas) ; sinon le nom du fichier.
+fn image_title(path: &Path) -> String {
+    match tri::developments::get(path) {
+        Some(d) => format!(
+            "{} ({})",
+            tri::media::display_stem(&d.photo),
+            development_label(path)
+        ),
+        None => file_name(path),
     }
 }
 
@@ -2751,6 +2808,13 @@ impl TriApp {
             meta: None,
             histogram: gui.histogram.visible,
             histogram_large: false,
+            palette_view: false,
+            palette_view_k: 0,
+            palette_view_false: false,
+            palette_view_perceived: false,
+            palette_view_shown: None,
+            palette_view_cache: Vec::new(),
+            palette_view_rx: None,
             histogram_photo: gui.histogram.analysis,
             histogram_camera: gui.histogram.camera_jpeg,
             engines_blocked: Default::default(),
@@ -5896,16 +5960,40 @@ impl TriApp {
     /// Montre la boîte des couleurs `dialog`, la recherche en cours retenue pour
     /// « Annuler » (aperçu en direct).
     fn show_colour_dialog(&mut self, dialog: ColourDialog) {
+        let from_view = self.mode == Mode::View;
+        let origin = self.files.get(self.selected).map(|f| f.path.clone());
         self.colour_live = Some(ColourLive {
             colour: self.palette_colour.clone(),
             last: self.palette_colour_last.clone(),
             like: self.palette_like.clone(),
             similar: self.similar.clone(),
             similar_wanted: self.similar_wanted,
+            from_view,
+            origin: origin.clone(),
+            from_palette_view: false,
             changed: false,
             applied: dialog.colours(),
             at: Instant::now(),
         });
+        // Des couleurs rangées : cherchées tout de suite, la grille filtrée derrière
+        // (retour du 23/11/2026 : on ne voyait pas le résultat) ; depuis le plein écran, en
+        // grille. Déjà cherchées (la recherche en cours) : rien ne bouge.
+        let colours = dialog.colours();
+        let current = self.palette_colour.as_ref().map(|c| &c.colours);
+        if !dialog.slots.is_empty() && current != Some(&colours) {
+            self.set_palette_colours(Some(colours));
+            if let Some(live) = &mut self.colour_live {
+                live.changed = true;
+            }
+            // La photo de départ, si elle est trouvée, reste en surbrillance.
+            if let Some(i) = origin
+                .as_ref()
+                .and_then(|p| self.files.iter().position(|f| &f.path == p))
+            {
+                self.selected = i;
+                self.reveal = Some(Reveal::Minimal);
+            }
+        }
         self.colour_dialog = Some(dialog);
     }
 
@@ -5943,6 +6031,10 @@ impl TriApp {
         let Some(live) = self.colour_live.take() else {
             return;
         };
+        // Venue de la palette en grand : rouverte (retour du 23/11/2026).
+        if live.from_palette_view {
+            self.palette_view = true;
+        }
         if !live.changed {
             return;
         }
@@ -5953,6 +6045,18 @@ impl TriApp {
         self.similar_wanted = live.similar_wanted;
         self.palette_refilter_pending = false;
         self.apply_filter();
+        // La photo de départ ; venue du plein écran, on y retourne, sur elle.
+        if let Some(i) = live
+            .origin
+            .as_ref()
+            .and_then(|p| self.files.iter().position(|f| &f.path == p))
+        {
+            self.selected = i;
+            self.reveal = Some(Reveal::Minimal);
+            if live.from_view && self.mode != Mode::View {
+                self.open_view();
+            }
+        }
     }
 
     /// Boîte de choix de la couleur cherchée (#492, retour du 21/11/2026) : la roue
@@ -7021,6 +7125,73 @@ impl TriApp {
         (targets, main)
     }
 
+    /// À droite du sous-titre « Source » des couleurs (idée de l'utilisateur, 24/11/2026) :
+    /// l'œil des couleurs perçues ou les pixels des couleurs mesurées (un clic bascule,
+    /// comme `<leader> c p`), puis les jumelles de la boîte de recherche des couleurs.
+    fn palette_source_icons(&mut self, ui: &mut Ui, heading: Rect) {
+        let size = ui.spacing().interact_size.y * 0.8;
+        let gap = 6.0;
+        // De la marge pour l'ascenseur du panneau, qui cachait les jumelles (24/11/2026).
+        let right = ui.max_rect().right() - ui.spacing().scroll.bar_width - gap;
+        let at = |n: f32| {
+            Rect::from_min_size(
+                pos2(
+                    right - n * (size + gap) + gap,
+                    heading.center().y - size / 2.0,
+                ),
+                vec2(size, size),
+            )
+        };
+        let color = ui.visuals().widgets.inactive.fg_stroke.color;
+        let perceived = self.palette_view_perceived;
+        let tip = if perceived {
+            t!("palette-view-perceived")
+        } else {
+            t!("palette-measured")
+        };
+        let toggle = ui
+            .scope_builder(egui::UiBuilder::new().max_rect(at(2.0)), |ui| {
+                let (rect, r) = marks::clickable_named(ui, size, &t!("palette-perceived"), &tip);
+                if perceived {
+                    marks::eye(ui.painter(), rect, color);
+                } else {
+                    marks::pixels(ui.painter(), rect, color);
+                }
+                r
+            })
+            .inner;
+        if toggle.clicked() {
+            self.palette_view_perceived = !perceived;
+        }
+        let search = ui
+            .scope_builder(egui::UiBuilder::new().max_rect(at(1.0)), |ui| {
+                let (rect, r) = marks::clickable_named(
+                    ui,
+                    size,
+                    &t!("palette-search-open"),
+                    &t!("palette-search-open"),
+                );
+                marks::binoculars(ui.painter(), rect, color);
+                r
+            })
+            .inner;
+        // Partir de cette photo (idée du 23/11/2026) : ses couleurs principales (celles du
+        // cran affiché) dans la boîte, cherchées tout de suite, à ajuster ; sans palette, la
+        // boîte telle quelle.
+        if search.clicked() {
+            let ctx = ui.ctx().clone();
+            let palette = self.palette_step(&ctx).map(|(_, p)| p).or_else(|| {
+                let kind = self.palette_source?;
+                let (_, main) = self.palette_targets(kind, self.selected);
+                self.palette_of(main)
+            });
+            match palette.filter(|p| !p.swatches.is_empty()) {
+                Some(p) => self.search_palette_colours(&p),
+                None => self.open_colour_dialog(),
+            }
+        }
+    }
+
     /// Section « Palette » du panneau de droite (#492) : la source, puis la palette de
     /// l'image sélectionnée (bande des couleurs, roue chromatique, couleurs et parts).
     fn palette_section(&mut self, ui: &mut Ui) {
@@ -7040,7 +7211,8 @@ impl TriApp {
         };
         // Sous-titre, « Comme la grille » (coché par défaut, retour du 21/11/2026), puis,
         // décoché, la liste pointable.
-        self.subheading(ui, t!("palette-source"));
+        let heading = self.subheading(ui, t!("palette-source"));
+        self.palette_source_icons(ui, heading.rect);
         let mut follow = self.palette_follow_grid;
         if self
             .side_checkbox(ui, &mut follow, t!("palette-follow-grid"))
@@ -7134,7 +7306,8 @@ impl TriApp {
                         ui.add_space(4.0);
                     }
                 }
-                self.palette_detail(ui, &main);
+                let click = self.palette_detail(ui, &main, true);
+                self.palette_detail_click(ui.ctx(), click);
             }
             return;
         }
@@ -7142,10 +7315,29 @@ impl TriApp {
             ui.weak(t!("palette-no-render"));
             return;
         }
+        // Un cran choisi au clavier (`<leader> c N`) ou les couleurs perçues : la palette
+        // de ce cran à la place de celle de la photo (retour du 23/11/2026).
+        let step = self.palette_step(ui.ctx());
+        if let (Some((_, p)), Some(main)) = (&step, &main_palette) {
+            for (_, row) in rows.iter_mut() {
+                if matches!(row, Row::Palette(r) if Arc::ptr_eq(r, main)) {
+                    *row = Row::Palette(p.clone());
+                }
+            }
+            main_palette = Some(p.clone());
+        }
         let several = rows.len() > 1;
         // De l'air sous la source, comme entre les autres réglages du panneau.
         ui.add_space(self.gui.dialogs.spacing);
-        let mut picked = None;
+        // Le cran choisi (les couleurs perçues : l'icône à côté de la source).
+        if self.palette_view_k > 0 {
+            ui.weak(match self.palette_view_k {
+                1 => t!("palette-view-mean"),
+                n => t!("palette-view-colours", n = n),
+            });
+        }
+        let mut open_view = false;
+        let mut colour_box = None;
         let mut shown: Vec<(Option<String>, Arc<Palette>)> = Vec::new();
         for (label, row) in rows {
             if let Some(label) = &label {
@@ -7162,8 +7354,10 @@ impl TriApp {
             }
             match row {
                 Row::Palette(p) => {
-                    if let Some(c) = self.palette_band(ui, &p) {
-                        picked = Some(c);
+                    // Un clic sur la bande : la palette en grand (retour du 23/11/2026, comme
+                    // l'histogramme).
+                    if self.palette_band(ui, &p).is_some() {
+                        open_view = true;
                     }
                     shown.push((label, p));
                 }
@@ -7181,29 +7375,20 @@ impl TriApp {
                 ui.add_space(4.0);
             }
         }
-        let mut these = None;
         if let Some(palette) = main_palette {
             self.palette_last = Some((shown, palette.clone()));
-            if let Some(c) = self.palette_detail(ui, &palette) {
-                picked = Some(c);
-            }
-            // Partir de cette photo (idée du 23/11/2026) : ses couleurs principales dans la
-            // boîte, cherchées tout de suite, à ajuster.
-            ui.add_space(4.0);
-            if ui
-                .button(t!("palette-search-these"))
-                .on_hover_text(t!("palette-search-these-tip"))
-                .clicked()
-            {
-                these = Some(palette);
+            match self.palette_detail(ui, &palette, true) {
+                DetailClick::Open => open_view = true,
+                DetailClick::Colour(c) => colour_box = Some(c),
+                DetailClick::None => {}
             }
         }
-        // La couleur cliquée : cherchée tout à la fin (la recherche refiltre la liste).
-        if picked.is_some() {
-            self.set_palette_colour(picked);
+        if let Some(c) = colour_box {
+            self.show_colour_dialog(ColourDialog::new(&[c]));
         }
-        if let Some(palette) = these {
-            self.search_palette_colours(&palette);
+        if open_view {
+            let ctx = ui.ctx().clone();
+            self.perform(&ctx, Action::PaletteView);
         }
     }
 
@@ -7222,21 +7407,17 @@ impl TriApp {
         if colours.is_empty() {
             return;
         }
+        // La boîte, sur elles, les cherche tout de suite.
         self.show_colour_dialog(ColourDialog::new(&colours));
-        self.set_palette_colours(Some(colours.clone()));
-        if let Some(live) = &mut self.colour_live {
-            live.applied = colours;
-            live.changed = true;
-            live.at = Instant::now();
-        }
     }
 
     /// Roue chromatique et liste des couleurs d'une palette : un clic sur un point de la
     /// roue ou une pastille de la liste cherche cette couleur (renvoyée), un clic sur un
     /// `#rrggbb` le copie.
-    fn palette_detail(&self, ui: &mut Ui, palette: &Palette) -> Option<[f32; 3]> {
+    fn palette_detail(&self, ui: &mut Ui, palette: &Palette, panel: bool) -> DetailClick {
         let width = ui.available_width();
         let mut picked = None;
+        let mut open = false;
         let tip = |s: &tri::palette::Swatch| {
             t!(
                 "palette-swatch-tip",
@@ -7256,7 +7437,18 @@ impl TriApp {
             );
             // Le point de la roue sous le pointeur.
             let radius = wheel.width().min(wheel.height()) / 2.0 - 6.0;
-            if let Some(pos) = response.hover_pos()
+            let hover = response.hover_pos();
+            // Dans le panneau, toute la roue ouvre la palette en grand (retour du
+            // 23/11/2026, comme la bande et l'histogramme).
+            if panel {
+                if response
+                    .on_hover_cursor(egui::CursorIcon::PointingHand)
+                    .on_hover_text(t!("palette-open-tip"))
+                    .clicked()
+                {
+                    open = true;
+                }
+            } else if let Some(pos) = hover
                 && let Some(s) = palette.swatches.iter().min_by(|a, b| {
                     let d = |s: &tri::palette::Swatch| {
                         crate::palette_view::wheel_pos(s, wheel.center(), radius).distance(pos)
@@ -7271,11 +7463,24 @@ impl TriApp {
             {
                 picked = Some(s.oklab);
             }
+            // La main sur les points seulement (retour du 23/11/2026 : dans la palette en
+            // grand, elle s'affichait sur toute la roue, perturbant).
+            if let Some(pos) = hover.filter(|_| !panel)
+                && !palette.swatches.iter().any(|s| {
+                    crate::palette_view::wheel_pos(s, wheel.center(), radius).distance(pos) < 12.0
+                })
+            {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Default);
+            }
             ui.vertical(|ui| {
                 for swatch in &palette.swatches {
                     ui.horizontal(|ui| {
                         let (dot, dot_response) =
                             ui.allocate_exact_size(vec2(12.0, 12.0), Sense::click());
+                        let name = t!("palette-dot", hex = crate::palette_view::hex(swatch));
+                        dot_response.widget_info(|| {
+                            egui::WidgetInfo::labeled(egui::Role::Button, true, name.clone())
+                        });
                         ui.painter()
                             .rect_filled(dot, 2.0, crate::palette_view::color(swatch));
                         if dot_response
@@ -7302,11 +7507,29 @@ impl TriApp {
                 }
             });
         });
-        picked
+        match (open, picked) {
+            (true, _) => DetailClick::Open,
+            (_, Some(c)) => DetailClick::Colour(c),
+            _ => DetailClick::None,
+        }
+    }
+
+    /// Un clic dans le détail d'une palette du panneau (palettes d'avant une recherche
+    /// vide) : la palette en grand, ou la boîte des couleurs sur la couleur cliquée.
+    fn palette_detail_click(&mut self, ctx: &egui::Context, click: DetailClick) {
+        match click {
+            DetailClick::Open => {
+                let ctx = ctx.clone();
+                self.perform(&ctx, Action::PaletteView);
+            }
+            DetailClick::Colour(c) => self.show_colour_dialog(ColourDialog::new(&[c])),
+            DetailClick::None => {}
+        }
     }
 
     /// Bande des couleurs d'une palette, sur toute la largeur : au survol d'une pastille,
-    /// sa couleur et sa part ; un clic la cherche (« contient cette couleur »), renvoyée.
+    /// sa couleur et sa part ; un clic (la couleur cliquée renvoyée) ouvre la palette en
+    /// grand.
     fn palette_band(&self, ui: &mut Ui, palette: &Palette) -> Option<[f32; 3]> {
         let (band, response) = ui.allocate_exact_size(
             vec2(ui.available_width(), crate::palette_view::BAND_HEIGHT),
@@ -7317,27 +7540,13 @@ impl TriApp {
             egui::WidgetInfo::labeled(egui::Role::Button, true, t!("palette-band"))
         });
         let rects = crate::palette_view::draw_band(ui.painter(), band, palette);
-        // La couleur cherchée, entourée.
-        if let Some(c) = &self.palette_colour {
-            for (r, s) in rects.iter().zip(&palette.swatches) {
-                if c.colours
-                    .iter()
-                    .any(|&c| tri::palette::weighted_distance(s.oklab, c, 1.0) < 0.005)
-                {
-                    ui.painter().rect_stroke(
-                        r.shrink(1.0),
-                        0.0,
-                        egui::Stroke::new(2.0, ui.visuals().strong_text_color()),
-                        egui::StrokeKind::Inside,
-                    );
-                }
-            }
-        }
+        // Plus de cadre autour des couleurs cherchées (retour du 24/11/2026) : en partant
+        // des couleurs de la photo (les jumelles), toute la bande s'encadrait.
         let pos = response.hover_pos()?;
         let k = rects.iter().position(|r| r.contains(pos))?;
         let swatch = palette.swatches[k];
         let tip = t!(
-            "palette-swatch-tip",
+            "palette-band-tip",
             hex = crate::palette_view::hex(&swatch),
             share = format!("{:.0}", swatch.share * 100.0)
         );
@@ -13611,6 +13820,12 @@ impl TriApp {
                 }
                 continue;
             }
+            // Palette en grand : Échap (ou sa touche) la ferme ; le reste agit derrière
+            // (changer d'image, noter), elle suit.
+            if self.palette_view && matches!(action, Action::Back | Action::PaletteView) {
+                self.palette_view = false;
+                continue;
+            }
             // Grand histogramme : échelle, fermeture (Échap, même touche).
             // Exposition retirée (#564) : plus de grand histogramme, il ne prend rien.
             if self.histogram_large && !crate::actions::removed(crate::actions::Tool::Exposure) {
@@ -14945,6 +15160,31 @@ impl TriApp {
             Action::ToggleHistogram => self.histogram = !self.histogram,
             Action::HistogramScale => self.histogram_scale = self.histogram_scale.toggled(),
             Action::HistogramLarge => self.histogram_large = !self.histogram_large,
+            // Un cran, les couleurs perçues (`<leader> c 0`…`8`, `<leader> c p`) : la palette
+            // du panneau et celle des couleurs en grand suivent, sans ouvrir la boîte
+            // (retour du 23/11/2026 : la roue du panneau doit changer).
+            Action::ColoursStep(_) | Action::ColoursPerceived => {
+                if self.palette_source.is_none() {
+                    self.notice = Some((t!("palette-choose"), false));
+                } else {
+                    match action {
+                        Action::ColoursStep(n) => {
+                            self.palette_view_k =
+                                usize::from(n).min(self.gui.palette_view.max.clamp(1, 16));
+                        }
+                        _ => self.palette_view_perceived = !self.palette_view_perceived,
+                    }
+                }
+            }
+            Action::PaletteView => {
+                if self.palette_view {
+                    self.palette_view = false;
+                } else if self.palette_source.is_none() {
+                    self.notice = Some((t!("palette-choose"), false));
+                } else {
+                    self.palette_view = true;
+                }
+            }
             // Le grand histogramme s'ouvre au besoin : c'est là que le canal se voit.
             Action::HistogramRed => self.histogram_channel = Some(0),
             Action::HistogramGreen => self.histogram_channel = Some(1),
@@ -21306,6 +21546,334 @@ impl TriApp {
         self.notes_changed();
     }
 
+    /// La palette en grand (#492, idée de l'utilisateur, 23/11/2026) : l'image de la photo
+    /// en surbrillance (celle d'où vient sa palette) en 0 à `max` couleurs (0 : telle
+    /// quelle, 1 : sa couleur moyenne, la dominante ; n : chaque pixel remplacé par la plus
+    /// proche des n couleurs principales), pour voir les rapports de masses ; fausses
+    /// couleurs au choix ; la palette du cran à droite (un clic sur une couleur la
+    /// cherche). Une boîte déplaçable, comme le grand histogramme.
+    fn palette_view_dialog(&mut self, ctx: &egui::Context) {
+        if !self.palette_view || crate::actions::removed(crate::actions::Tool::Palettes) {
+            return;
+        }
+        let wanted = self.palette_view_key();
+        let max = self.gui.palette_view.max.clamp(1, 16);
+        let file = self.files.get(self.selected).cloned();
+        let source = wanted.as_ref().map(|w| w.1);
+        self.palette_view_poll(ctx, wanted.as_ref());
+        // La palette de la photo (cran 0), connue du panneau.
+        let photo_palette = file
+            .as_ref()
+            .zip(source)
+            .and_then(|(f, s)| self.palettes.get(&(f.path.clone(), s)).cloned());
+        let name = file
+            .as_ref()
+            .map(|f| image_title(&f.path))
+            .unwrap_or_default();
+        let side = self.gui.palette_view.side.max(120.0);
+        let mut k = self.palette_view_k;
+        let mut false_colours = self.palette_view_false;
+        let mut perceived = self.palette_view_perceived;
+        let mut picked = None;
+        // En attendant le nouveau cran, l'ancien de la même photo reste (pas d'image vide).
+        let shown = self.palette_view_shown.as_ref().filter(|s| {
+            wanted
+                .as_ref()
+                .is_some_and(|w| s.key.0 == w.0 && s.key.1 == w.1)
+        });
+        let texture = shown.map(|s| s.texture.clone());
+        // Au cran 0 : la palette de la photo, ou en couleurs perçues la sienne.
+        let palette = match (k, shown) {
+            (0, _) if !perceived => photo_palette.as_deref().cloned(),
+            (_, Some(s)) => Some(Palette {
+                swatches: s.swatches.clone(),
+                ..Palette::default()
+            }),
+            _ => None,
+        };
+        let legend: Vec<Color32> = if false_colours && k > 0 {
+            self.false_colours()
+        } else {
+            Vec::new()
+        };
+        let at = ctx.content_rect().center() - vec2(side, side * 0.6);
+        let modal = modal_at("palette_view", at)
+            .title(name)
+            .free_width()
+            .show(ctx, |ui| {
+                ui.horizontal_top(|ui| {
+                    ui.vertical(|ui| {
+                        let (rect, _) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
+                        match &texture {
+                            Some(texture) => {
+                                let size = texture.size_vec2();
+                                let scale = side / size.x.max(size.y).max(1.0);
+                                let shown = Rect::from_center_size(rect.center(), size * scale);
+                                ui.painter().image(
+                                    texture.id(),
+                                    shown,
+                                    Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                                    Color32::WHITE,
+                                );
+                            }
+                            None => {
+                                ui.painter().text(
+                                    rect.center(),
+                                    egui::Align2::CENTER_CENTER,
+                                    t!("palette-computing"),
+                                    egui::TextStyle::Body.resolve(ui.style()),
+                                    ui.visuals().weak_text_color(),
+                                );
+                            }
+                        }
+                    });
+                    ui.add_space(16.0);
+                    ui.vertical(|ui| {
+                        ui.set_width(side * 0.6);
+                        // Les réglages à droite de l'image, au-dessus de la palette (retour
+                        // du 23/11/2026 : dessous, la boîte était déséquilibrée).
+                        // Le cran : 0 l'image, 1 la moyenne, n couleurs.
+                        let label = match k {
+                            0 => t!("palette-view-original"),
+                            1 => t!("palette-view-mean"),
+                            n => t!("palette-view-colours", n = n),
+                        };
+                        ui.horizontal(|ui| {
+                            let slider = ui.add(
+                                egui::Slider::new(&mut k, 0..=max)
+                                    .step_by(1.0)
+                                    .show_value(false),
+                            );
+                            if slider.double_clicked() {
+                                k = 0;
+                            }
+                            ui.label(label);
+                        });
+                        ui.checkbox(&mut false_colours, t!("palette-view-false"))
+                            .on_hover_text(t!("palette-view-false-tip"));
+                        ui.checkbox(&mut perceived, t!("palette-view-perceived"))
+                            .on_hover_text(t!("palette-view-perceived-tip"));
+                        ui.add_space(12.0);
+                        ui.separator();
+                        ui.add_space(8.0);
+                        // Fausses couleurs : leur légende, alignée sur les vraies.
+                        if !legend.is_empty()
+                            && let Some(p) = &palette
+                        {
+                            ui.horizontal_wrapped(|ui| {
+                                for (s, &c) in p.swatches.iter().zip(&legend) {
+                                    let (r, _) =
+                                        ui.allocate_exact_size(vec2(18.0, 18.0), Sense::hover());
+                                    ui.painter().rect_filled(r, 3.0, c);
+                                    let (r, _) =
+                                        ui.allocate_exact_size(vec2(18.0, 18.0), Sense::hover());
+                                    ui.painter()
+                                        .rect_filled(r, 3.0, crate::palette_view::color(s));
+                                    ui.add_space(6.0);
+                                }
+                            });
+                            ui.add_space(6.0);
+                        }
+                        match &palette {
+                            Some(p) => {
+                                let (band, _) = ui.allocate_exact_size(
+                                    vec2(ui.available_width(), crate::palette_view::BAND_HEIGHT),
+                                    Sense::hover(),
+                                );
+                                crate::palette_view::draw_band(ui.painter(), band, p);
+                                ui.add_space(6.0);
+                                if let DetailClick::Colour(c) = self.palette_detail(ui, p, false) {
+                                    picked = Some(c);
+                                }
+                            }
+                            None => {
+                                ui.weak(t!("palette-computing"));
+                            }
+                        }
+                    });
+                });
+            });
+        if modal.should_close() {
+            self.palette_view = false;
+        }
+        self.palette_view_k = k;
+        self.palette_view_false = false_colours;
+        self.palette_view_perceived = perceived;
+        // Une couleur cliquée : la boîte des couleurs, sur elle, à ajuster (retour du
+        // 23/11/2026 : chercher tout de suite vidait la grille derrière, la palette en grand
+        // restait ouverte).
+        if let Some(c) = picked {
+            self.palette_view = false;
+            self.show_colour_dialog(ColourDialog::new(&[c]));
+            if let Some(live) = &mut self.colour_live {
+                live.from_palette_view = true;
+            }
+        }
+    }
+
+    /// Fausses couleurs de la palette en grand, en couleurs d'écran.
+    fn false_colours(&self) -> Vec<Color32> {
+        self.gui
+            .palette_view
+            .false_colours
+            .iter()
+            .filter_map(|h| parse_hex(h))
+            .map(|[r, g, b]| Color32::from_rgb(r, g, b))
+            .collect()
+    }
+
+    /// L'image de la palette en grand : celle arrivée du fond, et demandée en fond si elle
+    /// manque (lecture du cache et postérisation hors du fil de l'interface).
+    /// Ce que montrent les couleurs en grand et, hors cran 0, la palette du panneau : la
+    /// photo en surbrillance, sa source, le cran (ramené à `max`), fausses et perçues.
+    fn palette_view_key(&mut self) -> Option<PaletteViewKey> {
+        let max = self.gui.palette_view.max.clamp(1, 16);
+        self.palette_view_k = self.palette_view_k.min(max);
+        let file = self.files.get(self.selected)?;
+        let source = self.palette_source.and_then(|k| k.source_for(file))?;
+        Some((
+            file.path.clone(),
+            source,
+            self.palette_view_k,
+            self.palette_view_false,
+            self.palette_view_perceived,
+        ))
+    }
+
+    /// La palette du cran choisi (`<leader> c N`, couleurs perçues) pour le panneau, quand
+    /// elle diffère de celle du dossier (cran 0 sans couleurs perçues : aucune) ; calculée
+    /// en fond comme pour les couleurs en grand, `None` en attendant.
+    fn palette_step(&mut self, ctx: &egui::Context) -> Option<(usize, Arc<Palette>)> {
+        if self.palette_view_k == 0 && !self.palette_view_perceived {
+            return None;
+        }
+        let wanted = self.palette_view_key()?;
+        self.palette_view_poll(ctx, Some(&wanted));
+        // En attendant le nouveau cran, l'ancien de la même photo reste (sans repasser par
+        // la palette du dossier : retour du 23/11/2026, un clignotement).
+        // Une autre photo : son cran à elle, le même nombre de couleurs, plutôt que la
+        // palette du dossier entre les deux (vidéo du 24/11/2026).
+        let shown = self.palette_view_shown.as_ref().filter(|s| {
+            !s.swatches.is_empty()
+                && ((s.key.0 == wanted.0 && s.key.1 == wanted.1)
+                    || (s.key.2 == wanted.2 && s.key.4 == wanted.4))
+        })?;
+        Some((
+            self.palette_view_k,
+            Arc::new(Palette {
+                swatches: shown.swatches.clone(),
+                ..Palette::default()
+            }),
+        ))
+    }
+
+    fn palette_view_poll(&mut self, ctx: &egui::Context, wanted: Option<&PaletteViewKey>) {
+        if let Some((key, rx)) = &self.palette_view_rx {
+            match rx.try_recv() {
+                Ok(Some((image, swatches))) => {
+                    let texture = ctx.load_texture("palette_view", image, Default::default());
+                    let shown = PaletteViewShown {
+                        key: key.clone(),
+                        texture,
+                        swatches,
+                    };
+                    self.palette_view_cache.retain(|s| s.key != shown.key);
+                    self.palette_view_cache.push(shown.clone());
+                    let over = self
+                        .palette_view_cache
+                        .len()
+                        .saturating_sub(self.gui.palette_view.cache.max(1));
+                    self.palette_view_cache.drain(..over);
+                    self.palette_view_shown = Some(shown);
+                    self.palette_view_rx = None;
+                }
+                Ok(None) | Err(mpsc::TryRecvError::Disconnected) => self.palette_view_rx = None,
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        let Some(wanted) = wanted else {
+            return;
+        };
+        if let Some(hit) = self.palette_view_cache.iter().find(|s| &s.key == wanted)
+            && self
+                .palette_view_shown
+                .as_ref()
+                .is_none_or(|s| &s.key != wanted)
+        {
+            self.palette_view_shown = Some(hit.clone());
+        }
+        let done = self
+            .palette_view_shown
+            .as_ref()
+            .is_some_and(|s| &s.key == wanted);
+        let pending = self
+            .palette_view_rx
+            .as_ref()
+            .is_some_and(|(k, _)| k == wanted);
+        if done || pending {
+            return;
+        }
+        let (Some(engine), Some(file)) = (&self.engine, self.files.get(self.selected).cloned())
+        else {
+            return;
+        };
+        let (cache, preview) = (engine.cache.clone(), engine.preview);
+        let settings = self.settings.palette;
+        let falses: Vec<[u8; 3]> = self
+            .gui
+            .palette_view
+            .false_colours
+            .iter()
+            .filter_map(|h| parse_hex(h))
+            .collect();
+        let (path, source, k, false_on, perceived) = wanted.clone();
+        let _ = path;
+        let (tx, rx) = mpsc::channel();
+        let repaint = ctx.clone();
+        std::thread::spawn(move || {
+            let image = preview::key(&file, preview::palette_input(source), &preview)
+                .ok()
+                .and_then(|key| cache.get(&key));
+            let out = image.map(|image| {
+                let (mut bitmap, swatches) = if k == 0 && !perceived {
+                    (image, Vec::new())
+                } else {
+                    tri::palette::posterize_with(&image, k, &settings, perceived)
+                };
+                // Fausses couleurs : chaque couleur (dans l'ordre de présence) remplacée.
+                if false_on && k > 0 && !falses.is_empty() {
+                    let map: HashMap<[u8; 3], [u8; 3]> = swatches
+                        .iter()
+                        .enumerate()
+                        .map(|(i, s)| {
+                            let rgb = falses[i % falses.len()];
+                            let working = tri::palette::Swatch {
+                                oklab: tri::palette::srgb_to_oklab(rgb),
+                                share: 0.0,
+                            }
+                            .working();
+                            (s.working(), working)
+                        })
+                        .collect();
+                    for px in bitmap.data.as_chunks_mut::<3>().0 {
+                        if let Some(c) = map.get(px) {
+                            *px = *c;
+                        }
+                    }
+                }
+                crate::display::to_screen(&mut bitmap);
+                let image = egui::ColorImage::from_rgb(
+                    [bitmap.width as usize, bitmap.height as usize],
+                    &bitmap.data,
+                );
+                (image, swatches)
+            });
+            let _ = tx.send(out);
+            repaint.request_repaint();
+        });
+        self.palette_view_rx = Some((wanted.clone(), rx));
+    }
+
     fn histogram_dialog(&mut self, ctx: &egui::Context) {
         if !self.histogram_large || crate::actions::removed(crate::actions::Tool::Exposure) {
             return;
@@ -21324,7 +21892,7 @@ impl TriApp {
         let name = self
             .files
             .get(self.selected)
-            .map(|f| file_name(&f.path))
+            .map(|f| image_title(&f.path))
             .unwrap_or_default();
         let screen = ctx.content_rect().size();
         let fraction = self.gui.histogram.large.clamp(0.2, 1.0);
@@ -24577,6 +25145,11 @@ impl TriApp {
                         .collect();
                     self.show_colour_dialog(ColourDialog::new(&colours));
                 }
+                Step::PaletteK(k, falses, perceived) => {
+                    self.palette_view_k = k;
+                    self.palette_view_false = falses;
+                    self.palette_view_perceived = perceived;
+                }
                 Step::Harmony(id) => {
                     let ryb = self.gui.colour_search.wheel == crate::settings::ColourWheel::Ryb;
                     if let (Some(d), Some(h)) = (
@@ -27742,6 +28315,7 @@ impl eframe::App for TriApp {
         self.update_dialog(&ctx);
         self.download_dialog(&ctx);
         self.histogram_dialog(&ctx);
+        self.palette_view_dialog(&ctx);
         self.offload_dialog(&ctx);
         // Clavier en cours d'usage : pointeur masqué (dernier mot sur l'icône de l'image).
         if !self.mouse_active {
@@ -27794,6 +28368,9 @@ enum Step {
     ColourSearch(Vec<[u8; 3]>),
     /// Une harmonie dans la boîte des couleurs ouverte (`harmony:triad`), pour la capture.
     Harmony(String),
+    /// Le cran de la palette en grand (`palette_k:4`, `palette_k:4f` en fausses couleurs,
+    /// `palette_k:4p` en couleurs perçues).
+    PaletteK(usize, bool, bool),
     /// Taper dans la recherche de la boîte ouverte, palette, réglages ou aide
     /// (`search:vim`).
     Search(String),
@@ -27833,6 +28410,14 @@ fn parse_actions(list: &str) -> Vec<Step> {
                         .filter_map(parse_hex)
                         .collect(),
                 )),
+                None if id.starts_with("palette_k:") => {
+                    let v = &id["palette_k:".len()..];
+                    let (falses, perceived) = (v.contains('f'), v.contains('p'));
+                    v.trim_end_matches(['f', 'p'])
+                        .parse()
+                        .ok()
+                        .map(|k| Step::PaletteK(k, falses, perceived))
+                }
                 None if id.starts_with("harmony:") => {
                     Some(Step::Harmony(id["harmony:".len()..].to_string()))
                 }
@@ -28052,7 +28637,7 @@ fn oklab_hex(oklab: [f32; 3]) -> String {
 /// relatives, 0..1) : 1 % du côté long, 2 pixels au moins.
 fn average_oklab(image: &tri::bitmap::Bitmap, point: egui::Pos2, area: f32) -> [f32; 3] {
     let (w, h) = (image.width.max(1), image.height.max(1));
-    // Zone de côté `area` × le grand côté (`[palette] pick_area`), celle du collimateur.
+    // Zone de côté `area` × le grand côté (`[colours] pick_area`), celle du collimateur.
     let half = ((w.max(h) as f32 * area / 2.0) as u32).max(2);
     let cx = (point.x.clamp(0.0, 1.0) * (w - 1) as f32) as u32;
     let cy = (point.y.clamp(0.0, 1.0) * (h - 1) as f32) as u32;
@@ -30319,15 +30904,20 @@ mod tests {
             ..modifiers
         };
         let events = crate::actions::winit_events(key, modifiers, cfg!(windows));
-        if matches!(events.as_slice(), [UiEvent::Key { .. }, ..]) {
+        if matches!(
+            events.as_slice(),
+            [UiEvent::Key { .. }, UiEvent::Key { .. }]
+        ) {
             h.key_press_modifiers(modifiers, key);
         } else {
             // Modificateurs tenus pendant l'image de l'événement, relâchés à la suivante
             // (comme au clavier : `event_modifiers` les relâcherait dans la même image).
-            h.event(UiEvent::ModifiersChanged(modifiers));
-            for event in events {
-                h.event(event);
-            }
+            // Tous dans la même image, comme egui-winit (la touche et son caractère : un
+            // chiffre) ; `h.event` en ferait une image chacun.
+            h.input_mut()
+                .events
+                .push(UiEvent::ModifiersChanged(modifiers));
+            h.input_mut().events.extend(events);
             h.run_steps(1);
             h.event(UiEvent::ModifiersChanged(Modifiers::NONE));
         }
@@ -32244,10 +32834,9 @@ mod tests {
         // La pastille ouvre la boîte ; sa pipette, puis un clic sur l'image (retour du
         // 21/11/2026).
         // La boîte le temps de s'ouvrir (fondu) avant de prendre un clic.
-        h.state_mut().open_colour_dialog();
-        // La boîte s'ouvre sur la recherche d'avant ; une couleur relevée s'y ajouterait
-        // (retour du 23/11/2026) : réinitialisée, elle ne cherche que celle-là.
-        h.state_mut().colour_dialog.as_mut().unwrap().reset();
+        // Vide (la recherche d'avant, rouverte, partirait aussitôt en grille) : elle ne
+        // cherchera que la couleur relevée.
+        h.state_mut().show_colour_dialog(ColourDialog::new(&[]));
         h.run_steps(10);
         h.get_by_label(&t!("palette-eyedropper-name")).click();
         h.run_steps(2);
@@ -32617,6 +33206,15 @@ mod tests {
         h.state_mut().selected = 2;
         h.run_steps(3);
         h.get_by_label(&t!("palette-band")).click();
+        h.run_steps(3);
+        // Depuis le 23/11/2026, la bande ouvre la palette en grand (plus de recherche
+        // directe) ; la recherche se lance alors de la boîte, sans plantage.
+        assert!(h.state().palette_view, "palette en grand");
+        h.state_mut().palette_view = false;
+        let blue = h.state().palettes[&(h.state().files[2].path.clone(), Source::Camera)].swatches
+            [0]
+        .oklab;
+        h.state_mut().set_palette_colour(Some(blue));
         h.run_steps(3);
         assert!(h.state().palette_colour.is_some(), "recherche lancée");
         assert_eq!(h.state().files.len(), 2);
@@ -33085,6 +33683,160 @@ mod tests {
     }
 
     #[test]
+    fn the_large_palette_shows_the_image_in_k_colours() {
+        // #492 (23/11/2026) : la palette en grand, l'image en 0 à `max` couleurs ; Échap la
+        // ferme.
+        use tri::palette::{Source, SourceKind};
+        let split = image::RgbImage::from_fn(64, 48, |x, _| {
+            image::Rgb(if x < 40 { [200, 30, 30] } else { [30, 40, 200] })
+        });
+        let (mut h, _dir) = harness_images(vec![("two.jpg", split)]);
+        h.run_steps(3);
+        choose_palette(&mut h, Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        // Un cran et les couleurs perçues au clavier (`<leader> c 3`, `<leader> c p`) :
+        // la palette du panneau suit, sans ouvrir la boîte.
+        for key in [Key::C, Key::Num3] {
+            if key == Key::C {
+                press(&mut h, Key::B, Modifiers::CTRL);
+            }
+            press(&mut h, key, Modifiers::NONE);
+        }
+        h.run_steps(2);
+        assert!(!h.state().palette_view);
+        assert_eq!(h.state().palette_view_k, 3);
+        run_until(&mut h, |app| {
+            app.palette_view_shown
+                .as_ref()
+                .is_some_and(|s| s.key.2 == 3 && s.swatches.len() == 3)
+        });
+        h.run_steps(2);
+        // Le panneau montre ces trois couleurs (ses pastilles, une par couleur).
+        let three = h
+            .state()
+            .palette_view_shown
+            .as_ref()
+            .unwrap()
+            .swatches
+            .clone();
+        for s in &three {
+            let label = t!("palette-dot", hex = crate::palette_view::hex(s));
+            assert!(h.query_by_label(&label).is_some(), "{label}");
+        }
+        for key in [Key::B, Key::C, Key::P] {
+            let m = if key == Key::B {
+                Modifiers::CTRL
+            } else {
+                Modifiers::NONE
+            };
+            press(&mut h, key, m);
+        }
+        h.run_steps(2);
+        assert!(h.state().palette_view_perceived);
+        h.state_mut().palette_view_perceived = false;
+        // À la souris : l'icône à côté de la source (pixels / œil) bascule, les jumelles
+        // ouvrent la boîte des couleurs (par l'accessibilité : la section est sous le bord
+        // de la fenêtre de test).
+        h.get_by_label(&t!("palette-perceived")).click_accesskit();
+        h.run_steps(2);
+        assert!(h.state().palette_view_perceived);
+        h.get_by_label(&t!("palette-perceived")).click_accesskit();
+        h.run_steps(2);
+        assert!(!h.state().palette_view_perceived);
+        h.get_by_label(&t!("palette-search-open")).click_accesskit();
+        h.run_steps(3);
+        // Remplie des couleurs principales de la photo.
+        assert!(
+            h.state()
+                .colour_dialog
+                .as_ref()
+                .is_some_and(|d| !d.slots.is_empty())
+        );
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().colour_dialog.is_none());
+        h.state_mut().palette_view_k = 0;
+        // Au clavier : « g c » (go colours).
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().palette_view);
+        h.state_mut().palette_view_k = 2;
+        run_until(&mut h, |app| {
+            app.palette_view_shown
+                .as_ref()
+                .is_some_and(|s| s.key.2 == 2 && s.swatches.len() == 2)
+        });
+        let shares: Vec<f32> = h
+            .state()
+            .palette_view_shown
+            .as_ref()
+            .unwrap()
+            .swatches
+            .iter()
+            .map(|s| s.share)
+            .collect();
+        assert!(shares[0] > 0.55 && shares[0] < 0.7, "{shares:?}");
+        // La moyenne : une seule couleur.
+        h.state_mut().palette_view_k = 1;
+        run_until(&mut h, |app| {
+            app.palette_view_shown
+                .as_ref()
+                .is_some_and(|s| s.key.2 == 1 && s.swatches.len() == 1)
+        });
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(!h.state().palette_view);
+        // Une couleur cliquée dans la palette en grand : elle se ferme, la boîte des
+        // couleurs s'ouvre sur cette couleur, sans chercher.
+        h.state_mut().palette_view = true;
+        h.state_mut().palette_view_k = 2;
+        run_until(&mut h, |app| {
+            app.palette_view_shown
+                .as_ref()
+                .is_some_and(|s| s.key.2 == 2)
+        });
+        h.run_steps(2);
+        let first = h.state().palette_view_shown.as_ref().unwrap().swatches[0];
+        let label = t!("palette-dot", hex = crate::palette_view::hex(&first));
+        // La même couleur peut être dans le panneau : celle de la boîte, dessinée après.
+        h.get_all_by_label(&label).last().unwrap().click();
+        h.run_steps(3);
+        assert!(!h.state().palette_view, "fermée");
+        let d = h
+            .state()
+            .colour_dialog
+            .as_ref()
+            .expect("la boîte des couleurs");
+        assert_eq!(d.slots.len(), 1);
+        assert!(h.state().palette_colour.is_some(), "cherchée tout de suite");
+        // « Annuler » : la recherche d'avant (aucune), et la palette en grand rouverte.
+        h.get_by_label(&t!("cancel")).click();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_none());
+        assert!(h.state().palette_view, "rouverte");
+    }
+
+    #[test]
+    fn dialog_titles_name_a_development_by_its_photo_and_software() {
+        // Retour du 23/11/2026 : « DSCF6228@dt.RAF » ne parlait pas.
+        // Un développement connu (comme le dossier lu les enregistre).
+        let dev = tri::developments::Development {
+            engine: tri::develop::Engine::Darktable,
+            copy: tri::developments::Copy::Main,
+            photo: PathBuf::from("/s/DSCF6228.RAF"),
+            sidecar: PathBuf::from("/s/DSCF6228.RAF.xmp"),
+        };
+        tri::developments::register(&dev);
+        assert_eq!(image_title(&dev.path()), "DSCF6228 (Darktable)");
+        assert_eq!(image_title(Path::new("/s/DSCF6228.RAF")), "DSCF6228.RAF");
+    }
+
+    #[test]
     fn the_rating_bar_stays_when_nothing_is_shown() {
         // Retour du 23/11/2026 : un filtre sans résultat faisait disparaître la barre du
         // bas ; elle reste, grisée (les barres ne bougent pas).
@@ -33098,6 +33850,53 @@ mod tests {
         h.state_mut().selected = 0;
         h.run_steps(2);
         assert!(h.query_by_label(&title).is_some(), "la barre reste");
+    }
+
+    #[test]
+    fn a_colour_search_from_a_photo_keeps_it_highlighted_and_cancel_returns_to_it() {
+        // Vidéo du 23/11/2026 : partie d'une photo (palette en grand), la recherche
+        // sélectionnait la première trouvée ; « Annuler » rouvrait la palette sur elle.
+        use tri::palette::{Source, SourceKind};
+        let blue = [30u8, 40, 200];
+        let mixed = image::RgbImage::from_fn(64, 48, |x, _| {
+            image::Rgb(if x < 44 { blue } else { [200, 30, 30] })
+        });
+        let images = vec![
+            (
+                "a_blue.jpg",
+                image::RgbImage::from_pixel(64, 48, image::Rgb(blue)),
+            ),
+            (
+                "b_green.jpg",
+                image::RgbImage::from_pixel(64, 48, image::Rgb([30, 180, 40])),
+            ),
+            ("c_mixed.jpg", mixed),
+        ];
+        let (mut h, _dir) = harness_images(images);
+        h.run_steps(3);
+        choose_palette(&mut h, Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        let origin = h.state().files[2].path.clone();
+        h.state_mut().selected = 2;
+        let blue = h.state().palettes[&(h.state().files[0].path.clone(), Source::Camera)].swatches
+            [0]
+        .oklab;
+        h.state_mut().show_colour_dialog(ColourDialog::new(&[blue]));
+        h.run_steps(3);
+        assert_eq!(h.state().files.len(), 2, "le bleu et la photo mêlée");
+        assert_eq!(
+            h.state().files[h.state().selected].path,
+            origin,
+            "la photo de départ en surbrillance"
+        );
+        h.get_by_label(&t!("cancel")).click();
+        h.run_steps(3);
+        assert_eq!(h.state().files.len(), 3);
+        assert_eq!(h.state().files[h.state().selected].path, origin, "revenue");
     }
 
     #[test]
@@ -41113,7 +41912,7 @@ mod tests {
 
     #[test]
     fn the_eyedropper_averages_the_reticle_area() {
-        // `[palette] pick_area` : la zone moyennée est celle que montre le collimateur.
+        // `[colours] pick_area` : la zone moyennée est celle que montre le collimateur.
         let (w, h) = (100u32, 50u32);
         let mut data = Vec::new();
         for _ in 0..h {
@@ -41170,7 +41969,7 @@ mod tests {
             assert!(h.query_by_label(&t!(id)).is_some(), "{id}");
         }
         // Sous « Palettes », une majuscule : « Données brutes ».
-        let raw = t!("compute-palette-raw");
+        let raw = t!("compute-colours-raw");
         let raw = raw.split_once("  ").unwrap().1;
         let raw: String = raw[..1].to_uppercase() + &raw[1..];
         assert!(h.query_by_label(&raw).is_some(), "{raw}");
@@ -43104,8 +43903,9 @@ mod tests {
             !h.state().histogram_large,
             "<leader> i c : le canal change, le grand histogramme reste fermé"
         );
-        press(&mut h, Key::I, Modifiers::SHIFT);
-        assert!(h.state().histogram_large, "Maj+I l'ouvre");
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::I, Modifiers::NONE);
+        assert!(h.state().histogram_large, "g i l'ouvre");
         assert_eq!(h.state().histogram_channel, Some(0));
         // L'image d'analyse de tous les canaux peut encore être là (CI macOS) : attendre
         // celle du rouge.
@@ -44189,7 +44989,8 @@ mod tests {
         );
         run_until(&mut h, |app| app.after_pending.is_empty() && !measured(app));
         // `e` dans le grand histogramme rebascule sur le réel.
-        press(&mut h, Key::I, Modifiers::SHIFT);
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::I, Modifiers::NONE);
         press(&mut h, Key::E, Modifiers::NONE);
         assert!(!h.state().gui.histogram.after_auto, "e : retour au réel");
         assert!(h.state_mut().shown_exposure(0).unwrap().1.is_none());
@@ -44288,8 +45089,9 @@ mod tests {
     #[test]
     fn the_large_histogram_opens_and_closes() {
         let (mut h, _dir) = harness();
-        press(&mut h, Key::I, Modifiers::SHIFT);
-        assert!(h.state().histogram_large, "Maj+E l'ouvre");
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::I, Modifiers::NONE);
+        assert!(h.state().histogram_large, "g i l'ouvre");
         // L'échelle est une icône dans l'histogramme (19/10/2026), plus un bouton texte
         // à côté de « Fermer ».
         assert!(h.query_by_label("Échelle linéaire").is_none());
@@ -44338,9 +45140,13 @@ mod tests {
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().histogram_large, "Échap la ferme");
         assert_eq!(h.state().mode, Mode::Grid);
-        press(&mut h, Key::I, Modifiers::SHIFT);
-        press(&mut h, Key::I, Modifiers::SHIFT);
-        assert!(!h.state().histogram_large, "la même touche la ferme");
+        // Depuis le 23/11/2026, « g i » l'ouvre ; dedans, `g` est le canal vert (comme
+        // `r g b a l`) : Échap la ferme.
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::I, Modifiers::NONE);
+        assert!(h.state().histogram_large);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(!h.state().histogram_large, "Échap la ferme");
     }
 
     #[test]
@@ -47130,11 +47936,9 @@ mod tests {
         let listed = crate::settings_window::settings_list(&[]);
         let has =
             |section: &str, key: &str| listed.iter().any(|r| r.section == section && r.key == key);
-        assert!(
-            !listed
-                .iter()
-                .any(|r| r.section == "exposure" || r.section == "palette")
-        );
+        assert!(!listed.iter().any(|r| r.section == "exposure"
+            || r.section == "colours"
+            || r.section == "gui.colours_view"));
         assert!(!has("gui.histogram", "scale"));
         assert!(!has("gui.metadata", "histogram"));
         assert!(!has("gui.grid", "stacks"));
@@ -47148,7 +47952,7 @@ mod tests {
             .settings_window
             .as_mut()
             .unwrap()
-            .show_section("palette");
+            .show_section("colours");
         h.run_steps(3);
         assert!(h.query_by_label(&t!("settings-analysis-removed")).is_some());
         h.get_by_label(&t!("settings-section-analysis")).click();

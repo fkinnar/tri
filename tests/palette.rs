@@ -19,7 +19,7 @@ fn a_decoded_jpeg_gets_a_palette_whose_shares_add_up() {
 #[test]
 fn palette_settings_are_read_from_the_configuration() {
     let s: tri::settings::EngineSettings =
-        tri::settings::parse("[palette]\ncolors = 8\nmin_share = 0.05\n").unwrap();
+        tri::settings::parse("[colours]\ncolors = 8\nmin_share = 0.05\n").unwrap();
     assert_eq!(s.palette.colors, 8);
     assert_eq!(s.palette.min_share, 0.05);
     assert_eq!(s.palette.side, PaletteSettings::default().side);

@@ -86,7 +86,7 @@ sharpness = "background"
 # Stacks: grouping fingerprints (same choice).
 stacks = "background"
 # Colour palettes: palette and colour searches, eyedropper (same choice).
-palettes = "background"
+colours = "background"
 
 [xmp]
 # Name of new sidecars: darktable style, Adobe style, or both.
@@ -587,7 +587,7 @@ group_threshold = 0.45
 # setting is remembered per folder.
 strictness_span = 2.0
 
-[palette]
+[colours]
 # Colour palettes: number of colours looked for in each image.
 #
 # Colour palettes (#492): the main colours of each image and their share, computed on a
@@ -664,6 +664,28 @@ mean_lightness = 0.3
 # The first colour more precise than the last: the second one's tolerance is 1.25 times
 # the slider's, the third 1.5 times… (0: the same for all).
 colour_widen = 0.25
+# Perceived colours (large palette): share of the surround's hue removed.
+#
+# Experiment: the eye adapts to the dominant light (under a violet light, a pinkish beige
+# face looks orange); each pixel is seen after removing this share.
+perceived_adaptation = 0.8
+# Perceived colours: size of the surround, as a share of the image's long side.
+perceived_surround = 0.2
+# Perceived colours: weight of the areas that stand out from their surround.
+perceived_salience = 1.0
+# Perceived colours: saturation given back after the adaptation, at 4 colours (1: as is).
+#
+# Removing the dominant light also takes colour away from everything else. Decreasing: fewer
+# colours, each more of an average and duller, more saturation (see the next two).
+perceived_saturation = 1.4
+# Perceived colours: number of colours at which perceived_saturation applies.
+perceived_saturation_colours = 4
+# Perceived colours: slope of the saturation by number of colours.
+#
+# The extra above 1 varies as (perceived_saturation_colours / colours) ^ slope: with 0.5,
+# 1.8 for 1 colour, 1.4 for 4, 1.28 for 8; the whole image is left as is. 0: the same
+# saturation everywhere.
+perceived_saturation_falloff = 0.5
 
 [index]
 # Record the palettes in the search index of all folders.
@@ -1345,8 +1367,8 @@ max = 5
 # Search mode: absolute, hierarchical or average colour.
 #
 # Contains these colours: "absolute", they all count the same; "hierarchical", the first
-# counts the most, then the second… ([palette] colour_hierarchy); "mean", the average colour
-# of the image compared with the first one ([palette] mean_lightness). Also changed in the
+# counts the most, then the second… ([colours] colour_hierarchy); "mean", the average colour
+# of the image compared with the first one ([colours] mean_lightness). Also changed in the
 # dialog.
 mode = "absolute"
 # Swatches of pure colours.
@@ -1376,6 +1398,24 @@ key_hue_step = 5.0
 key_step = 0.05
 # Keyboard: tolerance step with + and -.
 key_radius_step = 0.01
+
+[gui.colours_view]
+# Maximum number of colours of the large colours slider.
+#
+# 0: the image as is, 1: its average colour (the dominant), 2, 3…: the image in as many
+# colours, each pixel replaced by the closest.
+max = 8
+# Long side of the image in the large colours box (points).
+side = 420.0
+# Steps kept in memory (large colours and the panel's palette).
+#
+# A step already seen (same photo, same number of colours, perceived or not) comes back
+# without being computed again; the oldest go.
+cache = 64
+# False colours of the large colours, the most present colour first.
+#
+# Clearly distinct, to see the masses when the real colours are close.
+false_colours = ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6"]
 
 [gui.position]
 # "Photo 12 / 94" marker at each image change: how long it shows.

@@ -123,7 +123,9 @@ pub struct EngineSettings {
     pub sharpness: crate::sharpness::SharpnessSettings,
     /// Regroupement des images semblables.
     pub similarity: crate::similarity::SimilaritySettings,
-    /// Palettes de couleurs (#492).
+    /// Palettes de couleurs (#492), section `[colours]` (renommée le 23/11/2026, comme
+    /// « Couleurs » dans l'interface).
+    #[serde(rename = "colours")]
     pub palette: crate::palette::PaletteSettings,
     /// Index de recherche des palettes de tous les dossiers (#561).
     pub index: crate::index::IndexSettings,
@@ -874,7 +876,7 @@ mod tests {
     #[test]
     fn analyses_are_read_with_the_old_keys() {
         let s: EngineSettings =
-            parse("[analysis]\npalettes = \"off\"\nstacks = \"on-demand\"").unwrap();
+            parse("[analysis]\ncolours = \"off\"\nstacks = \"on-demand\"").unwrap();
         let config = s.scheduler(RawPreviews::OnDemand);
         assert_eq!(config.palettes, Analysis::Off);
         assert_eq!(config.similarity, Analysis::OnDemand);

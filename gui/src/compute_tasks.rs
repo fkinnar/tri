@@ -155,8 +155,8 @@ pub fn kind_label(kind: Kind) -> String {
         Kind::Exposure => t!("compute-exposure"),
         Kind::Sharpness => t!("compute-sharpness"),
         Kind::Signatures => t!("compute-signatures"),
-        Kind::Palette(SourceKind::Camera | SourceKind::Cover) => t!("compute-palette-camera"),
-        Kind::Palette(SourceKind::Raw) => t!("compute-palette-raw"),
+        Kind::Palette(SourceKind::Camera | SourceKind::Cover) => t!("compute-colours-camera"),
+        Kind::Palette(SourceKind::Raw) => t!("compute-colours-raw"),
         Kind::Palette(SourceKind::Developed(engine)) => {
             t!("compute-palette-developed", engine = engine.name())
         }

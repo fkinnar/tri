@@ -230,7 +230,7 @@ const CATEGORIES: [&[&str]; 6] = [
         "sidecars.",
         "sort",
         "similarity",
-        "palette",
+        "colours",
         "index",
         "sharpness",
         "exposure",
@@ -241,6 +241,7 @@ const CATEGORIES: [&[&str]; 6] = [
         "gui.zoom",
         "gui.compare",
         "gui.colour_search",
+        "gui.colours_view",
         "gui.position",
         "gui.position_bar",
         "gui.notes",
@@ -373,7 +374,8 @@ pub fn section_tool(section: &str) -> Option<Tool> {
     match section {
         "exposure" | "gui.histogram" => Some(Tool::Exposure),
         "similarity" => Some(Tool::Stacks),
-        "palette" | "index" => Some(Tool::Palettes),
+        // La boîte des couleurs et les couleurs en grand aussi (#492).
+        "colours" | "index" | "gui.colour_search" | "gui.colours_view" => Some(Tool::Palettes),
         _ => None,
     }
 }
@@ -575,9 +577,11 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
         ("gui", "theme") => &["dark", "light", "system", "neutral"],
         ("gui", "sort") => &["name", "captured", "modified", "stars", "color", "flag"],
         ("gui", "raw_previews") => &["on-demand", "background"],
-        ("analysis", "exposure" | "sharpness" | "stacks" | "palettes") => {
+        ("analysis", "exposure" | "sharpness" | "stacks" | "colours") => {
             &["background", "on-demand", "off"]
         }
+        ("gui.colour_search", "mode") => &["absolute", "hierarchical", "mean"],
+        ("gui.colour_search", "wheel") => &["ryb", "rgb"],
         ("xmp", "sidecar") => &["darktable", "adobe", "both"],
         ("xmp", "embed") => &["never", "internal", "everywhere"],
         ("files", "group_pairs") => &["ask", "separate", "grouped"],

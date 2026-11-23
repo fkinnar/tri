@@ -1617,6 +1617,45 @@ pub fn eye(painter: &Painter, rect: Rect, color: Color32) {
     painter.circle_filled(c, rect.width() * 0.13, color);
 }
 
+/// Couleurs mesurées (#492, en face de l'œil des couleurs perçues) : quatre pixels, les
+/// valeurs du fichier telles quelles.
+pub fn pixels(painter: &Painter, rect: Rect, color: Color32) {
+    let r = rect.shrink(rect.width() * 0.16);
+    let gap = (r.width() * 0.12).max(1.0);
+    let side = (r.width() - gap) / 2.0;
+    for (i, j) in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0)] {
+        let min = pos2(r.left() + i * (side + gap), r.top() + j * (side + gap));
+        let cell = Rect::from_min_size(min, vec2(side, side));
+        if i == j {
+            painter.rect_filled(cell, 1.0, color);
+        } else {
+            let stroke = Stroke::new((rect.width() / 14.0).max(1.0), color);
+            painter.rect_stroke(
+                cell.shrink(stroke.width / 2.0),
+                1.0,
+                stroke,
+                egui::StrokeKind::Inside,
+            );
+        }
+    }
+}
+
+/// Jumelles (chercher des couleurs, #492) : deux oculaires et leur pont.
+pub fn binoculars(painter: &Painter, rect: Rect, color: Color32) {
+    let stroke = Stroke::new((rect.width() / 12.0).max(1.0), color);
+    let (w, h) = (rect.width(), rect.height());
+    let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
+    let radius = w * 0.2;
+    // Centrées en hauteur, comme l'œil à côté (retour du 24/11/2026).
+    for x in [0.27, 0.73] {
+        // Le tube, puis la lentille en bas.
+        painter.line_segment([p(x - 0.08, 0.14), p(x - 0.17, 0.54)], stroke);
+        painter.line_segment([p(x + 0.08, 0.14), p(x + 0.17, 0.54)], stroke);
+        painter.circle_stroke(p(x, 0.6), radius, stroke);
+    }
+    painter.line_segment([p(0.35, 0.3), p(0.65, 0.3)], stroke);
+}
+
 /// Icône « disque externe » dans `rect` : boîtier arrondi et voyant.
 pub fn drive(painter: &Painter, rect: Rect, color: Color32) {
     let body = Rect::from_center_size(

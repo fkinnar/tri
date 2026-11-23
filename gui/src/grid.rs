@@ -259,6 +259,9 @@ pub fn navigate(
         | Action::ToggleHistogram
         | Action::HistogramScale
         | Action::HistogramLarge
+        | Action::PaletteView
+        | Action::ColoursStep(_)
+        | Action::ColoursPerceived
         | Action::HistogramChannel
         | Action::HistogramRed
         | Action::HistogramGreen

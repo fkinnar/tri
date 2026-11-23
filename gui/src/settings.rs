@@ -64,7 +64,8 @@ pub struct AppSettings {
     pub sharpness: tri::sharpness::SharpnessSettings,
     /// `[similarity]` (moteur) : regroupement des images semblables.
     pub similarity: tri::similarity::SimilaritySettings,
-    /// `[palette]` (moteur) : palettes de couleurs.
+    /// `[colours]` (moteur) : palettes de couleurs.
+    #[serde(rename = "colours")]
     pub palette: tri::palette::PaletteSettings,
     /// `[index]` (moteur) : index de recherche des palettes (#561).
     pub index: tri::index::IndexSettings,
@@ -325,6 +326,9 @@ pub struct GuiSettings {
     pub compare: CompareSettings,
     /// `[gui.colour_search]`.
     pub colour_search: ColourSearchSettings,
+    /// `[gui.colours_view]`.
+    #[serde(rename = "colours_view")]
+    pub palette_view: PaletteViewSettings,
     /// `[gui.position]`.
     pub position: PositionSettings,
     /// `[gui.position_bar]`.
@@ -402,6 +406,7 @@ impl Default for GuiSettings {
             zoom: ZoomSettings::default(),
             compare: CompareSettings::default(),
             colour_search: ColourSearchSettings::default(),
+            palette_view: PaletteViewSettings::default(),
             position: PositionSettings::default(),
             position_bar: PositionBarSettings::default(),
             notes: NotesSettings::default(),
@@ -1147,6 +1152,38 @@ impl Default for CompareSettings {
     }
 }
 
+/// Section `[gui.colours_view]` : la palette en grand (#492).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PaletteViewSettings {
+    /// Couleurs au plus du curseur (0 : l'image, 1 : sa moyenne, 2, 3…).
+    pub max: usize,
+    /// Grand côté de l'image dans la boîte (points).
+    pub side: f32,
+    /// Crans gardés en mémoire (couleurs en grand et palette du panneau) : un cran déjà vu
+    /// revient sans être recalculé.
+    pub cache: usize,
+    /// Fausses couleurs (`#rrggbb`), dans l'ordre des couleurs de l'image (la plus
+    /// présente d'abord) : bien distinctes, pour voir les masses quand les vraies sont
+    /// proches.
+    pub false_colours: Vec<String>,
+}
+
+impl Default for PaletteViewSettings {
+    fn default() -> Self {
+        let hex = |list: &[&str]| list.iter().map(|s| s.to_string()).collect();
+        Self {
+            max: 8,
+            side: 420.0,
+            cache: 64,
+            false_colours: hex(&[
+                "#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0",
+                "#f032e6",
+            ]),
+        }
+    }
+}
+
 /// Mode de la recherche de couleurs (#492).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -1154,7 +1191,7 @@ pub enum ColourMode {
     /// Toutes les couleurs comptent pareil.
     #[default]
     Absolute,
-    /// La première compte le plus, puis la deuxième… (`[palette] colour_hierarchy`).
+    /// La première compte le plus, puis la deuxième… (`[colours] colour_hierarchy`).
     Hierarchical,
     /// La couleur moyenne de l'image comparée à la première couleur (idée de
     /// l'utilisateur, 23/11/2026 : isoler les photos « bleues en moyenne », qu'une
@@ -2457,7 +2494,10 @@ mod tests {
         assert_eq!(old.keymap().1.len(), 1, "« both » signalé");
         // Communs : la notation, dans les deux.
         for km in [&classic, &vim] {
-            assert_eq!(next(km, egui::Key::Num3), Some(Action::Stars(3)));
+            assert_eq!(
+                km.chord_action(crate::actions::Chord::char('3')),
+                Some(Action::Stars(3))
+            );
         }
         assert_eq!(GuiSettings::default().profile, Profile::Classic);
     }

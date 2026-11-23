@@ -535,6 +535,12 @@ pub enum Action {
     HistogramScale,
     /// Grand histogramme, en boîte au milieu de l'écran.
     HistogramLarge,
+    /// Vue agrandie de la palette (#492) : l'image en 0 à `max` couleurs, et sa palette.
+    PaletteView,
+    /// Couleurs en grand : ce cran (0 l'image, 1 la moyenne, n couleurs), ouverte au besoin.
+    ColoursStep(u8),
+    /// Couleurs en grand : couleurs perçues ou non, ouverte au besoin.
+    ColoursPerceived,
     /// Grand histogramme : canal suivant (tous, rouge, vert, bleu).
     HistogramChannel,
     /// Grand histogramme ouvert : canal rouge seul.
@@ -617,7 +623,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 288] = [
+    pub const ALL: [Action; 299] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -886,6 +892,17 @@ impl Action {
         Action::AdjustPaste,
         Action::HistogramScale,
         Action::HistogramLarge,
+        Action::PaletteView,
+        Action::ColoursStep(0),
+        Action::ColoursStep(1),
+        Action::ColoursStep(2),
+        Action::ColoursStep(3),
+        Action::ColoursStep(4),
+        Action::ColoursStep(5),
+        Action::ColoursStep(6),
+        Action::ColoursStep(7),
+        Action::ColoursStep(8),
+        Action::ColoursPerceived,
         Action::HistogramChannel,
         Action::HistogramRed,
         Action::HistogramGreen,
@@ -1028,9 +1045,12 @@ impl Action {
             | Action::FilterStack
             | Action::StackEnterToggle
             | Action::FilterSimilar => Some(Tool::Stacks),
-            Action::FilterPalette | Action::FilterPaletteColour | Action::SetReference => {
-                Some(Tool::Palettes)
-            }
+            Action::FilterPalette
+            | Action::FilterPaletteColour
+            | Action::SetReference
+            | Action::PaletteView
+            | Action::ColoursStep(_)
+            | Action::ColoursPerceived => Some(Tool::Palettes),
             Action::FolderCompute(k) | Action::Compute(k) => kind(k),
             _ => None,
         }
@@ -1106,11 +1126,12 @@ impl Action {
             | ReviewDevelopments | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource
             | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram | AdjustBeforeAfter
             | AdjustApply | AdjustCopy | AdjustPaste | HistogramScale | HistogramLarge
-            | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
-            | HistogramLuminance | HistogramPhoto | HistogramCamera | HistogramAfter
-            | ToggleClipping | TogglePeaking | PeakingColor | SharpnessLenient
-            | SharpnessStrict | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode
-            | Develop | DevelopWith(_) | DevelopFolder => Group::View,
+            | PaletteView | ColoursStep(_) | ColoursPerceived | HistogramChannel | HistogramRed
+            | HistogramGreen | HistogramBlue | HistogramAll | HistogramLuminance
+            | HistogramPhoto | HistogramCamera | HistogramAfter | ToggleClipping
+            | TogglePeaking | PeakingColor | SharpnessLenient | SharpnessStrict
+            | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode | Develop
+            | DevelopWith(_) | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
             | CropPreset | CropPresetPrev | VersionNext | VersionPrev | VersionRatioNext
             | VersionRatioPrev | VersionTilesNext | VersionTilesPrev | VersionRowsNext
@@ -1257,8 +1278,8 @@ impl Action {
             Action::FilterInvert => "core.filter.invert",
             Action::FilterDeveloped => "core.filter.developed",
             Action::FilterConflicts => "core.filter.conflicts",
-            Action::FilterPalette => "core.filter.palette",
-            Action::FilterPaletteColour => "core.filter.palette_colour",
+            Action::FilterPalette => "core.filter.similar_colours",
+            Action::FilterPaletteColour => "core.filter.colour",
             Action::AllPhotos => "core.view.all_photos",
             Action::SetReference => "core.filter.reference",
             Action::FilterSimilar => "core.filter.similar",
@@ -1414,20 +1435,20 @@ impl Action {
                     Kind::Sharpness => "core.folders.compute.sharpness",
                     Kind::Signatures => "core.folders.compute.signatures",
                     Kind::Palette(SourceKind::Camera | SourceKind::Cover) => {
-                        "core.folders.compute.palette_camera"
+                        "core.folders.compute.colours_camera"
                     }
-                    Kind::Palette(SourceKind::Raw) => "core.folders.compute.palette_raw",
+                    Kind::Palette(SourceKind::Raw) => "core.folders.compute.colours_raw",
                     Kind::Palette(SourceKind::Developed(Engine::Darktable)) => {
-                        "plugin.darktable.compute_palettes"
+                        "plugin.darktable.compute_colours"
                     }
                     Kind::Palette(SourceKind::Developed(Engine::RapidRaw)) => {
-                        "plugin.rapidraw.compute_palettes"
+                        "plugin.rapidraw.compute_colours"
                     }
                     Kind::Palette(SourceKind::Developed(Engine::RawTherapee)) => {
-                        "plugin.rawtherapee.compute_palettes"
+                        "plugin.rawtherapee.compute_colours"
                     }
                     Kind::Palette(SourceKind::Developed(Engine::Art)) => {
-                        "plugin.art.compute_palettes"
+                        "plugin.art.compute_colours"
                     }
                 }
             }
@@ -1442,20 +1463,20 @@ impl Action {
                     Kind::Sharpness => "core.file.compute.sharpness",
                     Kind::Signatures => "core.file.compute.signatures",
                     Kind::Palette(SourceKind::Camera | SourceKind::Cover) => {
-                        "core.file.compute.palette_camera"
+                        "core.file.compute.colours_camera"
                     }
-                    Kind::Palette(SourceKind::Raw) => "core.file.compute.palette_raw",
+                    Kind::Palette(SourceKind::Raw) => "core.file.compute.colours_raw",
                     Kind::Palette(SourceKind::Developed(Engine::Darktable)) => {
-                        "plugin.darktable.compute_image_palettes"
+                        "plugin.darktable.compute_image_colours"
                     }
                     Kind::Palette(SourceKind::Developed(Engine::RapidRaw)) => {
-                        "plugin.rapidraw.compute_image_palettes"
+                        "plugin.rapidraw.compute_image_colours"
                     }
                     Kind::Palette(SourceKind::Developed(Engine::RawTherapee)) => {
-                        "plugin.rawtherapee.compute_image_palettes"
+                        "plugin.rawtherapee.compute_image_colours"
                     }
                     Kind::Palette(SourceKind::Developed(Engine::Art)) => {
-                        "plugin.art.compute_image_palettes"
+                        "plugin.art.compute_image_colours"
                     }
                 }
             }
@@ -1508,6 +1529,17 @@ impl Action {
             Action::AdjustPaste => "core.adjust.paste",
             Action::HistogramScale => "core.view.histogram_scale",
             Action::HistogramLarge => "core.view.histogram_large",
+            Action::PaletteView => "core.view.colours",
+            Action::ColoursStep(0) => "core.colours.step.0",
+            Action::ColoursStep(1) => "core.colours.step.1",
+            Action::ColoursStep(2) => "core.colours.step.2",
+            Action::ColoursStep(3) => "core.colours.step.3",
+            Action::ColoursStep(4) => "core.colours.step.4",
+            Action::ColoursStep(5) => "core.colours.step.5",
+            Action::ColoursStep(6) => "core.colours.step.6",
+            Action::ColoursStep(7) => "core.colours.step.7",
+            Action::ColoursStep(_) => "core.colours.step.8",
+            Action::ColoursPerceived => "core.colours.perceived",
             Action::HistogramChannel => "core.view.histogram_channel",
             Action::HistogramRed => "core.histogram.red",
             Action::HistogramGreen => "core.histogram.green",
@@ -1796,15 +1828,26 @@ pub(crate) fn winit_events(key: Key, modifiers: Modifiers, windows: bool) -> Vec
     {
         Event::Paste("texte".into())
     } else {
-        return [true, false]
-            .map(|pressed| Event::Key {
-                key,
-                physical_key: None,
-                pressed,
-                repeat: false,
-                modifiers,
-            })
-            .to_vec();
+        let [down, up] = [true, false].map(|pressed| Event::Key {
+            key,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers,
+        });
+        // Un chiffre tape aussi son caractère (rangée du haut d'un AZERTY avec Maj, d'un
+        // QWERTY sans, pavé numérique) : les raccourcis à chiffre y sont liés.
+        let digit = key
+            .name()
+            .chars()
+            .next()
+            .filter(|c| key.name().len() == 1 && c.is_ascii_digit());
+        return match digit {
+            Some(c) if !modifiers.ctrl && !modifiers.command && !modifiers.alt => {
+                vec![down, Event::Text(c.to_string()), up]
+            }
+            _ => vec![down, up],
+        };
     };
     vec![event]
 }
@@ -2968,10 +3011,11 @@ fn parse_chord_on(text: &str, mac: bool) -> Result<Chord, String> {
     if single.is_some_and(|c| c.is_ascii_uppercase()) {
         shift = true;
     }
-    // « + - * / ( ) = » : des caractères, pas des touches (le zoom, les piles) ; la touche
-    // dépend de la disposition (« + » demande Maj sur un AZERTY, « ( » sur un QWERTY), le
-    // caractère est le même partout, pavé numérique compris.
-    if let Some(c) = single.filter(|c| "+-*/()=:".contains(*c))
+    // « + - * / ( ) = » et les chiffres : des caractères, pas des touches (le zoom, les
+    // piles, les notes, `f 3`, `c 3`) ; la touche dépend de la disposition (« + » et « 3 »
+    // demandent Maj sur un AZERTY, « ( » sur un QWERTY), le caractère est le même partout,
+    // pavé numérique compris (retour du 23/11/2026 : « Maj+3 » ne vaut qu'en AZERTY).
+    if let Some(c) = single.filter(|c| "+-*/()=:".contains(*c) || c.is_ascii_digit())
         && !shift
         && !ctrl
         && !cmd
@@ -3520,20 +3564,28 @@ mod tests {
 
     #[test]
     fn rating_keys_work_with_or_without_shift() {
+        // Le caractère tapé (23/11/2026) : rangée du haut, avec Maj en AZERTY ou sans en
+        // QWERTY, ou pavé numérique ; la touche suivie de son caractère est laissée.
         let km = Keymap::default();
-        for (key, action) in [
-            (Key::Num0, Action::Stars(0)),
-            (Key::Num3, Action::Stars(3)),
-            (Key::Num5, Action::Stars(5)),
-            (Key::Num6, Action::Color(Color::Red)),
-            (Key::Num9, Action::Color(Color::Blue)),
+        for (c, action) in [
+            ('0', Action::Stars(0)),
+            ('3', Action::Stars(3)),
+            ('5', Action::Stars(5)),
+            ('6', Action::Color(Color::Red)),
+            ('9', Action::Color(Color::Blue)),
         ] {
-            assert_eq!(km.action(key, Modifiers::NONE), Some(action), "{key:?}");
-            assert_eq!(
-                km.action(key, Modifiers::SHIFT),
-                Some(action),
-                "Maj+{key:?}"
-            );
+            assert_eq!(km.chord_action(Chord::char(c)), Some(action), "{c}");
+            for shift in [false, true] {
+                let modifiers = if shift {
+                    Modifiers::SHIFT
+                } else {
+                    Modifiers::NONE
+                };
+                let key = Key::from_name(&c.to_string()).unwrap();
+                let events = winit_events(key, modifiers, false);
+                let chords = km.chords_repeated(&events, modifiers);
+                assert_eq!(chords, [(Chord::char(c), false)], "{c} {shift}");
+            }
         }
         assert_eq!(
             km.action(Key::Comma, Modifiers::NONE),
@@ -3814,7 +3866,7 @@ mod tests {
             Some(Action::FolderOpen)
         );
         assert_eq!(
-            seq.feed_one(&km, key(Key::Num3), now),
+            seq.feed_one(&km, Chord::char('3'), now),
             Some(Action::Stars(3)),
             "le reste passe"
         );
@@ -4145,7 +4197,8 @@ mod tests {
         assert_eq!(ok("Échap"), [plain(Key::Escape)]);
         assert_eq!(ok("Escape g"), [plain(Key::Escape), plain(Key::G)]);
         assert_eq!(ok("Page préc."), [plain(Key::PageUp)]);
-        assert_eq!(ok("3"), [plain(Key::Num3)]);
+        assert_eq!(ok("3"), [Chord::char('3')], "un chiffre : le caractère");
+        assert_eq!(ok("Maj+3"), [shifted(Key::Num3)], "avec Maj : la touche");
         assert_eq!(ok(","), [plain(Key::Comma)]);
         assert_eq!(
             ok("+"),

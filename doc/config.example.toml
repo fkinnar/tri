@@ -86,7 +86,7 @@ sharpness = "background"
 # Piles : empreintes de regroupement (même choix).
 stacks = "background"
 # Palettes de couleurs : recherches par palette et par couleur, pipette (même choix).
-palettes = "background"
+colours = "background"
 
 [xmp]
 # Nom des nouveaux sidecars : façon darktable, façon Adobe, ou les deux.
@@ -589,7 +589,7 @@ group_threshold = 0.45
 # réglage est retenu par dossier.
 strictness_span = 2.0
 
-[palette]
+[colours]
 # Palettes de couleurs : nombre de couleurs cherchées par image.
 #
 # Palettes de couleurs (#492) : les couleurs principales de chaque image et leur part,
@@ -667,6 +667,28 @@ mean_lightness = 0.3
 # La première couleur plus précise que la dernière : la tolérance de la deuxième est 1,25
 # fois celle du curseur, la troisième 1,5 fois… (0 : la même pour toutes).
 colour_widen = 0.25
+# Couleurs perçues (palette en grand) : part de la teinte de l'entourage retirée.
+#
+# Expérience : l'œil s'adapte à la lumière dominante (sous une lumière violette, un visage
+# beige rosé paraît orange) ; chaque pixel est vu après en avoir retiré cette part.
+perceived_adaptation = 0.8
+# Couleurs perçues : taille de l'entourage, en part du grand côté de l'image.
+perceived_surround = 0.2
+# Couleurs perçues : poids des zones qui tranchent sur leur entourage.
+perceived_salience = 1.0
+# Couleurs perçues : saturation rendue après l'adaptation, à 4 couleurs (1 : telle quelle).
+#
+# Retirer la lumière dominante ôte aussi de la couleur à tout le reste. Dégressive : moins de
+# couleurs, chacune plus moyenne et plus terne, plus de saturation (voir les deux suivants).
+perceived_saturation = 1.4
+# Couleurs perçues : nombre de couleurs auquel vaut perceived_saturation.
+perceived_saturation_colours = 4
+# Couleurs perçues : pente de la saturation selon le nombre de couleurs.
+#
+# Le surplus au-delà de 1 varie comme (perceived_saturation_colours / couleurs) ^ pente :
+# avec 0,5, 1,8 pour 1 couleur, 1,4 pour 4, 1,28 pour 8 ; l'image entière n'est pas touchée.
+# 0 : la même saturation partout.
+perceived_saturation_falloff = 0.5
 
 [index]
 # Noter les palettes dans l'index de recherche de tous les dossiers.
@@ -1358,8 +1380,8 @@ max = 5
 # Mode de recherche : absolue, hiérarchique ou couleur moyenne.
 #
 # Contient ces couleurs : "absolute", toutes comptent pareil ; "hierarchical", la première
-# compte le plus, puis la deuxième… ([palette] colour_hierarchy) ; "mean", la couleur
-# moyenne de l'image comparée à la première ([palette] mean_lightness). Changé aussi dans la
+# compte le plus, puis la deuxième… ([colours] colour_hierarchy) ; "mean", la couleur
+# moyenne de l'image comparée à la première ([colours] mean_lightness). Changé aussi dans la
 # boîte.
 mode = "absolute"
 # Pastilles des couleurs franches.
@@ -1390,6 +1412,24 @@ key_hue_step = 5.0
 key_step = 0.05
 # Clavier : pas de la tolérance à + et -.
 key_radius_step = 0.01
+
+[gui.colours_view]
+# Couleurs au plus du curseur des couleurs en grand.
+#
+# 0 : l'image telle quelle, 1 : sa couleur moyenne (la dominante), 2, 3… : l'image en autant
+# de couleurs, chaque pixel remplacé par la plus proche.
+max = 8
+# Grand côté de l'image dans la boîte des couleurs en grand (points).
+side = 420.0
+# Crans gardés en mémoire (couleurs en grand et palette du panneau).
+#
+# Un cran déjà vu (même photo, même nombre de couleurs, perçues ou non) revient sans être
+# recalculé ; les plus anciens partent.
+cache = 64
+# Fausses couleurs des couleurs en grand, la couleur la plus présente d'abord.
+#
+# Bien distinctes, pour voir les masses quand les vraies couleurs sont proches.
+false_colours = ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6"]
 
 [gui.position]
 # Repère « Photo 12 / 94 » à chaque changement d'image : durée d'affichage.

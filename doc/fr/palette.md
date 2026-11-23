@@ -2,7 +2,7 @@
 
 Issue #492 (idée de l'utilisateur, 15/11/2026) : construire des **moodboards** à partir
 de ses photos et d'images de référence. Extraire la palette de chaque image, chercher
-les images aux palettes proches ou qui contiennent une couleur, les rassembler.
+les images aux couleurs proches ou qui contiennent une couleur, les rassembler.
 
 Le module fait le calcul sur une image ; le cache par source et le calcul en fond sont
 décrits plus bas, l'interface vient ensuite.
@@ -46,7 +46,7 @@ infinie. Teinte et saturation (a, b) y comptent `chroma_weight` fois (2) face à
 (retour du 21/11/2026 : à poids égal, une photo brune au fond sombre semblait aussi
 proche d'une photo violette au fond sombre que les autres violettes).
 
-## Palettes proches (`rank_similar`)
+## Couleurs proches (`rank_similar`)
 
 Les éléments sous le seuil, du plus proche au plus lointain ; ceux dont la palette n'est
 pas encore calculée gardés à la fin, ceux sans palette possible retirés. Seuil de départ
@@ -65,7 +65,7 @@ des couleurs est plus loin que la tolérance ; sinon, recherche absolue, la moye
 distances (une couleur seule : sa distance, l'ordre d'avant) ; hiérarchique, chaque
 couleur pèse `colour_hierarchy` (0,4) fois la précédente et son coût est 1 − sa part dans
 l'image (`share_near`) plus `colour_proximity` (0,25) × sa distance rapportée à la
-tolérance. Mesuré le 23/11/2026 sur 300 photos d'une séance (`--colours`) : avec la
+tolérance. Mesuré le 23/11/2026 sur 300 photos d'une séance (`--find`) : avec la
 distance à part égale et 0,6, l'ordre changeait à peine quand on inversait les couleurs
 (une image avec 7 % de la première couleur en 5ᵉ place) ; la présence d'abord et 0,4
 mettent devant les images où la première couleur occupe le plus de place.
@@ -114,8 +114,8 @@ n'existe que pour un développement de la liste.
 
 ## Interface
 
-Section « Palette » du panneau de droite (source, bande, roue et couleurs de l'image
-sélectionnée), recherches dans la section Filtre (palettes proches, couleur) ; voir
+Section « Couleurs » du panneau de droite (source, bande, roue et couleurs de l'image
+sélectionnée), recherches dans la section Filtre (couleurs proches, couleur) ; voir
 [gui.md](gui.md). Sources (`SourceKind`) : `camera`, `raw`, ou un logiciel (`darktable`…)
 pour ses développements ; `developed` d'avant se relit `darktable`.
 
@@ -126,7 +126,7 @@ Idée de l'utilisateur (21/11/2026), après un essai sur une vraie séance : mê
 0,01 à 0,03). En **critère à part** (« Empiler : par palette (séries) », sous « Empiler
 automatiquement », retenu par dossier : `similarity::folder_by_palette`), elle sépare les
 **séries** (un éclairage, un fond) plutôt que les rafales. `stack_links` : la distance des
-palettes voisines divisée par `[palette] stack_scale` (0,5, bornée à 1) prend l'échelle des
+palettes voisines divisée par `[colours] stack_scale` (0,5, bornée à 1) prend l'échelle des
 empreintes, sur laquelle le curseur des piles et son centre calculé sont calés ; **sans
 l'heure** (une série est une lumière, pas un moment : à fond à gauche, tout se rejoint) ;
 une palette inconnue coupe. Sans source de palette choisie,
@@ -134,16 +134,36 @@ le JPEG boîtier.
 
 ## Ligne de commande
 
-`tri <dossier> --palette [--source camera|raw|darktable|…]` : chaque image, ses couleurs
+`tri <dossier> --colours [--source camera|raw|darktable|…]` : chaque image, ses couleurs
 `#rrggbb` et leur part, rangées dans le cache comme dans l'interface. Les rendus finis :
 seulement ceux déjà faits par l'interface (aucun logiciel lancé en ligne de commande).
-Avec `--colours "#d0a080,#6a7a80"` (la plus importante d'abord) et `--hierarchical` (ou
+Avec `--find "#d0a080,#6a7a80"` (la plus importante d'abord) et `--hierarchical` (ou
 `--mean`, la couleur moyenne, `Palette::mean`, comparée à la première) :
 ensuite, les images qui contiennent toutes ces couleurs, la mieux placée d'abord, avec
 leur coût et la part de chaque couleur (tolérance : `--threshold`, sinon
-`colour_radius`).
+`colour_radius`). Avec `--posterize K --to DOSSIER` : chaque image en K couleurs
+(`palette::posterize` ; 1 : sa couleur moyenne), écrite en sRGB (`NOM-pK.jpg`).
 
-## Réglages `[palette]`
+**Postérisation** (`palette::posterize`, #492, 23/11/2026) : les k couleurs principales de
+l'image (k-moyennes de `palette::extract`, factorisées dans `cluster`, sans fusion des
+proches ni retrait des miettes), puis chaque pixel remplacé par la plus proche (OKLab ;
+un pixel déjà vu n'est pas reconverti) ; k = 1, la couleur moyenne. Renvoie l'image et ses
+couleurs, parts des pixels décroissantes. Environ 10 ms pour une vignette.
+En **couleurs perçues** (`posterize_with(…, true)`, expérience) : l'image en OKLab, a et b
+floutés sur un carré de `perceived_surround` (0,2) du grand côté (deux passes de moyenne
+glissante, `box_blur`) donnent la teinte de l'entourage ; chaque pixel en perd la part
+`perceived_adaptation` (0,8 ; adaptation de l'œil à la lumière dominante), puis a et b
+sont multipliés par une saturation **dégressive** : `perceived_saturation` (1,4) à
+`perceived_saturation_colours` (4) couleurs, le surplus variant comme (4 / k) ^
+`perceived_saturation_falloff` (0,5) — 1,8 pour 1 couleur, 1,28 pour 8, l'image entière
+(cran 0) n'étant pas touchée (retours du 23/11/2026 : retirer la lumière dominante ôtait de la couleur
+à tout le reste, « infiniment plus naturel » mais terne ; puis « plus il y a de couleurs,
+moins il faut corriger ») ; dans les
+k-moyennes (pondérées, `cluster_weighted`), un point pèse `1 + perceived_salience × écart
+à son entourage / 0,1`. Sur la photo de l'utilisateur sous lumière violette, le visage
+sort orange dès 2 couleurs (beige rosé en valeurs brutes).
+
+## Réglages `[colours]`
 
 `colors`, `side`, `iterations`, `merge`, `min_share` (voir `doc/config.example.toml`).
 

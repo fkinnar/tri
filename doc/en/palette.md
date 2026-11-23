@@ -44,7 +44,7 @@ Symmetric; an empty palette is at infinite distance. Hue and saturation (a, b) c
 brown photo on a dark background looked as close to a purple photo on a dark background
 as the other purple ones).
 
-## Similar palettes (`rank_similar`)
+## Similar colours (`rank_similar`)
 
 The items under the threshold, closest first; those whose palette is not computed yet
 kept at the end, those without a possible palette removed. Slider start and end:
@@ -63,7 +63,7 @@ colours is further than the tolerance; otherwise, absolute search, the mean of t
 distances (a single colour: its distance, the previous order); hierarchical, each colour
 weighs `colour_hierarchy` (0.4) times the previous one and its cost is 1 − its share of
 the image (`share_near`) plus `colour_proximity` (0.25) × its distance relative to the
-tolerance. Measured on 2026-11-23 on 300 photos of a session (`--colours`): with the
+tolerance. Measured on 2026-11-23 on 300 photos of a session (`--find`): with the
 distance on an equal footing and 0.6, the order barely changed when swapping the colours
 (an image with 7 % of the first colour in 5th place); presence first and 0.4 put first
 the images where the first colour covers the most.
@@ -110,8 +110,8 @@ source), a finished render only exists for a development of the list.
 
 ## Interface
 
-"Palette" section of the right panel (source, band, wheel and colours of the selected
-image), searches in the Filter section (similar palettes, colour); see [gui.md](gui.md).
+"Colours" section of the right panel (source, band, wheel and colours of the selected
+image), searches in the Filter section (similar colours, colour); see [gui.md](gui.md).
 Sources (`SourceKind`): `camera`, `raw`, or a program (`darktable`…) for its
 developments; the former `developed` reads back as `darktable`.
 
@@ -122,21 +122,42 @@ the burst signature added no cut (between neighbours of one session, 0.01 to 0.0
 **criterion of its own** ("Stack: by palette (series)", under "Stack automatically",
 kept per folder: `similarity::folder_by_palette`), it separates **series** (one light, one
 background) rather than bursts. `stack_links`: the distance of neighbouring palettes
-divided by `[palette] stack_scale` (0.5, capped at 1) takes the signatures' scale, which
+divided by `[colours] stack_scale` (0.5, capped at 1) takes the signatures' scale, which
 the stacks slider and its computed centre are set on; **without the time** (a series is
 one light, not one moment: fully left, everything joins); an unknown palette cuts. Without a chosen palette source, the camera JPEG.
 
 ## Command line
 
-`tri <folder> --palette [--source camera|raw|darktable|…]`: each image, its `#rrggbb`
+`tri <folder> --colours [--source camera|raw|darktable|…]`: each image, its `#rrggbb`
 colours and their share, stored in the cache as in the interface. Finished renders: only
 those already made by the interface (no software launched from the command line). With
-`--colours "#d0a080,#6a7a80"` (the most important first) and `--hierarchical` (or `--mean`,
+`--find "#d0a080,#6a7a80"` (the most important first) and `--hierarchical` (or `--mean`,
 the average colour, `Palette::mean`, compared with the first one): then the
 images that contain all these colours, best first, with their cost and the share of each
-colour (tolerance: `--threshold`, otherwise `colour_radius`).
+colour (tolerance: `--threshold`, otherwise `colour_radius`). With `--posterize K --to
+FOLDER`: each image in K colours (`palette::posterize`; 1: its average colour), written in
+sRGB (`NAME-pK.jpg`).
 
-## Settings `[palette]`
+**Posterize** (`palette::posterize`, #492, 2026-11-23): the image's k main colours (the
+k-means of `palette::extract`, factored into `cluster`, without merging close colours or
+dropping specks), then each pixel replaced by the closest (OKLab; a pixel already seen is
+not converted again); k = 1, the average colour. Returns the image and its colours, pixel
+shares decreasing. About 10 ms for a thumbnail.
+In **perceived colours** (`posterize_with(…, true)`, experiment): the image in OKLab, a
+and b blurred over a square of `perceived_surround` (0.2) of the long side (two passes of
+running means, `box_blur`) give the surround's hue; each pixel loses the
+`perceived_adaptation` share of it (0.8; the eye adapting to the dominant light), then a
+and b are multiplied by a **decreasing** saturation: `perceived_saturation` (1.4) at
+`perceived_saturation_colours` (4) colours, the extra varying as (4 / k) ^
+`perceived_saturation_falloff` (0.5) — 1.8 for 1 colour, 1.28 for 8, the whole image
+(step 0) left as is (feedback of 2026-11-23: removing the dominant light took colour away from
+everything else, "infinitely more natural" but dull; then "the more colours, the less
+correction"); in the
+k-means (weighted, `cluster_weighted`), a point weighs `1 + perceived_salience × gap to its
+surround / 0.1`. On the user's photo under violet light, the face comes out orange from 2
+colours (pinkish beige in raw values).
+
+## Settings `[colours]`
 
 `colors`, `side`, `iterations`, `merge`, `min_share` (see `doc/config.example.en.toml`).
 
