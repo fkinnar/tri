@@ -666,9 +666,11 @@ struct ColourLive {
     like: Option<PaletteLike>,
     similar: Option<SimilarSearch>,
     similar_wanted: bool,
-    /// Ouverte depuis le plein écran, sur cette photo : « Annuler » y ramène (la recherche
-    /// passe en grille).
-    from_view: Option<PathBuf>,
+    /// Ouverte depuis le plein écran : « Annuler » y ramène (la recherche passe en grille).
+    from_view: bool,
+    /// La photo en surbrillance à l'ouverture : elle le reste dans le premier résultat si
+    /// elle en est, et « Annuler » y revient (retour du 23/11/2026).
+    origin: Option<PathBuf>,
     /// Ouverte depuis la palette en grand : « Annuler » la rouvre.
     from_palette_view: bool,
     /// Une recherche a été appliquée depuis l'ouverture (sinon, rien à rendre).
@@ -5951,9 +5953,8 @@ impl TriApp {
     /// Montre la boîte des couleurs `dialog`, la recherche en cours retenue pour
     /// « Annuler » (aperçu en direct).
     fn show_colour_dialog(&mut self, dialog: ColourDialog) {
-        let from_view = (self.mode == Mode::View)
-            .then(|| self.files.get(self.selected).map(|f| f.path.clone()))
-            .flatten();
+        let from_view = self.mode == Mode::View;
+        let origin = self.files.get(self.selected).map(|f| f.path.clone());
         self.colour_live = Some(ColourLive {
             colour: self.palette_colour.clone(),
             last: self.palette_colour_last.clone(),
@@ -5961,6 +5962,7 @@ impl TriApp {
             similar: self.similar.clone(),
             similar_wanted: self.similar_wanted,
             from_view,
+            origin: origin.clone(),
             from_palette_view: false,
             changed: false,
             applied: dialog.colours(),
@@ -5975,6 +5977,14 @@ impl TriApp {
             self.set_palette_colours(Some(colours));
             if let Some(live) = &mut self.colour_live {
                 live.changed = true;
+            }
+            // La photo de départ, si elle est trouvée, reste en surbrillance.
+            if let Some(i) = origin
+                .as_ref()
+                .and_then(|p| self.files.iter().position(|f| &f.path == p))
+            {
+                self.selected = i;
+                self.reveal = Some(Reveal::Minimal);
             }
         }
         self.colour_dialog = Some(dialog);
@@ -6028,12 +6038,15 @@ impl TriApp {
         self.similar_wanted = live.similar_wanted;
         self.palette_refilter_pending = false;
         self.apply_filter();
-        // Venue du plein écran : on y retourne, sur la même photo.
-        if let Some(path) = live.from_view
-            && let Some(i) = self.files.iter().position(|f| f.path == path)
+        // La photo de départ ; venue du plein écran, on y retourne, sur elle.
+        if let Some(i) = live
+            .origin
+            .as_ref()
+            .and_then(|p| self.files.iter().position(|f| &f.path == p))
         {
             self.selected = i;
-            if self.mode != Mode::View {
+            self.reveal = Some(Reveal::Minimal);
+            if live.from_view && self.mode != Mode::View {
                 self.open_view();
             }
         }
@@ -33626,6 +33639,53 @@ mod tests {
         h.state_mut().selected = 0;
         h.run_steps(2);
         assert!(h.query_by_label(&title).is_some(), "la barre reste");
+    }
+
+    #[test]
+    fn a_colour_search_from_a_photo_keeps_it_highlighted_and_cancel_returns_to_it() {
+        // Vidéo du 23/11/2026 : partie d'une photo (palette en grand), la recherche
+        // sélectionnait la première trouvée ; « Annuler » rouvrait la palette sur elle.
+        use tri::palette::{Source, SourceKind};
+        let blue = [30u8, 40, 200];
+        let mixed = image::RgbImage::from_fn(64, 48, |x, _| {
+            image::Rgb(if x < 44 { blue } else { [200, 30, 30] })
+        });
+        let images = vec![
+            (
+                "a_blue.jpg",
+                image::RgbImage::from_pixel(64, 48, image::Rgb(blue)),
+            ),
+            (
+                "b_green.jpg",
+                image::RgbImage::from_pixel(64, 48, image::Rgb([30, 180, 40])),
+            ),
+            ("c_mixed.jpg", mixed),
+        ];
+        let (mut h, _dir) = harness_images(images);
+        h.run_steps(3);
+        choose_palette(&mut h, Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        let origin = h.state().files[2].path.clone();
+        h.state_mut().selected = 2;
+        let blue = h.state().palettes[&(h.state().files[0].path.clone(), Source::Camera)].swatches
+            [0]
+        .oklab;
+        h.state_mut().show_colour_dialog(ColourDialog::new(&[blue]));
+        h.run_steps(3);
+        assert_eq!(h.state().files.len(), 2, "le bleu et la photo mêlée");
+        assert_eq!(
+            h.state().files[h.state().selected].path,
+            origin,
+            "la photo de départ en surbrillance"
+        );
+        h.get_by_label(&t!("cancel")).click();
+        h.run_steps(3);
+        assert_eq!(h.state().files.len(), 3);
+        assert_eq!(h.state().files[h.state().selected].path, origin, "revenue");
     }
 
     #[test]
