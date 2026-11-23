@@ -339,6 +339,11 @@ struct ColourDialog {
     /// Pas encore montrée : ses touches attendent l'image suivante (la touche qui l'a
     /// ouverte, Entrée, la validait aussitôt).
     fresh: bool,
+    /// L'emplacement réglé a été choisi exprès (clic dessus, `1`–`5`) : il le reste après
+    /// un clic sur la roue ; sinon, au relâcher, le clic suivant remplit le suivant.
+    sticky: bool,
+    /// Un clic ou un glisser sur la roue en cours.
+    stroke: bool,
 }
 
 impl ColourDialog {
@@ -356,15 +361,21 @@ impl ColourDialog {
             max: 5,
             dragging: None,
             fresh: true,
+            sticky: false,
+            stroke: false,
         };
         for &oklab in colours {
             dialog.set(oklab);
             dialog.slots.push(dialog.hsv);
         }
+        // Rien de choisi : un clic sur la roue remplit le premier emplacement vide (retour
+        // du 23/11/2026) ; la première couleur sur la roue.
         if colours.is_empty() {
             dialog.set_rgb([128, 128, 128]);
         } else {
             dialog.load(0);
+            dialog.active = None;
+            dialog.sticky = false;
         }
         dialog
     }
@@ -373,6 +384,7 @@ impl ColourDialog {
     /// rien à chercher tant qu'on n'a rien retouché.
     fn reset(&mut self) {
         self.harmony = None;
+        self.sticky = false;
         self.slots.clear();
         self.active = None;
         self.set_rgb([128, 128, 128]);
@@ -384,16 +396,47 @@ impl ColourDialog {
     fn store(&mut self, max: usize) {
         self.blank = false;
         self.harmony = None;
+        self.sticky = false;
         if self.slots.len() < max {
             self.slots.push(self.hsv);
             self.active = Some(self.slots.len() - 1);
         }
     }
 
+    /// Avant une retouche venue de la roue ou de la pipette (retour du 23/11/2026) :
+    /// l'emplacement choisi exprès, sinon le premier vide (la couleur réglée y est rangée),
+    /// sinon le dernier. Rien avec une harmonie (elle tourne).
+    fn edit_target(&mut self) {
+        if self.harmony.is_some() || (self.sticky && self.active.is_some()) {
+            return;
+        }
+        if self.slots.len() < self.max {
+            self.store(self.max);
+        } else {
+            self.active = self.slots.len().checked_sub(1);
+        }
+    }
+
+    /// Après cette retouche : plus rien de choisi (la suivante remplira l'emplacement
+    /// suivant), sauf un emplacement choisi exprès.
+    fn edit_done(&mut self) {
+        if !self.sticky && self.harmony.is_none() {
+            self.active = None;
+        }
+    }
+
+    /// Une couleur relevée (pipette) : comme un clic sur la roue.
+    fn pick(&mut self, oklab: [f32; 3]) {
+        self.edit_target();
+        self.set(oklab);
+        self.edit_done();
+    }
+
     /// Choisit l'emplacement `i` : sa couleur sur la roue.
     fn load(&mut self, i: usize) {
         if let Some(&hsv) = self.slots.get(i) {
             self.active = Some(i);
+            self.sticky = true;
             // Choisir n'est pas retoucher (retour du 23/11/2026 : l'harmonie se
             // détachait au simple clic sur une autre couleur).
             self.hsv = hsv;
@@ -407,6 +450,9 @@ impl ColourDialog {
         if i < self.slots.len() {
             self.harmony = None;
             self.slots.remove(i);
+            if self.active == Some(i) {
+                self.sticky = false;
+            }
             self.active = match self.active {
                 Some(a) if a == i => None,
                 Some(a) if a > i => Some(a - 1),
@@ -6317,12 +6363,23 @@ impl TriApp {
                     .map_or(0, |(i, _)| i);
                 dialog.dragging = Some(near);
             }
+            // Sans harmonie, au début d'un clic ou d'un glisser (retour du 23/11/2026) :
+            // l'emplacement choisi exprès, sinon le premier vide (rempli), sinon le dernier.
+            if dialog.harmony.is_none() && !dialog.stroke {
+                dialog.edit_target();
+            }
+            dialog.stroke = true;
             if let Some((h, s)) = hsv_at(pos, centre, radius, ryb) {
                 match (dialog.harmony, dialog.dragging) {
                     (Some(_), Some(i)) => dialog.turn(i, h, s),
                     _ => dialog.set_hsv([h, s, dialog.hsv[2]]),
                 }
             }
+        } else if dialog.stroke {
+            // Relâché : le clic suivant remplira l'emplacement suivant, sauf si celui-ci a
+            // été choisi exprès.
+            dialog.stroke = false;
+            dialog.edit_done();
         }
         if !response.dragged() {
             dialog.dragging = None;
@@ -6614,7 +6671,7 @@ impl TriApp {
             return;
         };
         match &mut self.colour_dialog {
-            Some(dialog) => dialog.set(oklab),
+            Some(dialog) => dialog.pick(oklab),
             None => self.set_palette_colour(Some(oklab)),
         }
     }
@@ -31915,6 +31972,9 @@ mod tests {
         // 21/11/2026).
         // La boîte le temps de s'ouvrir (fondu) avant de prendre un clic.
         h.state_mut().open_colour_dialog();
+        // La boîte s'ouvre sur la recherche d'avant ; une couleur relevée s'y ajouterait
+        // (retour du 23/11/2026) : réinitialisée, elle ne cherche que celle-là.
+        h.state_mut().colour_dialog.as_mut().unwrap().reset();
         h.run_steps(10);
         h.get_by_label(&t!("palette-eyedropper-name")).click();
         h.run_steps(2);
@@ -31938,7 +31998,8 @@ mod tests {
         run_until(&mut h, |app| {
             app.colour_dialog
                 .as_ref()
-                .is_some_and(|d| tri::palette::oklab_distance(d.colours()[0], red) < 0.02)
+                .and_then(|d| d.colours().first().copied())
+                .is_some_and(|c| tri::palette::oklab_distance(c, red) < 0.02)
         });
         h.run_steps(10);
         h.get_by_label(&t!("palette-colour-search")).click();
@@ -32733,9 +32794,28 @@ mod tests {
         assert_eq!(dialog.active, None, "plus rien de choisi");
         dialog.set_rgb([1, 2, 3]);
         assert_eq!(dialog.slot_rgb(0), [0, 255, 0], "rien ne suit");
+        // Un clic sur la roue remplit le premier vide, le suivant le suivant ; un
+        // emplacement choisi exprès le reste (retour du 23/11/2026).
+        let mut w = ColourDialog::new(&[]);
+        for rgb in [[255, 0, 0], [0, 0, 255]] {
+            w.edit_target();
+            w.set_rgb(rgb);
+            w.edit_done();
+        }
+        assert_eq!(w.slots.len(), 2);
+        assert_eq!((w.slot_rgb(0), w.slot_rgb(1)), ([255, 0, 0], [0, 0, 255]));
+        assert_eq!(w.active, None);
+        w.load(0);
+        for rgb in [[200, 0, 0], [180, 0, 0]] {
+            w.edit_target();
+            w.set_rgb(rgb);
+            w.edit_done();
+        }
+        assert_eq!(w.slots.len(), 2, "choisi exprès : retouché, pas d'ajout");
+        assert_eq!(w.slot_rgb(0), [180, 0, 0]);
         // Une seule couleur cherchée : rangée elle aussi (retour du 23/11/2026).
         let one = ColourDialog::new(&[tri::palette::srgb_to_oklab([200, 30, 30])]);
-        assert_eq!((one.slots.len(), one.active), (1, Some(0)));
+        assert_eq!((one.slots.len(), one.active), (1, None));
 
         let (mut h, dir) = harness();
         let config = dir.path().join("config.toml");

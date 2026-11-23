@@ -258,10 +258,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   l'agrandit pour viser juste (idée de l'utilisateur, 21/11/2026) ; « Valider » garde la recherche.
   **Plusieurs couleurs** (#492, idée de l'utilisateur, 23/11/2026) : en haut de la boîte,
   les couleurs cherchées, en pastilles comme les autres (`[gui.colour_search] max`
-  emplacements, 5 ; retours du 23/11/2026) : rien par défaut, un « + » dans les vides ; un
-  clic sur un vide y range la couleur réglée et le choisit, sur un plein le choisit
-  (encadré) : la roue, les valeurs et la pipette règlent alors celui-là ; clic droit
-  « Vider » (les suivants avancent). À l'ouverture, la recherche en cours ou la dernière,
+  emplacements, 5 ; retours du 23/11/2026) : rien par défaut, un « + » dans les vides. Un
+  clic sur la roue (ou la pipette) **remplit le premier emplacement vide**, et le glisser
+  le règle tant que le bouton reste enfoncé ; au relâcher, plus rien n'est choisi : le clic
+  suivant remplit l'emplacement suivant (plus de « + » à cliquer avant, ni de doublon).
+  Cinq rangées et rien de choisi : le dernier est retouché. Un clic sur un emplacement
+  plein le **choisit exprès** (sa pastille plus grande) : la roue, les valeurs et la
+  pipette le retouchent, autant de fois qu'on veut, jusqu'à un clic sur un « + » ; clic
+  droit « Vider » (les suivants avancent). À l'ouverture, la recherche en cours ou la dernière,
   même d'une seule couleur, la première choisie ; rien de rangé, « Valider » prend la
   couleur de la roue. Centrées entre deux traits fins.
   **Aperçu en direct** (retour du 23/11/2026) : à chaque changement de couleur dans la

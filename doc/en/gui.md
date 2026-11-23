@@ -247,10 +247,13 @@ system one ("cold" measurements, experiments).
   search.
   **Several colours** (#492, user's idea, 2026-11-23): at the top of the box, the colours
   looked for, as swatches like the others (`[gui.colour_search] max` slots, 5; feedback of
-  2026-11-23): nothing by default, a "+" in the empty ones; a click on an empty one stores
-  the current colour there and selects it, on a filled one selects it (framed): the wheel,
-  the values and the eyedropper then set that one; right-click "Clear" (the next ones move
-  up). When opening, the current or last search, even of a single colour, the first one
+  2026-11-23): nothing by default, a "+" in the empty ones. A click on the wheel (or the
+  eyedropper) **fills the first empty slot**, and dragging sets it while the button is
+  held; on release nothing is selected: the next click fills the next slot (no "+" to
+  click first, no duplicate). Five stored and nothing selected: the last one is changed.
+  A click on a filled slot **selects it on purpose** (its swatch larger): the wheel, the
+  values and the eyedropper change it, as often as needed, until a click on a "+";
+  right-click "Clear" (the next ones move up). When opening, the current or last search, even of a single colour, the first one
   selected; nothing stored, "OK" takes the wheel's colour. Centred between two thin
   lines. **Live preview** (feedback of 2026-11-23): at each colour change in the box, the
   grid searches behind it, at most once per `[gui.colour_search] live_ms` (150 ms; 0: no
