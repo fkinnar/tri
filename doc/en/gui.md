@@ -1269,7 +1269,7 @@ system one ("cold" measurements, experiments).
   **Reference photo** (feedback of 2026-11-22), shared by "similar palettes" and
   "similar" (`TriApp::reference`): in the Filters section, "Colour" first, then those two
   filters, the reference on their right (`reference_box`: its thumbnail, or an empty
-  frame; one and a half times the height of the two rows, `[gui.grid] reference_scale`,
+  frame; it fits the two rows, highlight included, `[gui.grid] reference_scale`,
   feedback of 2026-11-23); a click opens it larger (photo centred, buttons on the right) with "Remove the
   reference". **Similar** (`core.filter.similar`): the photos whose fingerprint (the
   stacks' one) is close to the reference's, closest first (`rank_by_similarity`, a

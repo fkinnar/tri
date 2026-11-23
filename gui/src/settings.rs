@@ -754,7 +754,7 @@ impl Default for GridSettings {
             name_chars: 24,
             textures: 600,
             marks: 12.0,
-            reference_scale: 1.5,
+            reference_scale: 1.25,
             empty_marks: true,
             rejected_opacity: 0.35,
             hover_frame: 2.0,
