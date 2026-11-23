@@ -301,13 +301,17 @@ system one ("cold" measurements, experiments).
   photo's palette): its main colours (the most present, without specks under
   `colour_min_share`, at most `max`) in the box, searched right away, to adjust; "Cancel"
   brings back the previous search. **Large palette** (next to it, action
-  `core.view.palette`, user's idea of 2026-11-23): a movable box like the large histogram,
+  `core.view.palette`, `g p`; a click on the band or the wheel of the panel's palette
+  opens it too, like the histogram; user's idea of 2026-11-23): a movable box like the large histogram,
   to see the **balance of masses** of the highlighted photo (the image its palette comes
   from); under the image, a stepped slider: 0 the image as is, 1 its average colour (the
   dominant), n the image in n colours (each pixel replaced by the closest,
   `palette::posterize`), up to `[gui.palette_view] max` (8); optional **false colours**
   (`false_colours`, the most present first, with their legend next to the real ones); on
-  the right, the palette of that step (a click on a colour searches it). **Perceived colours** (experiment of
+  the right, the palette of that step (a click on a colour closes it and opens the colour
+  box on it, without searching yet; the hand only over what can be clicked). In the panel
+  too, a colour of the list opens the colour box rather than filtering (feedback of
+  2026-11-23: the large palette stayed open over an empty grid). **Perceived colours** (experiment of
   2026-11-23, user's idea: under a violet light, a pinkish beige face looks orange): the
   colours adapted to the light of their surround, areas that stand out weighing more
   (`palette::posterize_with`, settings `[palette] perceived_*`); at step 0, the image "as

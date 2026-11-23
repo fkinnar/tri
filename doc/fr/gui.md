@@ -316,14 +316,18 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   Palette, sous la palette de la photo) : ses couleurs principales (les plus présentes, sans
   les miettes sous `colour_min_share`, au plus `max`) dans la boîte, cherchées tout de
   suite, à ajuster ; « Annuler » rend la recherche d'avant. **Palette en grand** (à côté,
-  action `core.view.palette`, idée de l'utilisateur du 23/11/2026) : une boîte déplaçable
+  action `core.view.palette`, `g p` ; un clic sur la bande ou la roue de la palette du
+  panneau l'ouvre aussi, comme l'histogramme ; idée de l'utilisateur du 23/11/2026) : une boîte déplaçable
   comme le grand histogramme, pour voir les **rapports de masses** de la photo en
   surbrillance (l'image d'où vient sa palette) ; sous l'image, un curseur à crans : 0
   l'image telle quelle, 1 sa couleur moyenne (la dominante), n l'image en n couleurs (chaque
   pixel remplacé par la plus proche, `palette::posterize`), jusqu'à `[gui.palette_view]
   max` (8) ; **fausses couleurs** au choix (`false_colours`, la plus présente d'abord, avec
   leur légende face aux vraies) ; à droite, la palette du cran (un clic sur une couleur la
-  cherche). **Couleurs perçues** (expérience du 23/11/2026, idée de l'utilisateur : sous
+  ferme et ouvre la boîte des couleurs sur elle, sans chercher encore ; la main seulement
+  sur ce qui se clique). Dans le panneau aussi, une couleur de la liste ouvre la boîte
+  des couleurs plutôt que de filtrer (retours du 23/11/2026 : la palette en grand restait
+  ouverte sur une grille vide). **Couleurs perçues** (expérience du 23/11/2026, idée de l'utilisateur : sous
   une lumière violette, un visage beige rosé paraît orange) : les couleurs adaptées à la
   lumière de leur entourage, les zones qui tranchent pesant plus
   (`palette::posterize_with`, réglages `[palette] perceived_*`) ; au cran 0, l'image

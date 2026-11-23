@@ -762,6 +762,14 @@ struct PaletteViewShown {
     swatches: Vec<tri::palette::Swatch>,
 }
 
+/// Un clic dans le détail d'une palette (roue, liste) : rien, la palette en grand (roue du
+/// panneau), ou une couleur (sa pastille ; la boîte des couleurs s'ouvre sur elle).
+enum DetailClick {
+    None,
+    Open,
+    Colour([f32; 3]),
+}
+
 /// Taille d'une pastille de la boîte des couleurs.
 const SWATCH: egui::Vec2 = egui::Vec2::new(26.0, 20.0);
 
@@ -7162,7 +7170,8 @@ impl TriApp {
                         ui.add_space(4.0);
                     }
                 }
-                self.palette_detail(ui, &main);
+                let click = self.palette_detail(ui, &main, true);
+                self.palette_detail_click(ui.ctx(), click);
             }
             return;
         }
@@ -7173,7 +7182,8 @@ impl TriApp {
         let several = rows.len() > 1;
         // De l'air sous la source, comme entre les autres réglages du panneau.
         ui.add_space(self.gui.dialogs.spacing);
-        let mut picked = None;
+        let mut open_view = false;
+        let mut colour_box = None;
         let mut shown: Vec<(Option<String>, Arc<Palette>)> = Vec::new();
         for (label, row) in rows {
             if let Some(label) = &label {
@@ -7190,8 +7200,10 @@ impl TriApp {
             }
             match row {
                 Row::Palette(p) => {
-                    if let Some(c) = self.palette_band(ui, &p) {
-                        picked = Some(c);
+                    // Un clic sur la bande : la palette en grand (retour du 23/11/2026, comme
+                    // l'histogramme).
+                    if self.palette_band(ui, &p).is_some() {
+                        open_view = true;
                     }
                     shown.push((label, p));
                 }
@@ -7210,11 +7222,12 @@ impl TriApp {
             }
         }
         let mut these = None;
-        let mut open_view = false;
         if let Some(palette) = main_palette {
             self.palette_last = Some((shown, palette.clone()));
-            if let Some(c) = self.palette_detail(ui, &palette) {
-                picked = Some(c);
+            match self.palette_detail(ui, &palette, true) {
+                DetailClick::Open => open_view = true,
+                DetailClick::Colour(c) => colour_box = Some(c),
+                DetailClick::None => {}
             }
             // Partir de cette photo (idée du 23/11/2026) : ses couleurs principales dans la
             // boîte, cherchées tout de suite, à ajuster.
@@ -7237,12 +7250,11 @@ impl TriApp {
                 }
             });
         }
-        // La couleur cliquée : cherchée tout à la fin (la recherche refiltre la liste).
-        if picked.is_some() {
-            self.set_palette_colour(picked);
-        }
         if let Some(palette) = these {
             self.search_palette_colours(&palette);
+        }
+        if let Some(c) = colour_box {
+            self.show_colour_dialog(ColourDialog::new(&[c]));
         }
         if open_view {
             let ctx = ui.ctx().clone();
@@ -7277,9 +7289,10 @@ impl TriApp {
     /// Roue chromatique et liste des couleurs d'une palette : un clic sur un point de la
     /// roue ou une pastille de la liste cherche cette couleur (renvoyée), un clic sur un
     /// `#rrggbb` le copie.
-    fn palette_detail(&self, ui: &mut Ui, palette: &Palette) -> Option<[f32; 3]> {
+    fn palette_detail(&self, ui: &mut Ui, palette: &Palette, panel: bool) -> DetailClick {
         let width = ui.available_width();
         let mut picked = None;
+        let mut open = false;
         let tip = |s: &tri::palette::Swatch| {
             t!(
                 "palette-swatch-tip",
@@ -7299,7 +7312,18 @@ impl TriApp {
             );
             // Le point de la roue sous le pointeur.
             let radius = wheel.width().min(wheel.height()) / 2.0 - 6.0;
-            if let Some(pos) = response.hover_pos()
+            let hover = response.hover_pos();
+            // Dans le panneau, toute la roue ouvre la palette en grand (retour du
+            // 23/11/2026, comme la bande et l'histogramme).
+            if panel {
+                if response
+                    .on_hover_cursor(egui::CursorIcon::PointingHand)
+                    .on_hover_text(t!("palette-open-tip"))
+                    .clicked()
+                {
+                    open = true;
+                }
+            } else if let Some(pos) = hover
                 && let Some(s) = palette.swatches.iter().min_by(|a, b| {
                     let d = |s: &tri::palette::Swatch| {
                         crate::palette_view::wheel_pos(s, wheel.center(), radius).distance(pos)
@@ -7314,11 +7338,24 @@ impl TriApp {
             {
                 picked = Some(s.oklab);
             }
+            // La main sur les points seulement (retour du 23/11/2026 : dans la palette en
+            // grand, elle s'affichait sur toute la roue, perturbant).
+            if let Some(pos) = hover.filter(|_| !panel)
+                && !palette.swatches.iter().any(|s| {
+                    crate::palette_view::wheel_pos(s, wheel.center(), radius).distance(pos) < 12.0
+                })
+            {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Default);
+            }
             ui.vertical(|ui| {
                 for swatch in &palette.swatches {
                     ui.horizontal(|ui| {
                         let (dot, dot_response) =
                             ui.allocate_exact_size(vec2(12.0, 12.0), Sense::click());
+                        let name = t!("palette-dot", hex = crate::palette_view::hex(swatch));
+                        dot_response.widget_info(|| {
+                            egui::WidgetInfo::labeled(egui::Role::Button, true, name.clone())
+                        });
                         ui.painter()
                             .rect_filled(dot, 2.0, crate::palette_view::color(swatch));
                         if dot_response
@@ -7345,11 +7382,29 @@ impl TriApp {
                 }
             });
         });
-        picked
+        match (open, picked) {
+            (true, _) => DetailClick::Open,
+            (_, Some(c)) => DetailClick::Colour(c),
+            _ => DetailClick::None,
+        }
+    }
+
+    /// Un clic dans le détail d'une palette du panneau (palettes d'avant une recherche
+    /// vide) : la palette en grand, ou la boîte des couleurs sur la couleur cliquée.
+    fn palette_detail_click(&mut self, ctx: &egui::Context, click: DetailClick) {
+        match click {
+            DetailClick::Open => {
+                let ctx = ctx.clone();
+                self.perform(&ctx, Action::PaletteView);
+            }
+            DetailClick::Colour(c) => self.show_colour_dialog(ColourDialog::new(&[c])),
+            DetailClick::None => {}
+        }
     }
 
     /// Bande des couleurs d'une palette, sur toute la largeur : au survol d'une pastille,
-    /// sa couleur et sa part ; un clic la cherche (« contient cette couleur »), renvoyée.
+    /// sa couleur et sa part ; un clic (la couleur cliquée renvoyée) ouvre la palette en
+    /// grand.
     fn palette_band(&self, ui: &mut Ui, palette: &Palette) -> Option<[f32; 3]> {
         let (band, response) = ui.allocate_exact_size(
             vec2(ui.available_width(), crate::palette_view::BAND_HEIGHT),
@@ -7380,7 +7435,7 @@ impl TriApp {
         let k = rects.iter().position(|r| r.contains(pos))?;
         let swatch = palette.swatches[k];
         let tip = t!(
-            "palette-swatch-tip",
+            "palette-band-tip",
             hex = crate::palette_view::hex(&swatch),
             share = format!("{:.0}", swatch.share * 100.0)
         );
@@ -21504,7 +21559,9 @@ impl TriApp {
                                 );
                                 crate::palette_view::draw_band(ui.painter(), band, p);
                                 ui.add_space(6.0);
-                                picked = self.palette_detail(ui, p);
+                                if let DetailClick::Colour(c) = self.palette_detail(ui, p, false) {
+                                    picked = Some(c);
+                                }
                             }
                             None => {
                                 ui.weak(t!("palette-computing"));
@@ -21519,8 +21576,12 @@ impl TriApp {
         self.palette_view_k = k;
         self.palette_view_false = false_colours;
         self.palette_view_perceived = perceived;
-        if picked.is_some() {
-            self.set_palette_colour(picked);
+        // Une couleur cliquée : la boîte des couleurs, sur elle, à ajuster (retour du
+        // 23/11/2026 : chercher tout de suite vidait la grille derrière, la palette en grand
+        // restait ouverte).
+        if let Some(c) = picked {
+            self.palette_view = false;
+            self.show_colour_dialog(ColourDialog::new(&[c]));
         }
     }
 
@@ -32947,6 +33008,15 @@ mod tests {
         h.run_steps(3);
         h.get_by_label(&t!("palette-band")).click();
         h.run_steps(3);
+        // Depuis le 23/11/2026, la bande ouvre la palette en grand (plus de recherche
+        // directe) ; la recherche se lance alors de la boîte, sans plantage.
+        assert!(h.state().palette_view, "palette en grand");
+        h.state_mut().palette_view = false;
+        let blue = h.state().palettes[&(h.state().files[2].path.clone(), Source::Camera)].swatches
+            [0]
+        .oklab;
+        h.state_mut().set_palette_colour(Some(blue));
+        h.run_steps(3);
         assert!(h.state().palette_colour.is_some(), "recherche lancée");
         assert_eq!(h.state().files.len(), 2);
     }
@@ -33429,7 +33499,10 @@ mod tests {
                 .iter()
                 .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
         });
-        act(&mut h, Action::PaletteView);
+        // Au clavier : « g p » (go palette).
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::P, Modifiers::NONE);
+        h.run_steps(2);
         assert!(h.state().palette_view);
         h.state_mut().palette_view_k = 2;
         run_until(&mut h, |app| {
@@ -33457,6 +33530,29 @@ mod tests {
         press(&mut h, Key::Escape, Modifiers::NONE);
         h.run_steps(2);
         assert!(!h.state().palette_view);
+        // Une couleur cliquée dans la palette en grand : elle se ferme, la boîte des
+        // couleurs s'ouvre sur cette couleur, sans chercher.
+        h.state_mut().palette_view = true;
+        h.state_mut().palette_view_k = 2;
+        run_until(&mut h, |app| {
+            app.palette_view_shown
+                .as_ref()
+                .is_some_and(|s| s.key.2 == 2)
+        });
+        h.run_steps(2);
+        let first = h.state().palette_view_shown.as_ref().unwrap().swatches[0];
+        let label = t!("palette-dot", hex = crate::palette_view::hex(&first));
+        // La même couleur peut être dans le panneau : celle de la boîte, dessinée après.
+        h.get_all_by_label(&label).last().unwrap().click();
+        h.run_steps(3);
+        assert!(!h.state().palette_view, "fermée");
+        let d = h
+            .state()
+            .colour_dialog
+            .as_ref()
+            .expect("la boîte des couleurs");
+        assert_eq!(d.slots.len(), 1);
+        assert!(h.state().palette_colour.is_none(), "rien cherché encore");
     }
 
     #[test]
