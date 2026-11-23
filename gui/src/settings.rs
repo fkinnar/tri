@@ -665,6 +665,9 @@ pub struct GridSettings {
     pub textures: usize,
     /// Taille des notes (étoiles, couleurs, drapeau) sur les vignettes.
     pub marks: f32,
+    /// Imagette de la référence (filtres « palettes proches », « semblables ») : sa taille,
+    /// en multiple de la hauteur des deux lignes qu'elle accompagne.
+    pub reference_scale: f32,
     /// Marques vides dessinées en gris clair là où rien n'est posé (une étoile, une
     /// pastille de couleur, le cercle du drapeau neutre) : chaque vignette montre toutes
     /// ses informations et où cliquer (demandé le 31/10/2026).
@@ -751,6 +754,7 @@ impl Default for GridSettings {
             name_chars: 24,
             textures: 600,
             marks: 12.0,
+            reference_scale: 1.5,
             empty_marks: true,
             rejected_opacity: 0.35,
             hover_frame: 2.0,

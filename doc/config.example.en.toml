@@ -1034,6 +1034,11 @@ name_chars = 24
 textures = 600
 # Size of the ratings (stars, colours, flag) on the thumbnails.
 marks = 12.0
+# Reference thumbnail: size, as a multiple of the height of the two filter rows.
+#
+# "Similar palettes" and "Similar" filters: the reference thumbnail on their right (1.5:
+# one and a half times the height of these two rows).
+reference_scale = 1.5
 # Draw empty marks in light grey where nothing is set (a star, a colour dot, the neutral
 # flag's circle): every thumbnail shows all its information, and where to click.
 empty_marks = true

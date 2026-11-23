@@ -5067,7 +5067,9 @@ impl TriApp {
         if palettes {
             self.search_filter_row(ui, Action::FilterPaletteColour);
         }
-        let side = (self.gui.grid.marks + 4.0) * 2.0 + ui.spacing().item_spacing.y;
+        // Plus grande que les deux lignes (retour du 23/11/2026 : on la voyait mal).
+        let side = ((self.gui.grid.marks + 4.0) * 2.0 + ui.spacing().item_spacing.y)
+            * self.gui.grid.reference_scale.max(0.5);
         let gap = ui.spacing().item_spacing.x * 2.0;
         let width = ui.available_width();
         // Les espacements d'egui entre les trois éléments de la rangée comptent aussi :

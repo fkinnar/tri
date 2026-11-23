@@ -1046,6 +1046,11 @@ name_chars = 24
 textures = 600
 # Taille des notes (étoiles, couleurs, drapeau) sur les vignettes.
 marks = 12.0
+# Imagette de la référence : taille, en multiple de la hauteur des deux lignes de filtres.
+#
+# Filtres « palettes proches » et « semblables » : l'imagette de la référence, à leur
+# droite (1,5 : une fois et demie la hauteur de ces deux lignes).
+reference_scale = 1.5
 # Marques vides dessinées en gris clair là où rien n'est posé (une étoile, une pastille
 # de couleur, le cercle du drapeau neutre) : chaque vignette montre toutes ses
 # informations, et où cliquer.
