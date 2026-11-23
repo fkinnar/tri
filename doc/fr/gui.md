@@ -255,15 +255,20 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   l'image d'où la palette est tirée, lue en fond ; ailleurs, le pixel de la capture de la
   fenêtre), puis la boîte revient ; sur une image, un **collimateur** montre la zone
   moyennée (`[palette] pick_area`, 2 % du grand côté), et la loupe (`m` maintenue)
-  l'agrandit pour viser juste (idée de l'utilisateur, 21/11/2026) ; « Chercher » lance le filtre.
+  l'agrandit pour viser juste (idée de l'utilisateur, 21/11/2026) ; « Valider » garde la recherche.
   **Plusieurs couleurs** (#492, idée de l'utilisateur, 23/11/2026) : en haut de la boîte,
   les couleurs cherchées, en pastilles comme les autres (`[gui.colour_search] max`
   emplacements, 5 ; retours du 23/11/2026) : rien par défaut, un « + » dans les vides ; un
   clic sur un vide y range la couleur réglée et le choisit, sur un plein le choisit
   (encadré) : la roue, les valeurs et la pipette règlent alors celui-là ; clic droit
   « Vider » (les suivants avancent). À l'ouverture, la recherche en cours ou la dernière,
-  même d'une seule couleur, la première choisie ; rien de rangé, « Chercher » prend la
-  couleur de la roue. Centrées entre deux traits fins. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
+  même d'une seule couleur, la première choisie ; rien de rangé, « Valider » prend la
+  couleur de la roue. Centrées entre deux traits fins.
+  **Aperçu en direct** (retour du 23/11/2026) : à chaque changement de couleur dans la
+  boîte, la grille cherche derrière, au plus une fois par `[gui.colour_search] live_ms`
+  (150 ms ; 0 : pas d'aperçu) ; l'ouverture ne lance rien ; « Valider » (ex-« Chercher »)
+  garde la recherche, « Annuler » ou la croix rendent celle d'avant (ou aucune) et le
+  tri d'avant. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
   couleur serait ingérable). À droite, **Absolue** (toutes comptent pareil : la moyenne des
   distances) ou **Hiérarchique** (la première compte le plus, chaque suivante
   `[palette] colour_hierarchy` fois la précédente, d'après sa présence dans l'image, la

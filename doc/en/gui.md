@@ -243,16 +243,19 @@ system one ("cold" measurements, experiments).
   a small area of the image the palette comes from, read in the background; elsewhere,
   the pixel of a capture of the window), then the box comes back; on an image, a
   **reticle** shows the averaged area (`[palette] pick_area`, 2 % of the long side), and
-  the loupe (`m` held) magnifies it to aim precisely (user's idea, 2026-11-21); "Search" starts the
-  filter.
+  the loupe (`m` held) magnifies it to aim precisely (user's idea, 2026-11-21); "OK" keeps the
+  search.
   **Several colours** (#492, user's idea, 2026-11-23): at the top of the box, the colours
   looked for, as swatches like the others (`[gui.colour_search] max` slots, 5; feedback of
   2026-11-23): nothing by default, a "+" in the empty ones; a click on an empty one stores
   the current colour there and selects it, on a filled one selects it (framed): the wheel,
   the values and the eyedropper then set that one; right-click "Clear" (the next ones move
   up). When opening, the current or last search, even of a single colour, the first one
-  selected; nothing stored, "Search" takes the wheel's colour. Centred between two thin
-  lines. An image must
+  selected; nothing stored, "OK" takes the wheel's colour. Centred between two thin
+  lines. **Live preview** (feedback of 2026-11-23): at each colour change in the box, the
+  grid searches behind it, at most once per `[gui.colour_search] live_ms` (150 ms; 0: no
+  preview); opening starts nothing; "OK" (formerly "Search") keeps the search, "Cancel" or
+  the cross bring back the previous one (or none) and the previous sort. An image must
   contain **all** of them (one tolerance for all: one per colour would be unmanageable).
   On the right, **Absolute** (all count the same: the mean of the distances) or
   **Hierarchical** (the first counts the most, each next one `[palette] colour_hierarchy`

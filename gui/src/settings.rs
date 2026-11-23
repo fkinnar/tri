@@ -1192,6 +1192,9 @@ pub struct ColourSearchSettings {
     pub own: Vec<String>,
     /// Nombre de pastilles libres.
     pub own_max: usize,
+    /// Aperçu en direct : la grille cherche derrière la boîte à chaque changement, au plus
+    /// une fois par ce délai (millisecondes) ; 0 : seulement à « Chercher ».
+    pub live_ms: u64,
 }
 
 impl Default for ColourSearchSettings {
@@ -1208,6 +1211,7 @@ impl Default for ColourSearchSettings {
             ]),
             own: Vec::new(),
             own_max: 6,
+            live_ms: 150,
         }
     }
 }

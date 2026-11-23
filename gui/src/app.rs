@@ -425,6 +425,20 @@ impl ColourDialog {
     }
 }
 
+/// Aperçu en direct de la boîte des couleurs : ce qu'« Annuler » rend, et les couleurs
+/// déjà appliquées à la grille (et quand : pas plus d'une fois par `live_ms`).
+struct ColourLive {
+    colour: Option<PaletteColour>,
+    last: Option<Vec<[f32; 3]>>,
+    like: Option<PaletteLike>,
+    similar: Option<SimilarSearch>,
+    similar_wanted: bool,
+    /// Une recherche a été appliquée depuis l'ouverture (sinon, rien à rendre).
+    changed: bool,
+    applied: Vec<[f32; 3]>,
+    at: Instant,
+}
+
 /// Taille d'une pastille de la boîte des couleurs.
 const SWATCH: egui::Vec2 = egui::Vec2::new(26.0, 20.0);
 
@@ -1353,6 +1367,9 @@ pub struct TriApp {
     screen_pick: Option<Receiver<[u8; 3]>>,
     /// Boîte de choix de la couleur cherchée (#492, retour du 21/11/2026), ouverte.
     colour_dialog: Option<ColourDialog>,
+    /// Aperçu en direct de la boîte des couleurs (retour du 23/11/2026) : la recherche
+    /// d'avant son ouverture (rendue par « Annuler »), les couleurs appliquées et quand.
+    colour_live: Option<ColourLive>,
     /// Dernière couleur cherchée : cocher « Couleur » la reprend.
     palette_colour_last: Option<Vec<[f32; 3]>>,
     /// Le tri d'avant la recherche de palettes en cours (passée à « Proximité »), rendu
@@ -2438,6 +2455,7 @@ impl TriApp {
             colour_pick: None,
             screen_pick: None,
             colour_dialog: None,
+            colour_live: None,
             palette_colour_last: None,
             order_before_search: None,
             sort_searching: false,
@@ -5500,7 +5518,69 @@ impl TriApp {
             .map(|c| c.colours.clone())
             .or(self.palette_colour_last.clone())
             .unwrap_or_default();
-        self.colour_dialog = Some(ColourDialog::new(&colours));
+        self.show_colour_dialog(ColourDialog::new(&colours));
+    }
+
+    /// Montre la boîte des couleurs `dialog`, la recherche en cours retenue pour
+    /// « Annuler » (aperçu en direct).
+    fn show_colour_dialog(&mut self, dialog: ColourDialog) {
+        self.colour_live = Some(ColourLive {
+            colour: self.palette_colour.clone(),
+            last: self.palette_colour_last.clone(),
+            like: self.palette_like.clone(),
+            similar: self.similar.clone(),
+            similar_wanted: self.similar_wanted,
+            changed: false,
+            applied: dialog.colours(),
+            at: Instant::now(),
+        });
+        self.colour_dialog = Some(dialog);
+    }
+
+    /// Aperçu en direct (retour du 23/11/2026) : les couleurs de la boîte changées, la
+    /// grille cherche derrière, pas plus d'une fois par `[gui.colour_search] live_ms`
+    /// (0 : pas d'aperçu).
+    fn colour_live_update(&mut self, ctx: &egui::Context, dialog: &ColourDialog) {
+        let every = self.gui.colour_search.live_ms;
+        if every == 0 {
+            return;
+        }
+        let colours = dialog.colours();
+        let Some(live) = &self.colour_live else {
+            return;
+        };
+        if live.applied == colours {
+            return;
+        }
+        let wait = Duration::from_millis(every);
+        let since = live.at.elapsed();
+        if since < wait {
+            ctx.request_repaint_after(wait - since);
+            return;
+        }
+        self.set_palette_colours(Some(colours.clone()));
+        if let Some(live) = &mut self.colour_live {
+            live.applied = colours;
+            live.at = Instant::now();
+            live.changed = true;
+        }
+    }
+
+    /// « Annuler » : la recherche d'avant l'ouverture de la boîte, si l'aperçu l'a changée.
+    fn colour_live_cancel(&mut self) {
+        let Some(live) = self.colour_live.take() else {
+            return;
+        };
+        if !live.changed {
+            return;
+        }
+        self.palette_colour = live.colour;
+        self.palette_colour_last = live.last;
+        self.palette_like = live.like;
+        self.similar = live.similar;
+        self.similar_wanted = live.similar_wanted;
+        self.palette_refilter_pending = false;
+        self.apply_filter();
     }
 
     /// Boîte de choix de la couleur cherchée (#492, retour du 21/11/2026) : la roue
@@ -5684,10 +5764,13 @@ impl TriApp {
         }
         if search {
             self.colour_dialog = None;
+            self.colour_live = None;
             self.set_palette_colours(Some(dialog.colours()));
         } else if cancel || modal.should_close() {
             self.colour_dialog = None;
+            self.colour_live_cancel();
         } else {
+            self.colour_live_update(ctx, &dialog);
             self.palette_eyedropper = eyedropper;
             self.colour_dialog = Some(dialog);
         }
@@ -23689,7 +23772,7 @@ impl TriApp {
                         .iter()
                         .map(|&c| tri::palette::srgb_to_oklab(c))
                         .collect();
-                    self.colour_dialog = Some(ColourDialog::new(&colours));
+                    self.show_colour_dialog(ColourDialog::new(&colours));
                 }
                 Step::ColourSearch(colours) => {
                     let colours: Vec<[f32; 3]> = colours
@@ -31880,6 +31963,60 @@ mod tests {
             descending: false,
         });
         assert_eq!(h.state().order.key, SortKey::Modified);
+    }
+
+    #[test]
+    fn the_colour_dialog_searches_live_and_cancel_restores() {
+        // Retour du 23/11/2026 : la grille cherche derrière la boîte à chaque changement ;
+        // « Annuler » rend la recherche d'avant (ici : aucune), « Chercher » la garde.
+        use tri::palette::{Source, SourceKind};
+        let images = vec![
+            (
+                "red.jpg",
+                image::RgbImage::from_pixel(64, 48, image::Rgb([200, 30, 30])),
+            ),
+            (
+                "blue.jpg",
+                image::RgbImage::from_pixel(64, 48, image::Rgb([30, 40, 200])),
+            ),
+        ];
+        let (mut h, _dir) = harness_images(images);
+        h.run_steps(3);
+        choose_palette(&mut h, Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        let order = h.state().order;
+        h.state_mut().gui.colour_search.live_ms = 1;
+        h.state_mut().open_colour_dialog();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_none(), "rien à l'ouverture");
+        let red = h.state().palettes[&(h.state().folder.files[1].path.clone(), Source::Camera)]
+            .swatches[0]
+            .oklab;
+        if let Some(d) = &mut h.state_mut().colour_dialog {
+            d.set(red);
+        }
+        run_until(&mut h, |app| app.palette_colour.is_some());
+        assert_eq!(h.state().files.len(), 1, "la grille suit");
+        h.get_by_label(&t!("cancel")).click();
+        h.run_steps(3);
+        assert!(h.state().colour_dialog.is_none());
+        assert!(h.state().palette_colour.is_none(), "rendue");
+        assert_eq!(h.state().files.len(), 2);
+        assert_eq!(h.state().order, order, "le tri d'avant");
+        // « Chercher » garde.
+        h.state_mut().open_colour_dialog();
+        if let Some(d) = &mut h.state_mut().colour_dialog {
+            d.set(red);
+        }
+        h.run_steps(3);
+        h.get_by_label(&t!("palette-colour-search")).click();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_some());
+        assert_eq!(h.state().files.len(), 1);
     }
 
     #[test]
