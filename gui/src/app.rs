@@ -4981,18 +4981,20 @@ impl TriApp {
         }
         let ready = self.palette_source.is_some();
         let like = self.palette_like.is_some();
+        // Dans l'ordre du panneau (retour du 23/11/2026) : la couleur, puis les deux qui
+        // partent de la référence.
         let mut toggles = vec![
+            (
+                Action::FilterPaletteColour,
+                self.palette_colour.is_some(),
+                self.palette_colour.is_some() || (ready && !computing(Action::FilterPaletteColour)),
+            ),
             (
                 Action::FilterPalette,
                 like,
                 like || (ready
                     && self.has_palette_reference()
                     && !computing(Action::FilterPalette)),
-            ),
-            (
-                Action::FilterPaletteColour,
-                self.palette_colour.is_some(),
-                self.palette_colour.is_some() || (ready && !computing(Action::FilterPaletteColour)),
             ),
         ];
         toggles.extend(similar);
@@ -23538,6 +23540,46 @@ impl TriApp {
                 }
             }
             ui.separator();
+            // Les couleurs juste après les drapeaux, avec les notes, devant les filtres
+            // calculés (retour du 23/11/2026).
+            // Plusieurs couleurs par photo : toutes (∧) ou l'une (∨) des couleurs choisies,
+            // devant les pastilles comme « ≥ = ≤ » devant les étoiles (retours du
+            // 12/11/2026) ; avec une seule couleur par photo, c'est forcément « ou ».
+            if self.settings.xmp.multiple_colors {
+                let name = if self.colors_all {
+                    t!("filter-colors-all-tip")
+                } else {
+                    t!("filter-colors-any-tip")
+                };
+                let tip = format!("{name}\n{}", self.action_tip(Action::FilterColorsAll));
+                let (rect, op) = marks::clickable_named(ui, size, &name, &tip);
+                let color = ui.style().interact(&op).fg_stroke.color;
+                marks::and_or(ui.painter(), rect, self.colors_all, color);
+                if op.clicked() {
+                    clicked.push(Action::FilterColorsAll);
+                }
+            }
+            for color in Color::ALL {
+                let tip = self.action_tip(Action::FilterColor(color));
+                let (rect, response) = marks::clickable(ui, size, &tip);
+                let active = self
+                    .notes_rule
+                    .colors
+                    .as_ref()
+                    .is_some_and(|r| r.any_of.contains(&color));
+                // Même pastille que le bandeau : pleine si le filtre est posé, fondue sinon.
+                marks::color_dot(
+                    ui.painter(),
+                    rect.center(),
+                    size,
+                    marks::color_of(&colors, color),
+                    active,
+                );
+                if response.clicked() {
+                    clicked.push(Action::FilterColor(color));
+                }
+            }
+            ui.separator();
             // Interrupteurs des filtres sur l'analyse et les développements : triangle
             // (nettes), soleil (bien exposées), bobine (développées), à l'accent quand ils
             // sont allumés. Leurs réglages sont dans le panneau de droite, section
@@ -23609,44 +23651,6 @@ impl TriApp {
                 filter_icon(ui.painter(), rect, Action::FilterStack, color);
                 if enabled && response.clicked() {
                     clicked.push(Action::FilterStack);
-                }
-            }
-            ui.separator();
-            // Plusieurs couleurs par photo : toutes (∧) ou l'une (∨) des couleurs choisies,
-            // devant les pastilles comme « ≥ = ≤ » devant les étoiles (retours du
-            // 12/11/2026) ; avec une seule couleur par photo, c'est forcément « ou ».
-            if self.settings.xmp.multiple_colors {
-                let name = if self.colors_all {
-                    t!("filter-colors-all-tip")
-                } else {
-                    t!("filter-colors-any-tip")
-                };
-                let tip = format!("{name}\n{}", self.action_tip(Action::FilterColorsAll));
-                let (rect, op) = marks::clickable_named(ui, size, &name, &tip);
-                let color = ui.style().interact(&op).fg_stroke.color;
-                marks::and_or(ui.painter(), rect, self.colors_all, color);
-                if op.clicked() {
-                    clicked.push(Action::FilterColorsAll);
-                }
-            }
-            for color in Color::ALL {
-                let tip = self.action_tip(Action::FilterColor(color));
-                let (rect, response) = marks::clickable(ui, size, &tip);
-                let active = self
-                    .notes_rule
-                    .colors
-                    .as_ref()
-                    .is_some_and(|r| r.any_of.contains(&color));
-                // Même pastille que le bandeau : pleine si le filtre est posé, fondue sinon.
-                marks::color_dot(
-                    ui.painter(),
-                    rect.center(),
-                    size,
-                    marks::color_of(&colors, color),
-                    active,
-                );
-                if response.clicked() {
-                    clicked.push(Action::FilterColor(color));
                 }
             }
             ui.separator();
@@ -32403,8 +32407,16 @@ mod tests {
             Some(tri::palette::SourceKind::Camera),
             "palettes de la grille"
         );
-        // Les palettes toutes là (le mode palette ne prend aux empreintes que les heures).
-        run_until(&mut h, |app| app.palettes_complete() && !app.stacks_dirty);
+        // Les palettes toutes lues, pas seulement annoncées calculées : une palette encore
+        // en lecture coupe le lien avec sa voisine, le temps qu'elle arrive (CI Windows,
+        // trois fois le 23/11/2026 : 4 piles au lieu de 3).
+        let source = tri::palette::Source::Camera;
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), source)))
+                && !app.stacks_dirty
+        });
         h.run_steps(3);
         assert_eq!(h.state().stacks.groups(), 3, "bleus, rouges, bleu");
         // À fond à gauche, tout se rejoint : ni l'heure ni les pauses ne coupent une série

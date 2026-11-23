@@ -1136,8 +1136,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   le moteur ([offload.md](offload.md)), la boîte (`offload.rs`) ne fait qu'afficher.
 - **Panneau de droite en sections** (réorganisation du 27/10/2026, idée de
   l'utilisateur ; `TriApp::side_panel`) : la barre des filtres ne garde que ce qui se
-  règle d'un clic (étoiles, drapeaux, interrupteurs nettes / bien exposées /
-  développées, couleurs) et la recherche par nom, avec le nombre d'images (« affichées / du dossier » ; le total
+  règle d'un clic (étoiles, drapeaux, couleurs, puis les interrupteurs des filtres
+  calculés : nettes / bien exposées / développées, couleur cherchée, palettes proches,
+  semblables, dans l'ordre du panneau ; retour du 23/11/2026 : les notes d'abord) et la recherche par nom, avec le nombre d'images (« affichées / du dossier » ; le total
   sans les développements des logiciels absents ou désactivés, masqués de la grille,
   `TriApp::folder_total`, 09/11/2026), l'inversion
   et l'effacement ; les **réglages** passent dans le panneau de droite, en sections
