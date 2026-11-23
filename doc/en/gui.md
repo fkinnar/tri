@@ -603,7 +603,8 @@ system one ("cold" measurements, experiments).
   number of images go into a "…" menu just before invert and clear, always visible, their
   lists as submenus (`bar_choice`, #181: a drop-down list opened from a menu closed with it), and the field shrinks
   down to `search_min_width`; the right-hand buttons of the rating bar wrap to a second
-  line, and stay there while the width does not change; widths measured on the previous
+  line, and stay there while the width does not change; with no result, the rating bar
+  stays, its buttons greyed (feedback of 2026-11-23: it disappeared); widths measured on the previous
   frame), live filter by file name (`tri::fuzzy::NameFilter`,
   combined with the other filters, "Clear" empties it too); Enter keeps the filter and
   gives the keyboard back to the grid, Esc clears it. **Folders**: field under the title;

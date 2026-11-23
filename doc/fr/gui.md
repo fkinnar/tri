@@ -626,7 +626,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   avant l'inversion et l'effacement, toujours visibles, leurs listes en sous-menus
   (`bar_choice`, #181 : une liste déroulante ouverte depuis un menu se refermait avec lui), et le champ se rétrécit jusqu'à `search_min_width` ;
   les boutons de droite du bandeau de notation passent à la ligne, et y restent tant que
-  la largeur ne change pas ; largeurs mesurées à l'image précédente), filtre en direct par nom de fichier
+  la largeur ne change pas ; filtre sans résultat, le bandeau reste, ses boutons grisés
+  (retour du 23/11/2026 : il disparaissait) ; largeurs mesurées à l'image précédente), filtre en direct par nom de fichier
   (`tri::fuzzy::NameFilter`, combiné aux autres filtres, « Effacer » le vide aussi) ;
   Entrée garde le filtre et rend le clavier à la grille, Échap l'efface. **Dossiers** :
   champ sous le titre ; pendant la recherche, les résultats remplacent l'arborescence

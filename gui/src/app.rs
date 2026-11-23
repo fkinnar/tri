@@ -22697,15 +22697,21 @@ impl TriApp {
 
     /// Bandeau de notation : notes de l'image sélectionnée, cliquables.
     fn rating_bar(&mut self, ui: &mut Ui) {
-        let Some(file) = self.files.get(self.selected) else {
-            return;
-        };
-        let notes = self.folder.notes.notes(&file.path).clone();
+        // Rien d'affiché (filtre sans résultat) : la barre reste, ses boutons grisés (retour
+        // du 23/11/2026 : elle disparaissait ; les barres ne bougent pas).
+        let file = self.files.get(self.selected).cloned();
+        if file.is_none() {
+            ui.disable();
+        }
+        let notes = file
+            .as_ref()
+            .map(|f| self.folder.notes.notes(&f.path).clone())
+            .unwrap_or(tri::xmp::Notes::EMPTY);
         let (colors, size) = (self.gui.colors.clone(), self.gui.grid.marks + 4.0);
         let marked = self.selection.visible(&self.files);
         let mut clicked = None;
         // Versions de l'image (plein écran) : pastilles, puis modifier / supprimer.
-        let path = file.path.clone();
+        let path = file.as_ref().map(|f| f.path.clone()).unwrap_or_default();
         // Lues en fond, comme pour la grille (19/11/2026, `TRI_IO_WATCH` : relues sur le
         // fil de l'interface à chaque image affichée) : les pastilles viennent un instant
         // après.
@@ -27515,11 +27521,7 @@ impl eframe::App for TriApp {
                 Some(crate::crop::BarAction::AddRatio(ratio)) => self.add_ratio(ratio),
                 None => {}
             }
-        } else if self.rating_bar
-            && !self.focus_mode
-            && !self.files.is_empty()
-            && self.error.is_none()
-        {
+        } else if self.rating_bar && !self.focus_mode && self.error.is_none() {
             egui::Panel::bottom("rating").show(ui, |ui| {
                 bar_texts(ui);
                 self.rating_bar(ui);
@@ -32972,6 +32974,22 @@ mod tests {
         h.run_steps(3);
         assert!(h.state().colour_dialog.is_none());
         assert_eq!(h.state().palette_colour.as_ref().unwrap().colours.len(), 2);
+    }
+
+    #[test]
+    fn the_rating_bar_stays_when_nothing_is_shown() {
+        // Retour du 23/11/2026 : un filtre sans résultat faisait disparaître la barre du
+        // bas ; elle reste, grisée (les barres ne bougent pas).
+        let (mut h, _dir) = harness();
+        h.state_mut().rating_bar = true;
+        h.run_steps(2);
+        let title = t!("rating-bar-title").to_uppercase();
+        assert!(h.query_by_label(&title).is_some());
+        h.state_mut().files.clear();
+        h.state_mut().status.clear();
+        h.state_mut().selected = 0;
+        h.run_steps(2);
+        assert!(h.query_by_label(&title).is_some(), "la barre reste");
     }
 
     #[test]
