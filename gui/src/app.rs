@@ -5246,6 +5246,9 @@ impl TriApp {
         }
         self.palette_refilter_pending = false;
         self.apply_filter();
+        if self.palette_like.is_some() {
+            self.search_from_top();
+        }
     }
 
     /// Ordre « palettes proches » : `groups` aplatis, gardés sous le seuil, du plus proche
@@ -5401,6 +5404,20 @@ impl TriApp {
         }
         self.palette_refilter_pending = false;
         self.apply_filter();
+        if self.palette_colour.is_some() {
+            self.search_from_top();
+        }
+    }
+
+    /// Une nouvelle recherche de palettes : la meilleure réponse choisie, la grille au
+    /// début (retour du 23/11/2026 : la sélection d'avant restait choisie, la grille
+    /// défilait jusqu'à elle, au milieu des résultats, et les meilleurs, au-dessus, ne se
+    /// voyaient pas ; la recherche hiérarchique semblait ne rien changer).
+    fn search_from_top(&mut self) {
+        if !self.files.is_empty() {
+            self.selected = 0;
+        }
+        self.reveal = Some(Reveal::Start);
     }
 
     /// Une recherche de palettes lancée du plein écran : ses résultats en grille (retour
@@ -5809,6 +5826,7 @@ impl TriApp {
         );
         if self.palette_colour.is_some() {
             self.apply_filter();
+            self.search_from_top();
         }
     }
 
@@ -10125,6 +10143,7 @@ impl TriApp {
             .zip(std::mem::take(&mut self.status))
             .collect();
         self.files = groups.into_iter().flatten().collect();
+
         self.status = self
             .files
             .iter()
@@ -23570,6 +23589,13 @@ impl TriApp {
                         .collect();
                     self.colour_dialog = Some(ColourDialog::new(&colours));
                 }
+                Step::ColourSearch(colours) => {
+                    let colours: Vec<[f32; 3]> = colours
+                        .iter()
+                        .map(|&c| tri::palette::srgb_to_oklab(c))
+                        .collect();
+                    self.set_palette_colours(Some(colours));
+                }
                 Step::ExportToast => {
                     if let Some(file) = self.files.get(self.selected) {
                         let written = [file.path.clone()];
@@ -26768,6 +26794,8 @@ enum Step {
     /// Ouvrir la boîte des couleurs cherchées sur ces couleurs
     /// (`colour_dialog:#ff0000 #0000ff`), pour la capture.
     ColourDialog(Vec<[u8; 3]>),
+    /// Chercher ces couleurs (`colour_search:#ff0000 #0000ff`), pour la capture.
+    ColourSearch(Vec<[u8; 3]>),
     /// Taper dans la recherche de la boîte ouverte, palette, réglages ou aide
     /// (`search:vim`).
     Search(String),
@@ -26803,6 +26831,12 @@ fn parse_actions(list: &str) -> Vec<Step> {
                     .map(Step::OpeningBox),
                 None if id.starts_with("colour_dialog:") => Some(Step::ColourDialog(
                     id["colour_dialog:".len()..]
+                        .split_whitespace()
+                        .filter_map(parse_hex)
+                        .collect(),
+                )),
+                None if id.starts_with("colour_search:") => Some(Step::ColourSearch(
+                    id["colour_search:".len()..]
                         .split_whitespace()
                         .filter_map(parse_hex)
                         .collect(),
@@ -31661,7 +31695,12 @@ mod tests {
                 .unwrap()
                 .contains("hierarchical = true")
         );
+        // La sélection d'avant (en bas de la liste) ne retient pas la grille : la meilleure
+        // réponse choisie, la grille au début (retour du 23/11/2026).
+        h.state_mut().selected = 3;
         h.state_mut().set_palette_colours(Some(vec![red, blue]));
+        assert_eq!(h.state().selected, 0);
+        assert!(matches!(h.state().reveal, Some(Reveal::Start)));
         h.run_steps(3);
         assert_eq!(names(&h), ["c_red_mostly.jpg", "a_blue_mostly.jpg"]);
         h.state_mut().set_palette_colours(Some(vec![blue, red]));

@@ -260,6 +260,10 @@ system one ("cold" measurements, experiments).
   where the first colour covers the most comes first; two searches with the same colours
   in another order keep the same images, in another order; requiring an order of areas, considered, would
   have emptied the results); the choice is written to `[gui.colour_search] hierarchical`.
+  A new search (colours, mode, similar palettes) selects the best answer and brings the
+  grid back to the start (feedback of 2026-11-23: the previous selection stayed selected
+  and the grid scrolled to it, in the middle of the results; the best ones, above, were not
+  seen).
   Under the values, three rows of **swatches**, without titles (it shows): pure (`pure`: studio lights, plain red and
   blue), "photo" (`photo`: sky, foliage, skin, sunset, sea, earth) and free (`own`,
   `own_max`: a click on an empty swatch stores the current colour there, right-click

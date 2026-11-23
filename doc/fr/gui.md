@@ -271,7 +271,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   devant ; deux recherches aux mêmes couleurs dans un autre ordre gardent les mêmes images,
   dans un autre ordre ; un ordre exigé des
   surfaces, essayé en idée, aurait vidé les résultats) ; le choix est écrit dans
-  `[gui.colour_search] hierarchical`. Sous les valeurs, trois rangées de **pastilles**, sans titres (ça se voit) : franches
+  `[gui.colour_search] hierarchical`. Une nouvelle recherche (couleurs, mode, palettes
+  proches) choisit la meilleure réponse et remet la grille au début (retour du 23/11/2026 :
+  la sélection d'avant restait choisie et la grille défilait jusqu'à elle, au milieu des
+  résultats ; les meilleurs, au-dessus, ne se voyaient pas). Sous les valeurs, trois rangées de **pastilles**, sans titres (ça se voit) : franches
   (`pure` : lumières de studio, rouge et bleu francs), « photo » (`photo` : ciel,
   feuillage, peau, coucher de soleil, mer, terre) et libres (`own`, `own_max` : un clic
   sur une pastille vide y range la couleur réglée, clic droit « Remplacer » ou « Vider »,
