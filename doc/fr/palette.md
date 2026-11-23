@@ -63,8 +63,12 @@ de la palette la plus proche, miettes sous `colour_min_share` (0,02) ignorées ;
 **Plusieurs couleurs** (`Palette::colours_cost`, `ColourQuery`, #492) : `None` si l'une
 des couleurs est plus loin que la tolérance ; sinon, recherche absolue, la moyenne des
 distances (une couleur seule : sa distance, l'ordre d'avant) ; hiérarchique, chaque
-couleur pèse `colour_hierarchy` (0,6) fois la précédente et son coût est sa distance plus
-la tolérance × (1 − sa part dans l'image, `share_near`).
+couleur pèse `colour_hierarchy` (0,4) fois la précédente et son coût est 1 − sa part dans
+l'image (`share_near`) plus `colour_proximity` (0,25) × sa distance rapportée à la
+tolérance. Mesuré le 23/11/2026 sur 300 photos d'une séance (`--colours`) : avec la
+distance à part égale et 0,6, l'ordre changeait à peine quand on inversait les couleurs
+(une image avec 7 % de la première couleur en 5ᵉ place) ; la présence d'abord et 0,4
+mettent devant les images où la première couleur occupe le plus de place.
 
 ## Couverture fine (`Coverage`)
 
@@ -133,6 +137,10 @@ le JPEG boîtier.
 `tri <dossier> --palette [--source camera|raw|darktable|…]` : chaque image, ses couleurs
 `#rrggbb` et leur part, rangées dans le cache comme dans l'interface. Les rendus finis :
 seulement ceux déjà faits par l'interface (aucun logiciel lancé en ligne de commande).
+Avec `--colours "#d0a080,#6a7a80"` (la plus importante d'abord) et `--hierarchical` :
+ensuite, les images qui contiennent toutes ces couleurs, la mieux placée d'abord, avec
+leur coût et la part de chaque couleur (tolérance : `--threshold`, sinon
+`colour_radius`).
 
 ## Réglages `[palette]`
 

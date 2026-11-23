@@ -57,6 +57,7 @@ action-core-filter-similar = Filter: similar to the reference (as in stacks, or 
 kw-core-filter-similar = similar resemblance burst series reference search
 palette-colour-title = Colour looked for
 palette-colour-slot = Colour { $n }
+palette-colour-slot-tip = { $hex }: the wheel sets it (right-click: clear)
 palette-colour-absolute = Absolute
 palette-colour-absolute-tip = All colours count the same
 palette-colour-hierarchical = Hierarchical

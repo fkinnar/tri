@@ -258,15 +258,18 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   l'agrandit pour viser juste (idée de l'utilisateur, 21/11/2026) ; « Chercher » lance le filtre.
   **Plusieurs couleurs** (#492, idée de l'utilisateur, 23/11/2026) : en haut de la boîte,
   les couleurs cherchées, en pastilles comme les autres (`[gui.colour_search] max`
-  emplacements, 5), qui marchent comme les pastilles libres (retour du 23/11/2026 : vides
-  à l'ouverture, sauf pendant une recherche de plusieurs couleurs, la couleur en cours ou
-  la dernière sur la roue : une couleur relevée à la pipette n'est jamais laissée de côté ; un clic sur un vide y range la couleur réglée sur la
-  roue, sur un plein la remet sur la roue, clic droit « Remplacer » ou « Vider » ; rien de
-  rangé, « Chercher » prend la couleur de la roue) ; centrées entre deux traits fins. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
+  emplacements, 5 ; retours du 23/11/2026) : rien par défaut, un « + » dans les vides ; un
+  clic sur un vide y range la couleur réglée et le choisit, sur un plein le choisit
+  (encadré) : la roue, les valeurs et la pipette règlent alors celui-là ; clic droit
+  « Vider » (les suivants avancent). À l'ouverture, la recherche en cours ou la dernière,
+  même d'une seule couleur, la première choisie ; rien de rangé, « Chercher » prend la
+  couleur de la roue. Centrées entre deux traits fins. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
   couleur serait ingérable). À droite, **Absolue** (toutes comptent pareil : la moyenne des
   distances) ou **Hiérarchique** (la première compte le plus, chaque suivante
-  `[palette] colour_hierarchy` fois la précédente, et sa présence dans l'image s'ajoute :
-  l'image où la première couleur est la plus présente passe devant ; un ordre exigé des
+  `[palette] colour_hierarchy` fois la précédente, d'après sa présence dans l'image, la
+  proximité départageant : l'image où la première couleur occupe le plus de place passe
+  devant ; deux recherches aux mêmes couleurs dans un autre ordre gardent les mêmes images,
+  dans un autre ordre ; un ordre exigé des
   surfaces, essayé en idée, aurait vidé les résultats) ; le choix est écrit dans
   `[gui.colour_search] hierarchical`. Sous les valeurs, trois rangées de **pastilles**, sans titres (ça se voit) : franches
   (`pure` : lumières de studio, rouge et bleu francs), « photo » (`photo` : ciel,

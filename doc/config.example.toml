@@ -648,10 +648,15 @@ stack_scale = 0.5
 pick_area = 0.02
 # Contient ces couleurs, recherche hiérarchique : poids de chaque couleur face à la précédente.
 #
-# 0,6 : la deuxième couleur compte 0,6 fois la première, la troisième 0,36 fois… Sa
-# présence dans l'image compte aussi : l'image où la première couleur est la plus présente
+# 0,4 : la deuxième couleur compte 0,4 fois la première, la troisième 0,16 fois… C'est sa
+# présence dans l'image qui compte : l'image où la première couleur est la plus présente
 # passe devant.
-colour_hierarchy = 0.6
+colour_hierarchy = 0.4
+# Contient ces couleurs, recherche hiérarchique : poids de la proximité face à la présence.
+#
+# La part de l'image proche de chaque couleur décide d'abord ; la proximité (distance
+# rapportée à la tolérance, 0,25 fois) départage.
+colour_proximity = 0.25
 
 [index]
 # Noter les palettes dans l'index de recherche de tous les dossiers.

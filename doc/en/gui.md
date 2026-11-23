@@ -246,17 +246,19 @@ system one ("cold" measurements, experiments).
   the loupe (`m` held) magnifies it to aim precisely (user's idea, 2026-11-21); "Search" starts the
   filter.
   **Several colours** (#492, user's idea, 2026-11-23): at the top of the box, the colours
-  looked for, as swatches like the others (`[gui.colour_search] max` slots, 5),
-  which work like the free swatches (feedback of 2026-11-23: empty when opening, except
-  during a search of several colours, the current or last colour on the wheel: a colour
-  picked with the eyedropper is never left out; a click on an empty one stores the wheel's colour there, on a filled one puts it
-  back on the wheel, right-click "Replace" or "Clear"; nothing stored, "Search" takes the
-  wheel's colour); centred between two thin lines. An image must
+  looked for, as swatches like the others (`[gui.colour_search] max` slots, 5; feedback of
+  2026-11-23): nothing by default, a "+" in the empty ones; a click on an empty one stores
+  the current colour there and selects it, on a filled one selects it (framed): the wheel,
+  the values and the eyedropper then set that one; right-click "Clear" (the next ones move
+  up). When opening, the current or last search, even of a single colour, the first one
+  selected; nothing stored, "Search" takes the wheel's colour. Centred between two thin
+  lines. An image must
   contain **all** of them (one tolerance for all: one per colour would be unmanageable).
   On the right, **Absolute** (all count the same: the mean of the distances) or
   **Hierarchical** (the first counts the most, each next one `[palette] colour_hierarchy`
-  times the previous one, and its presence in the image adds up: the image where the first
-  colour is the most present comes first; requiring an order of areas, considered, would
+  times the previous one, from its presence in the image, proximity breaking ties: the image
+  where the first colour covers the most comes first; two searches with the same colours
+  in another order keep the same images, in another order; requiring an order of areas, considered, would
   have emptied the results); the choice is written to `[gui.colour_search] hierarchical`.
   Under the values, three rows of **swatches**, without titles (it shows): pure (`pure`: studio lights, plain red and
   blue), "photo" (`photo`: sky, foliage, skin, sunset, sea, earth) and free (`own`,

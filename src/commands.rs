@@ -299,9 +299,16 @@ pub const COMMANDS: &[Command] = &[
     Command {
         id: "palette",
         theme: Theme::Analysis,
-        syntax: "tri <folder> --palette [--source camera|raw|darktable|…] [--raw|--flat] [--depth N]",
+        syntax: "tri <folder> --palette [--source camera|raw|darktable|…] [--colours <colours> [--hierarchical]] [--raw|--flat] [--depth N]",
         main: &["--palette"],
-        options: opts!["--source", "--raw", "--flat", "--depth"],
+        options: opts![
+            "--source",
+            "--colours",
+            "--hierarchical",
+            "--raw",
+            "--flat",
+            "--depth"
+        ],
         example: "tri <folder> --palette --source raw",
     },
     Command {

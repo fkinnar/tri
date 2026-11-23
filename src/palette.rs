@@ -199,8 +199,12 @@ pub struct PaletteSettings {
     /// suivent une seule teinte.
     pub mono_hue_spread: f32,
     /// Contient ces couleurs, recherche hiérarchique : poids de chaque couleur face à la
-    /// précédente (0,6 : la 2ᵉ compte 0,6 fois la 1ʳᵉ, la 3ᵉ 0,36 fois…).
+    /// précédente (0,4 : la deuxième compte 0,4 fois la première, la troisième 0,16 fois… ;
+    /// mesuré le 23/11/2026 : à 0,6, la deuxième couleur pesait encore trop).
     pub colour_hierarchy: f32,
+    /// Contient ces couleurs, recherche hiérarchique : poids de la proximité (distance
+    /// rapportée à la tolérance) face à la présence (part de l'image), qui décide d'abord.
+    pub colour_proximity: f32,
 }
 
 impl Default for PaletteSettings {
@@ -223,7 +227,8 @@ impl Default for PaletteSettings {
             stack_scale: 0.5,
             pick_area: 0.02,
             mono_hue_spread: 15.0,
-            colour_hierarchy: 0.6,
+            colour_hierarchy: 0.4,
+            colour_proximity: 0.25,
         }
     }
 }
@@ -484,10 +489,14 @@ impl Palette {
             if d > query.radius {
                 return None;
             }
+            // Hiérarchique : la présence d'abord (mesuré le 23/11/2026 sur 300 photos :
+            // la proximité, ajoutée à part égale, l'emportait, et l'ordre changeait à
+            // peine), la proximité (rapportée à la tolérance) pour départager.
             let cost = match query.hierarchy {
                 None => d,
                 Some(_) => {
-                    d + query.radius * (1.0 - self.share_near(oklab, query.radius, chroma_weight))
+                    let share = self.share_near(oklab, query.radius, chroma_weight);
+                    (1.0 - share) + query.proximity * d / query.radius.max(1e-6)
                 }
             };
             sum += weight * cost;
@@ -689,6 +698,16 @@ pub fn rank_similar<T>(
     known.into_iter().map(|(_, t)| t).chain(unknown).collect()
 }
 
+/// Lit une couleur `#rrggbb` (ou `rrggbb`) ; `None` sinon.
+pub fn parse_hex(text: &str) -> Option<[u8; 3]> {
+    let hex = text.trim().trim_start_matches('#');
+    if hex.len() != 6 || !hex.is_ascii() {
+        return None;
+    }
+    let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
+    Some([byte(0)?, byte(2)?, byte(4)?])
+}
+
 /// « Contient ces couleurs » (#492) : les couleurs cherchées (OKLab, la plus importante
 /// d'abord), la tolérance, et `hierarchy` : `None` pour une recherche absolue (toutes
 /// pèsent pareil), sinon le poids de chacune face à la précédente.
@@ -700,6 +719,8 @@ pub struct ColourQuery {
     pub radius: f32,
     /// `None` : recherche absolue ; sinon poids de chaque couleur face à la précédente.
     pub hierarchy: Option<f32>,
+    /// Recherche hiérarchique : poids de la proximité face à la présence.
+    pub proximity: f32,
 }
 
 /// Seuils de « monochrome » (voir [`Palette::is_monochrome`]).
@@ -1354,6 +1375,7 @@ mod tests {
             colours: colours.iter().map(|&c| working_to_oklab(c)).collect(),
             radius: s.colour_radius,
             hierarchy,
+            proximity: s.colour_proximity,
         };
         let cost = |q: &ColourQuery| palette.colours_cost(q, s.chroma_weight, s.colour_coverage);
         assert!(cost(&query(&[red, blue], None)).is_some());
@@ -1380,6 +1402,7 @@ mod tests {
             colours: colours.iter().map(|&c| working_to_oklab(c)).collect(),
             radius: s.colour_radius,
             hierarchy,
+            proximity: s.colour_proximity,
         };
         let cost = |p: &Palette, q: &ColourQuery| {
             p.colours_cost(q, s.chroma_weight, s.colour_coverage)

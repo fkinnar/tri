@@ -705,3 +705,44 @@ fn a_folder_is_reset_from_the_command_line() {
             .success()
     );
 }
+
+#[test]
+fn palettes_can_be_searched_by_several_colours() {
+    // #492 : `--palette --colours` range les images qui contiennent toutes ces couleurs ;
+    // une couleur illisible est refusée.
+    let env = Env::new();
+    let photos = env.photos();
+    env.image(&photos, "a.jpg");
+    let out = stdout(&ok(env.run([
+        arg(&photos),
+        "--palette".as_ref(),
+        "--colours".as_ref(),
+        "#00ff00".as_ref(),
+        "--threshold".as_ref(),
+        "0.01".as_ref(),
+    ])));
+    assert!(out.contains("0 images contain these colours"), "{out}");
+    // La couleur principale de l'image, lue dans sa palette : trouvée.
+    let main = out
+        .lines()
+        .find(|l| l.starts_with("a.jpg"))
+        .and_then(|l| l.split('\t').nth(1))
+        .and_then(|c| c.split_whitespace().next())
+        .unwrap()
+        .to_string();
+    let out = stdout(&ok(env.run([
+        arg(&photos),
+        "--palette".as_ref(),
+        "--colours".as_ref(),
+        main.as_ref(),
+        "--hierarchical".as_ref(),
+    ])));
+    assert!(out.contains("1 images contain these colours"), "{out}");
+    let out = failed(env.run([
+        arg(&photos),
+        "--palette".as_ref(),
+        "--colours".as_ref(),
+        "#zz".as_ref(),
+    ]));
+    assert!(stderr(&out).contains("#zz"), "{}", stderr(&out));
+}

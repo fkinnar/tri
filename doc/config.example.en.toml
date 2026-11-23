@@ -645,9 +645,15 @@ stack_scale = 0.5
 pick_area = 0.02
 # Contains these colours, hierarchical search: weight of each colour against the previous one.
 #
-# 0.6: the 2nd colour counts 0.6 times the 1st, the 3rd 0.36 times… Its presence in the
-# image counts too: the image where the 1st colour is the most present comes first.
-colour_hierarchy = 0.6
+# 0.4: the second colour counts 0.4 times the first, the third 0.16 times… What counts is
+# its presence in the image: the image where the first colour is the most present comes
+# first.
+colour_hierarchy = 0.4
+# Contains these colours, hierarchical search: weight of proximity against presence.
+#
+# The share of the image near each colour decides first; proximity (distance relative to
+# the tolerance, 0.25 times) breaks ties.
+colour_proximity = 0.25
 
 [index]
 # Record the palettes in the search index of all folders.
