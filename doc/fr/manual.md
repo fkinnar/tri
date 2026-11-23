@@ -59,6 +59,16 @@ avec une recherche :
 raccourcis, avec un bouton qui copie la commande remplie avec le dossier ouvert ou les
 images sélectionnées.
 
+## Chercher par couleur
+
+Dans les filtres, la pastille à côté de **Couleur** ouvre la boîte des couleurs : on y
+choisit une ou plusieurs couleurs (sur la roue, dans les pastilles, ou à la pipette dans
+une image), et la grille cherche derrière, pendant qu'on règle. Les petites icônes sous la
+roue proposent des **harmonies** ; **Moyenne** trouve les photos *à dominante* d'une
+couleur. À vous de jouer :
+
+![Couleur cherchée](../manual-images/fr/colour.jpg)
+
 ## Les couleurs
 
 Écran calibré ou large gamut ? La fiche [Vérifier les couleurs](colour-check.md) montre
