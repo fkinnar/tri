@@ -278,7 +278,10 @@ system one ("cold" measurements, experiments).
   panel's (kept per folder, double-click: starting value), and the **number of photos**
   found by the live preview. In hierarchical mode, the tolerance **widens rank by rank**
   (`[palette] colour_widen`, 0.25: the second colour ×1.25, the third ×1.5…): the first
-  colour more precise than the last. An image must
+  colour more precise than the last. **Search these colours** (Palette section, under the
+  photo's palette): its main colours (the most present, without specks under
+  `colour_min_share`, at most `max`) in the box, searched right away, to adjust; "Cancel"
+  brings back the previous search. An image must
   contain **all** of them (one tolerance for all: one per colour would be unmanageable).
   On the right, **Absolute** (all count the same: the mean of the distances) or
   **Hierarchical** (the first counts the most, each next one `[palette] colour_hierarchy`

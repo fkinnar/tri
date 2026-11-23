@@ -6716,15 +6716,53 @@ impl TriApp {
                 ui.add_space(4.0);
             }
         }
+        let mut these = None;
         if let Some(palette) = main_palette {
             self.palette_last = Some((shown, palette.clone()));
             if let Some(c) = self.palette_detail(ui, &palette) {
                 picked = Some(c);
             }
+            // Partir de cette photo (idée du 23/11/2026) : ses couleurs principales dans la
+            // boîte, cherchées tout de suite, à ajuster.
+            ui.add_space(4.0);
+            if ui
+                .button(t!("palette-search-these"))
+                .on_hover_text(t!("palette-search-these-tip"))
+                .clicked()
+            {
+                these = Some(palette);
+            }
         }
         // La couleur cliquée : cherchée tout à la fin (la recherche refiltre la liste).
         if picked.is_some() {
             self.set_palette_colour(picked);
+        }
+        if let Some(palette) = these {
+            self.search_palette_colours(&palette);
+        }
+    }
+
+    /// Les couleurs principales de `palette` (les plus présentes d'abord, sans les miettes,
+    /// au plus `[gui.colour_search] max`) dans la boîte des couleurs, cherchées tout de
+    /// suite ; « Annuler » rend la recherche d'avant.
+    fn search_palette_colours(&mut self, palette: &Palette) {
+        let min = self.settings.palette.colour_min_share;
+        let mut swatches: Vec<_> = palette.swatches.iter().filter(|s| s.share >= min).collect();
+        swatches.sort_by(|a, b| b.share.total_cmp(&a.share));
+        let colours: Vec<[f32; 3]> = swatches
+            .iter()
+            .take(self.gui.colour_search.max.max(1))
+            .map(|s| s.oklab)
+            .collect();
+        if colours.is_empty() {
+            return;
+        }
+        self.show_colour_dialog(ColourDialog::new(&colours));
+        self.set_palette_colours(Some(colours.clone()));
+        if let Some(live) = &mut self.colour_live {
+            live.applied = colours;
+            live.changed = true;
+            live.at = Instant::now();
         }
     }
 
@@ -32336,6 +32374,19 @@ mod tests {
             .click();
         h.run_steps(3);
         h.get_by_label(&t!("palette-colour-search")).click();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_none());
+        assert_eq!(h.state().files.len(), 2);
+        // « Chercher ces couleurs » (section Palette) : la boîte ouverte sur les couleurs
+        // de la photo, la recherche lancée ; « Annuler » la rend.
+        let palette =
+            h.state().palettes[&(h.state().folder.files[1].path.clone(), Source::Camera)].clone();
+        h.state_mut().search_palette_colours(&palette);
+        h.run_steps(3);
+        let d = h.state().colour_dialog.as_ref().expect("boîte ouverte");
+        assert_eq!(d.slots.len(), 1);
+        assert_eq!(h.state().files.len(), 1);
+        h.get_by_label(&t!("cancel")).click();
         h.run_steps(3);
         assert!(h.state().palette_colour.is_none());
         assert_eq!(h.state().files.len(), 2);

@@ -291,7 +291,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   panneau (retenue par dossier, double-clic : valeur de départ), et le **nombre de photos**
   trouvées par l'aperçu en direct. En hiérarchique, la tolérance **s'élargit de rang en
   rang** (`[palette] colour_widen`, 0,25 : la deuxième couleur ×1,25, la troisième ×1,5…) :
-  la première couleur plus précise que la dernière. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
+  la première couleur plus précise que la dernière. **Chercher ces couleurs** (section
+  Palette, sous la palette de la photo) : ses couleurs principales (les plus présentes, sans
+  les miettes sous `colour_min_share`, au plus `max`) dans la boîte, cherchées tout de
+  suite, à ajuster ; « Annuler » rend la recherche d'avant. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
   couleur serait ingérable). À droite, **Absolue** (toutes comptent pareil : la moyenne des
   distances) ou **Hiérarchique** (la première compte le plus, chaque suivante
   `[palette] colour_hierarchy` fois la précédente, d'après sa présence dans l'image, la
