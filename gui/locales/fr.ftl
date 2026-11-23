@@ -1652,6 +1652,7 @@ folder-recognised = « { $new } » est « { $old } », renommé ou déplacé : s
 locate-ok = Retrouver
 palette-colour-first = Choisissez d'abord une couleur (filtre « Contient cette couleur »)
 palette-reference = Référence
+palette-reference-take = Prendre comme référence
 palette-reference-none = aucune : la photo en surbrillance, ou <core.filter.reference>
 palette-reference-open-tip = Voir en grand, supprimer la référence
 palette-reference-clear = Supprimer la référence
