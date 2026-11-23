@@ -58,6 +58,15 @@ box:
 explains every command, and the **F1** help lists them after the shortcuts, with a button
 that copies the command filled in with the open folder or the selected images.
 
+## Searching by colour
+
+In the filters, the patch next to **Colour** opens the colour box: pick one or several
+colours (on the wheel, among the swatches, or with the eyedropper on an image), and the
+grid searches behind it while you adjust. The small icons under the wheel offer
+**harmonies**; **Average** finds the photos with a *cast* of a colour. Over to you:
+
+![Colour looked for](../manual-images/en/colour.jpg)
+
 ## Colours
 
 Calibrated or wide-gamut screen? The [Checking colours](colour-check.md) sheet shows in

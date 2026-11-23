@@ -13,7 +13,7 @@
 # - L'interface tourne avec sa propre configuration, son propre cache et un dossier de
 #   données temporaire : ni les réglages, ni l'état d'affichage, ni le cache de
 #   l'utilisateur ne sont touchés. Les photos d'origine ne sont jamais modifiées.
-# - Captures : <out>/<lang>/{grid,view,rating,compare,help}.jpg (défaut :
+# - Captures : <out>/<lang>/{grid,view,rating,compare,help,colour}.jpg (défaut :
 #   doc/manual-images), numérotées pour grid et view.
 #
 # Prérequis : interface compilée (cargo build --release -p tri-gui), ImageMagick (magick).
@@ -163,6 +163,8 @@ shot view "core.view.open,wait:2500"
 shot rating "rating_dialog,wait:500"
 shot compare "core.select.visual,core.nav.next,core.nav.next,core.select.visual,core.view.compare,wait:2500"
 shot help "core.app.help,wait:500"
+# La boîte des couleurs (deux couleurs, une harmonie), recadrée sur elle (centrée).
+shot colour "wait:3000,colour_dialog:#e07020 #2060d0,harmony:complementary,wait:1500"
 shot grid "wait:1500"
 
 # Pastilles à côté de ce qu'elles désignent, dans des zones vides (jamais sur un bouton) :
@@ -173,6 +175,8 @@ annotate "$out/$lang/grid.png" \
 # 1 ce qui est affiché, 2 1:1 / flèches / avance auto, 3 histogramme et métadonnées.
 annotate "$out/$lang/view.png" \
     0.42,0.03,1 0.615,0.955,2 0.97,0.32,3
+
+magick "$out/$lang/colour.png" -gravity center -crop 568x456+0+0 +repage "$out/$lang/colour.png"
 
 # JPEG : quatre fois plus léger que le PNG pour des captures pleines de photos (le dépôt
 # grossit à chaque nouvelle version du manuel).
