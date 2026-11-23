@@ -266,7 +266,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   couleur de la roue. Centrées entre deux traits fins.
   **Aperçu en direct** (retour du 23/11/2026) : à chaque changement de couleur dans la
   boîte, la grille cherche derrière, au plus une fois par `[gui.colour_search] live_ms`
-  (150 ms ; 0 : pas d'aperçu) ; l'ouverture ne lance rien ; « Valider » (ex-« Chercher »)
+  (150 ms ; 0 : pas d'aperçu) ; l'ouverture ne lance rien ; filtre éteint, changer la
+  couleur, la tolérance ou le mode lance la recherche ; « Valider » (ex-« Chercher »)
   garde la recherche, « Annuler » ou la croix rendent celle d'avant (ou aucune) et le
   tri d'avant. **Réinitialiser** (en bas à gauche) vide les emplacements, remet la roue au
   gris et arrête la recherche ; « Valider » juste après laisse la grille sans recherche.

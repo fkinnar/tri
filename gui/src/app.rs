@@ -5912,17 +5912,23 @@ impl TriApp {
             radius = (radius + keyed.radius).clamp(0.0, radius_max);
             radius_done = true;
         }
+        // Un réglage changé alors qu'aucune recherche n'est en cours (boîte ouverte filtre
+        // éteint, retour du 23/11/2026) : la recherche en direct commence.
+        let mut start_live = false;
         if radius != before_radius {
             self.palette_radius = radius;
             if let Some(c) = &mut self.palette_colour {
                 c.radius = radius;
                 self.refilter(Reveal::Minimal);
+            } else {
+                start_live = true;
             }
         }
         if radius_done {
             self.remember_palette_levels();
         }
         mode = mode.or(keyed.mode);
+        start_live |= mode.is_some() && self.palette_colour.is_none();
         wheel = wheel.or(keyed.wheel);
         search |= keyed.ok;
         eyedropper |= keyed.eyedropper;
@@ -5931,6 +5937,21 @@ impl TriApp {
         }
         if let Some(mode) = mode {
             self.set_colour_mode(mode);
+        }
+        if start_live
+            && self.gui.colour_search.live_ms > 0
+            && !search
+            && !cancel
+            && !modal.should_close()
+            && !dialog.colours().is_empty()
+        {
+            let colours = dialog.colours();
+            self.set_palette_colours(Some(colours.clone()));
+            if let Some(live) = &mut self.colour_live {
+                live.applied = colours;
+                live.changed = true;
+                live.at = Instant::now();
+            }
         }
         if let Some(wheel) = wheel {
             self.set_colour_wheel(wheel);
@@ -32489,6 +32510,20 @@ mod tests {
         assert!(h.state().palette_colour.is_none(), "rendue");
         assert_eq!(h.state().files.len(), 2);
         assert_eq!(h.state().order, order, "le tri d'avant");
+        // Filtre éteint, la boîte ouverte : changer la tolérance (ou le mode) lance aussi
+        // la recherche en direct (retour du 23/11/2026).
+        h.state_mut().open_colour_dialog();
+        h.run_steps(3);
+        h.state_mut().colour_dialog.as_mut().unwrap().fresh = false;
+        press(&mut h, Key::Plus, Modifiers::NONE);
+        h.run_steps(3);
+        assert!(
+            h.state().palette_colour.is_some(),
+            "la tolérance lance la recherche"
+        );
+        h.get_by_label(&t!("cancel")).click();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_none(), "rendue");
         // « Chercher » garde.
         h.state_mut().open_colour_dialog();
         if let Some(d) = &mut h.state_mut().colour_dialog {

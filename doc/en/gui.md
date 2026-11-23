@@ -254,7 +254,8 @@ system one ("cold" measurements, experiments).
   selected; nothing stored, "OK" takes the wheel's colour. Centred between two thin
   lines. **Live preview** (feedback of 2026-11-23): at each colour change in the box, the
   grid searches behind it, at most once per `[gui.colour_search] live_ms` (150 ms; 0: no
-  preview); opening starts nothing; "OK" (formerly "Search") keeps the search, "Cancel" or
+  preview); opening starts nothing; with the filter off, changing the colour, the
+  tolerance or the mode starts the search; "OK" (formerly "Search") keeps the search, "Cancel" or
   the cross bring back the previous one (or none) and the previous sort. **Reset**
   (bottom left) clears the slots, puts the wheel back to grey and stops the search; "OK"
   right after leaves the grid without a search.
