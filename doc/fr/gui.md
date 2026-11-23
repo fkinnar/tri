@@ -262,7 +262,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   clic sur la roue (ou la pipette) **remplit le premier emplacement vide**, et le glisser
   le règle tant que le bouton reste enfoncé ; au relâcher, plus rien n'est choisi : le clic
   suivant remplit l'emplacement suivant (plus de « + » à cliquer avant, ni de doublon).
-  Cinq rangées et rien de choisi : le dernier est retouché. Un clic sur un emplacement
+  Cinq rangées et rien de choisi : le dernier est retouché. Une **pastille** cliquée fait
+  comme un clic sur la roue ; une **valeur tapée** (R V B, T S V, `#rrggbb`) remplit de
+  même le prochain vide, puis le retouche (elles ne changeaient que la roue, pas la
+  recherche). Un clic sur un emplacement
   plein le **choisit exprès** (sa pastille plus grande) : la roue, les valeurs et la
   pipette le retouchent, autant de fois qu'on veut, jusqu'à un clic sur un « + », qui ne
   range rien (il dupliquait la couleur choisie) : plus rien de choisi, le prochain vide
@@ -328,7 +331,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   pas d'une recherche de la peau en moyenne) ; une photo bicolore a une moyenne grise et
   ne sort qu'en recherche ordinaire. Les autres emplacements sont cachés (retour du
   23/11/2026 : grisés, c'était bizarre), leurs couleurs gardées pour les autres modes ;
-  la roue et la pipette règlent la première. Mesuré sur 116 photos de quatre séances : les 6 photos à dominante bleue
+  toute retouche (roue, pastille, valeurs, clavier, pipette) va dans la première, un seul
+  point sur la roue. Mesuré sur 116 photos de quatre séances : les 6 photos à dominante bleue
   entre 0,07 et 0,09 d'un bleu, les suivantes à 0,17. Une nouvelle recherche (couleurs, mode, palettes
   proches) choisit la meilleure réponse et remet la grille au début (retour du 23/11/2026 :
   la sélection d'avant restait choisie et la grille défilait jusqu'à elle, au milieu des

@@ -250,7 +250,9 @@ system one ("cold" measurements, experiments).
   2026-11-23): nothing by default, a "+" in the empty ones. A click on the wheel (or the
   eyedropper) **fills the first empty slot**, and dragging sets it while the button is
   held; on release nothing is selected: the next click fills the next slot (no "+" to
-  click first, no duplicate). Five stored and nothing selected: the last one is changed.
+  click first, no duplicate). Five stored and nothing selected: the last one is changed. A clicked **swatch** acts
+  like a click on the wheel; a **typed value** (R G B, H S V, `#rrggbb`) likewise fills the
+  next empty slot, then changes it (they only changed the wheel, not the search).
   A click on a filled slot **selects it on purpose** (its swatch larger): the wheel, the
   values and the eyedropper change it, as often as needed, until a click on a "+", which
   stores nothing (it duplicated the selected colour): nothing selected, the next empty
@@ -311,8 +313,9 @@ system one ("cold" measurements, experiments).
   of that colour, not those that contain a little of it (a blue photo with a little skin
   comes out of a skin search, not of an average skin search); a two-colour photo has a
   grey average and only comes out of an ordinary search. The other slots are hidden (feedback
-  of 2026-11-23: greyed, it was odd), their colours kept for the other modes; the wheel
-  and the eyedropper set the first one. Measured on 116 photos of four sessions: the 6 blue-cast photos
+  of 2026-11-23: greyed, it was odd), their colours kept for the other modes; any change
+  (wheel, swatch, values, keyboard, eyedropper) goes to the first one, a single dot on the
+  wheel. Measured on 116 photos of four sessions: the 6 blue-cast photos
   between 0.07 and 0.09 from a blue, the next ones at 0.17.
   A new search (colours, mode, similar palettes) selects the best answer and brings the
   grid back to the start (feedback of 2026-11-23: the previous selection stayed selected

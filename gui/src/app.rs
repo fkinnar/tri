@@ -390,7 +390,9 @@ impl ColourDialog {
         self.sticky = false;
         self.slots.clear();
         self.active = None;
-        self.set_rgb([128, 128, 128]);
+        // Sans `follow` : en couleur moyenne, le gris irait dans la première couleur.
+        self.hsv = crate::palette_view::rgb_to_hsv([128, 128, 128], self.hsv[0]);
+        self.hex = "#808080".to_string();
         self.blank = true;
     }
 
@@ -432,7 +434,7 @@ impl ColourDialog {
     /// Après cette retouche : plus rien de choisi (la suivante remplira l'emplacement
     /// suivant), sauf un emplacement choisi exprès.
     fn edit_done(&mut self) {
-        if !self.sticky && self.harmony.is_none() {
+        if !self.sticky && self.harmony.is_none() && !self.mean {
             self.active = None;
         }
     }
@@ -448,6 +450,23 @@ impl ColourDialog {
         self.edit_target();
         self.set(oklab);
         self.edit_done();
+    }
+
+    /// Une pastille cliquée : comme un clic sur la roue (retour du 23/11/2026 : rien de
+    /// choisi, elle ne changeait que la roue, pas la recherche).
+    fn pick_rgb(&mut self, rgb: [u8; 3]) {
+        self.edit_target();
+        self.set_rgb(rgb);
+        self.edit_done();
+    }
+
+    /// Avant une valeur tapée (R V B, T S V, `#rrggbb`) : comme les flèches, rien de
+    /// choisi, le prochain vide est rempli et gardé.
+    fn type_target(&mut self) {
+        if self.active.is_none() && self.harmony.is_none() {
+            self.edit_target();
+            self.sticky = true;
+        }
     }
 
     /// Choisit l'emplacement `i` : sa couleur sur la roue.
@@ -524,6 +543,14 @@ impl ColourDialog {
     /// L'emplacement choisi prend la couleur réglée.
     fn follow(&mut self) {
         self.blank = false;
+        // Couleur moyenne : toute retouche va dans la première (retour du 23/11/2026 : une
+        // pastille ne changeait que la roue, deux points s'y voyaient).
+        if self.mean {
+            if self.slots.is_empty() {
+                self.slots.push(self.hsv);
+            }
+            self.active = Some(0);
+        }
         if let Some(slot) = self.active.and_then(|i| self.slots.get_mut(i)) {
             *slot = self.hsv;
         }
@@ -5855,6 +5882,7 @@ impl TriApp {
                                 && let Some(rgb) = parse_hex(&dialog.hex)
                             {
                                 let hex = dialog.hex.clone();
+                                dialog.type_target();
                                 dialog.set_rgb(rgb);
                                 dialog.hex = hex;
                             }
@@ -5930,8 +5958,10 @@ impl TriApp {
                                 ui.end_row();
                             });
                         if rgb != before_rgb {
+                            dialog.type_target();
                             dialog.set_rgb(rgb);
                         } else if (h, sp, vp) != before_hsv {
+                            dialog.type_target();
                             dialog.set_hsv([h, sp / 100.0, vp / 100.0]);
                         }
                         // Les pastilles (franches, « photo », libres, #492) sous les valeurs
@@ -6200,7 +6230,7 @@ impl TriApp {
                             .on_hover_text(tip);
                         if response.clicked() {
                             match rgb {
-                                Some(rgb) => dialog.set_rgb(rgb),
+                                Some(rgb) => dialog.pick_rgb(rgb),
                                 None if free => {
                                     own.push(dialog.hex.clone());
                                     changed = true;
@@ -32889,6 +32919,24 @@ mod tests {
         d.edit_target();
         assert_eq!(d.active, Some(0));
         assert_eq!(d.slots.len(), 2);
+        // Une pastille, une valeur tapée : dans la première couleur, rien ne se désélectionne
+        // (retour du 23/11/2026 : deux points sur la roue).
+        d.mean = true;
+        d.active = None;
+        d.pick_rgb([0, 200, 0]);
+        assert_eq!((d.active, d.slot_rgb(0)), (Some(0), [0, 200, 0]));
+        d.reset();
+        assert!(d.slots.is_empty(), "réinitialisée : rien de rangé");
+        // Hors couleur moyenne, une pastille remplit le prochain vide.
+        let mut w = ColourDialog::new(&[tri::palette::srgb_to_oklab([255, 0, 0])]);
+        w.pick_rgb([0, 0, 255]);
+        assert_eq!(w.slots.len(), 2);
+        assert_eq!(w.active, None);
+        w.type_target();
+        w.set_rgb([0, 0, 200]);
+        assert_eq!(w.slots.len(), 3, "une valeur tapée remplit le vide suivant");
+        w.set_rgb([0, 0, 150]);
+        assert_eq!(w.slots.len(), 3, "puis le retouche");
     }
 
     #[test]
