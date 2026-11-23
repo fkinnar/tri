@@ -5949,115 +5949,122 @@ impl TriApp {
                             ui.add_space(8.0);
                             self.colour_wheel(ui, &mut dialog);
                         });
-                        ui.add_space(8.0);
-                        self.harmony_row(ui, &mut dialog, &mut wheel);
                     });
-                    ui.add_space(12.0);
-                    ui.vertical(|ui| {
-                        // La couleur, son `#rrggbb` et la pipette.
-                        ui.horizontal(|ui| {
-                            let [r, g, b] = dialog.rgb();
-                            let (patch, _) =
-                                ui.allocate_exact_size(vec2(28.0, 22.0), Sense::hover());
-                            ui.painter()
-                                .rect_filled(patch, 3.0, Color32::from_rgb(r, g, b));
-                            let field = ui.add(
-                                egui::TextEdit::singleline(&mut dialog.hex)
-                                    .desired_width(80.0)
-                                    .font(egui::TextStyle::Monospace),
-                            );
-                            if field.changed()
-                                && let Some(rgb) = parse_hex(&dialog.hex)
-                            {
-                                let hex = dialog.hex.clone();
+                    ui.add_space(24.0);
+                    // Le bloc des valeurs et des pastilles calé à droite, aligné sur les
+                    // boutons (retour du 23/11/2026 : tout se tassait à gauche).
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                        ui.vertical(|ui| {
+                            // La couleur, son `#rrggbb` et la pipette.
+                            ui.horizontal(|ui| {
+                                let [r, g, b] = dialog.rgb();
+                                let (patch, _) =
+                                    ui.allocate_exact_size(vec2(28.0, 22.0), Sense::hover());
+                                ui.painter()
+                                    .rect_filled(patch, 3.0, Color32::from_rgb(r, g, b));
+                                let field = ui.add(
+                                    egui::TextEdit::singleline(&mut dialog.hex)
+                                        .desired_width(80.0)
+                                        .font(egui::TextStyle::Monospace),
+                                );
+                                if field.changed()
+                                    && let Some(rgb) = parse_hex(&dialog.hex)
+                                {
+                                    let hex = dialog.hex.clone();
+                                    dialog.type_target();
+                                    dialog.set_rgb(rgb);
+                                    dialog.hex = hex;
+                                }
+                                let size = ui.spacing().interact_size.y;
+                                let (rect, button) = marks::icon_button(
+                                    ui,
+                                    size,
+                                    &t!("palette-eyedropper-name"),
+                                    &format!("{} (p)", t!("palette-eyedropper-tip")),
+                                );
+                                marks::eyedropper_icon(
+                                    ui.painter(),
+                                    rect.shrink(size * 0.15),
+                                    ui.visuals().text_color(),
+                                );
+                                eyedropper = button.clicked();
+                            });
+                            ui.add_space(10.0);
+                            // R G B puis T S V, alignés (retour du 21/11/2026) : la lettre, la
+                            // valeur, l'unité en petit et en gris.
+                            let mut rgb = dialog.rgb();
+                            let before_rgb = rgb;
+                            let [mut h, s, v] = dialog.hsv;
+                            let (mut sp, mut vp) = (s * 100.0, v * 100.0);
+                            let before_hsv = (h, sp, vp);
+                            let small = egui::TextStyle::Small.resolve(ui.style());
+                            let body = egui::TextStyle::Body.resolve(ui.style());
+                            let weak = ui.visuals().weak_text_color();
+                            let field = vec2(44.0, ui.spacing().interact_size.y);
+                            // La valeur et son unité collées dans la même case (« ° » à la taille du
+                            // texte, « % » en petit : à taille égale, le degré paraissait minuscule).
+                            let with_unit = |ui: &mut Ui, value: egui::DragValue, text: &str| {
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 2.0;
+                                    ui.add_sized(field, value);
+                                    let font = if text == "°" {
+                                        egui::FontId::new(body.size * 1.35, body.family.clone())
+                                    } else {
+                                        small.clone()
+                                    };
+                                    let unit = egui::RichText::new(text).font(font).color(weak);
+                                    ui.add_sized(vec2(10.0, field.y), egui::Label::new(unit));
+                                });
+                            };
+                            egui::Grid::new("palette_colour_values")
+                                .num_columns(6)
+                                .min_col_width(0.0)
+                                .spacing(vec2(8.0, 6.0))
+                                .show(ui, |ui| {
+                                    for (value, name) in rgb.iter_mut().zip(["R:", "G:", "B:"]) {
+                                        ui.label(name);
+                                        with_unit(ui, egui::DragValue::new(value).speed(0.5), "");
+                                    }
+                                    ui.end_row();
+                                    let names = [
+                                        t!("palette-colour-h"),
+                                        t!("palette-colour-s"),
+                                        t!("palette-colour-v"),
+                                    ];
+                                    let fields: [(&mut f32, f32, &str); 3] = [
+                                        (&mut h, 360.0, "°"),
+                                        (&mut sp, 100.0, "%"),
+                                        (&mut vp, 100.0, "%"),
+                                    ];
+                                    for ((value, max, suffix), name) in
+                                        fields.into_iter().zip(names)
+                                    {
+                                        ui.label(format!("{name}:"));
+                                        let drag = egui::DragValue::new(value)
+                                            .range(0.0..=max)
+                                            .max_decimals(0)
+                                            .speed(0.5);
+                                        with_unit(ui, drag, suffix);
+                                    }
+                                    ui.end_row();
+                                });
+                            if rgb != before_rgb {
                                 dialog.type_target();
                                 dialog.set_rgb(rgb);
-                                dialog.hex = hex;
+                            } else if (h, sp, vp) != before_hsv {
+                                dialog.type_target();
+                                dialog.set_hsv([h, sp / 100.0, vp / 100.0]);
                             }
-                            let size = ui.spacing().interact_size.y;
-                            let (rect, button) = marks::icon_button(
-                                ui,
-                                size,
-                                &t!("palette-eyedropper-name"),
-                                &format!("{} (p)", t!("palette-eyedropper-tip")),
-                            );
-                            marks::eyedropper_icon(
-                                ui.painter(),
-                                rect.shrink(size * 0.15),
-                                ui.visuals().text_color(),
-                            );
-                            eyedropper = button.clicked();
+                            // Les pastilles (franches, « photo », libres, #492) sous les valeurs
+                            // (retour du 23/11/2026 : sans titres, ça se voit).
+                            ui.add_space(12.0);
+                            own = self.colour_swatches(ui, &mut dialog);
                         });
-                        ui.add_space(10.0);
-                        // R G B puis T S V, alignés (retour du 21/11/2026) : la lettre, la
-                        // valeur, l'unité en petit et en gris.
-                        let mut rgb = dialog.rgb();
-                        let before_rgb = rgb;
-                        let [mut h, s, v] = dialog.hsv;
-                        let (mut sp, mut vp) = (s * 100.0, v * 100.0);
-                        let before_hsv = (h, sp, vp);
-                        let small = egui::TextStyle::Small.resolve(ui.style());
-                        let body = egui::TextStyle::Body.resolve(ui.style());
-                        let weak = ui.visuals().weak_text_color();
-                        let field = vec2(44.0, ui.spacing().interact_size.y);
-                        // La valeur et son unité collées dans la même case (« ° » à la taille du
-                        // texte, « % » en petit : à taille égale, le degré paraissait minuscule).
-                        let with_unit = |ui: &mut Ui, value: egui::DragValue, text: &str| {
-                            ui.horizontal(|ui| {
-                                ui.spacing_mut().item_spacing.x = 2.0;
-                                ui.add_sized(field, value);
-                                let font = if text == "°" {
-                                    egui::FontId::new(body.size * 1.35, body.family.clone())
-                                } else {
-                                    small.clone()
-                                };
-                                let unit = egui::RichText::new(text).font(font).color(weak);
-                                ui.add_sized(vec2(10.0, field.y), egui::Label::new(unit));
-                            });
-                        };
-                        egui::Grid::new("palette_colour_values")
-                            .num_columns(6)
-                            .min_col_width(0.0)
-                            .spacing(vec2(8.0, 6.0))
-                            .show(ui, |ui| {
-                                for (value, name) in rgb.iter_mut().zip(["R:", "G:", "B:"]) {
-                                    ui.label(name);
-                                    with_unit(ui, egui::DragValue::new(value).speed(0.5), "");
-                                }
-                                ui.end_row();
-                                let names = [
-                                    t!("palette-colour-h"),
-                                    t!("palette-colour-s"),
-                                    t!("palette-colour-v"),
-                                ];
-                                let fields: [(&mut f32, f32, &str); 3] = [
-                                    (&mut h, 360.0, "°"),
-                                    (&mut sp, 100.0, "%"),
-                                    (&mut vp, 100.0, "%"),
-                                ];
-                                for ((value, max, suffix), name) in fields.into_iter().zip(names) {
-                                    ui.label(format!("{name}:"));
-                                    let drag = egui::DragValue::new(value)
-                                        .range(0.0..=max)
-                                        .max_decimals(0)
-                                        .speed(0.5);
-                                    with_unit(ui, drag, suffix);
-                                }
-                                ui.end_row();
-                            });
-                        if rgb != before_rgb {
-                            dialog.type_target();
-                            dialog.set_rgb(rgb);
-                        } else if (h, sp, vp) != before_hsv {
-                            dialog.type_target();
-                            dialog.set_hsv([h, sp / 100.0, vp / 100.0]);
-                        }
-                        // Les pastilles (franches, « photo », libres, #492) sous les valeurs
-                        // (retour du 23/11/2026 : sans titres, ça se voit).
-                        ui.add_space(12.0);
-                        own = self.colour_swatches(ui, &mut dialog);
                     });
                 });
+                // Les harmonies, et la roue tout à droite de la même ligne.
+                ui.add_space(8.0);
+                self.harmony_row(ui, &mut dialog, &mut wheel);
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     // À gauche, loin de « Valider ».
@@ -6073,7 +6080,7 @@ impl TriApp {
                     ui.add_space(12.0);
                     ui.label(egui::RichText::new(t!("palette-colour-tolerance")).color(weak));
                     let slider = ui
-                        .add(FineSlider::new(&mut radius, 0.0..=radius_max).width(140.0))
+                        .add(FineSlider::new(&mut radius, 0.0..=radius_max).width(110.0))
                         .on_hover_text(t!("palette-colour-radius"));
                     if slider.double_clicked_slider(ui) {
                         radius = radius_default;
@@ -6583,8 +6590,8 @@ impl TriApp {
         }
     }
 
-    /// Sous la roue : les harmonies (icônes ; la même une seconde fois la détache), puis
-    /// la roue, RYB ou RVB (`wheel` : changée).
+    /// Sous la roue : les harmonies (icônes ; la même une seconde fois la détache), et tout
+    /// à droite de la même ligne la roue, RYB ou RVB (`wheel` : changée).
     fn harmony_row(
         &self,
         ui: &mut Ui,
@@ -6611,30 +6618,31 @@ impl TriApp {
                     dialog.set_harmony(harmony);
                 }
             }
-        });
-        ui.horizontal(|ui| {
-            let current = self.gui.colour_search.wheel;
-            for (w, label, tip) in [
-                (
-                    ColourWheel::Ryb,
-                    t!("palette-wheel-ryb"),
-                    t!("palette-wheel-ryb-tip"),
-                ),
-                (
-                    ColourWheel::Rgb,
-                    t!("palette-wheel-rgb"),
-                    t!("palette-wheel-rgb-tip"),
-                ),
-            ] {
-                if ui
-                    .selectable_label(current == w, label)
-                    .on_hover_text(format!("{tip} (w)"))
-                    .clicked()
-                    && current != w
-                {
-                    *wheel = Some(w);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let current = self.gui.colour_search.wheel;
+                // De droite à gauche : RVB, puis RJB.
+                for (w, label, tip) in [
+                    (
+                        ColourWheel::Rgb,
+                        t!("palette-wheel-rgb"),
+                        t!("palette-wheel-rgb-tip"),
+                    ),
+                    (
+                        ColourWheel::Ryb,
+                        t!("palette-wheel-ryb"),
+                        t!("palette-wheel-ryb-tip"),
+                    ),
+                ] {
+                    if ui
+                        .selectable_label(current == w, label)
+                        .on_hover_text(format!("{tip} (w)"))
+                        .clicked()
+                        && current != w
+                    {
+                        *wheel = Some(w);
+                    }
                 }
-            }
+            });
         });
     }
 
