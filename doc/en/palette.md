@@ -58,6 +58,16 @@ enough of this blue". Measured like the distances between palettes (hue and satu
 palette colour, specks under `colour_min_share` (0.02) ignored; tolerance `colour_radius`
 (0.1), `colour_radius_max` (0.4).
 
+**Several colours** (`Palette::colours_cost`, `ColourQuery`, #492): `None` if one of the
+colours is further than the tolerance; otherwise, absolute search, the mean of the
+distances (a single colour: its distance, the previous order); hierarchical, each colour
+weighs `colour_hierarchy` (0.4) times the previous one and its cost is 1 − its share of
+the image (`share_near`) plus `colour_proximity` (0.25) × its distance relative to the
+tolerance. Measured on 2026-11-23 on 300 photos of a session (`--colours`): with the
+distance on an equal footing and 0.6, the order barely changed when swapping the colours
+(an image with 7 % of the first colour in 5th place); presence first and 0.4 put first
+the images where the first colour covers the most.
+
 ## Fine coverage (`Coverage`)
 
 Feedback of 2026-11-21 (video): skin in shadow, orange and saturated, was blended into an
@@ -120,7 +130,11 @@ one light, not one moment: fully left, everything joins); an unknown palette cut
 
 `tri <folder> --palette [--source camera|raw|darktable|…]`: each image, its `#rrggbb`
 colours and their share, stored in the cache as in the interface. Finished renders: only
-those already made by the interface (no software launched from the command line).
+those already made by the interface (no software launched from the command line). With
+`--colours "#d0a080,#6a7a80"` (the most important first) and `--hierarchical` (or `--mean`,
+the average colour, `Palette::mean`, compared with the first one): then the
+images that contain all these colours, best first, with their cost and the share of each
+colour (tolerance: `--threshold`, otherwise `colour_radius`).
 
 ## Settings `[palette]`
 

@@ -44,6 +44,10 @@ pub enum SortKey {
     Color,
     /// Drapeau : acceptée, sans drapeau, rejetée.
     Flag,
+    /// Proximité à la recherche en cours (palettes proches, couleurs, semblables ; #492,
+    /// 23/11/2026 : le filtre filtre, le tri trie). Le classement est fait par
+    /// l'interface, qui a les palettes ; ici, l'ordre des noms, qui départage.
+    Proximity,
 }
 
 /// Réglages du tri (section `[sort]` du fichier de configuration).
@@ -65,13 +69,14 @@ impl Default for SortSettings {
 
 impl SortKey {
     /// Toutes les clés, dans l'ordre où on les fait défiler.
-    pub const ALL: [SortKey; 6] = [
+    pub const ALL: [SortKey; 7] = [
         SortKey::Name,
         SortKey::Captured,
         SortKey::Modified,
         SortKey::Stars,
         SortKey::Color,
         SortKey::Flag,
+        SortKey::Proximity,
     ];
 
     /// Clé qui dépend des notes (à retrier quand une note change).
@@ -99,7 +104,7 @@ impl SortKey {
                 Flag::None => 1,
                 Flag::Rejected => 2,
             }),
-            SortKey::Name | SortKey::Captured | SortKey::Modified => None,
+            SortKey::Name | SortKey::Captured | SortKey::Modified | SortKey::Proximity => None,
         }
     }
 
@@ -147,7 +152,7 @@ pub fn sort(
 ) {
     // D'abord l'ordre des noms (paires : RAW puis JPEG), qui départage aussi.
     files.sort_by(by_name);
-    if order.key == SortKey::Name {
+    if matches!(order.key, SortKey::Name | SortKey::Proximity) {
         if order.descending {
             reverse_pairs(files);
         }
@@ -480,7 +485,16 @@ mod tests {
         sort(&mut files, by(SortKey::Color, false), |_| None, two, &mine);
         assert_eq!(names(&files), ["A.RAF", "C.RAF", "D.JPG", "B.RAF", "B.JPG"]);
         assert!(SortKey::Stars.by_notes() && !SortKey::Captured.by_notes());
-        assert_eq!(SortKey::ALL.len(), 6);
+        assert_eq!(SortKey::ALL.len(), 7);
+        // Proximité : l'ordre des noms ici (l'interface classe).
+        sort(
+            &mut files,
+            by(SortKey::Proximity, false),
+            |_| None,
+            notes,
+            &mine,
+        );
+        assert_eq!(names(&files), ["A.RAF", "B.RAF", "B.JPG", "C.RAF", "D.JPG"]);
         assert_eq!(SortSettings::default().color_order, Color::ALL);
     }
 
@@ -522,6 +536,7 @@ mod tests {
         assert_eq!(files[0].path, old, "le plus ancien d'abord");
         assert_eq!(SortKey::Name.next(), SortKey::Captured);
         assert_eq!(SortKey::Modified.next(), SortKey::Stars);
-        assert_eq!(SortKey::Flag.next(), SortKey::Name);
+        assert_eq!(SortKey::Flag.next(), SortKey::Proximity);
+        assert_eq!(SortKey::Proximity.next(), SortKey::Name);
     }
 }

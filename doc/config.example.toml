@@ -646,6 +646,22 @@ stack_scale = 0.5
 # Pipette : côté de la zone dont la couleur moyenne est prise (0,02 : 2 % du grand côté
 # de l'image), montrée par le collimateur sous le pointeur et dans la loupe.
 pick_area = 0.02
+# Contient ces couleurs, recherche hiérarchique : poids de chaque couleur face à la précédente.
+#
+# 0,4 : la deuxième couleur compte 0,4 fois la première, la troisième 0,16 fois… C'est sa
+# présence dans l'image qui compte : l'image où la première couleur est la plus présente
+# passe devant.
+colour_hierarchy = 0.4
+# Contient ces couleurs, recherche hiérarchique : poids de la proximité face à la présence.
+#
+# La part de l'image proche de chaque couleur décide d'abord ; la proximité (distance
+# rapportée à la tolérance, 0,25 fois) départage.
+colour_proximity = 0.25
+# Couleur moyenne : poids de la clarté face à la teinte et la saturation.
+#
+# Recherche de la couleur moyenne d'une image : petit, une photo sombre à dominante bleue
+# reste « bleue en moyenne » face à un bleu clair.
+mean_lightness = 0.3
 
 [index]
 # Noter les palettes dans l'index de recherche de tous les dossiers.
@@ -1325,6 +1341,33 @@ frame = 3.0
 # ("center", "top-left", "top-right", "bottom-right" ou "bottom-left").
 limit_seconds = 3.0
 limit_place = "center"
+
+[gui.colour_search]
+# Couleurs cherchées ensemble, au plus.
+max = 5
+# Mode de recherche : absolue, hiérarchique ou couleur moyenne.
+#
+# Contient ces couleurs : "absolute", toutes comptent pareil ; "hierarchical", la première
+# compte le plus, puis la deuxième… ([palette] colour_hierarchy) ; "mean", la couleur
+# moyenne de l'image comparée à la première ([palette] mean_lightness). Changé aussi dans la
+# boîte.
+mode = "absolute"
+# Pastilles des couleurs franches.
+pure = ["#ff0000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#ff00ff"]
+# Pastilles des couleurs « photo ».
+#
+# Ciel, feuillage, peau, coucher de soleil, mer, terre.
+photo = ["#7ea7d8", "#4f7a2e", "#e0ac8a", "#f08a3c", "#1f6e8c", "#7a5638"]
+# Pastilles libres, rangées depuis la boîte.
+own = []
+# Nombre de pastilles libres.
+own_max = 6
+# Aperçu en direct : délai entre deux recherches derrière la boîte (millisecondes).
+#
+# La grille cherche à chaque changement de couleur dans la boîte, au plus une fois par ce
+# délai (un gros dossier reste fluide pendant un glisser sur la roue) ; 0 : seulement à
+# « Chercher ».
+live_ms = 150
 
 [gui.position]
 # Repère « Photo 12 / 94 » à chaque changement d'image : durée d'affichage.

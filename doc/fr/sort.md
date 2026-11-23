@@ -45,3 +45,16 @@ ailleurs : `TriApp::notes_changed`) : l'image prend sa place, la sélection la s
 piles se forment sur l'ordre affiché (une rafale notée pareil reste contiguë, à égalité
 l'ordre des noms départage) ; le jugement de netteté reste celui du moteur, sur l'ordre
 de prise de vue.
+
+## Proximité (`SortKey::Proximity`, #492, 23/11/2026)
+
+Idée de l'utilisateur : « le filtre filtre, le tri trie ». Les recherches de palettes
+(couleurs, palettes proches) et « Semblables » ne font que **filtrer** ; le tri
+**Proximité** range les images gardées de la plus proche à la plus lointaine (inversé :
+l'inverse ; celles pas encore calculées à la fin). Le moteur n'a pas les palettes : ici,
+cette clé donne l'ordre des noms, et l'interface classe (`palette::rank_similar_by`, sous
+un autre tri `palette::keep_similar`, qui garde l'ordre). Dans l'interface : une
+recherche qui commence passe le tri à Proximité, et l'ordre d'avant revient quand elle
+s'arrête, sauf si l'on a choisi un autre tri entre deux ; sans recherche, Proximité est
+grisée dans la liste, sautée par le tri suivant, et jamais retenue (dossier ou session :
+l'ordre d'avant).

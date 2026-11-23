@@ -151,6 +151,12 @@ struct Args {
     /// Palettes de couleurs (`--palette`), de la source `--source` (#492).
     palette: bool,
     palette_source: Option<tri::palette::SourceKind>,
+    /// « Contient ces couleurs » (`--colours "#rrggbb,#rrggbb"`, #492), et
+    /// `--hierarchical`.
+    colours: Vec<[u8; 3]>,
+    hierarchical: bool,
+    /// `--mean` : la couleur moyenne de chaque image comparée à la première couleur.
+    mean: bool,
     /// Calculs choisis (`--compute previews,palette-raw…`, #555), et `--recreate`.
     compute: Vec<tri::compute::Kind>,
     recreate: bool,
@@ -486,6 +492,16 @@ fn parse() -> AnyResult<Args> {
             "--sharpness" => args.sharpness = true,
             "--groups" => args.groups = true,
             "--palette" => args.palette = true,
+            "--colours" => {
+                let text = value()?;
+                for part in text.split(',').filter(|p| !p.trim().is_empty()) {
+                    let rgb = tri::palette::parse_hex(part.trim())
+                        .ok_or_else(|| t!("cli-colours-bad", colour = part.trim()))?;
+                    args.colours.push(rgb);
+                }
+            }
+            "--hierarchical" => args.hierarchical = true,
+            "--mean" => args.mean = true,
             "--compute" => {
                 let text = value()?;
                 for part in text.split(',').filter(|p| !p.trim().is_empty()) {
@@ -1042,11 +1058,16 @@ fn exposure(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyRe
 /// Palette de couleurs de chaque image (#492), tirée de la source `kind`, calculée et
 /// rangée dans le cache comme dans l'interface : chaque couleur `#rrggbb` et sa part. Les
 /// rendus finis : seulement ceux déjà faits par l'interface (pas de logiciel lancé ici).
+/// Avec `query` (« contient ces couleurs ») : ensuite, les images qui les contiennent
+/// toutes, celles qui répondent le mieux d'abord, avec leur coût et la part de chaque
+/// couleur.
 fn palettes(
     settings: &EngineSettings,
     files: &[tri::media::MediaFile],
     kind: tri::palette::SourceKind,
+    query: Option<&tri::palette::ColourQuery>,
 ) -> AnyResult<()> {
+    let mut found: Vec<(String, tri::palette::Palette)> = Vec::new();
     use tri::scheduler::Producer;
     let cache = settings.open_cache()?;
     let preview = settings.preview(None);
@@ -1073,6 +1094,9 @@ fn palettes(
             });
         match read {
             Ok(p) => {
+                if query.is_some() {
+                    found.push((name.to_string(), p.clone()));
+                }
                 let colours: Vec<String> = p
                     .swatches
                     .iter()
@@ -1092,6 +1116,30 @@ fn palettes(
         }
     }
     println!("{}", t!("cli-palette-summary", n = done));
+    if let Some(q) = query {
+        let s = &settings.palette;
+        let mut ranked: Vec<(f32, String, Vec<f32>)> = found
+            .into_iter()
+            .filter_map(|(name, p)| {
+                let cost = p.colours_cost(q, s.chroma_weight, s.colour_coverage)?;
+                let shares = q
+                    .colours
+                    .iter()
+                    .map(|&c| p.share_near(c, q.radius, s.chroma_weight))
+                    .collect();
+                Some((cost, name, shares))
+            })
+            .collect();
+        ranked.sort_by(|a, b| a.0.total_cmp(&b.0));
+        println!("{}", t!("cli-colours-header", n = ranked.len()));
+        for (cost, name, shares) in ranked {
+            let shares: Vec<String> = shares
+                .iter()
+                .map(|s| format!("{:.1} %", s * 100.0))
+                .collect();
+            println!("{name}\t{cost:.3}\t{}", shares.join("  "));
+        }
+    }
     Ok(())
 }
 
@@ -2270,7 +2318,25 @@ fn run() -> AnyResult<()> {
     }
     if args.palette {
         let files: Vec<_> = groups.into_iter().flatten().collect();
-        return palettes(&settings, &files, args.palette_source.unwrap_or_default());
+        let query = (!args.colours.is_empty()).then(|| tri::palette::ColourQuery {
+            colours: args
+                .colours
+                .iter()
+                .map(|&c| tri::palette::srgb_to_oklab(c))
+                .collect(),
+            radius: args.threshold.unwrap_or(settings.palette.colour_radius),
+            hierarchy: args
+                .hierarchical
+                .then_some(settings.palette.colour_hierarchy),
+            proximity: settings.palette.colour_proximity,
+            mean: args.mean.then_some(settings.palette.mean_lightness),
+        });
+        return palettes(
+            &settings,
+            &files,
+            args.palette_source.unwrap_or_default(),
+            query.as_ref(),
+        );
     }
     if let Some(target) = args.convert {
         let files: Vec<_> = groups.into_iter().flatten().collect();

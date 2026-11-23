@@ -198,6 +198,16 @@ pub struct PaletteSettings {
     /// Écart de teintes au plus (degrés) d'une image monochrome teintée : ses couleurs
     /// suivent une seule teinte.
     pub mono_hue_spread: f32,
+    /// Contient ces couleurs, recherche hiérarchique : poids de chaque couleur face à la
+    /// précédente (0,4 : la deuxième compte 0,4 fois la première, la troisième 0,16 fois… ;
+    /// mesuré le 23/11/2026 : à 0,6, la deuxième couleur pesait encore trop).
+    pub colour_hierarchy: f32,
+    /// Contient ces couleurs, recherche hiérarchique : poids de la proximité (distance
+    /// rapportée à la tolérance) face à la présence (part de l'image), qui décide d'abord.
+    pub colour_proximity: f32,
+    /// Couleur moyenne : poids de la clarté face à la teinte et la saturation (comptées
+    /// `chroma_weight` fois) ; petit, une photo sombre à dominante bleue reste bleue.
+    pub mean_lightness: f32,
 }
 
 impl Default for PaletteSettings {
@@ -220,6 +230,9 @@ impl Default for PaletteSettings {
             stack_scale: 0.5,
             pick_area: 0.02,
             mono_hue_spread: 15.0,
+            colour_hierarchy: 0.4,
+            colour_proximity: 0.25,
+            mean_lightness: 0.3,
         }
     }
 }
@@ -460,6 +473,72 @@ impl Palette {
         hue_range(&mut hues) <= mono.hue_spread
     }
 
+    /// Couleur moyenne de l'image (OKLab) : celles de la palette, pondérées par leur part ;
+    /// `None` sans couleur.
+    pub fn mean(&self) -> Option<[f32; 3]> {
+        let total: f32 = self.swatches.iter().map(|s| s.share).sum();
+        if total <= 0.0 {
+            return None;
+        }
+        let mut m = [0.0; 3];
+        for s in &self.swatches {
+            for (k, v) in m.iter_mut().enumerate() {
+                *v += s.oklab[k] * s.share / total;
+            }
+        }
+        Some(m)
+    }
+
+    /// « Contient ces couleurs » (#492) : coût de la palette face à `query`, plus petit
+    /// pour une image qui répond mieux ; `None` si l'une des couleurs manque (plus loin que
+    /// la tolérance, voir [`Palette::nearest`]).
+    ///
+    /// Recherche absolue : la moyenne des distances (une couleur seule : sa distance).
+    /// Hiérarchique : chaque couleur compte `query.hierarchy` fois la précédente, et sa
+    /// présence (part de l'image à moins de la tolérance) s'y ajoute : l'image où la
+    /// 1ʳᵉ couleur est la plus proche et la plus présente passe devant.
+    pub fn colours_cost(
+        &self,
+        query: &ColourQuery,
+        chroma_weight: f32,
+        min_share: f32,
+    ) -> Option<f32> {
+        // Couleur moyenne : la teinte et la saturation surtout, la clarté peu (une photo à
+        // dominante bleue mais sombre reste « bleue en moyenne »).
+        if let Some(lightness) = query.mean {
+            let wanted = *query.colours.first()?;
+            let m = self.mean()?;
+            let d = ((lightness * (m[0] - wanted[0])).powi(2)
+                + (chroma_weight * (m[1] - wanted[1])).powi(2)
+                + (chroma_weight * (m[2] - wanted[2])).powi(2))
+            .sqrt();
+            return (d <= query.radius).then_some(d);
+        }
+        let (mut sum, mut weights, mut weight) = (0.0, 0.0, 1.0);
+        for &oklab in &query.colours {
+            let d = self.nearest(oklab, chroma_weight, min_share)?;
+            if d > query.radius {
+                return None;
+            }
+            // Hiérarchique : la présence d'abord (mesuré le 23/11/2026 sur 300 photos :
+            // la proximité, ajoutée à part égale, l'emportait, et l'ordre changeait à
+            // peine), la proximité (rapportée à la tolérance) pour départager.
+            let cost = match query.hierarchy {
+                None => d,
+                Some(_) => {
+                    let share = self.share_near(oklab, query.radius, chroma_weight);
+                    (1.0 - share) + query.proximity * d / query.radius.max(1e-6)
+                }
+            };
+            sum += weight * cost;
+            weights += weight;
+            if let Some(h) = query.hierarchy {
+                weight *= h.clamp(0.0, 1.0);
+            }
+        }
+        (weights > 0.0).then(|| sum / weights)
+    }
+
     /// Distance de la couleur de la palette la plus proche de `oklab` (comptée comme
     /// [`distance`]), parmi celles d'au moins `min_share` de l'image ; `None` s'il n'y en a
     /// aucune. « Contient cette couleur » : plus elle est petite, plus l'image la contient.
@@ -636,6 +715,17 @@ pub fn rank_similar<T>(
     distance: impl Fn(&T) -> Option<Option<f32>>,
     threshold: f32,
 ) -> Vec<T> {
+    rank_similar_by(items, distance, threshold, false)
+}
+
+/// [`rank_similar`], du plus lointain au plus proche avec `descending` (tri inversé) ;
+/// ceux pas encore calculés toujours à la fin.
+pub fn rank_similar_by<T>(
+    items: Vec<T>,
+    distance: impl Fn(&T) -> Option<Option<f32>>,
+    threshold: f32,
+    descending: bool,
+) -> Vec<T> {
     let mut known: Vec<(f32, T)> = Vec::new();
     let mut unknown: Vec<T> = Vec::new();
     for item in items {
@@ -647,7 +737,57 @@ pub fn rank_similar<T>(
         }
     }
     known.sort_by(|a, b| a.0.total_cmp(&b.0));
+    if descending {
+        known.reverse();
+    }
     known.into_iter().map(|(_, t)| t).chain(unknown).collect()
+}
+
+/// Comme [`rank_similar`], sans trier (#492, 23/11/2026 : le filtre filtre, le tri trie) :
+/// les éléments gardés restent dans leur ordre, ceux dont la palette n'est pas encore
+/// calculée à leur place.
+pub fn keep_similar<T>(
+    items: Vec<T>,
+    distance: impl Fn(&T) -> Option<Option<f32>>,
+    threshold: f32,
+) -> Vec<T> {
+    items
+        .into_iter()
+        .filter(|item| match distance(item) {
+            None => false,
+            Some(None) => true,
+            Some(Some(d)) => d <= threshold,
+        })
+        .collect()
+}
+
+/// Lit une couleur `#rrggbb` (ou `rrggbb`) ; `None` sinon.
+pub fn parse_hex(text: &str) -> Option<[u8; 3]> {
+    let hex = text.trim().trim_start_matches('#');
+    if hex.len() != 6 || !hex.is_ascii() {
+        return None;
+    }
+    let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
+    Some([byte(0)?, byte(2)?, byte(4)?])
+}
+
+/// « Contient ces couleurs » (#492) : les couleurs cherchées (OKLab, la plus importante
+/// d'abord), la tolérance, et `hierarchy` : `None` pour une recherche absolue (toutes
+/// pèsent pareil), sinon le poids de chacune face à la précédente.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ColourQuery {
+    /// Couleurs cherchées, en OKLab, la plus importante d'abord.
+    pub colours: Vec<[f32; 3]>,
+    /// Tolérance : distance au plus de chaque couleur (voir [`Palette::nearest`]).
+    pub radius: f32,
+    /// `None` : recherche absolue ; sinon poids de chaque couleur face à la précédente.
+    pub hierarchy: Option<f32>,
+    /// Recherche hiérarchique : poids de la proximité face à la présence.
+    pub proximity: f32,
+    /// Recherche de la couleur **moyenne** (#492, 23/11/2026) : `Some(poids de la
+    /// clarté)`, la première couleur seule comparée à la moyenne de l'image (voir
+    /// [`Palette::mean`]) ; `None` sinon.
+    pub mean: Option<f32>,
 }
 
 /// Seuils de « monochrome » (voir [`Palette::is_monochrome`]).
@@ -1290,6 +1430,118 @@ mod tests {
                 < 0.04,
             "à 0,5 %, trouvé"
         );
+    }
+
+    #[test]
+    fn keeping_similar_items_keeps_their_order() {
+        let items = vec![
+            ("a", Some(Some(0.3))),
+            ("b", None),
+            ("c", Some(None)),
+            ("d", Some(Some(0.1))),
+            ("e", Some(Some(0.9))),
+        ];
+        let kept = keep_similar(items.clone(), |i| i.1, 0.5);
+        assert_eq!(
+            kept.iter().map(|i| i.0).collect::<Vec<_>>(),
+            ["a", "c", "d"]
+        );
+        let ranked = rank_similar(items, |i| i.1, 0.5);
+        assert_eq!(
+            ranked.iter().map(|i| i.0).collect::<Vec<_>>(),
+            ["d", "a", "c"]
+        );
+    }
+
+    #[test]
+    fn the_average_colour_finds_the_colour_cast_only() {
+        // Idée de l'utilisateur (23/11/2026) : une photo à dominante bleue avec un peu de
+        // peau sort d'une recherche de la peau ; en couleur moyenne, non.
+        let s = PaletteSettings::default();
+        let (blue, skin) = ([40u8, 70, 150], [210u8, 160, 130]);
+        let blue_cast = extract(&bands(&[(blue, 85), (skin, 15)]), &s);
+        let portrait = extract(&bands(&[(skin, 85), (blue, 15)]), &s);
+        let query = |c: [u8; 3], mean| ColourQuery {
+            colours: vec![working_to_oklab(c)],
+            radius: s.colour_radius,
+            hierarchy: None,
+            proximity: s.colour_proximity,
+            mean,
+        };
+        let cost =
+            |p: &Palette, q: &ColourQuery| p.colours_cost(q, s.chroma_weight, s.colour_coverage);
+        let ordinary = query(skin, None);
+        assert!(cost(&blue_cast, &ordinary).is_some() && cost(&portrait, &ordinary).is_some());
+        let mean = Some(s.mean_lightness);
+        assert!(
+            cost(&blue_cast, &query(skin, mean)).is_none(),
+            "pas à dominante chair"
+        );
+        assert!(cost(&portrait, &query(skin, mean)).is_some());
+        assert!(cost(&blue_cast, &query(blue, mean)).is_some());
+        assert!(cost(&portrait, &query(blue, mean)).is_none());
+        // Plus sombre, la même dominante (la clarté compte peu ; très sombre, un bleu est
+        // aussi moins saturé en OKLab : la tolérance s'élargit au curseur).
+        let dark = extract(&bands(&[([30u8, 50, 110], 100)]), &s);
+        assert!(cost(&dark, &query([45u8, 75, 150], mean)).is_some());
+        // La recherche ordinaire, qui compte la clarté pleinement, l'écarte.
+        assert!(cost(&dark, &query([45u8, 75, 150], None)).is_none());
+    }
+
+    #[test]
+    fn several_colours_are_all_required() {
+        // #492 : plusieurs couleurs cherchées ensemble ; une seule qui manque écarte.
+        let s = PaletteSettings::default();
+        let (red, blue, green) = ([200u8, 30, 30], [30u8, 40, 200], [30u8, 180, 40]);
+        let palette = extract(&bands(&[(red, 60), (blue, 40)]), &s);
+        let query = |colours: &[[u8; 3]], hierarchy| ColourQuery {
+            colours: colours.iter().map(|&c| working_to_oklab(c)).collect(),
+            radius: s.colour_radius,
+            hierarchy,
+            proximity: s.colour_proximity,
+            mean: None,
+        };
+        let cost = |q: &ColourQuery| palette.colours_cost(q, s.chroma_weight, s.colour_coverage);
+        assert!(cost(&query(&[red, blue], None)).is_some());
+        assert!(
+            cost(&query(&[red, green], None)).is_none(),
+            "le vert manque"
+        );
+        // Une couleur seule : sa distance, comme avant.
+        assert_eq!(
+            cost(&query(&[red], None)),
+            palette.nearest(working_to_oklab(red), s.chroma_weight, s.colour_coverage)
+        );
+    }
+
+    #[test]
+    fn a_hierarchical_search_puts_the_first_colour_first() {
+        // #492 : recherche hiérarchique, l'image où la 1ʳᵉ couleur est la plus présente
+        // passe devant ; absolue, l'ordre des couleurs ne compte pas.
+        let s = PaletteSettings::default();
+        let (red, blue) = ([200u8, 30, 30], [30u8, 40, 200]);
+        let mostly_red = extract(&bands(&[(red, 80), (blue, 20)]), &s);
+        let mostly_blue = extract(&bands(&[(red, 20), (blue, 80)]), &s);
+        let query = |colours: &[[u8; 3]], hierarchy| ColourQuery {
+            colours: colours.iter().map(|&c| working_to_oklab(c)).collect(),
+            radius: s.colour_radius,
+            hierarchy,
+            proximity: s.colour_proximity,
+            mean: None,
+        };
+        let cost = |p: &Palette, q: &ColourQuery| {
+            p.colours_cost(q, s.chroma_weight, s.colour_coverage)
+                .unwrap()
+        };
+        let red_first = query(&[red, blue], Some(s.colour_hierarchy));
+        assert!(cost(&mostly_red, &red_first) < cost(&mostly_blue, &red_first));
+        let blue_first = query(&[blue, red], Some(s.colour_hierarchy));
+        assert!(cost(&mostly_blue, &blue_first) < cost(&mostly_red, &blue_first));
+        let absolute = query(&[red, blue], None);
+        let reversed = query(&[blue, red], None);
+        for p in [&mostly_red, &mostly_blue] {
+            assert!((cost(p, &absolute) - cost(p, &reversed)).abs() < 1e-6);
+        }
     }
 
     #[test]

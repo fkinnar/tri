@@ -243,8 +243,46 @@ system one ("cold" measurements, experiments).
   a small area of the image the palette comes from, read in the background; elsewhere,
   the pixel of a capture of the window), then the box comes back; on an image, a
   **reticle** shows the averaged area (`[palette] pick_area`, 2 % of the long side), and
-  the loupe (`m` held) magnifies it to aim precisely (user's idea, 2026-11-21); "Search" starts the
-  filter. Or a click on a colour of the Palette section:
+  the loupe (`m` held) magnifies it to aim precisely (user's idea, 2026-11-21); "OK" keeps the
+  search.
+  **Several colours** (#492, user's idea, 2026-11-23): at the top of the box, the colours
+  looked for, as swatches like the others (`[gui.colour_search] max` slots, 5; feedback of
+  2026-11-23): nothing by default, a "+" in the empty ones; a click on an empty one stores
+  the current colour there and selects it, on a filled one selects it (framed): the wheel,
+  the values and the eyedropper then set that one; right-click "Clear" (the next ones move
+  up). When opening, the current or last search, even of a single colour, the first one
+  selected; nothing stored, "OK" takes the wheel's colour. Centred between two thin
+  lines. **Live preview** (feedback of 2026-11-23): at each colour change in the box, the
+  grid searches behind it, at most once per `[gui.colour_search] live_ms` (150 ms; 0: no
+  preview); opening starts nothing; "OK" (formerly "Search") keeps the search, "Cancel" or
+  the cross bring back the previous one (or none) and the previous sort. **Reset**
+  (bottom left) clears the slots, puts the wheel back to grey and stops the search; "OK"
+  right after leaves the grid without a search. An image must
+  contain **all** of them (one tolerance for all: one per colour would be unmanageable).
+  On the right, **Absolute** (all count the same: the mean of the distances) or
+  **Hierarchical** (the first counts the most, each next one `[palette] colour_hierarchy`
+  times the previous one, from its presence in the image, proximity breaking ties: the image
+  where the first colour covers the most comes first; two searches with the same colours
+  in another order keep the same images, in another order; requiring an order of areas, considered, would
+  have emptied the results); the choice is written to `[gui.colour_search] mode`.
+  Third mode, **Average** (user's idea, 2026-11-23): the average colour of each image (its
+  palette's colours, weighted by their share) compared with the first colour, mostly hue
+  and saturation (lightness counted `[palette] mean_lightness` times): photos with a cast
+  of that colour, not those that contain a little of it (a blue photo with a little skin
+  comes out of a skin search, not of an average skin search); a two-colour photo has a
+  grey average and only comes out of an ordinary search. The other slots stay in place,
+  greyed and inert. Measured on 116 photos of four sessions: the 6 blue-cast photos
+  between 0.07 and 0.09 from a blue, the next ones at 0.17.
+  A new search (colours, mode, similar palettes) selects the best answer and brings the
+  grid back to the start (feedback of 2026-11-23: the previous selection stayed selected
+  and the grid scrolled to it, in the middle of the results; the best ones, above, were not
+  seen).
+  Under the values, three rows of **swatches**, without titles (it shows): pure (`pure`: studio lights, plain red and
+  blue), "photo" (`photo`: sky, foliage, skin, sunset, sea, earth) and free (`own`,
+  `own_max`: a click on an empty swatch stores the current colour there, right-click
+  "Replace" or "Clear", written to the configuration); a click on a filled swatch takes it
+  as the current colour. The filter's patch shows the colours side by side. Screenshot:
+  `TRI_GUI_ACTIONS=colour_dialog:#d03020 #2050c0`. Or a click on a colour of the Palette section:
   the images with a palette colour close enough, closest first (a single slider, the
   tolerance, `colour_radius` / `colour_radius_max`; specks under `colour_min_share`
   ignored). Common rules: one search at a time; images not computed yet stay, at the end

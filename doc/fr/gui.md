@@ -255,7 +255,46 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   l'image d'où la palette est tirée, lue en fond ; ailleurs, le pixel de la capture de la
   fenêtre), puis la boîte revient ; sur une image, un **collimateur** montre la zone
   moyennée (`[palette] pick_area`, 2 % du grand côté), et la loupe (`m` maintenue)
-  l'agrandit pour viser juste (idée de l'utilisateur, 21/11/2026) ; « Chercher » lance le filtre. Ou un clic sur une couleur
+  l'agrandit pour viser juste (idée de l'utilisateur, 21/11/2026) ; « Valider » garde la recherche.
+  **Plusieurs couleurs** (#492, idée de l'utilisateur, 23/11/2026) : en haut de la boîte,
+  les couleurs cherchées, en pastilles comme les autres (`[gui.colour_search] max`
+  emplacements, 5 ; retours du 23/11/2026) : rien par défaut, un « + » dans les vides ; un
+  clic sur un vide y range la couleur réglée et le choisit, sur un plein le choisit
+  (encadré) : la roue, les valeurs et la pipette règlent alors celui-là ; clic droit
+  « Vider » (les suivants avancent). À l'ouverture, la recherche en cours ou la dernière,
+  même d'une seule couleur, la première choisie ; rien de rangé, « Valider » prend la
+  couleur de la roue. Centrées entre deux traits fins.
+  **Aperçu en direct** (retour du 23/11/2026) : à chaque changement de couleur dans la
+  boîte, la grille cherche derrière, au plus une fois par `[gui.colour_search] live_ms`
+  (150 ms ; 0 : pas d'aperçu) ; l'ouverture ne lance rien ; « Valider » (ex-« Chercher »)
+  garde la recherche, « Annuler » ou la croix rendent celle d'avant (ou aucune) et le
+  tri d'avant. **Réinitialiser** (en bas à gauche) vide les emplacements, remet la roue au
+  gris et arrête la recherche ; « Valider » juste après laisse la grille sans recherche. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
+  couleur serait ingérable). À droite, **Absolue** (toutes comptent pareil : la moyenne des
+  distances) ou **Hiérarchique** (la première compte le plus, chaque suivante
+  `[palette] colour_hierarchy` fois la précédente, d'après sa présence dans l'image, la
+  proximité départageant : l'image où la première couleur occupe le plus de place passe
+  devant ; deux recherches aux mêmes couleurs dans un autre ordre gardent les mêmes images,
+  dans un autre ordre ; un ordre exigé des
+  surfaces, essayé en idée, aurait vidé les résultats) ; le choix est écrit dans
+  `[gui.colour_search] mode`. Troisième mode, **Moyenne** (idée de l'utilisateur,
+  23/11/2026) : la couleur moyenne de chaque image (celles de sa palette, pondérées par leur
+  part) comparée à la première couleur, la teinte et la saturation surtout (clarté comptée
+  `[palette] mean_lightness` fois) : les photos à dominante de cette couleur, pas celles
+  qui en ont un peu (une photo bleue avec un peu de peau sort d'une recherche de la peau,
+  pas d'une recherche de la peau en moyenne) ; une photo bicolore a une moyenne grise et
+  ne sort qu'en recherche ordinaire. Les autres emplacements restent à leur place, grisés
+  et inertes. Mesuré sur 116 photos de quatre séances : les 6 photos à dominante bleue
+  entre 0,07 et 0,09 d'un bleu, les suivantes à 0,17. Une nouvelle recherche (couleurs, mode, palettes
+  proches) choisit la meilleure réponse et remet la grille au début (retour du 23/11/2026 :
+  la sélection d'avant restait choisie et la grille défilait jusqu'à elle, au milieu des
+  résultats ; les meilleurs, au-dessus, ne se voyaient pas). Sous les valeurs, trois rangées de **pastilles**, sans titres (ça se voit) : franches
+  (`pure` : lumières de studio, rouge et bleu francs), « photo » (`photo` : ciel,
+  feuillage, peau, coucher de soleil, mer, terre) et libres (`own`, `own_max` : un clic
+  sur une pastille vide y range la couleur réglée, clic droit « Remplacer » ou « Vider »,
+  écrites dans la configuration) ; un clic sur une pastille pleine la prend pour la
+  couleur réglée. La pastille du filtre montre les couleurs côte à côte. Capture :
+  `TRI_GUI_ACTIONS=colour_dialog:#d03020 #2050c0`. Ou un clic sur une couleur
   de la section Palette : les images dont une couleur de la palette est assez proche, la plus
   proche d'abord (un seul curseur, la tolérance, `colour_radius` / `colour_radius_max` ;
   miettes sous `colour_min_share` ignorées). Règles communes : une recherche à la fois ;

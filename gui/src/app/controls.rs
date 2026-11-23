@@ -385,7 +385,12 @@ impl TriApp {
         let mut reverse = false;
         ui.horizontal(|ui| {
             let (item, pressed) = self.side_begin(false);
-            let keys = tri::sort::SortKey::ALL;
+            // « Proximité » seulement pendant une recherche (grisée sinon, à sa place).
+            let searching = self.palette_searching();
+            let keys: Vec<tri::sort::SortKey> = tri::sort::SortKey::ALL
+                .into_iter()
+                .filter(|&k| searching || k != tri::sort::SortKey::Proximity)
+                .collect();
             let at = keys.iter().position(|&k| k == key).unwrap_or(0);
             match pressed {
                 Some(SideKey::Left) => key = keys[at.saturating_sub(1)],
@@ -397,7 +402,11 @@ impl TriApp {
                 .selected_text(sort_name(key))
                 .show_ui(ui, |ui| {
                     for k in tri::sort::SortKey::ALL {
-                        ui.selectable_value(&mut key, k, sort_name(k));
+                        let usable = searching || k != tri::sort::SortKey::Proximity;
+                        ui.add_enabled_ui(usable, |ui| {
+                            ui.selectable_value(&mut key, k, sort_name(k))
+                                .on_disabled_hover_text(t!("sort-proximity-none"));
+                        });
                     }
                 })
                 .response

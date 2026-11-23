@@ -617,7 +617,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 287] = [
+    pub const ALL: [Action; 288] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -665,6 +665,7 @@ impl Action {
         Action::SortBy(tri::sort::SortKey::Stars),
         Action::SortBy(tri::sort::SortKey::Color),
         Action::SortBy(tri::sort::SortKey::Flag),
+        Action::SortBy(tri::sort::SortKey::Proximity),
         Action::FilterKind(tri::filter::KindFilter::All),
         Action::FilterKind(tri::filter::KindFilter::RawOnly),
         Action::FilterKind(tri::filter::KindFilter::FlatOnly),
@@ -1285,6 +1286,7 @@ impl Action {
             Action::SortBy(tri::sort::SortKey::Stars) => "core.filter.sort_by.stars",
             Action::SortBy(tri::sort::SortKey::Color) => "core.filter.sort_by.color",
             Action::SortBy(tri::sort::SortKey::Flag) => "core.filter.sort_by.flag",
+            Action::SortBy(tri::sort::SortKey::Proximity) => "core.filter.sort_by.proximity",
             Action::FilterKind(tri::filter::KindFilter::All) => "core.filter.kind.all",
             Action::FilterKind(tri::filter::KindFilter::RawOnly) => "core.filter.kind.raw",
             Action::FilterKind(tri::filter::KindFilter::FlatOnly) => "core.filter.kind.flat",

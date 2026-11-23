@@ -323,6 +323,8 @@ pub struct GuiSettings {
     pub zoom: ZoomSettings,
     /// `[gui.compare]`.
     pub compare: CompareSettings,
+    /// `[gui.colour_search]`.
+    pub colour_search: ColourSearchSettings,
     /// `[gui.position]`.
     pub position: PositionSettings,
     /// `[gui.position_bar]`.
@@ -399,6 +401,7 @@ impl Default for GuiSettings {
             view: ViewSettings::default(),
             zoom: ZoomSettings::default(),
             compare: CompareSettings::default(),
+            colour_search: ColourSearchSettings::default(),
             position: PositionSettings::default(),
             position_bar: PositionBarSettings::default(),
             notes: NotesSettings::default(),
@@ -1136,6 +1139,79 @@ impl Default for CompareSettings {
             frame: 3.0,
             limit_seconds: 3.0,
             limit_place: PositionPlace::Center,
+        }
+    }
+}
+
+/// Mode de la recherche de couleurs (#492).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ColourMode {
+    /// Toutes les couleurs comptent pareil.
+    #[default]
+    Absolute,
+    /// La première compte le plus, puis la deuxième… (`[palette] colour_hierarchy`).
+    Hierarchical,
+    /// La couleur moyenne de l'image comparée à la première couleur (idée de
+    /// l'utilisateur, 23/11/2026 : isoler les photos « bleues en moyenne », qu'une
+    /// recherche ordinaire de la peau retrouve dès qu'il y en a un peu).
+    Mean,
+}
+
+impl ColourMode {
+    /// Les modes, dans l'ordre de la boîte.
+    pub const ALL: [ColourMode; 3] = [
+        ColourMode::Absolute,
+        ColourMode::Hierarchical,
+        ColourMode::Mean,
+    ];
+
+    /// Identifiant dans la configuration.
+    pub fn id(self) -> &'static str {
+        match self {
+            ColourMode::Absolute => "absolute",
+            ColourMode::Hierarchical => "hierarchical",
+            ColourMode::Mean => "mean",
+        }
+    }
+}
+
+/// Section `[gui.colour_search]` : boîte « Couleur cherchée » (#492).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ColourSearchSettings {
+    /// Couleurs cherchées ensemble, au plus.
+    pub max: usize,
+    /// Mode de recherche ; changé aussi dans la boîte, et écrit ici.
+    pub mode: ColourMode,
+    /// Pastilles des couleurs franches (`#rrggbb`) : studio, lumières colorées.
+    pub pure: Vec<String>,
+    /// Pastilles des couleurs « photo » : ciel, feuillage, peau…
+    pub photo: Vec<String>,
+    /// Pastilles libres, rangées depuis la boîte (écrites ici par `tri`).
+    pub own: Vec<String>,
+    /// Nombre de pastilles libres.
+    pub own_max: usize,
+    /// Aperçu en direct : la grille cherche derrière la boîte à chaque changement, au plus
+    /// une fois par ce délai (millisecondes) ; 0 : seulement à « Chercher ».
+    pub live_ms: u64,
+}
+
+impl Default for ColourSearchSettings {
+    fn default() -> Self {
+        let hex = |list: &[&str]| list.iter().map(|s| s.to_string()).collect();
+        Self {
+            max: 5,
+            mode: ColourMode::Absolute,
+            pure: hex(&[
+                "#ff0000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#ff00ff",
+            ]),
+            photo: hex(&[
+                "#7ea7d8", "#4f7a2e", "#e0ac8a", "#f08a3c", "#1f6e8c", "#7a5638",
+            ]),
+            own: Vec::new(),
+            own_max: 6,
+            live_ms: 150,
         }
     }
 }

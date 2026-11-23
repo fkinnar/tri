@@ -302,44 +302,117 @@ struct SimilarSearch {
     threshold: f32,
 }
 
-/// « Contient cette couleur » (#492) : la grille ne garde que les images dont une couleur
-/// de la palette est proche de celle-ci, la plus proche d'abord.
-#[derive(Clone, Copy, Debug)]
+/// « Contient ces couleurs » (#492) : la grille ne garde que les images dont la palette
+/// contient chacune de ces couleurs, celles qui répondent le mieux d'abord.
+#[derive(Clone, Debug)]
 struct PaletteColour {
-    /// La couleur cherchée, en OKLab.
-    oklab: [f32; 3],
+    /// Les couleurs cherchées, en OKLab, la plus importante d'abord.
+    colours: Vec<[f32; 3]>,
     /// Tolérance : distance maximale de la couleur la plus proche de la palette (comptée
     /// comme entre palettes).
     radius: f32,
 }
 
-/// Boîte de choix de la couleur cherchée : la couleur en cours, en TSV (teinte en degrés,
-/// saturation et valeur de 0 à 1 ; la teinte d'un gris est gardée), et le texte du champ
-/// hexadécimal en cours de saisie.
+/// Boîte de choix des couleurs cherchées : la couleur réglée sur la roue, en TSV (teinte en
+/// degrés, saturation et valeur de 0 à 1 ; la teinte d'un gris est gardée), le texte du
+/// champ hexadécimal en cours de saisie, et les couleurs rangées dans les emplacements
+/// (#492 : plusieurs couleurs, la plus importante d'abord). Retours du 23/11/2026 : rien
+/// par défaut ; un clic sur un vide y range la couleur réglée, sur un plein le choisit ;
+/// l'emplacement choisi (`active`) suit la roue, les valeurs et la pipette.
 #[derive(Clone, Debug)]
 struct ColourDialog {
     hsv: [f32; 3],
     hex: String,
+    slots: Vec<[f32; 3]>,
+    active: Option<usize>,
+    /// Réinitialisée et pas retouchée depuis : rien à chercher.
+    blank: bool,
 }
 
 impl ColourDialog {
-    fn new(oklab: [f32; 3]) -> ColourDialog {
+    /// Sur les couleurs `colours` (rangées), la première choisie ; aucune : un gris moyen
+    /// sur la roue, rien de rangé.
+    fn new(colours: &[[f32; 3]]) -> ColourDialog {
         let mut dialog = ColourDialog {
             hsv: [0.0; 3],
             hex: String::new(),
+            slots: Vec::new(),
+            active: None,
+            blank: false,
         };
-        dialog.set(oklab);
+        for &oklab in colours {
+            dialog.set(oklab);
+            dialog.slots.push(dialog.hsv);
+        }
+        if colours.is_empty() {
+            dialog.set_rgb([128, 128, 128]);
+        } else {
+            dialog.load(0);
+        }
         dialog
+    }
+
+    /// Réinitialise (retour du 23/11/2026) : rien de rangé, un gris moyen sur la roue,
+    /// rien à chercher tant qu'on n'a rien retouché.
+    fn reset(&mut self) {
+        self.slots.clear();
+        self.active = None;
+        self.set_rgb([128, 128, 128]);
+        self.blank = true;
+    }
+
+    /// Range la couleur réglée dans le premier emplacement vide (au plus `max`), aussitôt
+    /// choisi.
+    fn store(&mut self, max: usize) {
+        self.blank = false;
+        if self.slots.len() < max {
+            self.slots.push(self.hsv);
+            self.active = Some(self.slots.len() - 1);
+        }
+    }
+
+    /// Choisit l'emplacement `i` : sa couleur sur la roue.
+    fn load(&mut self, i: usize) {
+        if let Some(&hsv) = self.slots.get(i) {
+            self.active = Some(i);
+            self.set_hsv(hsv);
+        }
+    }
+
+    /// Vide l'emplacement `i` (les suivants avancent : l'ordre est celui de l'importance).
+    fn clear(&mut self, i: usize) {
+        if i < self.slots.len() {
+            self.slots.remove(i);
+            self.active = match self.active {
+                Some(a) if a == i => None,
+                Some(a) if a > i => Some(a - 1),
+                other => other,
+            };
+        }
+    }
+
+    /// Couleur de l'emplacement `i`, en sRGB 8 bits.
+    fn slot_rgb(&self, i: usize) -> [u8; 3] {
+        crate::palette_view::hsv_to_rgb(self.slots[i])
+    }
+
+    /// Les couleurs cherchées, en OKLab : celles des emplacements, dans l'ordre ; aucune
+    /// rangée, celle de la roue ; réinitialisée, aucune.
+    fn colours(&self) -> Vec<[f32; 3]> {
+        if self.blank {
+            return Vec::new();
+        }
+        if self.slots.is_empty() {
+            return vec![tri::palette::srgb_to_oklab(self.rgb())];
+        }
+        (0..self.slots.len())
+            .map(|i| tri::palette::srgb_to_oklab(self.slot_rgb(i)))
+            .collect()
     }
 
     /// Couleur en sRGB 8 bits.
     fn rgb(&self) -> [u8; 3] {
         crate::palette_view::hsv_to_rgb(self.hsv)
-    }
-
-    /// Couleur en OKLab, pour la recherche.
-    fn oklab(&self) -> [f32; 3] {
-        tri::palette::srgb_to_oklab(self.rgb())
     }
 
     fn set(&mut self, oklab: [f32; 3]) {
@@ -350,13 +423,57 @@ impl ColourDialog {
     fn set_rgb(&mut self, rgb: [u8; 3]) {
         self.hsv = crate::palette_view::rgb_to_hsv(rgb, self.hsv[0]);
         self.hex = format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]);
+        self.follow();
     }
 
     fn set_hsv(&mut self, hsv: [f32; 3]) {
         self.hsv = hsv;
         let rgb = self.rgb();
         self.hex = format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]);
+        self.follow();
     }
+
+    /// L'emplacement choisi prend la couleur réglée.
+    fn follow(&mut self) {
+        self.blank = false;
+        if let Some(slot) = self.active.and_then(|i| self.slots.get_mut(i)) {
+            *slot = self.hsv;
+        }
+    }
+}
+
+/// Aperçu en direct de la boîte des couleurs : ce qu'« Annuler » rend, et les couleurs
+/// déjà appliquées à la grille (et quand : pas plus d'une fois par `live_ms`).
+struct ColourLive {
+    colour: Option<PaletteColour>,
+    last: Option<Vec<[f32; 3]>>,
+    like: Option<PaletteLike>,
+    similar: Option<SimilarSearch>,
+    similar_wanted: bool,
+    /// Une recherche a été appliquée depuis l'ouverture (sinon, rien à rendre).
+    changed: bool,
+    applied: Vec<[f32; 3]>,
+    at: Instant,
+}
+
+/// Taille d'une pastille de la boîte des couleurs.
+const SWATCH: egui::Vec2 = egui::Vec2::new(26.0, 20.0);
+
+/// Pastille vide de la boîte des couleurs : un cadre et un « + ».
+fn empty_swatch(ui: &Ui, rect: Rect, color: Color32) {
+    ui.painter().rect_stroke(
+        rect,
+        3.0,
+        egui::Stroke::new(1.0, color),
+        egui::StrokeKind::Inside,
+    );
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        "+",
+        egui::TextStyle::Body.resolve(ui.style()),
+        color,
+    );
 }
 
 /// Exposition du JPEG boîtier d'une image, calculée en fond.
@@ -1267,8 +1384,16 @@ pub struct TriApp {
     screen_pick: Option<Receiver<[u8; 3]>>,
     /// Boîte de choix de la couleur cherchée (#492, retour du 21/11/2026), ouverte.
     colour_dialog: Option<ColourDialog>,
+    /// Aperçu en direct de la boîte des couleurs (retour du 23/11/2026) : la recherche
+    /// d'avant son ouverture (rendue par « Annuler »), les couleurs appliquées et quand.
+    colour_live: Option<ColourLive>,
     /// Dernière couleur cherchée : cocher « Couleur » la reprend.
-    palette_colour_last: Option<[f32; 3]>,
+    palette_colour_last: Option<Vec<[f32; 3]>>,
+    /// Le tri d'avant la recherche de palettes en cours (passée à « Proximité »), rendu
+    /// quand elle s'arrête (#492).
+    order_before_search: Option<tri::sort::Order>,
+    /// Une recherche de palettes était en cours au dernier refiltrage.
+    sort_searching: bool,
     /// Image en plein écran à la dernière image : (rang, rectangle, partie de l'image
     /// montrée), pour la pipette.
     view_image: Option<(usize, Rect, Rect)>,
@@ -2347,7 +2472,10 @@ impl TriApp {
             colour_pick: None,
             screen_pick: None,
             colour_dialog: None,
+            colour_live: None,
             palette_colour_last: None,
+            order_before_search: None,
+            sort_searching: false,
             view_image: None,
             camera_exposures: Lru::new(gui.view.textures),
             screen: crate::display::Screen::default(),
@@ -2674,7 +2802,7 @@ impl TriApp {
             rating_bar: Some(self.rating_bar),
             image_info: Some(self.image_info),
             background: self.background,
-            sort: Some(self.order),
+            sort: Some(self.saved_order()),
             auto_advance: Some(self.auto_advance),
             filter_restart: Some(self.filter_restart),
             review_developments: Some(self.review_developments),
@@ -2778,7 +2906,7 @@ impl TriApp {
         if let Some(enter) = s.stack_enter {
             self.stack_enter = enter;
         }
-        if let Some(order) = s.sort {
+        if let Some(order) = s.sort.filter(|o| o.key != tri::sort::SortKey::Proximity) {
             self.order = order;
         }
         if s.download_format.is_some() {
@@ -4710,10 +4838,12 @@ impl TriApp {
                 // À droite de « Couleur », la pastille de la couleur cherchée (ou la
                 // dernière) : un clic ouvre la boîte de choix (retour du 21/11/2026).
                 if action == Action::FilterPaletteColour {
-                    let colour = self
+                    let colours = self
                         .palette_colour
-                        .map(|c| c.oklab)
-                        .or(self.palette_colour_last);
+                        .as_ref()
+                        .map(|c| c.colours.clone())
+                        .or(self.palette_colour_last.clone())
+                        .filter(|c| !c.is_empty());
                     let side = 14.0;
                     let (patch, response) =
                         ui.allocate_exact_size(vec2(side * 1.6, side), Sense::click());
@@ -4724,19 +4854,33 @@ impl TriApp {
                             t!("palette-colour-title"),
                         )
                     });
-                    let _ = match colour {
-                        Some(oklab) => ui.painter().rect_filled(
-                            patch,
-                            3.0,
-                            crate::palette_view::color(&tri::palette::Swatch { oklab, share: 0.0 }),
-                        ),
-                        None => ui.painter().rect_stroke(
-                            patch,
-                            3.0,
-                            egui::Stroke::new(1.0, ui.visuals().weak_text_color()),
-                            egui::StrokeKind::Inside,
-                        ),
-                    };
+                    // Plusieurs couleurs : côte à côte dans la pastille.
+                    match colours {
+                        Some(colours) => {
+                            let w = patch.width() / colours.len() as f32;
+                            for (i, &oklab) in colours.iter().enumerate() {
+                                let x = patch.left() + w * i as f32;
+                                let part = Rect::from_min_max(
+                                    pos2(x, patch.top()),
+                                    pos2(x + w, patch.bottom()),
+                                );
+                                let swatch = tri::palette::Swatch { oklab, share: 0.0 };
+                                ui.painter().rect_filled(
+                                    part,
+                                    0.0,
+                                    crate::palette_view::color(&swatch),
+                                );
+                            }
+                        }
+                        None => {
+                            ui.painter().rect_stroke(
+                                patch,
+                                3.0,
+                                egui::Stroke::new(1.0, ui.visuals().weak_text_color()),
+                                egui::StrokeKind::Inside,
+                            );
+                        }
+                    }
                     if response
                         .on_hover_cursor(egui::CursorIcon::PointingHand)
                         .on_hover_text(t!("palette-colour-patch-tip"))
@@ -4807,7 +4951,7 @@ impl TriApp {
                 }
             }
             _ => {
-                if let Some(colour) = self.palette_colour {
+                if let Some(colour) = self.palette_colour.clone() {
                     let max = p.colour_radius_max.max(0.01);
                     let (item, key) = self.side_begin(false);
                     let mut radius = self.keyed(colour.radius, key, max, p.colour_radius);
@@ -5144,6 +5288,62 @@ impl TriApp {
         }
         self.palette_refilter_pending = false;
         self.apply_filter();
+        if self.palette_like.is_some() {
+            self.search_from_top();
+        }
+    }
+
+    /// Recherche en cours : sous le tri « Proximité », les éléments gardés du plus proche
+    /// au plus lointain (inversé : l'inverse), ceux pas encore calculés à la fin
+    /// ([`tri::palette::rank_similar_by`]) ; sous un autre tri, gardés dans son ordre
+    /// ([`tri::palette::keep_similar`] ; #492, 23/11/2026 : le filtre filtre, le tri trie).
+    fn rank_or_keep(
+        &self,
+        files: Vec<MediaFile>,
+        distance: impl Fn(&MediaFile) -> Option<Option<f32>>,
+        threshold: f32,
+    ) -> Vec<MediaFile> {
+        if self.order.key == tri::sort::SortKey::Proximity {
+            tri::palette::rank_similar_by(files, distance, threshold, self.order.descending)
+        } else {
+            tri::palette::keep_similar(files, distance, threshold)
+        }
+    }
+
+    /// Une recherche commence : le tri passe à « Proximité » (l'ordre d'avant retenu) ;
+    /// elle s'arrête : l'ordre d'avant revient, si l'on n'en a pas choisi un autre entre
+    /// deux (#492, 23/11/2026). Appelé à chaque refiltrage : une recherche s'arrête de
+    /// bien des façons (source changée, filtres effacés…).
+    fn follow_search_sort(&mut self) {
+        use tri::sort::{Order, SortKey};
+        let searching = self.palette_searching();
+        if searching && !self.sort_searching {
+            self.sort_searching = true;
+            if self.order.key != SortKey::Proximity {
+                self.order_before_search = Some(self.order);
+                self.order = Order {
+                    key: SortKey::Proximity,
+                    descending: false,
+                };
+                self.apply_sort();
+            }
+        } else if !searching && (self.sort_searching || self.order.key == SortKey::Proximity) {
+            self.sort_searching = false;
+            if self.order.key == SortKey::Proximity {
+                self.order = self.order_before_search.unwrap_or_default();
+                self.apply_sort();
+            }
+            self.order_before_search = None;
+        }
+    }
+
+    /// L'ordre retenu pour le dossier et la session : jamais « Proximité », qui n'a de sens
+    /// que pendant une recherche (l'ordre d'avant).
+    fn saved_order(&self) -> tri::sort::Order {
+        match self.order.key {
+            tri::sort::SortKey::Proximity => self.order_before_search.unwrap_or_default(),
+            _ => self.order,
+        }
     }
 
     /// Ordre « palettes proches » : `groups` aplatis, gardés sous le seuil, du plus proche
@@ -5160,18 +5360,34 @@ impl TriApp {
         // Palettes proches : la distance à la référence ; contient cette couleur : celle de
         // la couleur la plus proche de la palette (retour du 21/11/2026 : une part minimale
         // en plus écartait parfois l'image même où la couleur avait été prise).
-        let (like, colour) = (self.palette_like.as_ref(), self.palette_colour);
+        let (like, colour) = (self.palette_like.as_ref(), self.palette_colour.as_ref());
         let threshold = match (like, colour) {
             (Some(l), _) => l.threshold,
             (None, Some(c)) => c.radius,
             (None, None) => return groups,
         };
-        let key = |p: &Palette| match (like, colour) {
-            (Some(l), _) => tri::palette::distance(&l.reference, p, weight),
-            (None, Some(c)) => p
-                .nearest(c.oklab, weight, self.settings.palette.colour_coverage)
-                .unwrap_or(f32::INFINITY),
-            (None, None) => 0.0,
+        // Plusieurs couleurs (#492) : chacune doit y être ; l'ordre selon la recherche,
+        // absolue ou hiérarchique. Le coût d'une recherche hiérarchique dépasse la
+        // tolérance (la présence s'y ajoute) : seul le manque d'une couleur écarte.
+        use crate::settings::ColourMode;
+        let mode = self.gui.colour_search.mode;
+        let query = colour.map(|c| tri::palette::ColourQuery {
+            colours: c.colours.clone(),
+            radius: c.radius,
+            hierarchy: (mode == ColourMode::Hierarchical)
+                .then_some(self.settings.palette.colour_hierarchy),
+            proximity: self.settings.palette.colour_proximity,
+            mean: (mode == ColourMode::Mean).then_some(self.settings.palette.mean_lightness),
+        });
+        let threshold = match &query {
+            Some(q) if q.hierarchy.is_some() => f32::INFINITY,
+            _ => threshold,
+        };
+        // `None` : l'image n'y répond pas (une couleur manque), écartée.
+        let key = |p: &Palette| match (like, &query) {
+            (Some(l), _) => Some(tri::palette::distance(&l.reference, p, weight)),
+            (None, Some(q)) => p.colours_cost(q, weight, self.settings.palette.colour_coverage),
+            (None, None) => Some(0.0),
         };
         // Noir et blanc et couleur ne se mélangent pas (retour du 21/11/2026) : une
         // référence (ou une couleur) en couleur écarte les images en noir et blanc, et
@@ -5183,13 +5399,12 @@ impl TriApp {
         // ce que contient une image teintée : seules les images en noir et blanc pur sont
         // alors écartées (retour du 21/11/2026 : une peau pipetée ne retrouvait qu'une des
         // trois photos de la série, les deux autres jugées « teintées »).
+        // Plusieurs couleurs : la plus saturée décide.
         let colour_chroma = colour.map(|c| {
-            tri::palette::Swatch {
-                oklab: c.oklab,
-                share: 1.0,
-            }
-            .hue_chroma()
-            .1
+            c.colours
+                .iter()
+                .map(|&oklab| tri::palette::Swatch { oklab, share: 1.0 }.hue_chroma().1)
+                .fold(0.0, f32::max)
         });
         // Selon la couleur cherchée (retours du 21-22/11/2026) : grise, le noir et blanc
         // pur seulement ; peu saturée, tout sauf lui ; saturée, ni lui ni les teintées.
@@ -5205,13 +5420,13 @@ impl TriApp {
             None => grey(p) != reference_grey,
         };
         let files: Vec<MediaFile> = groups.into_iter().flatten().collect();
-        let ranked = tri::palette::rank_similar(
+        let ranked = self.rank_or_keep(
             files,
             |f| {
                 let source = kind.source_for(f)?;
                 match self.palettes.get(&(f.path.clone(), source)) {
                     Some(p) if left_out(p) => None,
-                    Some(p) => Some(Some(key(p))),
+                    Some(p) => key(p).map(Some),
                     None => Some(None),
                 }
             },
@@ -5234,7 +5449,7 @@ impl TriApp {
     ) -> Vec<Vec<MediaFile>> {
         let weight = self.settings.similarity.shape_weight;
         let files: Vec<MediaFile> = groups.into_iter().flatten().collect();
-        let ranked = tri::palette::rank_similar(
+        let ranked = self.rank_or_keep(
             files,
             |f| {
                 let photo = tri::media::source(&f.path);
@@ -5261,14 +5476,21 @@ impl TriApp {
     /// « Contient cette couleur » (`oklab`), ou fin de la recherche (`None`) ; tolérance et
     /// part minimale gardées d'une couleur à l'autre.
     fn set_palette_colour(&mut self, oklab: Option<[f32; 3]>) {
+        self.set_palette_colours(oklab.map(|c| vec![c]));
+    }
+
+    /// « Contient ces couleurs » (`colours`, la plus importante d'abord ; vide ou `None` :
+    /// fin de la recherche).
+    fn set_palette_colours(&mut self, colours: Option<Vec<[f32; 3]>>) {
         let radius = self.palette_radius;
-        self.palette_colour = oklab.map(|oklab| PaletteColour { oklab, radius });
+        let colours = colours.filter(|c| !c.is_empty());
+        if colours.is_some() {
+            self.palette_colour_last = colours.clone();
+        }
+        self.palette_colour = colours.map(|colours| PaletteColour { colours, radius });
         if self.palette_colour.is_some() {
             self.similar = None;
             self.similar_wanted = false;
-        }
-        if oklab.is_some() {
-            self.palette_colour_last = oklab;
         }
         self.palette_eyedropper = false;
         if self.palette_colour.is_some() {
@@ -5277,6 +5499,20 @@ impl TriApp {
         }
         self.palette_refilter_pending = false;
         self.apply_filter();
+        if self.palette_colour.is_some() {
+            self.search_from_top();
+        }
+    }
+
+    /// Une nouvelle recherche de palettes : la meilleure réponse choisie, la grille au
+    /// début (retour du 23/11/2026 : la sélection d'avant restait choisie, la grille
+    /// défilait jusqu'à elle, au milieu des résultats, et les meilleurs, au-dessus, ne se
+    /// voyaient pas ; la recherche hiérarchique semblait ne rien changer).
+    fn search_from_top(&mut self) {
+        if !self.files.is_empty() {
+            self.selected = 0;
+        }
+        self.reveal = Some(Reveal::Start);
     }
 
     /// Une recherche de palettes lancée du plein écran : ses résultats en grille (retour
@@ -5290,15 +5526,78 @@ impl TriApp {
         }
     }
 
-    /// Ouvre la boîte de choix de la couleur cherchée, sur la couleur en cours (ou la
-    /// dernière, ou un gris moyen).
+    /// Ouvre la boîte de choix des couleurs cherchées, sur la recherche en cours (ou la
+    /// dernière ; aucune : rien de rangé).
     fn open_colour_dialog(&mut self) {
-        let oklab = self
+        let colours = self
             .palette_colour
-            .map(|c| c.oklab)
-            .or(self.palette_colour_last)
-            .unwrap_or([0.6, 0.0, 0.0]);
-        self.colour_dialog = Some(ColourDialog::new(oklab));
+            .as_ref()
+            .map(|c| c.colours.clone())
+            .or(self.palette_colour_last.clone())
+            .unwrap_or_default();
+        self.show_colour_dialog(ColourDialog::new(&colours));
+    }
+
+    /// Montre la boîte des couleurs `dialog`, la recherche en cours retenue pour
+    /// « Annuler » (aperçu en direct).
+    fn show_colour_dialog(&mut self, dialog: ColourDialog) {
+        self.colour_live = Some(ColourLive {
+            colour: self.palette_colour.clone(),
+            last: self.palette_colour_last.clone(),
+            like: self.palette_like.clone(),
+            similar: self.similar.clone(),
+            similar_wanted: self.similar_wanted,
+            changed: false,
+            applied: dialog.colours(),
+            at: Instant::now(),
+        });
+        self.colour_dialog = Some(dialog);
+    }
+
+    /// Aperçu en direct (retour du 23/11/2026) : les couleurs de la boîte changées, la
+    /// grille cherche derrière, pas plus d'une fois par `[gui.colour_search] live_ms`
+    /// (0 : pas d'aperçu).
+    fn colour_live_update(&mut self, ctx: &egui::Context, dialog: &ColourDialog) {
+        let every = self.gui.colour_search.live_ms;
+        if every == 0 {
+            return;
+        }
+        let colours = dialog.colours();
+        let Some(live) = &self.colour_live else {
+            return;
+        };
+        if live.applied == colours {
+            return;
+        }
+        let wait = Duration::from_millis(every);
+        let since = live.at.elapsed();
+        if since < wait {
+            ctx.request_repaint_after(wait - since);
+            return;
+        }
+        self.set_palette_colours(Some(colours.clone()));
+        if let Some(live) = &mut self.colour_live {
+            live.applied = colours;
+            live.at = Instant::now();
+            live.changed = true;
+        }
+    }
+
+    /// « Annuler » : la recherche d'avant l'ouverture de la boîte, si l'aperçu l'a changée.
+    fn colour_live_cancel(&mut self) {
+        let Some(live) = self.colour_live.take() else {
+            return;
+        };
+        if !live.changed {
+            return;
+        }
+        self.palette_colour = live.colour;
+        self.palette_colour_last = live.last;
+        self.palette_like = live.like;
+        self.similar = live.similar;
+        self.similar_wanted = live.similar_wanted;
+        self.palette_refilter_pending = false;
+        self.apply_filter();
     }
 
     /// Boîte de choix de la couleur cherchée (#492, retour du 21/11/2026) : la roue
@@ -5313,11 +5612,22 @@ impl TriApp {
             return;
         };
         let (mut search, mut cancel, mut eyedropper) = (false, false, false);
+        // Pastilles libres changées, recherche hiérarchique basculée : écrites après.
+        let mut own: Option<Vec<String>> = None;
+        let mut mode: Option<crate::settings::ColourMode> = None;
         let title = t!("palette-colour-title");
         let modal = modal_at("palette_colour_dialog", CENTRED)
             .title(title)
             .free_width()
             .show(ctx, |ui| {
+                // Les couleurs cherchées, en haut, et le mode de recherche (#492).
+                ui.add_space(5.0);
+                self.colour_slots_row(ui, &mut dialog, &mut mode);
+                // De l'air et un trait fin avant la roue, la rangée centrée entre les deux
+                // traits (retours du 23/11/2026).
+                ui.add_space(4.0);
+                ui.separator();
+                ui.add_space(10.0);
                 // La roue à gauche, les réglages à droite (retour du 21/11/2026 : en
                 // colonne, la boîte était trop large pour son contenu).
                 ui.horizontal_top(|ui| {
@@ -5355,7 +5665,6 @@ impl TriApp {
                     ui.painter()
                         .circle_stroke(at, 7.5, egui::Stroke::new(1.0, Color32::BLACK));
                     ui.add_space(12.0);
-                    let wheel_bottom = rect.bottom();
                     ui.vertical(|ui| {
                         // La couleur, son `#rrggbb` et la pipette.
                         ui.horizontal(|ui| {
@@ -5452,30 +5761,292 @@ impl TriApp {
                         } else if (h, sp, vp) != before_hsv {
                             dialog.set_hsv([h, sp / 100.0, vp / 100.0]);
                         }
-                        // Les boutons à droite des valeurs, sur le bas de la roue (retour du
-                        // 21/11/2026).
-                        let width = ui.min_rect().width();
-                        let row = ui.spacing().interact_size.y;
-                        let height = (wheel_bottom - ui.cursor().top()).max(row + 8.0);
-                        ui.allocate_ui_with_layout(
-                            vec2(width, height),
-                            egui::Layout::right_to_left(egui::Align::Max),
-                            |ui| {
-                                cancel = ui.button(t!("cancel")).clicked();
-                                search = ui.button(t!("palette-colour-search")).clicked();
-                            },
-                        );
+                        // Les pastilles (franches, « photo », libres, #492) sous les valeurs
+                        // (retour du 23/11/2026 : sans titres, ça se voit).
+                        ui.add_space(12.0);
+                        own = self.colour_swatches(ui, &mut dialog);
+                    });
+                });
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    // À gauche, loin de « Valider ».
+                    if ui
+                        .button(t!("palette-colour-reset"))
+                        .on_hover_text(t!("palette-colour-reset-tip"))
+                        .clicked()
+                    {
+                        dialog.reset();
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Max), |ui| {
+                        cancel = ui.button(t!("cancel")).clicked();
+                        search = ui.button(t!("palette-colour-search")).clicked();
                     });
                 });
             });
+        if let Some(own) = own {
+            self.set_own_swatches(own);
+        }
+        if let Some(mode) = mode {
+            self.set_colour_mode(mode);
+        }
         if search {
             self.colour_dialog = None;
-            self.set_palette_colour(Some(dialog.oklab()));
+            self.colour_live = None;
+            self.set_palette_colours(Some(dialog.colours()));
         } else if cancel || modal.should_close() {
             self.colour_dialog = None;
+            self.colour_live_cancel();
         } else {
+            self.colour_live_update(ctx, &dialog);
             self.palette_eyedropper = eyedropper;
             self.colour_dialog = Some(dialog);
+        }
+    }
+
+    /// Rangée des couleurs cherchées de la boîte (#492), des pastilles comme les autres
+    /// (retours du 23/11/2026) : `[gui.colour_search] max` emplacements ; un clic sur un
+    /// vide y range la couleur réglée, sur un plein le choisit (la roue le règle), clic
+    /// droit « Vider » ; puis le mode, absolu, hiérarchique ou moyen (`mode` : changé).
+    /// En couleur moyenne, seule la première compte : les autres grisées, à leur place.
+    fn colour_slots_row(
+        &self,
+        ui: &mut Ui,
+        dialog: &mut ColourDialog,
+        mode: &mut Option<crate::settings::ColourMode>,
+    ) {
+        let max = self.gui.colour_search.max.max(1);
+        let weak = ui.visuals().weak_text_color();
+        let mean = self.gui.colour_search.mode == crate::settings::ColourMode::Mean;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            for i in 0..max {
+                // En couleur moyenne, la première seule : les autres grisées, inertes.
+                let off = mean && i > 0;
+                let sense = if off { Sense::hover() } else { Sense::click() };
+                let (rect, response) = ui.allocate_exact_size(SWATCH * 1.25, sense);
+                let filled = i < dialog.slots.len();
+                if off {
+                    match filled {
+                        true => {
+                            let [r, g, b] = dialog.slot_rgb(i);
+                            let c = Color32::from_rgb(r, g, b).gamma_multiply(0.25);
+                            ui.painter().rect_filled(rect, 3.0, c);
+                        }
+                        false => empty_swatch(ui, rect, weak.gamma_multiply(0.4)),
+                    }
+                    response.on_hover_text(t!("palette-colour-mean-only"));
+                    continue;
+                }
+                let name = if filled {
+                    t!("palette-colour-slot", n = i + 1)
+                } else {
+                    t!("palette-swatch-empty")
+                };
+                response.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::Role::Button, true, name.clone())
+                });
+                let tip = if filled {
+                    let [r, g, b] = dialog.slot_rgb(i);
+                    ui.painter()
+                        .rect_filled(rect, 3.0, Color32::from_rgb(r, g, b));
+                    // Celle que l'on règle, encadrée.
+                    if dialog.active == Some(i) {
+                        let stroke = egui::Stroke::new(2.0, ui.visuals().strong_text_color());
+                        ui.painter().rect_stroke(
+                            rect.expand(2.0),
+                            4.0,
+                            stroke,
+                            egui::StrokeKind::Outside,
+                        );
+                    }
+                    t!(
+                        "palette-colour-slot-tip",
+                        hex = format!("#{r:02x}{g:02x}{b:02x}")
+                    )
+                } else {
+                    empty_swatch(ui, rect, weak);
+                    t!("palette-swatch-store-tip")
+                };
+                let response = response
+                    .on_hover_cursor(egui::CursorIcon::PointingHand)
+                    .on_hover_text(tip);
+                if response.clicked() {
+                    if filled {
+                        dialog.load(i);
+                    } else {
+                        dialog.store(max);
+                    }
+                }
+                if filled {
+                    response.context_menu(|ui| {
+                        if ui.button(t!("palette-swatch-clear")).clicked() {
+                            dialog.clear(i);
+                            ui.close();
+                        }
+                    });
+                }
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                use crate::settings::ColourMode;
+                let current = self.gui.colour_search.mode;
+                // De droite à gauche : « Moyenne », « Hiérarchique », « Absolue ».
+                for m in ColourMode::ALL.into_iter().rev() {
+                    let (name, tip) = match m {
+                        ColourMode::Absolute => (
+                            t!("palette-colour-absolute"),
+                            t!("palette-colour-absolute-tip"),
+                        ),
+                        ColourMode::Hierarchical => (
+                            t!("palette-colour-hierarchical"),
+                            t!("palette-colour-hierarchical-tip"),
+                        ),
+                        ColourMode::Mean => {
+                            (t!("palette-colour-mean"), t!("palette-colour-mean-tip"))
+                        }
+                    };
+                    if ui
+                        .selectable_label(current == m, name)
+                        .on_hover_text(tip)
+                        .clicked()
+                        && current != m
+                    {
+                        *mode = Some(m);
+                    }
+                }
+            });
+        });
+    }
+
+    /// Pastilles de la boîte (#492) : franches, « photo », libres. Un clic sur une pastille
+    /// la prend pour la couleur réglée ; sur une pastille libre vide, y range la couleur
+    /// réglée ; le clic droit d'une pastille libre la remplace ou la vide. Renvoie les
+    /// pastilles libres quand elles ont changé.
+    fn colour_swatches(&self, ui: &mut Ui, dialog: &mut ColourDialog) -> Option<Vec<String>> {
+        let cs = &self.gui.colour_search;
+        let mut own: Vec<String> = cs.own.iter().take(cs.own_max).cloned().collect();
+        let mut changed = false;
+        let side = SWATCH;
+        let weak = ui.visuals().weak_text_color();
+        let rows = [
+            (cs.pure.clone(), false),
+            (cs.photo.clone(), false),
+            (own.clone(), true),
+        ];
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 6.0;
+            for (list, free) in rows {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 6.0;
+                    let count = if free { cs.own_max } else { list.len() };
+                    for i in 0..count {
+                        let rgb = list.get(i).and_then(|h| parse_hex(h));
+                        let (rect, response) = ui.allocate_exact_size(side, Sense::click());
+                        let hex = list.get(i).cloned().unwrap_or_default();
+                        response.widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::Role::Button,
+                                true,
+                                if hex.is_empty() {
+                                    t!("palette-swatch-empty")
+                                } else {
+                                    hex.clone()
+                                },
+                            )
+                        });
+                        match rgb {
+                            Some([r, g, b]) => {
+                                ui.painter()
+                                    .rect_filled(rect, 3.0, Color32::from_rgb(r, g, b));
+                            }
+                            None => empty_swatch(ui, rect, weak),
+                        }
+                        let tip = match (rgb, free) {
+                            (Some(_), true) => t!("palette-swatch-own-tip", hex = hex.as_str()),
+                            (Some(_), false) => hex.clone(),
+                            (None, _) => t!("palette-swatch-store-tip"),
+                        };
+                        let response = response
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .on_hover_text(tip);
+                        if response.clicked() {
+                            match rgb {
+                                Some(rgb) => dialog.set_rgb(rgb),
+                                None if free => {
+                                    own.push(dialog.hex.clone());
+                                    changed = true;
+                                }
+                                None => {}
+                            }
+                        }
+                        if free && rgb.is_some() {
+                            response.context_menu(|ui| {
+                                if ui.button(t!("palette-swatch-replace")).clicked() {
+                                    own[i] = dialog.hex.clone();
+                                    changed = true;
+                                    ui.close();
+                                }
+                                if ui.button(t!("palette-swatch-clear")).clicked() {
+                                    own.remove(i);
+                                    changed = true;
+                                    ui.close();
+                                }
+                            });
+                        }
+                    }
+                });
+            }
+        });
+        changed.then_some(own)
+    }
+
+    /// Range les pastilles libres de la boîte des couleurs (`[gui.colour_search] own`).
+    fn set_own_swatches(&mut self, own: Vec<String>) {
+        if self.write_setting(
+            "gui.colour_search",
+            "own",
+            tri::config_edit::Value::Strings(own.clone()),
+        ) {
+            self.gui.colour_search.own = own;
+        }
+    }
+
+    /// Mode de la recherche de couleurs (`[gui.colour_search] mode`), la recherche en
+    /// cours refiltrée.
+    fn set_colour_mode(&mut self, mode: crate::settings::ColourMode) {
+        self.gui.colour_search.mode = mode;
+        self.write_setting(
+            "gui.colour_search",
+            "mode",
+            tri::config_edit::Value::Str(mode.id().to_string()),
+        );
+        if self.palette_colour.is_some() {
+            self.apply_filter();
+            self.search_from_top();
+        }
+    }
+
+    /// Écrit `key` de `[section]` dans le fichier de configuration (relu pour vérifier) ;
+    /// faux, l'erreur dans la barre d'état, si c'est impossible.
+    fn write_setting(&mut self, section: &str, key: &str, value: tri::config_edit::Value) -> bool {
+        let Some(path) = self
+            .config_path
+            .clone()
+            .or_else(tri::settings::default_path)
+        else {
+            self.notice = Some((t!("settings-no-path"), true));
+            return false;
+        };
+        let result = tri::config_edit::ConfigFile::open(&path).and_then(|mut file| {
+            file.set(section, key, &value)?;
+            tri::settings::parse::<AppSettings>(&file.text())?;
+            file.save().map_err(|e| format!("{} : {e}", path.display()))
+        });
+        match result {
+            Ok(()) => true,
+            Err(e) => {
+                self.notice = Some((e, true));
+                false
+            }
         }
     }
 
@@ -5996,7 +6567,10 @@ impl TriApp {
         // La couleur cherchée, entourée.
         if let Some(c) = &self.palette_colour {
             for (r, s) in rects.iter().zip(&palette.swatches) {
-                if tri::palette::weighted_distance(s.oklab, c.oklab, 1.0) < 0.005 {
+                if c.colours
+                    .iter()
+                    .any(|&c| tri::palette::weighted_distance(s.oklab, c, 1.0) < 0.005)
+                {
                     ui.painter().rect_stroke(
                         r.shrink(1.0),
                         0.0,
@@ -9578,6 +10152,7 @@ impl TriApp {
     /// place dans la liste (l'image suivante : on vient de rejeter une photo avec « masquer
     /// les rejetées », on passe à la suite).
     fn refilter(&mut self, reveal: Reveal) {
+        self.follow_search_sort();
         self.refiltered_at = Instant::now();
         let selected_path = self.files.get(self.selected).map(|f| f.path.clone());
         // Sélection hors de la vue (on a défilé sans la déplacer) : on garde la région
@@ -9764,6 +10339,7 @@ impl TriApp {
             .zip(std::mem::take(&mut self.status))
             .collect();
         self.files = groups.into_iter().flatten().collect();
+
         self.status = self
             .files
             .iter()
@@ -10169,7 +10745,7 @@ impl TriApp {
             well_exposed: self.well_exposed,
             developed: self.developed_on,
             inverted: self.filter_inverted,
-            order: Some(self.order),
+            order: Some(self.saved_order()),
             render: Some(self.grid_render),
             stacking: Some(self.stacking),
             developed_engines: self
@@ -10320,7 +10896,10 @@ impl TriApp {
             self.drop_inactive_developed();
         }
         self.filter_inverted = view.inverted;
-        if let Some(order) = view.order {
+        if let Some(order) = view
+            .order
+            .filter(|o| o.key != tri::sort::SortKey::Proximity)
+        {
             self.order = order;
         }
         // Rendu des vignettes du dossier (31/10/2026) ; sans rien de retenu, celui de la
@@ -10486,6 +11065,15 @@ impl TriApp {
 
     /// Change l'ordre : la grille suit, la même image reste sélectionnée.
     fn set_order(&mut self, order: tri::sort::Order) {
+        // « Proximité » sans recherche : rien à trier.
+        if order.key == tri::sort::SortKey::Proximity && !self.palette_searching() {
+            self.notice = Some((t!("sort-proximity-none"), false));
+            return;
+        }
+        // Un autre tri choisi pendant la recherche : il reste après elle.
+        if order.key != tri::sort::SortKey::Proximity {
+            self.order_before_search = None;
+        }
         self.order = order;
         self.sort_pending = false;
         self.apply_sort();
@@ -13475,10 +14063,10 @@ impl TriApp {
                     self.set_palette_colour(None);
                 } else if self.palette_source.is_none() {
                     self.notice = Some((t!("palette-choose"), false));
-                } else if let Some(last) = self.palette_colour_last {
+                } else if let Some(last) = self.palette_colour_last.clone() {
                     // La dernière couleur cherchée (retour du 21/11/2026 : plus de pipette
                     // armée d'office ; la boîte de choix par la pastille).
-                    self.set_palette_colour(Some(last));
+                    self.set_palette_colours(Some(last));
                 } else {
                     self.open_colour_dialog();
                 }
@@ -13559,10 +14147,14 @@ impl TriApp {
                 }
                 self.change_render(render);
             }
-            Action::SortNext => self.set_order(tri::sort::Order {
-                key: self.order.key.next(),
-                ..self.order
-            }),
+            Action::SortNext => {
+                // « Proximité » sautée sans recherche.
+                let mut key = self.order.key.next();
+                if key == tri::sort::SortKey::Proximity && !self.palette_searching() {
+                    key = key.next();
+                }
+                self.set_order(tri::sort::Order { key, ..self.order })
+            }
             Action::FilterKind(kind) => {
                 self.filter = kind;
                 self.apply_filter();
@@ -22085,7 +22677,8 @@ impl TriApp {
             ));
         }
         if let Some(c) = &self.palette_colour {
-            parts.push(t!("palette-colour-summary", hex = oklab_hex(c.oklab)));
+            let hex: Vec<String> = c.colours.iter().map(|&c| oklab_hex(c)).collect();
+            parts.push(t!("palette-colour-summary", hex = hex.join(" ")));
         }
         if name && !self.name_query.trim().is_empty() {
             parts.push(t!("filter-summary-name", query = self.name_query.trim()));
@@ -23200,6 +23793,20 @@ impl TriApp {
                         shot.forced = true;
                     }
                     return;
+                }
+                Step::ColourDialog(colours) => {
+                    let colours: Vec<[f32; 3]> = colours
+                        .iter()
+                        .map(|&c| tri::palette::srgb_to_oklab(c))
+                        .collect();
+                    self.show_colour_dialog(ColourDialog::new(&colours));
+                }
+                Step::ColourSearch(colours) => {
+                    let colours: Vec<[f32; 3]> = colours
+                        .iter()
+                        .map(|&c| tri::palette::srgb_to_oklab(c))
+                        .collect();
+                    self.set_palette_colours(Some(colours));
                 }
                 Step::ExportToast => {
                     if let Some(file) = self.files.get(self.selected) {
@@ -26396,6 +27003,11 @@ enum Step {
     OpeningBox(usize),
     /// Ouvrir la fenêtre de réglages sur une section (`settings:keys`, `settings:gui.zoom`).
     Settings(String),
+    /// Ouvrir la boîte des couleurs cherchées sur ces couleurs
+    /// (`colour_dialog:#ff0000 #0000ff`), pour la capture.
+    ColourDialog(Vec<[u8; 3]>),
+    /// Chercher ces couleurs (`colour_search:#ff0000 #0000ff`), pour la capture.
+    ColourSearch(Vec<[u8; 3]>),
     /// Taper dans la recherche de la boîte ouverte, palette, réglages ou aide
     /// (`search:vim`).
     Search(String),
@@ -26429,6 +27041,18 @@ fn parse_actions(list: &str) -> Vec<Step> {
                     .parse()
                     .ok()
                     .map(Step::OpeningBox),
+                None if id.starts_with("colour_dialog:") => Some(Step::ColourDialog(
+                    id["colour_dialog:".len()..]
+                        .split_whitespace()
+                        .filter_map(parse_hex)
+                        .collect(),
+                )),
+                None if id.starts_with("colour_search:") => Some(Step::ColourSearch(
+                    id["colour_search:".len()..]
+                        .split_whitespace()
+                        .filter_map(parse_hex)
+                        .collect(),
+                )),
                 None if id.starts_with("settings:") => {
                     Some(Step::Settings(id["settings:".len()..].to_string()))
                 }
@@ -26627,12 +27251,7 @@ const BAR_BACKDROP: f32 = position_bar::BACKDROP;
 
 /// Lit `#rrggbb` (ou `rrggbb`) ; `None` sinon.
 fn parse_hex(text: &str) -> Option<[u8; 3]> {
-    let hex = text.trim().trim_start_matches('#');
-    if hex.len() != 6 || !hex.is_ascii() {
-        return None;
-    }
-    let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
-    Some([byte(0)?, byte(2)?, byte(4)?])
+    tri::palette::parse_hex(text)
 }
 
 /// `#rrggbb` d'une couleur OKLab.
@@ -27941,6 +28560,7 @@ fn sort_name(key: tri::sort::SortKey) -> String {
         tri::sort::SortKey::Stars => t!("sort-stars"),
         tri::sort::SortKey::Color => t!("sort-color"),
         tri::sort::SortKey::Flag => t!("sort-flag"),
+        tri::sort::SortKey::Proximity => t!("sort-proximity"),
     }
 }
 
@@ -30845,7 +31465,7 @@ mod tests {
         run_until(&mut h, |app| {
             app.colour_dialog
                 .as_ref()
-                .is_some_and(|d| tri::palette::oklab_distance(d.oklab(), red) < 0.02)
+                .is_some_and(|d| tri::palette::oklab_distance(d.colours()[0], red) < 0.02)
         });
         h.run_steps(10);
         h.get_by_label(&t!("palette-colour-search")).click();
@@ -30854,7 +31474,7 @@ mod tests {
         // ne garde plus qu'elle.
         assert_eq!(h.state().files.len(), 1);
         assert_eq!(h.state().mode, Mode::Grid, "les résultats en grille");
-        let got = h.state().palette_colour.unwrap().oklab;
+        let got = h.state().palette_colour.as_ref().unwrap().colours[0];
         assert!(
             tri::palette::oklab_distance(got, red) < 0.02,
             "{got:?} contre {red:?}"
@@ -31148,7 +31768,7 @@ mod tests {
         h.run_steps(3);
         assert!(h.state().palette_colour.is_some());
         let red = h.state().palettes[&(path, Source::Camera)].swatches[0].oklab;
-        let got = h.state().palette_colour.unwrap().oklab;
+        let got = h.state().palette_colour.as_ref().unwrap().colours[0];
         assert!(
             tri::palette::oklab_distance(got, red) < 0.02,
             "{got:?} contre {red:?}"
@@ -31234,6 +31854,270 @@ mod tests {
         h.state_mut().refilter(Reveal::Minimal);
         h.run_steps(3);
         assert_eq!(names(&h), ["img0.jpg"]);
+    }
+
+    #[test]
+    fn several_colours_are_searched_together_in_their_order() {
+        // #492 : plusieurs couleurs ; toutes doivent y être. Hiérarchique : l'image où la
+        // 1ʳᵉ est la plus présente d'abord ; absolue : selon la distance seule.
+        use tri::palette::{Source, SourceKind};
+        let (red, blue, green) = ([200u8, 30, 30], [30u8, 40, 200], [30u8, 180, 40]);
+        // Rouge en haut sur `top` lignes de 48, bleu dessous.
+        let split = |top: u32| {
+            image::RgbImage::from_fn(64, 48, |_, y| image::Rgb(if y < top { red } else { blue }))
+        };
+        let images = vec![
+            ("a_blue_mostly.jpg", split(12)),
+            (
+                "b_red_only.jpg",
+                image::RgbImage::from_pixel(64, 48, image::Rgb(red)),
+            ),
+            ("c_red_mostly.jpg", split(36)),
+            (
+                "d_green.jpg",
+                image::RgbImage::from_pixel(64, 48, image::Rgb(green)),
+            ),
+        ];
+        let (mut h, dir) = harness_images(images);
+        h.run_steps(3);
+        choose_palette(&mut h, Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        let names = |h: &Harness<'static, TriApp>| -> Vec<String> {
+            h.state()
+                .files
+                .iter()
+                .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+                .collect()
+        };
+        // Les couleurs telles que lues dans les images (JPEG).
+        let oklab = |h: &Harness<'static, TriApp>, i: usize| {
+            let path = h.state().folder.files[i].path.clone();
+            h.state().palettes[&(path, Source::Camera)].swatches[0].oklab
+        };
+        let (red, blue) = (oklab(&h, 1), oklab(&h, 0));
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "").unwrap();
+        h.state_mut().config_path = Some(config.clone());
+        h.state_mut()
+            .set_colour_mode(crate::settings::ColourMode::Hierarchical);
+        assert!(
+            std::fs::read_to_string(&config)
+                .unwrap()
+                .contains("mode = \"hierarchical\"")
+        );
+        // La sélection d'avant (en bas de la liste) ne retient pas la grille : la meilleure
+        // réponse choisie, la grille au début (retour du 23/11/2026).
+        h.state_mut().selected = 3;
+        h.state_mut().set_palette_colours(Some(vec![red, blue]));
+        assert_eq!(h.state().selected, 0);
+        assert!(matches!(h.state().reveal, Some(Reveal::Start)));
+        h.run_steps(3);
+        assert_eq!(names(&h), ["c_red_mostly.jpg", "a_blue_mostly.jpg"]);
+        h.state_mut().set_palette_colours(Some(vec![blue, red]));
+        h.run_steps(3);
+        assert_eq!(names(&h), ["a_blue_mostly.jpg", "c_red_mostly.jpg"]);
+        // Absolue : les deux images gardées, quel que soit l'ordre des couleurs.
+        h.state_mut()
+            .set_colour_mode(crate::settings::ColourMode::Absolute);
+        h.run_steps(3);
+        let mut got = names(&h);
+        got.sort();
+        assert_eq!(got, ["a_blue_mostly.jpg", "c_red_mostly.jpg"]);
+        // La dernière recherche est reprise telle quelle (deux couleurs).
+        assert_eq!(h.state().palette_colour_last.as_ref().unwrap().len(), 2);
+
+        // Le filtre filtre, le tri trie (#492, 23/11/2026) : la recherche a passé le tri à
+        // « Proximité » ; un autre tri garde les mêmes images, dans son ordre, et reste
+        // après la recherche.
+        use tri::sort::{Order, SortKey};
+        h.state_mut()
+            .set_colour_mode(crate::settings::ColourMode::Hierarchical);
+        h.state_mut().set_palette_colours(Some(vec![blue, red]));
+        h.run_steps(3);
+        assert_eq!(h.state().order.key, SortKey::Proximity);
+        assert_eq!(names(&h), ["a_blue_mostly.jpg", "c_red_mostly.jpg"]);
+        h.state_mut().set_order(Order {
+            key: SortKey::Name,
+            descending: true,
+        });
+        h.run_steps(3);
+        assert_eq!(names(&h), ["c_red_mostly.jpg", "a_blue_mostly.jpg"]);
+        h.state_mut().set_palette_colours(None);
+        h.run_steps(3);
+        assert_eq!(h.state().order.key, SortKey::Name);
+        assert_eq!(names(&h).len(), 4);
+        // Sous un tri choisi avant (date de modification) : rendu à la fin de la recherche.
+        h.state_mut().set_order(Order {
+            key: SortKey::Modified,
+            descending: false,
+        });
+        h.state_mut().set_palette_colours(Some(vec![red]));
+        assert_eq!(h.state().order.key, SortKey::Proximity);
+        assert_eq!(
+            h.state().saved_order().key,
+            SortKey::Modified,
+            "jamais retenu"
+        );
+        // Couleur moyenne : la première couleur seule, comparée à la moyenne de l'image ;
+        // le mode écrit dans la configuration.
+        h.state_mut()
+            .set_colour_mode(crate::settings::ColourMode::Mean);
+        assert!(
+            std::fs::read_to_string(&config)
+                .unwrap()
+                .contains("mode = \"mean\"")
+        );
+        h.state_mut().set_palette_colours(Some(vec![red, blue]));
+        h.run_steps(3);
+        assert_eq!(
+            names(&h).first().map(String::as_str),
+            Some("b_red_only.jpg")
+        );
+        assert!(!names(&h).contains(&"d_green.jpg".to_string()));
+        assert!(
+            !names(&h).contains(&"a_blue_mostly.jpg".to_string()),
+            "pas rouge en moyenne"
+        );
+        // « Proximité » choisie sans recherche : refusée.
+        h.state_mut().set_palette_colours(None);
+        assert_eq!(h.state().order.key, SortKey::Modified);
+        h.state_mut().set_order(Order {
+            key: SortKey::Proximity,
+            descending: false,
+        });
+        assert_eq!(h.state().order.key, SortKey::Modified);
+    }
+
+    #[test]
+    fn the_colour_dialog_searches_live_and_cancel_restores() {
+        // Retour du 23/11/2026 : la grille cherche derrière la boîte à chaque changement ;
+        // « Annuler » rend la recherche d'avant (ici : aucune), « Chercher » la garde.
+        use tri::palette::{Source, SourceKind};
+        let images = vec![
+            (
+                "red.jpg",
+                image::RgbImage::from_pixel(64, 48, image::Rgb([200, 30, 30])),
+            ),
+            (
+                "blue.jpg",
+                image::RgbImage::from_pixel(64, 48, image::Rgb([30, 40, 200])),
+            ),
+        ];
+        let (mut h, _dir) = harness_images(images);
+        h.run_steps(3);
+        choose_palette(&mut h, Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        let order = h.state().order;
+        h.state_mut().gui.colour_search.live_ms = 1;
+        h.state_mut().open_colour_dialog();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_none(), "rien à l'ouverture");
+        let red = h.state().palettes[&(h.state().folder.files[1].path.clone(), Source::Camera)]
+            .swatches[0]
+            .oklab;
+        if let Some(d) = &mut h.state_mut().colour_dialog {
+            d.set(red);
+        }
+        run_until(&mut h, |app| app.palette_colour.is_some());
+        assert_eq!(h.state().files.len(), 1, "la grille suit");
+        h.get_by_label(&t!("cancel")).click();
+        h.run_steps(3);
+        assert!(h.state().colour_dialog.is_none());
+        assert!(h.state().palette_colour.is_none(), "rendue");
+        assert_eq!(h.state().files.len(), 2);
+        assert_eq!(h.state().order, order, "le tri d'avant");
+        // « Chercher » garde.
+        h.state_mut().open_colour_dialog();
+        if let Some(d) = &mut h.state_mut().colour_dialog {
+            d.set(red);
+        }
+        h.run_steps(3);
+        h.get_by_label(&t!("palette-colour-search")).click();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_some());
+        assert_eq!(h.state().files.len(), 1);
+        // Réinitialiser : rien de rangé, la recherche s'arrête derrière ; « Valider » la
+        // laisse arrêtée, « Annuler » rend celle d'avant.
+        h.state_mut().open_colour_dialog();
+        h.run_steps(3);
+        h.get_all_by_label(&t!("palette-colour-reset"))
+            .last()
+            .unwrap()
+            .click();
+        run_until(&mut h, |app| app.palette_colour.is_none());
+        assert!(h.state().colour_dialog.as_ref().unwrap().slots.is_empty());
+        assert_eq!(h.state().files.len(), 2);
+        h.get_by_label(&t!("cancel")).click();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_some(), "rendue");
+        h.state_mut().open_colour_dialog();
+        h.run_steps(3);
+        h.get_all_by_label(&t!("palette-colour-reset"))
+            .last()
+            .unwrap()
+            .click();
+        h.run_steps(3);
+        h.get_by_label(&t!("palette-colour-search")).click();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_none());
+        assert_eq!(h.state().files.len(), 2);
+    }
+
+    #[test]
+    fn the_colour_dialog_keeps_slots_and_own_swatches() {
+        // #492 : emplacements des couleurs (5 au plus) et pastilles libres rangées dans la
+        // configuration.
+        // Rien de rangé : la couleur de la roue est cherchée.
+        let mut dialog = ColourDialog::new(&[]);
+        assert!(dialog.slots.is_empty());
+        dialog.set_rgb([255, 0, 0]);
+        assert_eq!(dialog.colours().len(), 1);
+        // Ranger : l'emplacement rangé est choisi, la roue le règle.
+        dialog.store(2);
+        dialog.set_rgb([0, 0, 255]);
+        assert_eq!(dialog.slot_rgb(0), [0, 0, 255], "suit la roue");
+        dialog.store(2);
+        dialog.set_rgb([0, 255, 0]);
+        dialog.store(2);
+        assert_eq!(dialog.slots.len(), 2, "au plus 2");
+        assert_eq!(dialog.slot_rgb(1), [0, 255, 0]);
+        dialog.load(0);
+        assert_eq!(dialog.rgb(), [0, 0, 255]);
+        dialog.clear(0);
+        assert_eq!(dialog.slots.len(), 1);
+        assert_eq!(dialog.slot_rgb(0), [0, 255, 0], "la suivante avance");
+        assert_eq!(dialog.active, None, "plus rien de choisi");
+        dialog.set_rgb([1, 2, 3]);
+        assert_eq!(dialog.slot_rgb(0), [0, 255, 0], "rien ne suit");
+        // Une seule couleur cherchée : rangée elle aussi (retour du 23/11/2026).
+        let one = ColourDialog::new(&[tri::palette::srgb_to_oklab([200, 30, 30])]);
+        assert_eq!((one.slots.len(), one.active), (1, Some(0)));
+
+        let (mut h, dir) = harness();
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "").unwrap();
+        h.state_mut().config_path = Some(config.clone());
+        h.state_mut()
+            .set_own_swatches(vec!["#123456".to_string(), "#abcdef".to_string()]);
+        assert_eq!(h.state().gui.colour_search.own, ["#123456", "#abcdef"]);
+        let text = std::fs::read_to_string(&config).unwrap();
+        assert!(
+            text.contains("[gui.colour_search]") && text.contains("#abcdef"),
+            "{text}"
+        );
+        // La boîte s'ouvre dessus : pastilles nommées par leur couleur.
+        h.state_mut().colour_dialog = Some(ColourDialog::new(&[[0.6, 0.0, 0.0]]));
+        h.run_steps(2);
+        h.get_by_label("#abcdef");
+        h.get_by_label("Couleur 1");
     }
 
     #[test]
@@ -35998,7 +36882,8 @@ mod tests {
         press(&mut h, Key::B, Modifiers::CTRL);
         press(&mut h, Key::L, Modifiers::NONE);
         assert_eq!(h.state().focus, Scope::Metadata);
-        let radius = |h: &Harness<'static, TriApp>| h.state().palette_colour.unwrap().radius;
+        let radius =
+            |h: &Harness<'static, TriApp>| h.state().palette_colour.as_ref().unwrap().radius;
         let start = radius(&h);
         // Ligne par ligne jusqu'au curseur de la couleur : → le pousse.
         let mut moved = false;
