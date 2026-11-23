@@ -285,8 +285,8 @@ system one ("cold" measurements, experiments).
   mouse-only, and behind it the arrows moved the grid's selection): the grid receives
   nothing while the box is open; outside a text field, `1`–`5` select a colour (an empty
   one stores the current colour), ← → or `h` `l` the hue (`key_hue_step`, 5°; Shift: 1°),
-  ↑ ↓ or `k` `j` the saturation (Shift: the value; `key_step`, 0.05; hjkl for the vim
-  profile, feedback of 2026-11-23), `a` the next harmony (Shift: previous;
+  ↑ ↓ or `k` `j` the saturation (Shift: the value; `key_step`, 0.05; hjkl with the vim
+  profile only, feedback of 2026-11-23), `a` the next harmony (Shift: previous;
   after the last, none), `m` the mode, `w` the wheel, `p` the eyedropper, Delete clears the
   selected colour, `+` / `-` the tolerance (`key_radius_step`), Enter confirms, Escape
   cancels. Box keys, like a list's arrows: not in `[keys]`; shown in the buttons'

@@ -6200,12 +6200,13 @@ impl TriApp {
             }
             let [h, s, v] = dialog.hsv;
             let hue_step = if shift { 1.0 } else { cs.key_hue_step };
-            // hjkl comme les flèches (retour du 23/11/2026 : profil vim).
+            // hjkl comme les flèches, avec le profil vim seulement (retours du 23/11/2026).
+            let vim = self.gui.profile != crate::actions::Profile::Classic;
             let key = match key {
-                Key::H => Key::ArrowLeft,
-                Key::J => Key::ArrowDown,
-                Key::K => Key::ArrowUp,
-                Key::L => Key::ArrowRight,
+                Key::H if vim => Key::ArrowLeft,
+                Key::J if vim => Key::ArrowDown,
+                Key::K if vim => Key::ArrowUp,
+                Key::L if vim => Key::ArrowRight,
                 other => other,
             };
             match key {
@@ -32640,8 +32641,12 @@ mod tests {
         press(&mut h, Key::Num1, Modifiers::NONE);
         h.run_steps(2);
         assert_eq!(h.state().colour_dialog.as_ref().unwrap().slots.len(), 1);
-        // hjkl comme les flèches (profil vim) ; `a` : la première harmonie.
+        // hjkl comme les flèches, avec le profil vim seulement ; `a` : la première harmonie.
         let hue = hsv(&h)[0];
+        press(&mut h, Key::L, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(hsv(&h)[0], hue, "profil classique : rien");
+        h.state_mut().gui.profile = crate::actions::Profile::Vim;
         press(&mut h, Key::L, Modifiers::NONE);
         h.run_steps(2);
         assert!((hsv(&h)[0] - (hue + step).rem_euclid(360.0)).abs() < 0.01);
