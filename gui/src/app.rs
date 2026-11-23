@@ -349,7 +349,7 @@ struct ColourDialog {
 }
 
 impl ColourDialog {
-    /// Sur les couleurs `colours` (rangées), la première choisie ; aucune : un gris moyen
+    /// Sur les couleurs `colours` (rangées), la première choisie ; aucune : le blanc (centre de la roue, 100 %)
     /// sur la roue, rien de rangé.
     fn new(colours: &[[f32; 3]]) -> ColourDialog {
         let mut dialog = ColourDialog {
@@ -374,7 +374,9 @@ impl ColourDialog {
         // Rien de choisi : un clic sur la roue remplit le premier emplacement vide (retour
         // du 23/11/2026) ; la première couleur sur la roue.
         if colours.is_empty() {
-            dialog.set_rgb([128, 128, 128]);
+            // Le centre de la roue à 100 %, comme elle (retour du 23/11/2026 : un gris à
+            // 50 %, le curseur de la valeur partait à mi-hauteur).
+            dialog.set_rgb([255, 255, 255]);
         } else {
             dialog.load(0);
             dialog.active = None;
@@ -383,7 +385,7 @@ impl ColourDialog {
         dialog
     }
 
-    /// Réinitialise (retour du 23/11/2026) : rien de rangé, un gris moyen sur la roue,
+    /// Réinitialise (retour du 23/11/2026) : rien de rangé, le blanc sur la roue,
     /// rien à chercher tant qu'on n'a rien retouché.
     fn reset(&mut self) {
         self.harmony = None;
@@ -391,8 +393,8 @@ impl ColourDialog {
         self.slots.clear();
         self.active = None;
         // Sans `follow` : en couleur moyenne, le gris irait dans la première couleur.
-        self.hsv = crate::palette_view::rgb_to_hsv([128, 128, 128], self.hsv[0]);
-        self.hex = "#808080".to_string();
+        self.hsv = crate::palette_view::rgb_to_hsv([255, 255, 255], self.hsv[0]);
+        self.hex = "#ffffff".to_string();
         self.blank = true;
     }
 
@@ -33010,7 +33012,7 @@ mod tests {
         // Un clic sur la roue pour une couleur nouvelle : à pleine luminosité, comme la roue.
         let (mut hh, _dir) = harness();
         let mut fresh = ColourDialog::new(&[]);
-        assert!(fresh.hsv[2] < 0.6, "gris de départ");
+        assert_eq!(fresh.hsv[2], 1.0, "départ à 100 %, comme la roue");
         fresh.max = 5;
         hh.state_mut().colour_dialog = Some(fresh);
         hh.run_steps(3);

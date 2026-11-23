@@ -265,7 +265,7 @@ system one ("cold" measurements, experiments).
   preview); opening starts nothing; with the filter off, changing the colour, the
   tolerance or the mode starts the search; "OK" (formerly "Search") keeps the search, "Cancel" or
   the cross bring back the previous one (or none) and the previous sort. **Reset**
-  (bottom left) clears the slots, puts the wheel back to grey and stops the search; "OK"
+  (bottom left) clears the slots, puts the wheel back to white and stops the search; "OK"
   right after leaves the grid without a search and forgets the previous colours (the box
   reopens empty).
   **Wheel and harmonies** (user's idea, 2026-11-23, like Adobe Color; the wheel always at
