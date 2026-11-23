@@ -5929,24 +5929,22 @@ impl TriApp {
                 });
                 let tip = if filled {
                     let [r, g, b] = dialog.slot_rgb(i);
+                    // Celle que l'on règle occupe sa case, les autres un peu plus petites
+                    // (retour du 23/11/2026 : le cadre blanc était trop présent) ; la place
+                    // de chacune ne change pas.
+                    let shown = if dialog.active == Some(i) {
+                        rect.expand(2.0)
+                    } else {
+                        rect.shrink(2.0)
+                    };
                     ui.painter()
-                        .rect_filled(rect, 3.0, Color32::from_rgb(r, g, b));
-                    // Celle que l'on règle, encadrée.
-                    if dialog.active == Some(i) {
-                        let stroke = egui::Stroke::new(2.0, ui.visuals().strong_text_color());
-                        ui.painter().rect_stroke(
-                            rect.expand(2.0),
-                            4.0,
-                            stroke,
-                            egui::StrokeKind::Outside,
-                        );
-                    }
+                        .rect_filled(shown, 3.0, Color32::from_rgb(r, g, b));
                     t!(
                         "palette-colour-slot-tip",
                         hex = format!("#{r:02x}{g:02x}{b:02x}")
                     )
                 } else {
-                    empty_swatch(ui, rect, weak);
+                    empty_swatch(ui, rect.shrink(2.0), weak);
                     t!("palette-swatch-store-tip")
                 };
                 let response = response
