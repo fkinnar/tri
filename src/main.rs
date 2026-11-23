@@ -148,10 +148,10 @@ struct Args {
     metadata: bool,
     sharpness: bool,
     groups: bool,
-    /// Palettes de couleurs (`--palette`), de la source `--source` (#492).
+    /// Palettes de couleurs (`--colours`), de la source `--source` (#492).
     palette: bool,
     palette_source: Option<tri::palette::SourceKind>,
-    /// « Contient ces couleurs » (`--colours "#rrggbb,#rrggbb"`, #492), et
+    /// « Contient ces couleurs » (`--find "#rrggbb,#rrggbb"`, #492), et
     /// `--hierarchical`.
     colours: Vec<[u8; 3]>,
     hierarchical: bool,
@@ -162,7 +162,7 @@ struct Args {
     posterize: Option<usize>,
     /// `--perceived` : avec `--posterize`, en couleurs perçues (expérience).
     perceived: bool,
-    /// Calculs choisis (`--compute previews,palette-raw…`, #555), et `--recreate`.
+    /// Calculs choisis (`--compute previews,colours-raw…`, #555), et `--recreate`.
     compute: Vec<tri::compute::Kind>,
     recreate: bool,
     threshold: Option<f32>,
@@ -496,8 +496,8 @@ fn parse() -> AnyResult<Args> {
             "--metadata" => args.metadata = true,
             "--sharpness" => args.sharpness = true,
             "--groups" => args.groups = true,
-            "--palette" => args.palette = true,
-            "--colours" => {
+            "--colours" => args.palette = true,
+            "--find" => {
                 let text = value()?;
                 for part in text.split(',').filter(|p| !p.trim().is_empty()) {
                     let rgb = tri::palette::parse_hex(part.trim())

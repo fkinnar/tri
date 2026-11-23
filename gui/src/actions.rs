@@ -1261,8 +1261,8 @@ impl Action {
             Action::FilterInvert => "core.filter.invert",
             Action::FilterDeveloped => "core.filter.developed",
             Action::FilterConflicts => "core.filter.conflicts",
-            Action::FilterPalette => "core.filter.palette",
-            Action::FilterPaletteColour => "core.filter.palette_colour",
+            Action::FilterPalette => "core.filter.similar_colours",
+            Action::FilterPaletteColour => "core.filter.colour",
             Action::AllPhotos => "core.view.all_photos",
             Action::SetReference => "core.filter.reference",
             Action::FilterSimilar => "core.filter.similar",
@@ -1418,20 +1418,20 @@ impl Action {
                     Kind::Sharpness => "core.folders.compute.sharpness",
                     Kind::Signatures => "core.folders.compute.signatures",
                     Kind::Palette(SourceKind::Camera | SourceKind::Cover) => {
-                        "core.folders.compute.palette_camera"
+                        "core.folders.compute.colours_camera"
                     }
-                    Kind::Palette(SourceKind::Raw) => "core.folders.compute.palette_raw",
+                    Kind::Palette(SourceKind::Raw) => "core.folders.compute.colours_raw",
                     Kind::Palette(SourceKind::Developed(Engine::Darktable)) => {
-                        "plugin.darktable.compute_palettes"
+                        "plugin.darktable.compute_colours"
                     }
                     Kind::Palette(SourceKind::Developed(Engine::RapidRaw)) => {
-                        "plugin.rapidraw.compute_palettes"
+                        "plugin.rapidraw.compute_colours"
                     }
                     Kind::Palette(SourceKind::Developed(Engine::RawTherapee)) => {
-                        "plugin.rawtherapee.compute_palettes"
+                        "plugin.rawtherapee.compute_colours"
                     }
                     Kind::Palette(SourceKind::Developed(Engine::Art)) => {
-                        "plugin.art.compute_palettes"
+                        "plugin.art.compute_colours"
                     }
                 }
             }
@@ -1446,20 +1446,20 @@ impl Action {
                     Kind::Sharpness => "core.file.compute.sharpness",
                     Kind::Signatures => "core.file.compute.signatures",
                     Kind::Palette(SourceKind::Camera | SourceKind::Cover) => {
-                        "core.file.compute.palette_camera"
+                        "core.file.compute.colours_camera"
                     }
-                    Kind::Palette(SourceKind::Raw) => "core.file.compute.palette_raw",
+                    Kind::Palette(SourceKind::Raw) => "core.file.compute.colours_raw",
                     Kind::Palette(SourceKind::Developed(Engine::Darktable)) => {
-                        "plugin.darktable.compute_image_palettes"
+                        "plugin.darktable.compute_image_colours"
                     }
                     Kind::Palette(SourceKind::Developed(Engine::RapidRaw)) => {
-                        "plugin.rapidraw.compute_image_palettes"
+                        "plugin.rapidraw.compute_image_colours"
                     }
                     Kind::Palette(SourceKind::Developed(Engine::RawTherapee)) => {
-                        "plugin.rawtherapee.compute_image_palettes"
+                        "plugin.rawtherapee.compute_image_colours"
                     }
                     Kind::Palette(SourceKind::Developed(Engine::Art)) => {
-                        "plugin.art.compute_image_palettes"
+                        "plugin.art.compute_image_colours"
                     }
                 }
             }
@@ -1512,7 +1512,7 @@ impl Action {
             Action::AdjustPaste => "core.adjust.paste",
             Action::HistogramScale => "core.view.histogram_scale",
             Action::HistogramLarge => "core.view.histogram_large",
-            Action::PaletteView => "core.view.palette",
+            Action::PaletteView => "core.view.colours",
             Action::HistogramChannel => "core.view.histogram_channel",
             Action::HistogramRed => "core.histogram.red",
             Action::HistogramGreen => "core.histogram.green",

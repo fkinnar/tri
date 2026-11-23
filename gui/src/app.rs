@@ -1662,7 +1662,7 @@ pub struct TriApp {
     palette_view: bool,
     /// Son cran : 0 l'image, 1 sa moyenne, n : n couleurs (gardé d'une image à l'autre).
     palette_view_k: usize,
-    /// Fausses couleurs (`[gui.palette_view] false_colours`).
+    /// Fausses couleurs (`[gui.colours_view] false_colours`).
     palette_view_false: bool,
     /// Couleurs perçues (adaptées à la lumière de l'entourage ; expérience).
     palette_view_perceived: bool,
@@ -28506,7 +28506,7 @@ fn oklab_hex(oklab: [f32; 3]) -> String {
 /// relatives, 0..1) : 1 % du côté long, 2 pixels au moins.
 fn average_oklab(image: &tri::bitmap::Bitmap, point: egui::Pos2, area: f32) -> [f32; 3] {
     let (w, h) = (image.width.max(1), image.height.max(1));
-    // Zone de côté `area` × le grand côté (`[palette] pick_area`), celle du collimateur.
+    // Zone de côté `area` × le grand côté (`[colours] pick_area`), celle du collimateur.
     let half = ((w.max(h) as f32 * area / 2.0) as u32).max(2);
     let cx = (point.x.clamp(0.0, 1.0) * (w - 1) as f32) as u32;
     let cy = (point.y.clamp(0.0, 1.0) * (h - 1) as f32) as u32;
@@ -33554,9 +33554,9 @@ mod tests {
                 .iter()
                 .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
         });
-        // Au clavier : « g p » (go palette).
+        // Au clavier : « g c » (go colours).
         press(&mut h, Key::G, Modifiers::NONE);
-        press(&mut h, Key::P, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
         h.run_steps(2);
         assert!(h.state().palette_view);
         h.state_mut().palette_view_k = 2;
@@ -41706,7 +41706,7 @@ mod tests {
 
     #[test]
     fn the_eyedropper_averages_the_reticle_area() {
-        // `[palette] pick_area` : la zone moyennée est celle que montre le collimateur.
+        // `[colours] pick_area` : la zone moyennée est celle que montre le collimateur.
         let (w, h) = (100u32, 50u32);
         let mut data = Vec::new();
         for _ in 0..h {
@@ -41763,7 +41763,7 @@ mod tests {
             assert!(h.query_by_label(&t!(id)).is_some(), "{id}");
         }
         // Sous « Palettes », une majuscule : « Données brutes ».
-        let raw = t!("compute-palette-raw");
+        let raw = t!("compute-colours-raw");
         let raw = raw.split_once("  ").unwrap().1;
         let raw: String = raw[..1].to_uppercase() + &raw[1..];
         assert!(h.query_by_label(&raw).is_some(), "{raw}");
@@ -47730,11 +47730,9 @@ mod tests {
         let listed = crate::settings_window::settings_list(&[]);
         let has =
             |section: &str, key: &str| listed.iter().any(|r| r.section == section && r.key == key);
-        assert!(
-            !listed
-                .iter()
-                .any(|r| r.section == "exposure" || r.section == "palette")
-        );
+        assert!(!listed.iter().any(|r| r.section == "exposure"
+            || r.section == "colours"
+            || r.section == "gui.colours_view"));
         assert!(!has("gui.histogram", "scale"));
         assert!(!has("gui.metadata", "histogram"));
         assert!(!has("gui.grid", "stacks"));
@@ -47748,7 +47746,7 @@ mod tests {
             .settings_window
             .as_mut()
             .unwrap()
-            .show_section("palette");
+            .show_section("colours");
         h.run_steps(3);
         assert!(h.query_by_label(&t!("settings-analysis-removed")).is_some());
         h.get_by_label(&t!("settings-section-analysis")).click();

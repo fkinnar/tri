@@ -209,7 +209,7 @@ system one ("cold" measurements, experiments).
   `gui/src/position_bar.rs` (`Position::layout`, `split`), segments from
   `Stacks::photos_per_group` (developments counted with their photo). Thickness
   `thickness`.
-- **Colour palette** (#492, 2026-11-21). "Palette" section of the right panel, in the grid
+- **Colour palette** (#492, 2026-11-21). "Colours" section of the right panel, in the grid
   and in full screen, at the bottom of the panel: mostly to look. The **source**: "Same as the
   grid", checked by default, follows the thumbnails' render (camera JPEG, cover: each
   development's render and the camera JPEG of photos without development, program, RAW);
@@ -230,11 +230,11 @@ system one ("cold" measurements, experiments).
   icon, name; and in the top filter bar, with the others; greyed without a source;
   feedback of 2026-11-21). Threshold and tolerance kept per folder like the other sliders
   (`tri::palette::folder_threshold` / `folder_radius`, written when the slider is
-  released). **Similar palettes** (a
-  target, action `core.filter.palette`): the grid keeps only the images whose palette is
+  released). **Similar colours** (a
+  target, action `core.filter.similar_colours`): the grid keeps only the images whose palette is
   within the threshold of the image's (slider below, double-click: starting value,
-  `[palette] similar_threshold` / `similar_max`), closest first. **Colour** (eyedropper
-  icon, action `core.filter.palette_colour`: checked, the last colour looked for, otherwise
+  `[colours] similar_threshold` / `similar_max`), closest first. **Colour** (eyedropper
+  icon, action `core.filter.colour`: checked, the last colour looked for, otherwise
   the choice box). Right of the name, the colour **patch**: a click opens the choice box
   (feedback of 2026-11-21) — HSV wheel (hue as angle, saturation as radius, at the
   current value; OKLab lightness, tried, did not speak), R G B, hue / saturation / value,
@@ -242,7 +242,7 @@ system one ("cold" measurements, experiments).
   window reads the colour (on a thumbnail or the full-screen image, the average colour of
   a small area of the image the palette comes from, read in the background; elsewhere,
   the pixel of a capture of the window), then the box comes back; on an image, a
-  **reticle** shows the averaged area (`[palette] pick_area`, 2 % of the long side), and
+  **reticle** shows the averaged area (`[colours] pick_area`, 2 % of the long side), and
   the loupe (`m` held) magnifies it to aim precisely (user's idea, 2026-11-21); "OK" keeps the
   search.
   **Several colours** (#492, user's idea, 2026-11-23): at the top of the box, the colours
@@ -296,36 +296,36 @@ system one ("cold" measurements, experiments).
   bottom of the box (feedback of 2026-11-23): the **tolerance**, the same slider as the
   panel's (kept per folder, double-click: starting value), and the **number of photos**
   found by the live preview. In hierarchical mode, the tolerance **widens rank by rank**
-  (`[palette] colour_widen`, 0.25: the second colour ×1.25, the third ×1.5…): the first
-  colour more precise than the last. **Search these colours** (Palette section, under the
+  (`[colours] colour_widen`, 0.25: the second colour ×1.25, the third ×1.5…): the first
+  colour more precise than the last. **Search these colours** (Colours section, under the
   photo's palette): its main colours (the most present, without specks under
   `colour_min_share`, at most `max`) in the box, searched right away, to adjust; "Cancel"
-  brings back the previous search. **Large palette** (next to it, action
-  `core.view.palette`, `g p`, like `g i` for the large histogram since 2026-11-23
+  brings back the previous search. **Large colours** (next to it, action
+  `core.view.colours`, `g c`, like `g i` for the large histogram since 2026-11-23
   (`Shift+I` until then; inside it, `g` stays the green channel, Escape closes it); a click on the band or the wheel of the panel's palette
   opens it too, like the histogram; user's idea of 2026-11-23): a movable box like the large histogram,
   to see the **balance of masses** of the highlighted photo (the image its palette comes
   from); right of the image (feedback of 2026-11-23: below, the box was unbalanced), a
   stepped slider: 0 the image as is, 1 its average colour (the
   dominant), n the image in n colours (each pixel replaced by the closest,
-  `palette::posterize`), up to `[gui.palette_view] max` (8); optional **false colours**
+  `palette::posterize`), up to `[gui.colours_view] max` (8); optional **false colours**
   (`false_colours`, the most present first, with their legend next to the real ones); on
   the right, the palette of that step (a click on a colour closes it and opens the colour
   box on it, without searching yet; the hand only over what can be clicked). In the panel
   too, a colour of the list opens the colour box rather than filtering (feedback of
-  2026-11-23: the large palette stayed open over an empty grid). **Perceived colours** (experiment of
+  2026-11-23: the large colours stayed open over an empty grid). **Perceived colours** (experiment of
   2026-11-23, user's idea: under a violet light, a pinkish beige face looks orange): the
   colours adapted to the light of their surround, areas that stand out weighing more
-  (`palette::posterize_with`, settings `[palette] perceived_*`); at step 0, the image "as
-  seen", with the perceived palette of step `[palette] colors` (6),
+  (`palette::posterize_with`, settings `[colours] perceived_*`); at step 0, the image "as
+  seen", with the perceived palette of step `[colours] colors` (6),
   saturation included, the image staying untouched (feedback of 2026-11-23: the two
   differed). Neither the cache nor the search use it (to be decided with use). Computed in the
   background, on demand; changing image (arrows) follows, Escape closes it. Its title, like
   the large histogram's, names a development by its photo and software, "DSCF6228
   (Darktable)" (`image_title`). The colour box opened on colours (clicked in a palette, or
   the previous search) searches them at once, in the grid even from full screen; "Cancel"
-  goes back where one came from (full screen on the same photo, large palette). Screenshot:
-  `TRI_GUI_ACTIONS=core.view.palette,palette_k:4f`. **Keyboard** (feedback of 2026-11-23: the box was
+  goes back where one came from (full screen on the same photo, large colours). Screenshot:
+  `TRI_GUI_ACTIONS=core.view.colours,palette_k:4f`. **Keyboard** (feedback of 2026-11-23: the box was
   mouse-only, and behind it the arrows moved the grid's selection): the grid receives
   nothing while the box is open; outside a text field, `1`–`5` select a colour (an empty
   one: nothing selected), ← → or `h` `l` the hue (`key_hue_step`, 5°; Shift: 1°),
@@ -337,14 +337,14 @@ system one ("cold" measurements, experiments).
   tooltips. An image must
   contain **all** of them (one tolerance for all: one per colour would be unmanageable).
   On the right, **Absolute** (all count the same: the mean of the distances) or
-  **Hierarchical** (the first counts the most, each next one `[palette] colour_hierarchy`
+  **Hierarchical** (the first counts the most, each next one `[colours] colour_hierarchy`
   times the previous one, from its presence in the image, proximity breaking ties: the image
   where the first colour covers the most comes first; two searches with the same colours
   in another order keep the same images, in another order; requiring an order of areas, considered, would
   have emptied the results); the choice is written to `[gui.colour_search] mode`.
   Third mode, **Average** (user's idea, 2026-11-23): the average colour of each image (its
   palette's colours, weighted by their share) compared with the first colour, mostly hue
-  and saturation (lightness counted `[palette] mean_lightness` times): photos with a cast
+  and saturation (lightness counted `[colours] mean_lightness` times): photos with a cast
   of that colour, not those that contain a little of it (a blue photo with a little skin
   comes out of a skin search, not of an average skin search); a two-colour photo has a
   grey average and only comes out of an ordinary search. The other slots are hidden (feedback
@@ -352,7 +352,7 @@ system one ("cold" measurements, experiments).
   (wheel, swatch, values, keyboard, eyedropper) goes to the first one, a single dot on the
   wheel. Measured on 116 photos of four sessions: the 6 blue-cast photos
   between 0.07 and 0.09 from a blue, the next ones at 0.17.
-  A new search (colours, mode, similar palettes) selects the best answer and brings the
+  A new search (colours, mode, similar colours) selects the best answer and brings the
   grid back to the start (feedback of 2026-11-23: the previous selection stayed selected
   and the grid scrolled to it, in the middle of the results; the best ones, above, were not
   seen).
@@ -361,7 +361,7 @@ system one ("cold" measurements, experiments).
   `own_max`: a click on an empty swatch stores the current colour there, right-click
   "Replace" or "Clear", written to the configuration); a click on a filled swatch takes it
   as the current colour. The filter's patch shows the colours side by side. Screenshot:
-  `TRI_GUI_ACTIONS=colour_dialog:#d03020 #2050c0`. Or a click on a colour of the Palette section:
+  `TRI_GUI_ACTIONS=colour_dialog:#d03020 #2050c0`. Or a click on a colour of the Colours section:
   the images with a palette colour close enough, closest first (a single slider, the
   tolerance, `colour_radius` / `colour_radius_max`; specks under `colour_min_share`
   ignored). Common rules: one search at a time; images not computed yet stay, at the end
@@ -1293,7 +1293,7 @@ system one ("cold" measurements, experiments).
   (`select_after_open`). **Find its folder** (`core.file.locate`, `g l`,
   folder-and-magnifier icon): photos of an unreachable folder greyed, search and repair
   described in `index.md` (`TriApp::locate`, box `locate_dialog.rs`).
-  **Reference photo** (feedback of 2026-11-22), shared by "similar palettes" and
+  **Reference photo** (feedback of 2026-11-22), shared by "similar colours" and
   "similar" (`TriApp::reference`): in the Filters section, "Colour" first, then those two
   filters, the reference on their right (`reference_box`: its thumbnail, or an empty
   frame; it fits the two rows, highlight included, `[gui.grid] reference_scale`,
@@ -2133,7 +2133,7 @@ blurry background among landscapes), it wrongly flagged sharp photos.
   removed** (`[analysis]`, #564): on demand, nothing is computed in the background, the
   tool stays greyed while an image of the folder is missing from the cache
   (`TriApp::analysis_missing`, counted from `Event::Missing`) and comes back after
-  "Compute" on the folder; removed, the tool leaves the bars, the panel (Palette section,
+  "Compute" on the folder; removed, the tool leaves the bars, the panel (Colours section,
   stacks, "by palette" choice), the "Compute" menus, the help, `?`, `:` and the keyboard
   (`Action::tool`, `Action::available`; removed tools are per UI thread,
   `actions::set_removed_tools`). Exposure removed: the histogram, the large histogram and

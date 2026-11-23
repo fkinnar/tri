@@ -64,7 +64,8 @@ pub struct AppSettings {
     pub sharpness: tri::sharpness::SharpnessSettings,
     /// `[similarity]` (moteur) : regroupement des images semblables.
     pub similarity: tri::similarity::SimilaritySettings,
-    /// `[palette]` (moteur) : palettes de couleurs.
+    /// `[colours]` (moteur) : palettes de couleurs.
+    #[serde(rename = "colours")]
     pub palette: tri::palette::PaletteSettings,
     /// `[index]` (moteur) : index de recherche des palettes (#561).
     pub index: tri::index::IndexSettings,
@@ -325,7 +326,8 @@ pub struct GuiSettings {
     pub compare: CompareSettings,
     /// `[gui.colour_search]`.
     pub colour_search: ColourSearchSettings,
-    /// `[gui.palette_view]`.
+    /// `[gui.colours_view]`.
+    #[serde(rename = "colours_view")]
     pub palette_view: PaletteViewSettings,
     /// `[gui.position]`.
     pub position: PositionSettings,
@@ -1150,7 +1152,7 @@ impl Default for CompareSettings {
     }
 }
 
-/// Section `[gui.palette_view]` : la palette en grand (#492).
+/// Section `[gui.colours_view]` : la palette en grand (#492).
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PaletteViewSettings {
@@ -1185,7 +1187,7 @@ pub enum ColourMode {
     /// Toutes les couleurs comptent pareil.
     #[default]
     Absolute,
-    /// La première compte le plus, puis la deuxième… (`[palette] colour_hierarchy`).
+    /// La première compte le plus, puis la deuxième… (`[colours] colour_hierarchy`).
     Hierarchical,
     /// La couleur moyenne de l'image comparée à la première couleur (idée de
     /// l'utilisateur, 23/11/2026 : isoler les photos « bleues en moyenne », qu'une

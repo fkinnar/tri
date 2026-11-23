@@ -86,7 +86,7 @@ sharpness = "background"
 # Piles : empreintes de regroupement (même choix).
 stacks = "background"
 # Palettes de couleurs : recherches par palette et par couleur, pipette (même choix).
-palettes = "background"
+colours = "background"
 
 [xmp]
 # Nom des nouveaux sidecars : façon darktable, façon Adobe, ou les deux.
@@ -589,7 +589,7 @@ group_threshold = 0.45
 # réglage est retenu par dossier.
 strictness_span = 2.0
 
-[palette]
+[colours]
 # Palettes de couleurs : nombre de couleurs cherchées par image.
 #
 # Palettes de couleurs (#492) : les couleurs principales de chaque image et leur part,
@@ -1380,8 +1380,8 @@ max = 5
 # Mode de recherche : absolue, hiérarchique ou couleur moyenne.
 #
 # Contient ces couleurs : "absolute", toutes comptent pareil ; "hierarchical", la première
-# compte le plus, puis la deuxième… ([palette] colour_hierarchy) ; "mean", la couleur
-# moyenne de l'image comparée à la première ([palette] mean_lightness). Changé aussi dans la
+# compte le plus, puis la deuxième… ([colours] colour_hierarchy) ; "mean", la couleur
+# moyenne de l'image comparée à la première ([colours] mean_lightness). Changé aussi dans la
 # boîte.
 mode = "absolute"
 # Pastilles des couleurs franches.
@@ -1413,7 +1413,7 @@ key_step = 0.05
 # Clavier : pas de la tolérance à + et -.
 key_radius_step = 0.01
 
-[gui.palette_view]
+[gui.colours_view]
 # Couleurs au plus du curseur de la palette en grand.
 #
 # 0 : l'image telle quelle, 1 : sa couleur moyenne (la dominante), 2, 3… : l'image en autant

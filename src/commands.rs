@@ -297,13 +297,13 @@ pub const COMMANDS: &[Command] = &[
         example: "tri <folder> --groups",
     },
     Command {
-        id: "palette",
+        id: "colours",
         theme: Theme::Analysis,
-        syntax: "tri <folder> --palette [--source camera|raw|darktable|…] [--colours <colours> [--hierarchical|--mean]] [--posterize K [--perceived] --to <folder>] [--raw|--flat] [--depth N]",
-        main: &["--palette"],
+        syntax: "tri <folder> --colours [--source camera|raw|darktable|…] [--find <colours> [--hierarchical|--mean]] [--posterize K [--perceived] --to <folder>] [--raw|--flat] [--depth N]",
+        main: &["--colours"],
         options: opts![
             "--source",
-            "--colours",
+            "--find",
             "--hierarchical",
             "--mean",
             "--posterize",
@@ -313,7 +313,7 @@ pub const COMMANDS: &[Command] = &[
             "--flat",
             "--depth"
         ],
-        example: "tri <folder> --palette --source raw",
+        example: "tri <folder> --colours --source raw",
     },
     Command {
         id: "compute",
@@ -321,7 +321,7 @@ pub const COMMANDS: &[Command] = &[
         syntax: "tri <folder> --compute <what>[,<what>…] [--recreate] [--raw|--flat] [--depth N]",
         main: &["--compute"],
         options: opts!["--recreate", "--raw", "--flat", "--depth"],
-        example: "tri <folder> --compute previews,exposure,palette-camera",
+        example: "tri <folder> --compute previews,exposure,colours-camera",
     },
     Command {
         id: "clear-cache",

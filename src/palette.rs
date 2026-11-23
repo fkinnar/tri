@@ -146,7 +146,7 @@ impl From<String> for SourceKind {
     }
 }
 
-/// Réglages (section `[palette]` du fichier de configuration).
+/// Réglages (section `[colours]` du fichier de configuration).
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PaletteSettings {

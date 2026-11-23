@@ -13,7 +13,7 @@ choosing **what** to compute.
 | `exposure` | histograms | `Exposure` |
 | `sharpness` | sharpness | `Sharpness` |
 | `signatures` | stack signatures | `Similarity` |
-| `palette-camera`, `palette-raw`, `palette-darktable`… | palettes of a source | `Palette(source)` |
+| `colours-camera`, `colours-raw`, `colours-darktable`… | palettes of a source | `Palette(source)` |
 
 ## `run`
 
@@ -37,15 +37,15 @@ a computation runs; the shown image, its neighbours and the thumbnails are still
 
 Right-click a folder, "Compute": one entry per computation, "Compute everything" and
 "Compute everything again"; each is an action (`core.folders.compute.*`,
-`plugin.<program>.compute_palettes`), so also in `:`, `?` and `[keys]`. Each computation
+`plugin.<program>.compute_colours`), so also in `:`, `?` and `[keys]`. Each computation
 has its line in the status bar, with its stop button (see [gui.md](gui.md)).
 
 On a **selection** too (feedback of 2026-11-21): actions `core.file.compute.*` and
-`plugin.<program>.compute_image_palettes` (the selection, else the current image), and
+`plugin.<program>.compute_image_colours` (the selection, else the current image), and
 the "Compute" list of the right-click box on an image; "recreate" then erases only those
 images' entries (`clear_files`).
 
-`tri <folder> --compute previews,exposure,palette-camera [--recreate]`.
+`tri <folder> --compute previews,exposure,colours-camera [--recreate]`.
 
 ## Tests
 

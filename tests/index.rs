@@ -18,7 +18,7 @@ fn producer(cache: &tri::cache::Cache) -> CachedPreviews {
     }
 }
 
-fn compute_palettes(dir: &Path, producer: &CachedPreviews) {
+fn compute_colours(dir: &Path, producer: &CachedPreviews) {
     let files = tri::media::scan(dir, 1).unwrap();
     let s = tri::compute::run(
         &files,
@@ -53,20 +53,20 @@ fn computed_palettes_are_indexed_and_a_moved_photo_keeps_its_own() {
         IndexSettings::default(),
     )
     .unwrap();
-    compute_palettes(&a, &producer);
+    compute_colours(&a, &producer);
     tri::index::flush(Duration::from_secs(30));
     let index = Index::open(&db).unwrap();
     let found = index.palettes(Source::Camera).unwrap();
     assert_eq!(found.len(), 2);
     assert_eq!(index.counts().unwrap(), (2, 2));
     // Déjà là : recalculer ne note rien de neuf.
-    compute_palettes(&a, &producer);
+    compute_colours(&a, &producer);
     tri::index::flush(Duration::from_secs(30));
     assert_eq!(index.counts().unwrap(), (2, 2));
     // Déplacée ailleurs (hors de tri) : revue là-bas, même contenu, même palette ; un
     // chemin de plus (l'ancien ne mène plus à rien, vu à l'affichage d'un résultat).
     std::fs::rename(a.join("rouge.jpg"), b.join("rouge.jpg")).unwrap();
-    compute_palettes(&b, &producer);
+    compute_colours(&b, &producer);
     tri::index::flush(Duration::from_secs(30));
     let found = index.palettes(Source::Camera).unwrap();
     assert_eq!(found.len(), 2, "toujours deux contenus");

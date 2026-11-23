@@ -180,7 +180,7 @@ release (`cargo test --release --test index -- --ignored --nocapture`):
 | database | 429 MB |
 | writing, batches of 256 | 48 s (~0.5 ms per palette, in the background) |
 | reading everything | 0.34 s |
-| "similar palettes" over everything | 96 ms |
+| "similar colours" over everything | 96 ms |
 | "contains this colour" over everything | 68 ms |
 
 Searching in memory is enough (under 0.1 s, plus loading, once). The database size is the

@@ -149,12 +149,12 @@ loupe = "m"
 # --- On the image ---
 # i: the histogram; Shift+I: the large one. Its scale and channel: after the leader.
 "core.view.histogram" = ["i"]
-# The large histogram: "g i" like "go histogram", as "g p" for the large palette
+# The large histogram: "g i" like "go histogram", as "g c" for the large colours view
 # (2026-11-23, Shift+I until then).
 "core.view.histogram_large" = ["g i"]
-# The large palette (#492): "g p" like "go palette" (Shift+L, the palette's letter, pans
-# in the vim profile).
-"core.view.palette" = ["g p"]
+# The colours in large (#492): "g c" like "go colours" ("p" is sharpness: "<leader> c"
+# stays free for the colour settings, like "<leader> i" for the histogram).
+"core.view.colours" = ["g c"]
 # w: clipped / blocked areas (warnings).
 "core.view.clipping" = ["w"]
 # p: the sharpness map (peaking). Its colour and strictness: after the leader.
@@ -213,10 +213,10 @@ loupe = "m"
 "core.filter.developed" = ["f r"]
 # In conflict (ratings that disagree between programs): "c".
 "core.filter.conflicts" = ["f c"]
-# Similar palettes: "l" like palette; contains this colour: "o" like colour.
-"core.filter.palette" = ["f l"]
-"core.filter.palette_colour" = ["f o"]
-# The selected photo becomes the reference of similar palettes ("t" like the target).
+# Similar colours: "l" (the former "palette"); contains this colour: "o" like colour.
+"core.filter.similar_colours" = ["f l"]
+"core.filter.colour" = ["f o"]
+# The selected photo becomes the reference of similar colours ("t" like the target).
 "core.filter.reference" = ["f t"]
 # Photos similar to the reference (fingerprints, as in stacks): "m" like similar.
 "core.filter.similar" = ["f m"]
@@ -303,14 +303,14 @@ loupe = "m"
 "core.file.compute.exposure" = []
 "core.file.compute.sharpness" = []
 "core.file.compute.signatures" = []
-"core.file.compute.palette_camera" = []
-"core.file.compute.palette_raw" = []
+"core.file.compute.colours_camera" = []
+"core.file.compute.colours_raw" = []
 "core.file.compute.all" = []
 "core.file.compute.recreate_all" = []
-"plugin.darktable.compute_image_palettes" = []
-"plugin.rapidraw.compute_image_palettes" = []
-"plugin.rawtherapee.compute_image_palettes" = []
-"plugin.art.compute_image_palettes" = []
+"plugin.darktable.compute_image_colours" = []
+"plugin.rapidraw.compute_image_colours" = []
+"plugin.rawtherapee.compute_image_colours" = []
+"plugin.art.compute_image_colours" = []
 # Read the ratings written inside the images (changed in another program) into the
 # sidecars.
 "core.file.import_notes" = []
@@ -340,8 +340,8 @@ loupe = "m"
 "core.folders.compute.exposure" = []
 "core.folders.compute.sharpness" = []
 "core.folders.compute.signatures" = []
-"core.folders.compute.palette_camera" = []
-"core.folders.compute.palette_raw" = []
+"core.folders.compute.colours_camera" = []
+"core.folders.compute.colours_raw" = []
 "core.folders.compute.all" = []
 "core.folders.compute.recreate_all" = []
 # Removable drive under the cursor: offload, eject (a dialog confirms).
@@ -581,10 +581,10 @@ loupe = "m"
 "plugin.darktable.open_folder" = ["r d"]
 "plugin.rawtherapee.open_folder" = ["r t"]
 "plugin.art.open_folder" = ["r a"]
-"plugin.darktable.compute_palettes" = []
-"plugin.rapidraw.compute_palettes" = []
-"plugin.rawtherapee.compute_palettes" = []
-"plugin.art.compute_palettes" = []
+"plugin.darktable.compute_colours" = []
+"plugin.rapidraw.compute_colours" = []
+"plugin.rawtherapee.compute_colours" = []
+"plugin.art.compute_colours" = []
 # i: the histogram. s: the scale (EV / linear); c: the next channel; r, g, b, a, l:
 # red, green, blue, all, luminance.
 "core.view.histogram_scale" = ["i s"]

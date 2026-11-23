@@ -86,7 +86,7 @@ sharpness = "background"
 # Stacks: grouping fingerprints (same choice).
 stacks = "background"
 # Colour palettes: palette and colour searches, eyedropper (same choice).
-palettes = "background"
+colours = "background"
 
 [xmp]
 # Name of new sidecars: darktable style, Adobe style, or both.
@@ -587,7 +587,7 @@ group_threshold = 0.45
 # setting is remembered per folder.
 strictness_span = 2.0
 
-[palette]
+[colours]
 # Colour palettes: number of colours looked for in each image.
 #
 # Colour palettes (#492): the main colours of each image and their share, computed on a
@@ -1367,8 +1367,8 @@ max = 5
 # Search mode: absolute, hierarchical or average colour.
 #
 # Contains these colours: "absolute", they all count the same; "hierarchical", the first
-# counts the most, then the second… ([palette] colour_hierarchy); "mean", the average colour
-# of the image compared with the first one ([palette] mean_lightness). Also changed in the
+# counts the most, then the second… ([colours] colour_hierarchy); "mean", the average colour
+# of the image compared with the first one ([colours] mean_lightness). Also changed in the
 # dialog.
 mode = "absolute"
 # Swatches of pure colours.
@@ -1399,7 +1399,7 @@ key_step = 0.05
 # Keyboard: tolerance step with + and -.
 key_radius_step = 0.01
 
-[gui.palette_view]
+[gui.colours_view]
 # Maximum number of colours of the large palette slider.
 #
 # 0: the image as is, 1: its average colour (the dominant), 2, 3…: the image in as many

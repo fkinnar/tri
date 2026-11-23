@@ -13,7 +13,7 @@ débrancher un disque lent), en choisissant **quoi** calculer.
 | `exposure` | histogrammes | `Exposure` |
 | `sharpness` | netteté | `Sharpness` |
 | `signatures` | empreintes des piles | `Similarity` |
-| `palette-camera`, `palette-raw`, `palette-darktable`… | palettes d'une source | `Palette(source)` |
+| `colours-camera`, `colours-raw`, `colours-darktable`… | palettes d'une source | `Palette(source)` |
 
 ## `run`
 
@@ -37,15 +37,15 @@ tant qu'un calcul tourne ; l'image affichée, ses voisines et les vignettes rest
 
 Clic droit sur un dossier, « Calculer » : une entrée par calcul, « Tout calculer » et
 « Tout recalculer » ; chacune est une action (`core.folders.compute.*`,
-`plugin.<logiciel>.compute_palettes`), donc aussi dans `:`, `?` et `[keys]`. Chaque calcul
+`plugin.<logiciel>.compute_colours`), donc aussi dans `:`, `?` et `[keys]`. Chaque calcul
 a sa ligne dans la barre d'état, avec son bouton d'arrêt (voir [gui.md](gui.md)).
 
 Sur une **sélection** aussi (retour du 21/11/2026) : actions `core.file.compute.*` et
-`plugin.<logiciel>.compute_image_palettes` (la sélection, sinon l'image courante), et la
+`plugin.<logiciel>.compute_image_colours` (la sélection, sinon l'image courante), et la
 liste « Calculer » de la boîte du clic droit sur une image ; « recréer » efface alors les
 seules entrées de ces images (`clear_files`).
 
-`tri <dossier> --compute previews,exposure,palette-camera [--recreate]`.
+`tri <dossier> --compute previews,exposure,colours-camera [--recreate]`.
 
 ## Tests
 

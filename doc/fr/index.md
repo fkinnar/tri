@@ -184,7 +184,7 @@ Apple Silicon, release (`cargo test --release --test index -- --ignored --nocapt
 | base | 429 Mo |
 | écriture, lots de 256 | 48 s (~0,5 ms par palette, en fond) |
 | lecture de tout | 0,34 s |
-| « palettes proches » sur tout | 96 ms |
+| « couleurs proches » sur tout | 96 ms |
 | « contient cette couleur » sur tout | 68 ms |
 
 La recherche en mémoire suffit (moins de 0,1 s, plus le chargement, une fois). La taille

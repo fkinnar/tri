@@ -49,7 +49,7 @@ de prise de vue.
 ## Proximité (`SortKey::Proximity`, #492, 23/11/2026)
 
 Idée de l'utilisateur : « le filtre filtre, le tri trie ». Les recherches de palettes
-(couleurs, palettes proches) et « Semblables » ne font que **filtrer** ; le tri
+(couleurs, couleurs proches) et « Semblables » ne font que **filtrer** ; le tri
 **Proximité** range les images gardées de la plus proche à la plus lointaine (inversé :
 l'inverse ; celles pas encore calculées à la fin). Le moteur n'a pas les palettes : ici,
 cette clé donne l'ordre des noms, et l'interface classe (`palette::rank_similar_by`, sous

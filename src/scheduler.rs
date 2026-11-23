@@ -270,7 +270,8 @@ pub struct Analyses {
     pub sharpness: Analysis,
     /// Piles : empreintes de regroupement.
     pub stacks: Analysis,
-    /// Palettes de couleurs : recherches par palette et par couleur.
+    /// Palettes de couleurs : recherches par palette et par couleur (`colours`).
+    #[serde(rename = "colours")]
     pub palettes: Analysis,
 }
 

@@ -54,7 +54,7 @@ impl Kind {
     }
 
     /// Identifiant (ligne de commande, actions) : `previews`, `raw`, `exposure`,
-    /// `sharpness`, `signatures`, `palette-camera`, `palette-raw`, `palette-darktable`…
+    /// `sharpness`, `signatures`, `colours-camera`, `colours-raw`, `colours-darktable`…
     pub fn id(self) -> String {
         match self {
             Kind::Previews => "previews".into(),
@@ -62,11 +62,11 @@ impl Kind {
             Kind::Exposure => "exposure".into(),
             Kind::Sharpness => "sharpness".into(),
             Kind::Signatures => "signatures".into(),
-            Kind::Palette(k) => format!("palette-{}", k.id()),
+            Kind::Palette(k) => format!("colours-{}", k.id()),
         }
     }
 
-    /// Calcul d'après son identifiant ([`Kind::id`]) ; `palette:raw` accepté aussi.
+    /// Calcul d'après son identifiant ([`Kind::id`]) ; `colours:raw` accepté aussi.
     pub fn parse(text: &str) -> Option<Kind> {
         let text = text.trim().to_lowercase().replace(':', "-");
         Kind::all().into_iter().find(|k| k.id() == text)
@@ -274,7 +274,7 @@ mod tests {
             assert_eq!(Kind::parse(&kind.id()), Some(kind), "{kind:?}");
         }
         assert_eq!(
-            Kind::parse("palette:raw"),
+            Kind::parse("colours:raw"),
             Some(Kind::Palette(SourceKind::Raw))
         );
         assert_eq!(Kind::parse("nothing"), None);
