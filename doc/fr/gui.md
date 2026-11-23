@@ -258,9 +258,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   l'agrandit pour viser juste (idée de l'utilisateur, 21/11/2026) ; « Chercher » lance le filtre.
   **Plusieurs couleurs** (#492, idée de l'utilisateur, 23/11/2026) : en haut de la boîte,
   les couleurs cherchées, en pastilles comme les autres (`[gui.colour_search] max`
-  emplacements, 5) ; un clic règle l'une d'elles, un clic sur un emplacement vide en
-  ajoute une (copie de la couleur réglée), clic droit « Retirer » ; un trait fin les
-  sépare de la roue. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
+  emplacements, 5), qui marchent comme les pastilles libres (retour du 23/11/2026 : vides
+  à l'ouverture, sauf pendant une recherche de plusieurs couleurs, la couleur en cours ou
+  la dernière sur la roue : une couleur relevée à la pipette n'est jamais laissée de côté ; un clic sur un vide y range la couleur réglée sur la
+  roue, sur un plein la remet sur la roue, clic droit « Remplacer » ou « Vider » ; rien de
+  rangé, « Chercher » prend la couleur de la roue) ; centrées entre deux traits fins. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
   couleur serait ingérable). À droite, **Absolue** (toutes comptent pareil : la moyenne des
   distances) ou **Hiérarchique** (la première compte le plus, chaque suivante
   `[palette] colour_hierarchy` fois la précédente, et sa présence dans l'image s'ajoute :

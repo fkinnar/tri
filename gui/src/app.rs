@@ -313,55 +313,64 @@ struct PaletteColour {
     radius: f32,
 }
 
-/// Boîte de choix des couleurs cherchées : la couleur en cours, en TSV (teinte en degrés,
-/// saturation et valeur de 0 à 1 ; la teinte d'un gris est gardée), le texte du champ
-/// hexadécimal en cours de saisie, et les emplacements (#492 : plusieurs couleurs, la
-/// plus importante d'abord), dont `active` est celui que l'on règle.
+/// Boîte de choix des couleurs cherchées : la couleur réglée sur la roue, en TSV (teinte en
+/// degrés, saturation et valeur de 0 à 1 ; la teinte d'un gris est gardée), le texte du
+/// champ hexadécimal en cours de saisie, et les couleurs rangées dans les emplacements
+/// (#492 : plusieurs couleurs, la plus importante d'abord ; comme les pastilles libres,
+/// retour du 23/11/2026 : un clic sur un vide y range la couleur réglée, sur un plein la
+/// remet sur la roue).
 #[derive(Clone, Debug)]
 struct ColourDialog {
     hsv: [f32; 3],
     hex: String,
     slots: Vec<[f32; 3]>,
-    active: usize,
 }
 
 impl ColourDialog {
+    /// Sur les couleurs `colours` (rangées), la première sur la roue ; aucune : un gris
+    /// moyen, rien de rangé.
     fn new(colours: &[[f32; 3]]) -> ColourDialog {
         let mut dialog = ColourDialog {
             hsv: [0.0; 3],
             hex: String::new(),
-            slots: vec![[0.0; 3]; colours.len().max(1)],
-            active: 0,
+            slots: Vec::new(),
         };
-        for (i, &oklab) in colours.iter().enumerate() {
-            dialog.active = i;
+        for &oklab in colours {
             dialog.set(oklab);
+            dialog.slots.push(dialog.hsv);
         }
-        dialog.select(0);
+        match colours.first() {
+            Some(&first) => dialog.set(first),
+            None => dialog.set_rgb([128, 128, 128]),
+        }
         dialog
     }
 
-    /// Règle l'emplacement `i`.
-    fn select(&mut self, i: usize) {
+    /// Range la couleur réglée dans le premier emplacement vide (au plus `max`).
+    fn store(&mut self, max: usize) {
+        if self.slots.len() < max {
+            self.slots.push(self.hsv);
+        }
+    }
+
+    /// Remet la couleur de l'emplacement `i` sur la roue.
+    fn load(&mut self, i: usize) {
         if let Some(&hsv) = self.slots.get(i) {
-            self.active = i;
             self.set_hsv(hsv);
         }
     }
 
-    /// Un emplacement de plus (au plus `max`), copie de la couleur en cours, aussitôt réglé.
-    fn add(&mut self, max: usize) {
-        if self.slots.len() < max {
-            self.slots.push(self.hsv);
-            self.select(self.slots.len() - 1);
+    /// Remplace l'emplacement `i` par la couleur réglée.
+    fn replace(&mut self, i: usize) {
+        if let Some(slot) = self.slots.get_mut(i) {
+            *slot = self.hsv;
         }
     }
 
-    /// Retire l'emplacement réglé (il en reste toujours un).
-    fn remove(&mut self) {
-        if self.slots.len() > 1 {
-            self.slots.remove(self.active);
-            self.select(self.active.min(self.slots.len() - 1));
+    /// Vide l'emplacement `i` (les suivants avancent : l'ordre est celui de l'importance).
+    fn clear(&mut self, i: usize) {
+        if i < self.slots.len() {
+            self.slots.remove(i);
         }
     }
 
@@ -370,8 +379,12 @@ impl ColourDialog {
         crate::palette_view::hsv_to_rgb(self.slots[i])
     }
 
-    /// Les couleurs cherchées, en OKLab, dans l'ordre des emplacements.
+    /// Les couleurs cherchées, en OKLab : celles des emplacements, dans l'ordre ; aucune
+    /// rangée, celle de la roue.
     fn colours(&self) -> Vec<[f32; 3]> {
+        if self.slots.is_empty() {
+            return vec![tri::palette::srgb_to_oklab(self.rgb())];
+        }
         (0..self.slots.len())
             .map(|i| tri::palette::srgb_to_oklab(self.slot_rgb(i)))
             .collect()
@@ -390,14 +403,12 @@ impl ColourDialog {
     fn set_rgb(&mut self, rgb: [u8; 3]) {
         self.hsv = crate::palette_view::rgb_to_hsv(rgb, self.hsv[0]);
         self.hex = format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]);
-        self.slots[self.active] = self.hsv;
     }
 
     fn set_hsv(&mut self, hsv: [f32; 3]) {
         self.hsv = hsv;
         let rgb = self.rgb();
         self.hex = format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]);
-        self.slots[self.active] = self.hsv;
     }
 }
 
@@ -5389,16 +5400,27 @@ impl TriApp {
         }
     }
 
-    /// Ouvre la boîte de choix de la couleur cherchée, sur la couleur en cours (ou la
-    /// dernière, ou un gris moyen).
+    /// Ouvre la boîte de choix de la couleur cherchée. Une recherche de plusieurs couleurs en
+    /// cours : ses couleurs rangées, la première sur la roue. Sinon, rien de rangé (la
+    /// couleur de la roue est cherchée : une couleur relevée à la pipette n'est jamais
+    /// laissée de côté) et, sur la roue, la couleur en cours, ou la dernière, ou un gris.
     fn open_colour_dialog(&mut self) {
-        let colours = self
-            .palette_colour
-            .as_ref()
-            .map(|c| c.colours.clone())
-            .or(self.palette_colour_last.clone())
-            .unwrap_or_else(|| vec![[0.6, 0.0, 0.0]]);
-        self.colour_dialog = Some(ColourDialog::new(&colours));
+        let current = self.palette_colour.as_ref().map(|c| c.colours.clone());
+        let mut dialog = match current {
+            Some(colours) if colours.len() > 1 => ColourDialog::new(&colours),
+            _ => ColourDialog::new(&[]),
+        };
+        if dialog.slots.is_empty()
+            && let Some(&first) = self
+                .palette_colour
+                .as_ref()
+                .map(|c| &c.colours)
+                .or(self.palette_colour_last.as_ref())
+                .and_then(|c| c.first())
+        {
+            dialog.set(first);
+        }
+        self.colour_dialog = Some(dialog);
     }
 
     /// Boîte de choix de la couleur cherchée (#492, retour du 21/11/2026) : la roue
@@ -5422,9 +5444,11 @@ impl TriApp {
             .free_width()
             .show(ctx, |ui| {
                 // Les couleurs cherchées, en haut, et le mode de recherche (#492).
+                ui.add_space(5.0);
                 self.colour_slots_row(ui, &mut dialog, &mut hierarchical);
-                // De l'air et un trait fin avant la roue (retour du 23/11/2026).
-                ui.add_space(10.0);
+                // De l'air et un trait fin avant la roue, la rangée centrée entre les deux
+                // traits (retours du 23/11/2026).
+                ui.add_space(4.0);
                 ui.separator();
                 ui.add_space(10.0);
                 // La roue à gauche, les réglages à droite (retour du 21/11/2026 : en
@@ -5589,10 +5613,11 @@ impl TriApp {
         }
     }
 
-    /// Rangée des couleurs cherchées de la boîte (#492), des pastilles comme les autres
-    /// (retour du 23/11/2026) : `[gui.colour_search] max` emplacements ; un clic sur l'un
-    /// d'eux le règle, sur un vide en ajoute un (copie de la couleur réglée), clic droit
-    /// « Retirer » ; puis le mode, absolu ou hiérarchique (`hierarchical` : basculé).
+    /// Rangée des couleurs cherchées de la boîte (#492), des pastilles qui marchent comme
+    /// les pastilles libres (retour du 23/11/2026) : `[gui.colour_search] max`
+    /// emplacements ; un clic sur un vide y range la couleur réglée, sur un plein la remet
+    /// sur la roue, clic droit « Remplacer » ou « Vider » ; puis le mode, absolu ou
+    /// hiérarchique (`hierarchical` : basculé).
     fn colour_slots_row(
         &self,
         ui: &mut Ui,
@@ -5609,16 +5634,17 @@ impl TriApp {
                 let name = if filled {
                     t!("palette-colour-slot", n = i + 1)
                 } else {
-                    t!("palette-colour-add")
+                    t!("palette-swatch-empty")
                 };
                 response.widget_info(|| {
                     egui::WidgetInfo::labeled(egui::Role::Button, true, name.clone())
                 });
-                if filled {
+                let tip = if filled {
                     let [r, g, b] = dialog.slot_rgb(i);
                     ui.painter()
                         .rect_filled(rect, 3.0, Color32::from_rgb(r, g, b));
-                    if i == dialog.active {
+                    // Celle qui est sur la roue, encadrée.
+                    if [r, g, b] == dialog.rgb() {
                         let stroke = egui::Stroke::new(2.0, ui.visuals().strong_text_color());
                         ui.painter().rect_stroke(
                             rect.expand(2.0),
@@ -5627,29 +5653,32 @@ impl TriApp {
                             egui::StrokeKind::Outside,
                         );
                     }
+                    t!(
+                        "palette-swatch-own-tip",
+                        hex = format!("#{r:02x}{g:02x}{b:02x}")
+                    )
                 } else {
                     empty_swatch(ui, rect, weak);
-                }
-                let tip = if filled {
-                    t!("palette-colour-slot-tip", n = i + 1)
-                } else {
-                    t!("palette-colour-add")
+                    t!("palette-swatch-store-tip")
                 };
                 let response = response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
                     .on_hover_text(tip);
                 if response.clicked() {
                     if filled {
-                        dialog.select(i);
+                        dialog.load(i);
                     } else {
-                        dialog.add(max);
+                        dialog.store(max);
                     }
                 }
-                if filled && dialog.slots.len() > 1 {
+                if filled {
                     response.context_menu(|ui| {
-                        if ui.button(t!("palette-colour-remove")).clicked() {
-                            dialog.select(i);
-                            dialog.remove();
+                        if ui.button(t!("palette-swatch-replace")).clicked() {
+                            dialog.replace(i);
+                            ui.close();
+                        }
+                        if ui.button(t!("palette-swatch-clear")).clicked() {
+                            dialog.clear(i);
                             ui.close();
                         }
                     });
@@ -31659,20 +31688,28 @@ mod tests {
     fn the_colour_dialog_keeps_slots_and_own_swatches() {
         // #492 : emplacements des couleurs (5 au plus) et pastilles libres rangées dans la
         // configuration.
-        let mut dialog = ColourDialog::new(&[tri::palette::srgb_to_oklab([255, 0, 0])]);
-        dialog.add(2);
+        // Rien de rangé : la couleur de la roue est cherchée.
+        let mut dialog = ColourDialog::new(&[]);
+        assert!(dialog.slots.is_empty());
+        dialog.set_rgb([255, 0, 0]);
+        assert_eq!(dialog.colours().len(), 1);
+        // Ranger, comme les pastilles libres : la roue continue sans toucher aux rangées.
+        dialog.store(2);
         dialog.set_rgb([0, 0, 255]);
-        dialog.add(2);
+        dialog.store(2);
+        dialog.set_rgb([0, 255, 0]);
+        dialog.store(2);
         assert_eq!(dialog.slots.len(), 2, "au plus 2");
-        assert_eq!(dialog.active, 1);
-        dialog.select(0);
-        assert_eq!(dialog.rgb(), [255, 0, 0]);
+        assert_eq!(dialog.slot_rgb(0), [255, 0, 0]);
         assert_eq!(dialog.colours().len(), 2);
-        dialog.remove();
-        assert_eq!(dialog.slots.len(), 1);
+        dialog.load(1);
         assert_eq!(dialog.rgb(), [0, 0, 255]);
-        dialog.remove();
-        assert_eq!(dialog.slots.len(), 1, "il en reste une");
+        dialog.set_rgb([0, 255, 0]);
+        dialog.replace(0);
+        assert_eq!(dialog.slot_rgb(0), [0, 255, 0]);
+        dialog.clear(0);
+        assert_eq!(dialog.slots.len(), 1);
+        assert_eq!(dialog.slot_rgb(0), [0, 0, 255], "la suivante avance");
 
         let (mut h, dir) = harness();
         let config = dir.path().join("config.toml");
