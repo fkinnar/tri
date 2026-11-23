@@ -325,6 +325,8 @@ struct ColourDialog {
     hex: String,
     slots: Vec<[f32; 3]>,
     active: Option<usize>,
+    /// Réinitialisée et pas retouchée depuis : rien à chercher.
+    blank: bool,
 }
 
 impl ColourDialog {
@@ -336,6 +338,7 @@ impl ColourDialog {
             hex: String::new(),
             slots: Vec::new(),
             active: None,
+            blank: false,
         };
         for &oklab in colours {
             dialog.set(oklab);
@@ -349,9 +352,19 @@ impl ColourDialog {
         dialog
     }
 
+    /// Réinitialise (retour du 23/11/2026) : rien de rangé, un gris moyen sur la roue,
+    /// rien à chercher tant qu'on n'a rien retouché.
+    fn reset(&mut self) {
+        self.slots.clear();
+        self.active = None;
+        self.set_rgb([128, 128, 128]);
+        self.blank = true;
+    }
+
     /// Range la couleur réglée dans le premier emplacement vide (au plus `max`), aussitôt
     /// choisi.
     fn store(&mut self, max: usize) {
+        self.blank = false;
         if self.slots.len() < max {
             self.slots.push(self.hsv);
             self.active = Some(self.slots.len() - 1);
@@ -384,8 +397,11 @@ impl ColourDialog {
     }
 
     /// Les couleurs cherchées, en OKLab : celles des emplacements, dans l'ordre ; aucune
-    /// rangée, celle de la roue.
+    /// rangée, celle de la roue ; réinitialisée, aucune.
     fn colours(&self) -> Vec<[f32; 3]> {
+        if self.blank {
+            return Vec::new();
+        }
         if self.slots.is_empty() {
             return vec![tri::palette::srgb_to_oklab(self.rgb())];
         }
@@ -419,6 +435,7 @@ impl ColourDialog {
 
     /// L'emplacement choisi prend la couleur réglée.
     fn follow(&mut self) {
+        self.blank = false;
         if let Some(slot) = self.active.and_then(|i| self.slots.get_mut(i)) {
             *slot = self.hsv;
         }
@@ -5751,9 +5768,19 @@ impl TriApp {
                     });
                 });
                 ui.add_space(8.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Max), |ui| {
-                    cancel = ui.button(t!("cancel")).clicked();
-                    search = ui.button(t!("palette-colour-search")).clicked();
+                ui.horizontal(|ui| {
+                    // À gauche, loin de « Valider ».
+                    if ui
+                        .button(t!("palette-colour-reset"))
+                        .on_hover_text(t!("palette-colour-reset-tip"))
+                        .clicked()
+                    {
+                        dialog.reset();
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Max), |ui| {
+                        cancel = ui.button(t!("cancel")).clicked();
+                        search = ui.button(t!("palette-colour-search")).clicked();
+                    });
                 });
             });
         if let Some(own) = own {
@@ -32017,6 +32044,31 @@ mod tests {
         h.run_steps(3);
         assert!(h.state().palette_colour.is_some());
         assert_eq!(h.state().files.len(), 1);
+        // Réinitialiser : rien de rangé, la recherche s'arrête derrière ; « Valider » la
+        // laisse arrêtée, « Annuler » rend celle d'avant.
+        h.state_mut().open_colour_dialog();
+        h.run_steps(3);
+        h.get_all_by_label(&t!("palette-colour-reset"))
+            .last()
+            .unwrap()
+            .click();
+        run_until(&mut h, |app| app.palette_colour.is_none());
+        assert!(h.state().colour_dialog.as_ref().unwrap().slots.is_empty());
+        assert_eq!(h.state().files.len(), 2);
+        h.get_by_label(&t!("cancel")).click();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_some(), "rendue");
+        h.state_mut().open_colour_dialog();
+        h.run_steps(3);
+        h.get_all_by_label(&t!("palette-colour-reset"))
+            .last()
+            .unwrap()
+            .click();
+        h.run_steps(3);
+        h.get_by_label(&t!("palette-colour-search")).click();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_none());
+        assert_eq!(h.state().files.len(), 2);
     }
 
     #[test]

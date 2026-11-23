@@ -255,7 +255,9 @@ system one ("cold" measurements, experiments).
   lines. **Live preview** (feedback of 2026-11-23): at each colour change in the box, the
   grid searches behind it, at most once per `[gui.colour_search] live_ms` (150 ms; 0: no
   preview); opening starts nothing; "OK" (formerly "Search") keeps the search, "Cancel" or
-  the cross bring back the previous one (or none) and the previous sort. An image must
+  the cross bring back the previous one (or none) and the previous sort. **Reset**
+  (bottom left) clears the slots, puts the wheel back to grey and stops the search; "OK"
+  right after leaves the grid without a search. An image must
   contain **all** of them (one tolerance for all: one per colour would be unmanageable).
   On the right, **Absolute** (all count the same: the mean of the distances) or
   **Hierarchical** (the first counts the most, each next one `[palette] colour_hierarchy`
