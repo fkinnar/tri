@@ -1060,7 +1060,9 @@ system one ("cold" measurements, experiments).
   dialog (`offload.rs`) only displays.
 - **Right panel in sections** (reorganisation of 2026-10-27, the user's idea;
   `TriApp::side_panel`): the filter bar keeps only what is set with a click (stars, flags,
-  sharp / well exposed / developed switches, colours) and the name search, with the image
+  colours, then the switches of the computed filters: sharp / well exposed / developed,
+  colour looked for, similar palettes, similar, in the panel's order; feedback of
+  2026-11-23: the ratings first) and the name search, with the image
   count ("shown / in the folder"; the total without the developments of absent or
   disabled software, hidden from the grid, `TriApp::folder_total`, 2026-11-09), invert and clear; the **settings** move to the right panel, in titled sections
   like the folder panel's (`section_title`: capitals, bold, accent colour,
