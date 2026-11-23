@@ -21409,9 +21409,9 @@ impl TriApp {
             .as_ref()
             .filter(|s| Some(&s.key) == wanted.as_ref());
         let texture = shown.map(|s| s.texture.clone());
+        // Au cran 0 : la palette de la photo, ou en couleurs perçues la sienne.
         let palette = match (k, shown) {
             (0, _) if !perceived => photo_palette.as_deref().cloned(),
-            (0, _) => None,
             (_, Some(s)) => Some(Palette {
                 swatches: s.swatches.clone(),
                 ..Palette::default()

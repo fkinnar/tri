@@ -327,7 +327,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   une lumière violette, un visage beige rosé paraît orange) : les couleurs adaptées à la
   lumière de leur entourage, les zones qui tranchent pesant plus
   (`palette::posterize_with`, réglages `[palette] perceived_*`) ; au cran 0, l'image
-  « telle que vue ». Ni le cache ni la recherche n'en tiennent compte (à décider à
+  « telle que vue », avec sa palette perçue (`[palette] colors` couleurs). Ni le cache ni la recherche n'en tiennent compte (à décider à
   l'usage). Calculé en fond, à la demande ; changer d'image (flèches) la suit, Échap la
   ferme. Capture : `TRI_GUI_ACTIONS=core.view.palette,palette_k:4f`. **Clavier** (retour du
   23/11/2026 : la boîte ne se pilotait qu'à la souris, et derrière elle les flèches

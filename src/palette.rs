@@ -1137,17 +1137,6 @@ fn posterize_perceived(
         }
         data
     };
-    if k == 0 {
-        let data = to_bitmap(&perceived);
-        return (
-            Bitmap {
-                width: bitmap.width,
-                height: bitmap.height,
-                data,
-            },
-            Vec::new(),
-        );
-    }
     // Les points de la grille (comme `sample`), avec leur poids.
     let step = (w.max(h) / settings.side.max(1) as usize).max(1);
     let (mut points, mut weights) = (Vec::new(), Vec::new());
@@ -1156,6 +1145,39 @@ fn posterize_perceived(
             points.push(perceived[y * w + x]);
             weights.push(weight[y * w + x]);
         }
+    }
+    // L'image perçue entière (k = 0) : sa palette, du nombre de couleurs des palettes
+    // (retour du 23/11/2026 : à droite, rien ne venait), l'image intacte.
+    if k == 0 {
+        let centres = cluster_weighted(
+            &points,
+            Some(&weights),
+            settings.colors.clamp(1, 16),
+            settings.iterations,
+        )
+        .0;
+        let mut counts = vec![0usize; centres.len()];
+        for p in &perceived {
+            counts[nearest(&centres, *p)] += 1;
+        }
+        let mut swatches: Vec<Swatch> = centres
+            .into_iter()
+            .zip(counts)
+            .filter(|(_, c)| *c > 0)
+            .map(|(oklab, c)| Swatch {
+                oklab,
+                share: c as f32 / n as f32,
+            })
+            .collect();
+        swatches.sort_by(|a, b| b.share.total_cmp(&a.share));
+        return (
+            Bitmap {
+                width: bitmap.width,
+                height: bitmap.height,
+                data: to_bitmap(&perceived),
+            },
+            swatches,
+        );
     }
     let centres = if k <= 1 {
         let total: f32 = weights.iter().sum::<f32>().max(1e-6);
@@ -1867,8 +1889,11 @@ mod tests {
         let chroma = |w: Swatch| w.hue_chroma().1;
         assert!(chroma(large(&seen)) < chroma(large(&raw)));
         // Perçues, sans réduction (k = 0) : l'image entière, adaptée.
-        let (whole, none) = posterize_with(&image, 0, &s, true);
-        assert!(none.is_empty());
+        let (whole, palette) = posterize_with(&image, 0, &s, true);
+        assert!(
+            !palette.is_empty() && palette.len() <= s.colors,
+            "sa palette perçue"
+        );
         assert_eq!((whole.width, whole.height), (image.width, image.height));
     }
 
