@@ -5102,7 +5102,13 @@ impl TriApp {
                         marks::icon_button(ui, target, &t!("palette-reference-take"), &tip)
                     })
                     .inner;
-                let color = ui.style().interact(&response).fg_stroke.color;
+                // Inutilisable : gris plus sombre, comme les boutons sans objet des barres
+                // (retour du 23/11/2026 : désactivée, elle gardait sa couleur).
+                let color = if usable {
+                    ui.style().interact(&response).fg_stroke.color
+                } else {
+                    ui.visuals().weak_text_color().gamma_multiply(0.4)
+                };
                 marks::target_icon(ui.painter(), rect.shrink(target * 0.18), color);
                 if response.clicked() {
                     let ctx = ui.ctx().clone();
