@@ -1146,30 +1146,11 @@ fn posterize_perceived(
             weights.push(weight[y * w + x]);
         }
     }
-    // L'image perçue entière (k = 0) : sa palette, du nombre de couleurs des palettes
-    // (retour du 23/11/2026 : à droite, rien ne venait), l'image intacte.
+    // L'image perçue entière (k = 0) : intacte (sans saturation), avec la palette du cran
+    // `colors` (retours du 23/11/2026 : à droite rien ne venait, puis elle différait du
+    // cran 6 : calculée sans la saturation de ce cran).
     if k == 0 {
-        let centres = cluster_weighted(
-            &points,
-            Some(&weights),
-            settings.colors.clamp(1, 16),
-            settings.iterations,
-        )
-        .0;
-        let mut counts = vec![0usize; centres.len()];
-        for p in &perceived {
-            counts[nearest(&centres, *p)] += 1;
-        }
-        let mut swatches: Vec<Swatch> = centres
-            .into_iter()
-            .zip(counts)
-            .filter(|(_, c)| *c > 0)
-            .map(|(oklab, c)| Swatch {
-                oklab,
-                share: c as f32 / n as f32,
-            })
-            .collect();
-        swatches.sort_by(|a, b| b.share.total_cmp(&a.share));
+        let swatches = posterize_perceived(bitmap, settings.colors.clamp(1, 16), settings).1;
         return (
             Bitmap {
                 width: bitmap.width,
@@ -1894,6 +1875,8 @@ mod tests {
             !palette.is_empty() && palette.len() <= s.colors,
             "sa palette perçue"
         );
+        // La même que celle du cran `colors` (retour du 23/11/2026).
+        assert_eq!(palette, posterize_with(&image, s.colors, &s, true).1);
         assert_eq!((whole.width, whole.height), (image.width, image.height));
     }
 

@@ -333,7 +333,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   une lumière violette, un visage beige rosé paraît orange) : les couleurs adaptées à la
   lumière de leur entourage, les zones qui tranchent pesant plus
   (`palette::posterize_with`, réglages `[palette] perceived_*`) ; au cran 0, l'image
-  « telle que vue », avec sa palette perçue (`[palette] colors` couleurs). Ni le cache ni la recherche n'en tiennent compte (à décider à
+  « telle que vue », avec la palette perçue du cran `[palette] colors` (6), saturation
+  comprise, l'image restant intacte (retour du 23/11/2026 : les deux différaient). Ni le cache ni la recherche n'en tiennent compte (à décider à
   l'usage). Calculé en fond, à la demande ; changer d'image (flèches) la suit, Échap la
   ferme. Son titre, comme celui du grand histogramme, nomme un développement par sa photo
   et son logiciel, « DSCF6228 (Darktable) » (`image_title`). La boîte des couleurs ouverte

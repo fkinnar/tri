@@ -317,7 +317,9 @@ system one ("cold" measurements, experiments).
   2026-11-23, user's idea: under a violet light, a pinkish beige face looks orange): the
   colours adapted to the light of their surround, areas that stand out weighing more
   (`palette::posterize_with`, settings `[palette] perceived_*`); at step 0, the image "as
-  seen", with its perceived palette (`[palette] colors` colours). Neither the cache nor the search use it (to be decided with use). Computed in the
+  seen", with the perceived palette of step `[palette] colors` (6),
+  saturation included, the image staying untouched (feedback of 2026-11-23: the two
+  differed). Neither the cache nor the search use it (to be decided with use). Computed in the
   background, on demand; changing image (arrows) follows, Escape closes it. Its title, like
   the large histogram's, names a development by its photo and software, "DSCF6228
   (Darktable)" (`image_title`). The colour box opened on colours (clicked in a palette, or
