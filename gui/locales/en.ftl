@@ -58,6 +58,7 @@ kw-core-filter-similar = similar resemblance burst series reference search
 palette-colour-title = Colour looked for
 palette-colour-slot = Colour { $n }
 palette-colour-slot-tip = { $hex }: the wheel sets it (1 to 5; right-click: clear)
+palette-colour-next-tip = The next click on the wheel (or the eyedropper) fills this slot
 palette-colour-absolute = Absolute
 palette-colour-absolute-tip = All colours count the same
 palette-colour-hierarchical = Hierarchical

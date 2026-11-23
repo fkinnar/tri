@@ -264,8 +264,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   suivant remplit l'emplacement suivant (plus de « + » à cliquer avant, ni de doublon).
   Cinq rangées et rien de choisi : le dernier est retouché. Un clic sur un emplacement
   plein le **choisit exprès** (sa pastille plus grande) : la roue, les valeurs et la
-  pipette le retouchent, autant de fois qu'on veut, jusqu'à un clic sur un « + » ; clic
-  droit « Vider » (les suivants avancent). À l'ouverture, la recherche en cours ou la dernière,
+  pipette le retouchent, autant de fois qu'on veut, jusqu'à un clic sur un « + », qui ne
+  range rien (il dupliquait la couleur choisie) : plus rien de choisi, le prochain vide
+  (son « + » plus marqué) est rempli au clic suivant ; clic droit « Vider » (les suivants
+  avancent). Au clavier, les flèches remplissent de même le prochain vide au premier
+  appui, puis le retouchent. À l'ouverture, la recherche en cours ou la dernière,
   même d'une seule couleur, la première choisie ; rien de rangé, « Valider » prend la
   couleur de la roue. Centrées entre deux traits fins.
   **Aperçu en direct** (retour du 23/11/2026) : à chaque changement de couleur dans la
@@ -302,8 +305,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   suite, à ajuster ; « Annuler » rend la recherche d'avant. **Clavier** (retour du
   23/11/2026 : la boîte ne se pilotait qu'à la souris, et derrière elle les flèches
   déplaçaient la sélection) : la grille ne reçoit plus rien tant que la boîte est ouverte ;
-  hors saisie dans un champ, `1`–`5` choisissent une couleur (un vide y range la couleur
-  réglée), ← → ou `h` `l` la teinte (`key_hue_step`, 5° ; Maj : 1°), ↑ ↓ ou `k` `j` la
+  hors saisie dans un champ, `1`–`5` choisissent une couleur (un vide : plus rien de
+  choisi), ← → ou `h` `l` la teinte (`key_hue_step`, 5° ; Maj : 1°), ↑ ↓ ou `k` `j` la
   saturation (Maj : la valeur ; `key_step`, 0,05 ; hjkl avec le profil vim seulement, retours du
   23/11/2026), `a` l'harmonie suivante (Maj : précédente ; après la
   dernière, aucune), `m` le mode, `w` la roue, `p` la pipette, Suppr vide la couleur

@@ -252,8 +252,11 @@ system one ("cold" measurements, experiments).
   held; on release nothing is selected: the next click fills the next slot (no "+" to
   click first, no duplicate). Five stored and nothing selected: the last one is changed.
   A click on a filled slot **selects it on purpose** (its swatch larger): the wheel, the
-  values and the eyedropper change it, as often as needed, until a click on a "+";
-  right-click "Clear" (the next ones move up). When opening, the current or last search, even of a single colour, the first one
+  values and the eyedropper change it, as often as needed, until a click on a "+", which
+  stores nothing (it duplicated the selected colour): nothing selected, the next empty
+  slot (its "+" stronger) is filled by the next click; right-click "Clear" (the next ones
+  move up). From the keyboard, the arrows likewise fill the next empty slot on the first
+  press, then change it. When opening, the current or last search, even of a single colour, the first one
   selected; nothing stored, "OK" takes the wheel's colour. Centred between two thin
   lines. **Live preview** (feedback of 2026-11-23): at each colour change in the box, the
   grid searches behind it, at most once per `[gui.colour_search] live_ms` (150 ms; 0: no
@@ -288,7 +291,7 @@ system one ("cold" measurements, experiments).
   brings back the previous search. **Keyboard** (feedback of 2026-11-23: the box was
   mouse-only, and behind it the arrows moved the grid's selection): the grid receives
   nothing while the box is open; outside a text field, `1`–`5` select a colour (an empty
-  one stores the current colour), ← → or `h` `l` the hue (`key_hue_step`, 5°; Shift: 1°),
+  one: nothing selected), ← → or `h` `l` the hue (`key_hue_step`, 5°; Shift: 1°),
   ↑ ↓ or `k` `j` the saturation (Shift: the value; `key_step`, 0.05; hjkl with the vim
   profile only, feedback of 2026-11-23), `a` the next harmony (Shift: previous;
   after the last, none), `m` the mode, `w` the wheel, `p` the eyedropper, Delete clears the

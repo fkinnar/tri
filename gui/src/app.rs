@@ -437,6 +437,12 @@ impl ColourDialog {
         }
     }
 
+    /// Plus rien de choisi : le prochain clic sur la roue remplira le premier vide.
+    fn deselect(&mut self) {
+        self.active = None;
+        self.sticky = false;
+    }
+
     /// Une couleur relevée (pipette) : comme un clic sur la roue.
     fn pick(&mut self, oklab: [f32; 3]) {
         self.edit_target();
@@ -6077,8 +6083,16 @@ impl TriApp {
                         hex = format!("#{r:02x}{g:02x}{b:02x}")
                     )
                 } else {
-                    empty_swatch(ui, rect.shrink(2.0), weak);
-                    t!("palette-swatch-store-tip")
+                    // Le prochain rempli (rien de choisi) : plus marqué, on voit où ira la
+                    // couleur du prochain clic sur la roue.
+                    let next = dialog.active.is_none() && i == dialog.slots.len();
+                    let color = if next {
+                        ui.visuals().strong_text_color()
+                    } else {
+                        weak
+                    };
+                    empty_swatch(ui, rect.shrink(2.0), color);
+                    t!("palette-colour-next-tip")
                 };
                 let response = response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -6087,7 +6101,10 @@ impl TriApp {
                     if filled {
                         dialog.load(i);
                     } else {
-                        dialog.store(max);
+                        // Un « + » ne range rien (retour du 23/11/2026 : il dupliquait la
+                        // couleur choisie) : plus rien de choisi, le prochain clic sur la
+                        // roue le remplit.
+                        dialog.deselect();
                     }
                 }
                 if filled {
@@ -6265,10 +6282,21 @@ impl TriApp {
                 }
                 if i < dialog.slots.len() {
                     dialog.load(i);
-                } else if i < dialog.max {
-                    dialog.store(dialog.max);
+                } else {
+                    dialog.deselect();
                 }
                 continue;
+            }
+            // Les flèches comme la roue : rien de choisi, elles remplissent le prochain
+            // emplacement vide et le gardent pour les appuis suivants.
+            let arrows = matches!(
+                key,
+                Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown
+            ) || (self.gui.profile != crate::actions::Profile::Classic
+                && matches!(key, Key::H | Key::J | Key::K | Key::L));
+            if arrows && dialog.active.is_none() && dialog.harmony.is_none() {
+                dialog.edit_target();
+                dialog.sticky = true;
             }
             let [h, s, v] = dialog.hsv;
             let hue_step = if shift { 1.0 } else { cs.key_hue_step };
@@ -32740,7 +32768,7 @@ mod tests {
         press(&mut h, Key::ArrowUp, Modifiers::NONE);
         h.run_steps(2);
         assert!(hsv(&h)[1] > before[1]);
-        // `1` : la couleur réglée rangée ; `h` : la première harmonie.
+        // Les flèches ont rempli le premier emplacement ; `1` le choisit.
         press(&mut h, Key::Num1, Modifiers::NONE);
         h.run_steps(2);
         assert_eq!(h.state().colour_dialog.as_ref().unwrap().slots.len(), 1);
@@ -32820,6 +32848,14 @@ mod tests {
         }
         assert_eq!(w.slots.len(), 2, "choisi exprès : retouché, pas d'ajout");
         assert_eq!(w.slot_rgb(0), [180, 0, 0]);
+        // Fini : un « + » ne duplique rien, le clic suivant sur la roue remplit le vide.
+        w.deselect();
+        assert_eq!(w.slots.len(), 2);
+        w.edit_target();
+        w.set_rgb([0, 200, 0]);
+        w.edit_done();
+        assert_eq!(w.slots.len(), 3);
+        assert_eq!(w.slot_rgb(2), [0, 200, 0]);
         // Une seule couleur cherchée : rangée elle aussi (retour du 23/11/2026).
         let one = ColourDialog::new(&[tri::palette::srgb_to_oklab([200, 30, 30])]);
         assert_eq!((one.slots.len(), one.active), (1, None));

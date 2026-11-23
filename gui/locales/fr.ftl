@@ -58,6 +58,7 @@ kw-core-filter-similar = semblable similaire ressemblance rafale série référe
 palette-colour-title = Couleur cherchée
 palette-colour-slot = Couleur { $n }
 palette-colour-slot-tip = { $hex } : la roue la règle (1 à 5 ; clic droit : vider)
+palette-colour-next-tip = Le prochain clic sur la roue (ou la pipette) remplit cet emplacement
 palette-colour-absolute = Absolue
 palette-colour-absolute-tip = Toutes les couleurs comptent pareil
 palette-colour-hierarchical = Hiérarchique
