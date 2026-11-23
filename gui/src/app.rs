@@ -21556,6 +21556,12 @@ impl TriApp {
                                 );
                             }
                         }
+                    });
+                    ui.add_space(16.0);
+                    ui.vertical(|ui| {
+                        ui.set_width(side * 0.6);
+                        // Les réglages à droite de l'image, au-dessus de la palette (retour
+                        // du 23/11/2026 : dessous, la boîte était déséquilibrée).
                         // Le cran : 0 l'image, 1 la moyenne, n couleurs.
                         let label = match k {
                             0 => t!("palette-view-original"),
@@ -21577,10 +21583,9 @@ impl TriApp {
                             .on_hover_text(t!("palette-view-false-tip"));
                         ui.checkbox(&mut perceived, t!("palette-view-perceived"))
                             .on_hover_text(t!("palette-view-perceived-tip"));
-                    });
-                    ui.add_space(16.0);
-                    ui.vertical(|ui| {
-                        ui.set_width(side * 0.6);
+                        ui.add_space(12.0);
+                        ui.separator();
+                        ui.add_space(8.0);
                         // Fausses couleurs : leur légende, alignée sur les vraies.
                         if !legend.is_empty()
                             && let Some(p) = &palette

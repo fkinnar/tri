@@ -319,7 +319,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   action `core.view.palette`, `g p` ; un clic sur la bande ou la roue de la palette du
   panneau l'ouvre aussi, comme l'histogramme ; idée de l'utilisateur du 23/11/2026) : une boîte déplaçable
   comme le grand histogramme, pour voir les **rapports de masses** de la photo en
-  surbrillance (l'image d'où vient sa palette) ; sous l'image, un curseur à crans : 0
+  surbrillance (l'image d'où vient sa palette) ; à droite de l'image (retour du
+  23/11/2026 : dessous, la boîte était déséquilibrée), un curseur à crans : 0
   l'image telle quelle, 1 sa couleur moyenne (la dominante), n l'image en n couleurs (chaque
   pixel remplacé par la plus proche, `palette::posterize`), jusqu'à `[gui.palette_view]
   max` (8) ; **fausses couleurs** au choix (`false_colours`, la plus présente d'abord, avec

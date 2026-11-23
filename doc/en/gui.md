@@ -304,7 +304,8 @@ system one ("cold" measurements, experiments).
   `core.view.palette`, `g p`; a click on the band or the wheel of the panel's palette
   opens it too, like the histogram; user's idea of 2026-11-23): a movable box like the large histogram,
   to see the **balance of masses** of the highlighted photo (the image its palette comes
-  from); under the image, a stepped slider: 0 the image as is, 1 its average colour (the
+  from); right of the image (feedback of 2026-11-23: below, the box was unbalanced), a
+  stepped slider: 0 the image as is, 1 its average colour (the
   dominant), n the image in n colours (each pixel replaced by the closest,
   `palette::posterize`), up to `[gui.palette_view] max` (8); optional **false colours**
   (`false_colours`, the most present first, with their legend next to the real ones); on
