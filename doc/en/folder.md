@@ -39,6 +39,9 @@ one "opens a folder".
   Unix (non-UTF-8 names), UTF-8 elsewhere. The interface reopens this folder when it is
   launched without an argument (`[gui] reopen_last`). `remembered(data)` returns it even
   if it is gone (drive unplugged: the interface says so, issue #66).
+  `remember_all_photos(data, on)` / `remembered_all_photos(data)`: one was in "All
+  photos" when quitting (`last-all-photos` file, feedback of 2026-11-23); the interface
+  reopens the last real folder then goes back there, the way back leading to it.
 
 - `subfolders(data)` / `remember_subfolders(data, yes)`: the "Subfolders" checkbox of
   the folders panel (2026-10-20), kept from one session to the next (`subfolders` file);

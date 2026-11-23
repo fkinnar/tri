@@ -39,6 +39,9 @@ manipule quand on « ouvre un dossier ».
   octets bruts sous Unix (noms non UTF-8), UTF-8 ailleurs. L'interface rouvre ce dossier
   quand elle est lancée sans argument (`[gui] reopen_last`). `remembered(données)` le
   rend même s'il a disparu (disque débranché : l'interface le dit, issue n° 66).
+  `remember_all_photos(données, oui)` / `remembered_all_photos(données)` : on était dans
+  « Toutes les photos » en quittant (fichier `last-all-photos`, retour du 23/11/2026) ;
+  l'interface rouvre le dernier vrai dossier puis y repasse, le retour menant à lui.
 
 - `subfolders(données)` / `remember_subfolders(données, oui)` : la case « Sous-dossiers »
   du panneau des dossiers (20/10/2026), gardée d'une session à l'autre (fichier

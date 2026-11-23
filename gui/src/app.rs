@@ -1433,6 +1433,9 @@ pub struct TriApp {
     opening: Option<Opening>,
     /// « Toutes les photos » (#561) : dossier d'où l'on y est venu (Échap y ramène).
     all_photos_from: Option<PathBuf>,
+    /// Au lancement, on était dans « Toutes les photos » en quittant : on y repasse une
+    /// fois le dernier vrai dossier ouvert (le retour y ramène).
+    reopen_all_photos: bool,
     /// Empreintes de similitude de « Toutes les photos », lues d'un coup dans l'index
     /// (« semblables » partout sans relire le cache photo par photo).
     all_photos_signatures: Option<mpsc::Receiver<Vec<(PathBuf, tri::similarity::Signature)>>>,
@@ -2442,6 +2445,11 @@ impl TriApp {
         let remembered = (dir.is_none() && gui.reopen_last)
             .then(|| tri::folder::remembered(data.as_deref()?))
             .flatten();
+        let reopen_all_photos = dir.is_none()
+            && gui.reopen_last
+            && data
+                .as_deref()
+                .is_some_and(tri::folder::remembered_all_photos);
         let start_dir = dir.or(remembered.clone());
         let (folder, error, missing_last) = (Folder::default(), None, None);
         let subfolders = gui.folders.subfolders;
@@ -2659,6 +2667,7 @@ impl TriApp {
             neighbour_tried: cfg!(test),
             opening: None,
             all_photos_from: None,
+            reopen_all_photos,
             all_photos_last: None,
             all_photos_signatures: None,
             missing_dirs: HashMap::new(),
@@ -3403,6 +3412,22 @@ impl TriApp {
     /// « Toutes les photos » (#561) : y va en retenant le dossier d'où l'on vient ; de
     /// là, y retourne (bascule, retour du 22/11/2026). Les filtres restent posés : un
     /// filtre posé ici cherche ensuite partout.
+    /// Au lancement, « Toutes les photos » où l'on était en quittant : une fois le dernier
+    /// vrai dossier ouvert (ou sans dossier retenu), le moteur prêt.
+    fn reopen_all_photos_pending(&mut self) {
+        if !self.reopen_all_photos
+            || self.engine.is_none()
+            || self.loading.is_some()
+            || self.opening.is_some()
+        {
+            return;
+        }
+        self.reopen_all_photos = false;
+        if !tri::folder::is_all_photos(&self.folder.dir) {
+            self.toggle_all_photos();
+        }
+    }
+
     fn toggle_all_photos(&mut self) {
         if tri::folder::is_all_photos(&self.folder.dir) {
             match self.all_photos_from.take() {
@@ -4165,10 +4190,14 @@ impl TriApp {
                     self.all_photos_from = None;
                 }
                 self.missing_dirs.clear();
-                // Mémorisé pour le prochain lancement (sans conséquence en cas d'échec) ;
-                // pas « Toutes les photos ».
-                if let Some(data) = self.settings.data_dir().filter(|_| !all_photos) {
-                    let _ = tri::folder::remember(&data, &folder.dir);
+                // Mémorisé pour le prochain lancement (sans conséquence en cas d'échec) :
+                // le dernier vrai dossier, et si l'on est dans « Toutes les photos »
+                // (retour du 23/11/2026 : on n'y revenait pas).
+                if let Some(data) = self.settings.data_dir() {
+                    if !all_photos {
+                        let _ = tri::folder::remember(&data, &folder.dir);
+                    }
+                    let _ = tri::folder::remember_all_photos(&data, all_photos);
                 }
                 self.chosen = chosen;
                 self.dev_preferred = dev_preferred;
@@ -13089,6 +13118,7 @@ impl TriApp {
         self.set_palette_source(wanted);
         self.try_reference_filter();
         self.try_similar_filter();
+        self.reopen_all_photos_pending();
         self.select_pending();
         self.poll_all_photos_signatures();
         self.poll_locating();
@@ -38226,6 +38256,62 @@ mod tests {
                 .stars,
             3
         );
+    }
+
+    #[test]
+    fn all_photos_is_reopened_where_one_left_it() {
+        // Retour du 23/11/2026 : quitté dans « Toutes les photos », `tri` se rouvrait sur le
+        // dernier vrai dossier. Il y repasse, et le retour mène à ce dossier.
+        let dir = tempfile::tempdir().unwrap();
+        let photos = dir.path().join("séance");
+        std::fs::create_dir(&photos).unwrap();
+        image::RgbImage::new(8, 8)
+            .save(photos.join("a.jpg"))
+            .unwrap();
+        let settings = || {
+            let mut s = AppSettings::default();
+            s.cache.dir = Some(dir.path().join("cache"));
+            s.data.dir = Some(dir.path().join("data"));
+            s.places.watch_ms = 0;
+            s.watch.interval_ms = 0;
+            s.gui.reopen_last = true;
+            s
+        };
+        let (s, p) = (settings(), photos.clone());
+        let mut first = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(Some(p), s, None));
+        run_until(&mut first, |app| {
+            app.loading.is_none() && app.engine.is_some()
+        });
+        first.state_mut().toggle_all_photos();
+        run_until(&mut first, |app| {
+            tri::folder::is_all_photos(&app.folder.dir) && app.opening.is_none()
+        });
+        drop(first);
+        let s = settings();
+        let mut again = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(None, s, None));
+        run_until(&mut again, |app| {
+            tri::folder::is_all_photos(&app.folder.dir) && app.opening.is_none()
+        });
+        assert_eq!(
+            again.state().all_photos_from.as_deref(),
+            Some(photos.as_path())
+        );
+        // En revenir, puis relancer : le vrai dossier.
+        again.state_mut().toggle_all_photos();
+        run_until(&mut again, |app| {
+            app.folder.dir == photos && app.opening.is_none()
+        });
+        drop(again);
+        let s = settings();
+        let third = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(None, s, None));
+        assert_eq!(third.state().folder.dir, photos);
+        assert!(!third.state().reopen_all_photos);
     }
 
     #[test]

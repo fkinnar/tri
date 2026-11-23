@@ -492,6 +492,27 @@ pub fn remember(data: &Path, dir: &Path) -> io::Result<()> {
     std::fs::write(data.join("last-folder"), path_bytes(dir))
 }
 
+/// Retient (ou oublie) qu'on était dans « Toutes les photos » en quittant (retour du
+/// 23/11/2026 : `tri` se rouvrait sur le dernier vrai dossier) ; le dernier vrai dossier
+/// reste celui de [`remember`], pour en revenir.
+pub fn remember_all_photos(data: &Path, on: bool) -> io::Result<()> {
+    let path = data.join("last-all-photos");
+    if on {
+        std::fs::create_dir_all(data)?;
+        std::fs::write(path, b"1")
+    } else {
+        match std::fs::remove_file(path) {
+            Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+            _ => Ok(()),
+        }
+    }
+}
+
+/// Vrai si l'on était dans « Toutes les photos » en quittant ([`remember_all_photos`]).
+pub fn remembered_all_photos(data: &Path) -> bool {
+    data.join("last-all-photos").is_file()
+}
+
 /// Dernier dossier ouvert ([`remember`]) dans le dossier de données `data`, s'il existe
 /// toujours.
 pub fn last(data: &Path) -> Option<PathBuf> {
@@ -692,6 +713,17 @@ mod tests {
         folder.notes.adopt(loaded.notes);
         assert_eq!(folder.notes.notes(&image).stars, 4);
         assert!(!folder.notes.is_pending());
+    }
+
+    #[test]
+    fn all_photos_is_remembered_beside_the_last_folder() {
+        let data = tempfile::tempdir().unwrap();
+        assert!(!remembered_all_photos(data.path()));
+        remember_all_photos(data.path(), true).unwrap();
+        assert!(remembered_all_photos(data.path()));
+        remember_all_photos(data.path(), false).unwrap();
+        remember_all_photos(data.path(), false).unwrap();
+        assert!(!remembered_all_photos(data.path()));
     }
 
     #[test]
