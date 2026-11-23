@@ -333,7 +333,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   développées, inversion), le tri et, depuis le 31/10/2026, le **rendu des vignettes**
   (`f d` : JPEG boîtier, couverture, un logiciel, LibRaw ; `[gui.grid] render` est la
   valeur d'un dossier jamais réglé, pas celle du dossier précédent : on trie en JPEG
-  boîtier, on revient sur un dossier traité en couverture) et, depuis le 11/11/2026,
+  boîtier, on revient sur un dossier traité en couverture ; au lancement, le dossier rouvert
+  garde son rendu d'un logiciel, vérifié une fois les logiciels cherchés : il retombait
+  sur le JPEG boîtier, vidéo du 23/11/2026) et, depuis le 11/11/2026,
   **« Empiler automatiquement »** (`[gui.grid] stacks` pour un dossier jamais réglé), les
   logiciels du filtre « développées », la case **« Sous-dossiers »** (`[gui.folders]
   subfolders` pour un dossier jamais réglé), l'**image courante** et les **piles
