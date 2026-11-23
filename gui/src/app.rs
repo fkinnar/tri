@@ -7538,22 +7538,8 @@ impl TriApp {
             egui::WidgetInfo::labeled(egui::Role::Button, true, t!("palette-band"))
         });
         let rects = crate::palette_view::draw_band(ui.painter(), band, palette);
-        // La couleur cherchée, entourée.
-        if let Some(c) = &self.palette_colour {
-            for (r, s) in rects.iter().zip(&palette.swatches) {
-                if c.colours
-                    .iter()
-                    .any(|&c| tri::palette::weighted_distance(s.oklab, c, 1.0) < 0.005)
-                {
-                    ui.painter().rect_stroke(
-                        r.shrink(1.0),
-                        0.0,
-                        egui::Stroke::new(2.0, ui.visuals().strong_text_color()),
-                        egui::StrokeKind::Inside,
-                    );
-                }
-            }
-        }
+        // Plus de cadre autour des couleurs cherchées (retour du 24/11/2026) : en partant
+        // des couleurs de la photo (les jumelles), toute la bande s'encadrait.
         let pos = response.hover_pos()?;
         let k = rects.iter().position(|r| r.contains(pos))?;
         let swatch = palette.swatches[k];
