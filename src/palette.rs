@@ -205,6 +205,9 @@ pub struct PaletteSettings {
     /// Contient ces couleurs, recherche hiérarchique : poids de la proximité (distance
     /// rapportée à la tolérance) face à la présence (part de l'image), qui décide d'abord.
     pub colour_proximity: f32,
+    /// Couleur moyenne : poids de la clarté face à la teinte et la saturation (comptées
+    /// `chroma_weight` fois) ; petit, une photo sombre à dominante bleue reste bleue.
+    pub mean_lightness: f32,
 }
 
 impl Default for PaletteSettings {
@@ -229,6 +232,7 @@ impl Default for PaletteSettings {
             mono_hue_spread: 15.0,
             colour_hierarchy: 0.4,
             colour_proximity: 0.25,
+            mean_lightness: 0.3,
         }
     }
 }
@@ -469,6 +473,22 @@ impl Palette {
         hue_range(&mut hues) <= mono.hue_spread
     }
 
+    /// Couleur moyenne de l'image (OKLab) : celles de la palette, pondérées par leur part ;
+    /// `None` sans couleur.
+    pub fn mean(&self) -> Option<[f32; 3]> {
+        let total: f32 = self.swatches.iter().map(|s| s.share).sum();
+        if total <= 0.0 {
+            return None;
+        }
+        let mut m = [0.0; 3];
+        for s in &self.swatches {
+            for (k, v) in m.iter_mut().enumerate() {
+                *v += s.oklab[k] * s.share / total;
+            }
+        }
+        Some(m)
+    }
+
     /// « Contient ces couleurs » (#492) : coût de la palette face à `query`, plus petit
     /// pour une image qui répond mieux ; `None` si l'une des couleurs manque (plus loin que
     /// la tolérance, voir [`Palette::nearest`]).
@@ -483,6 +503,17 @@ impl Palette {
         chroma_weight: f32,
         min_share: f32,
     ) -> Option<f32> {
+        // Couleur moyenne : la teinte et la saturation surtout, la clarté peu (une photo à
+        // dominante bleue mais sombre reste « bleue en moyenne »).
+        if let Some(lightness) = query.mean {
+            let wanted = *query.colours.first()?;
+            let m = self.mean()?;
+            let d = ((lightness * (m[0] - wanted[0])).powi(2)
+                + (chroma_weight * (m[1] - wanted[1])).powi(2)
+                + (chroma_weight * (m[2] - wanted[2])).powi(2))
+            .sqrt();
+            return (d <= query.radius).then_some(d);
+        }
         let (mut sum, mut weights, mut weight) = (0.0, 0.0, 1.0);
         for &oklab in &query.colours {
             let d = self.nearest(oklab, chroma_weight, min_share)?;
@@ -753,6 +784,10 @@ pub struct ColourQuery {
     pub hierarchy: Option<f32>,
     /// Recherche hiérarchique : poids de la proximité face à la présence.
     pub proximity: f32,
+    /// Recherche de la couleur **moyenne** (#492, 23/11/2026) : `Some(poids de la
+    /// clarté)`, la première couleur seule comparée à la moyenne de l'image (voir
+    /// [`Palette::mean`]) ; `None` sinon.
+    pub mean: Option<f32>,
 }
 
 /// Seuils de « monochrome » (voir [`Palette::is_monochrome`]).
@@ -1419,6 +1454,41 @@ mod tests {
     }
 
     #[test]
+    fn the_average_colour_finds_the_colour_cast_only() {
+        // Idée de l'utilisateur (23/11/2026) : une photo à dominante bleue avec un peu de
+        // peau sort d'une recherche de la peau ; en couleur moyenne, non.
+        let s = PaletteSettings::default();
+        let (blue, skin) = ([40u8, 70, 150], [210u8, 160, 130]);
+        let blue_cast = extract(&bands(&[(blue, 85), (skin, 15)]), &s);
+        let portrait = extract(&bands(&[(skin, 85), (blue, 15)]), &s);
+        let query = |c: [u8; 3], mean| ColourQuery {
+            colours: vec![working_to_oklab(c)],
+            radius: s.colour_radius,
+            hierarchy: None,
+            proximity: s.colour_proximity,
+            mean,
+        };
+        let cost =
+            |p: &Palette, q: &ColourQuery| p.colours_cost(q, s.chroma_weight, s.colour_coverage);
+        let ordinary = query(skin, None);
+        assert!(cost(&blue_cast, &ordinary).is_some() && cost(&portrait, &ordinary).is_some());
+        let mean = Some(s.mean_lightness);
+        assert!(
+            cost(&blue_cast, &query(skin, mean)).is_none(),
+            "pas à dominante chair"
+        );
+        assert!(cost(&portrait, &query(skin, mean)).is_some());
+        assert!(cost(&blue_cast, &query(blue, mean)).is_some());
+        assert!(cost(&portrait, &query(blue, mean)).is_none());
+        // Plus sombre, la même dominante (la clarté compte peu ; très sombre, un bleu est
+        // aussi moins saturé en OKLab : la tolérance s'élargit au curseur).
+        let dark = extract(&bands(&[([30u8, 50, 110], 100)]), &s);
+        assert!(cost(&dark, &query([45u8, 75, 150], mean)).is_some());
+        // La recherche ordinaire, qui compte la clarté pleinement, l'écarte.
+        assert!(cost(&dark, &query([45u8, 75, 150], None)).is_none());
+    }
+
+    #[test]
     fn several_colours_are_all_required() {
         // #492 : plusieurs couleurs cherchées ensemble ; une seule qui manque écarte.
         let s = PaletteSettings::default();
@@ -1429,6 +1499,7 @@ mod tests {
             radius: s.colour_radius,
             hierarchy,
             proximity: s.colour_proximity,
+            mean: None,
         };
         let cost = |q: &ColourQuery| palette.colours_cost(q, s.chroma_weight, s.colour_coverage);
         assert!(cost(&query(&[red, blue], None)).is_some());
@@ -1456,6 +1527,7 @@ mod tests {
             radius: s.colour_radius,
             hierarchy,
             proximity: s.colour_proximity,
+            mean: None,
         };
         let cost = |p: &Palette, q: &ColourQuery| {
             p.colours_cost(q, s.chroma_weight, s.colour_coverage)

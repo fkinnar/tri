@@ -131,7 +131,8 @@ one light, not one moment: fully left, everything joins); an unknown palette cut
 `tri <folder> --palette [--source camera|raw|darktable|…]`: each image, its `#rrggbb`
 colours and their share, stored in the cache as in the interface. Finished renders: only
 those already made by the interface (no software launched from the command line). With
-`--colours "#d0a080,#6a7a80"` (the most important first) and `--hierarchical`: then the
+`--colours "#d0a080,#6a7a80"` (the most important first) and `--hierarchical` (or `--mean`,
+the average colour, `Palette::mean`, compared with the first one): then the
 images that contain all these colours, best first, with their cost and the share of each
 colour (tolerance: `--threshold`, otherwise `colour_radius`).
 

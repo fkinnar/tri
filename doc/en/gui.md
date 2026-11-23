@@ -259,7 +259,15 @@ system one ("cold" measurements, experiments).
   times the previous one, from its presence in the image, proximity breaking ties: the image
   where the first colour covers the most comes first; two searches with the same colours
   in another order keep the same images, in another order; requiring an order of areas, considered, would
-  have emptied the results); the choice is written to `[gui.colour_search] hierarchical`.
+  have emptied the results); the choice is written to `[gui.colour_search] mode`.
+  Third mode, **Average** (user's idea, 2026-11-23): the average colour of each image (its
+  palette's colours, weighted by their share) compared with the first colour, mostly hue
+  and saturation (lightness counted `[palette] mean_lightness` times): photos with a cast
+  of that colour, not those that contain a little of it (a blue photo with a little skin
+  comes out of a skin search, not of an average skin search); a two-colour photo has a
+  grey average and only comes out of an ordinary search. The other slots stay in place,
+  greyed and inert. Measured on 116 photos of four sessions: the 6 blue-cast photos
+  between 0.07 and 0.09 from a blue, the next ones at 0.17.
   A new search (colours, mode, similar palettes) selects the best answer and brings the
   grid back to the start (feedback of 2026-11-23: the previous selection stayed selected
   and the grid scrolled to it, in the middle of the results; the best ones, above, were not

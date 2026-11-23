@@ -1143,15 +1143,47 @@ impl Default for CompareSettings {
     }
 }
 
+/// Mode de la recherche de couleurs (#492).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ColourMode {
+    /// Toutes les couleurs comptent pareil.
+    #[default]
+    Absolute,
+    /// La première compte le plus, puis la deuxième… (`[palette] colour_hierarchy`).
+    Hierarchical,
+    /// La couleur moyenne de l'image comparée à la première couleur (idée de
+    /// l'utilisateur, 23/11/2026 : isoler les photos « bleues en moyenne », qu'une
+    /// recherche ordinaire de la peau retrouve dès qu'il y en a un peu).
+    Mean,
+}
+
+impl ColourMode {
+    /// Les modes, dans l'ordre de la boîte.
+    pub const ALL: [ColourMode; 3] = [
+        ColourMode::Absolute,
+        ColourMode::Hierarchical,
+        ColourMode::Mean,
+    ];
+
+    /// Identifiant dans la configuration.
+    pub fn id(self) -> &'static str {
+        match self {
+            ColourMode::Absolute => "absolute",
+            ColourMode::Hierarchical => "hierarchical",
+            ColourMode::Mean => "mean",
+        }
+    }
+}
+
 /// Section `[gui.colour_search]` : boîte « Couleur cherchée » (#492).
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ColourSearchSettings {
     /// Couleurs cherchées ensemble, au plus.
     pub max: usize,
-    /// Recherche hiérarchique (la 1ʳᵉ couleur compte le plus) plutôt qu'absolue (toutes
-    /// pareil) ; changée aussi dans la boîte, et écrite ici.
-    pub hierarchical: bool,
+    /// Mode de recherche ; changé aussi dans la boîte, et écrit ici.
+    pub mode: ColourMode,
     /// Pastilles des couleurs franches (`#rrggbb`) : studio, lumières colorées.
     pub pure: Vec<String>,
     /// Pastilles des couleurs « photo » : ciel, feuillage, peau…
@@ -1167,7 +1199,7 @@ impl Default for ColourSearchSettings {
         let hex = |list: &[&str]| list.iter().map(|s| s.to_string()).collect();
         Self {
             max: 5,
-            hierarchical: false,
+            mode: ColourMode::Absolute,
             pure: hex(&[
                 "#ff0000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#ff00ff",
             ]),

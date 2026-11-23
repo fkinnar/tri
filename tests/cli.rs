@@ -738,6 +738,14 @@ fn palettes_can_be_searched_by_several_colours() {
         "--hierarchical".as_ref(),
     ])));
     assert!(out.contains("1 images contain these colours"), "{out}");
+    let out = stdout(&ok(env.run([
+        arg(&photos),
+        "--palette".as_ref(),
+        "--colours".as_ref(),
+        "#00ff00".as_ref(),
+        "--mean".as_ref(),
+    ])));
+    assert!(out.contains("0 images contain these colours"), "{out}");
     let out = failed(env.run([
         arg(&photos),
         "--palette".as_ref(),

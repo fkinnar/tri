@@ -155,6 +155,8 @@ struct Args {
     /// `--hierarchical`.
     colours: Vec<[u8; 3]>,
     hierarchical: bool,
+    /// `--mean` : la couleur moyenne de chaque image comparée à la première couleur.
+    mean: bool,
     /// Calculs choisis (`--compute previews,palette-raw…`, #555), et `--recreate`.
     compute: Vec<tri::compute::Kind>,
     recreate: bool,
@@ -499,6 +501,7 @@ fn parse() -> AnyResult<Args> {
                 }
             }
             "--hierarchical" => args.hierarchical = true,
+            "--mean" => args.mean = true,
             "--compute" => {
                 let text = value()?;
                 for part in text.split(',').filter(|p| !p.trim().is_empty()) {
@@ -2326,6 +2329,7 @@ fn run() -> AnyResult<()> {
                 .hierarchical
                 .then_some(settings.palette.colour_hierarchy),
             proximity: settings.palette.colour_proximity,
+            mean: args.mean.then_some(settings.palette.mean_lightness),
         });
         return palettes(
             &settings,

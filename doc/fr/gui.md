@@ -271,7 +271,15 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   devant ; deux recherches aux mêmes couleurs dans un autre ordre gardent les mêmes images,
   dans un autre ordre ; un ordre exigé des
   surfaces, essayé en idée, aurait vidé les résultats) ; le choix est écrit dans
-  `[gui.colour_search] hierarchical`. Une nouvelle recherche (couleurs, mode, palettes
+  `[gui.colour_search] mode`. Troisième mode, **Moyenne** (idée de l'utilisateur,
+  23/11/2026) : la couleur moyenne de chaque image (celles de sa palette, pondérées par leur
+  part) comparée à la première couleur, la teinte et la saturation surtout (clarté comptée
+  `[palette] mean_lightness` fois) : les photos à dominante de cette couleur, pas celles
+  qui en ont un peu (une photo bleue avec un peu de peau sort d'une recherche de la peau,
+  pas d'une recherche de la peau en moyenne) ; une photo bicolore a une moyenne grise et
+  ne sort qu'en recherche ordinaire. Les autres emplacements restent à leur place, grisés
+  et inertes. Mesuré sur 116 photos de quatre séances : les 6 photos à dominante bleue
+  entre 0,07 et 0,09 d'un bleu, les suivantes à 0,17. Une nouvelle recherche (couleurs, mode, palettes
   proches) choisit la meilleure réponse et remet la grille au début (retour du 23/11/2026 :
   la sélection d'avant restait choisie et la grille défilait jusqu'à elle, au milieu des
   résultats ; les meilleurs, au-dessus, ne se voyaient pas). Sous les valeurs, trois rangées de **pastilles**, sans titres (ça se voit) : franches

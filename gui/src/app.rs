@@ -5334,15 +5334,15 @@ impl TriApp {
         // Plusieurs couleurs (#492) : chacune doit y être ; l'ordre selon la recherche,
         // absolue ou hiérarchique. Le coût d'une recherche hiérarchique dépasse la
         // tolérance (la présence s'y ajoute) : seul le manque d'une couleur écarte.
+        use crate::settings::ColourMode;
+        let mode = self.gui.colour_search.mode;
         let query = colour.map(|c| tri::palette::ColourQuery {
             colours: c.colours.clone(),
             radius: c.radius,
-            hierarchy: self
-                .gui
-                .colour_search
-                .hierarchical
+            hierarchy: (mode == ColourMode::Hierarchical)
                 .then_some(self.settings.palette.colour_hierarchy),
             proximity: self.settings.palette.colour_proximity,
+            mean: (mode == ColourMode::Mean).then_some(self.settings.palette.mean_lightness),
         });
         let threshold = match &query {
             Some(q) if q.hierarchy.is_some() => f32::INFINITY,
@@ -5517,7 +5517,7 @@ impl TriApp {
         let (mut search, mut cancel, mut eyedropper) = (false, false, false);
         // Pastilles libres changées, recherche hiérarchique basculée : écrites après.
         let mut own: Option<Vec<String>> = None;
-        let mut hierarchical: Option<bool> = None;
+        let mut mode: Option<crate::settings::ColourMode> = None;
         let title = t!("palette-colour-title");
         let modal = modal_at("palette_colour_dialog", CENTRED)
             .title(title)
@@ -5525,7 +5525,7 @@ impl TriApp {
             .show(ctx, |ui| {
                 // Les couleurs cherchées, en haut, et le mode de recherche (#492).
                 ui.add_space(5.0);
-                self.colour_slots_row(ui, &mut dialog, &mut hierarchical);
+                self.colour_slots_row(ui, &mut dialog, &mut mode);
                 // De l'air et un trait fin avant la roue, la rangée centrée entre les deux
                 // traits (retours du 23/11/2026).
                 ui.add_space(4.0);
@@ -5679,8 +5679,8 @@ impl TriApp {
         if let Some(own) = own {
             self.set_own_swatches(own);
         }
-        if let Some(on) = hierarchical {
-            self.set_colour_hierarchy(on);
+        if let Some(mode) = mode {
+            self.set_colour_mode(mode);
         }
         if search {
             self.colour_dialog = None;
@@ -5696,20 +5696,37 @@ impl TriApp {
     /// Rangée des couleurs cherchées de la boîte (#492), des pastilles comme les autres
     /// (retours du 23/11/2026) : `[gui.colour_search] max` emplacements ; un clic sur un
     /// vide y range la couleur réglée, sur un plein le choisit (la roue le règle), clic
-    /// droit « Vider » ; puis le mode, absolu ou hiérarchique (`hierarchical` : basculé).
+    /// droit « Vider » ; puis le mode, absolu, hiérarchique ou moyen (`mode` : changé).
+    /// En couleur moyenne, seule la première compte : les autres grisées, à leur place.
     fn colour_slots_row(
         &self,
         ui: &mut Ui,
         dialog: &mut ColourDialog,
-        hierarchical: &mut Option<bool>,
+        mode: &mut Option<crate::settings::ColourMode>,
     ) {
         let max = self.gui.colour_search.max.max(1);
         let weak = ui.visuals().weak_text_color();
+        let mean = self.gui.colour_search.mode == crate::settings::ColourMode::Mean;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
             for i in 0..max {
-                let (rect, response) = ui.allocate_exact_size(SWATCH * 1.25, Sense::click());
+                // En couleur moyenne, la première seule : les autres grisées, inertes.
+                let off = mean && i > 0;
+                let sense = if off { Sense::hover() } else { Sense::click() };
+                let (rect, response) = ui.allocate_exact_size(SWATCH * 1.25, sense);
                 let filled = i < dialog.slots.len();
+                if off {
+                    match filled {
+                        true => {
+                            let [r, g, b] = dialog.slot_rgb(i);
+                            let c = Color32::from_rgb(r, g, b).gamma_multiply(0.25);
+                            ui.painter().rect_filled(rect, 3.0, c);
+                        }
+                        false => empty_swatch(ui, rect, weak.gamma_multiply(0.4)),
+                    }
+                    response.on_hover_text(t!("palette-colour-mean-only"));
+                    continue;
+                }
                 let name = if filled {
                     t!("palette-colour-slot", n = i + 1)
                 } else {
@@ -5760,23 +5777,31 @@ impl TriApp {
                 }
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let on = self.gui.colour_search.hierarchical;
-                // De droite à gauche : « Hiérarchique » puis « Absolue ».
-                if ui
-                    .selectable_label(on, t!("palette-colour-hierarchical"))
-                    .on_hover_text(t!("palette-colour-hierarchical-tip"))
-                    .clicked()
-                    && !on
-                {
-                    *hierarchical = Some(true);
-                }
-                if ui
-                    .selectable_label(!on, t!("palette-colour-absolute"))
-                    .on_hover_text(t!("palette-colour-absolute-tip"))
-                    .clicked()
-                    && on
-                {
-                    *hierarchical = Some(false);
+                use crate::settings::ColourMode;
+                let current = self.gui.colour_search.mode;
+                // De droite à gauche : « Moyenne », « Hiérarchique », « Absolue ».
+                for m in ColourMode::ALL.into_iter().rev() {
+                    let (name, tip) = match m {
+                        ColourMode::Absolute => (
+                            t!("palette-colour-absolute"),
+                            t!("palette-colour-absolute-tip"),
+                        ),
+                        ColourMode::Hierarchical => (
+                            t!("palette-colour-hierarchical"),
+                            t!("palette-colour-hierarchical-tip"),
+                        ),
+                        ColourMode::Mean => {
+                            (t!("palette-colour-mean"), t!("palette-colour-mean-tip"))
+                        }
+                    };
+                    if ui
+                        .selectable_label(current == m, name)
+                        .on_hover_text(tip)
+                        .clicked()
+                        && current != m
+                    {
+                        *mode = Some(m);
+                    }
                 }
             });
         });
@@ -5875,14 +5900,14 @@ impl TriApp {
         }
     }
 
-    /// Recherche de couleurs hiérarchique ou absolue (`[gui.colour_search] hierarchical`),
-    /// la recherche en cours refiltrée.
-    fn set_colour_hierarchy(&mut self, on: bool) {
-        self.gui.colour_search.hierarchical = on;
+    /// Mode de la recherche de couleurs (`[gui.colour_search] mode`), la recherche en
+    /// cours refiltrée.
+    fn set_colour_mode(&mut self, mode: crate::settings::ColourMode) {
+        self.gui.colour_search.mode = mode;
         self.write_setting(
             "gui.colour_search",
-            "hierarchical",
-            tri::config_edit::Value::Bool(on),
+            "mode",
+            tri::config_edit::Value::Str(mode.id().to_string()),
         );
         if self.palette_colour.is_some() {
             self.apply_filter();
@@ -31767,11 +31792,12 @@ mod tests {
         let config = dir.path().join("config.toml");
         std::fs::write(&config, "").unwrap();
         h.state_mut().config_path = Some(config.clone());
-        h.state_mut().set_colour_hierarchy(true);
+        h.state_mut()
+            .set_colour_mode(crate::settings::ColourMode::Hierarchical);
         assert!(
             std::fs::read_to_string(&config)
                 .unwrap()
-                .contains("hierarchical = true")
+                .contains("mode = \"hierarchical\"")
         );
         // La sélection d'avant (en bas de la liste) ne retient pas la grille : la meilleure
         // réponse choisie, la grille au début (retour du 23/11/2026).
@@ -31785,7 +31811,8 @@ mod tests {
         h.run_steps(3);
         assert_eq!(names(&h), ["a_blue_mostly.jpg", "c_red_mostly.jpg"]);
         // Absolue : les deux images gardées, quel que soit l'ordre des couleurs.
-        h.state_mut().set_colour_hierarchy(false);
+        h.state_mut()
+            .set_colour_mode(crate::settings::ColourMode::Absolute);
         h.run_steps(3);
         let mut got = names(&h);
         got.sort();
@@ -31797,7 +31824,8 @@ mod tests {
         // « Proximité » ; un autre tri garde les mêmes images, dans son ordre, et reste
         // après la recherche.
         use tri::sort::{Order, SortKey};
-        h.state_mut().set_colour_hierarchy(true);
+        h.state_mut()
+            .set_colour_mode(crate::settings::ColourMode::Hierarchical);
         h.state_mut().set_palette_colours(Some(vec![blue, red]));
         h.run_steps(3);
         assert_eq!(h.state().order.key, SortKey::Proximity);
@@ -31823,6 +31851,26 @@ mod tests {
             h.state().saved_order().key,
             SortKey::Modified,
             "jamais retenu"
+        );
+        // Couleur moyenne : la première couleur seule, comparée à la moyenne de l'image ;
+        // le mode écrit dans la configuration.
+        h.state_mut()
+            .set_colour_mode(crate::settings::ColourMode::Mean);
+        assert!(
+            std::fs::read_to_string(&config)
+                .unwrap()
+                .contains("mode = \"mean\"")
+        );
+        h.state_mut().set_palette_colours(Some(vec![red, blue]));
+        h.run_steps(3);
+        assert_eq!(
+            names(&h).first().map(String::as_str),
+            Some("b_red_only.jpg")
+        );
+        assert!(!names(&h).contains(&"d_green.jpg".to_string()));
+        assert!(
+            !names(&h).contains(&"a_blue_mostly.jpg".to_string()),
+            "pas rouge en moyenne"
         );
         // « Proximité » choisie sans recherche : refusée.
         h.state_mut().set_palette_colours(None);

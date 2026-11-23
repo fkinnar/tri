@@ -654,6 +654,11 @@ colour_hierarchy = 0.4
 # The share of the image near each colour decides first; proximity (distance relative to
 # the tolerance, 0.25 times) breaks ties.
 colour_proximity = 0.25
+# Average colour: weight of lightness against hue and saturation.
+#
+# Search by the average colour of an image: small, a dark photo with a blue cast stays
+# "blue on average" against a light blue.
+mean_lightness = 0.3
 
 [index]
 # Record the palettes in the search index of all folders.
@@ -1327,11 +1332,13 @@ limit_place = "center"
 [gui.colour_search]
 # Colours searched together, at most.
 max = 5
-# Hierarchical search: the 1st colour counts the most.
+# Search mode: absolute, hierarchical or average colour.
 #
-# Contains these colours: false, they all count the same (absolute); true, the 1st counts
-# the most, then the 2nd… ([palette] colour_hierarchy). Also changed in the dialog.
-hierarchical = false
+# Contains these colours: "absolute", they all count the same; "hierarchical", the first
+# counts the most, then the second… ([palette] colour_hierarchy); "mean", the average colour
+# of the image compared with the first one ([palette] mean_lightness). Also changed in the
+# dialog.
+mode = "absolute"
 # Swatches of pure colours.
 pure = ["#ff0000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#ff00ff"]
 # Swatches of "photo" colours.

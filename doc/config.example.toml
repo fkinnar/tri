@@ -657,6 +657,11 @@ colour_hierarchy = 0.4
 # La part de l'image proche de chaque couleur décide d'abord ; la proximité (distance
 # rapportée à la tolérance, 0,25 fois) départage.
 colour_proximity = 0.25
+# Couleur moyenne : poids de la clarté face à la teinte et la saturation.
+#
+# Recherche de la couleur moyenne d'une image : petit, une photo sombre à dominante bleue
+# reste « bleue en moyenne » face à un bleu clair.
+mean_lightness = 0.3
 
 [index]
 # Noter les palettes dans l'index de recherche de tous les dossiers.
@@ -1340,11 +1345,13 @@ limit_place = "center"
 [gui.colour_search]
 # Couleurs cherchées ensemble, au plus.
 max = 5
-# Recherche hiérarchique : la première couleur compte le plus.
+# Mode de recherche : absolue, hiérarchique ou couleur moyenne.
 #
-# Contient ces couleurs : false, toutes comptent pareil (absolue) ; true, la première compte
-# le plus, puis la deuxième… ([palette] colour_hierarchy). Changé aussi dans la boîte.
-hierarchical = false
+# Contient ces couleurs : "absolute", toutes comptent pareil ; "hierarchical", la première
+# compte le plus, puis la deuxième… ([palette] colour_hierarchy) ; "mean", la couleur
+# moyenne de l'image comparée à la première ([palette] mean_lightness). Changé aussi dans la
+# boîte.
+mode = "absolute"
 # Pastilles des couleurs franches.
 pure = ["#ff0000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#ff00ff"]
 # Pastilles des couleurs « photo ».

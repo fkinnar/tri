@@ -137,7 +137,8 @@ le JPEG boîtier.
 `tri <dossier> --palette [--source camera|raw|darktable|…]` : chaque image, ses couleurs
 `#rrggbb` et leur part, rangées dans le cache comme dans l'interface. Les rendus finis :
 seulement ceux déjà faits par l'interface (aucun logiciel lancé en ligne de commande).
-Avec `--colours "#d0a080,#6a7a80"` (la plus importante d'abord) et `--hierarchical` :
+Avec `--colours "#d0a080,#6a7a80"` (la plus importante d'abord) et `--hierarchical` (ou
+`--mean`, la couleur moyenne, `Palette::mean`, comparée à la première) :
 ensuite, les images qui contiennent toutes ces couleurs, la mieux placée d'abord, avec
 leur coût et la part de chaque couleur (tolérance : `--threshold`, sinon
 `colour_radius`).
