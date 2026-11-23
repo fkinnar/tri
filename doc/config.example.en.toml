@@ -643,6 +643,11 @@ stack_scale = 0.5
 # Eyedropper: side of the area whose average colour is taken (0.02: 2 % of the image's
 # long side), shown by the reticle under the pointer and in the loupe.
 pick_area = 0.02
+# Contains these colours, hierarchical search: weight of each colour against the previous one.
+#
+# 0.6: the 2nd colour counts 0.6 times the 1st, the 3rd 0.36 times… Its presence in the
+# image counts too: the image where the 1st colour is the most present comes first.
+colour_hierarchy = 0.6
 
 [index]
 # Record the palettes in the search index of all folders.
@@ -1312,6 +1317,25 @@ frame = 3.0
 # "top-left", "top-right", "bottom-right" or "bottom-left").
 limit_seconds = 3.0
 limit_place = "center"
+
+[gui.colour_search]
+# Colours searched together, at most.
+max = 5
+# Hierarchical search: the 1st colour counts the most.
+#
+# Contains these colours: false, they all count the same (absolute); true, the 1st counts
+# the most, then the 2nd… ([palette] colour_hierarchy). Also changed in the dialog.
+hierarchical = false
+# Swatches of pure colours.
+pure = ["#ff0000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#ff00ff"]
+# Swatches of "photo" colours.
+#
+# Sky, foliage, skin, sunset, sea, earth.
+photo = ["#7ea7d8", "#4f7a2e", "#e0ac8a", "#f08a3c", "#1f6e8c", "#7a5638"]
+# Free swatches, stored from the dialog.
+own = []
+# Number of free swatches.
+own_max = 6
 
 [gui.position]
 # "Photo 12 / 94" marker at each image change: how long it shows.

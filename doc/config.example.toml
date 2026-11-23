@@ -646,6 +646,12 @@ stack_scale = 0.5
 # Pipette : côté de la zone dont la couleur moyenne est prise (0,02 : 2 % du grand côté
 # de l'image), montrée par le collimateur sous le pointeur et dans la loupe.
 pick_area = 0.02
+# Contient ces couleurs, recherche hiérarchique : poids de chaque couleur face à la précédente.
+#
+# 0,6 : la deuxième couleur compte 0,6 fois la première, la troisième 0,36 fois… Sa
+# présence dans l'image compte aussi : l'image où la première couleur est la plus présente
+# passe devant.
+colour_hierarchy = 0.6
 
 [index]
 # Noter les palettes dans l'index de recherche de tous les dossiers.
@@ -1325,6 +1331,25 @@ frame = 3.0
 # ("center", "top-left", "top-right", "bottom-right" ou "bottom-left").
 limit_seconds = 3.0
 limit_place = "center"
+
+[gui.colour_search]
+# Couleurs cherchées ensemble, au plus.
+max = 5
+# Recherche hiérarchique : la première couleur compte le plus.
+#
+# Contient ces couleurs : false, toutes comptent pareil (absolue) ; true, la première compte
+# le plus, puis la deuxième… ([palette] colour_hierarchy). Changé aussi dans la boîte.
+hierarchical = false
+# Pastilles des couleurs franches.
+pure = ["#ff0000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#ff00ff"]
+# Pastilles des couleurs « photo ».
+#
+# Ciel, feuillage, peau, coucher de soleil, mer, terre.
+photo = ["#7ea7d8", "#4f7a2e", "#e0ac8a", "#f08a3c", "#1f6e8c", "#7a5638"]
+# Pastilles libres, rangées depuis la boîte.
+own = []
+# Nombre de pastilles libres.
+own_max = 6
 
 [gui.position]
 # Repère « Photo 12 / 94 » à chaque changement d'image : durée d'affichage.

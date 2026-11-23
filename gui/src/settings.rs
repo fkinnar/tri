@@ -323,6 +323,8 @@ pub struct GuiSettings {
     pub zoom: ZoomSettings,
     /// `[gui.compare]`.
     pub compare: CompareSettings,
+    /// `[gui.colour_search]`.
+    pub colour_search: ColourSearchSettings,
     /// `[gui.position]`.
     pub position: PositionSettings,
     /// `[gui.position_bar]`.
@@ -399,6 +401,7 @@ impl Default for GuiSettings {
             view: ViewSettings::default(),
             zoom: ZoomSettings::default(),
             compare: CompareSettings::default(),
+            colour_search: ColourSearchSettings::default(),
             position: PositionSettings::default(),
             position_bar: PositionBarSettings::default(),
             notes: NotesSettings::default(),
@@ -1136,6 +1139,43 @@ impl Default for CompareSettings {
             frame: 3.0,
             limit_seconds: 3.0,
             limit_place: PositionPlace::Center,
+        }
+    }
+}
+
+/// Section `[gui.colour_search]` : boîte « Couleur cherchée » (#492).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ColourSearchSettings {
+    /// Couleurs cherchées ensemble, au plus.
+    pub max: usize,
+    /// Recherche hiérarchique (la 1ʳᵉ couleur compte le plus) plutôt qu'absolue (toutes
+    /// pareil) ; changée aussi dans la boîte, et écrite ici.
+    pub hierarchical: bool,
+    /// Pastilles des couleurs franches (`#rrggbb`) : studio, lumières colorées.
+    pub pure: Vec<String>,
+    /// Pastilles des couleurs « photo » : ciel, feuillage, peau…
+    pub photo: Vec<String>,
+    /// Pastilles libres, rangées depuis la boîte (écrites ici par `tri`).
+    pub own: Vec<String>,
+    /// Nombre de pastilles libres.
+    pub own_max: usize,
+}
+
+impl Default for ColourSearchSettings {
+    fn default() -> Self {
+        let hex = |list: &[&str]| list.iter().map(|s| s.to_string()).collect();
+        Self {
+            max: 5,
+            hierarchical: false,
+            pure: hex(&[
+                "#ff0000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#ff00ff",
+            ]),
+            photo: hex(&[
+                "#7ea7d8", "#4f7a2e", "#e0ac8a", "#f08a3c", "#1f6e8c", "#7a5638",
+            ]),
+            own: Vec::new(),
+            own_max: 6,
         }
     }
 }

@@ -60,6 +60,12 @@ saturation `chroma_weight` fois). « Contient cette couleur » utilise plutôt `
 de la palette la plus proche, miettes sous `colour_min_share` (0,02) ignorées ; tolérance
 `colour_radius` (0,1), `colour_radius_max` (0,4).
 
+**Plusieurs couleurs** (`Palette::colours_cost`, `ColourQuery`, #492) : `None` si l'une
+des couleurs est plus loin que la tolérance ; sinon, recherche absolue, la moyenne des
+distances (une couleur seule : sa distance, l'ordre d'avant) ; hiérarchique, chaque
+couleur pèse `colour_hierarchy` (0,6) fois la précédente et son coût est sa distance plus
+la tolérance × (1 − sa part dans l'image, `share_near`).
+
 ## Couverture fine (`Coverage`)
 
 Retour du 21/11/2026 (vidéo) : la peau dans l'ombre, orangée et saturée, était fondue

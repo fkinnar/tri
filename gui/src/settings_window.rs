@@ -240,6 +240,7 @@ const CATEGORIES: [&[&str]; 6] = [
         "gui.view",
         "gui.zoom",
         "gui.compare",
+        "gui.colour_search",
         "gui.position",
         "gui.position_bar",
         "gui.notes",

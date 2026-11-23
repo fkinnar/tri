@@ -58,6 +58,12 @@ enough of this blue". Measured like the distances between palettes (hue and satu
 palette colour, specks under `colour_min_share` (0.02) ignored; tolerance `colour_radius`
 (0.1), `colour_radius_max` (0.4).
 
+**Several colours** (`Palette::colours_cost`, `ColourQuery`, #492): `None` if one of the
+colours is further than the tolerance; otherwise, absolute search, the mean of the
+distances (a single colour: its distance, the previous order); hierarchical, each colour
+weighs `colour_hierarchy` (0.6) times the previous one and its cost is its distance plus
+the tolerance × (1 − its share of the image, `share_near`).
+
 ## Fine coverage (`Coverage`)
 
 Feedback of 2026-11-21 (video): skin in shadow, orange and saturated, was blended into an
