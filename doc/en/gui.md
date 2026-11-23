@@ -307,8 +307,9 @@ system one ("cold" measurements, experiments).
   and saturation (lightness counted `[palette] mean_lightness` times): photos with a cast
   of that colour, not those that contain a little of it (a blue photo with a little skin
   comes out of a skin search, not of an average skin search); a two-colour photo has a
-  grey average and only comes out of an ordinary search. The other slots stay in place,
-  greyed and inert. Measured on 116 photos of four sessions: the 6 blue-cast photos
+  grey average and only comes out of an ordinary search. The other slots are hidden (feedback
+  of 2026-11-23: greyed, it was odd), their colours kept for the other modes; the wheel
+  and the eyedropper set the first one. Measured on 116 photos of four sessions: the 6 blue-cast photos
   between 0.07 and 0.09 from a blue, the next ones at 0.17.
   A new search (colours, mode, similar palettes) selects the best answer and brings the
   grid back to the start (feedback of 2026-11-23: the previous selection stayed selected

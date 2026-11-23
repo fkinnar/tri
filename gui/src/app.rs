@@ -327,6 +327,8 @@ struct ColourDialog {
     active: Option<usize>,
     /// Réinitialisée et pas retouchée depuis : rien à chercher.
     blank: bool,
+    /// Mode couleur moyenne : seule la première couleur compte (et se montre).
+    mean: bool,
     /// Harmonie en cours (#492) : les emplacements suivent la base (le premier) ; retoucher
     /// un autre emplacement, en ranger ou en vider un, la détache.
     harmony: Option<crate::palette_view::Harmony>,
@@ -363,6 +365,7 @@ impl ColourDialog {
             fresh: true,
             sticky: false,
             stroke: false,
+            mean: false,
         };
         for &oklab in colours {
             dialog.set(oklab);
@@ -407,6 +410,15 @@ impl ColourDialog {
     /// l'emplacement choisi exprès, sinon le premier vide (la couleur réglée y est rangée),
     /// sinon le dernier. Rien avec une harmonie (elle tourne).
     fn edit_target(&mut self) {
+        // Couleur moyenne : toujours la première.
+        if self.mean {
+            if self.slots.is_empty() {
+                self.store(self.max);
+            } else {
+                self.active = Some(0);
+            }
+            return;
+        }
         if self.harmony.is_some() || (self.sticky && self.active.is_some()) {
             return;
         }
@@ -5794,6 +5806,7 @@ impl TriApp {
         let weak = ctx.global_style().visuals.weak_text_color();
         dialog.ryb = self.gui.colour_search.wheel == crate::settings::ColourWheel::Ryb;
         dialog.max = self.gui.colour_search.max.max(1);
+        dialog.mean = self.gui.colour_search.mode == crate::settings::ColourMode::Mean;
         let title = t!("palette-colour-title");
         let modal = modal_at("palette_colour_dialog", CENTRED)
             .title(title)
@@ -6033,24 +6046,12 @@ impl TriApp {
         let mean = self.gui.colour_search.mode == crate::settings::ColourMode::Mean;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
-            for i in 0..max {
-                // En couleur moyenne, la première seule : les autres grisées, inertes.
-                let off = mean && i > 0;
-                let sense = if off { Sense::hover() } else { Sense::click() };
-                let (rect, response) = ui.allocate_exact_size(SWATCH * 1.25, sense);
+            // En couleur moyenne, la première seule : les autres cachées (retour du
+            // 23/11/2026 : grisées, c'était bizarre), gardées pour les autres modes.
+            let shown = if mean { 1 } else { max };
+            for i in 0..shown {
+                let (rect, response) = ui.allocate_exact_size(SWATCH * 1.25, Sense::click());
                 let filled = i < dialog.slots.len();
-                if off {
-                    match filled {
-                        true => {
-                            let [r, g, b] = dialog.slot_rgb(i);
-                            let c = Color32::from_rgb(r, g, b).gamma_multiply(0.25);
-                            ui.painter().rect_filled(rect, 3.0, c);
-                        }
-                        false => empty_swatch(ui, rect, weak.gamma_multiply(0.4)),
-                    }
-                    response.on_hover_text(t!("palette-colour-mean-only"));
-                    continue;
-                }
                 let name = if filled {
                     t!("palette-colour-slot", n = i + 1)
                 } else {
@@ -6258,6 +6259,10 @@ impl TriApp {
         let digits = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5];
         for key in pressed {
             if let Some(i) = digits.iter().position(|&k| k == key) {
+                // Couleur moyenne : la première seule.
+                if dialog.mean && i > 0 {
+                    continue;
+                }
                 if i < dialog.slots.len() {
                     dialog.load(i);
                 } else if i < dialog.max {
@@ -6385,16 +6390,18 @@ impl TriApp {
             dialog.dragging = None;
         }
         let painter = ui.painter();
-        // L'harmonie : un rayon du centre à chaque couleur.
+        // L'harmonie : un rayon du centre à chaque couleur (couleur moyenne : la première).
         if dialog.harmony.is_some() {
-            for &hsv in &dialog.slots {
+            let shown = if dialog.mean { 1 } else { dialog.slots.len() };
+            for &hsv in dialog.slots.iter().take(shown) {
                 painter.line_segment(
                     [centre, marker(hsv)],
                     egui::Stroke::new(1.5, Color32::from_white_alpha(200)),
                 );
             }
         }
-        for (i, &hsv) in dialog.slots.iter().enumerate() {
+        let shown = if dialog.mean { 1 } else { dialog.slots.len() };
+        for (i, &hsv) in dialog.slots.iter().enumerate().take(shown) {
             let [r, g, b] = crate::palette_view::hsv_to_rgb(hsv);
             let at = marker(hsv);
             let size = if dialog.active == Some(i) { 7.0 } else { 5.0 };
@@ -32834,6 +32841,18 @@ mod tests {
         h.run_steps(2);
         h.get_by_label("#abcdef");
         h.get_by_label("Couleur 1");
+        // Couleur moyenne : la première seule, les autres cachées mais gardées ; la roue
+        // règle la première (retour du 23/11/2026).
+        let two = [[0.6, 0.1, 0.0], [0.5, 0.0, -0.1]];
+        h.state_mut().colour_dialog = Some(ColourDialog::new(&two));
+        h.state_mut().gui.colour_search.mode = crate::settings::ColourMode::Mean;
+        h.run_steps(2);
+        h.get_by_label("Couleur 1");
+        assert!(h.query_by_label("Couleur 2").is_none());
+        let d = h.state_mut().colour_dialog.as_mut().unwrap();
+        d.edit_target();
+        assert_eq!(d.active, Some(0));
+        assert_eq!(d.slots.len(), 2);
     }
 
     #[test]

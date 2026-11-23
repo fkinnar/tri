@@ -64,7 +64,6 @@ palette-colour-hierarchical = Hierarchical
 palette-colour-hierarchical-tip = The 1st colour counts the most, then the 2nd…; images where it is the most present first
 palette-colour-mean = Average
 palette-colour-mean-tip = The average colour of the image compared with the first colour: photos with a cast of this colour
-palette-colour-mean-only = With the average colour, only the first colour counts
 palette-harmony-complementary = Complementary
 palette-harmony-split = Split complementary
 palette-harmony-analogous = Analogous

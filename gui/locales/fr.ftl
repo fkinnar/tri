@@ -64,7 +64,6 @@ palette-colour-hierarchical = Hiérarchique
 palette-colour-hierarchical-tip = La première couleur compte le plus, puis la deuxième… ; les images où elle est la plus présente d'abord
 palette-colour-mean = Moyenne
 palette-colour-mean-tip = La couleur moyenne de l'image comparée à la première couleur : les photos à dominante de cette couleur
-palette-colour-mean-only = En couleur moyenne, seule la première couleur compte
 palette-harmony-complementary = Complémentaire
 palette-harmony-split = Complémentaire adjacente
 palette-harmony-analogous = Analogue

@@ -323,8 +323,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `[palette] mean_lightness` fois) : les photos à dominante de cette couleur, pas celles
   qui en ont un peu (une photo bleue avec un peu de peau sort d'une recherche de la peau,
   pas d'une recherche de la peau en moyenne) ; une photo bicolore a une moyenne grise et
-  ne sort qu'en recherche ordinaire. Les autres emplacements restent à leur place, grisés
-  et inertes. Mesuré sur 116 photos de quatre séances : les 6 photos à dominante bleue
+  ne sort qu'en recherche ordinaire. Les autres emplacements sont cachés (retour du
+  23/11/2026 : grisés, c'était bizarre), leurs couleurs gardées pour les autres modes ;
+  la roue et la pipette règlent la première. Mesuré sur 116 photos de quatre séances : les 6 photos à dominante bleue
   entre 0,07 et 0,09 d'un bleu, les suivantes à 0,17. Une nouvelle recherche (couleurs, mode, palettes
   proches) choisit la meilleure réponse et remet la grille au début (retour du 23/11/2026 :
   la sélection d'avant restait choisie et la grille défilait jusqu'à elle, au milieu des
