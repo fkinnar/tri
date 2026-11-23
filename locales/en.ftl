@@ -467,6 +467,7 @@ cli-opt-colours = "contains these colours": #rrggbb separated by commas, the mos
 cli-opt-hierarchical = with --colours: the first colour counts the most ([palette] colour_hierarchy)
 cli-opt-mean = with --colours: the average colour of each image compared with the first colour (mostly hue and saturation, [palette] mean_lightness)
 cli-opt-posterize = palette view: each image in K colours (1: its average colour), written to --to (NAME-pK.jpg)
+cli-opt-perceived = with --posterize: in perceived colours, adapted to the light of the surround (experiment; NAME-pKv.jpg)
 cli-ph-colours = colours
 cli-colours-bad = unreadable colour: "{ $colour }" (#rrggbb)
 cli-colours-header = { $n } images contain these colours: file, cost, share of each colour

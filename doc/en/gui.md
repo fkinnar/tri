@@ -307,7 +307,11 @@ system one ("cold" measurements, experiments).
   dominant), n the image in n colours (each pixel replaced by the closest,
   `palette::posterize`), up to `[gui.palette_view] max` (8); optional **false colours**
   (`false_colours`, the most present first, with their legend next to the real ones); on
-  the right, the palette of that step (a click on a colour searches it). Computed in the
+  the right, the palette of that step (a click on a colour searches it). **Perceived colours** (experiment of
+  2026-11-23, user's idea: under a violet light, a pinkish beige face looks orange): the
+  colours adapted to the light of their surround, areas that stand out weighing more
+  (`palette::posterize_with`, settings `[palette] perceived_*`); at step 0, the image "as
+  seen". Neither the cache nor the search use it (to be decided with use). Computed in the
   background, on demand; changing image (arrows) follows, Escape closes it. Screenshot:
   `TRI_GUI_ACTIONS=core.view.palette,palette_k:4f`. **Keyboard** (feedback of 2026-11-23: the box was
   mouse-only, and behind it the arrows moved the grid's selection): the grid receives

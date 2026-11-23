@@ -299,7 +299,7 @@ pub const COMMANDS: &[Command] = &[
     Command {
         id: "palette",
         theme: Theme::Analysis,
-        syntax: "tri <folder> --palette [--source camera|raw|darktable|…] [--colours <colours> [--hierarchical|--mean]] [--posterize K --to <folder>] [--raw|--flat] [--depth N]",
+        syntax: "tri <folder> --palette [--source camera|raw|darktable|…] [--colours <colours> [--hierarchical|--mean]] [--posterize K [--perceived] --to <folder>] [--raw|--flat] [--depth N]",
         main: &["--palette"],
         options: opts![
             "--source",
@@ -307,6 +307,7 @@ pub const COMMANDS: &[Command] = &[
             "--hierarchical",
             "--mean",
             "--posterize",
+            "--perceived",
             "--to",
             "--raw",
             "--flat",

@@ -149,6 +149,13 @@ l'image (k-moyennes de `palette::extract`, factorisées dans `cluster`, sans fus
 proches ni retrait des miettes), puis chaque pixel remplacé par la plus proche (OKLab ;
 un pixel déjà vu n'est pas reconverti) ; k = 1, la couleur moyenne. Renvoie l'image et ses
 couleurs, parts des pixels décroissantes. Environ 10 ms pour une vignette.
+En **couleurs perçues** (`posterize_with(…, true)`, expérience) : l'image en OKLab, a et b
+floutés sur un carré de `perceived_surround` (0,2) du grand côté (deux passes de moyenne
+glissante, `box_blur`) donnent la teinte de l'entourage ; chaque pixel en perd la part
+`perceived_adaptation` (0,8 ; adaptation de l'œil à la lumière dominante) ; dans les
+k-moyennes (pondérées, `cluster_weighted`), un point pèse `1 + perceived_salience × écart
+à son entourage / 0,1`. Sur la photo de l'utilisateur sous lumière violette, le visage
+sort orange dès 2 couleurs (beige rosé en valeurs brutes).
 
 ## Réglages `[palette]`
 

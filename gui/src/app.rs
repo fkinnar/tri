@@ -750,7 +750,7 @@ struct ColourKeys {
 }
 
 /// Ce que montre la palette en grand : l'image, la source, le cran, les fausses couleurs.
-type PaletteViewKey = (PathBuf, tri::palette::Source, usize, bool);
+type PaletteViewKey = (PathBuf, tri::palette::Source, usize, bool, bool);
 
 /// L'image de la palette en grand, prête pour l'écran, et ses couleurs.
 type PaletteViewImage = (egui::ColorImage, Vec<tri::palette::Swatch>);
@@ -1649,6 +1649,8 @@ pub struct TriApp {
     palette_view_k: usize,
     /// Fausses couleurs (`[gui.palette_view] false_colours`).
     palette_view_false: bool,
+    /// Couleurs perçues (adaptées à la lumière de l'entourage ; expérience).
+    palette_view_perceived: bool,
     /// Ce qu'elle montre, et ce qui se calcule en fond.
     palette_view_shown: Option<PaletteViewShown>,
     palette_view_rx: Option<(PaletteViewKey, mpsc::Receiver<Option<PaletteViewImage>>)>,
@@ -2776,6 +2778,7 @@ impl TriApp {
             palette_view: false,
             palette_view_k: 0,
             palette_view_false: false,
+            palette_view_perceived: false,
             palette_view_shown: None,
             palette_view_rx: None,
             histogram_photo: gui.histogram.analysis,
@@ -21383,6 +21386,7 @@ impl TriApp {
                 s,
                 self.palette_view_k,
                 self.palette_view_false,
+                self.palette_view_perceived,
             )
         });
         self.palette_view_poll(ctx, wanted.as_ref());
@@ -21398,6 +21402,7 @@ impl TriApp {
         let side = self.gui.palette_view.side.max(120.0);
         let mut k = self.palette_view_k;
         let mut false_colours = self.palette_view_false;
+        let mut perceived = self.palette_view_perceived;
         let mut picked = None;
         let shown = self
             .palette_view_shown
@@ -21405,7 +21410,8 @@ impl TriApp {
             .filter(|s| Some(&s.key) == wanted.as_ref());
         let texture = shown.map(|s| s.texture.clone());
         let palette = match (k, shown) {
-            (0, _) => photo_palette.as_deref().cloned(),
+            (0, _) if !perceived => photo_palette.as_deref().cloned(),
+            (0, _) => None,
             (_, Some(s)) => Some(Palette {
                 swatches: s.swatches.clone(),
                 ..Palette::default()
@@ -21466,6 +21472,8 @@ impl TriApp {
                         });
                         ui.checkbox(&mut false_colours, t!("palette-view-false"))
                             .on_hover_text(t!("palette-view-false-tip"));
+                        ui.checkbox(&mut perceived, t!("palette-view-perceived"))
+                            .on_hover_text(t!("palette-view-perceived-tip"));
                     });
                     ui.add_space(16.0);
                     ui.vertical(|ui| {
@@ -21510,6 +21518,7 @@ impl TriApp {
         }
         self.palette_view_k = k;
         self.palette_view_false = false_colours;
+        self.palette_view_perceived = perceived;
         if picked.is_some() {
             self.set_palette_colour(picked);
         }
@@ -21571,7 +21580,7 @@ impl TriApp {
             .iter()
             .filter_map(|h| parse_hex(h))
             .collect();
-        let (path, source, k, false_on) = wanted.clone();
+        let (path, source, k, false_on, perceived) = wanted.clone();
         let _ = path;
         let (tx, rx) = mpsc::channel();
         let repaint = ctx.clone();
@@ -21580,10 +21589,10 @@ impl TriApp {
                 .ok()
                 .and_then(|key| cache.get(&key));
             let out = image.map(|image| {
-                let (mut bitmap, swatches) = if k == 0 {
+                let (mut bitmap, swatches) = if k == 0 && !perceived {
                     (image, Vec::new())
                 } else {
-                    tri::palette::posterize(&image, k, &settings)
+                    tri::palette::posterize_with(&image, k, &settings, perceived)
                 };
                 // Fausses couleurs : chaque couleur (dans l'ordre de présence) remplacée.
                 if false_on && k > 0 && !falses.is_empty() {
@@ -24888,9 +24897,10 @@ impl TriApp {
                         .collect();
                     self.show_colour_dialog(ColourDialog::new(&colours));
                 }
-                Step::PaletteK(k, falses) => {
+                Step::PaletteK(k, falses, perceived) => {
                     self.palette_view_k = k;
                     self.palette_view_false = falses;
+                    self.palette_view_perceived = perceived;
                 }
                 Step::Harmony(id) => {
                     let ryb = self.gui.colour_search.wheel == crate::settings::ColourWheel::Ryb;
@@ -28110,8 +28120,9 @@ enum Step {
     ColourSearch(Vec<[u8; 3]>),
     /// Une harmonie dans la boîte des couleurs ouverte (`harmony:triad`), pour la capture.
     Harmony(String),
-    /// Le cran de la palette en grand (`palette_k:4`, `palette_k:4f` en fausses couleurs).
-    PaletteK(usize, bool),
+    /// Le cran de la palette en grand (`palette_k:4`, `palette_k:4f` en fausses couleurs,
+    /// `palette_k:4p` en couleurs perçues).
+    PaletteK(usize, bool, bool),
     /// Taper dans la recherche de la boîte ouverte, palette, réglages ou aide
     /// (`search:vim`).
     Search(String),
@@ -28153,11 +28164,11 @@ fn parse_actions(list: &str) -> Vec<Step> {
                 )),
                 None if id.starts_with("palette_k:") => {
                     let v = &id["palette_k:".len()..];
-                    let falses = v.ends_with('f');
-                    v.trim_end_matches('f')
+                    let (falses, perceived) = (v.contains('f'), v.contains('p'));
+                    v.trim_end_matches(['f', 'p'])
                         .parse()
                         .ok()
-                        .map(|k| Step::PaletteK(k, falses))
+                        .map(|k| Step::PaletteK(k, falses, perceived))
                 }
                 None if id.starts_with("harmony:") => {
                     Some(Step::Harmony(id["harmony:".len()..].to_string()))

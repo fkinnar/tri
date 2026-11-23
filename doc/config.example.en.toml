@@ -664,6 +664,15 @@ mean_lightness = 0.3
 # The first colour more precise than the last: the second one's tolerance is 1.25 times
 # the slider's, the third 1.5 times… (0: the same for all).
 colour_widen = 0.25
+# Perceived colours (large palette): share of the surround's hue removed.
+#
+# Experiment: the eye adapts to the dominant light (under a violet light, a pinkish beige
+# face looks orange); each pixel is seen after removing this share.
+perceived_adaptation = 0.8
+# Perceived colours: size of the surround, as a share of the image's long side.
+perceived_surround = 0.2
+# Perceived colours: weight of the areas that stand out from their surround.
+perceived_salience = 1.0
 
 [index]
 # Record the palettes in the search index of all folders.

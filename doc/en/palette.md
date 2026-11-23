@@ -143,6 +143,13 @@ k-means of `palette::extract`, factored into `cluster`, without merging close co
 dropping specks), then each pixel replaced by the closest (OKLab; a pixel already seen is
 not converted again); k = 1, the average colour. Returns the image and its colours, pixel
 shares decreasing. About 10 ms for a thumbnail.
+In **perceived colours** (`posterize_with(…, true)`, experiment): the image in OKLab, a
+and b blurred over a square of `perceived_surround` (0.2) of the long side (two passes of
+running means, `box_blur`) give the surround's hue; each pixel loses the
+`perceived_adaptation` share of it (0.8; the eye adapting to the dominant light); in the
+k-means (weighted, `cluster_weighted`), a point weighs `1 + perceived_salience × gap to its
+surround / 0.1`. On the user's photo under violet light, the face comes out orange from 2
+colours (pinkish beige in raw values).
 
 ## Settings `[palette]`
 

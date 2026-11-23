@@ -323,7 +323,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   pixel remplacé par la plus proche, `palette::posterize`), jusqu'à `[gui.palette_view]
   max` (8) ; **fausses couleurs** au choix (`false_colours`, la plus présente d'abord, avec
   leur légende face aux vraies) ; à droite, la palette du cran (un clic sur une couleur la
-  cherche). Calculé en fond, à la demande ; changer d'image (flèches) la suit, Échap la
+  cherche). **Couleurs perçues** (expérience du 23/11/2026, idée de l'utilisateur : sous
+  une lumière violette, un visage beige rosé paraît orange) : les couleurs adaptées à la
+  lumière de leur entourage, les zones qui tranchent pesant plus
+  (`palette::posterize_with`, réglages `[palette] perceived_*`) ; au cran 0, l'image
+  « telle que vue ». Ni le cache ni la recherche n'en tiennent compte (à décider à
+  l'usage). Calculé en fond, à la demande ; changer d'image (flèches) la suit, Échap la
   ferme. Capture : `TRI_GUI_ACTIONS=core.view.palette,palette_k:4f`. **Clavier** (retour du
   23/11/2026 : la boîte ne se pilotait qu'à la souris, et derrière elle les flèches
   déplaçaient la sélection) : la grille ne reçoit plus rien tant que la boîte est ouverte ;

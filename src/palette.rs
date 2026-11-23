@@ -211,6 +211,13 @@ pub struct PaletteSettings {
     /// Contient ces couleurs, recherche hiérarchique : tolérance élargie à chaque rang, en
     /// part de celle de la première (0,25 : la deuxième ×1,25, la troisième ×1,5…).
     pub colour_widen: f32,
+    /// Couleurs perçues (palette en grand, expérience) : part de la teinte de l'entourage
+    /// retirée de chaque pixel (adaptation de l'œil à la lumière dominante).
+    pub perceived_adaptation: f32,
+    /// Couleurs perçues : taille de l'entourage, en part du grand côté de l'image.
+    pub perceived_surround: f32,
+    /// Couleurs perçues : poids des zones qui tranchent sur leur entourage.
+    pub perceived_salience: f32,
 }
 
 impl Default for PaletteSettings {
@@ -237,6 +244,9 @@ impl Default for PaletteSettings {
             colour_proximity: 0.25,
             mean_lightness: 0.3,
             colour_widen: 0.25,
+            perceived_adaptation: 0.8,
+            perceived_surround: 0.2,
+            perceived_salience: 1.0,
         }
     }
 }
@@ -921,6 +931,16 @@ pub fn srgb_to_oklab(rgb: [u8; 3]) -> [f32; 3] {
 /// K-moyennes déterministes sur `samples` (OKLab) : `k` centres au plus, et le nombre de
 /// points de chacun.
 fn cluster(samples: &[[f32; 3]], k: usize, iterations: u32) -> (Vec<[f32; 3]>, Vec<usize>) {
+    cluster_weighted(samples, None, k, iterations)
+}
+
+/// [`cluster`], chaque point pesant `weights[i]` dans le calcul des centres (`None` : 1).
+fn cluster_weighted(
+    samples: &[[f32; 3]],
+    weights: Option<&[f32]>,
+    k: usize,
+    iterations: u32,
+) -> (Vec<[f32; 3]>, Vec<usize>) {
     let mut centres = initial_centres(samples, k);
     let mut members = vec![0usize; samples.len()];
     for _ in 0..iterations.max(1) {
@@ -928,12 +948,13 @@ fn cluster(samples: &[[f32; 3]], k: usize, iterations: u32) -> (Vec<[f32; 3]>, V
             *m = nearest(&centres, *p);
         }
         let mut sums = vec![[0.0f64; 4]; centres.len()];
-        for (m, p) in members.iter().zip(samples) {
+        for (i, (m, p)) in members.iter().zip(samples).enumerate() {
+            let w = f64::from(weights.map_or(1.0, |w| w[i]));
             let s = &mut sums[*m];
-            s[0] += f64::from(p[0]);
-            s[1] += f64::from(p[1]);
-            s[2] += f64::from(p[2]);
-            s[3] += 1.0;
+            s[0] += w * f64::from(p[0]);
+            s[1] += w * f64::from(p[1]);
+            s[2] += w * f64::from(p[2]);
+            s[3] += w;
         }
         let mut moved = false;
         for (c, s) in centres.iter_mut().zip(&sums) {
@@ -965,6 +986,25 @@ fn cluster(samples: &[[f32; 3]], k: usize, iterations: u32) -> (Vec<[f32; 3]>, V
 /// (même taille, espace de travail) et ses couleurs, les plus présentes d'abord (part
 /// des pixels).
 pub fn posterize(bitmap: &Bitmap, k: usize, settings: &PaletteSettings) -> (Bitmap, Vec<Swatch>) {
+    posterize_with(bitmap, k, settings, false)
+}
+
+/// [`posterize`], en **couleurs perçues** avec `perceived` (expérience du 23/11/2026, idée
+/// de l'utilisateur : sous une lumière violette, un visage beige rosé paraît orange) :
+/// chaque pixel est vu après adaptation à la lumière de son entourage (une part
+/// `perceived_adaptation` de la teinte moyenne d'un voisinage de `perceived_surround` du
+/// grand côté, retirée en OKLab), et les zones qui tranchent sur leur entourage pèsent
+/// plus (`perceived_salience`) dans le choix des couleurs. `k = 0` : l'image perçue,
+/// sans réduction.
+pub fn posterize_with(
+    bitmap: &Bitmap,
+    k: usize,
+    settings: &PaletteSettings,
+    perceived: bool,
+) -> (Bitmap, Vec<Swatch>) {
+    if perceived {
+        return posterize_perceived(bitmap, k, settings);
+    }
     let (w, h) = (bitmap.width, bitmap.height);
     let n = (w * h) as usize;
     let samples = sample(bitmap, settings.side.max(1));
@@ -1013,6 +1053,151 @@ pub fn posterize(bitmap: &Bitmap, k: usize, settings: &PaletteSettings) -> (Bitm
         },
         swatches,
     )
+}
+
+/// [`posterize_with`] en couleurs perçues.
+fn posterize_perceived(
+    bitmap: &Bitmap,
+    k: usize,
+    settings: &PaletteSettings,
+) -> (Bitmap, Vec<Swatch>) {
+    let (w, h) = (bitmap.width as usize, bitmap.height as usize);
+    let n = w * h;
+    if n == 0 || bitmap.data.len() < n * 3 {
+        return (bitmap.clone(), Vec::new());
+    }
+    // L'image en OKLab (un pixel déjà vu n'est pas reconverti).
+    let mut memo: std::collections::HashMap<[u8; 3], [f32; 3]> = std::collections::HashMap::new();
+    let lab: Vec<[f32; 3]> = bitmap.data[..n * 3]
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|&rgb| *memo.entry(rgb).or_insert_with(|| working_to_oklab(rgb)))
+        .collect();
+    // La teinte de l'entourage : a et b floutés (moyenne d'un carré, deux passes).
+    let radius = ((w.max(h) as f32 * settings.perceived_surround.clamp(0.0, 1.0)) as usize).max(1);
+    let a: Vec<f32> = lab.iter().map(|p| p[1]).collect();
+    let b: Vec<f32> = lab.iter().map(|p| p[2]).collect();
+    let around_a = box_blur(&box_blur(&a, w, h, radius), w, h, radius);
+    let around_b = box_blur(&box_blur(&b, w, h, radius), w, h, radius);
+    let adapt = settings.perceived_adaptation.clamp(0.0, 1.0);
+    let perceived: Vec<[f32; 3]> = (0..n)
+        .map(|i| {
+            [
+                lab[i][0],
+                lab[i][1] - adapt * around_a[i],
+                lab[i][2] - adapt * around_b[i],
+            ]
+        })
+        .collect();
+    // Ce qui tranche sur l'entourage pèse plus (l'écart de teinte, en part d'un écart
+    // franc de 0,1).
+    let weight: Vec<f32> = (0..n)
+        .map(|i| {
+            let d = (lab[i][1] - around_a[i]).hypot(lab[i][2] - around_b[i]);
+            1.0 + settings.perceived_salience.max(0.0) * d / 0.1
+        })
+        .collect();
+    let to_bitmap = |colours: &[[f32; 3]]| -> Vec<u8> {
+        let mut data = Vec::with_capacity(n * 3);
+        for c in colours {
+            data.extend_from_slice(
+                &Swatch {
+                    oklab: *c,
+                    share: 0.0,
+                }
+                .working(),
+            );
+        }
+        data
+    };
+    if k == 0 {
+        let data = to_bitmap(&perceived);
+        return (
+            Bitmap {
+                width: bitmap.width,
+                height: bitmap.height,
+                data,
+            },
+            Vec::new(),
+        );
+    }
+    // Les points de la grille (comme `sample`), avec leur poids.
+    let step = (w.max(h) / settings.side.max(1) as usize).max(1);
+    let (mut points, mut weights) = (Vec::new(), Vec::new());
+    for y in (step / 2..h).step_by(step) {
+        for x in (step / 2..w).step_by(step) {
+            points.push(perceived[y * w + x]);
+            weights.push(weight[y * w + x]);
+        }
+    }
+    let centres = if k <= 1 {
+        let total: f32 = weights.iter().sum::<f32>().max(1e-6);
+        let mut m = [0.0f32; 3];
+        for (p, wt) in points.iter().zip(&weights) {
+            for c in 0..3 {
+                m[c] += p[c] * wt / total;
+            }
+        }
+        vec![m]
+    } else {
+        cluster_weighted(&points, Some(&weights), k.min(16), settings.iterations).0
+    };
+    let mut counts = vec![0usize; centres.len()];
+    let mut out = Vec::with_capacity(n);
+    for p in &perceived {
+        let i = nearest(&centres, *p);
+        counts[i] += 1;
+        out.push(centres[i]);
+    }
+    let data = to_bitmap(&out);
+    let mut swatches: Vec<Swatch> = centres
+        .into_iter()
+        .zip(counts)
+        .filter(|(_, c)| *c > 0)
+        .map(|(oklab, c)| Swatch {
+            oklab,
+            share: c as f32 / n as f32,
+        })
+        .collect();
+    swatches.sort_by(|a, b| b.share.total_cmp(&a.share));
+    (
+        Bitmap {
+            width: bitmap.width,
+            height: bitmap.height,
+            data,
+        },
+        swatches,
+    )
+}
+
+/// Moyenne de `values` (une grille `w × h`) sur un carré de côté `2 × radius + 1`, bords
+/// compris (en deux passes, lignes puis colonnes, par sommes glissantes).
+fn box_blur(values: &[f32], w: usize, h: usize, radius: usize) -> Vec<f32> {
+    let mut rows = vec![0.0f32; w * h];
+    for y in 0..h {
+        let line = &values[y * w..(y + 1) * w];
+        let mut prefix = vec![0.0f64; w + 1];
+        for x in 0..w {
+            prefix[x + 1] = prefix[x] + f64::from(line[x]);
+        }
+        for x in 0..w {
+            let (lo, hi) = (x.saturating_sub(radius), (x + radius + 1).min(w));
+            rows[y * w + x] = ((prefix[hi] - prefix[lo]) / (hi - lo) as f64) as f32;
+        }
+    }
+    let mut out = vec![0.0f32; w * h];
+    for x in 0..w {
+        let mut prefix = vec![0.0f64; h + 1];
+        for y in 0..h {
+            prefix[y + 1] = prefix[y] + f64::from(rows[y * w + x]);
+        }
+        for y in 0..h {
+            let (lo, hi) = (y.saturating_sub(radius), (y + radius + 1).min(h));
+            out[y * w + x] = ((prefix[hi] - prefix[lo]) / (hi - lo) as f64) as f32;
+        }
+    }
+    out
 }
 
 /// Points de l'image, en OKLab : une grille d'au plus `side × side`.
@@ -1635,6 +1820,30 @@ mod tests {
         let (_, mean) = posterize(&image, 1, &s);
         let [r, _, b] = mean[0].srgb();
         assert!(r > 80 && b > 40, "{:?}", mean[0].srgb());
+    }
+
+    #[test]
+    fn perceived_colours_remove_the_dominant_light() {
+        // Expérience du 23/11/2026 : sous une lumière violette, un visage beige rosé paraît
+        // orange. En couleurs perçues, la petite zone tire vers l'orange (moins de bleu :
+        // b plus grand), et le fond violet perd de sa couleur.
+        let s = PaletteSettings::default();
+        let (violet, face) = ([60u8, 20, 150], [158u8, 123, 163]);
+        let image = bands(&[(violet, 85), (face, 15)]);
+        let (_, raw) = posterize(&image, 2, &s);
+        let (_, seen) = posterize_with(&image, 2, &s, true);
+        let small = |w: &[Swatch]| *w.iter().min_by(|a, b| a.share.total_cmp(&b.share)).unwrap();
+        let large = |w: &[Swatch]| *w.iter().max_by(|a, b| a.share.total_cmp(&b.share)).unwrap();
+        assert!(
+            small(&seen).oklab[2] > small(&raw).oklab[2] + 0.05,
+            "{raw:?} {seen:?}"
+        );
+        let chroma = |w: Swatch| w.hue_chroma().1;
+        assert!(chroma(large(&seen)) < chroma(large(&raw)));
+        // Perçues, sans réduction (k = 0) : l'image entière, adaptée.
+        let (whole, none) = posterize_with(&image, 0, &s, true);
+        assert!(none.is_empty());
+        assert_eq!((whole.width, whole.height), (image.width, image.height));
     }
 
     #[test]
