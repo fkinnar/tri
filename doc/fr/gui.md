@@ -312,8 +312,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   panneau (retenue par dossier, double-clic : valeur de départ), et le **nombre de photos**
   trouvées par l'aperçu en direct. En hiérarchique, la tolérance **s'élargit de rang en
   rang** (`[colours] colour_widen`, 0,25 : la deuxième couleur ×1,25, la troisième ×1,5…) :
-  la première couleur plus précise que la dernière. **Chercher ces couleurs** (section
-  Palette, sous la palette de la photo) : ses couleurs principales (les plus présentes, sans
+  la première couleur plus précise que la dernière. **Chercher ces couleurs** (les
+  jumelles à droite de la source, section Couleurs, depuis le 24/11/2026 ; un bouton sous
+  la palette avant) : celles du cran affiché, ses couleurs principales (les plus présentes, sans
   les miettes sous `colour_min_share`, au plus `max`) dans la boîte, cherchées tout de
   suite, à ajuster ; « Annuler » rend la recherche d'avant. **Couleurs en grand** (à côté,
   action `core.view.colours`, `g c`, comme `g i` pour le grand histogramme depuis le

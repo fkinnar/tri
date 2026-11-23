@@ -1646,13 +1646,14 @@ pub fn binoculars(painter: &Painter, rect: Rect, color: Color32) {
     let (w, h) = (rect.width(), rect.height());
     let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
     let radius = w * 0.2;
+    // Centrées en hauteur, comme l'œil à côté (retour du 24/11/2026).
     for x in [0.27, 0.73] {
         // Le tube, puis la lentille en bas.
-        painter.line_segment([p(x - 0.08, 0.22), p(x - 0.17, 0.62)], stroke);
-        painter.line_segment([p(x + 0.08, 0.22), p(x + 0.17, 0.62)], stroke);
-        painter.circle_stroke(p(x, 0.68), radius, stroke);
+        painter.line_segment([p(x - 0.08, 0.14), p(x - 0.17, 0.54)], stroke);
+        painter.line_segment([p(x + 0.08, 0.14), p(x + 0.17, 0.54)], stroke);
+        painter.circle_stroke(p(x, 0.6), radius, stroke);
     }
-    painter.line_segment([p(0.35, 0.38), p(0.65, 0.38)], stroke);
+    painter.line_segment([p(0.35, 0.3), p(0.65, 0.3)], stroke);
 }
 
 /// Icône « disque externe » dans `rect` : boîtier arrondi et voyant.

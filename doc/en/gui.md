@@ -297,8 +297,9 @@ system one ("cold" measurements, experiments).
   panel's (kept per folder, double-click: starting value), and the **number of photos**
   found by the live preview. In hierarchical mode, the tolerance **widens rank by rank**
   (`[colours] colour_widen`, 0.25: the second colour ×1.25, the third ×1.5…): the first
-  colour more precise than the last. **Search these colours** (Colours section, under the
-  photo's palette): its main colours (the most present, without specks under
+  colour more precise than the last. **Search for these colours** (the
+  binoculars right of the source, Colours section, since 2026-11-24; a button under the
+  palette before): those of the step shown, its main colours (the most present, without specks under
   `colour_min_share`, at most `max`) in the box, searched right away, to adjust; "Cancel"
   brings back the previous search. **Large colours** (next to it, action
   `core.view.colours`, `g c`, like `g i` for the large histogram since 2026-11-23

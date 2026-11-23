@@ -7129,7 +7129,8 @@ impl TriApp {
     fn palette_source_icons(&mut self, ui: &mut Ui, heading: Rect) {
         let size = ui.spacing().interact_size.y * 0.8;
         let gap = 6.0;
-        let right = ui.max_rect().right();
+        // De la marge pour l'ascenseur du panneau, qui cachait les jumelles (24/11/2026).
+        let right = ui.max_rect().right() - ui.spacing().scroll.bar_width - gap;
         let at = |n: f32| {
             Rect::from_min_size(
                 pos2(
@@ -7142,9 +7143,9 @@ impl TriApp {
         let color = ui.visuals().widgets.inactive.fg_stroke.color;
         let perceived = self.palette_view_perceived;
         let tip = if perceived {
-            t!("palette-perceived-on-tip")
+            t!("palette-view-perceived")
         } else {
-            t!("palette-perceived-off-tip")
+            t!("palette-measured")
         };
         let toggle = ui
             .scope_builder(egui::UiBuilder::new().max_rect(at(2.0)), |ui| {
@@ -7162,14 +7163,30 @@ impl TriApp {
         }
         let search = ui
             .scope_builder(egui::UiBuilder::new().max_rect(at(1.0)), |ui| {
-                let label = t!("palette-search-open");
-                let (rect, r) = marks::clickable_named(ui, size, &label, &label);
+                let (rect, r) = marks::clickable_named(
+                    ui,
+                    size,
+                    &t!("palette-search-open"),
+                    &t!("palette-search-these-tip"),
+                );
                 marks::binoculars(ui.painter(), rect, color);
                 r
             })
             .inner;
+        // Partir de cette photo (idée du 23/11/2026) : ses couleurs principales (celles du
+        // cran affiché) dans la boîte, cherchées tout de suite, à ajuster ; sans palette, la
+        // boîte telle quelle.
         if search.clicked() {
-            self.open_colour_dialog();
+            let ctx = ui.ctx().clone();
+            let palette = self.palette_step(&ctx).map(|(_, p)| p).or_else(|| {
+                let kind = self.palette_source?;
+                let (_, main) = self.palette_targets(kind, self.selected);
+                self.palette_of(main)
+            });
+            match palette.filter(|p| !p.swatches.is_empty()) {
+                Some(p) => self.search_palette_colours(&p),
+                None => self.open_colour_dialog(),
+            }
         }
     }
 
@@ -7356,7 +7373,6 @@ impl TriApp {
                 ui.add_space(4.0);
             }
         }
-        let mut these = None;
         if let Some(palette) = main_palette {
             self.palette_last = Some((shown, palette.clone()));
             match self.palette_detail(ui, &palette, true) {
@@ -7364,21 +7380,6 @@ impl TriApp {
                 DetailClick::Colour(c) => colour_box = Some(c),
                 DetailClick::None => {}
             }
-            // Partir de cette photo (idée du 23/11/2026) : ses couleurs principales dans la
-            // boîte, cherchées tout de suite, à ajuster.
-            ui.add_space(4.0);
-            ui.horizontal_wrapped(|ui| {
-                if ui
-                    .button(t!("palette-search-these"))
-                    .on_hover_text(t!("palette-search-these-tip"))
-                    .clicked()
-                {
-                    these = Some(palette);
-                }
-            });
-        }
-        if let Some(palette) = these {
-            self.search_palette_colours(&palette);
         }
         if let Some(c) = colour_box {
             self.show_colour_dialog(ColourDialog::new(&[c]));
@@ -33750,7 +33751,13 @@ mod tests {
         assert!(!h.state().palette_view_perceived);
         h.get_by_label(&t!("palette-search-open")).click_accesskit();
         h.run_steps(3);
-        assert!(h.state().colour_dialog.is_some());
+        // Remplie des couleurs principales de la photo.
+        assert!(
+            h.state()
+                .colour_dialog
+                .as_ref()
+                .is_some_and(|d| !d.slots.is_empty())
+        );
         press(&mut h, Key::Escape, Modifiers::NONE);
         h.run_steps(2);
         assert!(h.state().colour_dialog.is_none());
