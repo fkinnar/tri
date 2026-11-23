@@ -162,7 +162,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     indifférentes, `f p` acceptées, `f u` sans les rejetées, `f x` rejetées (la même
     séquence retire le filtre), `f 6`…`f 9`, `f °`, `f ,`, `f .` couleurs (ajouter / retirer),
     `f d` tout effacer (Échap ne fait que fermer le menu). Aussi après le leader
-    (`<leader> f 3`) : son menu les range sous « f ». Chiffres et lettres avec ou sans Maj.
+    (`<leader> f 3`) : son menu les range sous « f ». Chiffres : le caractère tapé.
   - Souris : **barre de filtres** en haut de la grille (`Maj+F` l'affiche ou la masque,
     `[gui] filter_bar`) : chaque clic déclenche la même action que le clavier (recliquer
     l'étoile active efface le filtre d'étoiles). Des filtres plus complexes (fenêtre ou
@@ -1920,13 +1920,17 @@ Notation, commune aux deux profils (17/10/2026, pensée aussi pour l'AZERTY) :
 
 | Action | Touches |
 |---|---|
-| `core.rate.star.0` … `core.rate.star.5` | 0 … 5, avec ou sans Maj |
-| `core.rate.color.red` / `yellow` / `green` / `blue` | 6 / 7 / 8 / 9, avec ou sans Maj |
+| `core.rate.star.0` … `core.rate.star.5` | 0 … 5 (le caractère, d'où qu'il vienne) |
+| `core.rate.color.red` / `yellow` / `green` / `blue` | 6 / 7 / 8 / 9 (idem) |
 | `core.rate.color.purple` | ° / , / . |
 | `core.flag.accept` / `reject` / `none` | Maj+P / Maj+X / Maj+U |
 
-Pourquoi : sur l'AZERTY, les chiffres de la rangée du haut demandent Maj, ceux du pavé
-numérique non ; egui-winit traduit la touche *logique* et, s'il ne la connaît pas (« & »,
+Depuis le 23/11/2026 (retour de l'utilisateur), un chiffre de `keys.toml` est le
+**caractère** tapé, comme `+ - * /` : rangée du haut (Maj en AZERTY, sans en QWERTY) ou
+pavé numérique, sans les doublons `Maj+3` d'avant, qui ne valaient qu'en AZERTY (en
+QWERTY, Maj+3 tape « # ») ; `f 3`, `c 3` (couleurs en grand) aussi. La touche suivie de
+son caractère lié est laissée de côté (`chords_repeated`). Historique : sur l'AZERTY, les
+chiffres de la rangée du haut demandent Maj, ceux du pavé numérique non ; egui-winit traduit la touche *logique* et, s'il ne la connaît pas (« & »,
 « é »), la touche *physique* : les deux donnent `Num1`… Exception : le 6 non majuscule de
 l'AZERTY est « - », reconnu comme `Minus`, d'où Maj sur la rangée du haut. Le violet est sur
 « ° » (Maj + la touche à droite du 0 en AZERTY), qu'egui ne nomme pas : c'est un

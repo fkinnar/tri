@@ -154,7 +154,7 @@ system one ("cold" measurements, experiments).
     `f u` without rejected, `f x` rejected (the same sequence removes the filter),
     `f 6`…`f 9`, `f °`, `f ,`, `f .` colours (add / remove), `f d` clear everything (Esc only closes the
     menu). After the leader too (`<leader> f 3`): its menu lists them under "f".
-    Digits and letters with or without Shift.
+    Digits: the typed character.
   - Mouse: **filter bar** at the top of the grid (`Shift+F` shows or hides it,
     `[gui] filter_bar`): each click triggers the same action as the keyboard (clicking the
     active star again clears the star filter). More complex filters (window or side
@@ -1812,12 +1812,17 @@ Rating, common to both profiles (2026-10-17, designed for AZERTY too):
 
 | Action | Keys |
 |---|---|
-| `core.rate.star.0` … `core.rate.star.5` | 0 … 5, with or without Shift |
-| `core.rate.color.red` / `yellow` / `green` / `blue` | 6 / 7 / 8 / 9, with or without Shift |
+| `core.rate.star.0` … `core.rate.star.5` | 0 … 5 (the character, wherever it comes from) |
+| `core.rate.color.red` / `yellow` / `green` / `blue` | 6 / 7 / 8 / 9 (likewise) |
 | `core.rate.color.purple` | ° / , / . |
 | `core.flag.accept` / `reject` / `none` | Shift+P / Shift+X / Shift+U |
 
-Why: on AZERTY, the digits of the top row need Shift, those of the numeric keypad do not;
+Since 2026-11-23 (user's feedback), a digit in `keys.toml` is the typed **character**,
+like `+ - * /`: top row (Shift on AZERTY, none on QWERTY) or numeric keypad, without the
+former `Shift+3` duplicates, which only held on AZERTY (on QWERTY, Shift+3 types "#");
+`f 3`, `c 3` (large colours) too. The key followed by its bound character is left aside
+(`chords_repeated`). History: on AZERTY, the digits of the top row need Shift, those of
+the numeric keypad do not;
 egui-winit translates the *logical* key and, if it does not know it ("&", "é"), the
 *physical* key: both give `Num1`… Exception: the unshifted 6 on AZERTY is "-", recognized
 as `Minus`, hence Shift on the top row. Purple is on "°" (Shift + the key to the right of

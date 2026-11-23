@@ -1400,14 +1400,19 @@ key_step = 0.05
 key_radius_step = 0.01
 
 [gui.colours_view]
-# Maximum number of colours of the large palette slider.
+# Maximum number of colours of the large colours slider.
 #
 # 0: the image as is, 1: its average colour (the dominant), 2, 3…: the image in as many
 # colours, each pixel replaced by the closest.
 max = 8
-# Long side of the image in the large palette box (points).
+# Long side of the image in the large colours box (points).
 side = 420.0
-# False colours of the large palette, the most present colour first.
+# Steps kept in memory (large colours and the panel's palette).
+#
+# A step already seen (same photo, same number of colours, perceived or not) comes back
+# without being computed again; the oldest go.
+cache = 64
+# False colours of the large colours, the most present colour first.
 #
 # Clearly distinct, to see the masses when the real colours are close.
 false_colours = ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6"]

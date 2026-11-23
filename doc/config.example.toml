@@ -1414,14 +1414,19 @@ key_step = 0.05
 key_radius_step = 0.01
 
 [gui.colours_view]
-# Couleurs au plus du curseur de la palette en grand.
+# Couleurs au plus du curseur des couleurs en grand.
 #
 # 0 : l'image telle quelle, 1 : sa couleur moyenne (la dominante), 2, 3… : l'image en autant
 # de couleurs, chaque pixel remplacé par la plus proche.
 max = 8
-# Grand côté de l'image dans la boîte de la palette en grand (points).
+# Grand côté de l'image dans la boîte des couleurs en grand (points).
 side = 420.0
-# Fausses couleurs de la palette en grand, la couleur la plus présente d'abord.
+# Crans gardés en mémoire (couleurs en grand et palette du panneau).
+#
+# Un cran déjà vu (même photo, même nombre de couleurs, perçues ou non) revient sans être
+# recalculé ; les plus anciens partent.
+cache = 64
+# Fausses couleurs des couleurs en grand, la couleur la plus présente d'abord.
 #
 # Bien distinctes, pour voir les masses quand les vraies couleurs sont proches.
 false_colours = ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6"]

@@ -1160,6 +1160,9 @@ pub struct PaletteViewSettings {
     pub max: usize,
     /// Grand côté de l'image dans la boîte (points).
     pub side: f32,
+    /// Crans gardés en mémoire (couleurs en grand et palette du panneau) : un cran déjà vu
+    /// revient sans être recalculé.
+    pub cache: usize,
     /// Fausses couleurs (`#rrggbb`), dans l'ordre des couleurs de l'image (la plus
     /// présente d'abord) : bien distinctes, pour voir les masses quand les vraies sont
     /// proches.
@@ -1172,6 +1175,7 @@ impl Default for PaletteViewSettings {
         Self {
             max: 8,
             side: 420.0,
+            cache: 64,
             false_colours: hex(&[
                 "#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0",
                 "#f032e6",
@@ -2490,7 +2494,10 @@ mod tests {
         assert_eq!(old.keymap().1.len(), 1, "« both » signalé");
         // Communs : la notation, dans les deux.
         for km in [&classic, &vim] {
-            assert_eq!(next(km, egui::Key::Num3), Some(Action::Stars(3)));
+            assert_eq!(
+                km.chord_action(crate::actions::Chord::char('3')),
+                Some(Action::Stars(3))
+            );
         }
         assert_eq!(GuiSettings::default().profile, Profile::Classic);
     }

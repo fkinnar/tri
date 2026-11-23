@@ -763,6 +763,7 @@ type PaletteViewKey = (PathBuf, tri::palette::Source, usize, bool, bool);
 type PaletteViewImage = (egui::ColorImage, Vec<tri::palette::Swatch>);
 
 /// La palette en grand, montrée.
+#[derive(Clone)]
 struct PaletteViewShown {
     key: PaletteViewKey,
     texture: TextureHandle,
@@ -1668,6 +1669,9 @@ pub struct TriApp {
     palette_view_perceived: bool,
     /// Ce qu'elle montre, et ce qui se calcule en fond.
     palette_view_shown: Option<PaletteViewShown>,
+    /// Crans déjà calculés, le plus récent à la fin (`[gui.colours_view] cache`) : revenir à
+    /// un cran (couleurs perçues surtout, plus lentes) ne le recalcule pas.
+    palette_view_cache: Vec<PaletteViewShown>,
     palette_view_rx: Option<(PaletteViewKey, mpsc::Receiver<Option<PaletteViewImage>>)>,
     /// Grand histogramme : photo d'analyse affichée à sa droite (`p`).
     histogram_photo: bool,
@@ -2809,6 +2813,7 @@ impl TriApp {
             palette_view_false: false,
             palette_view_perceived: false,
             palette_view_shown: None,
+            palette_view_cache: Vec::new(),
             palette_view_rx: None,
             histogram_photo: gui.histogram.analysis,
             histogram_camera: gui.histogram.camera_jpeg,
@@ -21534,10 +21539,12 @@ impl TriApp {
         let mut false_colours = self.palette_view_false;
         let mut perceived = self.palette_view_perceived;
         let mut picked = None;
-        let shown = self
-            .palette_view_shown
-            .as_ref()
-            .filter(|s| Some(&s.key) == wanted.as_ref());
+        // En attendant le nouveau cran, l'ancien de la même photo reste (pas d'image vide).
+        let shown = self.palette_view_shown.as_ref().filter(|s| {
+            wanted
+                .as_ref()
+                .is_some_and(|w| s.key.0 == w.0 && s.key.1 == w.1)
+        });
         let texture = shown.map(|s| s.texture.clone());
         // Au cran 0 : la palette de la photo, ou en couleurs perçues la sienne.
         let palette = match (k, shown) {
@@ -21706,10 +21713,12 @@ impl TriApp {
         }
         let wanted = self.palette_view_key()?;
         self.palette_view_poll(ctx, Some(&wanted));
+        // En attendant le nouveau cran, l'ancien de la même photo reste (sans repasser par
+        // la palette du dossier : retour du 23/11/2026, un clignotement).
         let shown = self
             .palette_view_shown
             .as_ref()
-            .filter(|s| s.key == wanted)?;
+            .filter(|s| s.key.0 == wanted.0 && s.key.1 == wanted.1 && !s.swatches.is_empty())?;
         Some((
             self.palette_view_k,
             Arc::new(Palette {
@@ -21724,11 +21733,19 @@ impl TriApp {
             match rx.try_recv() {
                 Ok(Some((image, swatches))) => {
                     let texture = ctx.load_texture("palette_view", image, Default::default());
-                    self.palette_view_shown = Some(PaletteViewShown {
+                    let shown = PaletteViewShown {
                         key: key.clone(),
                         texture,
                         swatches,
-                    });
+                    };
+                    self.palette_view_cache.retain(|s| s.key != shown.key);
+                    self.palette_view_cache.push(shown.clone());
+                    let over = self
+                        .palette_view_cache
+                        .len()
+                        .saturating_sub(self.gui.palette_view.cache.max(1));
+                    self.palette_view_cache.drain(..over);
+                    self.palette_view_shown = Some(shown);
                     self.palette_view_rx = None;
                 }
                 Ok(None) | Err(mpsc::TryRecvError::Disconnected) => self.palette_view_rx = None,
@@ -21738,6 +21755,14 @@ impl TriApp {
         let Some(wanted) = wanted else {
             return;
         };
+        if let Some(hit) = self.palette_view_cache.iter().find(|s| &s.key == wanted)
+            && self
+                .palette_view_shown
+                .as_ref()
+                .is_none_or(|s| &s.key != wanted)
+        {
+            self.palette_view_shown = Some(hit.clone());
+        }
         let done = self
             .palette_view_shown
             .as_ref()
@@ -30838,15 +30863,20 @@ mod tests {
             ..modifiers
         };
         let events = crate::actions::winit_events(key, modifiers, cfg!(windows));
-        if matches!(events.as_slice(), [UiEvent::Key { .. }, ..]) {
+        if matches!(
+            events.as_slice(),
+            [UiEvent::Key { .. }, UiEvent::Key { .. }]
+        ) {
             h.key_press_modifiers(modifiers, key);
         } else {
             // Modificateurs tenus pendant l'image de l'événement, relâchés à la suivante
             // (comme au clavier : `event_modifiers` les relâcherait dans la même image).
-            h.event(UiEvent::ModifiersChanged(modifiers));
-            for event in events {
-                h.event(event);
-            }
+            // Tous dans la même image, comme egui-winit (la touche et son caractère : un
+            // chiffre) ; `h.event` en ferait une image chacun.
+            h.input_mut()
+                .events
+                .push(UiEvent::ModifiersChanged(modifiers));
+            h.input_mut().events.extend(events);
             h.run_steps(1);
             h.event(UiEvent::ModifiersChanged(Modifiers::NONE));
         }

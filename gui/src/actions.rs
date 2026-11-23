@@ -1828,15 +1828,26 @@ pub(crate) fn winit_events(key: Key, modifiers: Modifiers, windows: bool) -> Vec
     {
         Event::Paste("texte".into())
     } else {
-        return [true, false]
-            .map(|pressed| Event::Key {
-                key,
-                physical_key: None,
-                pressed,
-                repeat: false,
-                modifiers,
-            })
-            .to_vec();
+        let [down, up] = [true, false].map(|pressed| Event::Key {
+            key,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers,
+        });
+        // Un chiffre tape aussi son caractère (rangée du haut d'un AZERTY avec Maj, d'un
+        // QWERTY sans, pavé numérique) : les raccourcis à chiffre y sont liés.
+        let digit = key
+            .name()
+            .chars()
+            .next()
+            .filter(|c| key.name().len() == 1 && c.is_ascii_digit());
+        return match digit {
+            Some(c) if !modifiers.ctrl && !modifiers.command && !modifiers.alt => {
+                vec![down, Event::Text(c.to_string()), up]
+            }
+            _ => vec![down, up],
+        };
     };
     vec![event]
 }
@@ -3000,10 +3011,11 @@ fn parse_chord_on(text: &str, mac: bool) -> Result<Chord, String> {
     if single.is_some_and(|c| c.is_ascii_uppercase()) {
         shift = true;
     }
-    // « + - * / ( ) = » : des caractères, pas des touches (le zoom, les piles) ; la touche
-    // dépend de la disposition (« + » demande Maj sur un AZERTY, « ( » sur un QWERTY), le
-    // caractère est le même partout, pavé numérique compris.
-    if let Some(c) = single.filter(|c| "+-*/()=:".contains(*c))
+    // « + - * / ( ) = » et les chiffres : des caractères, pas des touches (le zoom, les
+    // piles, les notes, `f 3`, `c 3`) ; la touche dépend de la disposition (« + » et « 3 »
+    // demandent Maj sur un AZERTY, « ( » sur un QWERTY), le caractère est le même partout,
+    // pavé numérique compris (retour du 23/11/2026 : « Maj+3 » ne vaut qu'en AZERTY).
+    if let Some(c) = single.filter(|c| "+-*/()=:".contains(*c) || c.is_ascii_digit())
         && !shift
         && !ctrl
         && !cmd
@@ -3552,20 +3564,28 @@ mod tests {
 
     #[test]
     fn rating_keys_work_with_or_without_shift() {
+        // Le caractère tapé (23/11/2026) : rangée du haut, avec Maj en AZERTY ou sans en
+        // QWERTY, ou pavé numérique ; la touche suivie de son caractère est laissée.
         let km = Keymap::default();
-        for (key, action) in [
-            (Key::Num0, Action::Stars(0)),
-            (Key::Num3, Action::Stars(3)),
-            (Key::Num5, Action::Stars(5)),
-            (Key::Num6, Action::Color(Color::Red)),
-            (Key::Num9, Action::Color(Color::Blue)),
+        for (c, action) in [
+            ('0', Action::Stars(0)),
+            ('3', Action::Stars(3)),
+            ('5', Action::Stars(5)),
+            ('6', Action::Color(Color::Red)),
+            ('9', Action::Color(Color::Blue)),
         ] {
-            assert_eq!(km.action(key, Modifiers::NONE), Some(action), "{key:?}");
-            assert_eq!(
-                km.action(key, Modifiers::SHIFT),
-                Some(action),
-                "Maj+{key:?}"
-            );
+            assert_eq!(km.chord_action(Chord::char(c)), Some(action), "{c}");
+            for shift in [false, true] {
+                let modifiers = if shift {
+                    Modifiers::SHIFT
+                } else {
+                    Modifiers::NONE
+                };
+                let key = Key::from_name(&c.to_string()).unwrap();
+                let events = winit_events(key, modifiers, false);
+                let chords = km.chords_repeated(&events, modifiers);
+                assert_eq!(chords, [(Chord::char(c), false)], "{c} {shift}");
+            }
         }
         assert_eq!(
             km.action(Key::Comma, Modifiers::NONE),
@@ -3846,7 +3866,7 @@ mod tests {
             Some(Action::FolderOpen)
         );
         assert_eq!(
-            seq.feed_one(&km, key(Key::Num3), now),
+            seq.feed_one(&km, Chord::char('3'), now),
             Some(Action::Stars(3)),
             "le reste passe"
         );
@@ -4177,7 +4197,8 @@ mod tests {
         assert_eq!(ok("Échap"), [plain(Key::Escape)]);
         assert_eq!(ok("Escape g"), [plain(Key::Escape), plain(Key::G)]);
         assert_eq!(ok("Page préc."), [plain(Key::PageUp)]);
-        assert_eq!(ok("3"), [plain(Key::Num3)]);
+        assert_eq!(ok("3"), [Chord::char('3')], "un chiffre : le caractère");
+        assert_eq!(ok("Maj+3"), [shifted(Key::Num3)], "avec Maj : la touche");
         assert_eq!(ok(","), [plain(Key::Comma)]);
         assert_eq!(
             ok("+"),
