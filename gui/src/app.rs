@@ -5093,7 +5093,9 @@ impl TriApp {
             // Centrée sur la hauteur de l'imagette.
             ui.vertical(|ui| {
                 ui.add_space(((side - target) / 2.0).max(0.0));
-                let usable = !self.files.is_empty();
+                // Comme l'action : une photo en surbrillance (retour du 23/11/2026 : toutes
+                // désélectionnées, la cible restait cliquable sans rien faire).
+                let usable = self.reference_from_selection().is_some();
                 let tip = self.action_tip(Action::SetReference);
                 let (rect, response) = ui
                     .add_enabled_ui(usable, |ui| {
@@ -33036,6 +33038,7 @@ mod tests {
 
     #[test]
     fn the_reference_is_set_with_the_mouse() {
+        use egui_kittest::kittest::NodeT;
         // Retour du 23/11/2026 : une cible à gauche de l'imagette de la référence la pose,
         // la photo en surbrillance.
         let (mut h, _dir) = harness();
@@ -33051,6 +33054,16 @@ mod tests {
             act(&mut h, Action::SetReference);
         }
         assert!(h.state().reference.is_some());
+        // Rien en surbrillance (curseur masqué, aucune sélection) : la cible est grisée.
+        h.state_mut().reference = None;
+        h.state_mut().cursor_hidden = true;
+        h.state_mut().selection.clear();
+        h.run_steps(2);
+        assert!(
+            h.get_by_label(&t!("palette-reference-take"))
+                .accesskit_node()
+                .is_disabled()
+        );
     }
 
     #[test]
