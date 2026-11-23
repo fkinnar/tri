@@ -32407,8 +32407,16 @@ mod tests {
             Some(tri::palette::SourceKind::Camera),
             "palettes de la grille"
         );
-        // Les palettes toutes là (le mode palette ne prend aux empreintes que les heures).
-        run_until(&mut h, |app| app.palettes_complete() && !app.stacks_dirty);
+        // Les palettes toutes lues, pas seulement annoncées calculées : une palette encore
+        // en lecture coupe le lien avec sa voisine, le temps qu'elle arrive (CI Windows,
+        // trois fois le 23/11/2026 : 4 piles au lieu de 3).
+        let source = tri::palette::Source::Camera;
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), source)))
+                && !app.stacks_dirty
+        });
         h.run_steps(3);
         assert_eq!(h.state().stacks.groups(), 3, "bleus, rouges, bleu");
         // À fond à gauche, tout se rejoint : ni l'heure ni les pauses ne coupent une série
