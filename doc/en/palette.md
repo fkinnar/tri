@@ -147,8 +147,12 @@ In **perceived colours** (`posterize_with(…, true)`, experiment): the image in
 and b blurred over a square of `perceived_surround` (0.2) of the long side (two passes of
 running means, `box_blur`) give the surround's hue; each pixel loses the
 `perceived_adaptation` share of it (0.8; the eye adapting to the dominant light), then a
-and b are multiplied by `perceived_saturation` (1.4: removing the dominant light took
-colour away from everything else, "infinitely more natural" but dull; 1.8 was garish); in the
+and b are multiplied by a **decreasing** saturation: `perceived_saturation` (1.4) at
+`perceived_saturation_colours` (4) colours, the extra varying as (4 / k) ^
+`perceived_saturation_falloff` (0.5) — 1.8 for 1 colour, 1.28 for 8, the whole image
+(step 0) left as is (feedback of 2026-11-23: removing the dominant light took colour away from
+everything else, "infinitely more natural" but dull; then "the more colours, the less
+correction"); in the
 k-means (weighted, `cluster_weighted`), a point weighs `1 + perceived_salience × gap to its
 surround / 0.1`. On the user's photo under violet light, the face comes out orange from 2
 colours (pinkish beige in raw values).

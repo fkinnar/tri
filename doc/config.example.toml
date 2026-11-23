@@ -676,10 +676,19 @@ perceived_adaptation = 0.8
 perceived_surround = 0.2
 # Couleurs perçues : poids des zones qui tranchent sur leur entourage.
 perceived_salience = 1.0
-# Couleurs perçues : saturation rendue après l'adaptation (1 : telle quelle).
+# Couleurs perçues : saturation rendue après l'adaptation, à 4 couleurs (1 : telle quelle).
 #
-# Retirer la lumière dominante ôte aussi de la couleur à tout le reste.
+# Retirer la lumière dominante ôte aussi de la couleur à tout le reste. Dégressive : moins de
+# couleurs, chacune plus moyenne et plus terne, plus de saturation (voir les deux suivants).
 perceived_saturation = 1.4
+# Couleurs perçues : nombre de couleurs auquel vaut perceived_saturation.
+perceived_saturation_colours = 4
+# Couleurs perçues : pente de la saturation selon le nombre de couleurs.
+#
+# Le surplus au-delà de 1 varie comme (perceived_saturation_colours / couleurs) ^ pente :
+# avec 0,5, 1,8 pour 1 couleur, 1,4 pour 4, 1,28 pour 8 ; l'image entière n'est pas touchée.
+# 0 : la même saturation partout.
+perceived_saturation_falloff = 0.5
 
 [index]
 # Noter les palettes dans l'index de recherche de tous les dossiers.

@@ -673,10 +673,19 @@ perceived_adaptation = 0.8
 perceived_surround = 0.2
 # Perceived colours: weight of the areas that stand out from their surround.
 perceived_salience = 1.0
-# Perceived colours: saturation given back after the adaptation (1: as is).
+# Perceived colours: saturation given back after the adaptation, at 4 colours (1: as is).
 #
-# Removing the dominant light also takes colour away from everything else.
+# Removing the dominant light also takes colour away from everything else. Decreasing: fewer
+# colours, each more of an average and duller, more saturation (see the next two).
 perceived_saturation = 1.4
+# Perceived colours: number of colours at which perceived_saturation applies.
+perceived_saturation_colours = 4
+# Perceived colours: slope of the saturation by number of colours.
+#
+# The extra above 1 varies as (perceived_saturation_colours / colours) ^ slope: with 0.5,
+# 1.8 for 1 colour, 1.4 for 4, 1.28 for 8; the whole image is left as is. 0: the same
+# saturation everywhere.
+perceived_saturation_falloff = 0.5
 
 [index]
 # Record the palettes in the search index of all folders.

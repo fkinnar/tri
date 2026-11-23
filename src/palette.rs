@@ -218,8 +218,14 @@ pub struct PaletteSettings {
     pub perceived_surround: f32,
     /// Couleurs perçues : poids des zones qui tranchent sur leur entourage.
     pub perceived_salience: f32,
-    /// Couleurs perçues : saturation rendue après l'adaptation (1 : telle quelle).
+    /// Couleurs perçues : saturation rendue après l'adaptation (1 : telle quelle), pour
+    /// `perceived_saturation_colours` couleurs.
     pub perceived_saturation: f32,
+    /// Couleurs perçues : nombre de couleurs auquel vaut `perceived_saturation`.
+    pub perceived_saturation_colours: usize,
+    /// Couleurs perçues : pente de la saturation selon le nombre de couleurs (le surplus
+    /// au-delà de 1 varie comme (référence / couleurs) ^ pente ; 0 : la même partout).
+    pub perceived_saturation_falloff: f32,
 }
 
 impl Default for PaletteSettings {
@@ -250,6 +256,8 @@ impl Default for PaletteSettings {
             perceived_surround: 0.2,
             perceived_salience: 1.0,
             perceived_saturation: 1.4,
+            perceived_saturation_colours: 4,
+            perceived_saturation_falloff: 0.5,
         }
     }
 }
@@ -1087,7 +1095,18 @@ fn posterize_perceived(
     // Retirer la lumière dominante ôte aussi de la couleur à tout le reste : rendue par
     // `perceived_saturation` (retour du 23/11/2026 : « infiniment plus naturel », mais
     // terne).
-    let saturation = settings.perceived_saturation.max(0.0);
+    // Dégressive (retour du 23/11/2026) : moins de couleurs, chacune plus moyenne, plus
+    // terne ; `perceived_saturation` vaut pour `perceived_saturation_colours` couleurs,
+    // et le surplus varie comme (référence / k) ^ `perceived_saturation_falloff` ;
+    // l'image entière (k = 0) n'est pas touchée (retour du 23/11/2026).
+    let reference = settings.perceived_saturation_colours.max(1) as f32;
+    let extra = settings.perceived_saturation - 1.0;
+    let saturation = if k == 0 {
+        1.0
+    } else {
+        (1.0 + extra * (reference / k as f32).powf(settings.perceived_saturation_falloff.max(0.0)))
+            .max(0.0)
+    };
     let perceived: Vec<[f32; 3]> = (0..n)
         .map(|i| {
             [
