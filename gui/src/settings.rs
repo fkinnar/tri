@@ -665,6 +665,9 @@ pub struct GridSettings {
     pub textures: usize,
     /// Taille des notes (étoiles, couleurs, drapeau) sur les vignettes.
     pub marks: f32,
+    /// Imagette de la référence (filtres « palettes proches », « semblables ») : sa taille,
+    /// en multiple de la hauteur des deux lignes qu'elle accompagne.
+    pub reference_scale: f32,
     /// Marques vides dessinées en gris clair là où rien n'est posé (une étoile, une
     /// pastille de couleur, le cercle du drapeau neutre) : chaque vignette montre toutes
     /// ses informations et où cliquer (demandé le 31/10/2026).
@@ -751,6 +754,7 @@ impl Default for GridSettings {
             name_chars: 24,
             textures: 600,
             marks: 12.0,
+            reference_scale: 1.25,
             empty_marks: true,
             rejected_opacity: 0.35,
             hover_frame: 2.0,
@@ -1195,6 +1199,36 @@ pub struct ColourSearchSettings {
     /// Aperçu en direct : la grille cherche derrière la boîte à chaque changement, au plus
     /// une fois par ce délai (millisecondes) ; 0 : seulement à « Chercher ».
     pub live_ms: u64,
+    /// Roue de la boîte : celle des peintres (rouge, jaune, bleu ; ses harmonies sont
+    /// celles qu'on connaît) ou la roue TSV ; changée aussi dans la boîte.
+    pub wheel: ColourWheel,
+    /// Clavier : pas de la teinte (degrés) aux flèches ← →.
+    pub key_hue_step: f32,
+    /// Clavier : pas de la saturation et de la valeur (0 à 1) aux flèches ↑ ↓.
+    pub key_step: f32,
+    /// Clavier : pas de la tolérance à `+` / `-`.
+    pub key_radius_step: f32,
+}
+
+/// Roue de la boîte des couleurs (#492).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ColourWheel {
+    /// Roue des peintres : rouge, jaune, bleu (complémentaire du bleu : l'orange).
+    #[default]
+    Ryb,
+    /// Roue TSV de l'écran (complémentaire du bleu : le jaune).
+    Rgb,
+}
+
+impl ColourWheel {
+    /// Identifiant dans la configuration.
+    pub fn id(self) -> &'static str {
+        match self {
+            ColourWheel::Ryb => "ryb",
+            ColourWheel::Rgb => "rgb",
+        }
+    }
 }
 
 impl Default for ColourSearchSettings {
@@ -1212,6 +1246,10 @@ impl Default for ColourSearchSettings {
             own: Vec::new(),
             own_max: 6,
             live_ms: 150,
+            wheel: ColourWheel::Ryb,
+            key_hue_step: 5.0,
+            key_step: 0.05,
+            key_radius_step: 0.01,
         }
     }
 }

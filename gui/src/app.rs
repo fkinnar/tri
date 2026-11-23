@@ -327,10 +327,31 @@ struct ColourDialog {
     active: Option<usize>,
     /// Réinitialisée et pas retouchée depuis : rien à chercher.
     blank: bool,
+    /// Mode couleur moyenne : seule la première couleur compte (et se montre).
+    mean: bool,
+    /// Harmonie en cours (#492) : les emplacements suivent la base (le premier) ; retoucher
+    /// un autre emplacement, en ranger ou en vider un, la détache.
+    harmony: Option<crate::palette_view::Harmony>,
+    /// Roue des peintres (RYB) plutôt que TSV : les angles des harmonies.
+    ryb: bool,
+    /// Emplacements au plus (`[gui.colour_search] max`).
+    max: usize,
+    /// Point de l'harmonie que l'on fait tourner sur la roue (glisser en cours).
+    dragging: Option<usize>,
+    /// Pas encore montrée : ses touches attendent l'image suivante (la touche qui l'a
+    /// ouverte, Entrée, la validait aussitôt).
+    fresh: bool,
+    /// Largeur de sa ligne du milieu, mesurée : celle de toute la boîte.
+    width: f32,
+    /// L'emplacement réglé a été choisi exprès (clic dessus, `1`–`5`) : il le reste après
+    /// un clic sur la roue ; sinon, au relâcher, le clic suivant remplit le suivant.
+    sticky: bool,
+    /// Un clic ou un glisser sur la roue en cours.
+    stroke: bool,
 }
 
 impl ColourDialog {
-    /// Sur les couleurs `colours` (rangées), la première choisie ; aucune : un gris moyen
+    /// Sur les couleurs `colours` (rangées), la première choisie ; aucune : le blanc (centre de la roue, 100 %)
     /// sur la roue, rien de rangé.
     fn new(colours: &[[f32; 3]]) -> ColourDialog {
         let mut dialog = ColourDialog {
@@ -339,25 +360,44 @@ impl ColourDialog {
             slots: Vec::new(),
             active: None,
             blank: false,
+            harmony: None,
+            ryb: true,
+            max: 5,
+            dragging: None,
+            fresh: true,
+            width: 0.0,
+            sticky: false,
+            stroke: false,
+            mean: false,
         };
         for &oklab in colours {
             dialog.set(oklab);
             dialog.slots.push(dialog.hsv);
         }
+        // Rien de choisi : un clic sur la roue remplit le premier emplacement vide (retour
+        // du 23/11/2026) ; la première couleur sur la roue.
         if colours.is_empty() {
-            dialog.set_rgb([128, 128, 128]);
+            // Le centre de la roue à 100 %, comme elle (retour du 23/11/2026 : un gris à
+            // 50 %, le curseur de la valeur partait à mi-hauteur).
+            dialog.set_rgb([255, 255, 255]);
         } else {
             dialog.load(0);
+            dialog.active = None;
+            dialog.sticky = false;
         }
         dialog
     }
 
-    /// Réinitialise (retour du 23/11/2026) : rien de rangé, un gris moyen sur la roue,
+    /// Réinitialise (retour du 23/11/2026) : rien de rangé, le blanc sur la roue,
     /// rien à chercher tant qu'on n'a rien retouché.
     fn reset(&mut self) {
+        self.harmony = None;
+        self.sticky = false;
         self.slots.clear();
         self.active = None;
-        self.set_rgb([128, 128, 128]);
+        // Sans `follow` : en couleur moyenne, le gris irait dans la première couleur.
+        self.hsv = crate::palette_view::rgb_to_hsv([255, 255, 255], self.hsv[0]);
+        self.hex = "#ffffff".to_string();
         self.blank = true;
     }
 
@@ -365,9 +405,88 @@ impl ColourDialog {
     /// choisi.
     fn store(&mut self, max: usize) {
         self.blank = false;
+        self.harmony = None;
+        self.sticky = false;
         if self.slots.len() < max {
             self.slots.push(self.hsv);
             self.active = Some(self.slots.len() - 1);
+        }
+    }
+
+    /// Avant une retouche venue de la roue ou de la pipette (retour du 23/11/2026) :
+    /// l'emplacement choisi exprès, sinon le premier vide (la couleur réglée y est rangée),
+    /// sinon le dernier. Rien avec une harmonie (elle tourne).
+    fn edit_target(&mut self) {
+        // Couleur moyenne : toujours la première.
+        if self.mean {
+            if self.slots.is_empty() {
+                self.store(self.max);
+            } else {
+                self.active = Some(0);
+            }
+            return;
+        }
+        if self.harmony.is_some() || (self.sticky && self.active.is_some()) {
+            return;
+        }
+        if self.slots.len() < self.max {
+            self.store(self.max);
+        } else {
+            self.active = self.slots.len().checked_sub(1);
+        }
+    }
+
+    /// Après cette retouche : plus rien de choisi (la suivante remplira l'emplacement
+    /// suivant), sauf un emplacement choisi exprès.
+    fn edit_done(&mut self) {
+        if !self.sticky && self.harmony.is_none() && !self.mean {
+            self.active = None;
+        }
+    }
+
+    /// Plus rien de choisi : le prochain clic sur la roue remplira le premier vide.
+    fn deselect(&mut self) {
+        self.active = None;
+        self.sticky = false;
+    }
+
+    /// Avant un réglage de la valeur (curseur vertical) : la couleur choisie, sinon la
+    /// dernière rangée (juste après un clic sur la roue, c'est elle), sinon une nouvelle.
+    fn value_target(&mut self) {
+        if self.active.is_some() {
+            return;
+        }
+        if (self.harmony.is_some() || self.mean) && !self.slots.is_empty() {
+            self.active = Some(0);
+            return;
+        }
+        match self.slots.len() {
+            0 => self.store(self.max),
+            n => self.active = Some(n - 1),
+        }
+    }
+
+    /// Une couleur relevée (pipette) : comme un clic sur la roue.
+    fn pick(&mut self, oklab: [f32; 3]) {
+        self.edit_target();
+        self.set(oklab);
+        self.edit_done();
+    }
+
+    /// Une pastille cliquée : comme un clic sur la roue (retour du 23/11/2026 : rien de
+    /// choisi, elle ne changeait que la roue, pas la recherche).
+    fn pick_rgb(&mut self, rgb: [u8; 3]) {
+        self.edit_target();
+        self.set_rgb(rgb);
+        self.edit_done();
+    }
+
+    /// Avant une valeur tapée (R V B, T S V, `#rrggbb`) : comme les flèches, rien de
+    /// choisi, le prochain vide est rempli et gardé.
+    fn type_target(&mut self) {
+        if self.active.is_none() && self.harmony.is_none() {
+            self.edit_target();
+            self.sticky = true;
         }
     }
 
@@ -375,14 +494,23 @@ impl ColourDialog {
     fn load(&mut self, i: usize) {
         if let Some(&hsv) = self.slots.get(i) {
             self.active = Some(i);
-            self.set_hsv(hsv);
+            self.sticky = true;
+            // Choisir n'est pas retoucher (retour du 23/11/2026 : l'harmonie se
+            // détachait au simple clic sur une autre couleur).
+            self.hsv = hsv;
+            let [r, g, b] = self.rgb();
+            self.hex = format!("#{r:02x}{g:02x}{b:02x}");
         }
     }
 
     /// Vide l'emplacement `i` (les suivants avancent : l'ordre est celui de l'importance).
     fn clear(&mut self, i: usize) {
         if i < self.slots.len() {
+            self.harmony = None;
             self.slots.remove(i);
+            if self.active == Some(i) {
+                self.sticky = false;
+            }
             self.active = match self.active {
                 Some(a) if a == i => None,
                 Some(a) if a > i => Some(a - 1),
@@ -436,9 +564,97 @@ impl ColourDialog {
     /// L'emplacement choisi prend la couleur réglée.
     fn follow(&mut self) {
         self.blank = false;
+        // Couleur moyenne : toute retouche va dans la première (retour du 23/11/2026 : une
+        // pastille ne changeait que la roue, deux points s'y voyaient).
+        if self.mean {
+            if self.slots.is_empty() {
+                self.slots.push(self.hsv);
+            }
+            self.active = Some(0);
+        }
         if let Some(slot) = self.active.and_then(|i| self.slots.get_mut(i)) {
             *slot = self.hsv;
         }
+        // Harmonie : n'importe quel point retouché la fait tourner, les autres suivent
+        // (retour du 23/11/2026 : retoucher un autre emplacement que la base la
+        // détachait) ; elle ne se détache qu'en recliquant son icône, ou en rangeant ou
+        // vidant un emplacement.
+        if let Some(harmony) = self.harmony {
+            match self.active {
+                Some(i) if i > 0 => {
+                    let [h, s, v] = self.hsv;
+                    let base = self.slots[0];
+                    self.slots[0] = if harmony == crate::palette_view::Harmony::Shades {
+                        [h, base[1], base[2]]
+                    } else {
+                        use crate::palette_view::{hue_to_wheel, wheel_to_hue};
+                        let offset = harmony.offsets().get(i).copied().unwrap_or(0.0);
+                        let angle = hue_to_wheel(h, self.ryb) - offset;
+                        [wheel_to_hue(angle, self.ryb), s, v]
+                    };
+                    self.regenerate();
+                    // La couleur réglée, recalculée (aller-retour par la roue).
+                    if let Some(&hsv) = self.slots.get(i) {
+                        self.hsv = hsv;
+                        let [r, g, b] = self.rgb();
+                        self.hex = format!("#{r:02x}{g:02x}{b:02x}");
+                    }
+                }
+                _ => self.regenerate(),
+            }
+        }
+    }
+
+    /// Les emplacements refaits d'après l'harmonie autour du premier (au plus `max`).
+    fn regenerate(&mut self) {
+        let (Some(harmony), Some(&base)) = (self.harmony, self.slots.first()) else {
+            return;
+        };
+        self.slots = harmony.colours(base, self.ryb);
+        self.slots.truncate(self.max.max(1));
+    }
+
+    /// Choisit l'harmonie `harmony` (la même une seconde fois : la détache, couleurs
+    /// gardées) : la couleur réglée devient la base, les autres emplacements suivent.
+    fn set_harmony(&mut self, harmony: crate::palette_view::Harmony) {
+        if self.harmony == Some(harmony) {
+            self.harmony = None;
+            return;
+        }
+        self.blank = false;
+        self.slots = vec![self.hsv];
+        self.active = Some(0);
+        self.harmony = Some(harmony);
+        self.regenerate();
+    }
+
+    /// Fait tourner l'harmonie sur la roue : le point `i` amené à la teinte `hue` (TSV) et
+    /// à la saturation `saturation`, les autres suivent (camaïeu : la base seule bouge).
+    fn turn(&mut self, i: usize, hue: f32, saturation: f32) {
+        use crate::palette_view::{Harmony, hue_to_wheel, wheel_to_hue};
+        let Some(harmony) = self.harmony else {
+            return;
+        };
+        let offset = harmony.offsets().get(i).copied().unwrap_or(0.0);
+        let offset = if harmony == Harmony::Shades {
+            0.0
+        } else {
+            offset
+        };
+        let angle = hue_to_wheel(hue, self.ryb) - offset;
+        let Some(base) = self.slots.first_mut() else {
+            return;
+        };
+        *base = [wheel_to_hue(angle, self.ryb), saturation, base[2]];
+        self.regenerate();
+        // Le point glissé devient celui qu'on règle.
+        if let Some(&hsv) = self.slots.get(i) {
+            self.active = Some(i);
+            self.hsv = hsv;
+            let [r, g, b] = self.rgb();
+            self.hex = format!("#{r:02x}{g:02x}{b:02x}");
+        }
+        self.blank = false;
     }
 }
 
@@ -454,6 +670,83 @@ struct ColourLive {
     changed: bool,
     applied: Vec<[f32; 3]>,
     at: Instant,
+}
+
+/// Curseur vertical de la valeur (TSV) à droite de la roue (retour du 23/11/2026) : la
+/// couleur réglée, de la pleine luminosité en haut au noir en bas ; un clic ou un glisser
+/// règle la valeur de la couleur choisie (rien de choisi : la dernière rangée),
+/// double-clic : 100 %.
+fn colour_value_bar(ui: &mut Ui, dialog: &mut ColourDialog) {
+    let size = vec2(16.0, 200.0);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::Role::Slider, true, t!("palette-colour-value"))
+    });
+    let response = response.on_hover_text(t!("palette-colour-value"));
+    let [h, s, _] = dialog.hsv;
+    // Le dégradé, par bandes.
+    let steps = 32;
+    let mut mesh = egui::Mesh::default();
+    for k in 0..=steps {
+        let t = k as f32 / steps as f32;
+        let [r, g, b] = crate::palette_view::hsv_to_rgb([h, s, 1.0 - t]);
+        let c = Color32::from_rgb(r, g, b);
+        let y = rect.top() + t * rect.height();
+        mesh.colored_vertex(pos2(rect.left(), y), c);
+        mesh.colored_vertex(pos2(rect.right(), y), c);
+    }
+    for k in 0..steps as u32 {
+        let i = k * 2;
+        mesh.add_triangle(i, i + 1, i + 2);
+        mesh.add_triangle(i + 1, i + 3, i + 2);
+    }
+    ui.painter().add(egui::Shape::mesh(mesh));
+    ui.painter().rect_stroke(
+        rect,
+        2.0,
+        egui::Stroke::new(1.0, Color32::from_black_alpha(90)),
+        egui::StrokeKind::Outside,
+    );
+    let set = |dialog: &mut ColourDialog, value: f32| {
+        dialog.value_target();
+        let [h, s, _] = dialog.hsv;
+        dialog.set_hsv([h, s, value.clamp(0.0, 1.0)]);
+    };
+    if response.double_clicked() {
+        set(dialog, 1.0);
+    } else if let Some(pos) = response.interact_pointer_pos()
+        && (response.clicked() || response.dragged())
+    {
+        set(dialog, 1.0 - (pos.y - rect.top()) / rect.height());
+    }
+    if response.drag_stopped() || (response.clicked() && !response.dragged()) {
+        dialog.edit_done();
+    }
+    // Le repère : un trait clair cerclé de noir à la hauteur de la valeur.
+    let y = rect.top() + (1.0 - dialog.hsv[2].clamp(0.0, 1.0)) * rect.height();
+    let mark = Rect::from_min_max(
+        pos2(rect.left() - 3.0, y - 2.0),
+        pos2(rect.right() + 3.0, y + 2.0),
+    );
+    ui.painter().rect_filled(mark, 1.0, Color32::WHITE);
+    ui.painter().rect_stroke(
+        mark,
+        1.0,
+        egui::Stroke::new(1.0, Color32::BLACK),
+        egui::StrokeKind::Outside,
+    );
+}
+
+/// Ce que les touches de la boîte des couleurs demandent à l'application (le reste est
+/// fait dans la boîte même).
+#[derive(Default)]
+struct ColourKeys {
+    mode: Option<crate::settings::ColourMode>,
+    wheel: Option<crate::settings::ColourWheel>,
+    eyedropper: bool,
+    /// Tolérance à ajouter (négatif : à retirer).
+    radius: f32,
+    ok: bool,
 }
 
 /// Taille d'une pastille de la boîte des couleurs.
@@ -1140,6 +1433,9 @@ pub struct TriApp {
     opening: Option<Opening>,
     /// « Toutes les photos » (#561) : dossier d'où l'on y est venu (Échap y ramène).
     all_photos_from: Option<PathBuf>,
+    /// Au lancement, on était dans « Toutes les photos » en quittant : on y repasse une
+    /// fois le dernier vrai dossier ouvert (le retour y ramène).
+    reopen_all_photos: bool,
     /// Empreintes de similitude de « Toutes les photos », lues d'un coup dans l'index
     /// (« semblables » partout sans relire le cache photo par photo).
     all_photos_signatures: Option<mpsc::Receiver<Vec<(PathBuf, tri::similarity::Signature)>>>,
@@ -2149,6 +2445,11 @@ impl TriApp {
         let remembered = (dir.is_none() && gui.reopen_last)
             .then(|| tri::folder::remembered(data.as_deref()?))
             .flatten();
+        let reopen_all_photos = dir.is_none()
+            && gui.reopen_last
+            && data
+                .as_deref()
+                .is_some_and(tri::folder::remembered_all_photos);
         let start_dir = dir.or(remembered.clone());
         let (folder, error, missing_last) = (Folder::default(), None, None);
         let subfolders = gui.folders.subfolders;
@@ -2366,6 +2667,7 @@ impl TriApp {
             neighbour_tried: cfg!(test),
             opening: None,
             all_photos_from: None,
+            reopen_all_photos,
             all_photos_last: None,
             all_photos_signatures: None,
             missing_dirs: HashMap::new(),
@@ -3110,6 +3412,22 @@ impl TriApp {
     /// « Toutes les photos » (#561) : y va en retenant le dossier d'où l'on vient ; de
     /// là, y retourne (bascule, retour du 22/11/2026). Les filtres restent posés : un
     /// filtre posé ici cherche ensuite partout.
+    /// Au lancement, « Toutes les photos » où l'on était en quittant : une fois le dernier
+    /// vrai dossier ouvert (ou sans dossier retenu), le moteur prêt.
+    fn reopen_all_photos_pending(&mut self) {
+        if !self.reopen_all_photos
+            || self.engine.is_none()
+            || self.loading.is_some()
+            || self.opening.is_some()
+        {
+            return;
+        }
+        self.reopen_all_photos = false;
+        if !tri::folder::is_all_photos(&self.folder.dir) {
+            self.toggle_all_photos();
+        }
+    }
+
     fn toggle_all_photos(&mut self) {
         if tri::folder::is_all_photos(&self.folder.dir) {
             match self.all_photos_from.take() {
@@ -3872,10 +4190,14 @@ impl TriApp {
                     self.all_photos_from = None;
                 }
                 self.missing_dirs.clear();
-                // Mémorisé pour le prochain lancement (sans conséquence en cas d'échec) ;
-                // pas « Toutes les photos ».
-                if let Some(data) = self.settings.data_dir().filter(|_| !all_photos) {
-                    let _ = tri::folder::remember(&data, &folder.dir);
+                // Mémorisé pour le prochain lancement (sans conséquence en cas d'échec) :
+                // le dernier vrai dossier, et si l'on est dans « Toutes les photos »
+                // (retour du 23/11/2026 : on n'y revenait pas).
+                if let Some(data) = self.settings.data_dir() {
+                    if !all_photos {
+                        let _ = tri::folder::remember(&data, &folder.dir);
+                    }
+                    let _ = tri::folder::remember_all_photos(&data, all_photos);
                 }
                 self.chosen = chosen;
                 self.dev_preferred = dev_preferred;
@@ -4745,7 +5067,9 @@ impl TriApp {
         if palettes {
             self.search_filter_row(ui, Action::FilterPaletteColour);
         }
-        let side = (self.gui.grid.marks + 4.0) * 2.0 + ui.spacing().item_spacing.y;
+        // Plus grande que les deux lignes (retour du 23/11/2026 : on la voyait mal).
+        let side = ((self.gui.grid.marks + 4.0) * 2.0 + ui.spacing().item_spacing.y)
+            * self.gui.grid.reference_scale.max(0.5);
         let gap = ui.spacing().item_spacing.x * 2.0;
         let width = ui.available_width();
         // Les espacements d'egui entre les trois éléments de la rangée comptent aussi :
@@ -5377,6 +5701,7 @@ impl TriApp {
             hierarchy: (mode == ColourMode::Hierarchical)
                 .then_some(self.settings.palette.colour_hierarchy),
             proximity: self.settings.palette.colour_proximity,
+            widen: self.settings.palette.colour_widen,
             mean: (mode == ColourMode::Mean).then_some(self.settings.palette.mean_lightness),
         });
         let threshold = match &query {
@@ -5615,10 +5940,31 @@ impl TriApp {
         // Pastilles libres changées, recherche hiérarchique basculée : écrites après.
         let mut own: Option<Vec<String>> = None;
         let mut mode: Option<crate::settings::ColourMode> = None;
+        let mut wheel: Option<crate::settings::ColourWheel> = None;
+        // Le clavier (retour du 23/11/2026 : la boîte ne se pilotait qu'à la souris).
+        let keyed = self.colour_dialog_keys(ctx, &mut dialog);
+        // La tolérance (celle du panneau) et le nombre de photos trouvées.
+        let p = self.settings.palette;
+        let (radius_max, radius_default) = (p.colour_radius_max.max(0.01), p.colour_radius);
+        let before_radius = self
+            .palette_colour
+            .as_ref()
+            .map_or(self.palette_radius, |c| c.radius);
+        let mut radius = before_radius;
+        let mut radius_done = false;
+        let found = self.palette_colour.is_some().then_some(self.files.len());
+        let weak = ctx.global_style().visuals.weak_text_color();
+        dialog.ryb = self.gui.colour_search.wheel == crate::settings::ColourWheel::Ryb;
+        dialog.max = self.gui.colour_search.max.max(1);
+        dialog.mean = self.gui.colour_search.mode == crate::settings::ColourMode::Mean;
         let title = t!("palette-colour-title");
         let modal = modal_at("palette_colour_dialog", CENTRED)
             .title(title)
             .free_width()
+            // La largeur de la ligne du milieu (valeur, roue, valeurs), mesurée à l'image
+            // d'avant (retour du 23/11/2026) : sans elle, le trait sous le titre prenait la
+            // place disponible, et les boutons calés à droite s'y alignaient.
+            .width((dialog.width > 0.0).then_some(dialog.width))
             .show(ctx, |ui| {
                 // Les couleurs cherchées, en haut, et le mode de recherche (#492).
                 ui.add_space(5.0);
@@ -5630,143 +5976,134 @@ impl TriApp {
                 ui.add_space(10.0);
                 // La roue à gauche, les réglages à droite (retour du 21/11/2026 : en
                 // colonne, la boîte était trop large pour son contenu).
-                ui.horizontal_top(|ui| {
-                    // La roue TSV (retour du 21/11/2026 : la clarté d'OKLab ne parlait pas) :
-                    // un clic ou un glisser y choisit teinte et saturation, à la valeur V.
-                    let side = 200.0;
-                    let (rect, response) =
-                        ui.allocate_exact_size(vec2(side, side), Sense::click_and_drag());
-                    crate::palette_view::draw_hsv_wheel(ui.painter(), rect, dialog.hsv[2]);
-                    let radius = side / 2.0;
-                    if let Some(pos) = response.interact_pointer_pos()
-                        && (response.clicked() || response.dragged())
-                    {
-                        // Hors de la roue en glissant : au bord, dans la même direction.
-                        let d = pos - rect.center();
-                        let pos = if d.length() > radius {
-                            rect.center() + d * (radius / d.length())
-                        } else {
-                            pos
-                        };
-                        if let Some((h, s)) =
-                            crate::palette_view::hsv_at(pos, rect.center(), radius)
-                        {
-                            dialog.set_hsv([h, s, dialog.hsv[2]]);
-                        }
-                    }
-                    let at = crate::palette_view::hsv_pos(
-                        dialog.hsv[0],
-                        dialog.hsv[1],
-                        rect.center(),
-                        radius,
-                    );
-                    ui.painter()
-                        .circle_stroke(at, 6.0, egui::Stroke::new(2.0, Color32::WHITE));
-                    ui.painter()
-                        .circle_stroke(at, 7.5, egui::Stroke::new(1.0, Color32::BLACK));
-                    ui.add_space(12.0);
+                let middle = ui.horizontal_top(|ui| {
+                    // La roue (retour du 21/11/2026 : la clarté d'OKLab ne parlait pas) : un
+                    // clic ou un glisser y choisit teinte et saturation, à la valeur V. Roue
+                    // des peintres (RYB) ou TSV, harmonies dessous (#492, 23/11/2026).
                     ui.vertical(|ui| {
-                        // La couleur, son `#rrggbb` et la pipette.
-                        ui.horizontal(|ui| {
-                            let [r, g, b] = dialog.rgb();
-                            let (patch, _) =
-                                ui.allocate_exact_size(vec2(28.0, 22.0), Sense::hover());
-                            ui.painter()
-                                .rect_filled(patch, 3.0, Color32::from_rgb(r, g, b));
-                            let field = ui.add(
-                                egui::TextEdit::singleline(&mut dialog.hex)
-                                    .desired_width(80.0)
-                                    .font(egui::TextStyle::Monospace),
-                            );
-                            if field.changed()
-                                && let Some(rgb) = parse_hex(&dialog.hex)
-                            {
-                                let hex = dialog.hex.clone();
-                                dialog.set_rgb(rgb);
-                                dialog.hex = hex;
-                            }
-                            let size = ui.spacing().interact_size.y;
-                            let (rect, button) = marks::icon_button(
-                                ui,
-                                size,
-                                &t!("palette-eyedropper-name"),
-                                &t!("palette-eyedropper-tip"),
-                            );
-                            marks::eyedropper_icon(
-                                ui.painter(),
-                                rect.shrink(size * 0.15),
-                                ui.visuals().text_color(),
-                            );
-                            eyedropper = button.clicked();
+                        // La valeur à gauche de la roue (retour du 23/11/2026).
+                        ui.horizontal_top(|ui| {
+                            colour_value_bar(ui, &mut dialog);
+                            ui.add_space(8.0);
+                            self.colour_wheel(ui, &mut dialog);
                         });
-                        ui.add_space(10.0);
-                        // R G B puis T S V, alignés (retour du 21/11/2026) : la lettre, la
-                        // valeur, l'unité en petit et en gris.
-                        let mut rgb = dialog.rgb();
-                        let before_rgb = rgb;
-                        let [mut h, s, v] = dialog.hsv;
-                        let (mut sp, mut vp) = (s * 100.0, v * 100.0);
-                        let before_hsv = (h, sp, vp);
-                        let small = egui::TextStyle::Small.resolve(ui.style());
-                        let body = egui::TextStyle::Body.resolve(ui.style());
-                        let weak = ui.visuals().weak_text_color();
-                        let field = vec2(44.0, ui.spacing().interact_size.y);
-                        // La valeur et son unité collées dans la même case (« ° » à la taille du
-                        // texte, « % » en petit : à taille égale, le degré paraissait minuscule).
-                        let with_unit = |ui: &mut Ui, value: egui::DragValue, text: &str| {
+                    });
+                    ui.add_space(24.0);
+                    // Le bloc des valeurs et des pastilles : son bord droit fait celui de la
+                    // boîte, où s'alignent les boutons (retours du 23/11/2026).
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                        ui.vertical(|ui| {
+                            // La couleur, son `#rrggbb` et la pipette.
                             ui.horizontal(|ui| {
-                                ui.spacing_mut().item_spacing.x = 2.0;
-                                ui.add_sized(field, value);
-                                let font = if text == "°" {
-                                    egui::FontId::new(body.size * 1.35, body.family.clone())
-                                } else {
-                                    small.clone()
-                                };
-                                let unit = egui::RichText::new(text).font(font).color(weak);
-                                ui.add_sized(vec2(10.0, field.y), egui::Label::new(unit));
-                            });
-                        };
-                        egui::Grid::new("palette_colour_values")
-                            .num_columns(6)
-                            .min_col_width(0.0)
-                            .spacing(vec2(8.0, 6.0))
-                            .show(ui, |ui| {
-                                for (value, name) in rgb.iter_mut().zip(["R:", "G:", "B:"]) {
-                                    ui.label(name);
-                                    with_unit(ui, egui::DragValue::new(value).speed(0.5), "");
+                                let [r, g, b] = dialog.rgb();
+                                let (patch, _) =
+                                    ui.allocate_exact_size(vec2(28.0, 22.0), Sense::hover());
+                                ui.painter()
+                                    .rect_filled(patch, 3.0, Color32::from_rgb(r, g, b));
+                                let field = ui.add(
+                                    egui::TextEdit::singleline(&mut dialog.hex)
+                                        .desired_width(80.0)
+                                        .font(egui::TextStyle::Monospace),
+                                );
+                                if field.changed()
+                                    && let Some(rgb) = parse_hex(&dialog.hex)
+                                {
+                                    let hex = dialog.hex.clone();
+                                    dialog.type_target();
+                                    dialog.set_rgb(rgb);
+                                    dialog.hex = hex;
                                 }
-                                ui.end_row();
-                                let names = [
-                                    t!("palette-colour-h"),
-                                    t!("palette-colour-s"),
-                                    t!("palette-colour-v"),
-                                ];
-                                let fields: [(&mut f32, f32, &str); 3] = [
-                                    (&mut h, 360.0, "°"),
-                                    (&mut sp, 100.0, "%"),
-                                    (&mut vp, 100.0, "%"),
-                                ];
-                                for ((value, max, suffix), name) in fields.into_iter().zip(names) {
-                                    ui.label(format!("{name}:"));
-                                    let drag = egui::DragValue::new(value)
-                                        .range(0.0..=max)
-                                        .max_decimals(0)
-                                        .speed(0.5);
-                                    with_unit(ui, drag, suffix);
-                                }
-                                ui.end_row();
+                                let size = ui.spacing().interact_size.y;
+                                let (rect, button) = marks::icon_button(
+                                    ui,
+                                    size,
+                                    &t!("palette-eyedropper-name"),
+                                    &format!("{} (p)", t!("palette-eyedropper-tip")),
+                                );
+                                marks::eyedropper_icon(
+                                    ui.painter(),
+                                    rect.shrink(size * 0.15),
+                                    ui.visuals().text_color(),
+                                );
+                                eyedropper = button.clicked();
                             });
-                        if rgb != before_rgb {
-                            dialog.set_rgb(rgb);
-                        } else if (h, sp, vp) != before_hsv {
-                            dialog.set_hsv([h, sp / 100.0, vp / 100.0]);
-                        }
-                        // Les pastilles (franches, « photo », libres, #492) sous les valeurs
-                        // (retour du 23/11/2026 : sans titres, ça se voit).
-                        ui.add_space(12.0);
-                        own = self.colour_swatches(ui, &mut dialog);
+                            ui.add_space(10.0);
+                            // R G B puis T S V, alignés (retour du 21/11/2026) : la lettre, la
+                            // valeur, l'unité en petit et en gris.
+                            let mut rgb = dialog.rgb();
+                            let before_rgb = rgb;
+                            let [mut h, s, v] = dialog.hsv;
+                            let (mut sp, mut vp) = (s * 100.0, v * 100.0);
+                            let before_hsv = (h, sp, vp);
+                            let small = egui::TextStyle::Small.resolve(ui.style());
+                            let body = egui::TextStyle::Body.resolve(ui.style());
+                            let weak = ui.visuals().weak_text_color();
+                            let field = vec2(44.0, ui.spacing().interact_size.y);
+                            // La valeur et son unité collées dans la même case (« ° » à la taille du
+                            // texte, « % » en petit : à taille égale, le degré paraissait minuscule).
+                            let with_unit = |ui: &mut Ui, value: egui::DragValue, text: &str| {
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 2.0;
+                                    ui.add_sized(field, value);
+                                    let font = if text == "°" {
+                                        egui::FontId::new(body.size * 1.35, body.family.clone())
+                                    } else {
+                                        small.clone()
+                                    };
+                                    let unit = egui::RichText::new(text).font(font).color(weak);
+                                    ui.add_sized(vec2(10.0, field.y), egui::Label::new(unit));
+                                });
+                            };
+                            egui::Grid::new("palette_colour_values")
+                                .num_columns(6)
+                                .min_col_width(0.0)
+                                .spacing(vec2(8.0, 6.0))
+                                .show(ui, |ui| {
+                                    for (value, name) in rgb.iter_mut().zip(["R:", "G:", "B:"]) {
+                                        ui.label(name);
+                                        with_unit(ui, egui::DragValue::new(value).speed(0.5), "");
+                                    }
+                                    ui.end_row();
+                                    let names = [
+                                        t!("palette-colour-h"),
+                                        t!("palette-colour-s"),
+                                        t!("palette-colour-v"),
+                                    ];
+                                    let fields: [(&mut f32, f32, &str); 3] = [
+                                        (&mut h, 360.0, "°"),
+                                        (&mut sp, 100.0, "%"),
+                                        (&mut vp, 100.0, "%"),
+                                    ];
+                                    for ((value, max, suffix), name) in
+                                        fields.into_iter().zip(names)
+                                    {
+                                        ui.label(format!("{name}:"));
+                                        let drag = egui::DragValue::new(value)
+                                            .range(0.0..=max)
+                                            .max_decimals(0)
+                                            .speed(0.5);
+                                        with_unit(ui, drag, suffix);
+                                    }
+                                    ui.end_row();
+                                });
+                            if rgb != before_rgb {
+                                dialog.type_target();
+                                dialog.set_rgb(rgb);
+                            } else if (h, sp, vp) != before_hsv {
+                                dialog.type_target();
+                                dialog.set_hsv([h, sp / 100.0, vp / 100.0]);
+                            }
+                            // Les pastilles (franches, « photo », libres, #492) sous les valeurs
+                            // (retour du 23/11/2026 : sans titres, ça se voit).
+                            ui.add_space(12.0);
+                            own = self.colour_swatches(ui, &mut dialog);
+                        });
                     });
                 });
+                dialog.width = middle.response.rect.width();
+                // Les harmonies, et la roue tout à droite de la même ligne.
+                ui.add_space(8.0);
+                self.harmony_row(ui, &mut dialog, &mut wheel);
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     // À gauche, loin de « Valider ».
@@ -5777,22 +6114,89 @@ impl TriApp {
                     {
                         dialog.reset();
                     }
+                    // La tolérance, comme celle du panneau (retour du 23/11/2026), et ce
+                    // que la recherche trouve.
+                    ui.add_space(6.0);
+                    ui.label(egui::RichText::new(t!("palette-colour-tolerance")).color(weak));
+                    let slider = ui
+                        .add(FineSlider::new(&mut radius, 0.0..=radius_max).width(70.0))
+                        .on_hover_text(t!("palette-colour-radius"));
+                    if slider.double_clicked_slider(ui) {
+                        radius = radius_default;
+                    }
+                    radius_done = slider.drag_stopped() || slider.double_clicked_slider(ui);
+                    ui.add_space(8.0);
+                    let found = match found {
+                        Some(n) => t!("palette-colour-found", n = n),
+                        None => "—".to_string(),
+                    };
+                    ui.label(egui::RichText::new(found).color(weak));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Max), |ui| {
                         cancel = ui.button(t!("cancel")).clicked();
                         search = ui.button(t!("palette-colour-search")).clicked();
                     });
                 });
             });
+        if keyed.radius != 0.0 {
+            radius = (radius + keyed.radius).clamp(0.0, radius_max);
+            radius_done = true;
+        }
+        // Un réglage changé alors qu'aucune recherche n'est en cours (boîte ouverte filtre
+        // éteint, retour du 23/11/2026) : la recherche en direct commence.
+        let mut start_live = false;
+        if radius != before_radius {
+            self.palette_radius = radius;
+            if let Some(c) = &mut self.palette_colour {
+                c.radius = radius;
+                self.refilter(Reveal::Minimal);
+            } else {
+                start_live = true;
+            }
+        }
+        if radius_done {
+            self.remember_palette_levels();
+        }
+        mode = mode.or(keyed.mode);
+        start_live |= mode.is_some() && self.palette_colour.is_none();
+        wheel = wheel.or(keyed.wheel);
+        search |= keyed.ok;
+        eyedropper |= keyed.eyedropper;
         if let Some(own) = own {
             self.set_own_swatches(own);
         }
         if let Some(mode) = mode {
             self.set_colour_mode(mode);
         }
+        if start_live
+            && self.gui.colour_search.live_ms > 0
+            && !search
+            && !cancel
+            && !modal.should_close()
+            && !dialog.colours().is_empty()
+        {
+            let colours = dialog.colours();
+            self.set_palette_colours(Some(colours.clone()));
+            if let Some(live) = &mut self.colour_live {
+                live.applied = colours;
+                live.changed = true;
+                live.at = Instant::now();
+            }
+        }
+        if let Some(wheel) = wheel {
+            self.set_colour_wheel(wheel);
+            dialog.ryb = wheel == crate::settings::ColourWheel::Ryb;
+        }
         if search {
             self.colour_dialog = None;
             self.colour_live = None;
-            self.set_palette_colours(Some(dialog.colours()));
+            let colours = dialog.colours();
+            // Réinitialisée puis validée : plus de recherche, et plus de couleurs gardées
+            // (retour du 23/11/2026 : la boîte se rouvrait sur celles d'avant, cocher
+            // « Couleur » les relançait).
+            if colours.is_empty() {
+                self.palette_colour_last = None;
+            }
+            self.set_palette_colours(Some(colours));
         } else if cancel || modal.should_close() {
             self.colour_dialog = None;
             self.colour_live_cancel();
@@ -5819,24 +6223,12 @@ impl TriApp {
         let mean = self.gui.colour_search.mode == crate::settings::ColourMode::Mean;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
-            for i in 0..max {
-                // En couleur moyenne, la première seule : les autres grisées, inertes.
-                let off = mean && i > 0;
-                let sense = if off { Sense::hover() } else { Sense::click() };
-                let (rect, response) = ui.allocate_exact_size(SWATCH * 1.25, sense);
+            // En couleur moyenne, la première seule : les autres cachées (retour du
+            // 23/11/2026 : grisées, c'était bizarre), gardées pour les autres modes.
+            let shown = if mean { 1 } else { max };
+            for i in 0..shown {
+                let (rect, response) = ui.allocate_exact_size(SWATCH * 1.25, Sense::click());
                 let filled = i < dialog.slots.len();
-                if off {
-                    match filled {
-                        true => {
-                            let [r, g, b] = dialog.slot_rgb(i);
-                            let c = Color32::from_rgb(r, g, b).gamma_multiply(0.25);
-                            ui.painter().rect_filled(rect, 3.0, c);
-                        }
-                        false => empty_swatch(ui, rect, weak.gamma_multiply(0.4)),
-                    }
-                    response.on_hover_text(t!("palette-colour-mean-only"));
-                    continue;
-                }
                 let name = if filled {
                     t!("palette-colour-slot", n = i + 1)
                 } else {
@@ -5847,25 +6239,31 @@ impl TriApp {
                 });
                 let tip = if filled {
                     let [r, g, b] = dialog.slot_rgb(i);
+                    // Celle que l'on règle occupe sa case, les autres un peu plus petites
+                    // (retour du 23/11/2026 : le cadre blanc était trop présent) ; la place
+                    // de chacune ne change pas.
+                    let shown = if dialog.active == Some(i) {
+                        rect.expand(2.0)
+                    } else {
+                        rect.shrink(2.0)
+                    };
                     ui.painter()
-                        .rect_filled(rect, 3.0, Color32::from_rgb(r, g, b));
-                    // Celle que l'on règle, encadrée.
-                    if dialog.active == Some(i) {
-                        let stroke = egui::Stroke::new(2.0, ui.visuals().strong_text_color());
-                        ui.painter().rect_stroke(
-                            rect.expand(2.0),
-                            4.0,
-                            stroke,
-                            egui::StrokeKind::Outside,
-                        );
-                    }
+                        .rect_filled(shown, 3.0, Color32::from_rgb(r, g, b));
                     t!(
                         "palette-colour-slot-tip",
                         hex = format!("#{r:02x}{g:02x}{b:02x}")
                     )
                 } else {
-                    empty_swatch(ui, rect, weak);
-                    t!("palette-swatch-store-tip")
+                    // Le prochain rempli (rien de choisi) : plus marqué, on voit où ira la
+                    // couleur du prochain clic sur la roue.
+                    let next = dialog.active.is_none() && i == dialog.slots.len();
+                    let color = if next {
+                        ui.visuals().strong_text_color()
+                    } else {
+                        weak
+                    };
+                    empty_swatch(ui, rect.shrink(2.0), color);
+                    t!("palette-colour-next-tip")
                 };
                 let response = response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -5874,7 +6272,10 @@ impl TriApp {
                     if filled {
                         dialog.load(i);
                     } else {
-                        dialog.store(max);
+                        // Un « + » ne range rien (retour du 23/11/2026 : il dupliquait la
+                        // couleur choisie) : plus rien de choisi, le prochain clic sur la
+                        // roue le remplit.
+                        dialog.deselect();
                     }
                 }
                 if filled {
@@ -5906,7 +6307,7 @@ impl TriApp {
                     };
                     if ui
                         .selectable_label(current == m, name)
-                        .on_hover_text(tip)
+                        .on_hover_text(format!("{tip} (m)"))
                         .clicked()
                         && current != m
                     {
@@ -5970,7 +6371,7 @@ impl TriApp {
                             .on_hover_text(tip);
                         if response.clicked() {
                             match rgb {
-                                Some(rgb) => dialog.set_rgb(rgb),
+                                Some(rgb) => dialog.pick_rgb(rgb),
                                 None if free => {
                                     own.push(dialog.hex.clone());
                                     changed = true;
@@ -6008,6 +6409,290 @@ impl TriApp {
         ) {
             self.gui.colour_search.own = own;
         }
+    }
+
+    /// Touches de la boîte des couleurs, hors saisie dans un champ : `1`–`5` choisissent
+    /// une couleur (un vide y range la couleur réglée), ← → (ou `h` `l`) la teinte (Maj :
+    /// finement), ↑ ↓ (ou `k` `j`) la saturation (Maj : la valeur), `a` l'harmonie suivante
+    /// (Maj : précédente ;
+    /// après la dernière, aucune), `m` le mode, `w` la roue, `p` la pipette, Suppr vide
+    /// la couleur choisie, `+` / `-` la tolérance, Entrée valide. Échap : la boîte elle-même.
+    /// Pas de `[keys]` ici : des touches de boîte, comme les flèches des listes ; leurs pas
+    /// sont réglables (`[gui.colour_search] key_*`).
+    fn colour_dialog_keys(&self, ctx: &egui::Context, dialog: &mut ColourDialog) -> ColourKeys {
+        use crate::palette_view::Harmony;
+        use crate::settings::{ColourMode, ColourWheel};
+        use egui::Key;
+        let mut out = ColourKeys::default();
+        if std::mem::take(&mut dialog.fresh)
+            || ctx.egui_wants_keyboard_input()
+            || self.palette_eyedropper
+        {
+            return out;
+        }
+        let cs = &self.gui.colour_search;
+        let (pressed, shift) = ctx.input(|i| {
+            let keys: Vec<Key> = i
+                .events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::Key {
+                        key, pressed: true, ..
+                    } => Some(*key),
+                    _ => None,
+                })
+                .collect();
+            (keys, i.modifiers.shift)
+        });
+        let digits = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5];
+        for key in pressed {
+            if let Some(i) = digits.iter().position(|&k| k == key) {
+                // Couleur moyenne : la première seule.
+                if dialog.mean && i > 0 {
+                    continue;
+                }
+                if i < dialog.slots.len() {
+                    dialog.load(i);
+                } else {
+                    dialog.deselect();
+                }
+                continue;
+            }
+            // Les flèches comme la roue : rien de choisi, elles remplissent le prochain
+            // emplacement vide et le gardent pour les appuis suivants.
+            let arrows = matches!(
+                key,
+                Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown
+            ) || (self.gui.profile != crate::actions::Profile::Classic
+                && matches!(key, Key::H | Key::J | Key::K | Key::L));
+            if arrows && dialog.active.is_none() && dialog.harmony.is_none() {
+                dialog.edit_target();
+                dialog.sticky = true;
+            }
+            let [h, s, v] = dialog.hsv;
+            let hue_step = if shift { 1.0 } else { cs.key_hue_step };
+            // hjkl comme les flèches, avec le profil vim seulement (retours du 23/11/2026).
+            let vim = self.gui.profile != crate::actions::Profile::Classic;
+            let key = match key {
+                Key::H if vim => Key::ArrowLeft,
+                Key::J if vim => Key::ArrowDown,
+                Key::K if vim => Key::ArrowUp,
+                Key::L if vim => Key::ArrowRight,
+                other => other,
+            };
+            match key {
+                Key::ArrowLeft => dialog.set_hsv([(h - hue_step).rem_euclid(360.0), s, v]),
+                Key::ArrowRight => dialog.set_hsv([(h + hue_step).rem_euclid(360.0), s, v]),
+                Key::ArrowUp if shift => {
+                    dialog.set_hsv([h, s, (v + cs.key_step).min(1.0)]);
+                }
+                Key::ArrowDown if shift => {
+                    dialog.set_hsv([h, s, (v - cs.key_step).max(0.0)]);
+                }
+                Key::ArrowUp => dialog.set_hsv([h, (s + cs.key_step).min(1.0), v]),
+                Key::ArrowDown => dialog.set_hsv([h, (s - cs.key_step).max(0.0), v]),
+                Key::A => {
+                    let all = Harmony::ALL;
+                    let at = dialog
+                        .harmony
+                        .and_then(|h| all.iter().position(|&x| x == h));
+                    let next = match (at, shift) {
+                        (None, false) => Some(0),
+                        (None, true) => Some(all.len() - 1),
+                        (Some(i), false) => (i + 1 < all.len()).then_some(i + 1),
+                        (Some(i), true) => i.checked_sub(1),
+                    };
+                    match next {
+                        Some(i) => {
+                            dialog.harmony = None;
+                            dialog.set_harmony(all[i]);
+                        }
+                        None => dialog.harmony = None,
+                    }
+                }
+                Key::M => {
+                    let all = ColourMode::ALL;
+                    let at = all.iter().position(|&m| m == cs.mode).unwrap_or(0);
+                    out.mode = Some(all[(at + 1) % all.len()]);
+                }
+                Key::W => {
+                    out.wheel = Some(match cs.wheel {
+                        ColourWheel::Ryb => ColourWheel::Rgb,
+                        ColourWheel::Rgb => ColourWheel::Ryb,
+                    });
+                }
+                Key::P => out.eyedropper = true,
+                Key::Delete | Key::Backspace => {
+                    if let Some(i) = dialog.active {
+                        dialog.clear(i);
+                    }
+                }
+                Key::Plus | Key::Equals => out.radius += cs.key_radius_step,
+                Key::Minus => out.radius -= cs.key_radius_step,
+                Key::Enter => out.ok = true,
+                _ => {}
+            }
+        }
+        out
+    }
+
+    /// La roue de la boîte des couleurs : un clic ou un glisser y choisit la couleur
+    /// réglée ; avec une harmonie, le point le plus proche du clic tourne et les autres
+    /// suivent. Les couleurs rangées y sont marquées (celle que l'on règle plus grande),
+    /// reliées au centre par l'harmonie.
+    fn colour_wheel(&self, ui: &mut Ui, dialog: &mut ColourDialog) {
+        use crate::palette_view::{draw_hsv_wheel, hsv_at, hsv_pos};
+        let side = 200.0;
+        let (rect, response) = ui.allocate_exact_size(vec2(side, side), Sense::click_and_drag());
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::Role::Slider, true, t!("palette-colour-wheel"))
+        });
+        let (centre, radius, ryb) = (rect.center(), side / 2.0, dialog.ryb);
+        // Toujours en pleine luminosité (retour du 23/11/2026 : dessinée à la valeur de la
+        // couleur réglée, elle changeait d'aspect d'une couleur à l'autre) ; la valeur se
+        // règle au champ V (ou Maj+↑ ↓), chaque point garde sa vraie couleur.
+        draw_hsv_wheel(ui.painter(), rect, 1.0, ryb);
+        let marker = |hsv: [f32; 3]| hsv_pos(hsv[0], hsv[1], centre, radius, ryb);
+        if let Some(pos) = response.interact_pointer_pos()
+            && (response.clicked() || response.dragged())
+        {
+            // Hors de la roue en glissant : au bord, dans la même direction.
+            let d = pos - centre;
+            let pos = if d.length() > radius {
+                centre + d * (radius / d.length())
+            } else {
+                pos
+            };
+            // Avec une harmonie : le point le plus proche au début du glisser (la base si
+            // aucun n'est près).
+            if dialog.harmony.is_some() && dialog.dragging.is_none() {
+                let near = (0..dialog.slots.len())
+                    .map(|i| (i, marker(dialog.slots[i]).distance(pos)))
+                    .filter(|(_, d)| *d < 14.0)
+                    .min_by(|a, b| a.1.total_cmp(&b.1))
+                    .map_or(0, |(i, _)| i);
+                dialog.dragging = Some(near);
+            }
+            // Sans harmonie, au début d'un clic ou d'un glisser (retour du 23/11/2026) :
+            // l'emplacement choisi exprès, sinon le premier vide (rempli), sinon le dernier.
+            if dialog.harmony.is_none() && !dialog.stroke {
+                let before = dialog.slots.len();
+                dialog.edit_target();
+                // Une couleur nouvelle : celle qu'on voit, la roue étant en pleine
+                // luminosité (retour du 23/11/2026 : elle prenait la valeur de la couleur
+                // d'avant, 50 % au départ) ; une couleur retouchée garde la sienne.
+                if dialog.slots.len() > before {
+                    dialog.hsv[2] = 1.0;
+                }
+            }
+            dialog.stroke = true;
+            if let Some((h, s)) = hsv_at(pos, centre, radius, ryb) {
+                match (dialog.harmony, dialog.dragging) {
+                    (Some(_), Some(i)) => dialog.turn(i, h, s),
+                    _ => dialog.set_hsv([h, s, dialog.hsv[2]]),
+                }
+            }
+        } else if dialog.stroke {
+            // Relâché : le clic suivant remplira l'emplacement suivant, sauf si celui-ci a
+            // été choisi exprès.
+            dialog.stroke = false;
+            dialog.edit_done();
+        }
+        if !response.dragged() {
+            dialog.dragging = None;
+        }
+        let painter = ui.painter();
+        // L'harmonie : un rayon du centre à chaque couleur (couleur moyenne : la première).
+        if dialog.harmony.is_some() {
+            let shown = if dialog.mean { 1 } else { dialog.slots.len() };
+            for &hsv in dialog.slots.iter().take(shown) {
+                painter.line_segment(
+                    [centre, marker(hsv)],
+                    egui::Stroke::new(1.5, Color32::from_white_alpha(200)),
+                );
+            }
+        }
+        let shown = if dialog.mean { 1 } else { dialog.slots.len() };
+        for (i, &hsv) in dialog.slots.iter().enumerate().take(shown) {
+            let [r, g, b] = crate::palette_view::hsv_to_rgb(hsv);
+            let at = marker(hsv);
+            let size = if dialog.active == Some(i) { 7.0 } else { 5.0 };
+            painter.circle_filled(at, size, Color32::from_rgb(r, g, b));
+            painter.circle_stroke(at, size, egui::Stroke::new(1.5, Color32::WHITE));
+            painter.circle_stroke(at, size + 1.0, egui::Stroke::new(1.0, Color32::BLACK));
+        }
+        // La couleur réglée hors des emplacements : l'anneau d'avant.
+        if dialog.active.is_none() {
+            let at = marker(dialog.hsv);
+            painter.circle_stroke(at, 6.0, egui::Stroke::new(2.0, Color32::WHITE));
+            painter.circle_stroke(at, 7.5, egui::Stroke::new(1.0, Color32::BLACK));
+        }
+    }
+
+    /// Sous la roue : les harmonies (icônes ; la même une seconde fois la détache), et tout
+    /// à droite de la même ligne la roue, RYB ou RVB (`wheel` : changée).
+    fn harmony_row(
+        &self,
+        ui: &mut Ui,
+        dialog: &mut ColourDialog,
+        wheel: &mut Option<crate::settings::ColourWheel>,
+    ) {
+        use crate::palette_view::Harmony;
+        use crate::settings::ColourWheel;
+        // Sept icônes sur la largeur de la roue.
+        let size = 26.0;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            for harmony in Harmony::ALL {
+                let name = t!(&format!("palette-harmony-{}", harmony.id()));
+                let tip = format!("{name} (a)");
+                let (rect, response) = marks::icon_button(ui, size, &name, &tip);
+                let on = dialog.harmony == Some(harmony);
+                if on {
+                    ui.painter()
+                        .rect_filled(rect, 3.0, ui.visuals().selection.bg_fill);
+                }
+                harmony.draw_icon(ui.painter(), rect.shrink(3.0), ui.visuals().text_color());
+                if response.clicked() {
+                    dialog.set_harmony(harmony);
+                }
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let current = self.gui.colour_search.wheel;
+                // De droite à gauche : RVB, puis RJB.
+                for (w, label, tip) in [
+                    (
+                        ColourWheel::Rgb,
+                        t!("palette-wheel-rgb"),
+                        t!("palette-wheel-rgb-tip"),
+                    ),
+                    (
+                        ColourWheel::Ryb,
+                        t!("palette-wheel-ryb"),
+                        t!("palette-wheel-ryb-tip"),
+                    ),
+                ] {
+                    if ui
+                        .selectable_label(current == w, label)
+                        .on_hover_text(format!("{tip} (w)"))
+                        .clicked()
+                        && current != w
+                    {
+                        *wheel = Some(w);
+                    }
+                }
+            });
+        });
+    }
+
+    /// Roue de la boîte des couleurs (`[gui.colour_search] wheel`).
+    fn set_colour_wheel(&mut self, wheel: crate::settings::ColourWheel) {
+        self.gui.colour_search.wheel = wheel;
+        self.write_setting(
+            "gui.colour_search",
+            "wheel",
+            tri::config_edit::Value::Str(wheel.id().to_string()),
+        );
     }
 
     /// Mode de la recherche de couleurs (`[gui.colour_search] mode`), la recherche en
@@ -6206,7 +6891,7 @@ impl TriApp {
             return;
         };
         match &mut self.colour_dialog {
-            Some(dialog) => dialog.set(oklab),
+            Some(dialog) => dialog.pick(oklab),
             None => self.set_palette_colour(Some(oklab)),
         }
     }
@@ -6466,15 +7151,53 @@ impl TriApp {
                 ui.add_space(4.0);
             }
         }
+        let mut these = None;
         if let Some(palette) = main_palette {
             self.palette_last = Some((shown, palette.clone()));
             if let Some(c) = self.palette_detail(ui, &palette) {
                 picked = Some(c);
             }
+            // Partir de cette photo (idée du 23/11/2026) : ses couleurs principales dans la
+            // boîte, cherchées tout de suite, à ajuster.
+            ui.add_space(4.0);
+            if ui
+                .button(t!("palette-search-these"))
+                .on_hover_text(t!("palette-search-these-tip"))
+                .clicked()
+            {
+                these = Some(palette);
+            }
         }
         // La couleur cliquée : cherchée tout à la fin (la recherche refiltre la liste).
         if picked.is_some() {
             self.set_palette_colour(picked);
+        }
+        if let Some(palette) = these {
+            self.search_palette_colours(&palette);
+        }
+    }
+
+    /// Les couleurs principales de `palette` (les plus présentes d'abord, sans les miettes,
+    /// au plus `[gui.colour_search] max`) dans la boîte des couleurs, cherchées tout de
+    /// suite ; « Annuler » rend la recherche d'avant.
+    fn search_palette_colours(&mut self, palette: &Palette) {
+        let min = self.settings.palette.colour_min_share;
+        let mut swatches: Vec<_> = palette.swatches.iter().filter(|s| s.share >= min).collect();
+        swatches.sort_by(|a, b| b.share.total_cmp(&a.share));
+        let colours: Vec<[f32; 3]> = swatches
+            .iter()
+            .take(self.gui.colour_search.max.max(1))
+            .map(|s| s.oklab)
+            .collect();
+        if colours.is_empty() {
+            return;
+        }
+        self.show_colour_dialog(ColourDialog::new(&colours));
+        self.set_palette_colours(Some(colours.clone()));
+        if let Some(live) = &mut self.colour_live {
+            live.applied = colours;
+            live.changed = true;
+            live.at = Instant::now();
         }
     }
 
@@ -12403,6 +13126,7 @@ impl TriApp {
         self.set_palette_source(wanted);
         self.try_reference_filter();
         self.try_similar_filter();
+        self.reopen_all_photos_pending();
         self.select_pending();
         self.poll_all_photos_signatures();
         self.poll_locating();
@@ -12893,6 +13617,14 @@ impl TriApp {
                 if action == Action::Back && !dialog.busy() {
                     self.file_dialog = None;
                 } else if action.works_over_overlay() {
+                    self.perform(ctx, action);
+                }
+                continue;
+            }
+            // Boîte des couleurs : ses touches à elle (`colour_dialog_keys`) ; derrière, la
+            // grille ne bouge pas (retour du 23/11/2026).
+            if self.colour_dialog.is_some() {
+                if action.works_over_overlay() && action != Action::Back {
                     self.perform(ctx, action);
                 }
                 continue;
@@ -22003,15 +22735,21 @@ impl TriApp {
 
     /// Bandeau de notation : notes de l'image sélectionnée, cliquables.
     fn rating_bar(&mut self, ui: &mut Ui) {
-        let Some(file) = self.files.get(self.selected) else {
-            return;
-        };
-        let notes = self.folder.notes.notes(&file.path).clone();
+        // Rien d'affiché (filtre sans résultat) : la barre reste, ses boutons grisés (retour
+        // du 23/11/2026 : elle disparaissait ; les barres ne bougent pas).
+        let file = self.files.get(self.selected).cloned();
+        if file.is_none() {
+            ui.disable();
+        }
+        let notes = file
+            .as_ref()
+            .map(|f| self.folder.notes.notes(&f.path).clone())
+            .unwrap_or(tri::xmp::Notes::EMPTY);
         let (colors, size) = (self.gui.colors.clone(), self.gui.grid.marks + 4.0);
         let marked = self.selection.visible(&self.files);
         let mut clicked = None;
         // Versions de l'image (plein écran) : pastilles, puis modifier / supprimer.
-        let path = file.path.clone();
+        let path = file.as_ref().map(|f| f.path.clone()).unwrap_or_default();
         // Lues en fond, comme pour la grille (19/11/2026, `TRI_IO_WATCH` : relues sur le
         // fil de l'interface à chaque image affichée) : les pastilles viennent un instant
         // après.
@@ -23806,6 +24544,18 @@ impl TriApp {
                         .map(|&c| tri::palette::srgb_to_oklab(c))
                         .collect();
                     self.show_colour_dialog(ColourDialog::new(&colours));
+                }
+                Step::Harmony(id) => {
+                    let ryb = self.gui.colour_search.wheel == crate::settings::ColourWheel::Ryb;
+                    if let (Some(d), Some(h)) = (
+                        &mut self.colour_dialog,
+                        crate::palette_view::Harmony::ALL
+                            .into_iter()
+                            .find(|h| h.id() == id),
+                    ) {
+                        d.ryb = ryb;
+                        d.set_harmony(h);
+                    }
                 }
                 Step::ColourSearch(colours) => {
                     let colours: Vec<[f32; 3]> = colours
@@ -26809,11 +27559,7 @@ impl eframe::App for TriApp {
                 Some(crate::crop::BarAction::AddRatio(ratio)) => self.add_ratio(ratio),
                 None => {}
             }
-        } else if self.rating_bar
-            && !self.focus_mode
-            && !self.files.is_empty()
-            && self.error.is_none()
-        {
+        } else if self.rating_bar && !self.focus_mode && self.error.is_none() {
             egui::Panel::bottom("rating").show(ui, |ui| {
                 bar_texts(ui);
                 self.rating_bar(ui);
@@ -27014,6 +27760,8 @@ enum Step {
     ColourDialog(Vec<[u8; 3]>),
     /// Chercher ces couleurs (`colour_search:#ff0000 #0000ff`), pour la capture.
     ColourSearch(Vec<[u8; 3]>),
+    /// Une harmonie dans la boîte des couleurs ouverte (`harmony:triad`), pour la capture.
+    Harmony(String),
     /// Taper dans la recherche de la boîte ouverte, palette, réglages ou aide
     /// (`search:vim`).
     Search(String),
@@ -27053,6 +27801,9 @@ fn parse_actions(list: &str) -> Vec<Step> {
                         .filter_map(parse_hex)
                         .collect(),
                 )),
+                None if id.starts_with("harmony:") => {
+                    Some(Step::Harmony(id["harmony:".len()..].to_string()))
+                }
                 None if id.starts_with("colour_search:") => Some(Step::ColourSearch(
                     id["colour_search:".len()..]
                         .split_whitespace()
@@ -28208,6 +28959,7 @@ pub(crate) fn modal_at(id: &str, at: egui::Pos2) -> Dialog {
         start: at + vec2(4.0, 4.0),
         title: None,
         free_width: false,
+        width: None,
         closable: true,
         centred: at == CENTRED,
     }
@@ -28244,6 +28996,8 @@ pub(crate) struct Dialog {
     /// Sans largeurs minimale et maximale (`[gui.dialogs]`) : la boîte prend la taille de
     /// son contenu (grand histogramme).
     free_width: bool,
+    /// Largeur imposée (boîte des couleurs : celle de sa ligne du milieu).
+    width: Option<f32>,
     /// Croix de fermeture à droite du titre (issue n° 39 : la même dans toutes les boîtes).
     closable: bool,
     /// Au centre de la fenêtre ([`CENTRED`]) d'après sa taille réelle, mesurée pendant ses
@@ -28305,6 +29059,12 @@ impl Dialog {
     /// Largeur libre (voir [`Dialog::free_width`]).
     pub(crate) fn free_width(mut self) -> Self {
         self.free_width = true;
+        self
+    }
+
+    /// Largeur imposée, `None` : libre (voir [`Dialog::width`]).
+    pub(crate) fn width(mut self, width: Option<f32>) -> Self {
+        self.width = width;
         self
     }
 
@@ -28386,7 +29146,10 @@ impl Dialog {
                         let spacing = ui.spacing_mut();
                         spacing.item_spacing = vec2(d.spacing, d.spacing);
                         spacing.button_padding = vec2(d.button_padding, d.button_padding / 2.0);
-                        if !self.free_width {
+                        if let Some(w) = self.width {
+                            ui.set_min_width(w);
+                            ui.set_max_width(w);
+                        } else if !self.free_width {
                             ui.set_min_width(d.min_width);
                             ui.set_max_width(d.max_width.max(d.min_width));
                         }
@@ -31443,11 +32206,16 @@ mod tests {
             .position(|f| f.path.ends_with("img1.jpg"))
             .unwrap();
         h.state_mut().selected = img1;
+        // Une boîte des couleurs restée ouverte prendrait Entrée (elle valide).
+        h.state_mut().colour_dialog = None;
         press(&mut h, Key::Enter, Modifiers::NONE);
         // La pastille ouvre la boîte ; sa pipette, puis un clic sur l'image (retour du
         // 21/11/2026).
         // La boîte le temps de s'ouvrir (fondu) avant de prendre un clic.
         h.state_mut().open_colour_dialog();
+        // La boîte s'ouvre sur la recherche d'avant ; une couleur relevée s'y ajouterait
+        // (retour du 23/11/2026) : réinitialisée, elle ne cherche que celle-là.
+        h.state_mut().colour_dialog.as_mut().unwrap().reset();
         h.run_steps(10);
         h.get_by_label(&t!("palette-eyedropper-name")).click();
         h.run_steps(2);
@@ -31471,7 +32239,8 @@ mod tests {
         run_until(&mut h, |app| {
             app.colour_dialog
                 .as_ref()
-                .is_some_and(|d| tri::palette::oklab_distance(d.colours()[0], red) < 0.02)
+                .and_then(|d| d.colours().first().copied())
+                .is_some_and(|c| tri::palette::oklab_distance(c, red) < 0.02)
         });
         h.run_steps(10);
         h.get_by_label(&t!("palette-colour-search")).click();
@@ -32034,12 +32803,29 @@ mod tests {
         }
         run_until(&mut h, |app| app.palette_colour.is_some());
         assert_eq!(h.state().files.len(), 1, "la grille suit");
+        // Ce qu'elle trouve, dit dans la boîte.
+        h.run_steps(2);
+        h.get_by_label("1 photo");
         h.get_by_label(&t!("cancel")).click();
         h.run_steps(3);
         assert!(h.state().colour_dialog.is_none());
         assert!(h.state().palette_colour.is_none(), "rendue");
         assert_eq!(h.state().files.len(), 2);
         assert_eq!(h.state().order, order, "le tri d'avant");
+        // Filtre éteint, la boîte ouverte : changer la tolérance (ou le mode) lance aussi
+        // la recherche en direct (retour du 23/11/2026).
+        h.state_mut().open_colour_dialog();
+        h.run_steps(3);
+        h.state_mut().colour_dialog.as_mut().unwrap().fresh = false;
+        press(&mut h, Key::Plus, Modifiers::NONE);
+        h.run_steps(3);
+        assert!(
+            h.state().palette_colour.is_some(),
+            "la tolérance lance la recherche"
+        );
+        h.get_by_label(&t!("cancel")).click();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_none(), "rendue");
         // « Chercher » garde.
         h.state_mut().open_colour_dialog();
         if let Some(d) = &mut h.state_mut().colour_dialog {
@@ -32075,6 +32861,173 @@ mod tests {
         h.run_steps(3);
         assert!(h.state().palette_colour.is_none());
         assert_eq!(h.state().files.len(), 2);
+        assert!(h.state().colour_dialog.is_none(), "validée, fermée");
+        assert!(
+            h.state().palette_colour_last.is_none(),
+            "couleurs d'avant oubliées"
+        );
+        // « Chercher ces couleurs » (section Palette) : la boîte ouverte sur les couleurs
+        // de la photo, la recherche lancée ; « Annuler » la rend.
+        let palette =
+            h.state().palettes[&(h.state().folder.files[1].path.clone(), Source::Camera)].clone();
+        h.state_mut().search_palette_colours(&palette);
+        h.run_steps(3);
+        let d = h.state().colour_dialog.as_ref().expect("boîte ouverte");
+        assert_eq!(d.slots.len(), 1);
+        assert_eq!(h.state().files.len(), 1);
+        h.get_by_label(&t!("cancel")).click();
+        h.run_steps(3);
+        assert!(h.state().palette_colour.is_none());
+        assert_eq!(h.state().files.len(), 2);
+    }
+
+    #[test]
+    fn harmonies_fill_the_slots_turn_and_detach() {
+        // #492 (23/11/2026) : une harmonie remplit les emplacements autour de la couleur
+        // réglée ; tourner sur la roue les fait suivre ; retoucher un autre emplacement la
+        // détache ; la même harmonie une seconde fois aussi (couleurs gardées).
+        use crate::palette_view::Harmony;
+        let mut d = ColourDialog::new(&[]);
+        d.set_hsv([240.0, 0.8, 0.9]);
+        d.set_harmony(Harmony::Triad);
+        assert_eq!(d.slots.len(), 3);
+        assert_eq!(d.active, Some(0));
+        // Roue des peintres : les primaires (bleu, rouge, jaune).
+        let hues: Vec<f32> = d.slots.iter().map(|h| h[0]).collect();
+        assert!(hues[1] < 5.0 || hues[1] > 355.0, "{hues:?}");
+        assert!((hues[2] - 60.0).abs() < 1.0, "{hues:?}");
+        // Tourner : le deuxième point amené au vert, les autres suivent.
+        d.turn(1, 120.0, 0.8);
+        assert!((d.slots[1][0] - 120.0).abs() < 1.0, "{:?}", d.slots);
+        assert_eq!(d.slots.len(), 3);
+        assert!(d.harmony.is_some());
+        assert_eq!(d.active, Some(1), "le point glissé est celui qu'on règle");
+        // La base retouchée par les valeurs : les autres suivent encore.
+        d.load(0);
+        d.set_rgb([200, 30, 30]);
+        assert!(d.harmony.is_some());
+        assert_eq!(d.slots[0], d.hsv);
+        // Choisir un autre emplacement ne la détache pas ; le retoucher la fait tourner.
+        d.load(2);
+        assert!(d.harmony.is_some(), "choisir n'est pas retoucher");
+        d.load(0);
+        assert!(d.harmony.is_some());
+        d.load(2);
+        d.set_hsv([180.0, 0.8, 0.9]);
+        assert!(d.harmony.is_some());
+        assert!((d.slots[2][0] - 180.0).abs() < 1.0, "{:?}", d.slots);
+        assert_eq!(d.slots.len(), 3);
+        // Ranger ou vider un emplacement la détache.
+        d.clear(2);
+        assert!(d.harmony.is_none());
+        // Au plus `max` emplacements ; la même harmonie une seconde fois la détache.
+        d.max = 2;
+        d.set_harmony(Harmony::Square);
+        assert_eq!(d.slots.len(), 2);
+        d.set_harmony(Harmony::Square);
+        assert!(d.harmony.is_none());
+        assert_eq!(d.slots.len(), 2, "couleurs gardées");
+        // Roue TSV : le complémentaire du bleu est le jaune.
+        let mut d = ColourDialog::new(&[]);
+        d.ryb = false;
+        d.set_hsv([240.0, 1.0, 1.0]);
+        d.set_harmony(Harmony::Complementary);
+        assert!((d.slots[1][0] - 60.0).abs() < 1.0);
+
+        // La roue choisie, écrite dans la configuration ; les boutons d'harmonie là.
+        let (mut h, dir) = harness();
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "").unwrap();
+        h.state_mut().config_path = Some(config.clone());
+        h.state_mut()
+            .set_colour_wheel(crate::settings::ColourWheel::Rgb);
+        assert!(
+            std::fs::read_to_string(&config)
+                .unwrap()
+                .contains("wheel = \"rgb\"")
+        );
+        h.state_mut().open_colour_dialog();
+        h.run_steps(3);
+        h.get_by_label(&t!("palette-harmony-triad")).click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state().colour_dialog.as_ref().unwrap().harmony,
+            Some(Harmony::Triad)
+        );
+    }
+
+    #[test]
+    fn the_colour_dialog_works_from_the_keyboard() {
+        // Retour du 23/11/2026 : la boîte ne se pilotait qu'à la souris ; derrière elle,
+        // les flèches déplaçaient la sélection de la grille.
+        use crate::palette_view::Harmony;
+        let (mut h, dir) = harness();
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "").unwrap();
+        h.state_mut().config_path = Some(config);
+        h.state_mut().gui.colour_search.live_ms = 0;
+        h.state_mut().selected = 1;
+        h.state_mut().open_colour_dialog();
+        h.run_steps(3);
+        let hsv = |h: &Harness<'static, TriApp>| h.state().colour_dialog.as_ref().unwrap().hsv;
+        let before = hsv(&h);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        h.run_steps(2);
+        let step = h.state().gui.colour_search.key_hue_step;
+        assert!((hsv(&h)[0] - (before[0] + step).rem_euclid(360.0)).abs() < 0.01);
+        assert_eq!(h.state().selected, 1, "la grille ne bouge pas");
+        press(&mut h, Key::ArrowUp, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(hsv(&h)[1] > before[1]);
+        // Les flèches ont rempli le premier emplacement ; `1` le choisit.
+        press(&mut h, Key::Num1, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(h.state().colour_dialog.as_ref().unwrap().slots.len(), 1);
+        // hjkl comme les flèches, avec le profil vim seulement ; `a` : la première harmonie.
+        let hue = hsv(&h)[0];
+        press(&mut h, Key::L, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(hsv(&h)[0], hue, "profil classique : rien");
+        h.state_mut().gui.profile = crate::actions::Profile::Vim;
+        press(&mut h, Key::L, Modifiers::NONE);
+        h.run_steps(2);
+        assert!((hsv(&h)[0] - (hue + step).rem_euclid(360.0)).abs() < 0.01);
+        press(&mut h, Key::A, Modifiers::NONE);
+        h.run_steps(2);
+        let d = h.state().colour_dialog.as_ref().unwrap();
+        assert_eq!(d.harmony, Some(Harmony::ALL[0]));
+        assert_eq!(d.slots.len(), 2);
+        // `m` : le mode suivant ; `+` : la tolérance.
+        let radius = h.state().palette_radius;
+        press(&mut h, Key::M, Modifiers::NONE);
+        press(&mut h, Key::Plus, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(
+            h.state().gui.colour_search.mode,
+            crate::settings::ColourMode::Hierarchical
+        );
+        assert!(h.state().palette_radius > radius);
+        // Entrée : valider.
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(3);
+        assert!(h.state().colour_dialog.is_none());
+        assert_eq!(h.state().palette_colour.as_ref().unwrap().colours.len(), 2);
+    }
+
+    #[test]
+    fn the_rating_bar_stays_when_nothing_is_shown() {
+        // Retour du 23/11/2026 : un filtre sans résultat faisait disparaître la barre du
+        // bas ; elle reste, grisée (les barres ne bougent pas).
+        let (mut h, _dir) = harness();
+        h.state_mut().rating_bar = true;
+        h.run_steps(2);
+        let title = t!("rating-bar-title").to_uppercase();
+        assert!(h.query_by_label(&title).is_some());
+        h.state_mut().files.clear();
+        h.state_mut().status.clear();
+        h.state_mut().selected = 0;
+        h.run_steps(2);
+        assert!(h.query_by_label(&title).is_some(), "la barre reste");
     }
 
     #[test]
@@ -32103,9 +33056,70 @@ mod tests {
         assert_eq!(dialog.active, None, "plus rien de choisi");
         dialog.set_rgb([1, 2, 3]);
         assert_eq!(dialog.slot_rgb(0), [0, 255, 0], "rien ne suit");
+        // Un clic sur la roue remplit le premier vide, le suivant le suivant ; un
+        // emplacement choisi exprès le reste (retour du 23/11/2026).
+        let mut w = ColourDialog::new(&[]);
+        for rgb in [[255, 0, 0], [0, 0, 255]] {
+            w.edit_target();
+            w.set_rgb(rgb);
+            w.edit_done();
+        }
+        assert_eq!(w.slots.len(), 2);
+        assert_eq!((w.slot_rgb(0), w.slot_rgb(1)), ([255, 0, 0], [0, 0, 255]));
+        assert_eq!(w.active, None);
+        w.load(0);
+        for rgb in [[200, 0, 0], [180, 0, 0]] {
+            w.edit_target();
+            w.set_rgb(rgb);
+            w.edit_done();
+        }
+        assert_eq!(w.slots.len(), 2, "choisi exprès : retouché, pas d'ajout");
+        assert_eq!(w.slot_rgb(0), [180, 0, 0]);
+        // Le curseur de la valeur, juste après un clic sur la roue : la dernière rangée,
+        // sans en créer une (retour du 23/11/2026).
+        w.deselect();
+        w.value_target();
+        assert_eq!((w.active, w.slots.len()), (Some(1), 2));
+        let [hh, ss, _] = w.hsv;
+        w.set_hsv([hh, ss, 0.3]);
+        w.edit_done();
+        assert!((w.slots[1][2] - 0.3).abs() < 1e-6);
+        // Fini : un « + » ne duplique rien, le clic suivant sur la roue remplit le vide.
+        w.deselect();
+        assert_eq!(w.slots.len(), 2);
+        w.edit_target();
+        w.set_rgb([0, 200, 0]);
+        w.edit_done();
+        assert_eq!(w.slots.len(), 3);
+        assert_eq!(w.slot_rgb(2), [0, 200, 0]);
         // Une seule couleur cherchée : rangée elle aussi (retour du 23/11/2026).
+        // Un clic sur la roue pour une couleur nouvelle : à pleine luminosité, comme la roue.
+        let (mut hh, _dir) = harness();
+        let mut fresh = ColourDialog::new(&[]);
+        assert_eq!(fresh.hsv[2], 1.0, "départ à 100 %, comme la roue");
+        fresh.max = 5;
+        hh.state_mut().colour_dialog = Some(fresh);
+        hh.run_steps(3);
+        let wheel = hh.get_by_label(&t!("palette-colour-wheel")).rect();
+        let at = wheel.center() + vec2(wheel.width() * 0.3, 0.0);
+        hh.event(UiEvent::PointerMoved(at));
+        for pressed in [true, false] {
+            hh.event(UiEvent::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            });
+            hh.run_steps(1);
+        }
+        hh.run_steps(2);
+        let d = hh.state().colour_dialog.as_ref().unwrap();
+        // Un clic simulé n'est pas toujours vu sur la CI : vérifié quand il l'est.
+        if let Some(slot) = d.slots.first() {
+            assert!((slot[2] - 1.0).abs() < 1e-6, "{slot:?}");
+        }
         let one = ColourDialog::new(&[tri::palette::srgb_to_oklab([200, 30, 30])]);
-        assert_eq!((one.slots.len(), one.active), (1, Some(0)));
+        assert_eq!((one.slots.len(), one.active), (1, None));
 
         let (mut h, dir) = harness();
         let config = dir.path().join("config.toml");
@@ -32124,6 +33138,36 @@ mod tests {
         h.run_steps(2);
         h.get_by_label("#abcdef");
         h.get_by_label("Couleur 1");
+        // Couleur moyenne : la première seule, les autres cachées mais gardées ; la roue
+        // règle la première (retour du 23/11/2026).
+        let two = [[0.6, 0.1, 0.0], [0.5, 0.0, -0.1]];
+        h.state_mut().colour_dialog = Some(ColourDialog::new(&two));
+        h.state_mut().gui.colour_search.mode = crate::settings::ColourMode::Mean;
+        h.run_steps(2);
+        h.get_by_label("Couleur 1");
+        assert!(h.query_by_label("Couleur 2").is_none());
+        let d = h.state_mut().colour_dialog.as_mut().unwrap();
+        d.edit_target();
+        assert_eq!(d.active, Some(0));
+        assert_eq!(d.slots.len(), 2);
+        // Une pastille, une valeur tapée : dans la première couleur, rien ne se désélectionne
+        // (retour du 23/11/2026 : deux points sur la roue).
+        d.mean = true;
+        d.active = None;
+        d.pick_rgb([0, 200, 0]);
+        assert_eq!((d.active, d.slot_rgb(0)), (Some(0), [0, 200, 0]));
+        d.reset();
+        assert!(d.slots.is_empty(), "réinitialisée : rien de rangé");
+        // Hors couleur moyenne, une pastille remplit le prochain vide.
+        let mut w = ColourDialog::new(&[tri::palette::srgb_to_oklab([255, 0, 0])]);
+        w.pick_rgb([0, 0, 255]);
+        assert_eq!(w.slots.len(), 2);
+        assert_eq!(w.active, None);
+        w.type_target();
+        w.set_rgb([0, 0, 200]);
+        assert_eq!(w.slots.len(), 3, "une valeur tapée remplit le vide suivant");
+        w.set_rgb([0, 0, 150]);
+        assert_eq!(w.slots.len(), 3, "puis le retouche");
     }
 
     #[test]
@@ -37220,6 +38264,62 @@ mod tests {
                 .stars,
             3
         );
+    }
+
+    #[test]
+    fn all_photos_is_reopened_where_one_left_it() {
+        // Retour du 23/11/2026 : quitté dans « Toutes les photos », `tri` se rouvrait sur le
+        // dernier vrai dossier. Il y repasse, et le retour mène à ce dossier.
+        let dir = tempfile::tempdir().unwrap();
+        let photos = dir.path().join("séance");
+        std::fs::create_dir(&photos).unwrap();
+        image::RgbImage::new(8, 8)
+            .save(photos.join("a.jpg"))
+            .unwrap();
+        let settings = || {
+            let mut s = AppSettings::default();
+            s.cache.dir = Some(dir.path().join("cache"));
+            s.data.dir = Some(dir.path().join("data"));
+            s.places.watch_ms = 0;
+            s.watch.interval_ms = 0;
+            s.gui.reopen_last = true;
+            s
+        };
+        let (s, p) = (settings(), photos.clone());
+        let mut first = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(Some(p), s, None));
+        run_until(&mut first, |app| {
+            app.loading.is_none() && app.engine.is_some()
+        });
+        first.state_mut().toggle_all_photos();
+        run_until(&mut first, |app| {
+            tri::folder::is_all_photos(&app.folder.dir) && app.opening.is_none()
+        });
+        drop(first);
+        let s = settings();
+        let mut again = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(None, s, None));
+        run_until(&mut again, |app| {
+            tri::folder::is_all_photos(&app.folder.dir) && app.opening.is_none()
+        });
+        assert_eq!(
+            again.state().all_photos_from.as_deref(),
+            Some(photos.as_path())
+        );
+        // En revenir, puis relancer : le vrai dossier.
+        again.state_mut().toggle_all_photos();
+        run_until(&mut again, |app| {
+            app.folder.dir == photos && app.opening.is_none()
+        });
+        drop(again);
+        let s = settings();
+        let third = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(None, s, None));
+        assert_eq!(third.state().folder.dir, photos);
+        assert!(!third.state().reopen_all_photos);
     }
 
     #[test]

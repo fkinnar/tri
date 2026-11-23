@@ -247,17 +247,69 @@ system one ("cold" measurements, experiments).
   search.
   **Several colours** (#492, user's idea, 2026-11-23): at the top of the box, the colours
   looked for, as swatches like the others (`[gui.colour_search] max` slots, 5; feedback of
-  2026-11-23): nothing by default, a "+" in the empty ones; a click on an empty one stores
-  the current colour there and selects it, on a filled one selects it (framed): the wheel,
-  the values and the eyedropper then set that one; right-click "Clear" (the next ones move
-  up). When opening, the current or last search, even of a single colour, the first one
+  2026-11-23): nothing by default, a "+" in the empty ones. A click on the wheel (or the
+  eyedropper) **fills the first empty slot**, and dragging sets it while the button is
+  held; on release nothing is selected: the next click fills the next slot (no "+" to
+  click first, no duplicate). Five stored and nothing selected: the last one is changed. A clicked **swatch** acts
+  like a click on the wheel; a **typed value** (R G B, H S V, `#rrggbb`) likewise fills the
+  next empty slot, then changes it (they only changed the wheel, not the search).
+  A click on a filled slot **selects it on purpose** (its swatch larger): the wheel, the
+  values and the eyedropper change it, as often as needed, until a click on a "+", which
+  stores nothing (it duplicated the selected colour): nothing selected, the next empty
+  slot (its "+" stronger) is filled by the next click; right-click "Clear" (the next ones
+  move up). From the keyboard, the arrows likewise fill the next empty slot on the first
+  press, then change it. When opening, the current or last search, even of a single colour, the first one
   selected; nothing stored, "OK" takes the wheel's colour. Centred between two thin
   lines. **Live preview** (feedback of 2026-11-23): at each colour change in the box, the
   grid searches behind it, at most once per `[gui.colour_search] live_ms` (150 ms; 0: no
-  preview); opening starts nothing; "OK" (formerly "Search") keeps the search, "Cancel" or
+  preview); opening starts nothing; with the filter off, changing the colour, the
+  tolerance or the mode starts the search; "OK" (formerly "Search") keeps the search, "Cancel" or
   the cross bring back the previous one (or none) and the previous sort. **Reset**
-  (bottom left) clears the slots, puts the wheel back to grey and stops the search; "OK"
-  right after leaves the grid without a search. An image must
+  (bottom left) clears the slots, puts the wheel back to white and stops the search; "OK"
+  right after leaves the grid without a search and forgets the previous colours (the box
+  reopens empty).
+  **Wheel and harmonies** (user's idea, 2026-11-23, like Adobe Color; the wheel always at
+  full brightness, the value in the V field: drawn at the current colour's value, it
+  changed look from one colour to another; on its left, a **vertical value slider**,
+  from full brightness to black: the selected colour, otherwise the last stored one,
+  double-click 100 %; a new colour taken on the wheel is the one seen, at 100 %, a changed
+  colour keeps its value): under the wheel,
+  the **painters' wheel** (RYB: red, yellow, blue; complement of blue: orange,
+  `palette_view::RYB_TO_RGB`, piecewise) or the **screen wheel** (RGB, HSV; complement of
+  blue: yellow), `[gui.colour_search] wheel`; and seven **harmonies** as icons
+  (`palette_view::Harmony`): complementary, split complementary, analogous, triad,
+  rectangle, square, shades. A click: the current colour becomes the base (first slot),
+  the other slots follow (at most `max`); the same harmony again detaches it, colours
+  kept. On the wheel, each stored colour has its dot (the one being set larger), joined to
+  the centre by the harmony; dragging a dot **turns** the harmony (the others follow; far
+  from any dot, the base); the dragged dot becomes the one being set (its swatch at the top, larger than the
+  others: a white frame was too loud). Selecting a
+  slot only selects it; changing any dot (wheel, values, eyedropper) turns the harmony
+  (feedback of 2026-11-23: changing a slot other than the base detached it, and selecting
+  counted as changing); it only detaches by clicking its icon again, or storing or
+  clearing a slot.
+  Layout (feedback of 2026-11-23): the box has the width of its middle row
+  (`Dialog::width`; otherwise the line under the title took all the available room and
+  the box stretched on a large screen), the values and swatches block
+  aligned right on the buttons, RYB / RGB at the right of the harmonies row. Screenshot:
+  `TRI_GUI_ACTIONS=colour_dialog:#2050c0,harmony:triad`. At the
+  bottom of the box (feedback of 2026-11-23): the **tolerance**, the same slider as the
+  panel's (kept per folder, double-click: starting value), and the **number of photos**
+  found by the live preview. In hierarchical mode, the tolerance **widens rank by rank**
+  (`[palette] colour_widen`, 0.25: the second colour ×1.25, the third ×1.5…): the first
+  colour more precise than the last. **Search these colours** (Palette section, under the
+  photo's palette): its main colours (the most present, without specks under
+  `colour_min_share`, at most `max`) in the box, searched right away, to adjust; "Cancel"
+  brings back the previous search. **Keyboard** (feedback of 2026-11-23: the box was
+  mouse-only, and behind it the arrows moved the grid's selection): the grid receives
+  nothing while the box is open; outside a text field, `1`–`5` select a colour (an empty
+  one: nothing selected), ← → or `h` `l` the hue (`key_hue_step`, 5°; Shift: 1°),
+  ↑ ↓ or `k` `j` the saturation (Shift: the value; `key_step`, 0.05; hjkl with the vim
+  profile only, feedback of 2026-11-23), `a` the next harmony (Shift: previous;
+  after the last, none), `m` the mode, `w` the wheel, `p` the eyedropper, Delete clears the
+  selected colour, `+` / `-` the tolerance (`key_radius_step`), Enter confirms, Escape
+  cancels. Box keys, like a list's arrows: not in `[keys]`; shown in the buttons'
+  tooltips. An image must
   contain **all** of them (one tolerance for all: one per colour would be unmanageable).
   On the right, **Absolute** (all count the same: the mean of the distances) or
   **Hierarchical** (the first counts the most, each next one `[palette] colour_hierarchy`
@@ -270,8 +322,10 @@ system one ("cold" measurements, experiments).
   and saturation (lightness counted `[palette] mean_lightness` times): photos with a cast
   of that colour, not those that contain a little of it (a blue photo with a little skin
   comes out of a skin search, not of an average skin search); a two-colour photo has a
-  grey average and only comes out of an ordinary search. The other slots stay in place,
-  greyed and inert. Measured on 116 photos of four sessions: the 6 blue-cast photos
+  grey average and only comes out of an ordinary search. The other slots are hidden (feedback
+  of 2026-11-23: greyed, it was odd), their colours kept for the other modes; any change
+  (wheel, swatch, values, keyboard, eyedropper) goes to the first one, a single dot on the
+  wheel. Measured on 116 photos of four sessions: the 6 blue-cast photos
   between 0.07 and 0.09 from a blue, the next ones at 0.17.
   A new search (colours, mode, similar palettes) selects the best answer and brings the
   grid back to the start (feedback of 2026-11-23: the previous selection stayed selected
@@ -551,7 +605,8 @@ system one ("cold" measurements, experiments).
   number of images go into a "…" menu just before invert and clear, always visible, their
   lists as submenus (`bar_choice`, #181: a drop-down list opened from a menu closed with it), and the field shrinks
   down to `search_min_width`; the right-hand buttons of the rating bar wrap to a second
-  line, and stay there while the width does not change; widths measured on the previous
+  line, and stay there while the width does not change; with no result, the rating bar
+  stays, its buttons greyed (feedback of 2026-11-23: it disappeared); widths measured on the previous
   frame), live filter by file name (`tri::fuzzy::NameFilter`,
   combined with the other filters, "Clear" empties it too); Enter keeps the filter and
   gives the keyboard back to the grid, Esc clears it. **Folders**: field under the title;
@@ -1216,7 +1271,8 @@ system one ("cold" measurements, experiments).
   **Reference photo** (feedback of 2026-11-22), shared by "similar palettes" and
   "similar" (`TriApp::reference`): in the Filters section, "Colour" first, then those two
   filters, the reference on their right (`reference_box`: its thumbnail, or an empty
-  frame); a click opens it larger (photo centred, buttons on the right) with "Remove the
+  frame; it fits the two rows, highlight included, `[gui.grid] reference_scale`,
+  feedback of 2026-11-23); a click opens it larger (photo centred, buttons on the right) with "Remove the
   reference". **Similar** (`core.filter.similar`): the photos whose fingerprint (the
   stacks' one) is close to the reference's, closest first (`rank_by_similarity`, a
   development has its photo's fingerprint), threshold on the slider (`[similarity]

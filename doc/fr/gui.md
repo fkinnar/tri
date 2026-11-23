@@ -258,18 +258,74 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   l'agrandit pour viser juste (idée de l'utilisateur, 21/11/2026) ; « Valider » garde la recherche.
   **Plusieurs couleurs** (#492, idée de l'utilisateur, 23/11/2026) : en haut de la boîte,
   les couleurs cherchées, en pastilles comme les autres (`[gui.colour_search] max`
-  emplacements, 5 ; retours du 23/11/2026) : rien par défaut, un « + » dans les vides ; un
-  clic sur un vide y range la couleur réglée et le choisit, sur un plein le choisit
-  (encadré) : la roue, les valeurs et la pipette règlent alors celui-là ; clic droit
-  « Vider » (les suivants avancent). À l'ouverture, la recherche en cours ou la dernière,
+  emplacements, 5 ; retours du 23/11/2026) : rien par défaut, un « + » dans les vides. Un
+  clic sur la roue (ou la pipette) **remplit le premier emplacement vide**, et le glisser
+  le règle tant que le bouton reste enfoncé ; au relâcher, plus rien n'est choisi : le clic
+  suivant remplit l'emplacement suivant (plus de « + » à cliquer avant, ni de doublon).
+  Cinq rangées et rien de choisi : le dernier est retouché. Une **pastille** cliquée fait
+  comme un clic sur la roue ; une **valeur tapée** (R V B, T S V, `#rrggbb`) remplit de
+  même le prochain vide, puis le retouche (elles ne changeaient que la roue, pas la
+  recherche). Un clic sur un emplacement
+  plein le **choisit exprès** (sa pastille plus grande) : la roue, les valeurs et la
+  pipette le retouchent, autant de fois qu'on veut, jusqu'à un clic sur un « + », qui ne
+  range rien (il dupliquait la couleur choisie) : plus rien de choisi, le prochain vide
+  (son « + » plus marqué) est rempli au clic suivant ; clic droit « Vider » (les suivants
+  avancent). Au clavier, les flèches remplissent de même le prochain vide au premier
+  appui, puis le retouchent. À l'ouverture, la recherche en cours ou la dernière,
   même d'une seule couleur, la première choisie ; rien de rangé, « Valider » prend la
   couleur de la roue. Centrées entre deux traits fins.
   **Aperçu en direct** (retour du 23/11/2026) : à chaque changement de couleur dans la
   boîte, la grille cherche derrière, au plus une fois par `[gui.colour_search] live_ms`
-  (150 ms ; 0 : pas d'aperçu) ; l'ouverture ne lance rien ; « Valider » (ex-« Chercher »)
+  (150 ms ; 0 : pas d'aperçu) ; l'ouverture ne lance rien ; filtre éteint, changer la
+  couleur, la tolérance ou le mode lance la recherche ; « Valider » (ex-« Chercher »)
   garde la recherche, « Annuler » ou la croix rendent celle d'avant (ou aucune) et le
   tri d'avant. **Réinitialiser** (en bas à gauche) vide les emplacements, remet la roue au
-  gris et arrête la recherche ; « Valider » juste après laisse la grille sans recherche. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
+  blanc (son centre, 100 %) et arrête la recherche ; « Valider » juste après laisse la grille sans recherche et
+  oublie les couleurs d'avant (la boîte se rouvre vide).
+  **Roue et harmonies** (idée de l'utilisateur, 23/11/2026, comme Adobe Color ; la roue
+  toujours en pleine luminosité, la valeur au champ V : dessinée à la valeur de la couleur
+  réglée, elle changeait d'aspect d'une couleur à l'autre ; à gauche, un **curseur
+  vertical de la valeur**, de la pleine luminosité au noir : la couleur choisie, sinon la
+  dernière rangée, double-clic 100 % ; une couleur nouvelle prise sur la roue est celle
+  qu'on voit, à 100 %, une couleur retouchée garde sa valeur) : sous la
+  roue, la **roue des peintres** (RJB : rouge, jaune, bleu ; complémentaire du bleu :
+  l'orange, `palette_view::RYB_TO_RGB`, par paliers) ou la **roue de l'écran** (RVB, TSV ;
+  complémentaire du bleu : le jaune), `[gui.colour_search] wheel` ; et sept
+  **harmonies** en icônes (`palette_view::Harmony`) : complémentaire, complémentaire
+  adjacente, analogue, triade, rectangle, carré, camaïeu. Un clic : la couleur réglée
+  devient la base (premier emplacement), les autres emplacements suivent (au plus `max`) ;
+  la même harmonie une seconde fois la détache, couleurs gardées. Sur la roue, chaque
+  couleur rangée a son point (celle qu'on règle plus grand), reliée au centre par
+  l'harmonie ; glisser un point fait **tourner** l'harmonie (les autres suivent ; loin de
+  tout point, la base) ; le point glissé devient celui qu'on règle (sa pastille en haut, plus grande que les
+  autres : un cadre blanc était trop présent). Choisir un
+  emplacement ne fait que le choisir ; retoucher n'importe quel point (roue, valeurs,
+  pipette) fait tourner l'harmonie (retour du 23/11/2026 : retoucher un autre emplacement
+  que la base la détachait, et choisir revenait à retoucher) ; elle ne se détache qu'en
+  recliquant son icône, ou en rangeant ou vidant un emplacement.
+  Disposition (retours du 23/11/2026) : la boîte a la largeur de sa ligne du milieu
+  (`Dialog::width` ; le trait sous le titre prenait sinon toute la place disponible, et la
+  boîte s'étirait sur un grand écran), le bloc des valeurs et des
+  pastilles calé à droite sur les boutons, RJB / RVB à droite de la ligne des harmonies.
+  Capture : `TRI_GUI_ACTIONS=colour_dialog:#2050c0,harmony:triad`. En bas
+  de la boîte (retours du 23/11/2026) : la **tolérance**, le même curseur que celui du
+  panneau (retenue par dossier, double-clic : valeur de départ), et le **nombre de photos**
+  trouvées par l'aperçu en direct. En hiérarchique, la tolérance **s'élargit de rang en
+  rang** (`[palette] colour_widen`, 0,25 : la deuxième couleur ×1,25, la troisième ×1,5…) :
+  la première couleur plus précise que la dernière. **Chercher ces couleurs** (section
+  Palette, sous la palette de la photo) : ses couleurs principales (les plus présentes, sans
+  les miettes sous `colour_min_share`, au plus `max`) dans la boîte, cherchées tout de
+  suite, à ajuster ; « Annuler » rend la recherche d'avant. **Clavier** (retour du
+  23/11/2026 : la boîte ne se pilotait qu'à la souris, et derrière elle les flèches
+  déplaçaient la sélection) : la grille ne reçoit plus rien tant que la boîte est ouverte ;
+  hors saisie dans un champ, `1`–`5` choisissent une couleur (un vide : plus rien de
+  choisi), ← → ou `h` `l` la teinte (`key_hue_step`, 5° ; Maj : 1°), ↑ ↓ ou `k` `j` la
+  saturation (Maj : la valeur ; `key_step`, 0,05 ; hjkl avec le profil vim seulement, retours du
+  23/11/2026), `a` l'harmonie suivante (Maj : précédente ; après la
+  dernière, aucune), `m` le mode, `w` la roue, `p` la pipette, Suppr vide la couleur
+  choisie, `+` / `-` la tolérance (`key_radius_step`), Entrée valide, Échap annule. Des
+  touches de boîte, comme les flèches des listes : pas dans `[keys]` ; dites dans les
+  bulles des boutons. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
   couleur serait ingérable). À droite, **Absolue** (toutes comptent pareil : la moyenne des
   distances) ou **Hiérarchique** (la première compte le plus, chaque suivante
   `[palette] colour_hierarchy` fois la précédente, d'après sa présence dans l'image, la
@@ -283,8 +339,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `[palette] mean_lightness` fois) : les photos à dominante de cette couleur, pas celles
   qui en ont un peu (une photo bleue avec un peu de peau sort d'une recherche de la peau,
   pas d'une recherche de la peau en moyenne) ; une photo bicolore a une moyenne grise et
-  ne sort qu'en recherche ordinaire. Les autres emplacements restent à leur place, grisés
-  et inertes. Mesuré sur 116 photos de quatre séances : les 6 photos à dominante bleue
+  ne sort qu'en recherche ordinaire. Les autres emplacements sont cachés (retour du
+  23/11/2026 : grisés, c'était bizarre), leurs couleurs gardées pour les autres modes ;
+  toute retouche (roue, pastille, valeurs, clavier, pipette) va dans la première, un seul
+  point sur la roue. Mesuré sur 116 photos de quatre séances : les 6 photos à dominante bleue
   entre 0,07 et 0,09 d'un bleu, les suivantes à 0,17. Une nouvelle recherche (couleurs, mode, palettes
   proches) choisit la meilleure réponse et remet la grille au début (retour du 23/11/2026 :
   la sélection d'avant restait choisie et la grille défilait jusqu'à elle, au milieu des
@@ -570,7 +628,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   avant l'inversion et l'effacement, toujours visibles, leurs listes en sous-menus
   (`bar_choice`, #181 : une liste déroulante ouverte depuis un menu se refermait avec lui), et le champ se rétrécit jusqu'à `search_min_width` ;
   les boutons de droite du bandeau de notation passent à la ligne, et y restent tant que
-  la largeur ne change pas ; largeurs mesurées à l'image précédente), filtre en direct par nom de fichier
+  la largeur ne change pas ; filtre sans résultat, le bandeau reste, ses boutons grisés
+  (retour du 23/11/2026 : il disparaissait) ; largeurs mesurées à l'image précédente), filtre en direct par nom de fichier
   (`tri::fuzzy::NameFilter`, combiné aux autres filtres, « Effacer » le vide aussi) ;
   Entrée garde le filtre et rend le clavier à la grille, Échap l'efface. **Dossiers** :
   champ sous le titre ; pendant la recherche, les résultats remplacent l'arborescence
@@ -1305,7 +1364,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   **Photo de référence** (retour du 22/11/2026), commune à « palettes proches » et à
   « semblables » (`TriApp::reference`) : dans la section Filtres, « Couleur » d'abord,
   puis ces deux filtres, la référence à leur droite (`reference_box` : son imagette, ou
-  un cadre vide) ; un clic l'ouvre en grand (photo au centre, boutons à droite) avec
+  un cadre vide ; elle tient sur les deux lignes, surbrillance comprise, `[gui.grid]
+  reference_scale`, retour du 23/11/2026) ; un clic l'ouvre en grand (photo au centre, boutons à droite) avec
   « Supprimer la référence ». **Semblables** (`core.filter.similar`) : les photos dont
   l'empreinte (celle des piles) est proche de celle de la référence, de la plus proche
   à la plus lointaine (`rank_by_similarity`, un développement a l'empreinte de sa

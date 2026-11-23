@@ -662,6 +662,11 @@ colour_proximity = 0.25
 # Recherche de la couleur moyenne d'une image : petit, une photo sombre à dominante bleue
 # reste « bleue en moyenne » face à un bleu clair.
 mean_lightness = 0.3
+# Contient ces couleurs, hiérarchique : tolérance élargie à chaque rang.
+#
+# La première couleur plus précise que la dernière : la tolérance de la deuxième est 1,25
+# fois celle du curseur, la troisième 1,5 fois… (0 : la même pour toutes).
+colour_widen = 0.25
 
 [index]
 # Noter les palettes dans l'index de recherche de tous les dossiers.
@@ -1041,6 +1046,11 @@ name_chars = 24
 textures = 600
 # Taille des notes (étoiles, couleurs, drapeau) sur les vignettes.
 marks = 12.0
+# Imagette de la référence : taille, en multiple de la hauteur des deux lignes de filtres.
+#
+# Filtres « palettes proches » et « semblables » : l'imagette de la référence, à leur
+# droite (1,25 : elle tient sur ces deux lignes, surbrillance comprise).
+reference_scale = 1.25
 # Marques vides dessinées en gris clair là où rien n'est posé (une étoile, une pastille
 # de couleur, le cercle du drapeau neutre) : chaque vignette montre toutes ses
 # informations, et où cliquer.
@@ -1368,6 +1378,18 @@ own_max = 6
 # délai (un gros dossier reste fluide pendant un glisser sur la roue) ; 0 : seulement à
 # « Chercher ».
 live_ms = 150
+# Roue de la boîte : celle des peintres ("ryb") ou la roue de l'écran ("rgb").
+#
+# "ryb" : rouge, jaune, bleu, comme Adobe Color ; ses harmonies sont celles qu'on connaît
+# (complémentaire du bleu : l'orange). "rgb" : la roue TSV de l'écran (complémentaire du
+# bleu : le jaune). Changé aussi dans la boîte.
+wheel = "ryb"
+# Clavier : pas de la teinte (degrés) aux flèches gauche et droite.
+key_hue_step = 5.0
+# Clavier : pas de la saturation et de la valeur aux flèches haut et bas.
+key_step = 0.05
+# Clavier : pas de la tolérance à + et -.
+key_radius_step = 0.01
 
 [gui.position]
 # Repère « Photo 12 / 94 » à chaque changement d'image : durée d'affichage.

@@ -208,6 +208,9 @@ pub struct PaletteSettings {
     /// Couleur moyenne : poids de la clarté face à la teinte et la saturation (comptées
     /// `chroma_weight` fois) ; petit, une photo sombre à dominante bleue reste bleue.
     pub mean_lightness: f32,
+    /// Contient ces couleurs, recherche hiérarchique : tolérance élargie à chaque rang, en
+    /// part de celle de la première (0,25 : la deuxième ×1,25, la troisième ×1,5…).
+    pub colour_widen: f32,
 }
 
 impl Default for PaletteSettings {
@@ -233,6 +236,7 @@ impl Default for PaletteSettings {
             colour_hierarchy: 0.4,
             colour_proximity: 0.25,
             mean_lightness: 0.3,
+            colour_widen: 0.25,
         }
     }
 }
@@ -515,9 +519,15 @@ impl Palette {
             return (d <= query.radius).then_some(d);
         }
         let (mut sum, mut weights, mut weight) = (0.0, 0.0, 1.0);
-        for &oklab in &query.colours {
+        for (rank, &oklab) in query.colours.iter().enumerate() {
+            // Hiérarchique : la tolérance s'élargit de rang en rang (idée de l'utilisateur,
+            // 23/11/2026 : la première couleur plus précise que la dernière).
+            let radius = match query.hierarchy {
+                Some(_) => query.radius * (1.0 + query.widen * rank as f32),
+                None => query.radius,
+            };
             let d = self.nearest(oklab, chroma_weight, min_share)?;
-            if d > query.radius {
+            if d > radius {
                 return None;
             }
             // Hiérarchique : la présence d'abord (mesuré le 23/11/2026 sur 300 photos :
@@ -526,8 +536,8 @@ impl Palette {
             let cost = match query.hierarchy {
                 None => d,
                 Some(_) => {
-                    let share = self.share_near(oklab, query.radius, chroma_weight);
-                    (1.0 - share) + query.proximity * d / query.radius.max(1e-6)
+                    let share = self.share_near(oklab, radius, chroma_weight);
+                    (1.0 - share) + query.proximity * d / radius.max(1e-6)
                 }
             };
             sum += weight * cost;
@@ -784,6 +794,9 @@ pub struct ColourQuery {
     pub hierarchy: Option<f32>,
     /// Recherche hiérarchique : poids de la proximité face à la présence.
     pub proximity: f32,
+    /// Recherche hiérarchique : la tolérance de chaque couleur, plus large de cette part
+    /// de celle de la première à chaque rang (0,25 : la 2ᵉ ×1,25, la 3ᵉ ×1,5…).
+    pub widen: f32,
     /// Recherche de la couleur **moyenne** (#492, 23/11/2026) : `Some(poids de la
     /// clarté)`, la première couleur seule comparée à la moyenne de l'image (voir
     /// [`Palette::mean`]) ; `None` sinon.
@@ -1466,6 +1479,7 @@ mod tests {
             radius: s.colour_radius,
             hierarchy: None,
             proximity: s.colour_proximity,
+            widen: s.colour_widen,
             mean,
         };
         let cost =
@@ -1489,6 +1503,43 @@ mod tests {
     }
 
     #[test]
+    fn a_hierarchical_search_widens_the_tolerance_rank_by_rank() {
+        // Idée de l'utilisateur (23/11/2026) : la première couleur plus précise que la
+        // dernière.
+        let s = PaletteSettings::default();
+        let (red, blue) = ([200u8, 30, 30], [30u8, 40, 200]);
+        let palette = extract(&bands(&[(red, 60), (blue, 40)]), &s);
+        let red = working_to_oklab(red);
+        // Un bleu un peu à côté : à 1,1 fois la tolérance.
+        let mut off = working_to_oklab(blue);
+        off[0] += 0.08;
+        let d = palette
+            .nearest(off, s.chroma_weight, s.colour_coverage)
+            .unwrap();
+        let radius = d / 1.1;
+        let query = |hierarchy| ColourQuery {
+            colours: vec![red, off],
+            radius,
+            hierarchy,
+            proximity: s.colour_proximity,
+            widen: s.colour_widen,
+            mean: None,
+        };
+        let cost = |q: &ColourQuery| palette.colours_cost(q, s.chroma_weight, s.colour_coverage);
+        assert!(cost(&query(None)).is_none(), "absolue : trop loin");
+        assert!(
+            cost(&query(Some(s.colour_hierarchy))).is_some(),
+            "2ᵉ rang : ×1,25"
+        );
+        // Dans l'autre ordre, le bleu en premier garde la tolérance du curseur.
+        let reversed = ColourQuery {
+            colours: vec![off, red],
+            ..query(Some(s.colour_hierarchy))
+        };
+        assert!(cost(&reversed).is_none());
+    }
+
+    #[test]
     fn several_colours_are_all_required() {
         // #492 : plusieurs couleurs cherchées ensemble ; une seule qui manque écarte.
         let s = PaletteSettings::default();
@@ -1499,6 +1550,7 @@ mod tests {
             radius: s.colour_radius,
             hierarchy,
             proximity: s.colour_proximity,
+            widen: s.colour_widen,
             mean: None,
         };
         let cost = |q: &ColourQuery| palette.colours_cost(q, s.chroma_weight, s.colour_coverage);
@@ -1527,6 +1579,7 @@ mod tests {
             radius: s.colour_radius,
             hierarchy,
             proximity: s.colour_proximity,
+            widen: s.colour_widen,
             mean: None,
         };
         let cost = |p: &Palette, q: &ColourQuery| {
