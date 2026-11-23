@@ -281,7 +281,15 @@ system one ("cold" measurements, experiments).
   colour more precise than the last. **Search these colours** (Palette section, under the
   photo's palette): its main colours (the most present, without specks under
   `colour_min_share`, at most `max`) in the box, searched right away, to adjust; "Cancel"
-  brings back the previous search. An image must
+  brings back the previous search. **Keyboard** (feedback of 2026-11-23: the box was
+  mouse-only, and behind it the arrows moved the grid's selection): the grid receives
+  nothing while the box is open; outside a text field, `1`–`5` select a colour (an empty
+  one stores the current colour), ← → the hue (`key_hue_step`, 5°; Shift: 1°), ↑ ↓ the
+  saturation (Shift: the value; `key_step`, 0.05), `h` the next harmony (Shift: previous;
+  after the last, none), `m` the mode, `w` the wheel, `p` the eyedropper, Delete clears the
+  selected colour, `+` / `-` the tolerance (`key_radius_step`), Enter confirms, Escape
+  cancels. Box keys, like a list's arrows: not in `[keys]`; shown in the buttons'
+  tooltips. An image must
   contain **all** of them (one tolerance for all: one per colour would be unmanageable).
   On the right, **Absolute** (all count the same: the mean of the distances) or
   **Hierarchical** (the first counts the most, each next one `[palette] colour_hierarchy`

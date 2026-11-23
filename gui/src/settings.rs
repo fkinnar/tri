@@ -1198,6 +1198,12 @@ pub struct ColourSearchSettings {
     /// Roue de la boîte : celle des peintres (rouge, jaune, bleu ; ses harmonies sont
     /// celles qu'on connaît) ou la roue TSV ; changée aussi dans la boîte.
     pub wheel: ColourWheel,
+    /// Clavier : pas de la teinte (degrés) aux flèches ← →.
+    pub key_hue_step: f32,
+    /// Clavier : pas de la saturation et de la valeur (0 à 1) aux flèches ↑ ↓.
+    pub key_step: f32,
+    /// Clavier : pas de la tolérance à `+` / `-`.
+    pub key_radius_step: f32,
 }
 
 /// Roue de la boîte des couleurs (#492).
@@ -1237,6 +1243,9 @@ impl Default for ColourSearchSettings {
             own_max: 6,
             live_ms: 150,
             wheel: ColourWheel::Ryb,
+            key_hue_step: 5.0,
+            key_step: 0.05,
+            key_radius_step: 0.01,
         }
     }
 }

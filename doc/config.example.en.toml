@@ -1365,6 +1365,12 @@ live_ms = 150
 # complement of blue: orange). "rgb": the screen's HSV wheel (the complement of blue:
 # yellow). Also changed in the box.
 wheel = "ryb"
+# Keyboard: hue step (degrees) with the left and right arrows.
+key_hue_step = 5.0
+# Keyboard: saturation and value step with the up and down arrows.
+key_step = 0.05
+# Keyboard: tolerance step with + and -.
+key_radius_step = 0.01
 
 [gui.position]
 # "Photo 12 / 94" marker at each image change: how long it shows.

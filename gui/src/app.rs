@@ -336,6 +336,9 @@ struct ColourDialog {
     max: usize,
     /// Point de l'harmonie que l'on fait tourner sur la roue (glisser en cours).
     dragging: Option<usize>,
+    /// Pas encore montrée : ses touches attendent l'image suivante (la touche qui l'a
+    /// ouverte, Entrée, la validait aussitôt).
+    fresh: bool,
 }
 
 impl ColourDialog {
@@ -352,6 +355,7 @@ impl ColourDialog {
             ryb: true,
             max: 5,
             dragging: None,
+            fresh: true,
         };
         for &oklab in colours {
             dialog.set(oklab);
@@ -554,6 +558,18 @@ struct ColourLive {
     changed: bool,
     applied: Vec<[f32; 3]>,
     at: Instant,
+}
+
+/// Ce que les touches de la boîte des couleurs demandent à l'application (le reste est
+/// fait dans la boîte même).
+#[derive(Default)]
+struct ColourKeys {
+    mode: Option<crate::settings::ColourMode>,
+    wheel: Option<crate::settings::ColourWheel>,
+    eyedropper: bool,
+    /// Tolérance à ajouter (négatif : à retirer).
+    radius: f32,
+    ok: bool,
 }
 
 /// Taille d'une pastille de la boîte des couleurs.
@@ -5717,6 +5733,8 @@ impl TriApp {
         let mut own: Option<Vec<String>> = None;
         let mut mode: Option<crate::settings::ColourMode> = None;
         let mut wheel: Option<crate::settings::ColourWheel> = None;
+        // Le clavier (retour du 23/11/2026 : la boîte ne se pilotait qu'à la souris).
+        let keyed = self.colour_dialog_keys(ctx, &mut dialog);
         // La tolérance (celle du panneau) et le nombre de photos trouvées.
         let p = self.settings.palette;
         let (radius_max, radius_default) = (p.colour_radius_max.max(0.01), p.colour_radius);
@@ -5780,7 +5798,7 @@ impl TriApp {
                                 ui,
                                 size,
                                 &t!("palette-eyedropper-name"),
-                                &t!("palette-eyedropper-tip"),
+                                &format!("{} (p)", t!("palette-eyedropper-tip")),
                             );
                             marks::eyedropper_icon(
                                 ui.painter(),
@@ -5890,6 +5908,10 @@ impl TriApp {
                     });
                 });
             });
+        if keyed.radius != 0.0 {
+            radius = (radius + keyed.radius).clamp(0.0, radius_max);
+            radius_done = true;
+        }
         if radius != before_radius {
             self.palette_radius = radius;
             if let Some(c) = &mut self.palette_colour {
@@ -5900,6 +5922,10 @@ impl TriApp {
         if radius_done {
             self.remember_palette_levels();
         }
+        mode = mode.or(keyed.mode);
+        wheel = wheel.or(keyed.wheel);
+        search |= keyed.ok;
+        eyedropper |= keyed.eyedropper;
         if let Some(own) = own {
             self.set_own_swatches(own);
         }
@@ -6025,7 +6051,7 @@ impl TriApp {
                     };
                     if ui
                         .selectable_label(current == m, name)
-                        .on_hover_text(tip)
+                        .on_hover_text(format!("{tip} (m)"))
                         .clicked()
                         && current != m
                     {
@@ -6129,6 +6155,106 @@ impl TriApp {
         }
     }
 
+    /// Touches de la boîte des couleurs, hors saisie dans un champ : `1`–`5` choisissent
+    /// une couleur (un vide y range la couleur réglée), ← → la teinte (Maj : finement),
+    /// ↑ ↓ la saturation (Maj : la valeur), `h` l'harmonie suivante (Maj : précédente ;
+    /// après la dernière, aucune), `m` le mode, `w` la roue, `p` la pipette, Suppr vide
+    /// la couleur choisie, `+` / `-` la tolérance, Entrée valide. Échap : la boîte elle-même.
+    /// Pas de `[keys]` ici : des touches de boîte, comme les flèches des listes ; leurs pas
+    /// sont réglables (`[gui.colour_search] key_*`).
+    fn colour_dialog_keys(&self, ctx: &egui::Context, dialog: &mut ColourDialog) -> ColourKeys {
+        use crate::palette_view::Harmony;
+        use crate::settings::{ColourMode, ColourWheel};
+        use egui::Key;
+        let mut out = ColourKeys::default();
+        if std::mem::take(&mut dialog.fresh)
+            || ctx.egui_wants_keyboard_input()
+            || self.palette_eyedropper
+        {
+            return out;
+        }
+        let cs = &self.gui.colour_search;
+        let (pressed, shift) = ctx.input(|i| {
+            let keys: Vec<Key> = i
+                .events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::Key {
+                        key, pressed: true, ..
+                    } => Some(*key),
+                    _ => None,
+                })
+                .collect();
+            (keys, i.modifiers.shift)
+        });
+        let digits = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5];
+        for key in pressed {
+            if let Some(i) = digits.iter().position(|&k| k == key) {
+                if i < dialog.slots.len() {
+                    dialog.load(i);
+                } else if i < dialog.max {
+                    dialog.store(dialog.max);
+                }
+                continue;
+            }
+            let [h, s, v] = dialog.hsv;
+            let hue_step = if shift { 1.0 } else { cs.key_hue_step };
+            match key {
+                Key::ArrowLeft => dialog.set_hsv([(h - hue_step).rem_euclid(360.0), s, v]),
+                Key::ArrowRight => dialog.set_hsv([(h + hue_step).rem_euclid(360.0), s, v]),
+                Key::ArrowUp if shift => {
+                    dialog.set_hsv([h, s, (v + cs.key_step).min(1.0)]);
+                }
+                Key::ArrowDown if shift => {
+                    dialog.set_hsv([h, s, (v - cs.key_step).max(0.0)]);
+                }
+                Key::ArrowUp => dialog.set_hsv([h, (s + cs.key_step).min(1.0), v]),
+                Key::ArrowDown => dialog.set_hsv([h, (s - cs.key_step).max(0.0), v]),
+                Key::H => {
+                    let all = Harmony::ALL;
+                    let at = dialog
+                        .harmony
+                        .and_then(|h| all.iter().position(|&x| x == h));
+                    let next = match (at, shift) {
+                        (None, false) => Some(0),
+                        (None, true) => Some(all.len() - 1),
+                        (Some(i), false) => (i + 1 < all.len()).then_some(i + 1),
+                        (Some(i), true) => i.checked_sub(1),
+                    };
+                    match next {
+                        Some(i) => {
+                            dialog.harmony = None;
+                            dialog.set_harmony(all[i]);
+                        }
+                        None => dialog.harmony = None,
+                    }
+                }
+                Key::M => {
+                    let all = ColourMode::ALL;
+                    let at = all.iter().position(|&m| m == cs.mode).unwrap_or(0);
+                    out.mode = Some(all[(at + 1) % all.len()]);
+                }
+                Key::W => {
+                    out.wheel = Some(match cs.wheel {
+                        ColourWheel::Ryb => ColourWheel::Rgb,
+                        ColourWheel::Rgb => ColourWheel::Ryb,
+                    });
+                }
+                Key::P => out.eyedropper = true,
+                Key::Delete | Key::Backspace => {
+                    if let Some(i) = dialog.active {
+                        dialog.clear(i);
+                    }
+                }
+                Key::Plus | Key::Equals => out.radius += cs.key_radius_step,
+                Key::Minus => out.radius -= cs.key_radius_step,
+                Key::Enter => out.ok = true,
+                _ => {}
+            }
+        }
+        out
+    }
+
     /// La roue de la boîte des couleurs : un clic ou un glisser y choisit la couleur
     /// réglée ; avec une harmonie, le point le plus proche du clic tourne et les autres
     /// suivent. Les couleurs rangées y sont marquées (celle que l'on règle plus grande),
@@ -6212,7 +6338,8 @@ impl TriApp {
             ui.spacing_mut().item_spacing.x = 3.0;
             for harmony in Harmony::ALL {
                 let name = t!(&format!("palette-harmony-{}", harmony.id()));
-                let (rect, response) = marks::icon_button(ui, size, &name, &name);
+                let tip = format!("{name} (h)");
+                let (rect, response) = marks::icon_button(ui, size, &name, &tip);
                 let on = dialog.harmony == Some(harmony);
                 if on {
                     ui.painter()
@@ -6240,7 +6367,7 @@ impl TriApp {
             ] {
                 if ui
                     .selectable_label(current == w, label)
-                    .on_hover_text(tip)
+                    .on_hover_text(format!("{tip} (w)"))
                     .clicked()
                     && current != w
                 {
@@ -13175,6 +13302,14 @@ impl TriApp {
                 if action == Action::Back && !dialog.busy() {
                     self.file_dialog = None;
                 } else if action.works_over_overlay() {
+                    self.perform(ctx, action);
+                }
+                continue;
+            }
+            // Boîte des couleurs : ses touches à elle (`colour_dialog_keys`) ; derrière, la
+            // grille ne bouge pas (retour du 23/11/2026).
+            if self.colour_dialog.is_some() {
+                if action.works_over_overlay() && action != Action::Back {
                     self.perform(ctx, action);
                 }
                 continue;
@@ -31742,6 +31877,8 @@ mod tests {
             .position(|f| f.path.ends_with("img1.jpg"))
             .unwrap();
         h.state_mut().selected = img1;
+        // Une boîte des couleurs restée ouverte prendrait Entrée (elle valide).
+        h.state_mut().colour_dialog = None;
         press(&mut h, Key::Enter, Modifiers::NONE);
         // La pastille ouvre la boîte ; sa pipette, puis un clic sur l'image (retour du
         // 21/11/2026).
@@ -32465,6 +32602,55 @@ mod tests {
             h.state().colour_dialog.as_ref().unwrap().harmony,
             Some(Harmony::Triad)
         );
+    }
+
+    #[test]
+    fn the_colour_dialog_works_from_the_keyboard() {
+        // Retour du 23/11/2026 : la boîte ne se pilotait qu'à la souris ; derrière elle,
+        // les flèches déplaçaient la sélection de la grille.
+        use crate::palette_view::Harmony;
+        let (mut h, dir) = harness();
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "").unwrap();
+        h.state_mut().config_path = Some(config);
+        h.state_mut().gui.colour_search.live_ms = 0;
+        h.state_mut().selected = 1;
+        h.state_mut().open_colour_dialog();
+        h.run_steps(3);
+        let hsv = |h: &Harness<'static, TriApp>| h.state().colour_dialog.as_ref().unwrap().hsv;
+        let before = hsv(&h);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        h.run_steps(2);
+        let step = h.state().gui.colour_search.key_hue_step;
+        assert!((hsv(&h)[0] - (before[0] + step).rem_euclid(360.0)).abs() < 0.01);
+        assert_eq!(h.state().selected, 1, "la grille ne bouge pas");
+        press(&mut h, Key::ArrowUp, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(hsv(&h)[1] > before[1]);
+        // `1` : la couleur réglée rangée ; `h` : la première harmonie.
+        press(&mut h, Key::Num1, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(h.state().colour_dialog.as_ref().unwrap().slots.len(), 1);
+        press(&mut h, Key::H, Modifiers::NONE);
+        h.run_steps(2);
+        let d = h.state().colour_dialog.as_ref().unwrap();
+        assert_eq!(d.harmony, Some(Harmony::ALL[0]));
+        assert_eq!(d.slots.len(), 2);
+        // `m` : le mode suivant ; `+` : la tolérance.
+        let radius = h.state().palette_radius;
+        press(&mut h, Key::M, Modifiers::NONE);
+        press(&mut h, Key::Plus, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(
+            h.state().gui.colour_search.mode,
+            crate::settings::ColourMode::Hierarchical
+        );
+        assert!(h.state().palette_radius > radius);
+        // Entrée : valider.
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(3);
+        assert!(h.state().colour_dialog.is_none());
+        assert_eq!(h.state().palette_colour.as_ref().unwrap().colours.len(), 2);
     }
 
     #[test]

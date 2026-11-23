@@ -1379,6 +1379,12 @@ live_ms = 150
 # (complémentaire du bleu : l'orange). "rgb" : la roue TSV de l'écran (complémentaire du
 # bleu : le jaune). Changé aussi dans la boîte.
 wheel = "ryb"
+# Clavier : pas de la teinte (degrés) aux flèches gauche et droite.
+key_hue_step = 5.0
+# Clavier : pas de la saturation et de la valeur aux flèches haut et bas.
+key_step = 0.05
+# Clavier : pas de la tolérance à + et -.
+key_radius_step = 0.01
 
 [gui.position]
 # Repère « Photo 12 / 94 » à chaque changement d'image : durée d'affichage.

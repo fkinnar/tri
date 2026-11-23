@@ -294,7 +294,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   la première couleur plus précise que la dernière. **Chercher ces couleurs** (section
   Palette, sous la palette de la photo) : ses couleurs principales (les plus présentes, sans
   les miettes sous `colour_min_share`, au plus `max`) dans la boîte, cherchées tout de
-  suite, à ajuster ; « Annuler » rend la recherche d'avant. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
+  suite, à ajuster ; « Annuler » rend la recherche d'avant. **Clavier** (retour du
+  23/11/2026 : la boîte ne se pilotait qu'à la souris, et derrière elle les flèches
+  déplaçaient la sélection) : la grille ne reçoit plus rien tant que la boîte est ouverte ;
+  hors saisie dans un champ, `1`–`5` choisissent une couleur (un vide y range la couleur
+  réglée), ← → la teinte (`key_hue_step`, 5° ; Maj : 1°), ↑ ↓ la saturation (Maj : la
+  valeur ; `key_step`, 0,05), `h` l'harmonie suivante (Maj : précédente ; après la
+  dernière, aucune), `m` le mode, `w` la roue, `p` la pipette, Suppr vide la couleur
+  choisie, `+` / `-` la tolérance (`key_radius_step`), Entrée valide, Échap annule. Des
+  touches de boîte, comme les flèches des listes : pas dans `[keys]` ; dites dans les
+  bulles des boutons. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
   couleur serait ingérable). À droite, **Absolue** (toutes comptent pareil : la moyenne des
   distances) ou **Hiérarchique** (la première compte le plus, chaque suivante
   `[palette] colour_hierarchy` fois la précédente, d'après sa présence dans l'image, la
