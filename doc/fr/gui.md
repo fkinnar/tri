@@ -280,10 +280,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   couleur, la tolérance ou le mode lance la recherche ; « Valider » (ex-« Chercher »)
   garde la recherche, « Annuler » ou la croix rendent celle d'avant (ou aucune) et le
   tri d'avant. **Réinitialiser** (en bas à gauche) vide les emplacements, remet la roue au
-  gris et arrête la recherche ; « Valider » juste après laisse la grille sans recherche.
+  gris et arrête la recherche ; « Valider » juste après laisse la grille sans recherche et
+  oublie les couleurs d'avant (la boîte se rouvre vide).
   **Roue et harmonies** (idée de l'utilisateur, 23/11/2026, comme Adobe Color ; la roue
   toujours en pleine luminosité, la valeur au champ V : dessinée à la valeur de la couleur
-  réglée, elle changeait d'aspect d'une couleur à l'autre ; à droite, un **curseur
+  réglée, elle changeait d'aspect d'une couleur à l'autre ; à gauche, un **curseur
   vertical de la valeur**, de la pleine luminosité au noir : la couleur choisie, sinon la
   dernière rangée, double-clic 100 % ; une couleur nouvelle prise sur la roue est celle
   qu'on voit, à 100 %, une couleur retouchée garde sa valeur) : sous la

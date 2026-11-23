@@ -5941,10 +5941,11 @@ impl TriApp {
                     // clic ou un glisser y choisit teinte et saturation, à la valeur V. Roue
                     // des peintres (RYB) ou TSV, harmonies dessous (#492, 23/11/2026).
                     ui.vertical(|ui| {
+                        // La valeur à gauche de la roue (retour du 23/11/2026).
                         ui.horizontal_top(|ui| {
-                            self.colour_wheel(ui, &mut dialog);
-                            ui.add_space(8.0);
                             colour_value_bar(ui, &mut dialog);
+                            ui.add_space(8.0);
+                            self.colour_wheel(ui, &mut dialog);
                         });
                         ui.add_space(8.0);
                         self.harmony_row(ui, &mut dialog, &mut wheel);
@@ -6140,7 +6141,14 @@ impl TriApp {
         if search {
             self.colour_dialog = None;
             self.colour_live = None;
-            self.set_palette_colours(Some(dialog.colours()));
+            let colours = dialog.colours();
+            // Réinitialisée puis validée : plus de recherche, et plus de couleurs gardées
+            // (retour du 23/11/2026 : la boîte se rouvrait sur celles d'avant, cocher
+            // « Couleur » les relançait).
+            if colours.is_empty() {
+                self.palette_colour_last = None;
+            }
+            self.set_palette_colours(Some(colours));
         } else if cancel || modal.should_close() {
             self.colour_dialog = None;
             self.colour_live_cancel();
@@ -32783,6 +32791,11 @@ mod tests {
         h.run_steps(3);
         assert!(h.state().palette_colour.is_none());
         assert_eq!(h.state().files.len(), 2);
+        assert!(h.state().colour_dialog.is_none(), "validée, fermée");
+        assert!(
+            h.state().palette_colour_last.is_none(),
+            "couleurs d'avant oubliées"
+        );
         // « Chercher ces couleurs » (section Palette) : la boîte ouverte sur les couleurs
         // de la photo, la recherche lancée ; « Annuler » la rend.
         let palette =

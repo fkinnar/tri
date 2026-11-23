@@ -266,10 +266,11 @@ system one ("cold" measurements, experiments).
   tolerance or the mode starts the search; "OK" (formerly "Search") keeps the search, "Cancel" or
   the cross bring back the previous one (or none) and the previous sort. **Reset**
   (bottom left) clears the slots, puts the wheel back to grey and stops the search; "OK"
-  right after leaves the grid without a search.
+  right after leaves the grid without a search and forgets the previous colours (the box
+  reopens empty).
   **Wheel and harmonies** (user's idea, 2026-11-23, like Adobe Color; the wheel always at
   full brightness, the value in the V field: drawn at the current colour's value, it
-  changed look from one colour to another; on its right, a **vertical value slider**,
+  changed look from one colour to another; on its left, a **vertical value slider**,
   from full brightness to black: the selected colour, otherwise the last stored one,
   double-click 100 %; a new colour taken on the wheel is the one seen, at 100 %, a changed
   colour keeps its value): under the wheel,
