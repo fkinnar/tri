@@ -257,15 +257,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   moyennée (`[palette] pick_area`, 2 % du grand côté), et la loupe (`m` maintenue)
   l'agrandit pour viser juste (idée de l'utilisateur, 21/11/2026) ; « Chercher » lance le filtre.
   **Plusieurs couleurs** (#492, idée de l'utilisateur, 23/11/2026) : en haut de la boîte,
-  les couleurs cherchées (au plus `[gui.colour_search] max`, 5) ; un clic règle l'une
-  d'elles, « + » en ajoute une (copie de la couleur réglée), « − » retire celle qu'on
-  règle. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
+  les couleurs cherchées, en pastilles comme les autres (`[gui.colour_search] max`
+  emplacements, 5) ; un clic règle l'une d'elles, un clic sur un emplacement vide en
+  ajoute une (copie de la couleur réglée), clic droit « Retirer » ; un trait fin les
+  sépare de la roue. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
   couleur serait ingérable). À droite, **Absolue** (toutes comptent pareil : la moyenne des
   distances) ou **Hiérarchique** (la première compte le plus, chaque suivante
   `[palette] colour_hierarchy` fois la précédente, et sa présence dans l'image s'ajoute :
   l'image où la première couleur est la plus présente passe devant ; un ordre exigé des
   surfaces, essayé en idée, aurait vidé les résultats) ; le choix est écrit dans
-  `[gui.colour_search] hierarchical`. En bas, trois rangées de **pastilles** : franches
+  `[gui.colour_search] hierarchical`. Sous les valeurs, trois rangées de **pastilles**, sans titres (ça se voit) : franches
   (`pure` : lumières de studio, rouge et bleu francs), « photo » (`photo` : ciel,
   feuillage, peau, coucher de soleil, mer, terre) et libres (`own`, `own_max` : un clic
   sur une pastille vide y range la couleur réglée, clic droit « Remplacer » ou « Vider »,

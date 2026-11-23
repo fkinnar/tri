@@ -246,15 +246,16 @@ system one ("cold" measurements, experiments).
   the loupe (`m` held) magnifies it to aim precisely (user's idea, 2026-11-21); "Search" starts the
   filter.
   **Several colours** (#492, user's idea, 2026-11-23): at the top of the box, the colours
-  looked for (at most `[gui.colour_search] max`, 5); a click sets one of them, "+" adds
-  one (a copy of the current colour), "−" removes the one being set. An image must
+  looked for, as swatches like the others (`[gui.colour_search] max` slots, 5); a click
+  sets one of them, a click on an empty slot adds one (a copy of the current colour),
+  right-click "Remove"; a thin line separates them from the wheel. An image must
   contain **all** of them (one tolerance for all: one per colour would be unmanageable).
   On the right, **Absolute** (all count the same: the mean of the distances) or
   **Hierarchical** (the first counts the most, each next one `[palette] colour_hierarchy`
   times the previous one, and its presence in the image adds up: the image where the first
   colour is the most present comes first; requiring an order of areas, considered, would
   have emptied the results); the choice is written to `[gui.colour_search] hierarchical`.
-  At the bottom, three rows of **swatches**: pure (`pure`: studio lights, plain red and
+  Under the values, three rows of **swatches**, without titles (it shows): pure (`pure`: studio lights, plain red and
   blue), "photo" (`photo`: sky, foliage, skin, sunset, sea, earth) and free (`own`,
   `own_max`: a click on an empty swatch stores the current colour there, right-click
   "Replace" or "Clear", written to the configuration); a click on a filled swatch takes it

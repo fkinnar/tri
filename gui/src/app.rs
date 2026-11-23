@@ -401,6 +401,26 @@ impl ColourDialog {
     }
 }
 
+/// Taille d'une pastille de la boîte des couleurs.
+const SWATCH: egui::Vec2 = egui::Vec2::new(26.0, 20.0);
+
+/// Pastille vide de la boîte des couleurs : un cadre et un « + ».
+fn empty_swatch(ui: &Ui, rect: Rect, color: Color32) {
+    ui.painter().rect_stroke(
+        rect,
+        3.0,
+        egui::Stroke::new(1.0, color),
+        egui::StrokeKind::Inside,
+    );
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        "+",
+        egui::TextStyle::Body.resolve(ui.style()),
+        color,
+    );
+}
+
 /// Exposition du JPEG boîtier d'une image, calculée en fond.
 type CameraRead = (PathBuf, Option<Arc<Exposure>>);
 
@@ -5403,7 +5423,10 @@ impl TriApp {
             .show(ctx, |ui| {
                 // Les couleurs cherchées, en haut, et le mode de recherche (#492).
                 self.colour_slots_row(ui, &mut dialog, &mut hierarchical);
-                ui.add_space(8.0);
+                // De l'air et un trait fin avant la roue (retour du 23/11/2026).
+                ui.add_space(10.0);
+                ui.separator();
+                ui.add_space(10.0);
                 // La roue à gauche, les réglages à droite (retour du 21/11/2026 : en
                 // colonne, la boîte était trop large pour son contenu).
                 ui.horizontal_top(|ui| {
@@ -5537,17 +5560,16 @@ impl TriApp {
                         } else if (h, sp, vp) != before_hsv {
                             dialog.set_hsv([h, sp / 100.0, vp / 100.0]);
                         }
+                        // Les pastilles (franches, « photo », libres, #492) sous les valeurs
+                        // (retour du 23/11/2026 : sans titres, ça se voit).
+                        ui.add_space(12.0);
+                        own = self.colour_swatches(ui, &mut dialog);
                     });
                 });
-                ui.add_space(10.0);
-                // Les pastilles (franches, « photo », libres, #492), et les boutons en bas à
-                // droite.
-                ui.horizontal(|ui| {
-                    own = self.colour_swatches(ui, &mut dialog);
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Max), |ui| {
-                        cancel = ui.button(t!("cancel")).clicked();
-                        search = ui.button(t!("palette-colour-search")).clicked();
-                    });
+                ui.add_space(8.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Max), |ui| {
+                    cancel = ui.button(t!("cancel")).clicked();
+                    search = ui.button(t!("palette-colour-search")).clicked();
                 });
             });
         if let Some(own) = own {
@@ -5567,9 +5589,10 @@ impl TriApp {
         }
     }
 
-    /// Rangée des couleurs cherchées de la boîte (#492) : un clic sur un emplacement le
-    /// règle, « + » en ajoute un (au plus `[gui.colour_search] max`), « − » retire celui
-    /// qu'on règle ; puis le mode, absolu ou hiérarchique (`hierarchical` : basculé).
+    /// Rangée des couleurs cherchées de la boîte (#492), des pastilles comme les autres
+    /// (retour du 23/11/2026) : `[gui.colour_search] max` emplacements ; un clic sur l'un
+    /// d'eux le règle, sur un vide en ajoute un (copie de la couleur réglée), clic droit
+    /// « Retirer » ; puis le mode, absolu ou hiérarchique (`hierarchical` : basculé).
     fn colour_slots_row(
         &self,
         ui: &mut Ui,
@@ -5577,47 +5600,60 @@ impl TriApp {
         hierarchical: &mut Option<bool>,
     ) {
         let max = self.gui.colour_search.max.max(1);
+        let weak = ui.visuals().weak_text_color();
         ui.horizontal(|ui| {
-            for i in 0..dialog.slots.len() {
-                let [r, g, b] = dialog.slot_rgb(i);
-                let (rect, response) = ui.allocate_exact_size(vec2(34.0, 24.0), Sense::click());
+            ui.spacing_mut().item_spacing.x = 6.0;
+            for i in 0..max {
+                let (rect, response) = ui.allocate_exact_size(SWATCH * 1.25, Sense::click());
+                let filled = i < dialog.slots.len();
+                let name = if filled {
+                    t!("palette-colour-slot", n = i + 1)
+                } else {
+                    t!("palette-colour-add")
+                };
                 response.widget_info(|| {
-                    egui::WidgetInfo::labeled(
-                        egui::Role::Button,
-                        true,
-                        t!("palette-colour-slot", n = i + 1),
-                    )
+                    egui::WidgetInfo::labeled(egui::Role::Button, true, name.clone())
                 });
-                ui.painter()
-                    .rect_filled(rect.shrink(2.0), 3.0, Color32::from_rgb(r, g, b));
-                if i == dialog.active {
-                    ui.painter().rect_stroke(
-                        rect,
-                        4.0,
-                        egui::Stroke::new(2.0, ui.visuals().strong_text_color()),
-                        egui::StrokeKind::Inside,
-                    );
+                if filled {
+                    let [r, g, b] = dialog.slot_rgb(i);
+                    ui.painter()
+                        .rect_filled(rect, 3.0, Color32::from_rgb(r, g, b));
+                    if i == dialog.active {
+                        let stroke = egui::Stroke::new(2.0, ui.visuals().strong_text_color());
+                        ui.painter().rect_stroke(
+                            rect.expand(2.0),
+                            4.0,
+                            stroke,
+                            egui::StrokeKind::Outside,
+                        );
+                    }
+                } else {
+                    empty_swatch(ui, rect, weak);
                 }
-                if response
+                let tip = if filled {
+                    t!("palette-colour-slot-tip", n = i + 1)
+                } else {
+                    t!("palette-colour-add")
+                };
+                let response = response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
-                    .on_hover_text(t!("palette-colour-slot", n = i + 1))
-                    .clicked()
-                {
-                    dialog.select(i);
+                    .on_hover_text(tip);
+                if response.clicked() {
+                    if filled {
+                        dialog.select(i);
+                    } else {
+                        dialog.add(max);
+                    }
                 }
-            }
-            // Les boutons restent en place, grisés quand ils ne servent pas.
-            let add = ui
-                .add_enabled(dialog.slots.len() < max, egui::Button::new("+"))
-                .on_hover_text(t!("palette-colour-add"));
-            if add.clicked() {
-                dialog.add(max);
-            }
-            let remove = ui
-                .add_enabled(dialog.slots.len() > 1, egui::Button::new("−"))
-                .on_hover_text(t!("palette-colour-remove"));
-            if remove.clicked() {
-                dialog.remove();
+                if filled && dialog.slots.len() > 1 {
+                    response.context_menu(|ui| {
+                        if ui.button(t!("palette-colour-remove")).clicked() {
+                            dialog.select(i);
+                            dialog.remove();
+                            ui.close();
+                        }
+                    });
+                }
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let on = self.gui.colour_search.hierarchical;
@@ -5650,95 +5686,77 @@ impl TriApp {
         let cs = &self.gui.colour_search;
         let mut own: Vec<String> = cs.own.iter().take(cs.own_max).cloned().collect();
         let mut changed = false;
-        let side = vec2(26.0, 20.0);
+        let side = SWATCH;
         let weak = ui.visuals().weak_text_color();
         let rows = [
-            (t!("palette-swatches-pure"), cs.pure.clone(), false),
-            (t!("palette-swatches-photo"), cs.photo.clone(), false),
-            (t!("palette-swatches-own"), own.clone(), true),
+            (cs.pure.clone(), false),
+            (cs.photo.clone(), false),
+            (own.clone(), true),
         ];
-        egui::Grid::new("palette_colour_swatches")
-            .num_columns(2)
-            .spacing(vec2(10.0, 6.0))
-            .show(ui, |ui| {
-                for (name, list, free) in rows {
-                    ui.label(egui::RichText::new(name).color(weak));
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 6.0;
-                        let count = if free { cs.own_max } else { list.len() };
-                        for i in 0..count {
-                            let rgb = list.get(i).and_then(|h| parse_hex(h));
-                            let (rect, response) = ui.allocate_exact_size(side, Sense::click());
-                            let hex = list.get(i).cloned().unwrap_or_default();
-                            response.widget_info(|| {
-                                egui::WidgetInfo::labeled(
-                                    egui::Role::Button,
-                                    true,
-                                    if hex.is_empty() {
-                                        t!("palette-swatch-empty")
-                                    } else {
-                                        hex.clone()
-                                    },
-                                )
-                            });
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 6.0;
+            for (list, free) in rows {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 6.0;
+                    let count = if free { cs.own_max } else { list.len() };
+                    for i in 0..count {
+                        let rgb = list.get(i).and_then(|h| parse_hex(h));
+                        let (rect, response) = ui.allocate_exact_size(side, Sense::click());
+                        let hex = list.get(i).cloned().unwrap_or_default();
+                        response.widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::Role::Button,
+                                true,
+                                if hex.is_empty() {
+                                    t!("palette-swatch-empty")
+                                } else {
+                                    hex.clone()
+                                },
+                            )
+                        });
+                        match rgb {
+                            Some([r, g, b]) => {
+                                ui.painter()
+                                    .rect_filled(rect, 3.0, Color32::from_rgb(r, g, b));
+                            }
+                            None => empty_swatch(ui, rect, weak),
+                        }
+                        let tip = match (rgb, free) {
+                            (Some(_), true) => t!("palette-swatch-own-tip", hex = hex.as_str()),
+                            (Some(_), false) => hex.clone(),
+                            (None, _) => t!("palette-swatch-store-tip"),
+                        };
+                        let response = response
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .on_hover_text(tip);
+                        if response.clicked() {
                             match rgb {
-                                Some([r, g, b]) => {
-                                    ui.painter()
-                                        .rect_filled(rect, 3.0, Color32::from_rgb(r, g, b));
+                                Some(rgb) => dialog.set_rgb(rgb),
+                                None if free => {
+                                    own.push(dialog.hex.clone());
+                                    changed = true;
                                 }
-                                None => {
-                                    ui.painter().rect_stroke(
-                                        rect,
-                                        3.0,
-                                        egui::Stroke::new(1.0, weak),
-                                        egui::StrokeKind::Inside,
-                                    );
-                                    ui.painter().text(
-                                        rect.center(),
-                                        egui::Align2::CENTER_CENTER,
-                                        "+",
-                                        egui::TextStyle::Body.resolve(ui.style()),
-                                        weak,
-                                    );
-                                }
-                            }
-                            let tip = match (rgb, free) {
-                                (Some(_), true) => t!("palette-swatch-own-tip", hex = hex.as_str()),
-                                (Some(_), false) => hex.clone(),
-                                (None, _) => t!("palette-swatch-store-tip"),
-                            };
-                            let response = response
-                                .on_hover_cursor(egui::CursorIcon::PointingHand)
-                                .on_hover_text(tip);
-                            if response.clicked() {
-                                match rgb {
-                                    Some(rgb) => dialog.set_rgb(rgb),
-                                    None if free => {
-                                        own.push(dialog.hex.clone());
-                                        changed = true;
-                                    }
-                                    None => {}
-                                }
-                            }
-                            if free && rgb.is_some() {
-                                response.context_menu(|ui| {
-                                    if ui.button(t!("palette-swatch-replace")).clicked() {
-                                        own[i] = dialog.hex.clone();
-                                        changed = true;
-                                        ui.close();
-                                    }
-                                    if ui.button(t!("palette-swatch-clear")).clicked() {
-                                        own.remove(i);
-                                        changed = true;
-                                        ui.close();
-                                    }
-                                });
+                                None => {}
                             }
                         }
-                    });
-                    ui.end_row();
-                }
-            });
+                        if free && rgb.is_some() {
+                            response.context_menu(|ui| {
+                                if ui.button(t!("palette-swatch-replace")).clicked() {
+                                    own[i] = dialog.hex.clone();
+                                    changed = true;
+                                    ui.close();
+                                }
+                                if ui.button(t!("palette-swatch-clear")).clicked() {
+                                    own.remove(i);
+                                    changed = true;
+                                    ui.close();
+                                }
+                            });
+                        }
+                    }
+                });
+            }
+        });
         changed.then_some(own)
     }
 
