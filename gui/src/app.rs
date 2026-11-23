@@ -6156,8 +6156,9 @@ impl TriApp {
     }
 
     /// Touches de la boîte des couleurs, hors saisie dans un champ : `1`–`5` choisissent
-    /// une couleur (un vide y range la couleur réglée), ← → la teinte (Maj : finement),
-    /// ↑ ↓ la saturation (Maj : la valeur), `h` l'harmonie suivante (Maj : précédente ;
+    /// une couleur (un vide y range la couleur réglée), ← → (ou `h` `l`) la teinte (Maj :
+    /// finement), ↑ ↓ (ou `k` `j`) la saturation (Maj : la valeur), `a` l'harmonie suivante
+    /// (Maj : précédente ;
     /// après la dernière, aucune), `m` le mode, `w` la roue, `p` la pipette, Suppr vide
     /// la couleur choisie, `+` / `-` la tolérance, Entrée valide. Échap : la boîte elle-même.
     /// Pas de `[keys]` ici : des touches de boîte, comme les flèches des listes ; leurs pas
@@ -6199,6 +6200,14 @@ impl TriApp {
             }
             let [h, s, v] = dialog.hsv;
             let hue_step = if shift { 1.0 } else { cs.key_hue_step };
+            // hjkl comme les flèches (retour du 23/11/2026 : profil vim).
+            let key = match key {
+                Key::H => Key::ArrowLeft,
+                Key::J => Key::ArrowDown,
+                Key::K => Key::ArrowUp,
+                Key::L => Key::ArrowRight,
+                other => other,
+            };
             match key {
                 Key::ArrowLeft => dialog.set_hsv([(h - hue_step).rem_euclid(360.0), s, v]),
                 Key::ArrowRight => dialog.set_hsv([(h + hue_step).rem_euclid(360.0), s, v]),
@@ -6210,7 +6219,7 @@ impl TriApp {
                 }
                 Key::ArrowUp => dialog.set_hsv([h, (s + cs.key_step).min(1.0), v]),
                 Key::ArrowDown => dialog.set_hsv([h, (s - cs.key_step).max(0.0), v]),
-                Key::H => {
+                Key::A => {
                     let all = Harmony::ALL;
                     let at = dialog
                         .harmony
@@ -6338,7 +6347,7 @@ impl TriApp {
             ui.spacing_mut().item_spacing.x = 3.0;
             for harmony in Harmony::ALL {
                 let name = t!(&format!("palette-harmony-{}", harmony.id()));
-                let tip = format!("{name} (h)");
+                let tip = format!("{name} (a)");
                 let (rect, response) = marks::icon_button(ui, size, &name, &tip);
                 let on = dialog.harmony == Some(harmony);
                 if on {
@@ -32631,7 +32640,12 @@ mod tests {
         press(&mut h, Key::Num1, Modifiers::NONE);
         h.run_steps(2);
         assert_eq!(h.state().colour_dialog.as_ref().unwrap().slots.len(), 1);
-        press(&mut h, Key::H, Modifiers::NONE);
+        // hjkl comme les flèches (profil vim) ; `a` : la première harmonie.
+        let hue = hsv(&h)[0];
+        press(&mut h, Key::L, Modifiers::NONE);
+        h.run_steps(2);
+        assert!((hsv(&h)[0] - (hue + step).rem_euclid(360.0)).abs() < 0.01);
+        press(&mut h, Key::A, Modifiers::NONE);
         h.run_steps(2);
         let d = h.state().colour_dialog.as_ref().unwrap();
         assert_eq!(d.harmony, Some(Harmony::ALL[0]));

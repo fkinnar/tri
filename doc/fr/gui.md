@@ -298,8 +298,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   23/11/2026 : la boîte ne se pilotait qu'à la souris, et derrière elle les flèches
   déplaçaient la sélection) : la grille ne reçoit plus rien tant que la boîte est ouverte ;
   hors saisie dans un champ, `1`–`5` choisissent une couleur (un vide y range la couleur
-  réglée), ← → la teinte (`key_hue_step`, 5° ; Maj : 1°), ↑ ↓ la saturation (Maj : la
-  valeur ; `key_step`, 0,05), `h` l'harmonie suivante (Maj : précédente ; après la
+  réglée), ← → ou `h` `l` la teinte (`key_hue_step`, 5° ; Maj : 1°), ↑ ↓ ou `k` `j` la
+  saturation (Maj : la valeur ; `key_step`, 0,05 ; hjkl pour le profil vim, retour du
+  23/11/2026), `a` l'harmonie suivante (Maj : précédente ; après la
   dernière, aucune), `m` le mode, `w` la roue, `p` la pipette, Suppr vide la couleur
   choisie, `+` / `-` la tolérance (`key_radius_step`), Entrée valide, Échap annule. Des
   touches de boîte, comme les flèches des listes : pas dans `[keys]` ; dites dans les
