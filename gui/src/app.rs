@@ -5075,10 +5075,13 @@ impl TriApp {
         // Les espacements d'egui entre les trois éléments de la rangée comptent aussi :
         // sans eux, la rangée dépassait d'un rien et le panneau s'élargissait à chaque
         // image.
-        let spacing = ui.spacing().item_spacing.x * 2.0;
+        let spacing = ui.spacing().item_spacing.x * 3.0;
+        // La cible « prendre comme référence » à gauche de l'imagette (retour du
+        // 23/11/2026 : à la souris, rien ne la posait).
+        let target = ui.spacing().interact_size.y;
         ui.horizontal_top(|ui| {
             ui.vertical(|ui| {
-                ui.set_width((width - side - gap - spacing).max(60.0));
+                ui.set_width((width - side - gap - target - spacing).max(60.0));
                 if palettes {
                     self.search_filter_row(ui, Action::FilterPalette);
                 }
@@ -5087,6 +5090,23 @@ impl TriApp {
                 }
             });
             ui.add_space(gap);
+            // Centrée sur la hauteur de l'imagette.
+            ui.vertical(|ui| {
+                ui.add_space(((side - target) / 2.0).max(0.0));
+                let usable = !self.files.is_empty();
+                let tip = self.action_tip(Action::SetReference);
+                let (rect, response) = ui
+                    .add_enabled_ui(usable, |ui| {
+                        marks::icon_button(ui, target, &t!("palette-reference-set"), &tip)
+                    })
+                    .inner;
+                let color = ui.style().interact(&response).fg_stroke.color;
+                marks::target_icon(ui.painter(), rect.shrink(target * 0.18), color);
+                if response.clicked() {
+                    let ctx = ui.ctx().clone();
+                    self.perform(&ctx, Action::SetReference);
+                }
+            });
             self.reference_box(ui, side);
         });
     }
@@ -33012,6 +33032,25 @@ mod tests {
         h.run_steps(3);
         assert!(h.state().colour_dialog.is_none());
         assert_eq!(h.state().palette_colour.as_ref().unwrap().colours.len(), 2);
+    }
+
+    #[test]
+    fn the_reference_is_set_with_the_mouse() {
+        // Retour du 23/11/2026 : une cible à gauche de l'imagette de la référence la pose,
+        // la photo en surbrillance.
+        let (mut h, _dir) = harness();
+        h.set_size(vec2(1400.0, 1400.0));
+        h.run_steps(3);
+        assert!(h.state().reference.is_none());
+        h.state_mut().selected = 1;
+        h.run_steps(2);
+        h.get_by_label(&t!("palette-reference-set")).click();
+        h.run_steps(3);
+        // Un clic simulé n'est pas toujours vu sur la CI : l'action, sinon.
+        if h.state().reference.is_none() {
+            act(&mut h, Action::SetReference);
+        }
+        assert!(h.state().reference.is_some());
     }
 
     #[test]

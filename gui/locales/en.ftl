@@ -1652,6 +1652,7 @@ folder-recognised = "{ $new }" is "{ $old }", renamed or moved: its notes, view 
 locate-ok = Find
 palette-colour-first = Choose a colour first ("Contains this colour" filter)
 palette-reference = Reference
+palette-reference-set = Use as reference
 palette-reference-none = none: the highlighted photo, or <core.filter.reference>
 palette-reference-open-tip = See it larger, remove the reference
 palette-reference-clear = Remove the reference

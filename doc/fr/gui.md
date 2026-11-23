@@ -1365,7 +1365,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   « semblables » (`TriApp::reference`) : dans la section Filtres, « Couleur » d'abord,
   puis ces deux filtres, la référence à leur droite (`reference_box` : son imagette, ou
   un cadre vide ; elle tient sur les deux lignes, surbrillance comprise, `[gui.grid]
-  reference_scale`, retour du 23/11/2026) ; un clic l'ouvre en grand (photo au centre, boutons à droite) avec
+  reference_scale`, retour du 23/11/2026 ; à sa gauche, centrée, une **cible** qui prend la
+  photo en surbrillance comme référence, comme `core.filter.reference`) ; un clic l'ouvre en grand (photo au centre, boutons à droite) avec
   « Supprimer la référence ». **Semblables** (`core.filter.similar`) : les photos dont
   l'empreinte (celle des piles) est proche de celle de la référence, de la plus proche
   à la plus lointaine (`rank_by_similarity`, un développement a l'empreinte de sa
