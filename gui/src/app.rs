@@ -7240,9 +7240,31 @@ impl TriApp {
             ui.weak(t!("palette-no-render"));
             return;
         }
+        // Un cran choisi au clavier (`<leader> c N`) ou les couleurs perçues : la palette
+        // de ce cran à la place de celle de la photo (retour du 23/11/2026).
+        let step = self.palette_step(ui.ctx());
+        if let (Some((_, p)), Some(main)) = (&step, &main_palette) {
+            for (_, row) in rows.iter_mut() {
+                if matches!(row, Row::Palette(r) if Arc::ptr_eq(r, main)) {
+                    *row = Row::Palette(p.clone());
+                }
+            }
+            main_palette = Some(p.clone());
+        }
         let several = rows.len() > 1;
         // De l'air sous la source, comme entre les autres réglages du panneau.
         ui.add_space(self.gui.dialogs.spacing);
+        if self.palette_view_k > 0 || self.palette_view_perceived {
+            let mut text = match self.palette_view_k {
+                0 => t!("palette-view-original"),
+                1 => t!("palette-view-mean"),
+                n => t!("palette-view-colours", n = n),
+            };
+            if self.palette_view_perceived {
+                text = format!("{text} · {}", t!("palette-view-perceived"));
+            }
+            ui.weak(text);
+        }
         let mut open_view = false;
         let mut colour_box = None;
         let mut shown: Vec<(Option<String>, Arc<Palette>)> = Vec::new();
@@ -15097,13 +15119,13 @@ impl TriApp {
             Action::ToggleHistogram => self.histogram = !self.histogram,
             Action::HistogramScale => self.histogram_scale = self.histogram_scale.toggled(),
             Action::HistogramLarge => self.histogram_large = !self.histogram_large,
-            // Un cran, les couleurs perçues (`<leader> c 0`…`8`, `<leader> c p`) : la vue
-            // ouverte au besoin (retour du 23/11/2026).
+            // Un cran, les couleurs perçues (`<leader> c 0`…`8`, `<leader> c p`) : la palette
+            // du panneau et celle des couleurs en grand suivent, sans ouvrir la boîte
+            // (retour du 23/11/2026 : la roue du panneau doit changer).
             Action::ColoursStep(_) | Action::ColoursPerceived => {
                 if self.palette_source.is_none() {
                     self.notice = Some((t!("palette-choose"), false));
                 } else {
-                    self.palette_view = true;
                     match action {
                         Action::ColoursStep(n) => {
                             self.palette_view_k =
@@ -21493,21 +21515,10 @@ impl TriApp {
         if !self.palette_view || crate::actions::removed(crate::actions::Tool::Palettes) {
             return;
         }
+        let wanted = self.palette_view_key();
         let max = self.gui.palette_view.max.clamp(1, 16);
-        self.palette_view_k = self.palette_view_k.min(max);
         let file = self.files.get(self.selected).cloned();
-        let source = file
-            .as_ref()
-            .and_then(|f| self.palette_source.and_then(|k| k.source_for(f)));
-        let wanted = file.as_ref().zip(source).map(|(f, s)| {
-            (
-                f.path.clone(),
-                s,
-                self.palette_view_k,
-                self.palette_view_false,
-                self.palette_view_perceived,
-            )
-        });
+        let source = wanted.as_ref().map(|w| w.1);
         self.palette_view_poll(ctx, wanted.as_ref());
         // La palette de la photo (cran 0), connue du panneau.
         let photo_palette = file
@@ -21670,6 +21681,44 @@ impl TriApp {
 
     /// L'image de la palette en grand : celle arrivée du fond, et demandée en fond si elle
     /// manque (lecture du cache et postérisation hors du fil de l'interface).
+    /// Ce que montrent les couleurs en grand et, hors cran 0, la palette du panneau : la
+    /// photo en surbrillance, sa source, le cran (ramené à `max`), fausses et perçues.
+    fn palette_view_key(&mut self) -> Option<PaletteViewKey> {
+        let max = self.gui.palette_view.max.clamp(1, 16);
+        self.palette_view_k = self.palette_view_k.min(max);
+        let file = self.files.get(self.selected)?;
+        let source = self.palette_source.and_then(|k| k.source_for(file))?;
+        Some((
+            file.path.clone(),
+            source,
+            self.palette_view_k,
+            self.palette_view_false,
+            self.palette_view_perceived,
+        ))
+    }
+
+    /// La palette du cran choisi (`<leader> c N`, couleurs perçues) pour le panneau, quand
+    /// elle diffère de celle du dossier (cran 0 sans couleurs perçues : aucune) ; calculée
+    /// en fond comme pour les couleurs en grand, `None` en attendant.
+    fn palette_step(&mut self, ctx: &egui::Context) -> Option<(usize, Arc<Palette>)> {
+        if self.palette_view_k == 0 && !self.palette_view_perceived {
+            return None;
+        }
+        let wanted = self.palette_view_key()?;
+        self.palette_view_poll(ctx, Some(&wanted));
+        let shown = self
+            .palette_view_shown
+            .as_ref()
+            .filter(|s| s.key == wanted)?;
+        Some((
+            self.palette_view_k,
+            Arc::new(Palette {
+                swatches: shown.swatches.clone(),
+                ..Palette::default()
+            }),
+        ))
+    }
+
     fn palette_view_poll(&mut self, ctx: &egui::Context, wanted: Option<&PaletteViewKey>) {
         if let Some((key, rx)) = &self.palette_view_rx {
             match rx.try_recv() {
@@ -33571,7 +33620,7 @@ mod tests {
                 .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
         });
         // Un cran et les couleurs perçues au clavier (`<leader> c 3`, `<leader> c p`) :
-        // la vue s'ouvre d'elle-même.
+        // la palette du panneau suit, sans ouvrir la boîte.
         for key in [Key::C, Key::Num3] {
             if key == Key::C {
                 press(&mut h, Key::B, Modifiers::CTRL);
@@ -33579,8 +33628,26 @@ mod tests {
             press(&mut h, key, Modifiers::NONE);
         }
         h.run_steps(2);
-        assert!(h.state().palette_view);
+        assert!(!h.state().palette_view);
         assert_eq!(h.state().palette_view_k, 3);
+        run_until(&mut h, |app| {
+            app.palette_view_shown
+                .as_ref()
+                .is_some_and(|s| s.key.2 == 3 && s.swatches.len() == 3)
+        });
+        h.run_steps(2);
+        // Le panneau montre ces trois couleurs (ses pastilles, une par couleur).
+        let three = h
+            .state()
+            .palette_view_shown
+            .as_ref()
+            .unwrap()
+            .swatches
+            .clone();
+        for s in &three {
+            let label = t!("palette-dot", hex = crate::palette_view::hex(s));
+            assert!(h.query_by_label(&label).is_some(), "{label}");
+        }
         for key in [Key::B, Key::C, Key::P] {
             let m = if key == Key::B {
                 Modifiers::CTRL
@@ -33592,7 +33659,7 @@ mod tests {
         h.run_steps(2);
         assert!(h.state().palette_view_perceived);
         h.state_mut().palette_view_perceived = false;
-        h.state_mut().palette_view = false;
+        h.state_mut().palette_view_k = 0;
         // Au clavier : « g c » (go colours).
         press(&mut h, Key::G, Modifiers::NONE);
         press(&mut h, Key::C, Modifiers::NONE);
