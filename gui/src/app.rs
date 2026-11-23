@@ -10905,10 +10905,16 @@ impl TriApp {
         // Rendu des vignettes du dossier (31/10/2026) ; sans rien de retenu, celui de la
         // configuration (pas celui du dossier précédent : on trie en JPEG boîtier, on
         // revient sur un dossier traité en couverture).
-        let render = view
-            .render
-            .unwrap_or(self.gui.grid.render)
-            .available(&self.developers.engines());
+        // Pas avant le démarrage du moteur (vidéo du 23/11/2026) : au lancement, le dossier
+        // rouvert l'est avant que les logiciels soient cherchés ; son rendu darktable,
+        // jugé indisponible, retombait sur le JPEG boîtier. Gardé tel quel : vérifié au
+        // démarrage du moteur (`fit_grid_render`), une fois les logiciels connus.
+        let wanted = view.render.unwrap_or(self.gui.grid.render);
+        let render = if self.engine.is_some() {
+            wanted.available(&self.developers.engines())
+        } else {
+            wanted
+        };
         if render != self.grid_render {
             self.grid_render = render;
             if let Some(engine) = &self.engine {
@@ -37948,6 +37954,38 @@ mod tests {
             Some(vec!["darktable".into(), "rapidraw".into()])
         );
         assert_eq!(written.order.unwrap().key, tri::sort::SortKey::Modified);
+    }
+
+    #[test]
+    fn a_folder_reopened_at_launch_keeps_its_development_render() {
+        // Vidéo du 23/11/2026 : au lancement, le dossier rouvert l'est avant que les
+        // logiciels soient cherchés ; son rendu darktable retombait sur le JPEG boîtier.
+        use crate::grid_render::GridRender;
+        use tri::develop::Engine;
+        let dir = tempfile::tempdir().unwrap();
+        let photos = dir.path().join("photos");
+        std::fs::create_dir(&photos).unwrap();
+        image::RgbImage::from_pixel(8, 8, image::Rgb([90, 90, 90]))
+            .save(photos.join("img0.jpg"))
+            .unwrap();
+        let mut settings = AppSettings::default();
+        settings.cache.dir = Some(dir.path().join("cache"));
+        settings.data.dir = Some(dir.path().join("data"));
+        settings.places.watch_ms = 0;
+        settings.watch.interval_ms = 0;
+        settings.gui.reopen_last = false;
+        settings.develop.darktable = String::new();
+        settings.develop.rapidraw = String::new();
+        settings.develop.rawtherapee = String::new();
+        settings.develop.art = String::new();
+        let view = crate::state::FolderView {
+            render: Some(GridRender::Engine(Engine::Darktable)),
+            ..Default::default()
+        };
+        crate::state::remember_folder_view(Some(&dir.path().join("data")), &photos, &view).unwrap();
+        let app = TriApp::new(Some(photos), settings, None);
+        assert!(app.engine.is_none(), "logiciels pas encore cherchés");
+        assert_eq!(app.grid_render, GridRender::Engine(Engine::Darktable));
     }
 
     #[test]

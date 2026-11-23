@@ -321,7 +321,9 @@ system one ("cold" measurements, experiments).
   developed, inversion), sort order and, since 2026-10-31, the **thumbnail render**
   (`f d`: camera JPEG, cover, a software, LibRaw; `[gui.grid] render` is the value of a
   folder never set, not the previous folder's: one culls in camera JPEG and comes back to
-  a processed folder in cover) and, since 2026-11-11, **"Stack automatically"**
+  a processed folder in cover; at launch, the reopened folder keeps its software render,
+  checked once the software has been looked for: it fell back to the camera JPEG, video
+  of 2026-11-23) and, since 2026-11-11, **"Stack automatically"**
   (`[gui.grid] stacks` for a folder never set), the developed-filter engines, the
   **"Subfolders"** checkbox (`[gui.folders] subfolders` for a folder never set), the
   **current image** and the **unfolded stacks** (#414; these two written when leaving
