@@ -445,6 +445,22 @@ impl ColourDialog {
         self.sticky = false;
     }
 
+    /// Avant un réglage de la valeur (curseur vertical) : la couleur choisie, sinon la
+    /// dernière rangée (juste après un clic sur la roue, c'est elle), sinon une nouvelle.
+    fn value_target(&mut self) {
+        if self.active.is_some() {
+            return;
+        }
+        if (self.harmony.is_some() || self.mean) && !self.slots.is_empty() {
+            self.active = Some(0);
+            return;
+        }
+        match self.slots.len() {
+            0 => self.store(self.max),
+            n => self.active = Some(n - 1),
+        }
+    }
+
     /// Une couleur relevée (pipette) : comme un clic sur la roue.
     fn pick(&mut self, oklab: [f32; 3]) {
         self.edit_target();
@@ -649,6 +665,71 @@ struct ColourLive {
     changed: bool,
     applied: Vec<[f32; 3]>,
     at: Instant,
+}
+
+/// Curseur vertical de la valeur (TSV) à droite de la roue (retour du 23/11/2026) : la
+/// couleur réglée, de la pleine luminosité en haut au noir en bas ; un clic ou un glisser
+/// règle la valeur de la couleur choisie (rien de choisi : la dernière rangée),
+/// double-clic : 100 %.
+fn colour_value_bar(ui: &mut Ui, dialog: &mut ColourDialog) {
+    let size = vec2(16.0, 200.0);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::Role::Slider, true, t!("palette-colour-value"))
+    });
+    let response = response.on_hover_text(t!("palette-colour-value"));
+    let [h, s, _] = dialog.hsv;
+    // Le dégradé, par bandes.
+    let steps = 32;
+    let mut mesh = egui::Mesh::default();
+    for k in 0..=steps {
+        let t = k as f32 / steps as f32;
+        let [r, g, b] = crate::palette_view::hsv_to_rgb([h, s, 1.0 - t]);
+        let c = Color32::from_rgb(r, g, b);
+        let y = rect.top() + t * rect.height();
+        mesh.colored_vertex(pos2(rect.left(), y), c);
+        mesh.colored_vertex(pos2(rect.right(), y), c);
+    }
+    for k in 0..steps as u32 {
+        let i = k * 2;
+        mesh.add_triangle(i, i + 1, i + 2);
+        mesh.add_triangle(i + 1, i + 3, i + 2);
+    }
+    ui.painter().add(egui::Shape::mesh(mesh));
+    ui.painter().rect_stroke(
+        rect,
+        2.0,
+        egui::Stroke::new(1.0, Color32::from_black_alpha(90)),
+        egui::StrokeKind::Outside,
+    );
+    let set = |dialog: &mut ColourDialog, value: f32| {
+        dialog.value_target();
+        let [h, s, _] = dialog.hsv;
+        dialog.set_hsv([h, s, value.clamp(0.0, 1.0)]);
+    };
+    if response.double_clicked() {
+        set(dialog, 1.0);
+    } else if let Some(pos) = response.interact_pointer_pos()
+        && (response.clicked() || response.dragged())
+    {
+        set(dialog, 1.0 - (pos.y - rect.top()) / rect.height());
+    }
+    if response.drag_stopped() || (response.clicked() && !response.dragged()) {
+        dialog.edit_done();
+    }
+    // Le repère : un trait clair cerclé de noir à la hauteur de la valeur.
+    let y = rect.top() + (1.0 - dialog.hsv[2].clamp(0.0, 1.0)) * rect.height();
+    let mark = Rect::from_min_max(
+        pos2(rect.left() - 3.0, y - 2.0),
+        pos2(rect.right() + 3.0, y + 2.0),
+    );
+    ui.painter().rect_filled(mark, 1.0, Color32::WHITE);
+    ui.painter().rect_stroke(
+        mark,
+        1.0,
+        egui::Stroke::new(1.0, Color32::BLACK),
+        egui::StrokeKind::Outside,
+    );
 }
 
 /// Ce que les touches de la boîte des couleurs demandent à l'application (le reste est
@@ -5860,7 +5941,11 @@ impl TriApp {
                     // clic ou un glisser y choisit teinte et saturation, à la valeur V. Roue
                     // des peintres (RYB) ou TSV, harmonies dessous (#492, 23/11/2026).
                     ui.vertical(|ui| {
-                        self.colour_wheel(ui, &mut dialog);
+                        ui.horizontal_top(|ui| {
+                            self.colour_wheel(ui, &mut dialog);
+                            ui.add_space(8.0);
+                            colour_value_bar(ui, &mut dialog);
+                        });
                         ui.add_space(8.0);
                         self.harmony_row(ui, &mut dialog, &mut wheel);
                     });
@@ -32881,6 +32966,15 @@ mod tests {
         }
         assert_eq!(w.slots.len(), 2, "choisi exprès : retouché, pas d'ajout");
         assert_eq!(w.slot_rgb(0), [180, 0, 0]);
+        // Le curseur de la valeur, juste après un clic sur la roue : la dernière rangée,
+        // sans en créer une (retour du 23/11/2026).
+        w.deselect();
+        w.value_target();
+        assert_eq!((w.active, w.slots.len()), (Some(1), 2));
+        let [hh, ss, _] = w.hsv;
+        w.set_hsv([hh, ss, 0.3]);
+        w.edit_done();
+        assert!((w.slots[1][2] - 0.3).abs() < 1e-6);
         // Fini : un « + » ne duplique rien, le clic suivant sur la roue remplit le vide.
         w.deselect();
         assert_eq!(w.slots.len(), 2);
