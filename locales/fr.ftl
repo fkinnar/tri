@@ -467,6 +467,7 @@ cli-palette-summary = { $n } palettes
 cli-opt-colours = « contient ces couleurs » : #rrggbb séparés par des virgules, la plus importante d'abord ; ensuite, les images qui les contiennent toutes, la mieux placée d'abord, avec la part de chaque couleur (tolérance : --threshold, sinon [palette] colour_radius)
 cli-opt-hierarchical = avec --colours : la première couleur compte le plus ([palette] colour_hierarchy)
 cli-opt-mean = avec --colours : la couleur moyenne de chaque image comparée à la première couleur (teinte et saturation surtout, [palette] mean_lightness)
+cli-opt-posterize = vue par palette : chaque image en K couleurs (1 : sa couleur moyenne), écrite dans --to (NOM-pK.jpg)
 cli-ph-colours = couleurs
 cli-colours-bad = couleur illisible : « { $colour } » (#rrggbb)
 cli-colours-header = { $n } images contiennent ces couleurs : fichier, coût, part de chaque couleur

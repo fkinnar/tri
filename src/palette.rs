@@ -624,40 +624,7 @@ pub fn extract(bitmap: &Bitmap, settings: &PaletteSettings) -> Palette {
     if samples.is_empty() {
         return Palette::default();
     }
-    let mut centres = initial_centres(&samples, k);
-    let mut members = vec![0usize; samples.len()];
-    for _ in 0..settings.iterations.max(1) {
-        for (m, p) in members.iter_mut().zip(&samples) {
-            *m = nearest(&centres, *p);
-        }
-        let mut sums = vec![[0.0f64; 4]; centres.len()];
-        for (m, p) in members.iter().zip(&samples) {
-            let s = &mut sums[*m];
-            s[0] += f64::from(p[0]);
-            s[1] += f64::from(p[1]);
-            s[2] += f64::from(p[2]);
-            s[3] += 1.0;
-        }
-        let mut moved = false;
-        for (c, s) in centres.iter_mut().zip(&sums) {
-            if s[3] > 0.0 {
-                let next = [
-                    (s[0] / s[3]) as f32,
-                    (s[1] / s[3]) as f32,
-                    (s[2] / s[3]) as f32,
-                ];
-                moved |= oklab_distance(next, *c) > 1e-5;
-                *c = next;
-            }
-        }
-        if !moved {
-            break;
-        }
-    }
-    let mut counts = vec![0usize; centres.len()];
-    for p in &samples {
-        counts[nearest(&centres, *p)] += 1;
-    }
+    let (centres, counts) = cluster(&samples, k, settings.iterations);
     let total = samples.len() as f32;
     let mut swatches: Vec<Swatch> = centres
         .into_iter()
@@ -949,6 +916,103 @@ pub fn working_to_oklab(rgb: [u8; 3]) -> [f32; 3] {
 /// Un pixel sRGB 8 bits (une couleur tapée `#rrggbb`), en OKLab.
 pub fn srgb_to_oklab(rgb: [u8; 3]) -> [f32; 3] {
     linear_srgb_to_oklab(rgb.map(|c| decode_srgb(f32::from(c) / 255.0)))
+}
+
+/// K-moyennes déterministes sur `samples` (OKLab) : `k` centres au plus, et le nombre de
+/// points de chacun.
+fn cluster(samples: &[[f32; 3]], k: usize, iterations: u32) -> (Vec<[f32; 3]>, Vec<usize>) {
+    let mut centres = initial_centres(samples, k);
+    let mut members = vec![0usize; samples.len()];
+    for _ in 0..iterations.max(1) {
+        for (m, p) in members.iter_mut().zip(samples) {
+            *m = nearest(&centres, *p);
+        }
+        let mut sums = vec![[0.0f64; 4]; centres.len()];
+        for (m, p) in members.iter().zip(samples) {
+            let s = &mut sums[*m];
+            s[0] += f64::from(p[0]);
+            s[1] += f64::from(p[1]);
+            s[2] += f64::from(p[2]);
+            s[3] += 1.0;
+        }
+        let mut moved = false;
+        for (c, s) in centres.iter_mut().zip(&sums) {
+            if s[3] > 0.0 {
+                let next = [
+                    (s[0] / s[3]) as f32,
+                    (s[1] / s[3]) as f32,
+                    (s[2] / s[3]) as f32,
+                ];
+                moved |= oklab_distance(next, *c) > 1e-5;
+                *c = next;
+            }
+        }
+        if !moved {
+            break;
+        }
+    }
+    let mut counts = vec![0usize; centres.len()];
+    for p in samples {
+        counts[nearest(&centres, *p)] += 1;
+    }
+    (centres, counts)
+}
+
+/// Vue « par palette » (#492, idée de l'utilisateur, 23/11/2026) : l'image en `k`
+/// couleurs, chaque pixel remplacé par la plus proche (OKLab) des `k` couleurs principales
+/// de l'image (k-moyennes sans fusion ni miettes, comme [`extract`]) ; `k = 1` : sa
+/// couleur moyenne, la dominante. Voir les rapports de masses colorées. Renvoie l'image
+/// (même taille, espace de travail) et ses couleurs, les plus présentes d'abord (part
+/// des pixels).
+pub fn posterize(bitmap: &Bitmap, k: usize, settings: &PaletteSettings) -> (Bitmap, Vec<Swatch>) {
+    let (w, h) = (bitmap.width, bitmap.height);
+    let n = (w * h) as usize;
+    let samples = sample(bitmap, settings.side.max(1));
+    if samples.is_empty() || bitmap.data.len() < n * 3 {
+        return (bitmap.clone(), Vec::new());
+    }
+    let centres = if k <= 1 {
+        let m = samples.len() as f32;
+        vec![samples.iter().fold([0.0f32; 3], |a, p| {
+            [a[0] + p[0] / m, a[1] + p[1] / m, a[2] + p[2] / m]
+        })]
+    } else {
+        cluster(&samples, k.min(16), settings.iterations).0
+    };
+    let colours: Vec<[u8; 3]> = centres
+        .iter()
+        .map(|&oklab| Swatch { oklab, share: 0.0 }.working())
+        .collect();
+    // Chaque pixel : sa couleur la plus proche ; un pixel déjà vu (même valeur) n'est pas
+    // reconverti (les aplats, les ciels).
+    let mut memo: std::collections::HashMap<[u8; 3], u8> = std::collections::HashMap::new();
+    let mut counts = vec![0usize; centres.len()];
+    let mut data = Vec::with_capacity(n * 3);
+    for &rgb in bitmap.data[..n * 3].as_chunks::<3>().0 {
+        let i = *memo
+            .entry(rgb)
+            .or_insert_with(|| nearest(&centres, working_to_oklab(rgb)) as u8);
+        counts[i as usize] += 1;
+        data.extend_from_slice(&colours[i as usize]);
+    }
+    let mut swatches: Vec<Swatch> = centres
+        .into_iter()
+        .zip(counts)
+        .filter(|(_, c)| *c > 0)
+        .map(|(oklab, c)| Swatch {
+            oklab,
+            share: c as f32 / n as f32,
+        })
+        .collect();
+    swatches.sort_by(|a, b| b.share.total_cmp(&a.share));
+    (
+        Bitmap {
+            width: w,
+            height: h,
+            data,
+        },
+        swatches,
+    )
 }
 
 /// Points de l'image, en OKLab : une grille d'au plus `side × side`.
@@ -1537,6 +1601,40 @@ mod tests {
             ..query(Some(s.colour_hierarchy))
         };
         assert!(cost(&reversed).is_none());
+    }
+
+    #[test]
+    fn posterize_shows_the_image_in_k_colours() {
+        // #492 (23/11/2026) : l'image en k couleurs ; 1, sa couleur moyenne.
+        let s = PaletteSettings::default();
+        let image = bands(&[
+            ([200u8, 30, 30], 60),
+            ([30u8, 40, 200], 30),
+            ([240u8, 240, 230], 10),
+        ]);
+        let distinct = |b: &Bitmap| {
+            let mut set = std::collections::HashSet::new();
+            for px in b.data.as_chunks::<3>().0 {
+                set.insert(*px);
+            }
+            set.len()
+        };
+        for k in [1usize, 2, 3] {
+            let (out, swatches) = posterize(&image, k, &s);
+            assert_eq!((out.width, out.height), (image.width, image.height));
+            assert_eq!(distinct(&out), k, "k = {k}");
+            assert_eq!(swatches.len(), k);
+            let total: f32 = swatches.iter().map(|w| w.share).sum();
+            assert!((total - 1.0).abs() < 1e-4);
+            assert!(swatches.windows(2).all(|w| w[0].share >= w[1].share));
+        }
+        // 3 couleurs : les vraies, rouge d'abord (60 %).
+        let (_, swatches) = posterize(&image, 3, &s);
+        assert!((swatches[0].share - 0.6).abs() < 0.05);
+        // 1 : la moyenne, entre le rouge et le bleu.
+        let (_, mean) = posterize(&image, 1, &s);
+        let [r, _, b] = mean[0].srgb();
+        assert!(r > 80 && b > 40, "{:?}", mean[0].srgb());
     }
 
     #[test]

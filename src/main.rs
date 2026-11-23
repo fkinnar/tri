@@ -157,6 +157,9 @@ struct Args {
     hierarchical: bool,
     /// `--mean` : la couleur moyenne de chaque image comparée à la première couleur.
     mean: bool,
+    /// `--posterize K` : chaque image en K couleurs (vue par palette, #492), écrite dans
+    /// `--to`.
+    posterize: Option<usize>,
     /// Calculs choisis (`--compute previews,palette-raw…`, #555), et `--recreate`.
     compute: Vec<tri::compute::Kind>,
     recreate: bool,
@@ -502,6 +505,7 @@ fn parse() -> AnyResult<Args> {
             }
             "--hierarchical" => args.hierarchical = true,
             "--mean" => args.mean = true,
+            "--posterize" => args.posterize = Some(value()?.parse()?),
             "--compute" => {
                 let text = value()?;
                 for part in text.split(',').filter(|p| !p.trim().is_empty()) {
@@ -1066,6 +1070,7 @@ fn palettes(
     files: &[tri::media::MediaFile],
     kind: tri::palette::SourceKind,
     query: Option<&tri::palette::ColourQuery>,
+    posterize: Option<(usize, PathBuf)>,
 ) -> AnyResult<()> {
     let mut found: Vec<(String, tri::palette::Palette)> = Vec::new();
     use tri::scheduler::Producer;
@@ -1094,6 +1099,28 @@ fn palettes(
             });
         match read {
             Ok(p) => {
+                // Vue par palette (#492) : l'image d'où vient la palette, en K couleurs,
+                // écrite en sRGB (`NOM-pK.jpg`).
+                if let Some((k, to)) = &posterize
+                    && let Ok(key) =
+                        tri::preview::key(file, tri::preview::palette_input(source), &preview)
+                    && let Some(image) = cache.get(&key)
+                {
+                    let (out, swatches) = tri::palette::posterize(&image, *k, &settings.palette);
+                    let srgb: std::collections::HashMap<[u8; 3], [u8; 3]> =
+                        swatches.iter().map(|s| (s.working(), s.srgb())).collect();
+                    let mut out = out;
+                    for px in out.data.as_chunks_mut::<3>().0 {
+                        if let Some(c) = srgb.get(px) {
+                            *px = *c;
+                        }
+                    }
+                    let stem = file.path.file_stem().unwrap_or_default().to_string_lossy();
+                    let path = to.join(format!("{stem}-p{k}.jpg"));
+                    let bytes = tri::jpeg::encode(&out, 92, tri::jpeg::Chroma::Full)?;
+                    std::fs::create_dir_all(to)?;
+                    std::fs::write(&path, bytes)?;
+                }
                 if query.is_some() {
                     found.push((name.to_string(), p.clone()));
                 }
@@ -2332,11 +2359,15 @@ fn run() -> AnyResult<()> {
             widen: settings.palette.colour_widen,
             mean: args.mean.then_some(settings.palette.mean_lightness),
         });
+        let posterize = args
+            .posterize
+            .map(|k| (k, args.to.clone().unwrap_or_else(|| ".".into())));
         return palettes(
             &settings,
             &files,
             args.palette_source.unwrap_or_default(),
             query.as_ref(),
+            posterize,
         );
     }
     if let Some(target) = args.convert {

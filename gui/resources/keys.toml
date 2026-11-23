@@ -150,6 +150,7 @@ loupe = "m"
 # i: the histogram; Shift+I: the large one. Its scale and channel: after the leader.
 "core.view.histogram" = ["i"]
 "core.view.histogram_large" = ["Shift+i"]
+"core.view.palette" = []
 # w: clipped / blocked areas (warnings).
 "core.view.clipping" = ["w"]
 # p: the sharpness map (peaking). Its colour and strictness: after the leader.

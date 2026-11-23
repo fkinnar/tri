@@ -535,6 +535,8 @@ pub enum Action {
     HistogramScale,
     /// Grand histogramme, en boîte au milieu de l'écran.
     HistogramLarge,
+    /// Vue agrandie de la palette (#492) : l'image en 0 à `max` couleurs, et sa palette.
+    PaletteView,
     /// Grand histogramme : canal suivant (tous, rouge, vert, bleu).
     HistogramChannel,
     /// Grand histogramme ouvert : canal rouge seul.
@@ -617,7 +619,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 288] = [
+    pub const ALL: [Action; 289] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -886,6 +888,7 @@ impl Action {
         Action::AdjustPaste,
         Action::HistogramScale,
         Action::HistogramLarge,
+        Action::PaletteView,
         Action::HistogramChannel,
         Action::HistogramRed,
         Action::HistogramGreen,
@@ -1028,9 +1031,10 @@ impl Action {
             | Action::FilterStack
             | Action::StackEnterToggle
             | Action::FilterSimilar => Some(Tool::Stacks),
-            Action::FilterPalette | Action::FilterPaletteColour | Action::SetReference => {
-                Some(Tool::Palettes)
-            }
+            Action::FilterPalette
+            | Action::FilterPaletteColour
+            | Action::SetReference
+            | Action::PaletteView => Some(Tool::Palettes),
             Action::FolderCompute(k) | Action::Compute(k) => kind(k),
             _ => None,
         }
@@ -1106,9 +1110,9 @@ impl Action {
             | ReviewDevelopments | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource
             | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram | AdjustBeforeAfter
             | AdjustApply | AdjustCopy | AdjustPaste | HistogramScale | HistogramLarge
-            | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
-            | HistogramLuminance | HistogramPhoto | HistogramCamera | HistogramAfter
-            | ToggleClipping | TogglePeaking | PeakingColor | SharpnessLenient
+            | PaletteView | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue
+            | HistogramAll | HistogramLuminance | HistogramPhoto | HistogramCamera
+            | HistogramAfter | ToggleClipping | TogglePeaking | PeakingColor | SharpnessLenient
             | SharpnessStrict | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode
             | Develop | DevelopWith(_) | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
@@ -1508,6 +1512,7 @@ impl Action {
             Action::AdjustPaste => "core.adjust.paste",
             Action::HistogramScale => "core.view.histogram_scale",
             Action::HistogramLarge => "core.view.histogram_large",
+            Action::PaletteView => "core.view.palette",
             Action::HistogramChannel => "core.view.histogram_channel",
             Action::HistogramRed => "core.histogram.red",
             Action::HistogramGreen => "core.histogram.green",

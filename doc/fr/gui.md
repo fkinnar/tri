@@ -315,7 +315,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   la première couleur plus précise que la dernière. **Chercher ces couleurs** (section
   Palette, sous la palette de la photo) : ses couleurs principales (les plus présentes, sans
   les miettes sous `colour_min_share`, au plus `max`) dans la boîte, cherchées tout de
-  suite, à ajuster ; « Annuler » rend la recherche d'avant. **Clavier** (retour du
+  suite, à ajuster ; « Annuler » rend la recherche d'avant. **Palette en grand** (à côté,
+  action `core.view.palette`, idée de l'utilisateur du 23/11/2026) : une boîte déplaçable
+  comme le grand histogramme, pour voir les **rapports de masses** de la photo en
+  surbrillance (l'image d'où vient sa palette) ; sous l'image, un curseur à crans : 0
+  l'image telle quelle, 1 sa couleur moyenne (la dominante), n l'image en n couleurs (chaque
+  pixel remplacé par la plus proche, `palette::posterize`), jusqu'à `[gui.palette_view]
+  max` (8) ; **fausses couleurs** au choix (`false_colours`, la plus présente d'abord, avec
+  leur légende face aux vraies) ; à droite, la palette du cran (un clic sur une couleur la
+  cherche). Calculé en fond, à la demande ; changer d'image (flèches) la suit, Échap la
+  ferme. Capture : `TRI_GUI_ACTIONS=core.view.palette,palette_k:4f`. **Clavier** (retour du
   23/11/2026 : la boîte ne se pilotait qu'à la souris, et derrière elle les flèches
   déplaçaient la sélection) : la grille ne reçoit plus rien tant que la boîte est ouverte ;
   hors saisie dans un champ, `1`–`5` choisissent une couleur (un vide : plus rien de

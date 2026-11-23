@@ -754,3 +754,29 @@ fn palettes_can_be_searched_by_several_colours() {
     ]));
     assert!(stderr(&out).contains("#zz"), "{}", stderr(&out));
 }
+
+#[test]
+fn palettes_can_be_posterized() {
+    // #492 : `--posterize K --to DOSSIER` écrit chaque image en K couleurs.
+    let env = Env::new();
+    let photos = env.photos();
+    env.image(&photos, "a.jpg");
+    let out = env.path("out");
+    ok(env.run([
+        arg(&photos),
+        "--palette".as_ref(),
+        "--posterize".as_ref(),
+        "3".as_ref(),
+        "--to".as_ref(),
+        arg(&out),
+    ]));
+    let written = out.join("a-p3.jpg");
+    assert!(written.is_file(), "{}", written.display());
+    let image = image::open(&written).unwrap().to_rgb8();
+    let mut colours = std::collections::HashSet::new();
+    for p in image.pixels() {
+        colours.insert(p.0);
+    }
+    // JPEG : quelques nuances autour des 3 couleurs, loin des milliers d'une photo.
+    assert!(colours.len() < 200, "{}", colours.len());
+}

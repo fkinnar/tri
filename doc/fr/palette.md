@@ -141,7 +141,14 @@ Avec `--colours "#d0a080,#6a7a80"` (la plus importante d'abord) et `--hierarchic
 `--mean`, la couleur moyenne, `Palette::mean`, comparée à la première) :
 ensuite, les images qui contiennent toutes ces couleurs, la mieux placée d'abord, avec
 leur coût et la part de chaque couleur (tolérance : `--threshold`, sinon
-`colour_radius`).
+`colour_radius`). Avec `--posterize K --to DOSSIER` : chaque image en K couleurs
+(`palette::posterize` ; 1 : sa couleur moyenne), écrite en sRGB (`NOM-pK.jpg`).
+
+**Postérisation** (`palette::posterize`, #492, 23/11/2026) : les k couleurs principales de
+l'image (k-moyennes de `palette::extract`, factorisées dans `cluster`, sans fusion des
+proches ni retrait des miettes), puis chaque pixel remplacé par la plus proche (OKLab ;
+un pixel déjà vu n'est pas reconverti) ; k = 1, la couleur moyenne. Renvoie l'image et ses
+couleurs, parts des pixels décroissantes. Environ 10 ms pour une vignette.
 
 ## Réglages `[palette]`
 

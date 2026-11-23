@@ -749,6 +749,19 @@ struct ColourKeys {
     ok: bool,
 }
 
+/// Ce que montre la palette en grand : l'image, la source, le cran, les fausses couleurs.
+type PaletteViewKey = (PathBuf, tri::palette::Source, usize, bool);
+
+/// L'image de la palette en grand, prête pour l'écran, et ses couleurs.
+type PaletteViewImage = (egui::ColorImage, Vec<tri::palette::Swatch>);
+
+/// La palette en grand, montrée.
+struct PaletteViewShown {
+    key: PaletteViewKey,
+    texture: TextureHandle,
+    swatches: Vec<tri::palette::Swatch>,
+}
+
 /// Taille d'une pastille de la boîte des couleurs.
 const SWATCH: egui::Vec2 = egui::Vec2::new(26.0, 20.0);
 
@@ -1630,6 +1643,15 @@ pub struct TriApp {
     histogram: bool,
     /// Grand histogramme, en boîte modale au milieu de l'écran.
     histogram_large: bool,
+    /// La palette en grand (#492), ouverte.
+    palette_view: bool,
+    /// Son cran : 0 l'image, 1 sa moyenne, n : n couleurs (gardé d'une image à l'autre).
+    palette_view_k: usize,
+    /// Fausses couleurs (`[gui.palette_view] false_colours`).
+    palette_view_false: bool,
+    /// Ce qu'elle montre, et ce qui se calcule en fond.
+    palette_view_shown: Option<PaletteViewShown>,
+    palette_view_rx: Option<(PaletteViewKey, mpsc::Receiver<Option<PaletteViewImage>>)>,
     /// Grand histogramme : photo d'analyse affichée à sa droite (`p`).
     histogram_photo: bool,
     /// Courbe du JPEG boîtier d'un RAW sur l'histogramme (`j` en grand, retenue).
@@ -2751,6 +2773,11 @@ impl TriApp {
             meta: None,
             histogram: gui.histogram.visible,
             histogram_large: false,
+            palette_view: false,
+            palette_view_k: 0,
+            palette_view_false: false,
+            palette_view_shown: None,
+            palette_view_rx: None,
             histogram_photo: gui.histogram.analysis,
             histogram_camera: gui.histogram.camera_jpeg,
             engines_blocked: Default::default(),
@@ -7180,6 +7207,7 @@ impl TriApp {
             }
         }
         let mut these = None;
+        let mut open_view = false;
         if let Some(palette) = main_palette {
             self.palette_last = Some((shown, palette.clone()));
             if let Some(c) = self.palette_detail(ui, &palette) {
@@ -7188,13 +7216,23 @@ impl TriApp {
             // Partir de cette photo (idée du 23/11/2026) : ses couleurs principales dans la
             // boîte, cherchées tout de suite, à ajuster.
             ui.add_space(4.0);
-            if ui
-                .button(t!("palette-search-these"))
-                .on_hover_text(t!("palette-search-these-tip"))
-                .clicked()
-            {
-                these = Some(palette);
-            }
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .button(t!("palette-search-these"))
+                    .on_hover_text(t!("palette-search-these-tip"))
+                    .clicked()
+                {
+                    these = Some(palette);
+                }
+                // La palette en grand (#492).
+                if ui
+                    .selectable_label(self.palette_view, t!("palette-view-open"))
+                    .on_hover_text(self.action_tip(Action::PaletteView))
+                    .clicked()
+                {
+                    open_view = true;
+                }
+            });
         }
         // La couleur cliquée : cherchée tout à la fin (la recherche refiltre la liste).
         if picked.is_some() {
@@ -7202,6 +7240,10 @@ impl TriApp {
         }
         if let Some(palette) = these {
             self.search_palette_colours(&palette);
+        }
+        if open_view {
+            let ctx = ui.ctx().clone();
+            self.perform(&ctx, Action::PaletteView);
         }
     }
 
@@ -13609,6 +13651,12 @@ impl TriApp {
                 }
                 continue;
             }
+            // Palette en grand : Échap (ou sa touche) la ferme ; le reste agit derrière
+            // (changer d'image, noter), elle suit.
+            if self.palette_view && matches!(action, Action::Back | Action::PaletteView) {
+                self.palette_view = false;
+                continue;
+            }
             // Grand histogramme : échelle, fermeture (Échap, même touche).
             // Exposition retirée (#564) : plus de grand histogramme, il ne prend rien.
             if self.histogram_large && !crate::actions::removed(crate::actions::Tool::Exposure) {
@@ -14943,6 +14991,15 @@ impl TriApp {
             Action::ToggleHistogram => self.histogram = !self.histogram,
             Action::HistogramScale => self.histogram_scale = self.histogram_scale.toggled(),
             Action::HistogramLarge => self.histogram_large = !self.histogram_large,
+            Action::PaletteView => {
+                if self.palette_view {
+                    self.palette_view = false;
+                } else if self.palette_source.is_none() {
+                    self.notice = Some((t!("palette-choose"), false));
+                } else {
+                    self.palette_view = true;
+                }
+            }
             // Le grand histogramme s'ouvre au besoin : c'est là que le canal se voit.
             Action::HistogramRed => self.histogram_channel = Some(0),
             Action::HistogramGreen => self.histogram_channel = Some(1),
@@ -21304,6 +21361,264 @@ impl TriApp {
         self.notes_changed();
     }
 
+    /// La palette en grand (#492, idée de l'utilisateur, 23/11/2026) : l'image de la photo
+    /// en surbrillance (celle d'où vient sa palette) en 0 à `max` couleurs (0 : telle
+    /// quelle, 1 : sa couleur moyenne, la dominante ; n : chaque pixel remplacé par la plus
+    /// proche des n couleurs principales), pour voir les rapports de masses ; fausses
+    /// couleurs au choix ; la palette du cran à droite (un clic sur une couleur la
+    /// cherche). Une boîte déplaçable, comme le grand histogramme.
+    fn palette_view_dialog(&mut self, ctx: &egui::Context) {
+        if !self.palette_view || crate::actions::removed(crate::actions::Tool::Palettes) {
+            return;
+        }
+        let max = self.gui.palette_view.max.clamp(1, 16);
+        self.palette_view_k = self.palette_view_k.min(max);
+        let file = self.files.get(self.selected).cloned();
+        let source = file
+            .as_ref()
+            .and_then(|f| self.palette_source.and_then(|k| k.source_for(f)));
+        let wanted = file.as_ref().zip(source).map(|(f, s)| {
+            (
+                f.path.clone(),
+                s,
+                self.palette_view_k,
+                self.palette_view_false,
+            )
+        });
+        self.palette_view_poll(ctx, wanted.as_ref());
+        // La palette de la photo (cran 0), connue du panneau.
+        let photo_palette = file
+            .as_ref()
+            .zip(source)
+            .and_then(|(f, s)| self.palettes.get(&(f.path.clone(), s)).cloned());
+        let name = file
+            .as_ref()
+            .map(|f| file_name(&f.path))
+            .unwrap_or_default();
+        let side = self.gui.palette_view.side.max(120.0);
+        let mut k = self.palette_view_k;
+        let mut false_colours = self.palette_view_false;
+        let mut picked = None;
+        let shown = self
+            .palette_view_shown
+            .as_ref()
+            .filter(|s| Some(&s.key) == wanted.as_ref());
+        let texture = shown.map(|s| s.texture.clone());
+        let palette = match (k, shown) {
+            (0, _) => photo_palette.as_deref().cloned(),
+            (_, Some(s)) => Some(Palette {
+                swatches: s.swatches.clone(),
+                ..Palette::default()
+            }),
+            _ => None,
+        };
+        let legend: Vec<Color32> = if false_colours && k > 0 {
+            self.false_colours()
+        } else {
+            Vec::new()
+        };
+        let at = ctx.content_rect().center() - vec2(side, side * 0.6);
+        let modal = modal_at("palette_view", at)
+            .title(name)
+            .free_width()
+            .show(ctx, |ui| {
+                ui.horizontal_top(|ui| {
+                    ui.vertical(|ui| {
+                        let (rect, _) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
+                        match &texture {
+                            Some(texture) => {
+                                let size = texture.size_vec2();
+                                let scale = side / size.x.max(size.y).max(1.0);
+                                let shown = Rect::from_center_size(rect.center(), size * scale);
+                                ui.painter().image(
+                                    texture.id(),
+                                    shown,
+                                    Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                                    Color32::WHITE,
+                                );
+                            }
+                            None => {
+                                ui.painter().text(
+                                    rect.center(),
+                                    egui::Align2::CENTER_CENTER,
+                                    t!("palette-computing"),
+                                    egui::TextStyle::Body.resolve(ui.style()),
+                                    ui.visuals().weak_text_color(),
+                                );
+                            }
+                        }
+                        // Le cran : 0 l'image, 1 la moyenne, n couleurs.
+                        let label = match k {
+                            0 => t!("palette-view-original"),
+                            1 => t!("palette-view-mean"),
+                            n => t!("palette-view-colours", n = n),
+                        };
+                        ui.horizontal(|ui| {
+                            let slider = ui.add(
+                                egui::Slider::new(&mut k, 0..=max)
+                                    .step_by(1.0)
+                                    .show_value(false),
+                            );
+                            if slider.double_clicked() {
+                                k = 0;
+                            }
+                            ui.label(label);
+                        });
+                        ui.checkbox(&mut false_colours, t!("palette-view-false"))
+                            .on_hover_text(t!("palette-view-false-tip"));
+                    });
+                    ui.add_space(16.0);
+                    ui.vertical(|ui| {
+                        ui.set_width(side * 0.6);
+                        // Fausses couleurs : leur légende, alignée sur les vraies.
+                        if !legend.is_empty()
+                            && let Some(p) = &palette
+                        {
+                            ui.horizontal_wrapped(|ui| {
+                                for (s, &c) in p.swatches.iter().zip(&legend) {
+                                    let (r, _) =
+                                        ui.allocate_exact_size(vec2(18.0, 18.0), Sense::hover());
+                                    ui.painter().rect_filled(r, 3.0, c);
+                                    let (r, _) =
+                                        ui.allocate_exact_size(vec2(18.0, 18.0), Sense::hover());
+                                    ui.painter()
+                                        .rect_filled(r, 3.0, crate::palette_view::color(s));
+                                    ui.add_space(6.0);
+                                }
+                            });
+                            ui.add_space(6.0);
+                        }
+                        match &palette {
+                            Some(p) => {
+                                let (band, _) = ui.allocate_exact_size(
+                                    vec2(ui.available_width(), crate::palette_view::BAND_HEIGHT),
+                                    Sense::hover(),
+                                );
+                                crate::palette_view::draw_band(ui.painter(), band, p);
+                                ui.add_space(6.0);
+                                picked = self.palette_detail(ui, p);
+                            }
+                            None => {
+                                ui.weak(t!("palette-computing"));
+                            }
+                        }
+                    });
+                });
+            });
+        if modal.should_close() {
+            self.palette_view = false;
+        }
+        self.palette_view_k = k;
+        self.palette_view_false = false_colours;
+        if picked.is_some() {
+            self.set_palette_colour(picked);
+        }
+    }
+
+    /// Fausses couleurs de la palette en grand, en couleurs d'écran.
+    fn false_colours(&self) -> Vec<Color32> {
+        self.gui
+            .palette_view
+            .false_colours
+            .iter()
+            .filter_map(|h| parse_hex(h))
+            .map(|[r, g, b]| Color32::from_rgb(r, g, b))
+            .collect()
+    }
+
+    /// L'image de la palette en grand : celle arrivée du fond, et demandée en fond si elle
+    /// manque (lecture du cache et postérisation hors du fil de l'interface).
+    fn palette_view_poll(&mut self, ctx: &egui::Context, wanted: Option<&PaletteViewKey>) {
+        if let Some((key, rx)) = &self.palette_view_rx {
+            match rx.try_recv() {
+                Ok(Some((image, swatches))) => {
+                    let texture = ctx.load_texture("palette_view", image, Default::default());
+                    self.palette_view_shown = Some(PaletteViewShown {
+                        key: key.clone(),
+                        texture,
+                        swatches,
+                    });
+                    self.palette_view_rx = None;
+                }
+                Ok(None) | Err(mpsc::TryRecvError::Disconnected) => self.palette_view_rx = None,
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        let Some(wanted) = wanted else {
+            return;
+        };
+        let done = self
+            .palette_view_shown
+            .as_ref()
+            .is_some_and(|s| &s.key == wanted);
+        let pending = self
+            .palette_view_rx
+            .as_ref()
+            .is_some_and(|(k, _)| k == wanted);
+        if done || pending {
+            return;
+        }
+        let (Some(engine), Some(file)) = (&self.engine, self.files.get(self.selected).cloned())
+        else {
+            return;
+        };
+        let (cache, preview) = (engine.cache.clone(), engine.preview);
+        let settings = self.settings.palette;
+        let falses: Vec<[u8; 3]> = self
+            .gui
+            .palette_view
+            .false_colours
+            .iter()
+            .filter_map(|h| parse_hex(h))
+            .collect();
+        let (path, source, k, false_on) = wanted.clone();
+        let _ = path;
+        let (tx, rx) = mpsc::channel();
+        let repaint = ctx.clone();
+        std::thread::spawn(move || {
+            let image = preview::key(&file, preview::palette_input(source), &preview)
+                .ok()
+                .and_then(|key| cache.get(&key));
+            let out = image.map(|image| {
+                let (mut bitmap, swatches) = if k == 0 {
+                    (image, Vec::new())
+                } else {
+                    tri::palette::posterize(&image, k, &settings)
+                };
+                // Fausses couleurs : chaque couleur (dans l'ordre de présence) remplacée.
+                if false_on && k > 0 && !falses.is_empty() {
+                    let map: HashMap<[u8; 3], [u8; 3]> = swatches
+                        .iter()
+                        .enumerate()
+                        .map(|(i, s)| {
+                            let rgb = falses[i % falses.len()];
+                            let working = tri::palette::Swatch {
+                                oklab: tri::palette::srgb_to_oklab(rgb),
+                                share: 0.0,
+                            }
+                            .working();
+                            (s.working(), working)
+                        })
+                        .collect();
+                    for px in bitmap.data.as_chunks_mut::<3>().0 {
+                        if let Some(c) = map.get(px) {
+                            *px = *c;
+                        }
+                    }
+                }
+                crate::display::to_screen(&mut bitmap);
+                let image = egui::ColorImage::from_rgb(
+                    [bitmap.width as usize, bitmap.height as usize],
+                    &bitmap.data,
+                );
+                (image, swatches)
+            });
+            let _ = tx.send(out);
+            repaint.request_repaint();
+        });
+        self.palette_view_rx = Some((wanted.clone(), rx));
+    }
+
     fn histogram_dialog(&mut self, ctx: &egui::Context) {
         if !self.histogram_large || crate::actions::removed(crate::actions::Tool::Exposure) {
             return;
@@ -24573,6 +24888,10 @@ impl TriApp {
                         .collect();
                     self.show_colour_dialog(ColourDialog::new(&colours));
                 }
+                Step::PaletteK(k, falses) => {
+                    self.palette_view_k = k;
+                    self.palette_view_false = falses;
+                }
                 Step::Harmony(id) => {
                     let ryb = self.gui.colour_search.wheel == crate::settings::ColourWheel::Ryb;
                     if let (Some(d), Some(h)) = (
@@ -27738,6 +28057,7 @@ impl eframe::App for TriApp {
         self.update_dialog(&ctx);
         self.download_dialog(&ctx);
         self.histogram_dialog(&ctx);
+        self.palette_view_dialog(&ctx);
         self.offload_dialog(&ctx);
         // Clavier en cours d'usage : pointeur masqué (dernier mot sur l'icône de l'image).
         if !self.mouse_active {
@@ -27790,6 +28110,8 @@ enum Step {
     ColourSearch(Vec<[u8; 3]>),
     /// Une harmonie dans la boîte des couleurs ouverte (`harmony:triad`), pour la capture.
     Harmony(String),
+    /// Le cran de la palette en grand (`palette_k:4`, `palette_k:4f` en fausses couleurs).
+    PaletteK(usize, bool),
     /// Taper dans la recherche de la boîte ouverte, palette, réglages ou aide
     /// (`search:vim`).
     Search(String),
@@ -27829,6 +28151,14 @@ fn parse_actions(list: &str) -> Vec<Step> {
                         .filter_map(parse_hex)
                         .collect(),
                 )),
+                None if id.starts_with("palette_k:") => {
+                    let v = &id["palette_k:".len()..];
+                    let falses = v.ends_with('f');
+                    v.trim_end_matches('f')
+                        .parse()
+                        .ok()
+                        .map(|k| Step::PaletteK(k, falses))
+                }
                 None if id.starts_with("harmony:") => {
                     Some(Step::Harmony(id["harmony:".len()..].to_string()))
                 }
@@ -33070,6 +33400,52 @@ mod tests {
                 .accesskit_node()
                 .is_disabled()
         );
+    }
+
+    #[test]
+    fn the_large_palette_shows_the_image_in_k_colours() {
+        // #492 (23/11/2026) : la palette en grand, l'image en 0 à `max` couleurs ; Échap la
+        // ferme.
+        use tri::palette::{Source, SourceKind};
+        let split = image::RgbImage::from_fn(64, 48, |x, _| {
+            image::Rgb(if x < 40 { [200, 30, 30] } else { [30, 40, 200] })
+        });
+        let (mut h, _dir) = harness_images(vec![("two.jpg", split)]);
+        h.run_steps(3);
+        choose_palette(&mut h, Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        act(&mut h, Action::PaletteView);
+        assert!(h.state().palette_view);
+        h.state_mut().palette_view_k = 2;
+        run_until(&mut h, |app| {
+            app.palette_view_shown
+                .as_ref()
+                .is_some_and(|s| s.key.2 == 2 && s.swatches.len() == 2)
+        });
+        let shares: Vec<f32> = h
+            .state()
+            .palette_view_shown
+            .as_ref()
+            .unwrap()
+            .swatches
+            .iter()
+            .map(|s| s.share)
+            .collect();
+        assert!(shares[0] > 0.55 && shares[0] < 0.7, "{shares:?}");
+        // La moyenne : une seule couleur.
+        h.state_mut().palette_view_k = 1;
+        run_until(&mut h, |app| {
+            app.palette_view_shown
+                .as_ref()
+                .is_some_and(|s| s.key.2 == 1 && s.swatches.len() == 1)
+        });
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(!h.state().palette_view);
     }
 
     #[test]

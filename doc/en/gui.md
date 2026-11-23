@@ -300,7 +300,16 @@ system one ("cold" measurements, experiments).
   colour more precise than the last. **Search these colours** (Palette section, under the
   photo's palette): its main colours (the most present, without specks under
   `colour_min_share`, at most `max`) in the box, searched right away, to adjust; "Cancel"
-  brings back the previous search. **Keyboard** (feedback of 2026-11-23: the box was
+  brings back the previous search. **Large palette** (next to it, action
+  `core.view.palette`, user's idea of 2026-11-23): a movable box like the large histogram,
+  to see the **balance of masses** of the highlighted photo (the image its palette comes
+  from); under the image, a stepped slider: 0 the image as is, 1 its average colour (the
+  dominant), n the image in n colours (each pixel replaced by the closest,
+  `palette::posterize`), up to `[gui.palette_view] max` (8); optional **false colours**
+  (`false_colours`, the most present first, with their legend next to the real ones); on
+  the right, the palette of that step (a click on a colour searches it). Computed in the
+  background, on demand; changing image (arrows) follows, Escape closes it. Screenshot:
+  `TRI_GUI_ACTIONS=core.view.palette,palette_k:4f`. **Keyboard** (feedback of 2026-11-23: the box was
   mouse-only, and behind it the arrows moved the grid's selection): the grid receives
   nothing while the box is open; outside a text field, `1`–`5` select a colour (an empty
   one: nothing selected), ← → or `h` `l` the hue (`key_hue_step`, 5°; Shift: 1°),

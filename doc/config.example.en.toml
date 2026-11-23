@@ -1377,6 +1377,19 @@ key_step = 0.05
 # Keyboard: tolerance step with + and -.
 key_radius_step = 0.01
 
+[gui.palette_view]
+# Maximum number of colours of the large palette slider.
+#
+# 0: the image as is, 1: its average colour (the dominant), 2, 3…: the image in as many
+# colours, each pixel replaced by the closest.
+max = 8
+# Long side of the image in the large palette box (points).
+side = 420.0
+# False colours of the large palette, the most present colour first.
+#
+# Clearly distinct, to see the masses when the real colours are close.
+false_colours = ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6"]
+
 [gui.position]
 # "Photo 12 / 94" marker at each image change: how long it shows.
 #

@@ -325,6 +325,8 @@ pub struct GuiSettings {
     pub compare: CompareSettings,
     /// `[gui.colour_search]`.
     pub colour_search: ColourSearchSettings,
+    /// `[gui.palette_view]`.
+    pub palette_view: PaletteViewSettings,
     /// `[gui.position]`.
     pub position: PositionSettings,
     /// `[gui.position_bar]`.
@@ -402,6 +404,7 @@ impl Default for GuiSettings {
             zoom: ZoomSettings::default(),
             compare: CompareSettings::default(),
             colour_search: ColourSearchSettings::default(),
+            palette_view: PaletteViewSettings::default(),
             position: PositionSettings::default(),
             position_bar: PositionBarSettings::default(),
             notes: NotesSettings::default(),
@@ -1143,6 +1146,34 @@ impl Default for CompareSettings {
             frame: 3.0,
             limit_seconds: 3.0,
             limit_place: PositionPlace::Center,
+        }
+    }
+}
+
+/// Section `[gui.palette_view]` : la palette en grand (#492).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PaletteViewSettings {
+    /// Couleurs au plus du curseur (0 : l'image, 1 : sa moyenne, 2, 3…).
+    pub max: usize,
+    /// Grand côté de l'image dans la boîte (points).
+    pub side: f32,
+    /// Fausses couleurs (`#rrggbb`), dans l'ordre des couleurs de l'image (la plus
+    /// présente d'abord) : bien distinctes, pour voir les masses quand les vraies sont
+    /// proches.
+    pub false_colours: Vec<String>,
+}
+
+impl Default for PaletteViewSettings {
+    fn default() -> Self {
+        let hex = |list: &[&str]| list.iter().map(|s| s.to_string()).collect();
+        Self {
+            max: 8,
+            side: 420.0,
+            false_colours: hex(&[
+                "#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0",
+                "#f032e6",
+            ]),
         }
     }
 }

@@ -134,7 +134,15 @@ those already made by the interface (no software launched from the command line)
 `--colours "#d0a080,#6a7a80"` (the most important first) and `--hierarchical` (or `--mean`,
 the average colour, `Palette::mean`, compared with the first one): then the
 images that contain all these colours, best first, with their cost and the share of each
-colour (tolerance: `--threshold`, otherwise `colour_radius`).
+colour (tolerance: `--threshold`, otherwise `colour_radius`). With `--posterize K --to
+FOLDER`: each image in K colours (`palette::posterize`; 1: its average colour), written in
+sRGB (`NAME-pK.jpg`).
+
+**Posterize** (`palette::posterize`, #492, 2026-11-23): the image's k main colours (the
+k-means of `palette::extract`, factored into `cluster`, without merging close colours or
+dropping specks), then each pixel replaced by the closest (OKLab; a pixel already seen is
+not converted again); k = 1, the average colour. Returns the image and its colours, pixel
+shares decreasing. About 10 ms for a thumbnail.
 
 ## Settings `[palette]`
 
