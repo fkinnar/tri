@@ -390,7 +390,11 @@ impl ColourDialog {
     fn load(&mut self, i: usize) {
         if let Some(&hsv) = self.slots.get(i) {
             self.active = Some(i);
-            self.set_hsv(hsv);
+            // Choisir n'est pas retoucher (retour du 23/11/2026 : l'harmonie se
+            // détachait au simple clic sur une autre couleur).
+            self.hsv = hsv;
+            let [r, g, b] = self.rgb();
+            self.hex = format!("#{r:02x}{g:02x}{b:02x}");
         }
     }
 
@@ -455,13 +459,32 @@ impl ColourDialog {
         if let Some(slot) = self.active.and_then(|i| self.slots.get_mut(i)) {
             *slot = self.hsv;
         }
-        // Harmonie : la base change, les autres suivent ; un autre emplacement retouché,
-        // elle se détache.
-        if self.harmony.is_some() {
-            if self.active == Some(0) {
-                self.regenerate();
-            } else {
-                self.harmony = None;
+        // Harmonie : n'importe quel point retouché la fait tourner, les autres suivent
+        // (retour du 23/11/2026 : retoucher un autre emplacement que la base la
+        // détachait) ; elle ne se détache qu'en recliquant son icône, ou en rangeant ou
+        // vidant un emplacement.
+        if let Some(harmony) = self.harmony {
+            match self.active {
+                Some(i) if i > 0 => {
+                    let [h, s, v] = self.hsv;
+                    let base = self.slots[0];
+                    self.slots[0] = if harmony == crate::palette_view::Harmony::Shades {
+                        [h, base[1], base[2]]
+                    } else {
+                        use crate::palette_view::{hue_to_wheel, wheel_to_hue};
+                        let offset = harmony.offsets().get(i).copied().unwrap_or(0.0);
+                        let angle = hue_to_wheel(h, self.ryb) - offset;
+                        [wheel_to_hue(angle, self.ryb), s, v]
+                    };
+                    self.regenerate();
+                    // La couleur réglée, recalculée (aller-retour par la roue).
+                    if let Some(&hsv) = self.slots.get(i) {
+                        self.hsv = hsv;
+                        let [r, g, b] = self.rgb();
+                        self.hex = format!("#{r:02x}{g:02x}{b:02x}");
+                    }
+                }
+                _ => self.regenerate(),
             }
         }
     }
@@ -503,9 +526,19 @@ impl ColourDialog {
             offset
         };
         let angle = hue_to_wheel(hue, self.ryb) - offset;
-        let base = self.slots.first().copied().unwrap_or(self.hsv);
-        self.active = Some(0);
-        self.set_hsv([wheel_to_hue(angle, self.ryb), saturation, base[2]]);
+        let Some(base) = self.slots.first_mut() else {
+            return;
+        };
+        *base = [wheel_to_hue(angle, self.ryb), saturation, base[2]];
+        self.regenerate();
+        // Le point glissé devient celui qu'on règle.
+        if let Some(&hsv) = self.slots.get(i) {
+            self.active = Some(i);
+            self.hsv = hsv;
+            let [r, g, b] = self.rgb();
+            self.hex = format!("#{r:02x}{g:02x}{b:02x}");
+        }
+        self.blank = false;
     }
 }
 
@@ -32288,13 +32321,24 @@ mod tests {
         assert!((d.slots[1][0] - 120.0).abs() < 1.0, "{:?}", d.slots);
         assert_eq!(d.slots.len(), 3);
         assert!(d.harmony.is_some());
+        assert_eq!(d.active, Some(1), "le point glissé est celui qu'on règle");
         // La base retouchée par les valeurs : les autres suivent encore.
+        d.load(0);
         d.set_rgb([200, 30, 30]);
         assert!(d.harmony.is_some());
         assert_eq!(d.slots[0], d.hsv);
-        // Un autre emplacement retouché : détachée.
+        // Choisir un autre emplacement ne la détache pas ; le retoucher la fait tourner.
         d.load(2);
-        d.set_rgb([10, 200, 10]);
+        assert!(d.harmony.is_some(), "choisir n'est pas retoucher");
+        d.load(0);
+        assert!(d.harmony.is_some());
+        d.load(2);
+        d.set_hsv([180.0, 0.8, 0.9]);
+        assert!(d.harmony.is_some());
+        assert!((d.slots[2][0] - 180.0).abs() < 1.0, "{:?}", d.slots);
+        assert_eq!(d.slots.len(), 3);
+        // Ranger ou vider un emplacement la détache.
+        d.clear(2);
         assert!(d.harmony.is_none());
         // Au plus `max` emplacements ; la même harmonie une seconde fois la détache.
         d.max = 2;

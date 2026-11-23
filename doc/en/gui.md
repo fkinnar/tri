@@ -267,8 +267,11 @@ system one ("cold" measurements, experiments).
   the other slots follow (at most `max`); the same harmony again detaches it, colours
   kept. On the wheel, each stored colour has its dot (the one being set larger), joined to
   the centre by the harmony; dragging a dot **turns** the harmony (the others follow; far
-  from any dot, the base). Changing the base (wheel, values, eyedropper): the others
-  follow; changing another slot, storing or clearing one: the harmony detaches.
+  from any dot, the base); the dragged dot becomes the one being set (framed). Selecting a
+  slot only selects it; changing any dot (wheel, values, eyedropper) turns the harmony
+  (feedback of 2026-11-23: changing a slot other than the base detached it, and selecting
+  counted as changing); it only detaches by clicking its icon again, or storing or
+  clearing a slot.
   Screenshot: `TRI_GUI_ACTIONS=colour_dialog:#2050c0,harmony:triad`. An image must
   contain **all** of them (one tolerance for all: one per colour would be unmanageable).
   On the right, **Absolute** (all count the same: the mean of the distances) or

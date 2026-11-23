@@ -280,8 +280,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   la même harmonie une seconde fois la détache, couleurs gardées. Sur la roue, chaque
   couleur rangée a son point (celle qu'on règle plus grand), reliée au centre par
   l'harmonie ; glisser un point fait **tourner** l'harmonie (les autres suivent ; loin de
-  tout point, la base). Retoucher la base (roue, valeurs, pipette) : les autres suivent ;
-  retoucher un autre emplacement, en ranger ou en vider un : l'harmonie se détache.
+  tout point, la base) ; le point glissé devient celui qu'on règle (encadré). Choisir un
+  emplacement ne fait que le choisir ; retoucher n'importe quel point (roue, valeurs,
+  pipette) fait tourner l'harmonie (retour du 23/11/2026 : retoucher un autre emplacement
+  que la base la détachait, et choisir revenait à retoucher) ; elle ne se détache qu'en
+  recliquant son icône, ou en rangeant ou vidant un emplacement.
   Capture : `TRI_GUI_ACTIONS=colour_dialog:#2050c0,harmony:triad`. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
   couleur serait ingérable). À droite, **Absolue** (toutes comptent pareil : la moyenne des
   distances) ou **Hiérarchique** (la première compte le plus, chaque suivante
