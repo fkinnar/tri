@@ -7167,7 +7167,7 @@ impl TriApp {
                     ui,
                     size,
                     &t!("palette-search-open"),
-                    &t!("palette-search-these-tip"),
+                    &t!("palette-search-open"),
                 );
                 marks::binoculars(ui.painter(), rect, color);
                 r

@@ -102,7 +102,6 @@ palette-view-false = Fausses couleurs
 palette-view-false-tip = Des couleurs bien distinctes à la place des vraies, pour voir les masses quand elles sont proches
 palette-view-perceived = Couleurs perçues
 palette-view-perceived-tip = Expérience : les couleurs telles que l'œil les voit, adaptées à la lumière de leur entourage ; les zones qui tranchent comptent plus
-palette-search-these-tip = Les couleurs principales de cette photo dans la boîte des couleurs, cherchées tout de suite, à ajuster
 palette-eyedropper-name = Pipette
 action-core-filter-developed = Filtre : développées (allumer / éteindre ; logiciels à cocher dans la liste)
 action-core-grid-render = Rendu affiché précédent (vignettes et plein écran)
