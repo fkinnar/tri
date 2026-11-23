@@ -288,7 +288,9 @@ system one ("cold" measurements, experiments).
   (feedback of 2026-11-23: changing a slot other than the base detached it, and selecting
   counted as changing); it only detaches by clicking its icon again, or storing or
   clearing a slot.
-  Layout (feedback of 2026-11-23): the box made narrower, the values and swatches block
+  Layout (feedback of 2026-11-23): the box has the width of its middle row
+  (`Dialog::width`; otherwise the line under the title took all the available room and
+  the box stretched on a large screen), the values and swatches block
   aligned right on the buttons, RYB / RGB at the right of the harmonies row. Screenshot:
   `TRI_GUI_ACTIONS=colour_dialog:#2050c0,harmony:triad`. At the
   bottom of the box (feedback of 2026-11-23): the **tolerance**, the same slider as the

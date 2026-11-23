@@ -303,7 +303,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   pipette) fait tourner l'harmonie (retour du 23/11/2026 : retoucher un autre emplacement
   que la base la détachait, et choisir revenait à retoucher) ; elle ne se détache qu'en
   recliquant son icône, ou en rangeant ou vidant un emplacement.
-  Disposition (retour du 23/11/2026) : la boîte resserrée, le bloc des valeurs et des
+  Disposition (retours du 23/11/2026) : la boîte a la largeur de sa ligne du milieu
+  (`Dialog::width` ; le trait sous le titre prenait sinon toute la place disponible, et la
+  boîte s'étirait sur un grand écran), le bloc des valeurs et des
   pastilles calé à droite sur les boutons, RJB / RVB à droite de la ligne des harmonies.
   Capture : `TRI_GUI_ACTIONS=colour_dialog:#2050c0,harmony:triad`. En bas
   de la boîte (retours du 23/11/2026) : la **tolérance**, le même curseur que celui du

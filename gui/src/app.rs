@@ -341,6 +341,8 @@ struct ColourDialog {
     /// Pas encore montrée : ses touches attendent l'image suivante (la touche qui l'a
     /// ouverte, Entrée, la validait aussitôt).
     fresh: bool,
+    /// Largeur de sa ligne du milieu, mesurée : celle de toute la boîte.
+    width: f32,
     /// L'emplacement réglé a été choisi exprès (clic dessus, `1`–`5`) : il le reste après
     /// un clic sur la roue ; sinon, au relâcher, le clic suivant remplit le suivant.
     sticky: bool,
@@ -363,6 +365,7 @@ impl ColourDialog {
             max: 5,
             dragging: None,
             fresh: true,
+            width: 0.0,
             sticky: false,
             stroke: false,
             mean: false,
@@ -5927,6 +5930,10 @@ impl TriApp {
         let modal = modal_at("palette_colour_dialog", CENTRED)
             .title(title)
             .free_width()
+            // La largeur de la ligne du milieu (valeur, roue, valeurs), mesurée à l'image
+            // d'avant (retour du 23/11/2026) : sans elle, le trait sous le titre prenait la
+            // place disponible, et les boutons calés à droite s'y alignaient.
+            .width((dialog.width > 0.0).then_some(dialog.width))
             .show(ctx, |ui| {
                 // Les couleurs cherchées, en haut, et le mode de recherche (#492).
                 ui.add_space(5.0);
@@ -5938,7 +5945,7 @@ impl TriApp {
                 ui.add_space(10.0);
                 // La roue à gauche, les réglages à droite (retour du 21/11/2026 : en
                 // colonne, la boîte était trop large pour son contenu).
-                ui.horizontal_top(|ui| {
+                let middle = ui.horizontal_top(|ui| {
                     // La roue (retour du 21/11/2026 : la clarté d'OKLab ne parlait pas) : un
                     // clic ou un glisser y choisit teinte et saturation, à la valeur V. Roue
                     // des peintres (RYB) ou TSV, harmonies dessous (#492, 23/11/2026).
@@ -5951,9 +5958,9 @@ impl TriApp {
                         });
                     });
                     ui.add_space(24.0);
-                    // Le bloc des valeurs et des pastilles calé à droite, aligné sur les
-                    // boutons (retour du 23/11/2026 : tout se tassait à gauche).
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                    // Le bloc des valeurs et des pastilles : son bord droit fait celui de la
+                    // boîte, où s'alignent les boutons (retours du 23/11/2026).
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
                         ui.vertical(|ui| {
                             // La couleur, son `#rrggbb` et la pipette.
                             ui.horizontal(|ui| {
@@ -6062,6 +6069,7 @@ impl TriApp {
                         });
                     });
                 });
+                dialog.width = middle.response.rect.width();
                 // Les harmonies, et la roue tout à droite de la même ligne.
                 ui.add_space(8.0);
                 self.harmony_row(ui, &mut dialog, &mut wheel);
@@ -6077,10 +6085,10 @@ impl TriApp {
                     }
                     // La tolérance, comme celle du panneau (retour du 23/11/2026), et ce
                     // que la recherche trouve.
-                    ui.add_space(12.0);
+                    ui.add_space(6.0);
                     ui.label(egui::RichText::new(t!("palette-colour-tolerance")).color(weak));
                     let slider = ui
-                        .add(FineSlider::new(&mut radius, 0.0..=radius_max).width(110.0))
+                        .add(FineSlider::new(&mut radius, 0.0..=radius_max).width(70.0))
                         .on_hover_text(t!("palette-colour-radius"));
                     if slider.double_clicked_slider(ui) {
                         radius = radius_default;
@@ -28911,6 +28919,7 @@ pub(crate) fn modal_at(id: &str, at: egui::Pos2) -> Dialog {
         start: at + vec2(4.0, 4.0),
         title: None,
         free_width: false,
+        width: None,
         closable: true,
         centred: at == CENTRED,
     }
@@ -28947,6 +28956,8 @@ pub(crate) struct Dialog {
     /// Sans largeurs minimale et maximale (`[gui.dialogs]`) : la boîte prend la taille de
     /// son contenu (grand histogramme).
     free_width: bool,
+    /// Largeur imposée (boîte des couleurs : celle de sa ligne du milieu).
+    width: Option<f32>,
     /// Croix de fermeture à droite du titre (issue n° 39 : la même dans toutes les boîtes).
     closable: bool,
     /// Au centre de la fenêtre ([`CENTRED`]) d'après sa taille réelle, mesurée pendant ses
@@ -29008,6 +29019,12 @@ impl Dialog {
     /// Largeur libre (voir [`Dialog::free_width`]).
     pub(crate) fn free_width(mut self) -> Self {
         self.free_width = true;
+        self
+    }
+
+    /// Largeur imposée, `None` : libre (voir [`Dialog::width`]).
+    pub(crate) fn width(mut self, width: Option<f32>) -> Self {
+        self.width = width;
         self
     }
 
@@ -29089,7 +29106,10 @@ impl Dialog {
                         let spacing = ui.spacing_mut();
                         spacing.item_spacing = vec2(d.spacing, d.spacing);
                         spacing.button_padding = vec2(d.button_padding, d.button_padding / 2.0);
-                        if !self.free_width {
+                        if let Some(w) = self.width {
+                            ui.set_min_width(w);
+                            ui.set_max_width(w);
+                        } else if !self.free_width {
                             ui.set_min_width(d.min_width);
                             ui.set_max_width(d.max_width.max(d.min_width));
                         }
