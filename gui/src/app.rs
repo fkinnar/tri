@@ -1355,6 +1355,11 @@ pub struct TriApp {
     colour_dialog: Option<ColourDialog>,
     /// Dernière couleur cherchée : cocher « Couleur » la reprend.
     palette_colour_last: Option<Vec<[f32; 3]>>,
+    /// Le tri d'avant la recherche de palettes en cours (passée à « Proximité »), rendu
+    /// quand elle s'arrête (#492).
+    order_before_search: Option<tri::sort::Order>,
+    /// Une recherche de palettes était en cours au dernier refiltrage.
+    sort_searching: bool,
     /// Image en plein écran à la dernière image : (rang, rectangle, partie de l'image
     /// montrée), pour la pipette.
     view_image: Option<(usize, Rect, Rect)>,
@@ -2434,6 +2439,8 @@ impl TriApp {
             screen_pick: None,
             colour_dialog: None,
             palette_colour_last: None,
+            order_before_search: None,
+            sort_searching: false,
             view_image: None,
             camera_exposures: Lru::new(gui.view.textures),
             screen: crate::display::Screen::default(),
@@ -2760,7 +2767,7 @@ impl TriApp {
             rating_bar: Some(self.rating_bar),
             image_info: Some(self.image_info),
             background: self.background,
-            sort: Some(self.order),
+            sort: Some(self.saved_order()),
             auto_advance: Some(self.auto_advance),
             filter_restart: Some(self.filter_restart),
             review_developments: Some(self.review_developments),
@@ -2864,7 +2871,7 @@ impl TriApp {
         if let Some(enter) = s.stack_enter {
             self.stack_enter = enter;
         }
-        if let Some(order) = s.sort {
+        if let Some(order) = s.sort.filter(|o| o.key != tri::sort::SortKey::Proximity) {
             self.order = order;
         }
         if s.download_format.is_some() {
@@ -5251,6 +5258,59 @@ impl TriApp {
         }
     }
 
+    /// Recherche en cours : sous le tri « Proximité », les éléments gardés du plus proche
+    /// au plus lointain (inversé : l'inverse), ceux pas encore calculés à la fin
+    /// ([`tri::palette::rank_similar_by`]) ; sous un autre tri, gardés dans son ordre
+    /// ([`tri::palette::keep_similar`] ; #492, 23/11/2026 : le filtre filtre, le tri trie).
+    fn rank_or_keep(
+        &self,
+        files: Vec<MediaFile>,
+        distance: impl Fn(&MediaFile) -> Option<Option<f32>>,
+        threshold: f32,
+    ) -> Vec<MediaFile> {
+        if self.order.key == tri::sort::SortKey::Proximity {
+            tri::palette::rank_similar_by(files, distance, threshold, self.order.descending)
+        } else {
+            tri::palette::keep_similar(files, distance, threshold)
+        }
+    }
+
+    /// Une recherche commence : le tri passe à « Proximité » (l'ordre d'avant retenu) ;
+    /// elle s'arrête : l'ordre d'avant revient, si l'on n'en a pas choisi un autre entre
+    /// deux (#492, 23/11/2026). Appelé à chaque refiltrage : une recherche s'arrête de
+    /// bien des façons (source changée, filtres effacés…).
+    fn follow_search_sort(&mut self) {
+        use tri::sort::{Order, SortKey};
+        let searching = self.palette_searching();
+        if searching && !self.sort_searching {
+            self.sort_searching = true;
+            if self.order.key != SortKey::Proximity {
+                self.order_before_search = Some(self.order);
+                self.order = Order {
+                    key: SortKey::Proximity,
+                    descending: false,
+                };
+                self.apply_sort();
+            }
+        } else if !searching && (self.sort_searching || self.order.key == SortKey::Proximity) {
+            self.sort_searching = false;
+            if self.order.key == SortKey::Proximity {
+                self.order = self.order_before_search.unwrap_or_default();
+                self.apply_sort();
+            }
+            self.order_before_search = None;
+        }
+    }
+
+    /// L'ordre retenu pour le dossier et la session : jamais « Proximité », qui n'a de sens
+    /// que pendant une recherche (l'ordre d'avant).
+    fn saved_order(&self) -> tri::sort::Order {
+        match self.order.key {
+            tri::sort::SortKey::Proximity => self.order_before_search.unwrap_or_default(),
+            _ => self.order,
+        }
+    }
+
     /// Ordre « palettes proches » : `groups` aplatis, gardés sous le seuil, du plus proche
     /// au plus lointain ; ceux dont la palette n'est pas encore calculée à la fin (voir
     /// [`tri::palette::rank_similar`]).
@@ -5325,7 +5385,7 @@ impl TriApp {
             None => grey(p) != reference_grey,
         };
         let files: Vec<MediaFile> = groups.into_iter().flatten().collect();
-        let ranked = tri::palette::rank_similar(
+        let ranked = self.rank_or_keep(
             files,
             |f| {
                 let source = kind.source_for(f)?;
@@ -5354,7 +5414,7 @@ impl TriApp {
     ) -> Vec<Vec<MediaFile>> {
         let weight = self.settings.similarity.shape_weight;
         let files: Vec<MediaFile> = groups.into_iter().flatten().collect();
-        let ranked = tri::palette::rank_similar(
+        let ranked = self.rank_or_keep(
             files,
             |f| {
                 let photo = tri::media::source(&f.path);
@@ -9957,6 +10017,7 @@ impl TriApp {
     /// place dans la liste (l'image suivante : on vient de rejeter une photo avec « masquer
     /// les rejetées », on passe à la suite).
     fn refilter(&mut self, reveal: Reveal) {
+        self.follow_search_sort();
         self.refiltered_at = Instant::now();
         let selected_path = self.files.get(self.selected).map(|f| f.path.clone());
         // Sélection hors de la vue (on a défilé sans la déplacer) : on garde la région
@@ -10549,7 +10610,7 @@ impl TriApp {
             well_exposed: self.well_exposed,
             developed: self.developed_on,
             inverted: self.filter_inverted,
-            order: Some(self.order),
+            order: Some(self.saved_order()),
             render: Some(self.grid_render),
             stacking: Some(self.stacking),
             developed_engines: self
@@ -10700,7 +10761,10 @@ impl TriApp {
             self.drop_inactive_developed();
         }
         self.filter_inverted = view.inverted;
-        if let Some(order) = view.order {
+        if let Some(order) = view
+            .order
+            .filter(|o| o.key != tri::sort::SortKey::Proximity)
+        {
             self.order = order;
         }
         // Rendu des vignettes du dossier (31/10/2026) ; sans rien de retenu, celui de la
@@ -10866,6 +10930,15 @@ impl TriApp {
 
     /// Change l'ordre : la grille suit, la même image reste sélectionnée.
     fn set_order(&mut self, order: tri::sort::Order) {
+        // « Proximité » sans recherche : rien à trier.
+        if order.key == tri::sort::SortKey::Proximity && !self.palette_searching() {
+            self.notice = Some((t!("sort-proximity-none"), false));
+            return;
+        }
+        // Un autre tri choisi pendant la recherche : il reste après elle.
+        if order.key != tri::sort::SortKey::Proximity {
+            self.order_before_search = None;
+        }
         self.order = order;
         self.sort_pending = false;
         self.apply_sort();
@@ -13939,10 +14012,14 @@ impl TriApp {
                 }
                 self.change_render(render);
             }
-            Action::SortNext => self.set_order(tri::sort::Order {
-                key: self.order.key.next(),
-                ..self.order
-            }),
+            Action::SortNext => {
+                // « Proximité » sautée sans recherche.
+                let mut key = self.order.key.next();
+                if key == tri::sort::SortKey::Proximity && !self.palette_searching() {
+                    key = key.next();
+                }
+                self.set_order(tri::sort::Order { key, ..self.order })
+            }
             Action::FilterKind(kind) => {
                 self.filter = kind;
                 self.apply_filter();
@@ -28348,6 +28425,7 @@ fn sort_name(key: tri::sort::SortKey) -> String {
         tri::sort::SortKey::Stars => t!("sort-stars"),
         tri::sort::SortKey::Color => t!("sort-color"),
         tri::sort::SortKey::Flag => t!("sort-flag"),
+        tri::sort::SortKey::Proximity => t!("sort-proximity"),
     }
 }
 
@@ -31714,6 +31792,46 @@ mod tests {
         assert_eq!(got, ["a_blue_mostly.jpg", "c_red_mostly.jpg"]);
         // La dernière recherche est reprise telle quelle (deux couleurs).
         assert_eq!(h.state().palette_colour_last.as_ref().unwrap().len(), 2);
+
+        // Le filtre filtre, le tri trie (#492, 23/11/2026) : la recherche a passé le tri à
+        // « Proximité » ; un autre tri garde les mêmes images, dans son ordre, et reste
+        // après la recherche.
+        use tri::sort::{Order, SortKey};
+        h.state_mut().set_colour_hierarchy(true);
+        h.state_mut().set_palette_colours(Some(vec![blue, red]));
+        h.run_steps(3);
+        assert_eq!(h.state().order.key, SortKey::Proximity);
+        assert_eq!(names(&h), ["a_blue_mostly.jpg", "c_red_mostly.jpg"]);
+        h.state_mut().set_order(Order {
+            key: SortKey::Name,
+            descending: true,
+        });
+        h.run_steps(3);
+        assert_eq!(names(&h), ["c_red_mostly.jpg", "a_blue_mostly.jpg"]);
+        h.state_mut().set_palette_colours(None);
+        h.run_steps(3);
+        assert_eq!(h.state().order.key, SortKey::Name);
+        assert_eq!(names(&h).len(), 4);
+        // Sous un tri choisi avant (date de modification) : rendu à la fin de la recherche.
+        h.state_mut().set_order(Order {
+            key: SortKey::Modified,
+            descending: false,
+        });
+        h.state_mut().set_palette_colours(Some(vec![red]));
+        assert_eq!(h.state().order.key, SortKey::Proximity);
+        assert_eq!(
+            h.state().saved_order().key,
+            SortKey::Modified,
+            "jamais retenu"
+        );
+        // « Proximité » choisie sans recherche : refusée.
+        h.state_mut().set_palette_colours(None);
+        assert_eq!(h.state().order.key, SortKey::Modified);
+        h.state_mut().set_order(Order {
+            key: SortKey::Proximity,
+            descending: false,
+        });
+        assert_eq!(h.state().order.key, SortKey::Modified);
     }
 
     #[test]

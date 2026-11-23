@@ -43,3 +43,15 @@ undone, changed elsewhere: `TriApp::notes_changed`): the image takes its place, 
 selection follows it. The stacks form on the displayed order (a burst rated alike stays
 contiguous, ties broken by name order); the sharpness judgement stays the engine's, on the
 shooting order.
+
+## Proximity (`SortKey::Proximity`, #492, 2026-11-23)
+
+The user's idea: "the filter filters, the sort sorts". Palette searches (colours, similar
+palettes) and "Similar" only **filter**; the **Proximity** sort orders the kept images
+from the closest to the furthest (reversed: the other way; those not computed yet at the
+end). The engine does not have the palettes: here, this key gives the name order, and the
+interface ranks (`palette::rank_similar_by`, under another sort `palette::keep_similar`,
+which keeps the order). In the interface: a search that starts switches the sort to
+Proximity, and the previous order comes back when it stops, unless another sort was chosen
+in between; without a search, Proximity is greyed in the list, skipped by the next sort,
+and never remembered (folder or session: the previous order).

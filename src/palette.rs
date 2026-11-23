@@ -684,6 +684,17 @@ pub fn rank_similar<T>(
     distance: impl Fn(&T) -> Option<Option<f32>>,
     threshold: f32,
 ) -> Vec<T> {
+    rank_similar_by(items, distance, threshold, false)
+}
+
+/// [`rank_similar`], du plus lointain au plus proche avec `descending` (tri inversé) ;
+/// ceux pas encore calculés toujours à la fin.
+pub fn rank_similar_by<T>(
+    items: Vec<T>,
+    distance: impl Fn(&T) -> Option<Option<f32>>,
+    threshold: f32,
+    descending: bool,
+) -> Vec<T> {
     let mut known: Vec<(f32, T)> = Vec::new();
     let mut unknown: Vec<T> = Vec::new();
     for item in items {
@@ -695,7 +706,28 @@ pub fn rank_similar<T>(
         }
     }
     known.sort_by(|a, b| a.0.total_cmp(&b.0));
+    if descending {
+        known.reverse();
+    }
     known.into_iter().map(|(_, t)| t).chain(unknown).collect()
+}
+
+/// Comme [`rank_similar`], sans trier (#492, 23/11/2026 : le filtre filtre, le tri trie) :
+/// les éléments gardés restent dans leur ordre, ceux dont la palette n'est pas encore
+/// calculée à leur place.
+pub fn keep_similar<T>(
+    items: Vec<T>,
+    distance: impl Fn(&T) -> Option<Option<f32>>,
+    threshold: f32,
+) -> Vec<T> {
+    items
+        .into_iter()
+        .filter(|item| match distance(item) {
+            None => false,
+            Some(None) => true,
+            Some(Some(d)) => d <= threshold,
+        })
+        .collect()
 }
 
 /// Lit une couleur `#rrggbb` (ou `rrggbb`) ; `None` sinon.
@@ -1362,6 +1394,27 @@ mod tests {
                 .unwrap()
                 < 0.04,
             "à 0,5 %, trouvé"
+        );
+    }
+
+    #[test]
+    fn keeping_similar_items_keeps_their_order() {
+        let items = vec![
+            ("a", Some(Some(0.3))),
+            ("b", None),
+            ("c", Some(None)),
+            ("d", Some(Some(0.1))),
+            ("e", Some(Some(0.9))),
+        ];
+        let kept = keep_similar(items.clone(), |i| i.1, 0.5);
+        assert_eq!(
+            kept.iter().map(|i| i.0).collect::<Vec<_>>(),
+            ["a", "c", "d"]
+        );
+        let ranked = rank_similar(items, |i| i.1, 0.5);
+        assert_eq!(
+            ranked.iter().map(|i| i.0).collect::<Vec<_>>(),
+            ["d", "a", "c"]
         );
     }
 

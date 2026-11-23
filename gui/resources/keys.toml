@@ -231,6 +231,7 @@ loupe = "m"
 "core.filter.sort_by.stars" = []
 "core.filter.sort_by.color" = []
 "core.filter.sort_by.flag" = []
+"core.filter.sort_by.proximity" = []
 
 # --- Stacks (s) ---
 # s: stacks on / off (grid and full screen); Shift+S: expand / collapse all of them;
