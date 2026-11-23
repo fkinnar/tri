@@ -1354,6 +1354,12 @@ own_max = 6
 # The grid searches at each colour change in the box, at most once per this delay (a big
 # folder stays smooth while dragging on the wheel); 0: only on "Search".
 live_ms = 150
+# Wheel of the box: the painters' wheel ("ryb") or the screen's wheel ("rgb").
+#
+# "ryb": red, yellow, blue, like Adobe Color; its harmonies are the familiar ones (the
+# complement of blue: orange). "rgb": the screen's HSV wheel (the complement of blue:
+# yellow). Also changed in the box.
+wheel = "ryb"
 
 [gui.position]
 # "Photo 12 / 94" marker at each image change: how long it shows.

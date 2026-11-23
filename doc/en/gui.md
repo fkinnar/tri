@@ -257,7 +257,19 @@ system one ("cold" measurements, experiments).
   preview); opening starts nothing; "OK" (formerly "Search") keeps the search, "Cancel" or
   the cross bring back the previous one (or none) and the previous sort. **Reset**
   (bottom left) clears the slots, puts the wheel back to grey and stops the search; "OK"
-  right after leaves the grid without a search. An image must
+  right after leaves the grid without a search.
+  **Wheel and harmonies** (user's idea, 2026-11-23, like Adobe Color): under the wheel,
+  the **painters' wheel** (RYB: red, yellow, blue; complement of blue: orange,
+  `palette_view::RYB_TO_RGB`, piecewise) or the **screen wheel** (RGB, HSV; complement of
+  blue: yellow), `[gui.colour_search] wheel`; and seven **harmonies** as icons
+  (`palette_view::Harmony`): complementary, split complementary, analogous, triad,
+  rectangle, square, shades. A click: the current colour becomes the base (first slot),
+  the other slots follow (at most `max`); the same harmony again detaches it, colours
+  kept. On the wheel, each stored colour has its dot (the one being set larger), joined to
+  the centre by the harmony; dragging a dot **turns** the harmony (the others follow; far
+  from any dot, the base). Changing the base (wheel, values, eyedropper): the others
+  follow; changing another slot, storing or clearing one: the harmony detaches.
+  Screenshot: `TRI_GUI_ACTIONS=colour_dialog:#2050c0,harmony:triad`. An image must
   contain **all** of them (one tolerance for all: one per colour would be unmanageable).
   On the right, **Absolute** (all count the same: the mean of the distances) or
   **Hierarchical** (the first counts the most, each next one `[palette] colour_hierarchy`

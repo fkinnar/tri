@@ -86,24 +86,181 @@ pub fn rgb_to_hsv(rgb: [u8; 3], hue_if_grey: f32) -> [f32; 3] {
     [h, s, max]
 }
 
-/// Teinte et saturation au point `pos` de la roue TSV de centre `centre` et de rayon
-/// `radius` (rouge à droite, sens trigonométrique, gris au centre) ; `None` hors de la
-/// roue.
-pub fn hsv_at(pos: Pos2, centre: Pos2, radius: f32) -> Option<(f32, f32)> {
-    let d = pos - centre;
-    let s = d.length() / radius.max(1.0);
-    (s <= 1.0).then(|| ((-d.y).atan2(d.x).to_degrees().rem_euclid(360.0), s))
+/// Roue des peintres (rouge, jaune, bleu ; #492, 23/11/2026, comme Adobe Color) : la
+/// teinte TSV (sRGB) de chaque angle de la roue RYB, par paliers ; entre deux, linéaire.
+/// Le complémentaire du rouge y est le vert, celui du bleu l'orange, celui du jaune le
+/// violet : les harmonies « qu'on connaît ».
+const RYB_TO_RGB: [(f32, f32); 7] = [
+    (0.0, 0.0),
+    (60.0, 35.0),
+    (120.0, 60.0),
+    (180.0, 120.0),
+    (240.0, 240.0),
+    (300.0, 280.0),
+    (360.0, 360.0),
+];
+
+/// Interpolation linéaire par paliers de `x` dans `table` (colonne `from` vers `to`).
+fn piecewise(x: f32, from: usize, to: usize) -> f32 {
+    let x = x.rem_euclid(360.0);
+    let at = |i: usize, k: usize| {
+        if k == 0 {
+            RYB_TO_RGB[i].0
+        } else {
+            RYB_TO_RGB[i].1
+        }
+    };
+    for i in 0..RYB_TO_RGB.len() - 1 {
+        let (a, b) = (at(i, from), at(i + 1, from));
+        if x >= a && x <= b {
+            let t = if b > a { (x - a) / (b - a) } else { 0.0 };
+            return (at(i, to) + t * (at(i + 1, to) - at(i, to))).rem_euclid(360.0);
+        }
+    }
+    x
 }
 
-/// Place d'une teinte (degrés) et d'une saturation sur la roue TSV.
-pub fn hsv_pos(hue: f32, saturation: f32, centre: Pos2, radius: f32) -> Pos2 {
-    let a = hue.to_radians();
+/// Teinte TSV (sRGB, degrés) de l'angle `angle` de la roue : RYB ou la roue TSV même.
+pub fn wheel_to_hue(angle: f32, ryb: bool) -> f32 {
+    if ryb {
+        piecewise(angle, 0, 1)
+    } else {
+        angle.rem_euclid(360.0)
+    }
+}
+
+/// Angle sur la roue (RYB ou TSV) de la teinte TSV `hue` (degrés).
+pub fn hue_to_wheel(hue: f32, ryb: bool) -> f32 {
+    if ryb {
+        piecewise(hue, 1, 0)
+    } else {
+        hue.rem_euclid(360.0)
+    }
+}
+
+/// Teinte TSV et saturation au point `pos` de la roue de centre `centre` et de rayon
+/// `radius` (rouge à droite, sens trigonométrique, gris au centre ; roue RYB si `ryb`) ;
+/// `None` hors de la roue.
+pub fn hsv_at(pos: Pos2, centre: Pos2, radius: f32, ryb: bool) -> Option<(f32, f32)> {
+    let d = pos - centre;
+    let s = d.length() / radius.max(1.0);
+    let angle = (-d.y).atan2(d.x).to_degrees().rem_euclid(360.0);
+    (s <= 1.0).then(|| (wheel_to_hue(angle, ryb), s))
+}
+
+/// Place d'une teinte TSV (degrés) et d'une saturation sur la roue (RYB si `ryb`).
+pub fn hsv_pos(hue: f32, saturation: f32, centre: Pos2, radius: f32, ryb: bool) -> Pos2 {
+    let a = hue_to_wheel(hue, ryb).to_radians();
     let r = radius * saturation.clamp(0.0, 1.0);
     pos2(centre.x + r * a.cos(), centre.y - r * a.sin())
 }
 
-/// Roue TSV du sélecteur de couleur, à la valeur `value` (0 à 1).
-pub fn draw_hsv_wheel(painter: &Painter, rect: Rect, value: f32) {
+/// Harmonie de couleurs (#492, 23/11/2026, comme Adobe Color) : des teintes placées sur
+/// la roue à partir d'une couleur de base, qui tournent avec elle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Harmony {
+    /// En face.
+    Complementary,
+    /// Les deux voisines de l'opposée.
+    SplitComplementary,
+    /// Les voisines.
+    Analogous,
+    /// Trois à 120°.
+    Triad,
+    /// Deux paires opposées, en rectangle.
+    Rectangle,
+    /// Quatre à 90°.
+    Square,
+    /// Même teinte, d'autres saturations et luminosités.
+    Shades,
+}
+
+impl Harmony {
+    /// Toutes, dans l'ordre des boutons.
+    pub const ALL: [Harmony; 7] = [
+        Harmony::Complementary,
+        Harmony::SplitComplementary,
+        Harmony::Analogous,
+        Harmony::Triad,
+        Harmony::Rectangle,
+        Harmony::Square,
+        Harmony::Shades,
+    ];
+
+    /// Identifiant (chaînes `palette-harmony-<id>`).
+    pub fn id(self) -> &'static str {
+        match self {
+            Harmony::Complementary => "complementary",
+            Harmony::SplitComplementary => "split",
+            Harmony::Analogous => "analogous",
+            Harmony::Triad => "triad",
+            Harmony::Rectangle => "rectangle",
+            Harmony::Square => "square",
+            Harmony::Shades => "shades",
+        }
+    }
+
+    /// Écarts d'angle sur la roue depuis la base (degrés), la base d'abord.
+    pub fn offsets(self) -> &'static [f32] {
+        match self {
+            Harmony::Complementary => &[0.0, 180.0],
+            Harmony::SplitComplementary => &[0.0, 150.0, 210.0],
+            Harmony::Analogous => &[0.0, -30.0, 30.0],
+            Harmony::Triad => &[0.0, 120.0, 240.0],
+            Harmony::Rectangle => &[0.0, 60.0, 180.0, 240.0],
+            Harmony::Square => &[0.0, 90.0, 180.0, 270.0],
+            Harmony::Shades => &[0.0, 0.0, 0.0],
+        }
+    }
+
+    /// Les couleurs (TSV) de l'harmonie autour de `base`, la base d'abord ; les angles sur
+    /// la roue (RYB si `ryb`), saturation et valeur de la base (camaïeu : la même teinte,
+    /// plus sombre puis moins saturée).
+    pub fn colours(self, base: [f32; 3], ryb: bool) -> Vec<[f32; 3]> {
+        let [h, s, v] = base;
+        if self == Harmony::Shades {
+            return vec![[h, s, v], [h, s, v * 0.6], [h, s * 0.5, v]];
+        }
+        let angle = hue_to_wheel(h, ryb);
+        // La base telle quelle (pas d'aller-retour par la roue).
+        std::iter::once(base)
+            .chain(
+                self.offsets()[1..]
+                    .iter()
+                    .map(|o| [wheel_to_hue(angle + o, ryb), s, v]),
+            )
+            .collect()
+    }
+
+    /// Petite icône : la roue, ses points et leurs rayons.
+    pub fn draw_icon(self, painter: &Painter, rect: Rect, color: Color32) {
+        let c = rect.center();
+        let r = rect.width().min(rect.height()) / 2.0 - 1.0;
+        painter.circle_stroke(c, r, Stroke::new(1.0, color.gamma_multiply(0.45)));
+        let dot = |p: Pos2| painter.circle_filled(p, 2.0, color);
+        let ray = Stroke::new(1.0, color.gamma_multiply(0.8));
+        if self == Harmony::Shades {
+            for t in [0.35, 0.65, 0.95] {
+                let p = pos2(c.x + r * t * 0.85, c.y - r * t * 0.5);
+                painter.line_segment([c, p], ray);
+                dot(p);
+            }
+            return;
+        }
+        for (i, o) in self.offsets().iter().enumerate() {
+            // La base en haut à droite, comme un repère.
+            let a = (30.0 + o).to_radians();
+            let k = if i == 0 { 0.85 } else { 0.75 };
+            let p = pos2(c.x + r * k * a.cos(), c.y - r * k * a.sin());
+            painter.line_segment([c, p], ray);
+            dot(p);
+        }
+    }
+}
+
+/// Roue TSV du sélecteur de couleur, à la valeur `value` (0 à 1) ; roue des peintres
+/// (RYB) si `ryb` : les mêmes couleurs, placées autrement.
+pub fn draw_hsv_wheel(painter: &Painter, rect: Rect, value: f32, ryb: bool) {
     let centre = rect.center();
     let radius = rect.width().min(rect.height()) / 2.0;
     let (rings, sectors) = (14usize, 72usize);
@@ -111,8 +268,10 @@ pub fn draw_hsv_wheel(painter: &Painter, rect: Rect, value: f32) {
     for ring in 0..=rings {
         let s = ring as f32 / rings as f32;
         for sector in 0..=sectors {
-            let hue = sector as f32 / sectors as f32 * 360.0;
-            let pos = hsv_pos(hue, s, centre, radius);
+            let angle = sector as f32 / sectors as f32 * 360.0;
+            let hue = wheel_to_hue(angle, ryb);
+            // Placé à son angle sur la roue (la roue TSV : l'angle est la teinte).
+            let pos = hsv_pos(angle, s, centre, radius, false);
             let [r, g, b] = hsv_to_rgb([hue, s, value]);
             mesh.colored_vertex(pos, Color32::from_rgb(r, g, b));
         }
@@ -227,10 +386,14 @@ mod tests {
             "le gris garde sa teinte"
         );
         let c = pos2(100.0, 100.0);
-        let at = hsv_pos(210.0, 0.7, c, 50.0);
-        let (h, s) = hsv_at(at, c, 50.0).unwrap();
+        let at = hsv_pos(210.0, 0.7, c, 50.0, false);
+        let (h, s) = hsv_at(at, c, 50.0, false).unwrap();
         assert!((h - 210.0).abs() < 0.01 && (s - 0.7).abs() < 1e-4);
-        assert!(hsv_at(pos2(160.0, 100.0), c, 50.0).is_none());
+        assert!(hsv_at(pos2(160.0, 100.0), c, 50.0, false).is_none());
+        // Sur la roue RYB aussi, aller et retour.
+        let at = hsv_pos(210.0, 0.7, c, 50.0, true);
+        let (h, _) = hsv_at(at, c, 50.0, true).unwrap();
+        assert!((h - 210.0).abs() < 0.5, "{h}");
     }
 
     #[test]
@@ -241,5 +404,33 @@ mod tests {
         let red = wheel_pos(&swatch([220, 30, 30], 1.0), c, 50.0);
         assert!(red.x > c.x + 20.0, "{red:?}");
         assert_eq!(hex(&swatch([18, 52, 86], 1.0)), "#123456");
+    }
+
+    #[test]
+    fn the_painters_wheel_puts_the_known_complements_opposite() {
+        // #492 : roue RYB, rouge ↔ vert, bleu ↔ orange, jaune ↔ violet.
+        let opposite = |hue: f32| Harmony::Complementary.colours([hue, 1.0, 1.0], true)[1][0];
+        assert!((opposite(0.0) - 120.0).abs() < 1.0, "rouge → vert");
+        let orange = opposite(240.0);
+        assert!((25.0..45.0).contains(&orange), "bleu → orange : {orange}");
+        let violet = opposite(60.0);
+        assert!(
+            (260.0..300.0).contains(&violet),
+            "jaune → violet : {violet}"
+        );
+        // Roue TSV : le complémentaire du bleu est le jaune.
+        let yellow = Harmony::Complementary.colours([240.0, 1.0, 1.0], false)[1][0];
+        assert!((yellow - 60.0).abs() < 1.0);
+        for h in [0.0, 17.0, 95.0, 200.0, 359.0] {
+            assert!(
+                (wheel_to_hue(hue_to_wheel(h, true), true) - h).abs() < 0.01,
+                "{h}"
+            );
+        }
+        for harmony in Harmony::ALL {
+            let colours = harmony.colours([10.0, 0.8, 0.9], true);
+            assert_eq!(colours.len(), harmony.offsets().len());
+            assert_eq!(colours[0], [10.0, 0.8, 0.9], "la base d'abord");
+        }
     }
 }

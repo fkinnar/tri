@@ -269,7 +269,20 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (150 ms ; 0 : pas d'aperçu) ; l'ouverture ne lance rien ; « Valider » (ex-« Chercher »)
   garde la recherche, « Annuler » ou la croix rendent celle d'avant (ou aucune) et le
   tri d'avant. **Réinitialiser** (en bas à gauche) vide les emplacements, remet la roue au
-  gris et arrête la recherche ; « Valider » juste après laisse la grille sans recherche. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
+  gris et arrête la recherche ; « Valider » juste après laisse la grille sans recherche.
+  **Roue et harmonies** (idée de l'utilisateur, 23/11/2026, comme Adobe Color) : sous la
+  roue, la **roue des peintres** (RJB : rouge, jaune, bleu ; complémentaire du bleu :
+  l'orange, `palette_view::RYB_TO_RGB`, par paliers) ou la **roue de l'écran** (RVB, TSV ;
+  complémentaire du bleu : le jaune), `[gui.colour_search] wheel` ; et sept
+  **harmonies** en icônes (`palette_view::Harmony`) : complémentaire, complémentaire
+  adjacente, analogue, triade, rectangle, carré, camaïeu. Un clic : la couleur réglée
+  devient la base (premier emplacement), les autres emplacements suivent (au plus `max`) ;
+  la même harmonie une seconde fois la détache, couleurs gardées. Sur la roue, chaque
+  couleur rangée a son point (celle qu'on règle plus grand), reliée au centre par
+  l'harmonie ; glisser un point fait **tourner** l'harmonie (les autres suivent ; loin de
+  tout point, la base). Retoucher la base (roue, valeurs, pipette) : les autres suivent ;
+  retoucher un autre emplacement, en ranger ou en vider un : l'harmonie se détache.
+  Capture : `TRI_GUI_ACTIONS=colour_dialog:#2050c0,harmony:triad`. Une image doit les contenir **toutes** (même tolérance pour toutes : une par
   couleur serait ingérable). À droite, **Absolue** (toutes comptent pareil : la moyenne des
   distances) ou **Hiérarchique** (la première compte le plus, chaque suivante
   `[palette] colour_hierarchy` fois la précédente, d'après sa présence dans l'image, la

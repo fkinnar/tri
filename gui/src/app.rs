@@ -327,6 +327,15 @@ struct ColourDialog {
     active: Option<usize>,
     /// Réinitialisée et pas retouchée depuis : rien à chercher.
     blank: bool,
+    /// Harmonie en cours (#492) : les emplacements suivent la base (le premier) ; retoucher
+    /// un autre emplacement, en ranger ou en vider un, la détache.
+    harmony: Option<crate::palette_view::Harmony>,
+    /// Roue des peintres (RYB) plutôt que TSV : les angles des harmonies.
+    ryb: bool,
+    /// Emplacements au plus (`[gui.colour_search] max`).
+    max: usize,
+    /// Point de l'harmonie que l'on fait tourner sur la roue (glisser en cours).
+    dragging: Option<usize>,
 }
 
 impl ColourDialog {
@@ -339,6 +348,10 @@ impl ColourDialog {
             slots: Vec::new(),
             active: None,
             blank: false,
+            harmony: None,
+            ryb: true,
+            max: 5,
+            dragging: None,
         };
         for &oklab in colours {
             dialog.set(oklab);
@@ -355,6 +368,7 @@ impl ColourDialog {
     /// Réinitialise (retour du 23/11/2026) : rien de rangé, un gris moyen sur la roue,
     /// rien à chercher tant qu'on n'a rien retouché.
     fn reset(&mut self) {
+        self.harmony = None;
         self.slots.clear();
         self.active = None;
         self.set_rgb([128, 128, 128]);
@@ -365,6 +379,7 @@ impl ColourDialog {
     /// choisi.
     fn store(&mut self, max: usize) {
         self.blank = false;
+        self.harmony = None;
         if self.slots.len() < max {
             self.slots.push(self.hsv);
             self.active = Some(self.slots.len() - 1);
@@ -382,6 +397,7 @@ impl ColourDialog {
     /// Vide l'emplacement `i` (les suivants avancent : l'ordre est celui de l'importance).
     fn clear(&mut self, i: usize) {
         if i < self.slots.len() {
+            self.harmony = None;
             self.slots.remove(i);
             self.active = match self.active {
                 Some(a) if a == i => None,
@@ -439,6 +455,57 @@ impl ColourDialog {
         if let Some(slot) = self.active.and_then(|i| self.slots.get_mut(i)) {
             *slot = self.hsv;
         }
+        // Harmonie : la base change, les autres suivent ; un autre emplacement retouché,
+        // elle se détache.
+        if self.harmony.is_some() {
+            if self.active == Some(0) {
+                self.regenerate();
+            } else {
+                self.harmony = None;
+            }
+        }
+    }
+
+    /// Les emplacements refaits d'après l'harmonie autour du premier (au plus `max`).
+    fn regenerate(&mut self) {
+        let (Some(harmony), Some(&base)) = (self.harmony, self.slots.first()) else {
+            return;
+        };
+        self.slots = harmony.colours(base, self.ryb);
+        self.slots.truncate(self.max.max(1));
+    }
+
+    /// Choisit l'harmonie `harmony` (la même une seconde fois : la détache, couleurs
+    /// gardées) : la couleur réglée devient la base, les autres emplacements suivent.
+    fn set_harmony(&mut self, harmony: crate::palette_view::Harmony) {
+        if self.harmony == Some(harmony) {
+            self.harmony = None;
+            return;
+        }
+        self.blank = false;
+        self.slots = vec![self.hsv];
+        self.active = Some(0);
+        self.harmony = Some(harmony);
+        self.regenerate();
+    }
+
+    /// Fait tourner l'harmonie sur la roue : le point `i` amené à la teinte `hue` (TSV) et
+    /// à la saturation `saturation`, les autres suivent (camaïeu : la base seule bouge).
+    fn turn(&mut self, i: usize, hue: f32, saturation: f32) {
+        use crate::palette_view::{Harmony, hue_to_wheel, wheel_to_hue};
+        let Some(harmony) = self.harmony else {
+            return;
+        };
+        let offset = harmony.offsets().get(i).copied().unwrap_or(0.0);
+        let offset = if harmony == Harmony::Shades {
+            0.0
+        } else {
+            offset
+        };
+        let angle = hue_to_wheel(hue, self.ryb) - offset;
+        let base = self.slots.first().copied().unwrap_or(self.hsv);
+        self.active = Some(0);
+        self.set_hsv([wheel_to_hue(angle, self.ryb), saturation, base[2]]);
     }
 }
 
@@ -5615,6 +5682,9 @@ impl TriApp {
         // Pastilles libres changées, recherche hiérarchique basculée : écrites après.
         let mut own: Option<Vec<String>> = None;
         let mut mode: Option<crate::settings::ColourMode> = None;
+        let mut wheel: Option<crate::settings::ColourWheel> = None;
+        dialog.ryb = self.gui.colour_search.wheel == crate::settings::ColourWheel::Ryb;
+        dialog.max = self.gui.colour_search.max.max(1);
         let title = t!("palette-colour-title");
         let modal = modal_at("palette_colour_dialog", CENTRED)
             .title(title)
@@ -5631,39 +5701,14 @@ impl TriApp {
                 // La roue à gauche, les réglages à droite (retour du 21/11/2026 : en
                 // colonne, la boîte était trop large pour son contenu).
                 ui.horizontal_top(|ui| {
-                    // La roue TSV (retour du 21/11/2026 : la clarté d'OKLab ne parlait pas) :
-                    // un clic ou un glisser y choisit teinte et saturation, à la valeur V.
-                    let side = 200.0;
-                    let (rect, response) =
-                        ui.allocate_exact_size(vec2(side, side), Sense::click_and_drag());
-                    crate::palette_view::draw_hsv_wheel(ui.painter(), rect, dialog.hsv[2]);
-                    let radius = side / 2.0;
-                    if let Some(pos) = response.interact_pointer_pos()
-                        && (response.clicked() || response.dragged())
-                    {
-                        // Hors de la roue en glissant : au bord, dans la même direction.
-                        let d = pos - rect.center();
-                        let pos = if d.length() > radius {
-                            rect.center() + d * (radius / d.length())
-                        } else {
-                            pos
-                        };
-                        if let Some((h, s)) =
-                            crate::palette_view::hsv_at(pos, rect.center(), radius)
-                        {
-                            dialog.set_hsv([h, s, dialog.hsv[2]]);
-                        }
-                    }
-                    let at = crate::palette_view::hsv_pos(
-                        dialog.hsv[0],
-                        dialog.hsv[1],
-                        rect.center(),
-                        radius,
-                    );
-                    ui.painter()
-                        .circle_stroke(at, 6.0, egui::Stroke::new(2.0, Color32::WHITE));
-                    ui.painter()
-                        .circle_stroke(at, 7.5, egui::Stroke::new(1.0, Color32::BLACK));
+                    // La roue (retour du 21/11/2026 : la clarté d'OKLab ne parlait pas) : un
+                    // clic ou un glisser y choisit teinte et saturation, à la valeur V. Roue
+                    // des peintres (RYB) ou TSV, harmonies dessous (#492, 23/11/2026).
+                    ui.vertical(|ui| {
+                        self.colour_wheel(ui, &mut dialog);
+                        ui.add_space(8.0);
+                        self.harmony_row(ui, &mut dialog, &mut wheel);
+                    });
                     ui.add_space(12.0);
                     ui.vertical(|ui| {
                         // La couleur, son `#rrggbb` et la pipette.
@@ -5788,6 +5833,10 @@ impl TriApp {
         }
         if let Some(mode) = mode {
             self.set_colour_mode(mode);
+        }
+        if let Some(wheel) = wheel {
+            self.set_colour_wheel(wheel);
+            dialog.ryb = wheel == crate::settings::ColourWheel::Ryb;
         }
         if search {
             self.colour_dialog = None;
@@ -6008,6 +6057,137 @@ impl TriApp {
         ) {
             self.gui.colour_search.own = own;
         }
+    }
+
+    /// La roue de la boîte des couleurs : un clic ou un glisser y choisit la couleur
+    /// réglée ; avec une harmonie, le point le plus proche du clic tourne et les autres
+    /// suivent. Les couleurs rangées y sont marquées (celle que l'on règle plus grande),
+    /// reliées au centre par l'harmonie.
+    fn colour_wheel(&self, ui: &mut Ui, dialog: &mut ColourDialog) {
+        use crate::palette_view::{draw_hsv_wheel, hsv_at, hsv_pos};
+        let side = 200.0;
+        let (rect, response) = ui.allocate_exact_size(vec2(side, side), Sense::click_and_drag());
+        let (centre, radius, ryb) = (rect.center(), side / 2.0, dialog.ryb);
+        draw_hsv_wheel(ui.painter(), rect, dialog.hsv[2], ryb);
+        let marker = |hsv: [f32; 3]| hsv_pos(hsv[0], hsv[1], centre, radius, ryb);
+        if let Some(pos) = response.interact_pointer_pos()
+            && (response.clicked() || response.dragged())
+        {
+            // Hors de la roue en glissant : au bord, dans la même direction.
+            let d = pos - centre;
+            let pos = if d.length() > radius {
+                centre + d * (radius / d.length())
+            } else {
+                pos
+            };
+            // Avec une harmonie : le point le plus proche au début du glisser (la base si
+            // aucun n'est près).
+            if dialog.harmony.is_some() && dialog.dragging.is_none() {
+                let near = (0..dialog.slots.len())
+                    .map(|i| (i, marker(dialog.slots[i]).distance(pos)))
+                    .filter(|(_, d)| *d < 14.0)
+                    .min_by(|a, b| a.1.total_cmp(&b.1))
+                    .map_or(0, |(i, _)| i);
+                dialog.dragging = Some(near);
+            }
+            if let Some((h, s)) = hsv_at(pos, centre, radius, ryb) {
+                match (dialog.harmony, dialog.dragging) {
+                    (Some(_), Some(i)) => dialog.turn(i, h, s),
+                    _ => dialog.set_hsv([h, s, dialog.hsv[2]]),
+                }
+            }
+        }
+        if !response.dragged() {
+            dialog.dragging = None;
+        }
+        let painter = ui.painter();
+        // L'harmonie : un rayon du centre à chaque couleur.
+        if dialog.harmony.is_some() {
+            for &hsv in &dialog.slots {
+                painter.line_segment(
+                    [centre, marker(hsv)],
+                    egui::Stroke::new(1.5, Color32::from_white_alpha(200)),
+                );
+            }
+        }
+        for (i, &hsv) in dialog.slots.iter().enumerate() {
+            let [r, g, b] = crate::palette_view::hsv_to_rgb(hsv);
+            let at = marker(hsv);
+            let size = if dialog.active == Some(i) { 7.0 } else { 5.0 };
+            painter.circle_filled(at, size, Color32::from_rgb(r, g, b));
+            painter.circle_stroke(at, size, egui::Stroke::new(1.5, Color32::WHITE));
+            painter.circle_stroke(at, size + 1.0, egui::Stroke::new(1.0, Color32::BLACK));
+        }
+        // La couleur réglée hors des emplacements : l'anneau d'avant.
+        if dialog.active.is_none() {
+            let at = marker(dialog.hsv);
+            painter.circle_stroke(at, 6.0, egui::Stroke::new(2.0, Color32::WHITE));
+            painter.circle_stroke(at, 7.5, egui::Stroke::new(1.0, Color32::BLACK));
+        }
+    }
+
+    /// Sous la roue : les harmonies (icônes ; la même une seconde fois la détache), puis
+    /// la roue, RYB ou RVB (`wheel` : changée).
+    fn harmony_row(
+        &self,
+        ui: &mut Ui,
+        dialog: &mut ColourDialog,
+        wheel: &mut Option<crate::settings::ColourWheel>,
+    ) {
+        use crate::palette_view::Harmony;
+        use crate::settings::ColourWheel;
+        // Sept icônes sur la largeur de la roue.
+        let size = 26.0;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            for harmony in Harmony::ALL {
+                let name = t!(&format!("palette-harmony-{}", harmony.id()));
+                let (rect, response) = marks::icon_button(ui, size, &name, &name);
+                let on = dialog.harmony == Some(harmony);
+                if on {
+                    ui.painter()
+                        .rect_filled(rect, 3.0, ui.visuals().selection.bg_fill);
+                }
+                harmony.draw_icon(ui.painter(), rect.shrink(3.0), ui.visuals().text_color());
+                if response.clicked() {
+                    dialog.set_harmony(harmony);
+                }
+            }
+        });
+        ui.horizontal(|ui| {
+            let current = self.gui.colour_search.wheel;
+            for (w, label, tip) in [
+                (
+                    ColourWheel::Ryb,
+                    t!("palette-wheel-ryb"),
+                    t!("palette-wheel-ryb-tip"),
+                ),
+                (
+                    ColourWheel::Rgb,
+                    t!("palette-wheel-rgb"),
+                    t!("palette-wheel-rgb-tip"),
+                ),
+            ] {
+                if ui
+                    .selectable_label(current == w, label)
+                    .on_hover_text(tip)
+                    .clicked()
+                    && current != w
+                {
+                    *wheel = Some(w);
+                }
+            }
+        });
+    }
+
+    /// Roue de la boîte des couleurs (`[gui.colour_search] wheel`).
+    fn set_colour_wheel(&mut self, wheel: crate::settings::ColourWheel) {
+        self.gui.colour_search.wheel = wheel;
+        self.write_setting(
+            "gui.colour_search",
+            "wheel",
+            tri::config_edit::Value::Str(wheel.id().to_string()),
+        );
     }
 
     /// Mode de la recherche de couleurs (`[gui.colour_search] mode`), la recherche en
@@ -23801,6 +23981,18 @@ impl TriApp {
                         .collect();
                     self.show_colour_dialog(ColourDialog::new(&colours));
                 }
+                Step::Harmony(id) => {
+                    let ryb = self.gui.colour_search.wheel == crate::settings::ColourWheel::Ryb;
+                    if let (Some(d), Some(h)) = (
+                        &mut self.colour_dialog,
+                        crate::palette_view::Harmony::ALL
+                            .into_iter()
+                            .find(|h| h.id() == id),
+                    ) {
+                        d.ryb = ryb;
+                        d.set_harmony(h);
+                    }
+                }
                 Step::ColourSearch(colours) => {
                     let colours: Vec<[f32; 3]> = colours
                         .iter()
@@ -27008,6 +27200,8 @@ enum Step {
     ColourDialog(Vec<[u8; 3]>),
     /// Chercher ces couleurs (`colour_search:#ff0000 #0000ff`), pour la capture.
     ColourSearch(Vec<[u8; 3]>),
+    /// Une harmonie dans la boîte des couleurs ouverte (`harmony:triad`), pour la capture.
+    Harmony(String),
     /// Taper dans la recherche de la boîte ouverte, palette, réglages ou aide
     /// (`search:vim`).
     Search(String),
@@ -27047,6 +27241,9 @@ fn parse_actions(list: &str) -> Vec<Step> {
                         .filter_map(parse_hex)
                         .collect(),
                 )),
+                None if id.starts_with("harmony:") => {
+                    Some(Step::Harmony(id["harmony:".len()..].to_string()))
+                }
                 None if id.starts_with("colour_search:") => Some(Step::ColourSearch(
                     id["colour_search:".len()..]
                         .split_whitespace()
@@ -32069,6 +32266,70 @@ mod tests {
         h.run_steps(3);
         assert!(h.state().palette_colour.is_none());
         assert_eq!(h.state().files.len(), 2);
+    }
+
+    #[test]
+    fn harmonies_fill_the_slots_turn_and_detach() {
+        // #492 (23/11/2026) : une harmonie remplit les emplacements autour de la couleur
+        // réglée ; tourner sur la roue les fait suivre ; retoucher un autre emplacement la
+        // détache ; la même harmonie une seconde fois aussi (couleurs gardées).
+        use crate::palette_view::Harmony;
+        let mut d = ColourDialog::new(&[]);
+        d.set_hsv([240.0, 0.8, 0.9]);
+        d.set_harmony(Harmony::Triad);
+        assert_eq!(d.slots.len(), 3);
+        assert_eq!(d.active, Some(0));
+        // Roue des peintres : les primaires (bleu, rouge, jaune).
+        let hues: Vec<f32> = d.slots.iter().map(|h| h[0]).collect();
+        assert!(hues[1] < 5.0 || hues[1] > 355.0, "{hues:?}");
+        assert!((hues[2] - 60.0).abs() < 1.0, "{hues:?}");
+        // Tourner : le deuxième point amené au vert, les autres suivent.
+        d.turn(1, 120.0, 0.8);
+        assert!((d.slots[1][0] - 120.0).abs() < 1.0, "{:?}", d.slots);
+        assert_eq!(d.slots.len(), 3);
+        assert!(d.harmony.is_some());
+        // La base retouchée par les valeurs : les autres suivent encore.
+        d.set_rgb([200, 30, 30]);
+        assert!(d.harmony.is_some());
+        assert_eq!(d.slots[0], d.hsv);
+        // Un autre emplacement retouché : détachée.
+        d.load(2);
+        d.set_rgb([10, 200, 10]);
+        assert!(d.harmony.is_none());
+        // Au plus `max` emplacements ; la même harmonie une seconde fois la détache.
+        d.max = 2;
+        d.set_harmony(Harmony::Square);
+        assert_eq!(d.slots.len(), 2);
+        d.set_harmony(Harmony::Square);
+        assert!(d.harmony.is_none());
+        assert_eq!(d.slots.len(), 2, "couleurs gardées");
+        // Roue TSV : le complémentaire du bleu est le jaune.
+        let mut d = ColourDialog::new(&[]);
+        d.ryb = false;
+        d.set_hsv([240.0, 1.0, 1.0]);
+        d.set_harmony(Harmony::Complementary);
+        assert!((d.slots[1][0] - 60.0).abs() < 1.0);
+
+        // La roue choisie, écrite dans la configuration ; les boutons d'harmonie là.
+        let (mut h, dir) = harness();
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "").unwrap();
+        h.state_mut().config_path = Some(config.clone());
+        h.state_mut()
+            .set_colour_wheel(crate::settings::ColourWheel::Rgb);
+        assert!(
+            std::fs::read_to_string(&config)
+                .unwrap()
+                .contains("wheel = \"rgb\"")
+        );
+        h.state_mut().open_colour_dialog();
+        h.run_steps(3);
+        h.get_by_label(&t!("palette-harmony-triad")).click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state().colour_dialog.as_ref().unwrap().harmony,
+            Some(Harmony::Triad)
+        );
     }
 
     #[test]

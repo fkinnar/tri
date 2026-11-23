@@ -1368,6 +1368,12 @@ own_max = 6
 # délai (un gros dossier reste fluide pendant un glisser sur la roue) ; 0 : seulement à
 # « Chercher ».
 live_ms = 150
+# Roue de la boîte : celle des peintres ("ryb") ou la roue de l'écran ("rgb").
+#
+# "ryb" : rouge, jaune, bleu, comme Adobe Color ; ses harmonies sont celles qu'on connaît
+# (complémentaire du bleu : l'orange). "rgb" : la roue TSV de l'écran (complémentaire du
+# bleu : le jaune). Changé aussi dans la boîte.
+wheel = "ryb"
 
 [gui.position]
 # Repère « Photo 12 / 94 » à chaque changement d'image : durée d'affichage.

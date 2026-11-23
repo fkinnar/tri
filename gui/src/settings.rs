@@ -1195,6 +1195,30 @@ pub struct ColourSearchSettings {
     /// Aperçu en direct : la grille cherche derrière la boîte à chaque changement, au plus
     /// une fois par ce délai (millisecondes) ; 0 : seulement à « Chercher ».
     pub live_ms: u64,
+    /// Roue de la boîte : celle des peintres (rouge, jaune, bleu ; ses harmonies sont
+    /// celles qu'on connaît) ou la roue TSV ; changée aussi dans la boîte.
+    pub wheel: ColourWheel,
+}
+
+/// Roue de la boîte des couleurs (#492).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ColourWheel {
+    /// Roue des peintres : rouge, jaune, bleu (complémentaire du bleu : l'orange).
+    #[default]
+    Ryb,
+    /// Roue TSV de l'écran (complémentaire du bleu : le jaune).
+    Rgb,
+}
+
+impl ColourWheel {
+    /// Identifiant dans la configuration.
+    pub fn id(self) -> &'static str {
+        match self {
+            ColourWheel::Ryb => "ryb",
+            ColourWheel::Rgb => "rgb",
+        }
+    }
 }
 
 impl Default for ColourSearchSettings {
@@ -1212,6 +1236,7 @@ impl Default for ColourSearchSettings {
             own: Vec::new(),
             own_max: 6,
             live_ms: 150,
+            wheel: ColourWheel::Ryb,
         }
     }
 }
