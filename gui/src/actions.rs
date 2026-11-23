@@ -537,6 +537,10 @@ pub enum Action {
     HistogramLarge,
     /// Vue agrandie de la palette (#492) : l'image en 0 à `max` couleurs, et sa palette.
     PaletteView,
+    /// Couleurs en grand : ce cran (0 l'image, 1 la moyenne, n couleurs), ouverte au besoin.
+    ColoursStep(u8),
+    /// Couleurs en grand : couleurs perçues ou non, ouverte au besoin.
+    ColoursPerceived,
     /// Grand histogramme : canal suivant (tous, rouge, vert, bleu).
     HistogramChannel,
     /// Grand histogramme ouvert : canal rouge seul.
@@ -619,7 +623,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 289] = [
+    pub const ALL: [Action; 299] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -889,6 +893,16 @@ impl Action {
         Action::HistogramScale,
         Action::HistogramLarge,
         Action::PaletteView,
+        Action::ColoursStep(0),
+        Action::ColoursStep(1),
+        Action::ColoursStep(2),
+        Action::ColoursStep(3),
+        Action::ColoursStep(4),
+        Action::ColoursStep(5),
+        Action::ColoursStep(6),
+        Action::ColoursStep(7),
+        Action::ColoursStep(8),
+        Action::ColoursPerceived,
         Action::HistogramChannel,
         Action::HistogramRed,
         Action::HistogramGreen,
@@ -1034,7 +1048,9 @@ impl Action {
             Action::FilterPalette
             | Action::FilterPaletteColour
             | Action::SetReference
-            | Action::PaletteView => Some(Tool::Palettes),
+            | Action::PaletteView
+            | Action::ColoursStep(_)
+            | Action::ColoursPerceived => Some(Tool::Palettes),
             Action::FolderCompute(k) | Action::Compute(k) => kind(k),
             _ => None,
         }
@@ -1110,11 +1126,12 @@ impl Action {
             | ReviewDevelopments | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource
             | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram | AdjustBeforeAfter
             | AdjustApply | AdjustCopy | AdjustPaste | HistogramScale | HistogramLarge
-            | PaletteView | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue
-            | HistogramAll | HistogramLuminance | HistogramPhoto | HistogramCamera
-            | HistogramAfter | ToggleClipping | TogglePeaking | PeakingColor | SharpnessLenient
-            | SharpnessStrict | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode
-            | Develop | DevelopWith(_) | DevelopFolder => Group::View,
+            | PaletteView | ColoursStep(_) | ColoursPerceived | HistogramChannel | HistogramRed
+            | HistogramGreen | HistogramBlue | HistogramAll | HistogramLuminance
+            | HistogramPhoto | HistogramCamera | HistogramAfter | ToggleClipping
+            | TogglePeaking | PeakingColor | SharpnessLenient | SharpnessStrict
+            | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode | Develop
+            | DevelopWith(_) | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
             | CropPreset | CropPresetPrev | VersionNext | VersionPrev | VersionRatioNext
             | VersionRatioPrev | VersionTilesNext | VersionTilesPrev | VersionRowsNext
@@ -1513,6 +1530,16 @@ impl Action {
             Action::HistogramScale => "core.view.histogram_scale",
             Action::HistogramLarge => "core.view.histogram_large",
             Action::PaletteView => "core.view.colours",
+            Action::ColoursStep(0) => "core.colours.step.0",
+            Action::ColoursStep(1) => "core.colours.step.1",
+            Action::ColoursStep(2) => "core.colours.step.2",
+            Action::ColoursStep(3) => "core.colours.step.3",
+            Action::ColoursStep(4) => "core.colours.step.4",
+            Action::ColoursStep(5) => "core.colours.step.5",
+            Action::ColoursStep(6) => "core.colours.step.6",
+            Action::ColoursStep(7) => "core.colours.step.7",
+            Action::ColoursStep(_) => "core.colours.step.8",
+            Action::ColoursPerceived => "core.colours.perceived",
             Action::HistogramChannel => "core.view.histogram_channel",
             Action::HistogramRed => "core.histogram.red",
             Action::HistogramGreen => "core.histogram.green",

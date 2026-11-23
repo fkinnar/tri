@@ -302,7 +302,7 @@ system one ("cold" measurements, experiments).
   `colour_min_share`, at most `max`) in the box, searched right away, to adjust; "Cancel"
   brings back the previous search. **Large colours** (next to it, action
   `core.view.colours`, `g c`, like `g i` for the large histogram since 2026-11-23
-  (`Shift+I` until then; inside it, `g` stays the green channel, Escape closes it); a click on the band or the wheel of the panel's palette
+  (`Shift+I` until then; inside it, `g` stays the green channel, Escape closes it); `<leader> c 0`…`8` picks the step (0 the image, 1 the average), `<leader> c p` the perceived colours, opening the box if needed (actions `core.colours.step.N`, `core.colours.perceived`); a click on the band or the wheel of the panel's palette
   opens it too, like the histogram; user's idea of 2026-11-23): a movable box like the large histogram,
   to see the **balance of masses** of the highlighted photo (the image its palette comes
   from); right of the image (feedback of 2026-11-23: below, the box was unbalanced), a

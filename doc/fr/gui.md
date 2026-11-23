@@ -317,7 +317,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   les miettes sous `colour_min_share`, au plus `max`) dans la boîte, cherchées tout de
   suite, à ajuster ; « Annuler » rend la recherche d'avant. **Couleurs en grand** (à côté,
   action `core.view.colours`, `g c`, comme `g i` pour le grand histogramme depuis le
-  23/11/2026 (`Maj+I` jusque-là ; dedans, `g` reste le canal vert, Échap le ferme) ; un clic sur la bande ou la roue de la palette du
+  23/11/2026 (`Maj+I` jusque-là ; dedans, `g` reste le canal vert, Échap le ferme) ; `<leader> c 0`…`8` y choisit le cran (0 l'image, 1 la moyenne), `<leader> c p` les couleurs perçues, la boîte s'ouvrant au besoin (actions `core.colours.step.N`, `core.colours.perceived`) ; un clic sur la bande ou la roue de la palette du
   panneau l'ouvre aussi, comme l'histogramme ; idée de l'utilisateur du 23/11/2026) : une boîte déplaçable
   comme le grand histogramme, pour voir les **rapports de masses** de la photo en
   surbrillance (l'image d'où vient sa palette) ; à droite de l'image (retour du

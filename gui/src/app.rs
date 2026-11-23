@@ -15097,6 +15097,22 @@ impl TriApp {
             Action::ToggleHistogram => self.histogram = !self.histogram,
             Action::HistogramScale => self.histogram_scale = self.histogram_scale.toggled(),
             Action::HistogramLarge => self.histogram_large = !self.histogram_large,
+            // Un cran, les couleurs perçues (`<leader> c 0`…`8`, `<leader> c p`) : la vue
+            // ouverte au besoin (retour du 23/11/2026).
+            Action::ColoursStep(_) | Action::ColoursPerceived => {
+                if self.palette_source.is_none() {
+                    self.notice = Some((t!("palette-choose"), false));
+                } else {
+                    self.palette_view = true;
+                    match action {
+                        Action::ColoursStep(n) => {
+                            self.palette_view_k =
+                                usize::from(n).min(self.gui.palette_view.max.clamp(1, 16));
+                        }
+                        _ => self.palette_view_perceived = !self.palette_view_perceived,
+                    }
+                }
+            }
             Action::PaletteView => {
                 if self.palette_view {
                     self.palette_view = false;
@@ -33554,6 +33570,29 @@ mod tests {
                 .iter()
                 .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
         });
+        // Un cran et les couleurs perçues au clavier (`<leader> c 3`, `<leader> c p`) :
+        // la vue s'ouvre d'elle-même.
+        for key in [Key::C, Key::Num3] {
+            if key == Key::C {
+                press(&mut h, Key::B, Modifiers::CTRL);
+            }
+            press(&mut h, key, Modifiers::NONE);
+        }
+        h.run_steps(2);
+        assert!(h.state().palette_view);
+        assert_eq!(h.state().palette_view_k, 3);
+        for key in [Key::B, Key::C, Key::P] {
+            let m = if key == Key::B {
+                Modifiers::CTRL
+            } else {
+                Modifiers::NONE
+            };
+            press(&mut h, key, m);
+        }
+        h.run_steps(2);
+        assert!(h.state().palette_view_perceived);
+        h.state_mut().palette_view_perceived = false;
+        h.state_mut().palette_view = false;
         // Au clavier : « g c » (go colours).
         press(&mut h, Key::G, Modifiers::NONE);
         press(&mut h, Key::C, Modifiers::NONE);
