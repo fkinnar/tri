@@ -285,7 +285,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   toujours en pleine luminosité, la valeur au champ V : dessinée à la valeur de la couleur
   réglée, elle changeait d'aspect d'une couleur à l'autre ; à droite, un **curseur
   vertical de la valeur**, de la pleine luminosité au noir : la couleur choisie, sinon la
-  dernière rangée, double-clic 100 %) : sous la
+  dernière rangée, double-clic 100 % ; une couleur nouvelle prise sur la roue est celle
+  qu'on voit, à 100 %, une couleur retouchée garde sa valeur) : sous la
   roue, la **roue des peintres** (RJB : rouge, jaune, bleu ; complémentaire du bleu :
   l'orange, `palette_view::RYB_TO_RGB`, par paliers) ou la **roue de l'écran** (RVB, TSV ;
   complémentaire du bleu : le jaune), `[gui.colour_search] wheel` ; et sept

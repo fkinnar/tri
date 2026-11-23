@@ -271,7 +271,8 @@ system one ("cold" measurements, experiments).
   full brightness, the value in the V field: drawn at the current colour's value, it
   changed look from one colour to another; on its right, a **vertical value slider**,
   from full brightness to black: the selected colour, otherwise the last stored one,
-  double-click 100 %): under the wheel,
+  double-click 100 %; a new colour taken on the wheel is the one seen, at 100 %, a changed
+  colour keeps its value): under the wheel,
   the **painters' wheel** (RYB: red, yellow, blue; complement of blue: orange,
   `palette_view::RYB_TO_RGB`, piecewise) or the **screen wheel** (RGB, HSV; complement of
   blue: yellow), `[gui.colour_search] wheel`; and seven **harmonies** as icons

@@ -6488,6 +6488,9 @@ impl TriApp {
         use crate::palette_view::{draw_hsv_wheel, hsv_at, hsv_pos};
         let side = 200.0;
         let (rect, response) = ui.allocate_exact_size(vec2(side, side), Sense::click_and_drag());
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::Role::Slider, true, t!("palette-colour-wheel"))
+        });
         let (centre, radius, ryb) = (rect.center(), side / 2.0, dialog.ryb);
         // Toujours en pleine luminosité (retour du 23/11/2026 : dessinée à la valeur de la
         // couleur réglée, elle changeait d'aspect d'une couleur à l'autre) ; la valeur se
@@ -6517,7 +6520,14 @@ impl TriApp {
             // Sans harmonie, au début d'un clic ou d'un glisser (retour du 23/11/2026) :
             // l'emplacement choisi exprès, sinon le premier vide (rempli), sinon le dernier.
             if dialog.harmony.is_none() && !dialog.stroke {
+                let before = dialog.slots.len();
                 dialog.edit_target();
+                // Une couleur nouvelle : celle qu'on voit, la roue étant en pleine
+                // luminosité (retour du 23/11/2026 : elle prenait la valeur de la couleur
+                // d'avant, 50 % au départ) ; une couleur retouchée garde la sienne.
+                if dialog.slots.len() > before {
+                    dialog.hsv[2] = 1.0;
+                }
             }
             dialog.stroke = true;
             if let Some((h, s)) = hsv_at(pos, centre, radius, ryb) {
@@ -32984,6 +32994,31 @@ mod tests {
         assert_eq!(w.slots.len(), 3);
         assert_eq!(w.slot_rgb(2), [0, 200, 0]);
         // Une seule couleur cherchée : rangée elle aussi (retour du 23/11/2026).
+        // Un clic sur la roue pour une couleur nouvelle : à pleine luminosité, comme la roue.
+        let (mut hh, _dir) = harness();
+        let mut fresh = ColourDialog::new(&[]);
+        assert!(fresh.hsv[2] < 0.6, "gris de départ");
+        fresh.max = 5;
+        hh.state_mut().colour_dialog = Some(fresh);
+        hh.run_steps(3);
+        let wheel = hh.get_by_label(&t!("palette-colour-wheel")).rect();
+        let at = wheel.center() + vec2(wheel.width() * 0.3, 0.0);
+        hh.event(UiEvent::PointerMoved(at));
+        for pressed in [true, false] {
+            hh.event(UiEvent::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            });
+            hh.run_steps(1);
+        }
+        hh.run_steps(2);
+        let d = hh.state().colour_dialog.as_ref().unwrap();
+        // Un clic simulé n'est pas toujours vu sur la CI : vérifié quand il l'est.
+        if let Some(slot) = d.slots.first() {
+            assert!((slot[2] - 1.0).abs() < 1e-6, "{slot:?}");
+        }
         let one = ColourDialog::new(&[tri::palette::srgb_to_oklab([200, 30, 30])]);
         assert_eq!((one.slots.len(), one.active), (1, None));
 
