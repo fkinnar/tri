@@ -5097,7 +5097,7 @@ impl TriApp {
                 let tip = self.action_tip(Action::SetReference);
                 let (rect, response) = ui
                     .add_enabled_ui(usable, |ui| {
-                        marks::icon_button(ui, target, &t!("palette-reference-set"), &tip)
+                        marks::icon_button(ui, target, &t!("palette-reference-take"), &tip)
                     })
                     .inner;
                 let color = ui.style().interact(&response).fg_stroke.color;
@@ -33044,7 +33044,7 @@ mod tests {
         assert!(h.state().reference.is_none());
         h.state_mut().selected = 1;
         h.run_steps(2);
-        h.get_by_label(&t!("palette-reference-set")).click();
+        h.get_by_label(&t!("palette-reference-take")).click();
         h.run_steps(3);
         // Un clic simulé n'est pas toujours vu sur la CI : l'action, sinon.
         if h.state().reference.is_none() {
