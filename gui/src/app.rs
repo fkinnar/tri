@@ -7123,6 +7123,56 @@ impl TriApp {
         (targets, main)
     }
 
+    /// À droite du sous-titre « Source » des couleurs (idée de l'utilisateur, 24/11/2026) :
+    /// l'œil des couleurs perçues ou les pixels des couleurs mesurées (un clic bascule,
+    /// comme `<leader> c p`), puis les jumelles de la boîte de recherche des couleurs.
+    fn palette_source_icons(&mut self, ui: &mut Ui, heading: Rect) {
+        let size = ui.spacing().interact_size.y * 0.8;
+        let gap = 6.0;
+        let right = ui.max_rect().right();
+        let at = |n: f32| {
+            Rect::from_min_size(
+                pos2(
+                    right - n * (size + gap) + gap,
+                    heading.center().y - size / 2.0,
+                ),
+                vec2(size, size),
+            )
+        };
+        let color = ui.visuals().widgets.inactive.fg_stroke.color;
+        let perceived = self.palette_view_perceived;
+        let tip = if perceived {
+            t!("palette-perceived-on-tip")
+        } else {
+            t!("palette-perceived-off-tip")
+        };
+        let toggle = ui
+            .scope_builder(egui::UiBuilder::new().max_rect(at(2.0)), |ui| {
+                let (rect, r) = marks::clickable_named(ui, size, &t!("palette-perceived"), &tip);
+                if perceived {
+                    marks::eye(ui.painter(), rect, color);
+                } else {
+                    marks::pixels(ui.painter(), rect, color);
+                }
+                r
+            })
+            .inner;
+        if toggle.clicked() {
+            self.palette_view_perceived = !perceived;
+        }
+        let search = ui
+            .scope_builder(egui::UiBuilder::new().max_rect(at(1.0)), |ui| {
+                let label = t!("palette-search-open");
+                let (rect, r) = marks::clickable_named(ui, size, &label, &label);
+                marks::binoculars(ui.painter(), rect, color);
+                r
+            })
+            .inner;
+        if search.clicked() {
+            self.open_colour_dialog();
+        }
+    }
+
     /// Section « Palette » du panneau de droite (#492) : la source, puis la palette de
     /// l'image sélectionnée (bande des couleurs, roue chromatique, couleurs et parts).
     fn palette_section(&mut self, ui: &mut Ui) {
@@ -7142,7 +7192,8 @@ impl TriApp {
         };
         // Sous-titre, « Comme la grille » (coché par défaut, retour du 21/11/2026), puis,
         // décoché, la liste pointable.
-        self.subheading(ui, t!("palette-source"));
+        let heading = self.subheading(ui, t!("palette-source"));
+        self.palette_source_icons(ui, heading.rect);
         let mut follow = self.palette_follow_grid;
         if self
             .side_checkbox(ui, &mut follow, t!("palette-follow-grid"))
@@ -7259,16 +7310,12 @@ impl TriApp {
         let several = rows.len() > 1;
         // De l'air sous la source, comme entre les autres réglages du panneau.
         ui.add_space(self.gui.dialogs.spacing);
-        if self.palette_view_k > 0 || self.palette_view_perceived {
-            let mut text = match self.palette_view_k {
-                0 => t!("palette-view-original"),
+        // Le cran choisi (les couleurs perçues : l'icône à côté de la source).
+        if self.palette_view_k > 0 {
+            ui.weak(match self.palette_view_k {
                 1 => t!("palette-view-mean"),
                 n => t!("palette-view-colours", n = n),
-            };
-            if self.palette_view_perceived {
-                text = format!("{text} · {}", t!("palette-view-perceived"));
-            }
-            ui.weak(text);
+            });
         }
         let mut open_view = false;
         let mut colour_box = None;
@@ -21715,10 +21762,13 @@ impl TriApp {
         self.palette_view_poll(ctx, Some(&wanted));
         // En attendant le nouveau cran, l'ancien de la même photo reste (sans repasser par
         // la palette du dossier : retour du 23/11/2026, un clignotement).
-        let shown = self
-            .palette_view_shown
-            .as_ref()
-            .filter(|s| s.key.0 == wanted.0 && s.key.1 == wanted.1 && !s.swatches.is_empty())?;
+        // Une autre photo : son cran à elle, le même nombre de couleurs, plutôt que la
+        // palette du dossier entre les deux (vidéo du 24/11/2026).
+        let shown = self.palette_view_shown.as_ref().filter(|s| {
+            !s.swatches.is_empty()
+                && ((s.key.0 == wanted.0 && s.key.1 == wanted.1)
+                    || (s.key.2 == wanted.2 && s.key.4 == wanted.4))
+        })?;
         Some((
             self.palette_view_k,
             Arc::new(Palette {
@@ -33689,6 +33739,21 @@ mod tests {
         h.run_steps(2);
         assert!(h.state().palette_view_perceived);
         h.state_mut().palette_view_perceived = false;
+        // À la souris : l'icône à côté de la source (pixels / œil) bascule, les jumelles
+        // ouvrent la boîte des couleurs (par l'accessibilité : la section est sous le bord
+        // de la fenêtre de test).
+        h.get_by_label(&t!("palette-perceived")).click_accesskit();
+        h.run_steps(2);
+        assert!(h.state().palette_view_perceived);
+        h.get_by_label(&t!("palette-perceived")).click_accesskit();
+        h.run_steps(2);
+        assert!(!h.state().palette_view_perceived);
+        h.get_by_label(&t!("palette-search-open")).click_accesskit();
+        h.run_steps(3);
+        assert!(h.state().colour_dialog.is_some());
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().colour_dialog.is_none());
         h.state_mut().palette_view_k = 0;
         // Au clavier : « g c » (go colours).
         press(&mut h, Key::G, Modifiers::NONE);
