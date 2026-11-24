@@ -691,6 +691,12 @@ perceived_saturation_falloff = 0.5
 # Reduced first: the computation covers every pixel. Kept with the measured palette, for
 # searches in perceived colours (the eye of the Colours section).
 perceived_side = 512
+# Large colours: weight of lightness against hue to split the image into colours.
+#
+# 1: OKLab as is. More: light and dark areas separate first, as in a value study (a light
+# shirt under violet light goes with the face rather than the background). The "masses"
+# mode has its slider.
+posterize_lightness = 1.0
 
 [index]
 # Record the palettes in the search index of all folders.
@@ -1421,6 +1427,22 @@ cache = 64
 #
 # Clearly distinct, to see the masses when the real colours are close.
 false_colours = ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6"]
+# "Masses" mode: minimum size of a patch, as a share of the image (slider start).
+#
+# A smaller patch takes the colour of the mass around it: a clear map of the photo, for
+# composition, without the details.
+masses_area = 0.005
+# "Masses" mode: end of the minimum size slider.
+masses_area_max = 0.05
+# "Masses" mode: edge smoothing, radius as a share of the long side (slider start).
+masses_smooth = 0.004
+# "Masses" mode: end of the smoothing slider.
+masses_smooth_max = 0.02
+# "Masses" mode: weight of lightness against hue (slider start; see [colours]
+# posterize_lightness).
+masses_lightness = 1.0
+# "Masses" mode: end of the lightness slider.
+masses_lightness_max = 4.0
 
 [gui.position]
 # "Photo 12 / 94" marker at each image change: how long it shows.

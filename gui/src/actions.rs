@@ -544,6 +544,9 @@ pub enum Action {
     /// L'image affichée au cran choisi (plein écran, recadrage d'une version), ou telle
     /// quelle (idée du 24/11/2026).
     ColoursOnImage,
+    /// Mode « masses » : taches reprises par leur masse, bords lissés (idée du
+    /// 24/11/2026).
+    ColoursMasses,
     /// Grand histogramme : canal suivant (tous, rouge, vert, bleu).
     HistogramChannel,
     /// Grand histogramme ouvert : canal rouge seul.
@@ -626,7 +629,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 300] = [
+    pub const ALL: [Action; 301] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -907,6 +910,7 @@ impl Action {
         Action::ColoursStep(8),
         Action::ColoursPerceived,
         Action::ColoursOnImage,
+        Action::ColoursMasses,
         Action::HistogramChannel,
         Action::HistogramRed,
         Action::HistogramGreen,
@@ -1055,7 +1059,8 @@ impl Action {
             | Action::PaletteView
             | Action::ColoursStep(_)
             | Action::ColoursPerceived
-            | Action::ColoursOnImage => Some(Tool::Palettes),
+            | Action::ColoursOnImage
+            | Action::ColoursMasses => Some(Tool::Palettes),
             Action::FolderCompute(k) | Action::Compute(k) => kind(k),
             _ => None,
         }
@@ -1131,7 +1136,7 @@ impl Action {
             | ReviewDevelopments | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource
             | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram | AdjustBeforeAfter
             | AdjustApply | AdjustCopy | AdjustPaste | HistogramScale | HistogramLarge
-            | PaletteView | ColoursStep(_) | ColoursPerceived | ColoursOnImage
+            | PaletteView | ColoursStep(_) | ColoursPerceived | ColoursOnImage | ColoursMasses
             | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
             | HistogramLuminance | HistogramPhoto | HistogramCamera | HistogramAfter
             | ToggleClipping | TogglePeaking | PeakingColor | SharpnessLenient
@@ -1546,6 +1551,7 @@ impl Action {
             Action::ColoursStep(_) => "core.colours.step.8",
             Action::ColoursPerceived => "core.colours.perceived",
             Action::ColoursOnImage => "core.colours.image",
+            Action::ColoursMasses => "core.colours.masses",
             Action::HistogramChannel => "core.view.histogram_channel",
             Action::HistogramRed => "core.histogram.red",
             Action::HistogramGreen => "core.histogram.green",

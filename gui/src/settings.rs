@@ -1167,6 +1167,21 @@ pub struct PaletteViewSettings {
     /// présente d'abord) : bien distinctes, pour voir les masses quand les vraies sont
     /// proches.
     pub false_colours: Vec<String>,
+    /// Mode « masses » : taille minimale d'une tache, en part de l'image (au départ du
+    /// curseur) ; plus petite, elle prend la couleur de la masse qui l'entoure.
+    pub masses_area: f32,
+    /// Mode « masses » : bout du curseur de la taille minimale.
+    pub masses_area_max: f32,
+    /// Mode « masses » : lissage des bords, rayon en part du grand côté (au départ du
+    /// curseur).
+    pub masses_smooth: f32,
+    /// Mode « masses » : bout du curseur du lissage.
+    pub masses_smooth_max: f32,
+    /// Mode « masses » : poids de la clarté face à la teinte, au départ du curseur
+    /// (`[colours] posterize_lightness` sans le mode).
+    pub masses_lightness: f32,
+    /// Mode « masses » : bout du curseur de la clarté.
+    pub masses_lightness_max: f32,
 }
 
 impl Default for PaletteViewSettings {
@@ -1180,6 +1195,12 @@ impl Default for PaletteViewSettings {
                 "#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0",
                 "#f032e6",
             ]),
+            masses_area: 0.005,
+            masses_area_max: 0.05,
+            masses_smooth: 0.004,
+            masses_smooth_max: 0.02,
+            masses_lightness: 1.0,
+            masses_lightness_max: 4.0,
         }
     }
 }

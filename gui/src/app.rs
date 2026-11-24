@@ -757,11 +757,15 @@ struct ColourKeys {
 }
 
 /// Ce que montre la palette en grand : l'image, la source, le cran, les fausses couleurs.
-type PaletteViewKey = (PathBuf, tri::palette::Source, usize, bool, bool);
+type PaletteViewKey = (PathBuf, tri::palette::Source, usize, bool, bool, Masses);
+
+/// Mode « masses » d'une image au cran choisi : aire minimale, lissage et poids de la
+/// clarté (`f32::to_bits`, pour servir de clé), ou `None` sans.
+type Masses = Option<(u32, u32, u32)>;
 
 /// Image du plein écran au cran choisi (`<leader> c v`) : la photo, le niveau d'aperçu
 /// d'où elle est tirée, le cran, fausses couleurs, couleurs perçues.
-type ColoursImageKey = (PathBuf, Level, usize, bool, bool);
+type ColoursImageKey = (PathBuf, Level, usize, bool, bool, Masses);
 
 /// L'image de la palette en grand, prête pour l'écran, et ses couleurs.
 type PaletteViewImage = (egui::ColorImage, Vec<tri::palette::Swatch>);
@@ -1674,6 +1678,15 @@ pub struct TriApp {
     palette_view_perceived: bool,
     /// L'image du plein écran (et du recadrage) au cran choisi (`<leader> c v`).
     colours_on_image: bool,
+    /// Mode « masses » des couleurs en grand et de l'image au cran choisi
+    /// (`<leader> c m`) : taches reprises par leur masse, bords lissés.
+    palette_view_masses: bool,
+    /// Son aire minimale (part de l'image) et son lissage (part du grand côté), réglés
+    /// dans la boîte (`[gui.colours_view] masses_*`).
+    palette_view_masses_area: f32,
+    palette_view_masses_smooth: f32,
+    /// Et son poids de la clarté face à la teinte (`[colours] posterize_lightness`).
+    palette_view_masses_lightness: f32,
     /// Ses images, calculées à la demande, la plus récente à la fin
     /// (`[gui.colours_view] cache`).
     colours_images: Vec<(ColoursImageKey, TextureHandle)>,
@@ -2253,9 +2266,9 @@ pub fn development_label(path: &Path) -> String {
     }
 }
 
-/// `image` au cran `k` (0 : telle quelle, ou perçue avec `perceived`), en fausses
-/// couleurs avec `false_on` (`falses`, dans l'ordre de présence), prête pour l'écran ; et
-/// ses couleurs. Fait en fond : couleurs en grand, image du plein écran (`<leader> c v`).
+/// `image` au cran `k` (0 : telle quelle, ou perçue avec `perceived`), nettoyée en
+/// masses avec `masses`, en fausses couleurs avec `false_on` (`falses`, dans l'ordre de
+/// présence), prête pour l'écran ; et ses couleurs. Fait en fond : couleurs en grand, image du plein écran (`<leader> c v`).
 fn posterized_image(
     image: tri::bitmap::Bitmap,
     k: usize,
@@ -2263,12 +2276,27 @@ fn posterized_image(
     perceived: bool,
     false_on: bool,
     falses: &[[u8; 3]],
+    masses: Masses,
 ) -> (egui::ColorImage, Vec<tri::palette::Swatch>) {
-    let (mut bitmap, swatches) = if k == 0 && !perceived {
+    // Mode « masses » : son poids de la clarté pour répartir l'image en couleurs.
+    let mut settings = *settings;
+    if let Some((_, _, lightness)) = masses {
+        settings.posterize_lightness = f32::from_bits(lightness);
+    }
+    let (mut bitmap, mut swatches) = if k == 0 && !perceived {
         (image, Vec::new())
     } else {
-        tri::palette::posterize_with(&image, k, settings, perceived)
+        tri::palette::posterize_with(&image, k, &settings, perceived)
     };
+    // Puis les taches reprises par leur masse, les bords lissés.
+    if let Some((area, smooth, _)) = masses {
+        (bitmap, swatches) = tri::palette::masses(
+            &bitmap,
+            &swatches,
+            f32::from_bits(area),
+            f32::from_bits(smooth),
+        );
+    }
     // Fausses couleurs : chaque couleur (dans l'ordre de présence) remplacée.
     if false_on && k > 0 && !falses.is_empty() {
         let map: HashMap<[u8; 3], [u8; 3]> = swatches
@@ -2887,6 +2915,10 @@ impl TriApp {
             palette_view_perceived: false,
             palette_perceived_applied: false,
             colours_on_image: false,
+            palette_view_masses: false,
+            palette_view_masses_area: gui.palette_view.masses_area,
+            palette_view_masses_smooth: gui.palette_view.masses_smooth,
+            palette_view_masses_lightness: gui.palette_view.masses_lightness,
             colours_images: Vec::new(),
             colours_image_rx: None,
             palette_view_shown: None,
@@ -15345,6 +15377,7 @@ impl TriApp {
             // (retour du 23/11/2026 : la roue du panneau doit changer).
             // L'image du plein écran au cran choisi (idée du 24/11/2026).
             Action::ColoursOnImage => self.colours_on_image = !self.colours_on_image,
+            Action::ColoursMasses => self.palette_view_masses = !self.palette_view_masses,
             Action::ColoursStep(_) | Action::ColoursPerceived => {
                 if self.palette_source.is_none() {
                     self.notice = Some((t!("palette-choose"), false));
@@ -21870,6 +21903,8 @@ impl TriApp {
                             .on_hover_text(t!("palette-view-false-tip"));
                         ui.checkbox(&mut perceived, t!("palette-view-perceived"))
                             .on_hover_text(t!("palette-view-perceived-tip"));
+                        // Le mode « masses » et ses deux curseurs (idée du 24/11/2026).
+                        self.palette_view_masses_controls(ui);
                         // La superposition de composition, à la souris aussi (au clavier,
                         // `o` agit derrière la boîte).
                         self.palette_view_overlay(ui);
@@ -21941,6 +21976,55 @@ impl TriApp {
         }
     }
 
+    /// Case « Masses » des couleurs en grand et, cochée, ses curseurs : taille minimale
+    /// d'une tache et lissage des bords (double-clic : valeur de départ).
+    fn palette_view_masses_controls(&mut self, ui: &mut Ui) {
+        let s = self.gui.palette_view.clone();
+        ui.checkbox(&mut self.palette_view_masses, t!("palette-view-masses"))
+            .on_hover_text(t!("palette-view-masses-tip"));
+        if !self.palette_view_masses {
+            return;
+        }
+        let slider = |ui: &mut Ui, value: &mut f32, max: f32, start: f32, name, tip| {
+            ui.horizontal(|ui| {
+                ui.add_space(ui.spacing().icon_width + ui.spacing().icon_spacing);
+                let r = ui
+                    .add(egui::Slider::new(value, 0.0..=max.max(1e-4)).show_value(false))
+                    .on_hover_text(tip);
+                if r.double_clicked() {
+                    *value = start;
+                }
+                ui.label(name);
+            });
+        };
+        slider(
+            ui,
+            &mut self.palette_view_masses_area,
+            s.masses_area_max,
+            s.masses_area,
+            t!("palette-view-masses-area"),
+            t!("palette-view-masses-area-tip"),
+        );
+        slider(
+            ui,
+            &mut self.palette_view_masses_smooth,
+            s.masses_smooth_max,
+            s.masses_smooth,
+            t!("palette-view-masses-smooth"),
+            t!("palette-view-masses-smooth-tip"),
+        );
+        // La clarté (retour du 24/11/2026 : la chemise claire, sous la lumière violette,
+        // allait avec le fond bleu et non avec le visage).
+        slider(
+            ui,
+            &mut self.palette_view_masses_lightness,
+            s.masses_lightness_max,
+            s.masses_lightness,
+            t!("palette-view-masses-lightness"),
+            t!("palette-view-masses-lightness-tip"),
+        );
+    }
+
     /// L'image `level` de `file` au cran choisi (`<leader> c v`), calculée en fond à la
     /// demande et gardée (`[gui.colours_view] cache`) ; en attendant, celle d'un autre cran
     /// de la même image, sinon `None` (l'image telle quelle reste).
@@ -21974,6 +22058,7 @@ impl TriApp {
             self.palette_view_k,
             self.palette_view_false,
             self.palette_view_perceived,
+            self.masses_key(),
         );
         if let Some((_, t)) = self.colours_images.iter().find(|(k, _)| *k == wanted) {
             return Some(t.clone());
@@ -21992,7 +22077,7 @@ impl TriApp {
                 .iter()
                 .filter_map(|h| parse_hex(h))
                 .collect();
-            let (_, _, k, false_on, perceived) = wanted.clone();
+            let (_, _, k, false_on, perceived, masses) = wanted.clone();
             let file = file.clone();
             let (tx, rx) = mpsc::channel();
             let repaint = ctx.clone();
@@ -22001,7 +22086,7 @@ impl TriApp {
                     .ok()
                     .and_then(|key| cache.get(&key));
                 let out = image.map(|image| {
-                    posterized_image(image, k, &settings, perceived, false_on, &falses).0
+                    posterized_image(image, k, &settings, perceived, false_on, &falses, masses).0
                 });
                 let _ = tx.send(out);
                 repaint.request_repaint();
@@ -22068,7 +22153,20 @@ impl TriApp {
             self.palette_view_k,
             self.palette_view_false,
             self.palette_view_perceived,
+            self.masses_key(),
         ))
+    }
+
+    /// Le mode « masses » en clé (aire minimale, lissage), `None` sans ; seulement à
+    /// partir de 2 couleurs (une seule couleur : rien à nettoyer).
+    fn masses_key(&self) -> Masses {
+        (self.palette_view_masses && self.palette_view_k >= 2).then(|| {
+            (
+                self.palette_view_masses_area.to_bits(),
+                self.palette_view_masses_smooth.to_bits(),
+                self.palette_view_masses_lightness.to_bits(),
+            )
+        })
     }
 
     /// La palette du cran choisi (`<leader> c N`, couleurs perçues) pour le panneau, quand
@@ -22158,7 +22256,7 @@ impl TriApp {
             .iter()
             .filter_map(|h| parse_hex(h))
             .collect();
-        let (path, source, k, false_on, perceived) = wanted.clone();
+        let (path, source, k, false_on, perceived, masses) = wanted.clone();
         let _ = path;
         let (tx, rx) = mpsc::channel();
         let repaint = ctx.clone();
@@ -22166,8 +22264,9 @@ impl TriApp {
             let image = preview::key(&file, preview::palette_input(source), &preview)
                 .ok()
                 .and_then(|key| cache.get(&key));
-            let out = image
-                .map(|image| posterized_image(image, k, &settings, perceived, false_on, &falses));
+            let out = image.map(|image| {
+                posterized_image(image, k, &settings, perceived, false_on, &falses, masses)
+            });
             let _ = tx.send(out);
             repaint.request_repaint();
         });
@@ -34075,6 +34174,61 @@ mod tests {
     }
 
     #[test]
+    fn the_masses_mode_cleans_the_large_colours() {
+        // Idée du 24/11/2026 : une carte claire de la photo, pour la composition ;
+        // `<leader> c m`, deux curseurs (taille minimale, lissage).
+        use tri::palette::SourceKind;
+        let specked = image::RgbImage::from_fn(64, 48, |x, y| {
+            let right = x >= 32;
+            let speck = x % 7 == 3 && y % 5 == 2 && !(28..36).contains(&x);
+            image::Rgb(if right != speck {
+                [210, 100, 40]
+            } else {
+                [20, 40, 90]
+            })
+        });
+        let (mut h, _dir) = harness_images(vec![("specked.jpg", specked)]);
+        h.run_steps(3);
+        choose_palette(&mut h, Some(SourceKind::Camera));
+        h.state_mut().palette_view = true;
+        h.state_mut().palette_view_k = 2;
+        for key in [Key::B, Key::C, Key::M] {
+            let m = if key == Key::B {
+                Modifiers::CTRL
+            } else {
+                Modifiers::NONE
+            };
+            press(&mut h, key, m);
+        }
+        h.run_steps(2);
+        assert!(h.state().palette_view_masses);
+        assert!(h.state().palette_view, "la boîte reste ouverte");
+        run_until(&mut h, |app| {
+            app.palette_view_shown
+                .as_ref()
+                .is_some_and(|s| s.key.5.is_some() && s.swatches.len() == 2)
+        });
+        // Deux masses, à peu près moitié-moitié (les taches reprises).
+        let shown = h.state().palette_view_shown.clone().unwrap();
+        assert!(
+            (shown.swatches[0].share - 0.5).abs() < 0.08,
+            "{:?}",
+            shown.swatches
+        );
+        for label in [
+            t!("palette-view-masses-area"),
+            t!("palette-view-masses-smooth"),
+            t!("palette-view-masses-lightness"),
+        ] {
+            assert!(h.query_by_label(&label).is_some(), "{label}");
+        }
+        // Un curseur bougé : une autre image (clé différente).
+        h.state_mut().palette_view_masses_area = 0.0;
+        h.run_steps(2);
+        assert_ne!(h.state().masses_key(), shown.key.5);
+    }
+
+    #[test]
     fn the_full_screen_image_shows_the_chosen_step() {
         // Idée du 24/11/2026 : en plein écran (et en recadrant une version), l'image
         // affichée au cran choisi, `<leader> c v`, calculée à la demande et gardée.
@@ -34102,7 +34256,7 @@ mod tests {
         run_until(&mut h, |app| {
             app.colours_images
                 .iter()
-                .any(|((_, _, k, _, _), _)| *k == 2)
+                .any(|((_, _, k, _, _, _), _)| *k == 2)
         });
         // Le bouton du bandeau, allumé : l'éteint.
         assert!(h.query_by_label(&Action::ColoursOnImage.label()).is_some());
