@@ -163,7 +163,11 @@ smaller than `min_area` (share of the image) takes the label most present around
 border, smallest first (`absorb_small`, two passes); then a majority filter of radius
 `smooth` (share of the long side: a running mean per colour, `box_blur`, the pixel takes the
 most present) smooths the edges, and patches that became too small again are taken. Shares
-are computed again.
+are computed again. Before that, the split into colours (`posterize_with`) counts
+lightness `posterize_lightness` times against hue (1: OKLab as is; more: a value study,
+light areas together), and its k-means start from two points, its own and centres as far
+apart as possible (`cluster_best`, `spread_centres`), the better one kept: with one only, a
+light shirt stayed stuck with the dark background (local minimum).
 
 **Cached perceived palette** (2026-11-24): next to the measured palette, the cache keeps
 its perceived-colour version (`Palette::perceived`, `extract_perceived`: the same

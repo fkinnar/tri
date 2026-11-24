@@ -226,6 +226,10 @@ pub struct PaletteSettings {
     /// Couleurs perçues : pente de la saturation selon le nombre de couleurs (le surplus
     /// au-delà de 1 varie comme (référence / couleurs) ^ pente ; 0 : la même partout).
     pub perceived_saturation_falloff: f32,
+    /// Vue par palette ([`posterize_with`]) : poids de la clarté face à la teinte pour
+    /// choisir les couleurs et la couleur de chaque pixel (1 : OKLab tel quel ; plus, les
+    /// zones claires et sombres se séparent d'abord, comme pour une étude de valeurs).
+    pub posterize_lightness: f32,
     /// Couleurs perçues : grand côté (pixels) de l'image d'où la palette perçue du cache
     /// est tirée (réduite d'abord : le calcul porte sur chaque pixel).
     pub perceived_side: u32,
@@ -262,6 +266,7 @@ impl Default for PaletteSettings {
             perceived_saturation_colours: 4,
             perceived_saturation_falloff: 0.5,
             perceived_side: 512,
+            posterize_lightness: 1.0,
         }
     }
 }
@@ -996,7 +1001,74 @@ fn cluster_weighted(
     k: usize,
     iterations: u32,
 ) -> (Vec<[f32; 3]>, Vec<usize>) {
-    let mut centres = initial_centres(samples, k);
+    cluster_from(samples, weights, initial_centres(samples, k), iterations)
+}
+
+/// [`cluster_weighted`] partie de deux départs, le sien et des centres aussi éloignés
+/// que possible les uns des autres ([`spread_centres`]) : le meilleur des deux (plus
+/// petite somme des carrés des écarts). Pour la vue par palette (retour du 24/11/2026 :
+/// les k-moyennes restaient prises dans un minimum local, une chemise claire avec le fond
+/// sombre plutôt qu'avec le visage) ; les palettes du cache gardent un seul départ.
+fn cluster_best(
+    samples: &[[f32; 3]],
+    weights: Option<&[f32]>,
+    k: usize,
+    iterations: u32,
+) -> Vec<[f32; 3]> {
+    let cost = |centres: &[[f32; 3]]| -> f64 {
+        samples
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                let c = centres[nearest(centres, *p)];
+                let w = f64::from(weights.map_or(1.0, |w| w[i]));
+                w * f64::from(oklab_distance(*p, c).powi(2))
+            })
+            .sum()
+    };
+    let a = cluster_weighted(samples, weights, k, iterations).0;
+    let b = cluster_from(samples, weights, spread_centres(samples, k), iterations).0;
+    if cost(&b) < cost(&a) { b } else { a }
+}
+
+/// Centres de départ éloignés : le point le plus sombre, puis à chaque fois le point le
+/// plus loin des centres déjà pris (sans hasard).
+fn spread_centres(samples: &[[f32; 3]], k: usize) -> Vec<[f32; 3]> {
+    let Some(&first) = samples.iter().min_by(|a, b| a[0].total_cmp(&b[0])) else {
+        return Vec::new();
+    };
+    let mut centres = vec![first];
+    let mut nearest_sq: Vec<f32> = samples
+        .iter()
+        .map(|p| oklab_distance(*p, first).powi(2))
+        .collect();
+    while centres.len() < k {
+        let Some((i, &d)) = nearest_sq
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.total_cmp(b.1))
+        else {
+            break;
+        };
+        if d <= 1e-12 {
+            break;
+        }
+        let c = samples[i];
+        centres.push(c);
+        for (n, p) in nearest_sq.iter_mut().zip(samples) {
+            *n = n.min(oklab_distance(*p, c).powi(2));
+        }
+    }
+    centres
+}
+
+/// Les k-moyennes à partir de `centres`.
+fn cluster_from(
+    samples: &[[f32; 3]],
+    weights: Option<&[f32]>,
+    mut centres: Vec<[f32; 3]>,
+    iterations: u32,
+) -> (Vec<[f32; 3]>, Vec<usize>) {
     let mut members = vec![0usize; samples.len()];
     for _ in 0..iterations.max(1) {
         for (m, p) in members.iter_mut().zip(samples) {
@@ -1066,14 +1138,19 @@ pub fn posterize_with(
     if samples.is_empty() || bitmap.data.len() < n * 3 {
         return (bitmap.clone(), Vec::new());
     }
-    let centres = if k <= 1 {
+    // Clarté comptée `posterize_lightness` fois face à la teinte (k-moyennes et choix de
+    // la couleur de chaque pixel ; les couleurs rendues restent les vraies).
+    let (up, down) = lightness_scale(settings);
+    let scaled = if k <= 1 {
         let m = samples.len() as f32;
-        vec![samples.iter().fold([0.0f32; 3], |a, p| {
+        vec![up.apply(samples.iter().fold([0.0f32; 3], |a, p| {
             [a[0] + p[0] / m, a[1] + p[1] / m, a[2] + p[2] / m]
-        })]
+        }))]
     } else {
-        cluster(&samples, k.min(16), settings.iterations).0
+        let samples: Vec<[f32; 3]> = samples.iter().map(|&p| up.apply(p)).collect();
+        cluster_best(&samples, None, k.min(16), settings.iterations)
     };
+    let centres: Vec<[f32; 3]> = scaled.iter().map(|&c| down.apply(c)).collect();
     let colours: Vec<[u8; 3]> = centres
         .iter()
         .map(|&oklab| Swatch { oklab, share: 0.0 }.working())
@@ -1086,7 +1163,7 @@ pub fn posterize_with(
     for &rgb in bitmap.data[..n * 3].as_chunks::<3>().0 {
         let i = *memo
             .entry(rgb)
-            .or_insert_with(|| nearest(&centres, working_to_oklab(rgb)) as u8);
+            .or_insert_with(|| nearest(&scaled, up.apply(working_to_oklab(rgb))) as u8);
         counts[i as usize] += 1;
         data.extend_from_slice(&colours[i as usize]);
     }
@@ -1150,7 +1227,8 @@ fn posterize_perceived(
             swatches,
         );
     }
-    let centres = if k <= 1 {
+    let (up, down) = lightness_scale(settings);
+    let scaled = if k <= 1 {
         let total: f32 = weights.iter().sum::<f32>().max(1e-6);
         let mut m = [0.0f32; 3];
         for (p, wt) in points.iter().zip(&weights) {
@@ -1158,14 +1236,16 @@ fn posterize_perceived(
                 m[c] += p[c] * wt / total;
             }
         }
-        vec![m]
+        vec![up.apply(m)]
     } else {
-        cluster_weighted(&points, Some(&weights), k.min(16), settings.iterations).0
+        let points: Vec<[f32; 3]> = points.iter().map(|&p| up.apply(p)).collect();
+        cluster_best(&points, Some(&weights), k.min(16), settings.iterations)
     };
+    let centres: Vec<[f32; 3]> = scaled.iter().map(|&c| down.apply(c)).collect();
     let mut counts = vec![0usize; centres.len()];
     let mut out = Vec::with_capacity(n);
     for p in &perceived {
-        let i = nearest(&centres, *p);
+        let i = nearest(&scaled, up.apply(*p));
         counts[i] += 1;
         out.push(centres[i]);
     }
@@ -1261,6 +1341,24 @@ fn grid(
         }
     }
     (points, weights)
+}
+
+/// Clarté (L d'OKLab) multipliée par `posterize_lightness` pour la vue par palette, et
+/// l'inverse : à plus de 1, les zones de même clarté se rejoignent malgré leur teinte (une
+/// chemise claire sous une lumière violette avec le visage, plutôt qu'avec le fond).
+fn lightness_scale(settings: &PaletteSettings) -> (Scale, Scale) {
+    let f = settings.posterize_lightness.max(0.05);
+    (Scale(f), Scale(1.0 / f))
+}
+
+/// Une clarté multipliée par un facteur ([`lightness_scale`]).
+#[derive(Clone, Copy)]
+struct Scale(f32);
+
+impl Scale {
+    fn apply(self, p: [f32; 3]) -> [f32; 3] {
+        [p[0] * self.0, p[1], p[2]]
+    }
 }
 
 /// Saturation rendue après l'adaptation pour `k` couleurs (`k = 0` : l'image entière,
@@ -2331,6 +2429,28 @@ mod tests {
                 "{from_big:?} {seen:?}"
             );
         }
+    }
+
+    #[test]
+    fn lightness_weight_groups_light_areas_together() {
+        // Retour du 24/11/2026 : sous une lumière violette, la chemise claire allait avec
+        // le fond bleu sombre plutôt qu'avec le visage ; la clarté comptée plus, elle
+        // rejoint le visage.
+        let mut s = PaletteSettings::default();
+        let (bg, shirt, face) = ([20u8, 30, 90], [110u8, 70, 190], [220u8, 130, 70]);
+        let image = bands(&[(bg, 60), (shirt, 25), (face, 15)]);
+        let same = |b: &Bitmap, x: u32, y: u32| b.pixel(x, 5) == b.pixel(y, 5);
+        let (by_hue, _) = posterize(&image, 2, &s);
+        assert!(same(&by_hue, 70, 10), "teinte : la chemise avec le fond");
+        s.posterize_lightness = 4.0;
+        let (by_light, swatches) = posterize(&image, 2, &s);
+        assert!(
+            same(&by_light, 70, 95),
+            "clarté : la chemise avec le visage"
+        );
+        assert!(!same(&by_light, 70, 10));
+        // Les couleurs rendues restent de vraies couleurs (clarté non déformée).
+        assert!(swatches.iter().all(|w| (0.0..=1.0).contains(&w.oklab[0])));
     }
 
     #[test]

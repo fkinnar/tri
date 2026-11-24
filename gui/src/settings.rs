@@ -1177,6 +1177,11 @@ pub struct PaletteViewSettings {
     pub masses_smooth: f32,
     /// Mode « masses » : bout du curseur du lissage.
     pub masses_smooth_max: f32,
+    /// Mode « masses » : poids de la clarté face à la teinte, au départ du curseur
+    /// (`[colours] posterize_lightness` sans le mode).
+    pub masses_lightness: f32,
+    /// Mode « masses » : bout du curseur de la clarté.
+    pub masses_lightness_max: f32,
 }
 
 impl Default for PaletteViewSettings {
@@ -1194,6 +1199,8 @@ impl Default for PaletteViewSettings {
             masses_area_max: 0.05,
             masses_smooth: 0.004,
             masses_smooth_max: 0.02,
+            masses_lightness: 1.0,
+            masses_lightness_max: 4.0,
         }
     }
 }

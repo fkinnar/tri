@@ -170,6 +170,11 @@ sur son pourtour, des plus petites aux plus grandes (`absorb_small`, deux passes
 filtre majoritaire de rayon `smooth` (part du grand côté : une moyenne glissante par
 couleur, `box_blur`, le pixel prend la plus présente) lisse les bords, et les taches
 redevenues trop petites sont reprises. Les parts sont recalculées.
+Avant cela, la répartition en couleurs (`posterize_with`) compte la clarté
+`posterize_lightness` fois face à la teinte (1 : OKLab tel quel ; plus : une étude de
+valeurs, les zones claires ensemble), et ses k-moyennes partent de deux départs, le sien et
+des centres aussi éloignés que possible (`cluster_best`, `spread_centres`), le meilleur
+gardé : avec un seul, une chemise claire restait prise avec le fond sombre (minimum local).
 
 **Palette perçue en cache** (24/11/2026) : à côté de la palette mesurée, le cache range sa
 version en couleurs perçues (`Palette::perceived`, `extract_perceived` : même calcul au

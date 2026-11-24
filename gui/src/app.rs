@@ -759,9 +759,9 @@ struct ColourKeys {
 /// Ce que montre la palette en grand : l'image, la source, le cran, les fausses couleurs.
 type PaletteViewKey = (PathBuf, tri::palette::Source, usize, bool, bool, Masses);
 
-/// Mode « masses » d'une image au cran choisi : aire minimale et lissage (`f32::to_bits`,
-/// pour servir de clé), ou `None` sans.
-type Masses = Option<(u32, u32)>;
+/// Mode « masses » d'une image au cran choisi : aire minimale, lissage et poids de la
+/// clarté (`f32::to_bits`, pour servir de clé), ou `None` sans.
+type Masses = Option<(u32, u32, u32)>;
 
 /// Image du plein écran au cran choisi (`<leader> c v`) : la photo, le niveau d'aperçu
 /// d'où elle est tirée, le cran, fausses couleurs, couleurs perçues.
@@ -1685,6 +1685,8 @@ pub struct TriApp {
     /// dans la boîte (`[gui.colours_view] masses_*`).
     palette_view_masses_area: f32,
     palette_view_masses_smooth: f32,
+    /// Et son poids de la clarté face à la teinte (`[colours] posterize_lightness`).
+    palette_view_masses_lightness: f32,
     /// Ses images, calculées à la demande, la plus récente à la fin
     /// (`[gui.colours_view] cache`).
     colours_images: Vec<(ColoursImageKey, TextureHandle)>,
@@ -2276,13 +2278,18 @@ fn posterized_image(
     falses: &[[u8; 3]],
     masses: Masses,
 ) -> (egui::ColorImage, Vec<tri::palette::Swatch>) {
+    // Mode « masses » : son poids de la clarté pour répartir l'image en couleurs.
+    let mut settings = *settings;
+    if let Some((_, _, lightness)) = masses {
+        settings.posterize_lightness = f32::from_bits(lightness);
+    }
     let (mut bitmap, mut swatches) = if k == 0 && !perceived {
         (image, Vec::new())
     } else {
-        tri::palette::posterize_with(&image, k, settings, perceived)
+        tri::palette::posterize_with(&image, k, &settings, perceived)
     };
-    // Mode « masses » : les taches reprises par leur masse, les bords lissés.
-    if let Some((area, smooth)) = masses {
+    // Puis les taches reprises par leur masse, les bords lissés.
+    if let Some((area, smooth, _)) = masses {
         (bitmap, swatches) = tri::palette::masses(
             &bitmap,
             &swatches,
@@ -2911,6 +2918,7 @@ impl TriApp {
             palette_view_masses: false,
             palette_view_masses_area: gui.palette_view.masses_area,
             palette_view_masses_smooth: gui.palette_view.masses_smooth,
+            palette_view_masses_lightness: gui.palette_view.masses_lightness,
             colours_images: Vec::new(),
             colours_image_rx: None,
             palette_view_shown: None,
@@ -22005,6 +22013,16 @@ impl TriApp {
             t!("palette-view-masses-smooth"),
             t!("palette-view-masses-smooth-tip"),
         );
+        // La clarté (retour du 24/11/2026 : la chemise claire, sous la lumière violette,
+        // allait avec le fond bleu et non avec le visage).
+        slider(
+            ui,
+            &mut self.palette_view_masses_lightness,
+            s.masses_lightness_max,
+            s.masses_lightness,
+            t!("palette-view-masses-lightness"),
+            t!("palette-view-masses-lightness-tip"),
+        );
     }
 
     /// L'image `level` de `file` au cran choisi (`<leader> c v`), calculée en fond à la
@@ -22146,6 +22164,7 @@ impl TriApp {
             (
                 self.palette_view_masses_area.to_bits(),
                 self.palette_view_masses_smooth.to_bits(),
+                self.palette_view_masses_lightness.to_bits(),
             )
         })
     }
@@ -34199,6 +34218,7 @@ mod tests {
         for label in [
             t!("palette-view-masses-area"),
             t!("palette-view-masses-smooth"),
+            t!("palette-view-masses-lightness"),
         ] {
             assert!(h.query_by_label(&label).is_some(), "{label}");
         }

@@ -694,6 +694,12 @@ perceived_saturation_falloff = 0.5
 # Réduite d'abord : le calcul porte sur chaque pixel. Rangée avec la palette mesurée, pour
 # les recherches en couleurs perçues (l'œil de la section Couleurs).
 perceived_side = 512
+# Couleurs en grand : poids de la clarté face à la teinte pour répartir l'image en couleurs.
+#
+# 1 : OKLab tel quel. Plus : les zones claires et sombres se séparent d'abord, comme pour
+# une étude de valeurs (une chemise claire sous une lumière violette va avec le visage
+# plutôt qu'avec le fond). Le mode « masses » a son curseur.
+posterize_lightness = 1.0
 
 [index]
 # Noter les palettes dans l'index de recherche de tous les dossiers.
@@ -1446,6 +1452,11 @@ masses_area_max = 0.05
 masses_smooth = 0.004
 # Mode « masses » : bout du curseur du lissage.
 masses_smooth_max = 0.02
+# Mode « masses » : poids de la clarté face à la teinte (départ du curseur ; voir
+# [colours] posterize_lightness).
+masses_lightness = 1.0
+# Mode « masses » : bout du curseur de la clarté.
+masses_lightness_max = 4.0
 
 [gui.position]
 # Repère « Photo 12 / 94 » à chaque changement d'image : durée d'affichage.
