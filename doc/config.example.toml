@@ -1435,6 +1435,17 @@ cache = 64
 #
 # Bien distinctes, pour voir les masses quand les vraies couleurs sont proches.
 false_colours = ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6"]
+# Mode « masses » : taille minimale d'une tache, en part de l'image (départ du curseur).
+#
+# Une tache plus petite prend la couleur de la masse qui l'entoure : une carte claire de la
+# photo, pour la composition, sans les détails.
+masses_area = 0.005
+# Mode « masses » : bout du curseur de la taille minimale.
+masses_area_max = 0.05
+# Mode « masses » : lissage des bords, rayon en part du grand côté (départ du curseur).
+masses_smooth = 0.004
+# Mode « masses » : bout du curseur du lissage.
+masses_smooth_max = 0.02
 
 [gui.position]
 # Repère « Photo 12 / 94 » à chaque changement d'image : durée d'affichage.

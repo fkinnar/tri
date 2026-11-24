@@ -1421,6 +1421,17 @@ cache = 64
 #
 # Clearly distinct, to see the masses when the real colours are close.
 false_colours = ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6"]
+# "Masses" mode: minimum size of a patch, as a share of the image (slider start).
+#
+# A smaller patch takes the colour of the mass around it: a clear map of the photo, for
+# composition, without the details.
+masses_area = 0.005
+# "Masses" mode: end of the minimum size slider.
+masses_area_max = 0.05
+# "Masses" mode: edge smoothing, radius as a share of the long side (slider start).
+masses_smooth = 0.004
+# "Masses" mode: end of the smoothing slider.
+masses_smooth_max = 0.02
 
 [gui.position]
 # "Photo 12 / 94" marker at each image change: how long it shows.

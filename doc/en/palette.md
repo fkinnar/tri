@@ -157,6 +157,14 @@ k-means (weighted, `cluster_weighted`), a point weighs `1 + perceived_salience Ã
 surround / 0.1`. On the user's photo under violet light, the face comes out orange from 2
 colours (pinkish beige in raw values).
 
+**Masses** (`masses`, the user's idea, 2026-11-24: a clear map of the photo, for
+composition, without the details): on the posterized image, each (4-connected) patch
+smaller than `min_area` (share of the image) takes the label most present around its
+border, smallest first (`absorb_small`, two passes); then a majority filter of radius
+`smooth` (share of the long side: a running mean per colour, `box_blur`, the pixel takes the
+most present) smooths the edges, and patches that became too small again are taken. Shares
+are computed again.
+
 **Cached perceived palette** (2026-11-24): next to the measured palette, the cache keeps
 its perceived-colour version (`Palette::perceived`, `extract_perceived`: the same
 computation at step `colors`, then merges and specks as in `extract`, with its coverage).

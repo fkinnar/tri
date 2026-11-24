@@ -163,6 +163,14 @@ k-moyennes (pondérées, `cluster_weighted`), un point pèse `1 + perceived_sali
 à son entourage / 0,1`. Sur la photo de l'utilisateur sous lumière violette, le visage
 sort orange dès 2 couleurs (beige rosé en valeurs brutes).
 
+**Masses** (`masses`, idée de l'utilisateur, 24/11/2026 : une carte claire de la photo,
+pour la composition, sans les détails) : sur l'image postérisée, chaque tache
+(4-connexe) plus petite que `min_area` (part de l'image) prend l'étiquette la plus présente
+sur son pourtour, des plus petites aux plus grandes (`absorb_small`, deux passes) ; puis un
+filtre majoritaire de rayon `smooth` (part du grand côté : une moyenne glissante par
+couleur, `box_blur`, le pixel prend la plus présente) lisse les bords, et les taches
+redevenues trop petites sont reprises. Les parts sont recalculées.
+
 **Palette perçue en cache** (24/11/2026) : à côté de la palette mesurée, le cache range sa
 version en couleurs perçues (`Palette::perceived`, `extract_perceived` : même calcul au
 cran `colors`, puis fusions et miettes comme `extract`, avec sa couverture). L'image est

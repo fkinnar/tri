@@ -263,6 +263,7 @@ pub fn navigate(
         | Action::ColoursStep(_)
         | Action::ColoursPerceived
         | Action::ColoursOnImage
+        | Action::ColoursMasses
         | Action::HistogramChannel
         | Action::HistogramRed
         | Action::HistogramGreen

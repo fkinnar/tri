@@ -1328,6 +1328,186 @@ fn perceive(
     (perceived, weight)
 }
 
+/// Mode « masses » (idée de l'utilisateur, 24/11/2026 : une carte claire de la photo,
+/// pour la composition, sans les détails) : `bitmap`, une image postérisée dont chaque
+/// pixel a l'une des couleurs `swatches` ([`Swatch::working`]), nettoyée. Chaque tache
+/// plus petite que `min_area` (part de l'image) prend la couleur de la masse qui
+/// l'entoure, puis les bords sont lissés par un filtre majoritaire de rayon `smooth` (part
+/// du grand côté), puis les taches redevenues trop petites sont reprises. Renvoie l'image
+/// et ses couleurs, parts recalculées, les plus présentes d'abord. Un pixel d'une autre
+/// couleur est laissé tel quel.
+pub fn masses(
+    bitmap: &Bitmap,
+    swatches: &[Swatch],
+    min_area: f32,
+    smooth: f32,
+) -> (Bitmap, Vec<Swatch>) {
+    let (w, h) = (bitmap.width as usize, bitmap.height as usize);
+    let n = w * h;
+    if n == 0 || swatches.is_empty() || bitmap.data.len() < n * 3 {
+        return (bitmap.clone(), swatches.to_vec());
+    }
+    let colours: Vec<[u8; 3]> = swatches.iter().map(Swatch::working).collect();
+    let index: std::collections::HashMap<[u8; 3], u8> = colours
+        .iter()
+        .enumerate()
+        .map(|(i, &c)| (c, i as u8))
+        .collect();
+    // L'étiquette de chaque pixel ; `u8::MAX` : une couleur inconnue, intouchée.
+    let mut labels: Vec<u8> = bitmap.data[..n * 3]
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|rgb| index.get(rgb).copied().unwrap_or(u8::MAX))
+        .collect();
+    let min_pixels = (min_area.clamp(0.0, 1.0) * n as f32) as usize;
+    absorb_small(&mut labels, w, h, min_pixels, colours.len());
+    let radius = (smooth.clamp(0.0, 1.0) * w.max(h) as f32).round() as usize;
+    if radius > 0 {
+        majority(&mut labels, w, h, radius, colours.len());
+        absorb_small(&mut labels, w, h, min_pixels, colours.len());
+    }
+    let mut counts = vec![0usize; colours.len()];
+    let mut data = Vec::with_capacity(n * 3);
+    for (i, &l) in labels.iter().enumerate() {
+        match colours.get(l as usize) {
+            Some(c) => {
+                counts[l as usize] += 1;
+                data.extend_from_slice(c);
+            }
+            None => data.extend_from_slice(&bitmap.data[i * 3..i * 3 + 3]),
+        }
+    }
+    let mut out: Vec<Swatch> = swatches
+        .iter()
+        .zip(counts)
+        .filter(|(_, c)| *c > 0)
+        .map(|(s, c)| Swatch {
+            oklab: s.oklab,
+            share: c as f32 / n as f32,
+        })
+        .collect();
+    out.sort_by(|a, b| b.share.total_cmp(&a.share));
+    (
+        Bitmap {
+            width: bitmap.width,
+            height: bitmap.height,
+            data,
+        },
+        out,
+    )
+}
+
+/// Taches (4-connexes, même étiquette) de moins de `min_pixels` pixels : reprises par
+/// l'étiquette la plus présente sur leur pourtour, des plus petites aux plus grandes.
+fn absorb_small(labels: &mut [u8], w: usize, h: usize, min_pixels: usize, k: usize) {
+    if min_pixels <= 1 {
+        return;
+    }
+    // Deux passes : une tache reprise peut en laisser une autre, voisine, isolée.
+    for _ in 0..2 {
+        let mut component = vec![u32::MAX; w * h];
+        let mut spots: Vec<Vec<usize>> = Vec::new();
+        let mut stack = Vec::new();
+        for start in 0..w * h {
+            if component[start] != u32::MAX || labels[start] as usize >= k {
+                continue;
+            }
+            let id = spots.len() as u32;
+            let label = labels[start];
+            let mut pixels = Vec::new();
+            component[start] = id;
+            stack.push(start);
+            while let Some(i) = stack.pop() {
+                pixels.push(i);
+                let (x, y) = (i % w, i / w);
+                let mut visit = |j: usize| {
+                    if component[j] == u32::MAX && labels[j] == label {
+                        component[j] = id;
+                        stack.push(j);
+                    }
+                };
+                if x > 0 {
+                    visit(i - 1);
+                }
+                if x + 1 < w {
+                    visit(i + 1);
+                }
+                if y > 0 {
+                    visit(i - w);
+                }
+                if y + 1 < h {
+                    visit(i + w);
+                }
+            }
+            spots.push(pixels);
+        }
+        let mut small: Vec<usize> = (0..spots.len())
+            .filter(|&s| spots[s].len() < min_pixels)
+            .collect();
+        if small.is_empty() {
+            return;
+        }
+        small.sort_by_key(|&s| spots[s].len());
+        for s in small {
+            let own = labels[spots[s][0]];
+            let mut around = vec![0usize; k];
+            for &i in &spots[s] {
+                let (x, y) = (i % w, i / w);
+                let mut count = |j: usize| {
+                    let l = labels[j];
+                    if l != own && (l as usize) < k {
+                        around[l as usize] += 1;
+                    }
+                };
+                if x > 0 {
+                    count(i - 1);
+                }
+                if x + 1 < w {
+                    count(i + 1);
+                }
+                if y > 0 {
+                    count(i - w);
+                }
+                if y + 1 < h {
+                    count(i + w);
+                }
+            }
+            if let Some((best, _)) = around
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| **c > 0)
+                .max_by_key(|(_, c)| **c)
+            {
+                for &i in &spots[s] {
+                    labels[i] = best as u8;
+                }
+            }
+        }
+    }
+}
+
+/// Filtre majoritaire : chaque pixel prend l'étiquette la plus présente dans le carré de
+/// côté `2 × radius + 1` autour de lui (une moyenne glissante par étiquette).
+fn majority(labels: &mut [u8], w: usize, h: usize, radius: usize, k: usize) {
+    let mut best = vec![0.0f32; w * h];
+    let mut chosen = labels.to_vec();
+    for l in 0..k {
+        let indicator: Vec<f32> = labels
+            .iter()
+            .map(|&v| if v as usize == l { 1.0 } else { 0.0 })
+            .collect();
+        let share = box_blur(&indicator, w, h, radius);
+        for i in 0..w * h {
+            if share[i] > best[i] && (labels[i] as usize) < k {
+                best[i] = share[i];
+                chosen[i] = l as u8;
+            }
+        }
+    }
+    labels.copy_from_slice(&chosen);
+}
+
 /// Moyenne de `values` (une grille `w × h`) sur un carré de côté `2 × radius + 1`, bords
 /// compris (en deux passes, lignes puis colonnes, par sommes glissantes).
 fn box_blur(values: &[f32], w: usize, h: usize, radius: usize) -> Vec<f32> {
@@ -2151,6 +2331,49 @@ mod tests {
                 "{from_big:?} {seen:?}"
             );
         }
+    }
+
+    #[test]
+    fn masses_absorb_specks_and_smooth_edges() {
+        // Idée du 24/11/2026 : deux masses (le corps orange sur le fond bleu), sans les
+        // petites taches bleues dans l'orange ni orange dans le bleu.
+        let s = PaletteSettings::default();
+        let (blue, orange) = ([20u8, 40, 90], [210u8, 100, 40]);
+        let (w, h) = (100u32, 80u32);
+        let mut data = Vec::new();
+        for y in 0..h {
+            for x in 0..w {
+                // L'orange à droite, piqué de taches bleues ; le bleu piqué d'orange.
+                let right = x >= 50;
+                let speck = (x % 9 == 4) && (y % 7 == 3) && !(45..55).contains(&x);
+                let c = if right != speck { orange } else { blue };
+                data.extend_from_slice(&c);
+            }
+        }
+        let image = Bitmap {
+            width: w,
+            height: h,
+            data,
+        };
+        let (poster, swatches) = posterize(&image, 2, &s);
+        let specks = |b: &Bitmap| {
+            let left = b.pixel(4, 3).unwrap();
+            (0..h)
+                .flat_map(|y| (0..w).map(move |x| (x, y)))
+                .filter(|&(x, y)| (x < 50) != (b.pixel(x, y).unwrap() == left))
+                .count()
+        };
+        assert!(specks(&poster) > 50, "piquée avant");
+        let (clean, shares) = masses(&poster, &swatches, 0.01, 0.0);
+        assert_eq!(specks(&clean), 0, "deux masses nettes");
+        assert_eq!(shares.len(), 2);
+        assert!((shares[0].share - 0.5).abs() < 0.01, "{shares:?}");
+        // Sans aire minimale, le lissage seul retire aussi les taches isolées.
+        let (smoothed, _) = masses(&poster, &swatches, 0.0, 0.02);
+        assert_eq!(specks(&smoothed), 0);
+        // Rien à faire : telle quelle.
+        let (same, _) = masses(&poster, &swatches, 0.0, 0.0);
+        assert_eq!(same.data, poster.data);
     }
 
     #[test]
