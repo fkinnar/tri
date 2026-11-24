@@ -21575,6 +21575,7 @@ impl TriApp {
         let mut false_colours = self.palette_view_false;
         let mut perceived = self.palette_view_perceived;
         let mut picked = None;
+        let mut search = false;
         // En attendant le nouveau cran, l'ancien de la même photo reste (pas d'image vide).
         let shown = self.palette_view_shown.as_ref().filter(|s| {
             wanted
@@ -21648,6 +21649,23 @@ impl TriApp {
                                 k = 0;
                             }
                             ui.label(label);
+                            // Les jumelles, comme dans le panneau (demandé le 25/11/2026) :
+                            // les couleurs du cran affiché dans la boîte des couleurs.
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let size = ui.spacing().interact_size.y * 0.8;
+                                    let color = ui.visuals().widgets.inactive.fg_stroke.color;
+                                    let (rect, r) = marks::clickable_named(
+                                        ui,
+                                        size,
+                                        &t!("palette-search-open"),
+                                        &t!("palette-search-open"),
+                                    );
+                                    marks::binoculars(ui.painter(), rect, color);
+                                    search = r.clicked();
+                                },
+                            );
                         });
                         ui.checkbox(&mut false_colours, t!("palette-view-false"))
                             .on_hover_text(t!("palette-view-false-tip"));
@@ -21699,6 +21717,16 @@ impl TriApp {
         self.palette_view_k = k;
         self.palette_view_false = false_colours;
         self.palette_view_perceived = perceived;
+        // Les jumelles : les couleurs principales du cran affiché, cherchées ; « Retour »
+        // rend les couleurs en grand, comme pour une couleur cliquée.
+        if search && let Some(p) = palette.filter(|p| !p.swatches.is_empty()) {
+            self.palette_view = false;
+            self.search_palette_colours(&p);
+            if let Some(live) = &mut self.colour_live {
+                live.from_palette_view = true;
+            }
+            return;
+        }
         // Une couleur cliquée : la boîte des couleurs, sur elle, à ajuster (retour du
         // 23/11/2026 : chercher tout de suite vidait la grille derrière, la palette en grand
         // restait ouverte).
@@ -33818,6 +33846,30 @@ mod tests {
         h.get_by_label(&t!("cancel")).click();
         h.run_steps(3);
         assert!(h.state().palette_colour.is_none());
+        assert!(h.state().palette_view, "rouverte");
+        // Les jumelles de la palette en grand (celles de la boîte, dessinées après celles
+        // du panneau) : les deux couleurs du cran dans la boîte, la palette en grand fermée,
+        // rouverte par « Annuler ».
+        run_until(&mut h, |app| {
+            app.palette_view_shown
+                .as_ref()
+                .is_some_and(|s| s.key.2 == 2)
+        });
+        h.run_steps(2);
+        h.get_all_by_label(&t!("palette-search-open"))
+            .last()
+            .unwrap()
+            .click();
+        h.run_steps(3);
+        assert!(!h.state().palette_view, "fermée");
+        let d = h
+            .state()
+            .colour_dialog
+            .as_ref()
+            .expect("la boîte des couleurs");
+        assert_eq!(d.slots.len(), 2);
+        h.get_by_label(&t!("cancel")).click();
+        h.run_steps(3);
         assert!(h.state().palette_view, "rouverte");
     }
 
