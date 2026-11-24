@@ -21723,6 +21723,11 @@ impl TriApp {
                                     Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
                                     Color32::WHITE,
                                 );
+                                // La superposition de composition (`o`, `Maj+O`, qui agissent
+                                // derrière la boîte), sur les masses de couleur (idée du
+                                // 24/11/2026).
+                                let ctx = ui.ctx().clone();
+                                self.draw_overlay(&ctx, ui.painter(), Some(shown));
                             }
                             None => {
                                 ui.painter().text(
@@ -21778,6 +21783,9 @@ impl TriApp {
                             .on_hover_text(t!("palette-view-false-tip"));
                         ui.checkbox(&mut perceived, t!("palette-view-perceived"))
                             .on_hover_text(t!("palette-view-perceived-tip"));
+                        // La superposition de composition, à la souris aussi (au clavier,
+                        // `o` agit derrière la boîte).
+                        self.palette_view_overlay(ui);
                         ui.add_space(12.0);
                         ui.separator();
                         ui.add_space(8.0);
@@ -21844,6 +21852,31 @@ impl TriApp {
                 live.from_palette_view = true;
             }
         }
+    }
+
+    /// Liste « Superposition » des couleurs en grand : aucune, ou l'une des superpositions
+    /// (`o` les fait défiler aussi).
+    fn palette_view_overlay(&mut self, ui: &mut Ui) {
+        if self.overlays.is_empty() {
+            self.reload_overlays();
+        }
+        let name = |app: &TriApp, i: usize| {
+            i.checked_sub(1)
+                .and_then(|i| app.overlays.get(i))
+                .map_or_else(|| t!("palette-view-overlay-none"), |o| o.name())
+        };
+        let mut chosen = self.overlay;
+        ui.horizontal(|ui| {
+            ui.label(t!("palette-view-overlay"));
+            egui::ComboBox::from_id_salt("palette_view_overlay")
+                .selected_text(name(self, chosen))
+                .show_ui(ui, |ui| {
+                    for i in 0..=self.overlays.len() {
+                        ui.selectable_value(&mut chosen, i, name(self, i));
+                    }
+                });
+        });
+        self.overlay = chosen;
     }
 
     /// Fausses couleurs de la palette en grand, en couleurs d'écran.
@@ -33996,6 +34029,19 @@ mod tests {
             .map(|s| s.share)
             .collect();
         assert!(shares[0] > 0.55 && shares[0] < 0.7, "{shares:?}");
+        // La superposition de composition (`o`), sur l'image de la boîte, qui reste
+        // ouverte ; sa liste dans la boîte, pour la souris.
+        assert_eq!(h.state().overlay, 0);
+        press(&mut h, Key::O, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(h.state().overlay, 1);
+        assert!(h.state().palette_view);
+        assert!(
+            h.query_all_by_label_contains(&t!("palette-view-overlay"))
+                .next()
+                .is_some()
+        );
+        h.state_mut().overlay = 0;
         // La moyenne : une seule couleur.
         h.state_mut().palette_view_k = 1;
         run_until(&mut h, |app| {

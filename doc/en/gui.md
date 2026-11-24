@@ -300,7 +300,7 @@ system one ("cold" measurements, experiments).
   found by the live preview. In hierarchical mode, the tolerance **widens rank by rank**
   (`[colours] colour_widen`, 0.25: the second colour ×1.25, the third ×1.5…): the first
   colour more precise than the last. **Search for these colours** (the
-  binoculars right of the source, Colours section, since 2026-11-24, and right of the step in the large colours since 2026-11-25, which close, reopened by "Cancel"; a button under the
+  binoculars right of the source, Colours section, since 2026-11-24, and right of the step in the large colours since 2026-11-25, which close, reopened by "Cancel"; the composition **overlay** over the large colours' image (idea of 2026-11-24: see the masses against the thirds, the spiral…), `o` and `Shift+O` acting behind the box, or its "Overlay" list under the checkboxes (`palette_view_overlay`); a button under the
   palette before): those of the step shown, its main colours (the most present, without specks under
   `colour_min_share`, at most `max`) in the box, searched right away, to adjust; "Cancel"
   brings back the previous search. **Large colours** (next to it, action
