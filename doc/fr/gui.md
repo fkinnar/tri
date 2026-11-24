@@ -313,7 +313,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   trouvées par l'aperçu en direct. En hiérarchique, la tolérance **s'élargit de rang en
   rang** (`[colours] colour_widen`, 0,25 : la deuxième couleur ×1,25, la troisième ×1,5…) :
   la première couleur plus précise que la dernière. **Chercher ces couleurs** (les
-  jumelles à droite de la source, section Couleurs, depuis le 24/11/2026 ; un bouton sous
+  jumelles à droite de la source, section Couleurs, depuis le 24/11/2026, et à droite du cran dans les couleurs en grand depuis le 25/11/2026, qui se ferment, rouvertes par « Annuler » ; un bouton sous
   la palette avant) : celles du cran affiché, ses couleurs principales (les plus présentes, sans
   les miettes sous `colour_min_share`, au plus `max`) dans la boîte, cherchées tout de
   suite, à ajuster ; « Annuler » rend la recherche d'avant. **Couleurs en grand** (à côté,
