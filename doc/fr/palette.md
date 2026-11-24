@@ -163,6 +163,18 @@ k-moyennes (pondérées, `cluster_weighted`), un point pèse `1 + perceived_sali
 à son entourage / 0,1`. Sur la photo de l'utilisateur sous lumière violette, le visage
 sort orange dès 2 couleurs (beige rosé en valeurs brutes).
 
+**Palette perçue en cache** (24/11/2026) : à côté de la palette mesurée, le cache range sa
+version en couleurs perçues (`Palette::perceived`, `extract_perceived` : même calcul au
+cran `colors`, puis fusions et miettes comme `extract`, avec sa couverture). L'image est
+d'abord réduite à `perceived_side` (512 px) : le calcul porte sur chaque pixel, et
+l'entourage se mesure en part de l'image. Les deux palettes forment une seule entrée,
+dans le cache comme dans l'index de recherche (`VERSION` 3 : les palettes d'avant sont
+recalculées une fois) ; la clé compte aussi les réglages `perceived_*`.
+`Palette::view(perceived)` donne l'une ou l'autre. Dans l'interface, l'œil de la section
+Couleurs vaut pour tout : la palette du panneau, les couleurs en grand, « Couleur »,
+« Couleurs proches », les jumelles et l'empilement par palette (refaits quand il bascule).
+En ligne de commande, `--perceived` vaut pour les palettes affichées et `--find`.
+
 ## Réglages `[colours]`
 
 `colors`, `side`, `iterations`, `merge`, `min_share` (voir `doc/config.example.toml`).

@@ -27,7 +27,7 @@ use crate::bitmap::Bitmap;
 use crate::colour;
 
 /// Version du calcul (dans la clé du cache : la changer recalcule tout).
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
 
 /// Source d'une palette (décision de l'utilisateur, 21/11/2026) : trois usages, une
 /// palette par image et par source dans le cache.
@@ -226,6 +226,9 @@ pub struct PaletteSettings {
     /// Couleurs perçues : pente de la saturation selon le nombre de couleurs (le surplus
     /// au-delà de 1 varie comme (référence / couleurs) ^ pente ; 0 : la même partout).
     pub perceived_saturation_falloff: f32,
+    /// Couleurs perçues : grand côté (pixels) de l'image d'où la palette perçue du cache
+    /// est tirée (réduite d'abord : le calcul porte sur chaque pixel).
+    pub perceived_side: u32,
 }
 
 impl Default for PaletteSettings {
@@ -258,6 +261,7 @@ impl Default for PaletteSettings {
             perceived_saturation: 1.4,
             perceived_saturation_colours: 4,
             perceived_saturation_falloff: 0.5,
+            perceived_side: 512,
         }
     }
 }
@@ -299,6 +303,9 @@ pub struct Palette {
     pub swatches: Vec<Swatch>,
     /// Couverture fine des couleurs, pour « contient cette couleur » ([`Coverage`]).
     pub coverage: Coverage,
+    /// La même palette en couleurs perçues ([`extract_perceived`]), rangée avec elle : les
+    /// recherches la prennent quand les couleurs perçues sont choisies ([`Palette::view`]).
+    pub perceived: Option<Box<Palette>>,
 }
 
 /// Cases de clarté de [`Coverage`] (L de 0 à 1, pas de 0,04).
@@ -590,6 +597,20 @@ impl Palette {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(5 + self.swatches.len() * 16);
         out.extend_from_slice(&VERSION.to_le_bytes());
+        self.write_body(&mut out);
+        // Puis la palette perçue (version 3) : 1 et son corps, ou 0.
+        match &self.perceived {
+            Some(p) => {
+                out.push(1);
+                p.write_body(&mut out);
+            }
+            None => out.push(0),
+        }
+        out
+    }
+
+    /// Les couleurs et la couverture, sans la version ni la palette perçue.
+    fn write_body(&self, out: &mut Vec<u8>) {
         out.push(self.swatches.len() as u8);
         for s in &self.swatches {
             for v in s.oklab.iter().chain([&s.share]) {
@@ -603,7 +624,6 @@ impl Palette {
             out.extend_from_slice(&bin.to_le_bytes());
             out.extend_from_slice(&n.to_le_bytes());
         }
-        out
     }
 
     /// Relit [`Palette::to_bytes`] ; `None` si l'entrée est illisible ou d'une autre
@@ -613,8 +633,19 @@ impl Palette {
         if version != VERSION {
             return None;
         }
-        let n = *bytes.get(4)? as usize;
-        let body = bytes.get(5..5 + n * 16)?;
+        let (mut palette, used) = Palette::read_body(bytes.get(4..)?)?;
+        let rest = bytes.get(4 + used..)?;
+        palette.perceived = match rest.first()? {
+            1 => Some(Box::new(Palette::read_body(&rest[1..])?.0)),
+            _ => None,
+        };
+        Some(palette)
+    }
+
+    /// Relit [`Palette::write_body`] ; la palette et les octets lus.
+    fn read_body(bytes: &[u8]) -> Option<(Palette, usize)> {
+        let n = *bytes.first()? as usize;
+        let body = bytes.get(1..1 + n * 16)?;
         let f = |i: usize| f32::from_le_bytes(body[i * 4..i * 4 + 4].try_into().unwrap());
         let swatches = (0..n)
             .map(|k| Swatch {
@@ -622,7 +653,7 @@ impl Palette {
                 share: f(k * 4 + 3),
             })
             .collect();
-        let rest = bytes.get(5 + n * 16..)?;
+        let rest = bytes.get(1 + n * 16..)?;
         let u32_at = |i: usize| Some(u32::from_le_bytes(rest.get(i..i + 4)?.try_into().ok()?));
         let total = u32_at(0)?;
         let count = u32_at(4)? as usize;
@@ -631,10 +662,22 @@ impl Palette {
         let bins = (0..count)
             .map(|k| (u16_at(k * 4), u16_at(k * 4 + 2)))
             .collect();
-        Some(Palette {
-            swatches,
-            coverage: Coverage { bins, total },
-        })
+        Some((
+            Palette {
+                swatches,
+                coverage: Coverage { bins, total },
+                perceived: None,
+            },
+            1 + n * 16 + 8 + count * 4,
+        ))
+    }
+
+    /// Cette palette, ou en couleurs perçues avec `perceived` (la sienne, si elle en a).
+    pub fn view(&self, perceived: bool) -> &Palette {
+        match &self.perceived {
+            Some(p) if perceived => p,
+            _ => self,
+        }
     }
 }
 
@@ -668,6 +711,7 @@ pub fn extract(bitmap: &Bitmap, settings: &PaletteSettings) -> Palette {
     Palette {
         swatches,
         coverage: Coverage::from_samples(&samples),
+        perceived: None,
     }
 }
 
@@ -1077,53 +1121,7 @@ fn posterize_perceived(
     if n == 0 || bitmap.data.len() < n * 3 {
         return (bitmap.clone(), Vec::new());
     }
-    // L'image en OKLab (un pixel déjà vu n'est pas reconverti).
-    let mut memo: std::collections::HashMap<[u8; 3], [f32; 3]> = std::collections::HashMap::new();
-    let lab: Vec<[f32; 3]> = bitmap.data[..n * 3]
-        .as_chunks::<3>()
-        .0
-        .iter()
-        .map(|&rgb| *memo.entry(rgb).or_insert_with(|| working_to_oklab(rgb)))
-        .collect();
-    // La teinte de l'entourage : a et b floutés (moyenne d'un carré, deux passes).
-    let radius = ((w.max(h) as f32 * settings.perceived_surround.clamp(0.0, 1.0)) as usize).max(1);
-    let a: Vec<f32> = lab.iter().map(|p| p[1]).collect();
-    let b: Vec<f32> = lab.iter().map(|p| p[2]).collect();
-    let around_a = box_blur(&box_blur(&a, w, h, radius), w, h, radius);
-    let around_b = box_blur(&box_blur(&b, w, h, radius), w, h, radius);
-    let adapt = settings.perceived_adaptation.clamp(0.0, 1.0);
-    // Retirer la lumière dominante ôte aussi de la couleur à tout le reste : rendue par
-    // `perceived_saturation` (retour du 23/11/2026 : « infiniment plus naturel », mais
-    // terne).
-    // Dégressive (retour du 23/11/2026) : moins de couleurs, chacune plus moyenne, plus
-    // terne ; `perceived_saturation` vaut pour `perceived_saturation_colours` couleurs,
-    // et le surplus varie comme (référence / k) ^ `perceived_saturation_falloff` ;
-    // l'image entière (k = 0) n'est pas touchée (retour du 23/11/2026).
-    let reference = settings.perceived_saturation_colours.max(1) as f32;
-    let extra = settings.perceived_saturation - 1.0;
-    let saturation = if k == 0 {
-        1.0
-    } else {
-        (1.0 + extra * (reference / k as f32).powf(settings.perceived_saturation_falloff.max(0.0)))
-            .max(0.0)
-    };
-    let perceived: Vec<[f32; 3]> = (0..n)
-        .map(|i| {
-            [
-                lab[i][0],
-                saturation * (lab[i][1] - adapt * around_a[i]),
-                saturation * (lab[i][2] - adapt * around_b[i]),
-            ]
-        })
-        .collect();
-    // Ce qui tranche sur l'entourage pèse plus (l'écart de teinte, en part d'un écart
-    // franc de 0,1).
-    let weight: Vec<f32> = (0..n)
-        .map(|i| {
-            let d = (lab[i][1] - around_a[i]).hypot(lab[i][2] - around_b[i]);
-            1.0 + settings.perceived_salience.max(0.0) * d / 0.1
-        })
-        .collect();
+    let (perceived, weight) = perceive(bitmap, settings, perceived_saturation(k, settings));
     let to_bitmap = |colours: &[[f32; 3]]| -> Vec<u8> {
         let mut data = Vec::with_capacity(n * 3);
         for c in colours {
@@ -1137,20 +1135,12 @@ fn posterize_perceived(
         }
         data
     };
-    // Les points de la grille (comme `sample`), avec leur poids.
-    let step = (w.max(h) / settings.side.max(1) as usize).max(1);
-    let (mut points, mut weights) = (Vec::new(), Vec::new());
-    for y in (step / 2..h).step_by(step) {
-        for x in (step / 2..w).step_by(step) {
-            points.push(perceived[y * w + x]);
-            weights.push(weight[y * w + x]);
-        }
-    }
+    let (points, weights) = grid(&perceived, &weight, w, h, settings.side);
     // L'image perçue entière (k = 0) : intacte (sans saturation), avec la palette du cran
     // `colors` (retours du 23/11/2026 : à droite rien ne venait, puis elle différait du
     // cran 6 : calculée sans la saturation de ce cran).
     if k == 0 {
-        let swatches = posterize_perceived(bitmap, settings.colors.clamp(1, 16), settings).1;
+        let swatches = extract_perceived(bitmap, settings).swatches;
         return (
             Bitmap {
                 width: bitmap.width,
@@ -1198,6 +1188,144 @@ fn posterize_perceived(
         },
         swatches,
     )
+}
+
+/// Palette de `bitmap` en **couleurs perçues** (comme [`posterize_with`] avec
+/// `perceived`, au cran `colors`), fusions et miettes retirées comme [`extract`] : celle
+/// rangée dans le cache avec la palette mesurée ([`Palette::perceived`]), pour les
+/// recherches en couleurs perçues. L'image est d'abord réduite à `perceived_side` (le
+/// calcul porte sur chaque pixel ; l'entourage est en part de l'image, la réduction ne le
+/// change pas).
+pub fn extract_perceived(bitmap: &Bitmap, settings: &PaletteSettings) -> Palette {
+    let (w, h) = (bitmap.width as usize, bitmap.height as usize);
+    if w == 0 || h == 0 || bitmap.data.len() < w * h * 3 {
+        return Palette::default();
+    }
+    let side = settings.perceived_side.max(16);
+    let reduced;
+    let bitmap = if bitmap.width.max(bitmap.height) > side {
+        reduced = bitmap.clone().fit(side);
+        &reduced
+    } else {
+        bitmap
+    };
+    let (w, h) = (bitmap.width as usize, bitmap.height as usize);
+    let k = settings.colors.clamp(1, 16);
+    let (perceived, weight) = perceive(bitmap, settings, perceived_saturation(k, settings));
+    let (points, weights) = grid(&perceived, &weight, w, h, settings.side);
+    if points.is_empty() {
+        return Palette::default();
+    }
+    let (centres, counts) = cluster_weighted(&points, Some(&weights), k, settings.iterations);
+    let total = points.len() as f32;
+    let mut swatches: Vec<Swatch> = centres
+        .into_iter()
+        .zip(counts)
+        .filter(|(_, n)| *n > 0)
+        .map(|(oklab, n)| Swatch {
+            oklab,
+            share: n as f32 / total,
+        })
+        .collect();
+    merge_close(&mut swatches, settings.merge);
+    swatches.retain(|s| s.share >= settings.min_share);
+    let kept: f32 = swatches.iter().map(|s| s.share).sum();
+    if kept > 0.0 {
+        for s in &mut swatches {
+            s.share /= kept;
+        }
+    }
+    swatches.sort_by(|a, b| b.share.total_cmp(&a.share));
+    Palette {
+        swatches,
+        coverage: Coverage::from_samples(&points),
+        perceived: None,
+    }
+}
+
+/// Les points d'une grille de `side × side` au plus (comme `sample`) sur une image
+/// `w × h` de couleurs `colours`, avec leur poids.
+fn grid(
+    colours: &[[f32; 3]],
+    weight: &[f32],
+    w: usize,
+    h: usize,
+    side: u32,
+) -> (Vec<[f32; 3]>, Vec<f32>) {
+    let step = (w.max(h) / side.max(1) as usize).max(1);
+    let (mut points, mut weights) = (Vec::new(), Vec::new());
+    for y in (step / 2..h).step_by(step) {
+        for x in (step / 2..w).step_by(step) {
+            points.push(colours[y * w + x]);
+            weights.push(weight[y * w + x]);
+        }
+    }
+    (points, weights)
+}
+
+/// Saturation rendue après l'adaptation pour `k` couleurs (`k = 0` : l'image entière,
+/// intacte).
+fn perceived_saturation(k: usize, settings: &PaletteSettings) -> f32 {
+    let reference = settings.perceived_saturation_colours.max(1) as f32;
+    let extra = settings.perceived_saturation - 1.0;
+    if k == 0 {
+        1.0
+    } else {
+        (1.0 + extra * (reference / k as f32).powf(settings.perceived_saturation_falloff.max(0.0)))
+            .max(0.0)
+    }
+}
+
+/// Chaque pixel de `bitmap` (taille vérifiée par l'appelant) en couleurs perçues
+/// (OKLab, adapté à son entourage, saturation `saturation`) et son poids (ce qui tranche
+/// sur l'entourage pèse plus).
+fn perceive(
+    bitmap: &Bitmap,
+    settings: &PaletteSettings,
+    saturation: f32,
+) -> (Vec<[f32; 3]>, Vec<f32>) {
+    let (w, h) = (bitmap.width as usize, bitmap.height as usize);
+    let n = w * h;
+    // L'image en OKLab (un pixel déjà vu n'est pas reconverti).
+    let mut memo: std::collections::HashMap<[u8; 3], [f32; 3]> = std::collections::HashMap::new();
+    let lab: Vec<[f32; 3]> = bitmap.data[..n * 3]
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|&rgb| *memo.entry(rgb).or_insert_with(|| working_to_oklab(rgb)))
+        .collect();
+    // La teinte de l'entourage : a et b floutés (moyenne d'un carré, deux passes).
+    let radius = ((w.max(h) as f32 * settings.perceived_surround.clamp(0.0, 1.0)) as usize).max(1);
+    let a: Vec<f32> = lab.iter().map(|p| p[1]).collect();
+    let b: Vec<f32> = lab.iter().map(|p| p[2]).collect();
+    let around_a = box_blur(&box_blur(&a, w, h, radius), w, h, radius);
+    let around_b = box_blur(&box_blur(&b, w, h, radius), w, h, radius);
+    let adapt = settings.perceived_adaptation.clamp(0.0, 1.0);
+    // Retirer la lumière dominante ôte aussi de la couleur à tout le reste : rendue par
+    // `perceived_saturation` (retour du 23/11/2026 : « infiniment plus naturel », mais
+    // terne).
+    // Dégressive (retour du 23/11/2026) : moins de couleurs, chacune plus moyenne, plus
+    // terne ; `perceived_saturation` vaut pour `perceived_saturation_colours` couleurs,
+    // et le surplus varie comme (référence / k) ^ `perceived_saturation_falloff` ;
+    // l'image entière (k = 0) n'est pas touchée (retour du 23/11/2026).
+    let perceived: Vec<[f32; 3]> = (0..n)
+        .map(|i| {
+            [
+                lab[i][0],
+                saturation * (lab[i][1] - adapt * around_a[i]),
+                saturation * (lab[i][2] - adapt * around_b[i]),
+            ]
+        })
+        .collect();
+    // Ce qui tranche sur l'entourage pèse plus (l'écart de teinte, en part d'un écart
+    // franc de 0,1).
+    let weight: Vec<f32> = (0..n)
+        .map(|i| {
+            let d = (lab[i][1] - around_a[i]).hypot(lab[i][2] - around_b[i]);
+            1.0 + settings.perceived_salience.max(0.0) * d / 0.1
+        })
+        .collect();
+    (perceived, weight)
 }
 
 /// Moyenne de `values` (une grille `w × h`) sur un carré de côté `2 × radius + 1`, bords
@@ -1504,6 +1632,7 @@ mod tests {
         let mono = s.monochrome();
         let from = |hexes: &[(&str, f32)]| Palette {
             coverage: Default::default(),
+            perceived: None,
             swatches: hexes
                 .iter()
                 .map(|(h, share)| {
@@ -1587,6 +1716,7 @@ mod tests {
     fn nearest_colour_ignores_specks() {
         let p = Palette {
             coverage: Default::default(),
+            perceived: None,
             swatches: vec![
                 Swatch {
                     oklab: [0.5, 0.1, 0.0],
@@ -1875,8 +2005,8 @@ mod tests {
             !palette.is_empty() && palette.len() <= s.colors,
             "sa palette perçue"
         );
-        // La même que celle du cran `colors` (retour du 23/11/2026).
-        assert_eq!(palette, posterize_with(&image, s.colors, &s, true).1);
+        // La palette perçue du cache (celle que cherchent les recherches).
+        assert_eq!(palette, extract_perceived(&image, &s).swatches);
         assert_eq!((whole.width, whole.height), (image.width, image.height));
     }
 
@@ -1950,6 +2080,7 @@ mod tests {
                 share: 1.0,
             }],
             coverage: Coverage::from_samples(&samples),
+            perceived: None,
         };
         let [_, a, b] = cover_centre(cover_bin(samples[0]));
         assert!(
@@ -1968,11 +2099,71 @@ mod tests {
     }
 
     #[test]
-    fn bytes_round_trip_and_reject_other_versions() {
-        let p = extract(
-            &bands(&[([200, 40, 40], 70), ([40, 60, 200], 30)]),
-            &PaletteSettings::default(),
+    fn the_perceived_palette_is_searched_in_perceived_colours() {
+        // Sous une lumière violette, le visage beige rosé paraît orange : en couleurs
+        // perçues, la palette du cache a cet orange, et une recherche de l'orange la trouve
+        // plus près que dans la palette mesurée.
+        let s = PaletteSettings::default();
+        let (violet, face) = ([60u8, 20, 150], [158u8, 123, 163]);
+        let image = bands(&[(violet, 85), (face, 15)]);
+        let mut p = extract(&image, &s);
+        p.perceived = Some(Box::new(extract_perceived(&image, &s)));
+        let seen = p.view(true);
+        assert!(!seen.swatches.is_empty() && seen.swatches.len() <= s.colors);
+        assert!(
+            !seen.coverage.is_empty(),
+            "sa couverture, pour « contient »"
         );
+        assert_eq!(
+            p.view(false).swatches,
+            extract(&image, &s).swatches,
+            "mesurée : elle-même"
+        );
+        // La teinte du fond retirée : le violet du fond, perçu, moins coloré.
+        let chroma = |p: &Palette| p.swatches[0].hue_chroma().1;
+        assert!(chroma(seen) < chroma(&p), "{p:?}");
+        // L'orange que l'œil voit (le visage adapté), cherché.
+        let orange = seen
+            .swatches
+            .iter()
+            .min_by(|a, b| a.share.total_cmp(&b.share))
+            .unwrap()
+            .oklab;
+        let near = |p: &Palette| p.nearest(orange, s.chroma_weight, s.colour_coverage);
+        assert!(near(seen).unwrap() < near(&p).unwrap_or(f32::INFINITY));
+        // Une grande image est réduite d'abord (`perceived_side`) : même palette, à peu près.
+        let big = Bitmap {
+            width: image.width * 8,
+            height: image.height * 8,
+            data: (0..image.height * 8)
+                .flat_map(|y| (0..image.width * 8).map(move |x| (x / 8, y / 8)))
+                .flat_map(|(x, y)| image.pixel(x, y).unwrap())
+                .collect(),
+        };
+        let from_big = extract_perceived(&big, &s);
+        let orange_big = from_big.nearest(orange, s.chroma_weight, s.colour_coverage);
+        assert!(orange_big.is_some_and(|d| d < 0.05), "{from_big:?}");
+        // Les grandes couleurs, à peu près les mêmes (la réduction peut ajouter une petite
+        // couleur de bord, entre les deux).
+        for (a, b) in from_big.swatches.iter().zip(&seen.swatches).take(1) {
+            assert!(
+                oklab_distance(a.oklab, b.oklab) < 0.03,
+                "{from_big:?} {seen:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn bytes_round_trip_and_reject_other_versions() {
+        let image = bands(&[([200, 40, 40], 70), ([40, 60, 200], 30)]);
+        let mut p = extract(&image, &PaletteSettings::default());
+        assert_eq!(Palette::from_bytes(&p.to_bytes()), Some(p.clone()));
+        // Avec sa palette perçue, rangée avec elle.
+        p.perceived = Some(Box::new(extract_perceived(
+            &image,
+            &PaletteSettings::default(),
+        )));
+        assert!(p.perceived.as_ref().is_some_and(|v| **v != p));
         assert_eq!(Palette::from_bytes(&p.to_bytes()), Some(p.clone()));
         let mut bytes = p.to_bytes();
         bytes[0] ^= 0xff;

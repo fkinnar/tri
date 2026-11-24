@@ -1040,6 +1040,7 @@ mod tests {
                 share: 1.0,
             }],
             coverage: crate::palette::Coverage::from_samples(&[[l, 0.1, 0.0]; 4]),
+            perceived: None,
         }
     }
 

@@ -224,7 +224,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   en grille et en plein écran, en bas du panneau : surtout pour voir. La **source** : « Comme la
   grille », coché par défaut, suit le rendu des vignettes (JPEG boîtier, couverture : le
   rendu de chaque développement et le JPEG boîtier des photos sans développement,
-  logiciel, RAW) ; décoché, une liste sur le modèle du rendu affiché (`palette_source`,
+  logiciel, RAW) ; en plein écran, « Comme la vue » (24/11/2026) : le rendu affiché de
+  l'image (`r`, « Rendu affiché »), sauf pendant une recherche par couleur, qui garde sa
+  source (en changer l'arrêterait) ; décoché, une liste sur le modèle du rendu affiché (`palette_source`,
   `palette_follow_grid` de l'état d'affichage, retenus) : aucune (rien ne se calcule),
   « JPEG boîtier », « Couverture », chaque logiciel de développement actif (tous ses
   développements, clones compris), « RAW LibRaw ». Choisie,
@@ -318,7 +320,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   les miettes sous `colour_min_share`, au plus `max`) dans la boîte, cherchées tout de
   suite, à ajuster ; « Annuler » rend la recherche d'avant. **Couleurs en grand** (à côté,
   action `core.view.colours`, `g c`, comme `g i` pour le grand histogramme depuis le
-  23/11/2026 (`Maj+I` jusque-là ; dedans, `g` reste le canal vert, Échap le ferme) ; `<leader> c 0`…`8` choisit le cran (0 l'image, 1 la moyenne), `<leader> c p` les couleurs perçues (actions `core.colours.step.N`, `core.colours.perceived`) : la palette du **panneau** suit aussi, sans ouvrir la boîte (cran rappelé sous la source ; au cran 0 sans couleurs perçues, la palette du dossier ; `palette_step`, même calcul en fond que la boîte ; en attendant un cran, celui d'avant reste, de la même photo ou, en changeant de photo, au même nombre de couleurs, plutôt que la palette du dossier ; crans gardés, `[gui.colours_view] cache`). À droite du sous-titre « Source » (idée de l'utilisateur, 24/11/2026) : un **œil** (couleurs perçues) ou **quatre pixels** (couleurs mesurées, celles du fichier), un clic bascule ; des **jumelles** ouvrent la boîte de recherche des couleurs (`palette_source_icons`, `marks::pixels`, `marks::binoculars`) ; un clic sur la bande ou la roue de la palette du
+  23/11/2026 (`Maj+I` jusque-là ; dedans, `g` reste le canal vert, Échap le ferme) ; `<leader> c 0`…`8` choisit le cran (0 l'image, 1 la moyenne), `<leader> c p` les couleurs perçues (actions `core.colours.step.N`, `core.colours.perceived`) : la palette du **panneau** suit aussi, sans ouvrir la boîte (cran rappelé sous la source ; au cran 0 sans couleurs perçues, la palette du dossier ; `palette_step`, même calcul en fond que la boîte ; en attendant un cran, celui d'avant reste, de la même photo ou, en changeant de photo, au même nombre de couleurs, plutôt que la palette du dossier ; crans gardés, `[gui.colours_view] cache`). À droite du sous-titre « Source » (idée de l'utilisateur, 24/11/2026) : un **œil** (couleurs perçues) ou **quatre pixels** (couleurs mesurées, celles du fichier), un clic bascule, pour le panneau comme pour les recherches (« Couleur », « Couleurs proches », jumelles, piles par palette, refaites ; palette perçue du cache depuis le 24/11/2026, voir `palette.md`) ; des **jumelles** ouvrent la boîte de recherche des couleurs (`palette_source_icons`, `marks::pixels`, `marks::binoculars`) ; un clic sur la bande ou la roue de la palette du
   panneau l'ouvre aussi, comme l'histogramme ; idée de l'utilisateur du 23/11/2026) : une boîte déplaçable
   comme le grand histogramme, pour voir les **rapports de masses** de la photo en
   surbrillance (l'image d'où vient sa palette) ; à droite de l'image (retour du

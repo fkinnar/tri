@@ -1665,8 +1665,11 @@ pub struct TriApp {
     palette_view_k: usize,
     /// Fausses couleurs (`[gui.colours_view] false_colours`).
     palette_view_false: bool,
-    /// Couleurs perçues (adaptées à la lumière de l'entourage ; expérience).
+    /// Couleurs perçues (adaptées à la lumière de l'entourage) : la palette du panneau, les
+    /// couleurs en grand, les recherches par couleur et les piles par palette (l'œil).
     palette_view_perceived: bool,
+    /// Couleurs perçues ou non des recherches posées (refaites quand l'œil bascule).
+    palette_perceived_applied: bool,
     /// Ce qu'elle montre, et ce qui se calcule en fond.
     palette_view_shown: Option<PaletteViewShown>,
     /// Crans déjà calculés, le plus récent à la fin (`[gui.colours_view] cache`) : revenir à
@@ -2230,6 +2233,14 @@ pub fn development_label(path: &Path) -> String {
             }
         }
         None => tri::media::display_stem(path),
+    }
+}
+
+/// La palette `p`, ou sa palette perçue avec `perceived` (une copie, rangée à part).
+fn perceived_view(p: Arc<Palette>, perceived: bool) -> Arc<Palette> {
+    match &p.perceived {
+        Some(v) if perceived => Arc::new(v.as_ref().clone()),
+        _ => p,
     }
 }
 
@@ -2812,6 +2823,7 @@ impl TriApp {
             palette_view_k: 0,
             palette_view_false: false,
             palette_view_perceived: false,
+            palette_perceived_applied: false,
             palette_view_shown: None,
             palette_view_cache: Vec::new(),
             palette_view_rx: None,
@@ -5803,8 +5815,14 @@ impl TriApp {
             _ => threshold,
         };
         // `None` : l'image n'y répond pas (une couleur manque), écartée.
+        // Couleurs perçues (l'œil) : les palettes perçues, la référence comprise.
+        let perceived = self.palette_view_perceived;
         let key = |p: &Palette| match (like, &query) {
-            (Some(l), _) => Some(tri::palette::distance(&l.reference, p, weight)),
+            (Some(l), _) => Some(tri::palette::distance(
+                l.reference.view(perceived),
+                p,
+                weight,
+            )),
             (None, Some(q)) => p.colours_cost(q, weight, self.settings.palette.colour_coverage),
             (None, None) => Some(0.0),
         };
@@ -5831,7 +5849,7 @@ impl TriApp {
         // et couleur, la distance entre palettes les départage (retour du 22/11/2026 : la
         // frontière teinté / couleur tombait au milieu d'une série chaude, le noir et blanc
         // entrait et la 3ᵉ photo de la série non).
-        let reference_grey = like.is_some_and(|l| grey(&l.reference));
+        let reference_grey = like.is_some_and(|l| grey(l.reference.view(perceived)));
         let left_out = |p: &Palette| match colour_chroma {
             Some(c) if c < ps.mono_chroma => !grey(p),
             Some(c) if c < ps.mono_toned_chroma => grey(p),
@@ -5843,7 +5861,11 @@ impl TriApp {
             files,
             |f| {
                 let source = kind.source_for(f)?;
-                match self.palettes.get(&(f.path.clone(), source)) {
+                match self
+                    .palettes
+                    .get(&(f.path.clone(), source))
+                    .map(|p| p.view(perceived))
+                {
                     Some(p) if left_out(p) => None,
                     Some(p) => key(p).map(Some),
                     None => Some(None),
@@ -7041,7 +7063,21 @@ impl TriApp {
                 .palette_manual
                 .or((self.stacking && self.stacks_by_palette()).then_some(SourceKind::Camera));
         }
-        Some(match self.grid_render {
+        // En plein écran, « Comme la vue » (retour du 24/11/2026) : le rendu affiché de
+        // l'image, que `r` ou la liste « Rendu affiché » change sans toucher la grille ;
+        // sauf pendant une recherche par couleur, qui garde la source où elle a été posée
+        // (changer de source l'arrêterait).
+        let render = match self.files.get(self.selected) {
+            Some(file)
+                if self.mode == Mode::View
+                    && self.palette_like.is_none()
+                    && self.palette_colour.is_none() =>
+            {
+                self.displayed_render(file)
+            }
+            _ => self.grid_render,
+        };
+        Some(match render {
             GridRender::Embedded => SourceKind::Camera,
             GridRender::Cover => SourceKind::Cover,
             GridRender::Engine(engine) => SourceKind::Developed(engine),
@@ -7183,7 +7219,8 @@ impl TriApp {
             let palette = self.palette_step(&ctx).map(|(_, p)| p).or_else(|| {
                 let kind = self.palette_source?;
                 let (_, main) = self.palette_targets(kind, self.selected);
-                self.palette_of(main)
+                let perceived = self.palette_view_perceived;
+                self.palette_of(main).map(|p| perceived_view(p, perceived))
             });
             match palette.filter(|p| !p.swatches.is_empty()) {
                 Some(p) => self.search_palette_colours(&p),
@@ -7214,9 +7251,14 @@ impl TriApp {
         let heading = self.subheading(ui, t!("palette-source"));
         self.palette_source_icons(ui, heading.rect);
         let mut follow = self.palette_follow_grid;
+        let (label, tip) = if self.mode == Mode::View {
+            (t!("palette-follow-view"), t!("palette-follow-view-tip"))
+        } else {
+            (t!("palette-follow-grid"), t!("palette-follow-grid-tip"))
+        };
         if self
-            .side_checkbox(ui, &mut follow, t!("palette-follow-grid"))
-            .on_hover_text(t!("palette-follow-grid-tip"))
+            .side_checkbox(ui, &mut follow, label)
+            .on_hover_text(tip)
             .changed()
         {
             self.palette_follow_grid = follow;
@@ -7263,6 +7305,8 @@ impl TriApp {
         let mut rows: Vec<(Option<String>, Row)> = Vec::new();
         let mut main_palette: Option<Arc<Palette>> = None;
         let mut no_render = false;
+        // Les couleurs perçues (l'œil) : la palette perçue du cache.
+        let perceived = self.palette_view_perceived;
         if index < self.files.len() {
             let (targets, main) = self.palette_targets(kind, index);
             no_render = targets.is_empty();
@@ -7272,7 +7316,7 @@ impl TriApp {
                 matches!(kind, SourceKind::Developed(_) | SourceKind::Cover) && targets.len() > 1;
             for &i in &targets {
                 let label = named.then(|| development_label(&self.files[i].path));
-                let row = match self.palette_of(i) {
+                let row = match self.palette_of(i).map(|p| perceived_view(p, perceived)) {
                     Some(p) if p.swatches.is_empty() => Row::Empty,
                     Some(p) => {
                         if i == main {
@@ -7315,8 +7359,8 @@ impl TriApp {
             ui.weak(t!("palette-no-render"));
             return;
         }
-        // Un cran choisi au clavier (`<leader> c N`) ou les couleurs perçues : la palette
-        // de ce cran à la place de celle de la photo (retour du 23/11/2026).
+        // Un cran choisi au clavier (`<leader> c N`) : la palette de ce cran à la place de
+        // celle de la photo (retour du 23/11/2026).
         let step = self.palette_step(ui.ctx());
         if let (Some((_, p)), Some(main)) = (&step, &main_palette) {
             for (_, row) in rows.iter_mut() {
@@ -12242,7 +12286,7 @@ impl TriApp {
             let src = kind.source_for(f)?;
             self.palettes
                 .get(&(f.path.clone(), src))
-                .map(|p| p.as_ref())
+                .map(|p| p.view(self.palette_view_perceived))
         };
         let photo_of = |f: &MediaFile| -> PathBuf {
             let path = tri::developments::get(&f.path).map_or(f.path.clone(), |d| d.photo);
@@ -12277,7 +12321,8 @@ impl TriApp {
             self.group_curve,
             self.group_gap,
             match (self.stacks_by_palette(), self.palette_source) {
-                (true, Some(kind)) => format!("palette:{}", kind.id()),
+                (true, Some(kind)) =>
+                    format!("palette:{}:{}", kind.id(), self.palette_view_perceived),
                 _ => String::new(),
             }
         );
@@ -13363,6 +13408,17 @@ impl TriApp {
         // Source des palettes : suit le rendu de la grille (« Comme la grille »).
         let wanted = self.wanted_palette_source();
         self.set_palette_source(wanted);
+        // L'œil basculé : les recherches et les piles par palette en couleurs perçues (ou
+        // mesurées), refaites.
+        if self.palette_view_perceived != self.palette_perceived_applied {
+            self.palette_perceived_applied = self.palette_view_perceived;
+            if self.palette_like.is_some()
+                || self.palette_colour.is_some()
+                || self.stacks_by_palette()
+            {
+                self.apply_filter();
+            }
+        }
         self.try_reference_filter();
         self.try_similar_filter();
         self.reopen_all_photos_pending();
@@ -21583,9 +21639,9 @@ impl TriApp {
                 .is_some_and(|w| s.key.0 == w.0 && s.key.1 == w.1)
         });
         let texture = shown.map(|s| s.texture.clone());
-        // Au cran 0 : la palette de la photo, ou en couleurs perçues la sienne.
+        // Au cran 0 : la palette de la photo, mesurée ou perçue (celle du cache).
         let palette = match (k, shown) {
-            (0, _) if !perceived => photo_palette.as_deref().cloned(),
+            (0, _) => photo_palette.as_deref().map(|p| p.view(perceived).clone()),
             (_, Some(s)) => Some(Palette {
                 swatches: s.swatches.clone(),
                 ..Palette::default()
@@ -21772,7 +21828,8 @@ impl TriApp {
     /// elle diffère de celle du dossier (cran 0 sans couleurs perçues : aucune) ; calculée
     /// en fond comme pour les couleurs en grand, `None` en attendant.
     fn palette_step(&mut self, ctx: &egui::Context) -> Option<(usize, Arc<Palette>)> {
-        if self.palette_view_k == 0 && !self.palette_view_perceived {
+        // Au cran 0, la palette du cache (perçue avec l'œil) : rien à calculer.
+        if self.palette_view_k == 0 {
             return None;
         }
         let wanted = self.palette_view_key()?;
@@ -33078,6 +33135,7 @@ mod tests {
         // Une palette pour chaque développement (le rendu de darktable n'est pas fait ici).
         let grey = Arc::new(Palette {
             coverage: Default::default(),
+            perceived: None,
             swatches: vec![Swatch {
                 oklab: [0.5, 0.0, 0.0],
                 share: 1.0,
@@ -33708,6 +33766,62 @@ mod tests {
                 .accesskit_node()
                 .is_disabled()
         );
+    }
+
+    #[test]
+    fn the_eye_searches_in_perceived_colours() {
+        // L'œil (couleurs perçues) vaut aussi pour les recherches (demandé le 24/11/2026) :
+        // sous une lumière violette, le visage beige rosé paraît orange ; cet orange,
+        // cherché, trouve la photo en couleurs perçues, pas en couleurs mesurées.
+        use tri::palette::{Source, SourceKind};
+        let violet = image::RgbImage::from_fn(100, 40, |x, _| {
+            image::Rgb(if x < 85 {
+                [60, 20, 150]
+            } else {
+                [158, 123, 163]
+            })
+        });
+        let grey = image::RgbImage::from_pixel(100, 40, image::Rgb([128, 128, 128]));
+        let (mut h, _dir) = harness_images(vec![("violet.jpg", violet), ("grey.jpg", grey)]);
+        h.run_steps(3);
+        choose_palette(&mut h, Some(SourceKind::Camera));
+        run_until(&mut h, |app| {
+            app.files
+                .iter()
+                .all(|f| app.palettes.contains_key(&(f.path.clone(), Source::Camera)))
+        });
+        let path = h.state().files[1].path.clone();
+        assert!(path.ends_with("violet.jpg"));
+        let palette = h.state().palettes[&(path.clone(), Source::Camera)].clone();
+        let seen = palette
+            .perceived
+            .as_deref()
+            .expect("rangée avec la palette");
+        let orange = seen
+            .swatches
+            .iter()
+            .min_by(|a, b| a.share.total_cmp(&b.share))
+            .unwrap()
+            .oklab;
+        h.state_mut().set_palette_colour(Some(orange));
+        h.run_steps(3);
+        let found = |h: &Harness<'_, TriApp>| h.state().files.iter().any(|f| f.path == path);
+        assert!(!found(&h), "mesurées : le beige rosé n'est pas orange");
+        h.state_mut().palette_view_perceived = true;
+        h.run_steps(3);
+        assert!(found(&h), "perçues : l'orange est là");
+        // Le panneau montre la palette perçue (ses pastilles).
+        let at = h.state().files.iter().position(|f| f.path == path).unwrap();
+        h.state_mut().select(at);
+        h.run_steps(3);
+        for s in &seen.swatches {
+            let label = t!("palette-dot", hex = crate::palette_view::hex(s));
+            assert!(h.query_by_label(&label).is_some(), "{label}");
+        }
+        // L'œil refermé : la recherche se refait en couleurs mesurées.
+        h.state_mut().palette_view_perceived = false;
+        h.run_steps(3);
+        assert!(!found(&h));
     }
 
     #[test]
@@ -37905,6 +38019,48 @@ mod tests {
         assert!(h.state().position_key.is_none(), "repère masqué aussi");
         act(&mut h, Action::ToggleImageInfo);
         assert!(h.state().image_info);
+    }
+
+    #[test]
+    fn in_full_screen_the_colours_follow_the_view() {
+        // Retour du 24/11/2026 : en plein écran, changer le rendu affiché (`r`) sans
+        // toucher la grille laissait la palette sur le rendu de la grille.
+        use tri::palette::SourceKind;
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let app = h.state_mut();
+        app.files[0] = MediaFile {
+            path: dir.path().join("a.RAF"),
+            kind: MediaKind::Raw,
+        };
+        app.selected = 0;
+        app.grid_render = crate::grid_render::GridRender::Embedded;
+        app.source = Source::Raw;
+        assert_eq!(
+            app.wanted_palette_source(),
+            Some(SourceKind::Camera),
+            "grille"
+        );
+        app.mode = Mode::View;
+        assert_eq!(app.wanted_palette_source(), Some(SourceKind::Raw), "la vue");
+        app.source = Source::Embedded;
+        assert_eq!(app.wanted_palette_source(), Some(SourceKind::Camera));
+        // Une recherche par couleur en cours garde sa source (en changer l'arrêterait).
+        app.source = Source::Raw;
+        app.palette_colour = Some(PaletteColour {
+            colours: vec![[0.5, 0.1, 0.0]],
+            radius: 0.1,
+        });
+        assert_eq!(app.wanted_palette_source(), Some(SourceKind::Camera));
+        app.palette_colour = None;
+        // Le libellé suit : « Comme la vue ».
+        h.state_mut().metadata_panel = true;
+        h.run_steps(3);
+        assert!(
+            h.query_all_by_label_contains(&t!("palette-follow-view"))
+                .next()
+                .is_some()
+        );
     }
 
     #[test]

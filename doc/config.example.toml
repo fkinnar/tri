@@ -689,6 +689,11 @@ perceived_saturation_colours = 4
 # avec 0,5, 1,8 pour 1 couleur, 1,4 pour 4, 1,28 pour 8 ; l'image entière n'est pas touchée.
 # 0 : la même saturation partout.
 perceived_saturation_falloff = 0.5
+# Couleurs perçues : grand côté (pixels) de l'image d'où la palette perçue du cache est tirée.
+#
+# Réduite d'abord : le calcul porte sur chaque pixel. Rangée avec la palette mesurée, pour
+# les recherches en couleurs perçues (l'œil de la section Couleurs).
+perceived_side = 512
 
 [index]
 # Noter les palettes dans l'index de recherche de tous les dossiers.
