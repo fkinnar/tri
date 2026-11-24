@@ -5140,11 +5140,6 @@ impl TriApp {
         if !palettes && !similar {
             return;
         }
-        // Retour du 22/11/2026 : la couleur d'abord ; puis les deux filtres qui partent de
-        // la référence (palettes proches, semblables), elle à leur droite.
-        if palettes {
-            self.search_filter_row(ui, Action::FilterPaletteColour);
-        }
         // Plus grande que les deux lignes (retour du 23/11/2026 : on la voyait mal).
         let side = ((self.gui.grid.marks + 4.0) * 2.0 + ui.spacing().item_spacing.y)
             * self.gui.grid.reference_scale.max(0.5);
@@ -5157,9 +5152,32 @@ impl TriApp {
         // La cible « prendre comme référence » à gauche de l'imagette (retour du
         // 23/11/2026 : à la souris, rien ne la posait).
         let target = ui.spacing().interact_size.y;
+        let left = (width - side - gap - target - spacing).max(60.0);
+        // Retour du 22/11/2026 : la couleur d'abord ; puis les deux filtres qui partent de
+        // la référence (palettes proches, semblables), elle à leur droite. Deux colonnes à
+        // droite (retour du 24/11/2026) : au-dessus de la cible, l'œil des couleurs
+        // perçues ; au-dessus de la référence, la pastille de la couleur cherchée.
+        if palettes {
+            ui.horizontal_top(|ui| {
+                ui.vertical(|ui| {
+                    ui.set_width(left);
+                    self.search_filter_row(ui, Action::FilterPaletteColour);
+                });
+                ui.add_space(gap);
+                let row = ui.spacing().interact_size.y;
+                ui.vertical(|ui| {
+                    ui.set_width(target);
+                    self.perceived_toggle(ui, target);
+                });
+                ui.vertical(|ui| {
+                    ui.add_space(row * 0.15);
+                    self.colour_patch(ui, vec2(side, row * 0.7));
+                });
+            });
+        }
         ui.horizontal_top(|ui| {
             ui.vertical(|ui| {
-                ui.set_width((width - side - gap - target - spacing).max(60.0));
+                ui.set_width(left);
                 if palettes {
                     self.search_filter_row(ui, Action::FilterPalette);
                 }
@@ -5195,6 +5213,70 @@ impl TriApp {
             });
             self.reference_box(ui, side);
         });
+    }
+
+    /// L'œil (couleurs perçues) ou les pixels (mesurées) des recherches, un clic bascule,
+    /// dans un carré de côté `side` (le filtre, au-dessus de la cible).
+    fn perceived_toggle(&mut self, ui: &mut Ui, side: f32) {
+        let perceived = self.palette_view_perceived;
+        let tip = if perceived {
+            t!("palette-view-perceived")
+        } else {
+            t!("palette-measured")
+        };
+        let (rect, eye) = marks::icon_button(ui, side, &t!("palette-perceived"), &tip);
+        let color = ui.style().interact(&eye).fg_stroke.color;
+        if perceived {
+            marks::eye(ui.painter(), rect.shrink(side * 0.15), color);
+        } else {
+            marks::pixels(ui.painter(), rect.shrink(side * 0.22), color);
+        }
+        if eye.clicked() {
+            self.palette_view_perceived = !perceived;
+        }
+    }
+
+    /// La pastille de la couleur cherchée (ou de la dernière ; plusieurs côte à côte), de
+    /// taille `size` : un clic ouvre la boîte de choix (retour du 21/11/2026).
+    fn colour_patch(&mut self, ui: &mut Ui, size: egui::Vec2) {
+        let colours = self
+            .palette_colour
+            .as_ref()
+            .map(|c| c.colours.clone())
+            .or(self.palette_colour_last.clone())
+            .filter(|c| !c.is_empty());
+        let (patch, response) = ui.allocate_exact_size(size, Sense::click());
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::Role::Button, true, t!("palette-colour-title"))
+        });
+        match colours {
+            Some(colours) => {
+                let w = patch.width() / colours.len() as f32;
+                for (i, &oklab) in colours.iter().enumerate() {
+                    let x = patch.left() + w * i as f32;
+                    let part =
+                        Rect::from_min_max(pos2(x, patch.top()), pos2(x + w, patch.bottom()));
+                    let swatch = tri::palette::Swatch { oklab, share: 0.0 };
+                    ui.painter()
+                        .rect_filled(part, 0.0, crate::palette_view::color(&swatch));
+                }
+            }
+            None => {
+                ui.painter().rect_stroke(
+                    patch,
+                    3.0,
+                    egui::Stroke::new(1.0, ui.visuals().weak_text_color()),
+                    egui::StrokeKind::Inside,
+                );
+            }
+        }
+        if response
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .on_hover_text(t!("palette-colour-patch-tip"))
+            .clicked()
+        {
+            self.open_colour_dialog();
+        }
     }
 
     /// Valeur d'un curseur `0..=max` du panneau après la touche `key` (pointé au clavier) :
@@ -5265,60 +5347,6 @@ impl TriApp {
                 let label = ui
                     .add(egui::Label::new(name.as_str()).sense(Sense::click()))
                     .on_hover_text(&tip);
-                // À droite de « Couleur », la pastille de la couleur cherchée (ou la
-                // dernière) : un clic ouvre la boîte de choix (retour du 21/11/2026).
-                if action == Action::FilterPaletteColour {
-                    let colours = self
-                        .palette_colour
-                        .as_ref()
-                        .map(|c| c.colours.clone())
-                        .or(self.palette_colour_last.clone())
-                        .filter(|c| !c.is_empty());
-                    let side = 14.0;
-                    let (patch, response) =
-                        ui.allocate_exact_size(vec2(side * 1.6, side), Sense::click());
-                    response.widget_info(|| {
-                        egui::WidgetInfo::labeled(
-                            egui::Role::Button,
-                            true,
-                            t!("palette-colour-title"),
-                        )
-                    });
-                    // Plusieurs couleurs : côte à côte dans la pastille.
-                    match colours {
-                        Some(colours) => {
-                            let w = patch.width() / colours.len() as f32;
-                            for (i, &oklab) in colours.iter().enumerate() {
-                                let x = patch.left() + w * i as f32;
-                                let part = Rect::from_min_max(
-                                    pos2(x, patch.top()),
-                                    pos2(x + w, patch.bottom()),
-                                );
-                                let swatch = tri::palette::Swatch { oklab, share: 0.0 };
-                                ui.painter().rect_filled(
-                                    part,
-                                    0.0,
-                                    crate::palette_view::color(&swatch),
-                                );
-                            }
-                        }
-                        None => {
-                            ui.painter().rect_stroke(
-                                patch,
-                                3.0,
-                                egui::Stroke::new(1.0, ui.visuals().weak_text_color()),
-                                egui::StrokeKind::Inside,
-                            );
-                        }
-                    }
-                    if response
-                        .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .on_hover_text(t!("palette-colour-patch-tip"))
-                        .clicked()
-                    {
-                        self.open_colour_dialog();
-                    }
-                }
                 check.changed() || icon.clicked() || label.clicked()
             })
             .inner
@@ -6093,6 +6121,8 @@ impl TriApp {
             return;
         };
         let (mut search, mut cancel, mut eyedropper) = (false, false, false);
+        let mut toggle_perceived = false;
+        let perceived = self.palette_view_perceived;
         // Pastilles libres changées, recherche hiérarchique basculée : écrites après.
         let mut own: Option<Vec<String>> = None;
         let mut mode: Option<crate::settings::ColourMode> = None;
@@ -6182,6 +6212,23 @@ impl TriApp {
                                     ui.visuals().text_color(),
                                 );
                                 eyedropper = button.clicked();
+                                // L'œil (ou les pixels) du panneau : la recherche en couleurs
+                                // perçues ou mesurées, pour savoir ce qu'on cherche (retour du
+                                // 24/11/2026) ; un clic bascule.
+                                let tip = if perceived {
+                                    t!("palette-view-perceived")
+                                } else {
+                                    t!("palette-measured")
+                                };
+                                let (rect, button) =
+                                    marks::icon_button(ui, size, &t!("palette-perceived"), &tip);
+                                let color = ui.visuals().text_color();
+                                if perceived {
+                                    marks::eye(ui.painter(), rect.shrink(size * 0.15), color);
+                                } else {
+                                    marks::pixels(ui.painter(), rect.shrink(size * 0.2), color);
+                                }
+                                toggle_perceived = button.clicked();
                             });
                             ui.add_space(10.0);
                             // R G B puis T S V, alignés (retour du 21/11/2026) : la lettre, la
@@ -6317,6 +6364,10 @@ impl TriApp {
         wheel = wheel.or(keyed.wheel);
         search |= keyed.ok;
         eyedropper |= keyed.eyedropper;
+        // L'aperçu en direct se refait (`drain_events` voit l'œil basculé).
+        if toggle_perceived {
+            self.palette_view_perceived = !perceived;
+        }
         if let Some(own) = own {
             self.set_own_swatches(own);
         }
@@ -33822,6 +33873,22 @@ mod tests {
         h.state_mut().palette_view_perceived = false;
         h.run_steps(3);
         assert!(!found(&h));
+        // Dans la boîte des couleurs aussi, l'icône bascule (celle de la boîte, dessinée
+        // après celle du panneau).
+        h.state_mut()
+            .show_colour_dialog(ColourDialog::new(&[orange]));
+        h.run_steps(3);
+        h.get_all_by_label(&t!("palette-perceived"))
+            .last()
+            .unwrap()
+            .click_accesskit();
+        h.run_steps(3);
+        assert!(h.state().palette_view_perceived);
+        assert!(found(&h), "l'aperçu en direct, en couleurs perçues");
+        // Et dans le filtre, au-dessus de la cible : à garder en vue.
+        h.state_mut().colour_dialog = None;
+        h.run_steps(3);
+        assert!(h.get_all_by_label(&t!("palette-perceived")).count() >= 2);
     }
 
     #[test]
@@ -33883,10 +33950,16 @@ mod tests {
         // À la souris : l'icône à côté de la source (pixels / œil) bascule, les jumelles
         // ouvrent la boîte des couleurs (par l'accessibilité : la section est sous le bord
         // de la fenêtre de test).
-        h.get_by_label(&t!("palette-perceived")).click_accesskit();
+        h.get_all_by_label(&t!("palette-perceived"))
+            .last()
+            .unwrap()
+            .click_accesskit();
         h.run_steps(2);
         assert!(h.state().palette_view_perceived);
-        h.get_by_label(&t!("palette-perceived")).click_accesskit();
+        h.get_all_by_label(&t!("palette-perceived"))
+            .last()
+            .unwrap()
+            .click_accesskit();
         h.run_steps(2);
         assert!(!h.state().palette_view_perceived);
         h.get_by_label(&t!("palette-search-open")).click_accesskit();
