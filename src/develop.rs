@@ -1172,8 +1172,8 @@ pub fn render_stamp_known(sidecar: &Path) -> bool {
 }
 
 /// Empreinte du **développement** décrit par un sidecar, pour la clé de cache du rendu
-/// développé : sous `xmp`, seulement les champs de darktable (`darktable:…`), sans
-/// `darktable:colorlabels` ; autre format (`.rrdata`), tout le contenu. Avant (revue du
+/// développé : sous `xmp`, seulement les champs de darktable (`darktable:…`), sans ceux
+/// qui ne décrivent pas le développement ([`NOT_DEVELOPMENT`] : couleurs, dates) ; autre format (`.rrdata`), tout le contenu. Avant (revue du
 /// 28/10/2026), la taille et la date du fichier : noter une image dans `tri`, qui écrit
 /// dans le même `IMAGE.RAF.xmp` (convention darktable), refaisait le rendu (~10 s).
 /// Mémorisée par fichier, taille et date : le sidecar n'est relu que s'il a changé.
@@ -1238,11 +1238,24 @@ pub fn render_stamp(sidecar: &Path) -> String {
     fingerprint
 }
 
+/// Champs de darktable qui ne décrivent pas le développement : les couleurs (écrites par
+/// `tri` avec les notes) et les dates d'import, de modification, d'export et
+/// d'impression. Retour du 24/11/2026 : la séance importée dans darktable sur une autre
+/// machine (sans rien développer), puis une image exportée, et toute la séance se
+/// redéveloppait, darktable ayant réécrit chaque sidecar avec sa date d'import.
+const NOT_DEVELOPMENT: [&str; 5] = [
+    "darktable:colorlabels",
+    "darktable:import_timestamp",
+    "darktable:change_timestamp",
+    "darktable:export_timestamp",
+    "darktable:print_timestamp",
+];
+
 /// Champs de darktable d'un sidecar XMP, à la suite (attributs, éléments et leur texte),
 /// sans `darktable:colorlabels` (écrit par `tri` avec les notes). `None` : XML illisible.
 fn darktable_content(xmp: &str) -> Option<Vec<u8>> {
     use quick_xml::events::Event;
-    let ours = |name: &str| name.starts_with("darktable:") && name != "darktable:colorlabels";
+    let ours = |name: &str| name.starts_with("darktable:") && !NOT_DEVELOPMENT.contains(&name);
     let mut reader = quick_xml::Reader::from_str(xmp);
     let mut out = Vec::new();
     // Profondeur dans un élément de darktable (`darktable:history`…) : tout son contenu
@@ -2299,6 +2312,23 @@ mod tests {
             developed,
             "exposition changée : autre rendu"
         );
+        // Importée ou exportée dans darktable (retour du 24/11/2026) : ses dates, en
+        // attributs ou en éléments, ne refont pas le rendu.
+        write(xmp(4, 2, "bb"));
+        let developed = render_stamp(&sidecar);
+        write(xmp(4, 2, "bb").replace(
+            "darktable:history_end=\"2\"",
+            "darktable:history_end=\"2\" darktable:import_timestamp=\"63902551234567890\" \
+             darktable:change_timestamp=\"63902551234567891\"",
+        ));
+        assert_eq!(render_stamp(&sidecar), developed, "importée : même rendu");
+        write(xmp(4, 2, "bb").replace(
+            "<darktable:history>",
+            "<darktable:export_timestamp>63902559999999999</darktable:export_timestamp>\
+             <darktable:print_timestamp>63902559999999998</darktable:print_timestamp>\
+             <darktable:history>",
+        ));
+        assert_eq!(render_stamp(&sidecar), developed, "exportée : même rendu");
         // RapidRAW : les réglages seuls ; la note ne refait pas le rendu (31/10/2026).
         let rr = dir.path().join("DSCF0001.RAF.rrdata");
         written(&rr, r#"{"rating": 0, "adjustments": {"exposure": 1}}"#).unwrap();
