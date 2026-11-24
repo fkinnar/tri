@@ -208,6 +208,7 @@ fn synthetic(rng: &mut Lcg) -> Palette {
             })
             .collect(),
         coverage: Coverage::from_samples(&samples),
+        perceived: None,
     }
 }
 

@@ -157,6 +157,18 @@ k-means (weighted, `cluster_weighted`), a point weighs `1 + perceived_salience Ã
 surround / 0.1`. On the user's photo under violet light, the face comes out orange from 2
 colours (pinkish beige in raw values).
 
+**Cached perceived palette** (2026-11-24): next to the measured palette, the cache keeps
+its perceived-colour version (`Palette::perceived`, `extract_perceived`: the same
+computation at step `colors`, then merges and specks as in `extract`, with its coverage).
+The image is first reduced to `perceived_side` (512 px): the computation covers every
+pixel, and the surround is measured as a share of the image. Both palettes make a single
+entry, in the cache and in the search index (`VERSION` 3: earlier palettes are computed
+again once); the key also counts the `perceived_*` settings. `Palette::view(perceived)`
+gives one or the other. In the interface, the eye of the Colours section applies to
+everything: the panel's palette, the large colours, "Colour", "Similar colours", the
+binoculars and stacking by palette (redone when it toggles). On the command line,
+`--perceived` applies to the printed palettes and `--find`.
+
 ## Settings `[colours]`
 
 `colors`, `side`, `iterations`, `merge`, `min_share` (see `doc/config.example.en.toml`).

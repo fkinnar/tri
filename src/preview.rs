@@ -212,13 +212,21 @@ pub fn params(level: Level, settings: &Settings) -> String {
         Level::Palette(source) => {
             let p = &settings.palette;
             format!(
-                "r{RULES_VERSION};v{};colors={};side={};it={};merge={};min={};from={}",
+                "r{RULES_VERSION};v{};colors={};side={};it={};merge={};min={};\
+                 perceived={},{},{},{},{},{},{};from={}",
                 crate::palette::VERSION,
                 p.colors,
                 p.side,
                 p.iterations,
                 p.merge,
                 p.min_share,
+                p.perceived_adaptation,
+                p.perceived_surround,
+                p.perceived_salience,
+                p.perceived_saturation,
+                p.perceived_saturation_colours,
+                p.perceived_saturation_falloff,
+                p.perceived_side,
                 params(palette_input(source), settings)
             )
         }
@@ -578,7 +586,12 @@ pub fn compute_palette(
     let image = cache
         .get(&key(file, input, settings)?)
         .ok_or(PreviewError::NotAnImage)?;
-    Ok(crate::palette::extract(&image, &settings.palette))
+    let mut palette = crate::palette::extract(&image, &settings.palette);
+    palette.perceived = Some(Box::new(crate::palette::extract_perceived(
+        &image,
+        &settings.palette,
+    )));
+    Ok(palette)
 }
 
 /// Palette de `file` tirée de `source`, lue dans le cache ; `None` si elle n'y est pas

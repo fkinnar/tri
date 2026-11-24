@@ -160,7 +160,7 @@ struct Args {
     /// `--posterize K` : chaque image en K couleurs (vue par palette, #492), écrite dans
     /// `--to`.
     posterize: Option<usize>,
-    /// `--perceived` : avec `--posterize`, en couleurs perçues (expérience).
+    /// `--perceived` : en couleurs perçues, les palettes, `--find` et `--posterize`.
     perceived: bool,
     /// Calculs choisis (`--compute previews,colours-raw…`, #555), et `--recreate`.
     compute: Vec<tri::compute::Kind>,
@@ -1074,6 +1074,7 @@ fn palettes(
     kind: tri::palette::SourceKind,
     query: Option<&tri::palette::ColourQuery>,
     posterize: Option<(usize, PathBuf, bool)>,
+    perceived: bool,
 ) -> AnyResult<()> {
     let mut found: Vec<(String, tri::palette::Palette)> = Vec::new();
     use tri::scheduler::Producer;
@@ -1100,6 +1101,8 @@ fn palettes(
             .and_then(|()| {
                 tri::preview::palette(&cache, file, source, &preview).ok_or_else(|| "?".to_string())
             });
+        // En couleurs perçues : la palette perçue rangée avec elle.
+        let read = read.map(|p| p.view(perceived).clone());
         match read {
             Ok(p) => {
                 // Vue par palette (#492) : l'image d'où vient la palette, en K couleurs,
@@ -2377,6 +2380,7 @@ fn run() -> AnyResult<()> {
             args.palette_source.unwrap_or_default(),
             query.as_ref(),
             posterize,
+            args.perceived,
         );
     }
     if let Some(target) = args.convert {
