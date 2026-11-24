@@ -607,6 +607,8 @@ loupe = "m"
 "core.colours.step.7" = ["c 7"]
 "core.colours.step.8" = ["c 8"]
 "core.colours.perceived" = ["c p"]
+# v (voir): the shown image itself in the chosen step (full screen, cropping a version).
+"core.colours.image" = ["c v"]
 # p: the sharpness map. c: its colour; j / k (or Down / Up): more lenient / stricter.
 # z then a number, without Enter: the full-screen zoom (same rules as m below); z again
 # (before any digit): 100 %; / (fit, as without the leader): fitted.

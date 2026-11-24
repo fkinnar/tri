@@ -389,6 +389,7 @@ action-core-colours-step-6 = Couleurs en grand : 6 couleurs
 action-core-colours-step-7 = Couleurs en grand : 7 couleurs
 action-core-colours-step-8 = Couleurs en grand : 8 couleurs
 action-core-colours-perceived = Couleurs en grand : couleurs perçues ou non
+action-core-colours-image = Image affichée au cran choisi ou telle quelle (plein écran, recadrage)
 action-core-view-histogram_channel = Grand histogramme : canal suivant
 action-core-histogram-red = Grand histogramme : rouge seul
 action-core-histogram-green = Grand histogramme : vert seul
