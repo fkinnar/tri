@@ -327,8 +327,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   23/11/2026 : dessous, la boîte était déséquilibrée), un curseur à crans : 0
   l'image telle quelle, 1 sa couleur moyenne (la dominante), n l'image en n couleurs (chaque
   pixel remplacé par la plus proche, `palette::posterize`), jusqu'à `[gui.colours_view]
-  max` (8) ; **fausses couleurs** au choix (`false_colours`, la plus présente d'abord, avec
-  leur légende face aux vraies) ; à droite, la palette du cran (un clic sur une couleur la
+  max` (8) ; **N&B** au choix (`<leader> c g`, `core.colours.grey`, à la place des fausses couleurs
+  depuis le 24/11/2026, « en moins criard » : chaque couleur en gris selon sa clarté, du
+  noir au blanc à pas égaux selon le nombre de couleurs, `palette::grey_levels`, avec leur
+  légende face aux vraies ; au cran 0, l'image en gris ; l'ancienne clé `false_colours`
+  est ignorée) ; à droite, la palette du cran (un clic sur une couleur la
   ferme et ouvre la boîte des couleurs sur elle, sans chercher encore ; la main seulement
   sur ce qui se clique). Dans le panneau aussi, une couleur de la liste ouvre la boîte
   des couleurs plutôt que de filtrer (retours du 23/11/2026 : la couleurs en grand restait
@@ -343,7 +346,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   et son logiciel, « DSCF6228 (Darktable) » (`image_title`). La boîte des couleurs ouverte
   sur des couleurs (cliquées dans une palette, ou la recherche d'avant) les cherche tout
   de suite, en grille même depuis le plein écran ; « Annuler » ramène d'où l'on vient
-  (plein écran sur la même photo, couleurs en grand). Capture : `TRI_GUI_ACTIONS=core.view.colours,palette_k:4f`. **Clavier** (retour du
+  (plein écran sur la même photo, couleurs en grand). Capture : `TRI_GUI_ACTIONS=core.view.colours,palette_k:4g`. **Clavier** (retour du
   23/11/2026 : la boîte ne se pilotait qu'à la souris, et derrière elle les flèches
   déplaçaient la sélection) : la grille ne reçoit plus rien tant que la boîte est ouverte ;
   hors saisie dans un champ, `1`–`5` choisissent une couleur (un vide : plus rien de

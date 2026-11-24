@@ -1671,8 +1671,8 @@ pub struct TriApp {
     palette_view: bool,
     /// Son cran : 0 l'image, 1 sa moyenne, n : n couleurs (gardé d'une image à l'autre).
     palette_view_k: usize,
-    /// Fausses couleurs (`[gui.colours_view] false_colours`).
-    palette_view_false: bool,
+    /// « N&B » : chaque couleur en gris, du noir au blanc (`<leader> c g`).
+    palette_view_grey: bool,
     /// Couleurs perçues (adaptées à la lumière de l'entourage) : la palette du panneau, les
     /// couleurs en grand, les recherches par couleur et les piles par palette (l'œil).
     palette_view_perceived: bool,
@@ -2267,15 +2267,14 @@ pub fn development_label(path: &Path) -> String {
 }
 
 /// `image` au cran `k` (0 : telle quelle, ou perçue avec `perceived`), nettoyée en
-/// masses avec `masses`, en fausses couleurs avec `false_on` (`falses`, dans l'ordre de
-/// présence), prête pour l'écran ; et ses couleurs. Fait en fond : couleurs en grand, image du plein écran (`<leader> c v`).
+/// masses avec `masses`, en gris avec `grey` (« N&B »), prête pour l'écran ; et ses
+/// couleurs. Fait en fond : couleurs en grand, image du plein écran (`<leader> c v`).
 fn posterized_image(
     image: tri::bitmap::Bitmap,
     k: usize,
     settings: &tri::palette::PaletteSettings,
     perceived: bool,
-    false_on: bool,
-    falses: &[[u8; 3]],
+    grey: bool,
     masses: Masses,
 ) -> (egui::ColorImage, Vec<tri::palette::Swatch>) {
     // Mode « masses » : son poids de la clarté pour répartir l'image en couleurs.
@@ -2297,25 +2296,26 @@ fn posterized_image(
             f32::from_bits(smooth),
         );
     }
-    // Fausses couleurs : chaque couleur (dans l'ordre de présence) remplacée.
-    if false_on && k > 0 && !falses.is_empty() {
+    // « N&B » : chaque couleur remplacée par son gris, du noir au blanc à pas égaux selon
+    // le nombre de couleurs (`palette::grey_levels`) ; au cran 0, l'image en gris (la
+    // clarté de chaque pixel).
+    if grey && k > 0 {
         let map: HashMap<[u8; 3], [u8; 3]> = swatches
             .iter()
-            .enumerate()
-            .map(|(i, s)| {
-                let rgb = falses[i % falses.len()];
-                let working = tri::palette::Swatch {
-                    oklab: tri::palette::srgb_to_oklab(rgb),
-                    share: 0.0,
-                }
-                .working();
-                (s.working(), working)
-            })
+            .zip(tri::palette::grey_levels(&swatches))
+            .map(|(s, l)| (s.working(), grey_working(l)))
             .collect();
         for px in bitmap.data.as_chunks_mut::<3>().0 {
             if let Some(c) = map.get(px) {
                 *px = *c;
             }
+        }
+    } else if grey {
+        let mut memo: HashMap<[u8; 3], [u8; 3]> = HashMap::new();
+        for px in bitmap.data.as_chunks_mut::<3>().0 {
+            *px = *memo
+                .entry(*px)
+                .or_insert_with(|| grey_working(tri::palette::working_to_oklab(*px)[0]));
         }
     }
     crate::display::to_screen(&mut bitmap);
@@ -2324,6 +2324,15 @@ fn posterized_image(
         &bitmap.data,
     );
     (image, swatches)
+}
+
+/// Le gris de clarté OKLab `l` (0 noir, 1 blanc), dans l'espace de travail.
+fn grey_working(l: f32) -> [u8; 3] {
+    tri::palette::Swatch {
+        oklab: [l.clamp(0.0, 1.0), 0.0, 0.0],
+        share: 0.0,
+    }
+    .working()
 }
 
 /// La palette `p`, ou sa palette perçue avec `perceived` (une copie, rangée à part).
@@ -2911,7 +2920,7 @@ impl TriApp {
             histogram_large: false,
             palette_view: false,
             palette_view_k: 0,
-            palette_view_false: false,
+            palette_view_grey: false,
             palette_view_perceived: false,
             palette_perceived_applied: false,
             colours_on_image: false,
@@ -15378,6 +15387,7 @@ impl TriApp {
             // L'image du plein écran au cran choisi (idée du 24/11/2026).
             Action::ColoursOnImage => self.colours_on_image = !self.colours_on_image,
             Action::ColoursMasses => self.palette_view_masses = !self.palette_view_masses,
+            Action::ColoursGrey => self.palette_view_grey = !self.palette_view_grey,
             Action::ColoursStep(_) | Action::ColoursPerceived => {
                 if self.palette_source.is_none() {
                     self.notice = Some((t!("palette-choose"), false));
@@ -21799,7 +21809,7 @@ impl TriApp {
             .unwrap_or_default();
         let side = self.gui.palette_view.side.max(120.0);
         let mut k = self.palette_view_k;
-        let mut false_colours = self.palette_view_false;
+        let mut grey = self.palette_view_grey;
         let mut perceived = self.palette_view_perceived;
         let mut picked = None;
         let mut search = false;
@@ -21819,10 +21829,18 @@ impl TriApp {
             }),
             _ => None,
         };
-        let legend: Vec<Color32> = if false_colours && k > 0 {
-            self.false_colours()
-        } else {
-            Vec::new()
+        // « N&B » : le gris de chaque couleur, en légende à côté d'elle.
+        let legend: Vec<Color32> = match &palette {
+            Some(p) if grey && k > 0 => tri::palette::grey_levels(&p.swatches)
+                .into_iter()
+                .map(|l| {
+                    crate::palette_view::color(&tri::palette::Swatch {
+                        oklab: [l, 0.0, 0.0],
+                        share: 0.0,
+                    })
+                })
+                .collect(),
+            _ => Vec::new(),
         };
         let at = ctx.content_rect().center() - vec2(side, side * 0.6);
         let modal = modal_at("palette_view", at)
@@ -21899,8 +21917,8 @@ impl TriApp {
                                 },
                             );
                         });
-                        ui.checkbox(&mut false_colours, t!("palette-view-false"))
-                            .on_hover_text(t!("palette-view-false-tip"));
+                        ui.checkbox(&mut grey, t!("palette-view-grey"))
+                            .on_hover_text(t!("palette-view-grey-tip"));
                         ui.checkbox(&mut perceived, t!("palette-view-perceived"))
                             .on_hover_text(t!("palette-view-perceived-tip"));
                         // Le mode « masses » et ses deux curseurs (idée du 24/11/2026).
@@ -21911,7 +21929,7 @@ impl TriApp {
                         ui.add_space(12.0);
                         ui.separator();
                         ui.add_space(8.0);
-                        // Fausses couleurs : leur légende, alignée sur les vraies.
+                        // « N&B » : la légende des gris, chacun à côté de sa couleur.
                         if !legend.is_empty()
                             && let Some(p) = &palette
                         {
@@ -21952,7 +21970,7 @@ impl TriApp {
             self.palette_view = false;
         }
         self.palette_view_k = k;
-        self.palette_view_false = false_colours;
+        self.palette_view_grey = grey;
         self.palette_view_perceived = perceived;
         // Les jumelles : les couleurs principales du cran affiché, cherchées ; « Retour »
         // rend les couleurs en grand, comme pour une couleur cliquée.
@@ -22056,7 +22074,7 @@ impl TriApp {
             file.path.clone(),
             level,
             self.palette_view_k,
-            self.palette_view_false,
+            self.palette_view_grey,
             self.palette_view_perceived,
             self.masses_key(),
         );
@@ -22070,14 +22088,7 @@ impl TriApp {
         if !pending && let Some(engine) = &self.engine {
             let (cache, preview) = (engine.cache.clone(), engine.preview);
             let settings = self.settings.palette;
-            let falses: Vec<[u8; 3]> = self
-                .gui
-                .palette_view
-                .false_colours
-                .iter()
-                .filter_map(|h| parse_hex(h))
-                .collect();
-            let (_, _, k, false_on, perceived, masses) = wanted.clone();
+            let (_, _, k, grey, perceived, masses) = wanted.clone();
             let file = file.clone();
             let (tx, rx) = mpsc::channel();
             let repaint = ctx.clone();
@@ -22085,9 +22096,8 @@ impl TriApp {
                 let image = preview::key(&file, level, &preview)
                     .ok()
                     .and_then(|key| cache.get(&key));
-                let out = image.map(|image| {
-                    posterized_image(image, k, &settings, perceived, false_on, &falses, masses).0
-                });
+                let out = image
+                    .map(|image| posterized_image(image, k, &settings, perceived, grey, masses).0);
                 let _ = tx.send(out);
                 repaint.request_repaint();
             });
@@ -22127,17 +22137,6 @@ impl TriApp {
         self.overlay = chosen;
     }
 
-    /// Fausses couleurs de la palette en grand, en couleurs d'écran.
-    fn false_colours(&self) -> Vec<Color32> {
-        self.gui
-            .palette_view
-            .false_colours
-            .iter()
-            .filter_map(|h| parse_hex(h))
-            .map(|[r, g, b]| Color32::from_rgb(r, g, b))
-            .collect()
-    }
-
     /// L'image de la palette en grand : celle arrivée du fond, et demandée en fond si elle
     /// manque (lecture du cache et postérisation hors du fil de l'interface).
     /// Ce que montrent les couleurs en grand et, hors cran 0, la palette du panneau : la
@@ -22151,7 +22150,7 @@ impl TriApp {
             file.path.clone(),
             source,
             self.palette_view_k,
-            self.palette_view_false,
+            self.palette_view_grey,
             self.palette_view_perceived,
             self.masses_key(),
         ))
@@ -22249,14 +22248,7 @@ impl TriApp {
         };
         let (cache, preview) = (engine.cache.clone(), engine.preview);
         let settings = self.settings.palette;
-        let falses: Vec<[u8; 3]> = self
-            .gui
-            .palette_view
-            .false_colours
-            .iter()
-            .filter_map(|h| parse_hex(h))
-            .collect();
-        let (path, source, k, false_on, perceived, masses) = wanted.clone();
+        let (path, source, k, grey, perceived, masses) = wanted.clone();
         let _ = path;
         let (tx, rx) = mpsc::channel();
         let repaint = ctx.clone();
@@ -22264,9 +22256,8 @@ impl TriApp {
             let image = preview::key(&file, preview::palette_input(source), &preview)
                 .ok()
                 .and_then(|key| cache.get(&key));
-            let out = image.map(|image| {
-                posterized_image(image, k, &settings, perceived, false_on, &falses, masses)
-            });
+            let out =
+                image.map(|image| posterized_image(image, k, &settings, perceived, grey, masses));
             let _ = tx.send(out);
             repaint.request_repaint();
         });
@@ -25563,9 +25554,9 @@ impl TriApp {
                         .collect();
                     self.show_colour_dialog(ColourDialog::new(&colours));
                 }
-                Step::PaletteK(k, falses, perceived) => {
+                Step::PaletteK(k, grey, perceived) => {
                     self.palette_view_k = k;
-                    self.palette_view_false = falses;
+                    self.palette_view_grey = grey;
                     self.palette_view_perceived = perceived;
                 }
                 Step::Harmony(id) => {
@@ -28830,11 +28821,12 @@ fn parse_actions(list: &str) -> Vec<Step> {
                 )),
                 None if id.starts_with("palette_k:") => {
                     let v = &id["palette_k:".len()..];
-                    let (falses, perceived) = (v.contains('f'), v.contains('p'));
-                    v.trim_end_matches(['f', 'p'])
+                    // `g` : N&B ; `p` : couleurs perçues.
+                    let (grey, perceived) = (v.contains('g'), v.contains('p'));
+                    v.trim_end_matches(['g', 'p'])
                         .parse()
                         .ok()
-                        .map(|k| Step::PaletteK(k, falses, perceived))
+                        .map(|k| Step::PaletteK(k, grey, perceived))
                 }
                 None if id.starts_with("harmony:") => {
                     Some(Step::Harmony(id["harmony:".len()..].to_string()))
@@ -34226,6 +34218,22 @@ mod tests {
         h.state_mut().palette_view_masses_area = 0.0;
         h.run_steps(2);
         assert_ne!(h.state().masses_key(), shown.key.5);
+        // « N&B » (`<leader> c g`, à la place des fausses couleurs) : l'image en gris.
+        for key in [Key::B, Key::C, Key::G] {
+            let m = if key == Key::B {
+                Modifiers::CTRL
+            } else {
+                Modifiers::NONE
+            };
+            press(&mut h, key, m);
+        }
+        h.run_steps(2);
+        assert!(h.state().palette_view_grey);
+        run_until(&mut h, |app| {
+            app.palette_view_shown
+                .as_ref()
+                .is_some_and(|s| s.key.3 && s.key.2 == 2)
+        });
     }
 
     #[test]
