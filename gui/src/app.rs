@@ -1992,6 +1992,12 @@ pub struct TriApp {
     /// Vignettes visibles prêtes mais pas encore chargées (budget de l'image dépassé).
     visible_waiting: usize,
     mode: Mode,
+    /// Tests : bords gauche et droit des cellules de la dernière ligne dessinée.
+    #[cfg(test)]
+    grid_row_span: Option<(f32, f32)>,
+    /// Tests : bords gauche et droit de la zone de la grille.
+    #[cfg(test)]
+    grid_area_span: Option<(f32, f32)>,
     /// Source préférée en plein écran pour les RAW (JPEG boîtier par défaut).
     source: Source,
     /// Source d'avant le développé (boîtier ou RAW) : celle des images qui n'ont pas de
@@ -3019,6 +3025,10 @@ impl TriApp {
             startup_actions: startup_actions().into(),
             script_wait: None,
             mode: Mode::Grid,
+            #[cfg(test)]
+            grid_row_span: None,
+            #[cfg(test)]
+            grid_area_span: None,
             source: Source::default(),
             base_source: Source::default(),
             zoom: None,
@@ -5662,6 +5672,18 @@ impl TriApp {
         for (key, p) in engine.palette_reads.take() {
             if let Some(p) = p {
                 new |= self.palettes.insert(key, p).is_none();
+            }
+        }
+        // Ici, et pas chez l'appelant : le panneau (`palette_of`) prend aussi les palettes
+        // arrivées, et les piles n'étaient alors pas refaites (CI Windows, 23-24/11/2026 :
+        // 4 piles au lieu de 3, une palette prise en dessinant le panneau).
+        if new {
+            if self.palette_searching() {
+                self.palette_refilter_pending = true;
+            }
+            // Piles par palette : refaites avec les palettes arrivées.
+            if self.stacking && self.stacks_by_palette() {
+                self.stacks_dirty = true;
             }
         }
         new
@@ -13539,15 +13561,7 @@ impl TriApp {
         let mut scored = Vec::new();
         self.drain_engine(&mut scored);
         self.take_scores(scored);
-        if self.take_palette_reads() {
-            if self.palette_searching() {
-                self.palette_refilter_pending = true;
-            }
-            // Piles par palette : refaites avec les palettes arrivées.
-            if self.stacking && self.stacks_by_palette() {
-                self.stacks_dirty = true;
-            }
-        }
+        self.take_palette_reads();
         self.palette_refilter();
         self.take_colour_pick();
         self.exposure_refilter();
@@ -24732,21 +24746,33 @@ impl TriApp {
         }
         // Grille centrée : la marge restante est répartie des deux côtés.
         let margin = (ui.available_width() - self.layout.width()) / 2.0;
-
+        #[cfg(test)]
+        {
+            let r = ui.available_rect_before_wrap();
+            self.grid_area_span = Some((r.left(), r.right()));
+        }
         let deadline = Instant::now() + self.gui.load_budget();
         self.visible_waiting = 0;
         let mut drawn: Option<(usize, usize)> = None;
         let output = area.show_rows(ui, cell, rows, |ui, visible| {
             for row in visible {
                 ui.horizontal(|ui| {
-                    ui.add_space((margin - g.gap).max(0.0));
+                    // Sans l'espacement entre éléments : `add_space` ne l'ajoute pas
+                    // (retour du 24/11/2026 : la grille était décalée d'un écart à gauche).
+                    ui.add_space(margin.max(0.0));
                     let start = row * self.layout.columns;
                     let end = (start + self.layout.columns).min(shown.len());
+                    #[cfg(test)]
+                    let left = ui.cursor().left();
                     for &index in &shown[start..end] {
                         drawn = Some(
                             drawn.map_or((index, index), |(a, b)| (a.min(index), b.max(index))),
                         );
                         self.cell(ui, &ctx, index, deadline);
+                    }
+                    #[cfg(test)]
+                    {
+                        self.grid_row_span = Some((left, ui.min_rect().right()));
                     }
                 });
             }
@@ -38272,6 +38298,25 @@ mod tests {
         h.state_mut().gui.end.seconds = 0.0;
         h.run_steps(2);
         assert!(h.state().end_notice.is_none());
+    }
+
+    #[test]
+    fn the_grid_is_centred_in_its_area() {
+        // Retour du 24/11/2026 : la grille était décalée d'un écart vers la gauche.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        let area = h.state().grid_width;
+        let (left, _) = h.state().grid_row_span.expect("une ligne dessinée");
+        let (start, end) = h.state().grid_area_span.expect("la zone de la grille");
+        assert!((end - start - area).abs() < 0.5, "{start} {end} {area}");
+        // Une ligne pleine (la dernière peut ne pas l'être) : de `left` à `left + width`.
+        let right = left + h.state().layout.width();
+        assert!(
+            ((left - start) - (end - right)).abs() < 1.0,
+            "à gauche {}, à droite {}",
+            left - start,
+            end - right
+        );
     }
 
     #[test]
