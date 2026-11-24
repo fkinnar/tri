@@ -140,7 +140,13 @@ rangé **tel quel** dans le cache. Sa clé comprend l'empreinte du **développem
 par le sidecar (`develop::render_stamp` : les champs `darktable:…` sans
 `darktable:colorlabels`, ou tout le `.rrdata`) : modifier le développement dans darktable
 refait le rendu, noter l'image dans `tri` (qui écrit dans le même `IMAGE.RAF.xmp`) non.
-Jusqu'au 28/10/2026, la taille et la date du fichier : chaque note refaisait le rendu. Dans l'interface, un développé
+Jusqu'au 28/10/2026, la taille et la date du fichier : chaque note refaisait le rendu.
+Depuis le 24/11/2026, sans non plus les **dates** de darktable (`import_timestamp`,
+`change_timestamp`, `export_timestamp`, `print_timestamp`, `NOT_DEVELOPMENT`) : importer la
+séance dans darktable sur une autre machine, sans rien développer, puis exporter une
+image, réécrivait chaque sidecar avec sa date d'import, et toute la séance se
+redéveloppait. (Le changement d'empreinte refait une fois les développements déjà en
+cache.) Dans l'interface, un développé
 déjà affiché dont le sidecar a changé (surveillance du dossier, ou au moment de `b` /
 `Maj+B`) est oublié : `b` revient au rendu de base et `Maj+B` le refait (retour du
 19/10/2026 : un recadrage modifié n'était pas vu). Calcul **sur demande

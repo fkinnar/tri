@@ -136,7 +136,12 @@ in the cache. Its key includes the fingerprint of the **development** described 
 sidecar (`develop::render_stamp`: the `darktable:…` fields without
 `darktable:colorlabels`, or the whole `.rrdata`): changing the development in darktable
 redoes the render, rating the image in `tri` (which writes to the same `IMAGE.RAF.xmp`)
-does not. Until 2026-10-28, the file's size and date: every rating redid the render. In the interface, a developed image already
+does not. Until 2026-10-28, the file's size and date: every rating redid the render.
+Since 2026-11-24, without darktable's **dates** either (`import_timestamp`,
+`change_timestamp`, `export_timestamp`, `print_timestamp`, `NOT_DEVELOPMENT`): importing the
+session into darktable on another machine, without developing anything, then exporting an
+image, rewrote every sidecar with its import date, and the whole session was developed
+again. (The changed fingerprint redoes cached developments once.) In the interface, a developed image already
 displayed whose sidecar has changed (folder watching, or at the time of `b` / `Shift+B`)
 is forgotten: `b` goes back to the basic render and `Shift+B` redoes it (feedback from
 2026-10-19: a modified crop was not seen). Computed **on explicit request only**
