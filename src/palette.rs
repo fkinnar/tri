@@ -1151,6 +1151,9 @@ pub fn posterize_with(
         cluster_best(&samples, None, k.min(16), settings.iterations)
     };
     let centres: Vec<[f32; 3]> = scaled.iter().map(|&c| down.apply(c)).collect();
+    let centres = steady_colours(centres, settings, || {
+        cluster_best(&samples, None, k.min(16), settings.iterations)
+    });
     let colours: Vec<[u8; 3]> = centres
         .iter()
         .map(|&oklab| Swatch { oklab, share: 0.0 }.working())
@@ -1242,6 +1245,9 @@ fn posterize_perceived(
         cluster_best(&points, Some(&weights), k.min(16), settings.iterations)
     };
     let centres: Vec<[f32; 3]> = scaled.iter().map(|&c| down.apply(c)).collect();
+    let centres = steady_colours(centres, settings, || {
+        cluster_best(&points, Some(&weights), k.min(16), settings.iterations)
+    });
     let mut counts = vec![0usize; centres.len()];
     let mut out = Vec::with_capacity(n);
     for p in &perceived {
@@ -1341,6 +1347,47 @@ fn grid(
         }
     }
     (points, weights)
+}
+
+/// Couleurs rendues des masses quand la clarté pèse plus (`posterize_lightness` ≠ 1) :
+/// celles de la répartition par la teinte seule (`reference`, calculée seulement alors),
+/// chaque masse prenant la plus proche, une chacune (retour du 24/11/2026 : en bougeant le
+/// curseur de la clarté, la couleur changeait, la chemise rejointe tirant l'orange du
+/// visage vers le lavande). Seule l'étendue des masses suit le curseur.
+fn steady_colours(
+    centres: Vec<[f32; 3]>,
+    settings: &PaletteSettings,
+    reference: impl FnOnce() -> Vec<[f32; 3]>,
+) -> Vec<[f32; 3]> {
+    if (settings.posterize_lightness - 1.0).abs() < 1e-3 || centres.len() <= 1 {
+        return centres;
+    }
+    let reference = reference();
+    if reference.len() != centres.len() {
+        return centres;
+    }
+    // Les couples les plus proches d'abord, chaque couleur une seule fois.
+    let mut pairs: Vec<(f32, usize, usize)> = centres
+        .iter()
+        .enumerate()
+        .flat_map(|(i, &c)| {
+            reference
+                .iter()
+                .enumerate()
+                .map(move |(j, &r)| (oklab_distance(c, r), i, j))
+        })
+        .collect();
+    pairs.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut out = centres.clone();
+    let (mut done, mut used) = (vec![false; centres.len()], vec![false; reference.len()]);
+    for (_, i, j) in pairs {
+        if !done[i] && !used[j] {
+            out[i] = reference[j];
+            done[i] = true;
+            used[j] = true;
+        }
+    }
+    out
 }
 
 /// Clarté (L d'OKLab) multipliée par `posterize_lightness` pour la vue par palette, et
@@ -2449,8 +2496,15 @@ mod tests {
             "clarté : la chemise avec le visage"
         );
         assert!(!same(&by_light, 70, 10));
-        // Les couleurs rendues restent de vraies couleurs (clarté non déformée).
-        assert!(swatches.iter().all(|w| (0.0..=1.0).contains(&w.oklab[0])));
+        // Les couleurs restent celles de la répartition par la teinte (retour du
+        // 24/11/2026 : elles changeaient avec le curseur) ; seule l'étendue suit.
+        s.posterize_lightness = 1.0;
+        let (_, by_hue_colours) = posterize(&image, 2, &s);
+        let mut a: Vec<[u8; 3]> = swatches.iter().map(Swatch::working).collect();
+        let mut b: Vec<[u8; 3]> = by_hue_colours.iter().map(Swatch::working).collect();
+        a.sort();
+        b.sort();
+        assert_eq!(a, b);
     }
 
     #[test]

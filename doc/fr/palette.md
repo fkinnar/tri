@@ -175,6 +175,9 @@ Avant cela, la répartition en couleurs (`posterize_with`) compte la clarté
 valeurs, les zones claires ensemble), et ses k-moyennes partent de deux départs, le sien et
 des centres aussi éloignés que possible (`cluster_best`, `spread_centres`), le meilleur
 gardé : avec un seul, une chemise claire restait prise avec le fond sombre (minimum local).
+La clarté pesant plus, les couleurs rendues restent celles de la répartition par la teinte
+seule, chaque masse prenant la plus proche (`steady_colours`) : seule l'étendue des masses
+suit le curseur (retour du 24/11/2026 : la couleur changeait).
 
 **Palette perçue en cache** (24/11/2026) : à côté de la palette mesurée, le cache range sa
 version en couleurs perçues (`Palette::perceived`, `extract_perceived` : même calcul au

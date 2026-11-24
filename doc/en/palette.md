@@ -167,7 +167,10 @@ are computed again. Before that, the split into colours (`posterize_with`) count
 lightness `posterize_lightness` times against hue (1: OKLab as is; more: a value study,
 light areas together), and its k-means start from two points, its own and centres as far
 apart as possible (`cluster_best`, `spread_centres`), the better one kept: with one only, a
-light shirt stayed stuck with the dark background (local minimum).
+light shirt stayed stuck with the dark background (local minimum). With lightness weighing
+more, the rendered colours stay those of the hue-only split, each mass taking the closest
+(`steady_colours`): only the masses' extent follows the slider (feedback of 2026-11-24: the
+colour changed).
 
 **Cached perceived palette** (2026-11-24): next to the measured palette, the cache keeps
 its perceived-colour version (`Palette::perceived`, `extract_perceived`: the same
