@@ -5615,6 +5615,18 @@ impl TriApp {
                 new |= self.palettes.insert(key, p).is_none();
             }
         }
+        // Ici, et pas chez l'appelant : le panneau (`palette_of`) prend aussi les palettes
+        // arrivées, et les piles n'étaient alors pas refaites (CI Windows, 23-24/11/2026 :
+        // 4 piles au lieu de 3, une palette prise en dessinant le panneau).
+        if new {
+            if self.palette_searching() {
+                self.palette_refilter_pending = true;
+            }
+            // Piles par palette : refaites avec les palettes arrivées.
+            if self.stacking && self.stacks_by_palette() {
+                self.stacks_dirty = true;
+            }
+        }
         new
     }
 
@@ -13490,15 +13502,7 @@ impl TriApp {
         let mut scored = Vec::new();
         self.drain_engine(&mut scored);
         self.take_scores(scored);
-        if self.take_palette_reads() {
-            if self.palette_searching() {
-                self.palette_refilter_pending = true;
-            }
-            // Piles par palette : refaites avec les palettes arrivées.
-            if self.stacking && self.stacks_by_palette() {
-                self.stacks_dirty = true;
-            }
-        }
+        self.take_palette_reads();
         self.palette_refilter();
         self.take_colour_pick();
         self.exposure_refilter();
