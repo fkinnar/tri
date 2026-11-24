@@ -387,6 +387,7 @@ action-core-colours-step-6 = Large colours: 6 colours
 action-core-colours-step-7 = Large colours: 7 colours
 action-core-colours-step-8 = Large colours: 8 colours
 action-core-colours-perceived = Large colours: perceived colours or not
+action-core-colours-image = Shown image in the chosen step or as is (full screen, cropping)
 action-core-view-histogram_channel = Large histogram: next channel
 action-core-histogram-red = Large histogram: red only
 action-core-histogram-green = Large histogram: green only

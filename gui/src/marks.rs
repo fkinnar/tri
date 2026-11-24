@@ -866,6 +866,23 @@ pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32) {
         ));
     };
     match action {
+        // L'image au cran choisi : un cadre et ses aplats (deux masses, l'une pleine,
+        // l'autre à demi), séparées par une marche.
+        Action::ColoursOnImage => {
+            let thin = Stroke::new((w * 0.08).max(1.2), color);
+            let frame = Rect::from_min_max(p(0.14, 0.2), p(0.86, 0.8));
+            painter.rect_filled(
+                Rect::from_min_max(p(0.14, 0.52), p(0.5, 0.8)),
+                0.0,
+                color,
+            );
+            painter.rect_filled(
+                Rect::from_min_max(p(0.5, 0.36), p(0.86, 0.8)),
+                0.0,
+                color.gamma_multiply(0.45),
+            );
+            painter.rect_stroke(frame, 1.0, thin, egui::StrokeKind::Inside);
+        }
         Action::NavPrev => chevron(0.32, 0.64),
         Action::NavNext => chevron(0.68, 0.36),
         Action::NavUp | Action::NavDown => {

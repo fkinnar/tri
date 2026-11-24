@@ -759,6 +759,10 @@ struct ColourKeys {
 /// Ce que montre la palette en grand : l'image, la source, le cran, les fausses couleurs.
 type PaletteViewKey = (PathBuf, tri::palette::Source, usize, bool, bool);
 
+/// Image du plein écran au cran choisi (`<leader> c v`) : la photo, le niveau d'aperçu
+/// d'où elle est tirée, le cran, fausses couleurs, couleurs perçues.
+type ColoursImageKey = (PathBuf, Level, usize, bool, bool);
+
 /// L'image de la palette en grand, prête pour l'écran, et ses couleurs.
 type PaletteViewImage = (egui::ColorImage, Vec<tri::palette::Swatch>);
 
@@ -1668,6 +1672,13 @@ pub struct TriApp {
     /// Couleurs perçues (adaptées à la lumière de l'entourage) : la palette du panneau, les
     /// couleurs en grand, les recherches par couleur et les piles par palette (l'œil).
     palette_view_perceived: bool,
+    /// L'image du plein écran (et du recadrage) au cran choisi (`<leader> c v`).
+    colours_on_image: bool,
+    /// Ses images, calculées à la demande, la plus récente à la fin
+    /// (`[gui.colours_view] cache`).
+    colours_images: Vec<(ColoursImageKey, TextureHandle)>,
+    /// Celle qui se calcule en fond.
+    colours_image_rx: Option<(ColoursImageKey, mpsc::Receiver<Option<egui::ColorImage>>)>,
     /// Couleurs perçues ou non des recherches posées (refaites quand l'œil bascule).
     palette_perceived_applied: bool,
     /// Ce qu'elle montre, et ce qui se calcule en fond.
@@ -2234,6 +2245,51 @@ pub fn development_label(path: &Path) -> String {
         }
         None => tri::media::display_stem(path),
     }
+}
+
+/// `image` au cran `k` (0 : telle quelle, ou perçue avec `perceived`), en fausses
+/// couleurs avec `false_on` (`falses`, dans l'ordre de présence), prête pour l'écran ; et
+/// ses couleurs. Fait en fond : couleurs en grand, image du plein écran (`<leader> c v`).
+fn posterized_image(
+    image: tri::bitmap::Bitmap,
+    k: usize,
+    settings: &tri::palette::PaletteSettings,
+    perceived: bool,
+    false_on: bool,
+    falses: &[[u8; 3]],
+) -> (egui::ColorImage, Vec<tri::palette::Swatch>) {
+    let (mut bitmap, swatches) = if k == 0 && !perceived {
+        (image, Vec::new())
+    } else {
+        tri::palette::posterize_with(&image, k, settings, perceived)
+    };
+    // Fausses couleurs : chaque couleur (dans l'ordre de présence) remplacée.
+    if false_on && k > 0 && !falses.is_empty() {
+        let map: HashMap<[u8; 3], [u8; 3]> = swatches
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                let rgb = falses[i % falses.len()];
+                let working = tri::palette::Swatch {
+                    oklab: tri::palette::srgb_to_oklab(rgb),
+                    share: 0.0,
+                }
+                .working();
+                (s.working(), working)
+            })
+            .collect();
+        for px in bitmap.data.as_chunks_mut::<3>().0 {
+            if let Some(c) = map.get(px) {
+                *px = *c;
+            }
+        }
+    }
+    crate::display::to_screen(&mut bitmap);
+    let image = egui::ColorImage::from_rgb(
+        [bitmap.width as usize, bitmap.height as usize],
+        &bitmap.data,
+    );
+    (image, swatches)
 }
 
 /// La palette `p`, ou sa palette perçue avec `perceived` (une copie, rangée à part).
@@ -2824,6 +2880,9 @@ impl TriApp {
             palette_view_false: false,
             palette_view_perceived: false,
             palette_perceived_applied: false,
+            colours_on_image: false,
+            colours_images: Vec::new(),
+            colours_image_rx: None,
             palette_view_shown: None,
             palette_view_cache: Vec::new(),
             palette_view_rx: None,
@@ -15270,6 +15329,8 @@ impl TriApp {
             // Un cran, les couleurs perçues (`<leader> c 0`…`8`, `<leader> c p`) : la palette
             // du panneau et celle des couleurs en grand suivent, sans ouvrir la boîte
             // (retour du 23/11/2026 : la roue du panneau doit changer).
+            // L'image du plein écran au cran choisi (idée du 24/11/2026).
+            Action::ColoursOnImage => self.colours_on_image = !self.colours_on_image,
             Action::ColoursStep(_) | Action::ColoursPerceived => {
                 if self.palette_source.is_none() {
                     self.notice = Some((t!("palette-choose"), false));
@@ -19861,6 +19922,18 @@ impl TriApp {
                 None => uv,
             };
             painter.image(texture.id(), rect, uv, Color32::WHITE);
+            // L'image au cran choisi (`<leader> c v`, idée du 24/11/2026), tirée de
+            // l'aperçu ajusté (aussi zoomée : étirée), par-dessus quand elle est prête.
+            if self.colours_on_image
+                && (self.palette_view_k > 0 || self.palette_view_perceived)
+                && !crate::actions::removed(crate::actions::Tool::Palettes)
+                && let Some(level) = view::pick(file.kind, source, false, developed, |l| {
+                    self.ready(index, l)
+                })
+                && let Some(texture) = self.colours_image(&ctx, &file, level)
+            {
+                painter.image(texture.id(), rect, uv, Color32::WHITE);
+            }
             image_rect = Some(rect);
             // Recadrage : la souris règle le cadre, pas le zoom.
             if self.crop.is_none() {
@@ -21846,6 +21919,82 @@ impl TriApp {
         }
     }
 
+    /// L'image `level` de `file` au cran choisi (`<leader> c v`), calculée en fond à la
+    /// demande et gardée (`[gui.colours_view] cache`) ; en attendant, celle d'un autre cran
+    /// de la même image, sinon `None` (l'image telle quelle reste).
+    fn colours_image(
+        &mut self,
+        ctx: &egui::Context,
+        file: &MediaFile,
+        level: Level,
+    ) -> Option<TextureHandle> {
+        if let Some((key, rx)) = &self.colours_image_rx {
+            match rx.try_recv() {
+                Ok(Some(image)) => {
+                    let texture = ctx.load_texture("colours_image", image, Default::default());
+                    let key = key.clone();
+                    self.colours_images.retain(|(k, _)| *k != key);
+                    self.colours_images.push((key, texture));
+                    let over = self
+                        .colours_images
+                        .len()
+                        .saturating_sub(self.gui.palette_view.cache.max(1));
+                    self.colours_images.drain(..over);
+                    self.colours_image_rx = None;
+                }
+                Ok(None) | Err(mpsc::TryRecvError::Disconnected) => self.colours_image_rx = None,
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        let wanted: ColoursImageKey = (
+            file.path.clone(),
+            level,
+            self.palette_view_k,
+            self.palette_view_false,
+            self.palette_view_perceived,
+        );
+        if let Some((_, t)) = self.colours_images.iter().find(|(k, _)| *k == wanted) {
+            return Some(t.clone());
+        }
+        let pending = self
+            .colours_image_rx
+            .as_ref()
+            .is_some_and(|(k, _)| *k == wanted);
+        if !pending && let Some(engine) = &self.engine {
+            let (cache, preview) = (engine.cache.clone(), engine.preview);
+            let settings = self.settings.palette;
+            let falses: Vec<[u8; 3]> = self
+                .gui
+                .palette_view
+                .false_colours
+                .iter()
+                .filter_map(|h| parse_hex(h))
+                .collect();
+            let (_, _, k, false_on, perceived) = wanted.clone();
+            let file = file.clone();
+            let (tx, rx) = mpsc::channel();
+            let repaint = ctx.clone();
+            std::thread::spawn(move || {
+                let image = preview::key(&file, level, &preview)
+                    .ok()
+                    .and_then(|key| cache.get(&key));
+                let out = image.map(|image| {
+                    posterized_image(image, k, &settings, perceived, false_on, &falses).0
+                });
+                let _ = tx.send(out);
+                repaint.request_repaint();
+            });
+            self.colours_image_rx = Some((wanted.clone(), rx));
+        }
+        // En attendant : un autre cran de la même image (pas de retour à la photo entre
+        // deux crans).
+        self.colours_images
+            .iter()
+            .rev()
+            .find(|(k, _)| k.0 == wanted.0 && k.1 == wanted.1)
+            .map(|(_, t)| t.clone())
+    }
+
     /// Fausses couleurs de la palette en grand, en couleurs d'écran.
     fn false_colours(&self) -> Vec<Color32> {
         self.gui
@@ -21970,40 +22119,8 @@ impl TriApp {
             let image = preview::key(&file, preview::palette_input(source), &preview)
                 .ok()
                 .and_then(|key| cache.get(&key));
-            let out = image.map(|image| {
-                let (mut bitmap, swatches) = if k == 0 && !perceived {
-                    (image, Vec::new())
-                } else {
-                    tri::palette::posterize_with(&image, k, &settings, perceived)
-                };
-                // Fausses couleurs : chaque couleur (dans l'ordre de présence) remplacée.
-                if false_on && k > 0 && !falses.is_empty() {
-                    let map: HashMap<[u8; 3], [u8; 3]> = swatches
-                        .iter()
-                        .enumerate()
-                        .map(|(i, s)| {
-                            let rgb = falses[i % falses.len()];
-                            let working = tri::palette::Swatch {
-                                oklab: tri::palette::srgb_to_oklab(rgb),
-                                share: 0.0,
-                            }
-                            .working();
-                            (s.working(), working)
-                        })
-                        .collect();
-                    for px in bitmap.data.as_chunks_mut::<3>().0 {
-                        if let Some(c) = map.get(px) {
-                            *px = *c;
-                        }
-                    }
-                }
-                crate::display::to_screen(&mut bitmap);
-                let image = egui::ColorImage::from_rgb(
-                    [bitmap.width as usize, bitmap.height as usize],
-                    &bitmap.data,
-                );
-                (image, swatches)
-            });
+            let out = image
+                .map(|image| posterized_image(image, k, &settings, perceived, false_on, &falses));
             let _ = tx.send(out);
             repaint.request_repaint();
         });
@@ -23670,6 +23787,10 @@ impl TriApp {
                 // Comparer (retour du 07/11/2026) : la sélection, sinon la pile, sinon tout ;
                 // allumé en comparaison, où il la quitte.
                 actions.push(Action::Compare);
+                // L'image au cran choisi (`<leader> c v`, 24/11/2026), en plein écran.
+                if self.mode == Mode::View {
+                    actions.push(Action::ColoursOnImage);
+                }
                 // Développer dans darktable (si darktable est là), à côté du 1:1.
                 if self.mode == Mode::View && !self.developers.is_empty() {
                     actions.push(Action::Develop);
@@ -23740,6 +23861,7 @@ impl TriApp {
                         Action::StackMode => self.action_unusable(action).is_none(),
                         Action::NavDown | Action::NavUp | Action::StackEnterToggle => self.stacking,
                         Action::DevNext | Action::DevPrev => developments,
+                        Action::ColoursOnImage => self.palette_source.is_some(),
                         _ => true,
                     };
                     let (rect, response) = ui
@@ -23755,6 +23877,7 @@ impl TriApp {
                         }
                         Action::FilterRestart => self.filter_restart,
                         Action::Develop => self.source == Source::Developed,
+                        Action::ColoursOnImage => self.colours_on_image,
                         _ => false,
                     };
                     // Allumé = icône à l'accent, sans fond (retour du 05/11/2026 : comme
@@ -24576,6 +24699,7 @@ impl TriApp {
         }
         // Grille centrée : la marge restante est répartie des deux côtés.
         let margin = (ui.available_width() - self.layout.width()) / 2.0;
+
         let deadline = Instant::now() + self.gui.load_budget();
         self.visible_waiting = 0;
         let mut drawn: Option<(usize, usize)> = None;
@@ -33889,6 +34013,42 @@ mod tests {
         h.state_mut().colour_dialog = None;
         h.run_steps(3);
         assert!(h.get_all_by_label(&t!("palette-perceived")).count() >= 2);
+    }
+
+    #[test]
+    fn the_full_screen_image_shows_the_chosen_step() {
+        // Idée du 24/11/2026 : en plein écran (et en recadrant une version), l'image
+        // affichée au cran choisi, `<leader> c v`, calculée à la demande et gardée.
+        use tri::palette::SourceKind;
+        let split = image::RgbImage::from_fn(64, 48, |x, _| {
+            image::Rgb(if x < 40 { [200, 30, 30] } else { [30, 40, 200] })
+        });
+        let (mut h, _dir) = harness_images(vec![("two.jpg", split)]);
+        h.run_steps(3);
+        choose_palette(&mut h, Some(SourceKind::Camera));
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(3);
+        assert_eq!(h.state().mode, Mode::View);
+        h.state_mut().palette_view_k = 2;
+        for key in [Key::B, Key::C, Key::V] {
+            let m = if key == Key::B {
+                Modifiers::CTRL
+            } else {
+                Modifiers::NONE
+            };
+            press(&mut h, key, m);
+        }
+        h.run_steps(2);
+        assert!(h.state().colours_on_image);
+        run_until(&mut h, |app| {
+            app.colours_images
+                .iter()
+                .any(|((_, _, k, _, _), _)| *k == 2)
+        });
+        // Le bouton du bandeau, allumé : l'éteint.
+        assert!(h.query_by_label(&Action::ColoursOnImage.label()).is_some());
+        act(&mut h, Action::ColoursOnImage);
+        assert!(!h.state().colours_on_image);
     }
 
     #[test]
