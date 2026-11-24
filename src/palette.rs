@@ -1473,6 +1473,25 @@ fn perceive(
     (perceived, weight)
 }
 
+/// Niveaux de gris des couleurs `swatches` (« N&B » des couleurs en grand, idée de
+/// l'utilisateur du 24/11/2026, à la place des fausses couleurs, « en moins criard ») : la
+/// clarté OKLab de chacune, rangée de la plus sombre (0, noir) à la plus claire (1, blanc)
+/// à pas égaux selon le nombre de couleurs ; une seule couleur : 0,5. Dans l'ordre de
+/// `swatches`.
+pub fn grey_levels(swatches: &[Swatch]) -> Vec<f32> {
+    let n = swatches.len();
+    if n <= 1 {
+        return vec![0.5; n];
+    }
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by(|&a, &b| swatches[a].oklab[0].total_cmp(&swatches[b].oklab[0]));
+    let mut levels = vec![0.0; n];
+    for (rank, i) in order.into_iter().enumerate() {
+        levels[i] = rank as f32 / (n - 1) as f32;
+    }
+    levels
+}
+
 /// Mode « masses » (idée de l'utilisateur, 24/11/2026 : une carte claire de la photo,
 /// pour la composition, sans les détails) : `bitmap`, une image postérisée dont chaque
 /// pixel a l'une des couleurs `swatches` ([`Swatch::working`]), nettoyée. Chaque tache
@@ -2505,6 +2524,22 @@ mod tests {
         a.sort();
         b.sort();
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn grey_levels_split_lightness_evenly() {
+        // « N&B » : du noir au blanc à pas égaux, la plus sombre en noir.
+        let sw = |l: f32| Swatch {
+            oklab: [l, 0.05, 0.0],
+            share: 0.3,
+        };
+        assert_eq!(grey_levels(&[sw(0.8), sw(0.2)]), vec![1.0, 0.0]);
+        assert_eq!(
+            grey_levels(&[sw(0.5), sw(0.9), sw(0.1)]),
+            vec![0.5, 1.0, 0.0]
+        );
+        assert_eq!(grey_levels(&[sw(0.3)]), vec![0.5]);
+        assert!(grey_levels(&[]).is_empty());
     }
 
     #[test]

@@ -311,8 +311,11 @@ system one ("cold" measurements, experiments).
   from); right of the image (feedback of 2026-11-23: below, the box was unbalanced), a
   stepped slider: 0 the image as is, 1 its average colour (the
   dominant), n the image in n colours (each pixel replaced by the closest,
-  `palette::posterize`), up to `[gui.colours_view] max` (8); optional **false colours**
-  (`false_colours`, the most present first, with their legend next to the real ones); on
+  `palette::posterize`), up to `[gui.colours_view] max` (8); optional **B&W**
+  (`<leader> c g`, `core.colours.grey`, replacing false colours since 2026-11-24, "less
+  garish": each colour as a grey by its lightness, black to white in even steps by the number
+  of colours, `palette::grey_levels`, with their legend next to the real ones; at step 0, the
+  image in grey; the old `false_colours` key is ignored); on
   the right, the palette of that step (a click on a colour closes it and opens the colour
   box on it, without searching yet; the hand only over what can be clicked). In the panel
   too, a colour of the list opens the colour box rather than filtering (feedback of
@@ -328,7 +331,7 @@ system one ("cold" measurements, experiments).
   (Darktable)" (`image_title`). The colour box opened on colours (clicked in a palette, or
   the previous search) searches them at once, in the grid even from full screen; "Cancel"
   goes back where one came from (full screen on the same photo, large colours). Screenshot:
-  `TRI_GUI_ACTIONS=core.view.colours,palette_k:4f`. **Keyboard** (feedback of 2026-11-23: the box was
+  `TRI_GUI_ACTIONS=core.view.colours,palette_k:4g`. **Keyboard** (feedback of 2026-11-23: the box was
   mouse-only, and behind it the arrows moved the grid's selection): the grid receives
   nothing while the box is open; outside a text field, `1`–`5` select a colour (an empty
   one: nothing selected), ← → or `h` `l` the hue (`key_hue_step`, 5°; Shift: 1°),

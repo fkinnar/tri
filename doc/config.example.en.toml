@@ -1423,10 +1423,6 @@ side = 420.0
 # A step already seen (same photo, same number of colours, perceived or not) comes back
 # without being computed again; the oldest go.
 cache = 64
-# False colours of the large colours, the most present colour first.
-#
-# Clearly distinct, to see the masses when the real colours are close.
-false_colours = ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6"]
 # "Masses" mode: minimum size of a patch, as a share of the image (slider start).
 #
 # A smaller patch takes the colour of the mass around it: a clear map of the photo, for

@@ -1163,10 +1163,10 @@ pub struct PaletteViewSettings {
     /// Crans gardés en mémoire (couleurs en grand et palette du panneau) : un cran déjà vu
     /// revient sans être recalculé.
     pub cache: usize,
-    /// Fausses couleurs (`#rrggbb`), dans l'ordre des couleurs de l'image (la plus
-    /// présente d'abord) : bien distinctes, pour voir les masses quand les vraies sont
-    /// proches.
-    pub false_colours: Vec<String>,
+    /// Ancienne clé (fausses couleurs, remplacées par le « N&B » le 24/11/2026) : acceptée
+    /// et ignorée, pour qu'un fichier qui l'a encore reste valable.
+    #[serde(rename = "false_colours")]
+    pub old_false_colours: serde::de::IgnoredAny,
     /// Mode « masses » : taille minimale d'une tache, en part de l'image (au départ du
     /// curseur) ; plus petite, elle prend la couleur de la masse qui l'entoure.
     pub masses_area: f32,
@@ -1186,15 +1186,11 @@ pub struct PaletteViewSettings {
 
 impl Default for PaletteViewSettings {
     fn default() -> Self {
-        let hex = |list: &[&str]| list.iter().map(|s| s.to_string()).collect();
         Self {
             max: 8,
             side: 420.0,
             cache: 64,
-            false_colours: hex(&[
-                "#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0",
-                "#f032e6",
-            ]),
+            old_false_colours: serde::de::IgnoredAny,
             masses_area: 0.005,
             masses_area_max: 0.05,
             masses_smooth: 0.004,
