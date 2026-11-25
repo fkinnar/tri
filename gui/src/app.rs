@@ -4318,6 +4318,15 @@ impl TriApp {
         }
     }
 
+    /// Arrête la surveillance du dossier sans attendre la fin d'un relevé en cours (retour
+    /// du 25/11/2026 : sur un NAS, attendre le relevé de 2285 fichiers figeait
+    /// l'interface au changement de dossier) ; le fil s'arrête de lui-même ensuite.
+    fn stop_watch(&mut self) {
+        if let Some((mut watch, _, _)) = self.watch.take() {
+            watch.detach();
+        }
+    }
+
     /// Une ouverture lente commence : le travail de fond du dossier affiché est suspendu
     /// (aperçus et analyses), la lecture de ses notes arrêtée et sa surveillance coupée,
     /// pour laisser le disque (NAS) au dossier demandé.
@@ -4329,7 +4338,7 @@ impl TriApp {
             engine.scheduler.set_paused(true);
         }
         let notes_stopped = self.loading.take().is_some();
-        self.watch = None;
+        self.stop_watch();
         self.held = Some((self.folder.dir.clone(), notes_stopped));
     }
 
@@ -8864,7 +8873,7 @@ impl TriApp {
         let interval = self.settings.watch.interval_ms;
         // « Toutes les photos » : pas de dossier à surveiller (complété en fond).
         if self.folder.is_none() || interval == 0 || tri::folder::is_all_photos(&self.folder.dir) {
-            self.watch = None;
+            self.stop_watch();
             return;
         }
         // Un autre dossier s'ouvre : celui-ci n'est plus surveillé en attendant.
@@ -8899,6 +8908,7 @@ impl TriApp {
                     tri::watch::FolderWatch::start_depth(&self.folder.dir, depth, pace, on_change)
                 }
             };
+            self.stop_watch();
             self.watch = Some((watch, rx, interval));
         }
         let Some((_, rx, _)) = &self.watch else {
@@ -21167,6 +21177,8 @@ impl TriApp {
             if p.total == 0
                 || waiting
                 || self.analysis_on_demand(slot)
+                // Dossier en attente pendant l'ouverture d'un autre : rien ne tourne.
+                || (self.held.is_some() && slot != usize::MAX)
                 || (self.gui.progress_hide_done && p.done >= p.total)
             {
                 continue;
