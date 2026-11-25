@@ -504,9 +504,11 @@ struct ProfileToml {
     passthrough: Option<bool>,
     applies_to: Option<AppliesTo>,
     sharpen: Option<Sharpen>,
-    /// Ancienne clé `iptc` (#277) acceptée.
-    #[serde(alias = "iptc")]
     metadata: Option<String>,
+    /// Ancienne clé de `metadata` (#277), lue si `metadata` manque ; les deux présentes
+    /// (la fenêtre de réglages a écrit la nouvelle) : `metadata` l'emporte (25/11/2026 :
+    /// un alias refusait le fichier, « duplicate field »).
+    iptc: Option<String>,
 }
 
 /// Les profils d'export, dans l'ordre : profils fournis, puis ceux de l'utilisateur (par
@@ -577,7 +579,7 @@ impl<'de> Deserialize<'de> for Profiles {
             if let Some(v) = t.sharpen {
                 p.sharpen = v;
             }
-            if let Some(v) = t.metadata {
+            if let Some(v) = t.metadata.or(t.iptc) {
                 p.metadata = v;
             }
         }
@@ -2851,10 +2853,13 @@ mod tests {
         assert!(!has(b"Ana Lima") && !has(b"x:xmpmeta"), "plus de XMP");
         assert!(crate::iptc::read(&report.written[0]).is_empty());
         assert!(!crate::iptc::read(&jpg).is_empty(), "l'original intact");
-        // L'ancienne clé `iptc` est toujours lue.
+        // L'ancienne clé `iptc` est toujours lue ; avec la nouvelle, celle-ci l'emporte.
         let text = "[profiles.web]\niptc = \"mine\"\n";
         let old: ExportSettings = toml::from_str(text).unwrap();
         assert_eq!(old.profiles.get("web").unwrap().metadata, "mine");
+        let both = "[profiles.web]\niptc = \"mine\"\nmetadata = \"strip\"\n";
+        let both: ExportSettings = toml::from_str(both).unwrap();
+        assert_eq!(both.profiles.get("web").unwrap().metadata, STRIP);
     }
 
     #[test]

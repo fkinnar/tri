@@ -566,6 +566,13 @@ struct MemberChoice {
     extra: Option<(&'static str, &'static str)>,
 }
 
+/// Ancien nom d'une clé, encore lu par le moteur : sa valeur est montrée tant que la
+/// nouvelle clé manque, et retirée quand la nouvelle est écrite (`metadata` d'un préréglage
+/// d'export, anciennement `iptc`, 25/11/2026).
+fn legacy_key(section: &str, key: &str) -> Option<&'static str> {
+    (section.starts_with("export.profiles.") && key == "metadata").then_some("iptc")
+}
+
 fn member_choice(section: &str, key: &str) -> Option<MemberChoice> {
     let choice = |root, empty, extra| Some(MemberChoice { root, empty, extra });
     match (section, key) {
@@ -1099,6 +1106,7 @@ impl SettingsWindow {
     fn current(&self, section: &str, entry: &Entry) -> Value {
         self.file
             .get(section, &entry.key)
+            .or_else(|| legacy_key(section, &entry.key).and_then(|old| self.file.get(section, old)))
             .unwrap_or_else(|| entry.default.clone())
     }
 
@@ -1118,6 +1126,11 @@ impl SettingsWindow {
             written.and_then(|()| tri::settings::parse_message::<AppSettings>(&self.file.text()));
         match checked {
             Ok(settings) => {
+                // Ancien nom de la clé : il part avec la nouvelle valeur (sinon il
+                // reviendrait si la nouvelle était remise à sa valeur par défaut).
+                if let Some(old) = legacy_key(section, key) {
+                    self.file.remove(section, old);
+                }
                 self.errors.remove(&id);
                 self.dirty = true;
                 (self.keymap, self.key_warnings) = settings.keymap();
@@ -3652,6 +3665,43 @@ mod tests {
                 "{root}"
             );
         }
+        // L'ancienne clé `iptc` : montrée, puis remplacée par `metadata` (25/11/2026 :
+        // les deux ensemble, le fichier était refusé).
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "[export.profiles.web]\niptc = \"mine\"\n").unwrap();
+        let mut w = SettingsWindow::open(&config).unwrap();
+        let section = "export.profiles.web";
+        let entry = schema
+            .sections
+            .iter()
+            .find(|s| s.name == section)
+            .and_then(|s| {
+                s.groups
+                    .iter()
+                    .flat_map(|g| &g.entries)
+                    .find(|e| e.key == "metadata")
+            })
+            .unwrap()
+            .clone();
+        assert_eq!(w.current(section, &entry), Value::Str("mine".into()));
+        assert!(
+            w.commit(
+                section,
+                "metadata",
+                Some(Value::Str(tri::export::STRIP.into()))
+            )
+            .is_some()
+        );
+        assert_eq!(
+            w.file.get(section, "iptc"),
+            None,
+            "l'ancienne clé est partie"
+        );
+        assert_eq!(
+            w.file.get(section, "metadata"),
+            Some(Value::Str(tri::export::STRIP.into()))
+        );
         // « strip » accepté par le moteur.
         let text = "[export.profiles.web]\nmetadata = \"strip\"\n";
         assert!(tri::settings::parse::<AppSettings>(text).is_ok());

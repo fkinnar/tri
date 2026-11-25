@@ -1217,7 +1217,10 @@ mod tests {
             );
         h.run_steps(3);
         assert_eq!(h.state().0.metadata.0, "mine", "celui du préréglage");
-        assert!(h.query_by_label(&t!("export-metadata")).is_some(), "la liste");
+        assert!(
+            h.query_by_label(&t!("export-metadata")).is_some(),
+            "la liste"
+        );
         // Pour cette fois : toutes retirées ; le préréglage parti les emporte.
         h.state_mut().0.metadata.0 = tri::export::STRIP.into();
         h.run_steps(2);
