@@ -76,6 +76,11 @@ pub enum Source {
     Folder(PathBuf),
 }
 
+/// Reprend le cache des images copiées ou déplacées (#508) : (avant, après) de chaque
+/// fichier, et vrai pour une copie. Fourni par l'application (cache et réglages du
+/// moteur), appelé dans le fil de la copie.
+pub type Carrier = Arc<dyn Fn(&[(PathBuf, PathBuf)], bool) + Send + Sync>;
+
 /// Plan d'une copie ou d'un déplacement, selon la source.
 enum Plan {
     Images(files::Transfer),
@@ -111,6 +116,14 @@ impl Plan {
             Plan::Folder(p) => files::transfer_dir(p, progress),
         }
     }
+
+    /// (avant, après) de chaque fichier copié ou déplacé.
+    fn files(&self) -> Vec<(PathBuf, PathBuf)> {
+        match self {
+            Plan::Images(p) => p.files.iter().chain(&p.shared).cloned().collect(),
+            Plan::Folder(p) => p.files.clone(),
+        }
+    }
 }
 
 /// Boîte « Copier / déplacer vers… ».
@@ -136,6 +149,10 @@ pub struct Transfer {
     has_pairs: Option<bool>,
     /// Dossier déplacé : son cache le suit (coché d'office).
     bring_cache: bool,
+    /// Images copiées ou déplacées, dossier copié : leurs aperçus déjà calculés suivent
+    /// (#508 ; case de la boîte, `None` : `[files] carry_cache`), par `carrier`.
+    carry: Option<bool>,
+    carrier: Option<Carrier>,
     /// Et il sera gardé avec le dossier à sa nouvelle place ([`CacheGoes::WithFolder`]),
     /// décidé dans la boîte (avant le déplacement).
     keep_here: bool,
@@ -315,9 +332,19 @@ impl FileDialog {
             pairs: None,
             has_pairs: None,
             bring_cache: true,
+            carry: None,
+            carrier: None,
             keep_here: false,
             hidden: false,
         }))
+    }
+
+    /// Donne à la boîte de copie de quoi reprendre le cache des images (#508).
+    pub fn with_carrier(mut self, carrier: Option<Carrier>) -> FileDialog {
+        if let FileDialog::Transfer(t) = &mut self {
+            t.carrier = carrier;
+        }
+        self
     }
 
     /// Affiche la boîte et applique l'action confirmée ; `data` : dossier de données
@@ -1000,8 +1027,19 @@ impl Transfer {
                 if self.mode == TransferMode::Move {
                     library_warning(ui);
                 }
+                // Images, ou dossier copié : leurs aperçus déjà calculés suivent (#508).
+                let folder_move =
+                    matches!(self.source, Source::Folder(_)) && self.mode == TransferMode::Move;
+                if !folder_move && self.carrier.is_some() {
+                    let mut carry = self.carry.unwrap_or(settings.carry_cache);
+                    ui.checkbox(&mut carry, t!("transfer-carry-cache"))
+                        .on_hover_text(t!("transfer-carry-cache-tip"));
+                    if carry != settings.carry_cache || self.carry.is_some() {
+                        self.carry = Some(carry);
+                    }
+                }
                 // Dossier déplacé : son cache le suit, sur demande (issue n° 55).
-                if matches!(self.source, Source::Folder(_)) && self.mode == TransferMode::Move {
+                if folder_move {
                     ui.checkbox(&mut self.bring_cache, t!("transfer-bring-cache"))
                         .on_hover_text(t!("transfer-bring-cache-tip"));
                     // Où il ira, selon où il est et ce que garde la destination (retour du
@@ -1096,12 +1134,23 @@ impl Transfer {
         let done = Arc::new(AtomicUsize::new(0));
         let total = plan.len();
         let (counter, ctx) = (done.clone(), ctx.clone());
+        // Un dossier déplacé emmène son cache autrement (« Emporter le cache »).
+        let folder_move =
+            matches!(self.source, Source::Folder(_)) && self.mode == TransferMode::Move;
+        let carrier = self
+            .carrier
+            .clone()
+            .filter(|_| !folder_move && self.carry.unwrap_or(settings.carry_cache));
+        let copy = self.mode == TransferMode::Copy;
         let handle = std::thread::spawn(move || {
             plan.run(|n, _| {
                 counter.store(n, Ordering::Relaxed);
                 ctx.request_repaint();
-            })
-            .map(|()| plan)
+            })?;
+            if let Some(carry) = carrier {
+                carry(&plan.files(), copy);
+            }
+            Ok(plan)
         });
         self.job = Some(Job {
             done,
