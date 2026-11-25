@@ -81,12 +81,11 @@ pub fn applies(action: Action, place: Place) -> bool {
         }
         None => {}
     }
-    // Ce qui ne vaut que sur une image affichée en grand.
+    // Ce qui ne vaut que sur une image affichée en grand. Le zoom (`z z`, plein écran à
+    // 100 % depuis une vignette) et la loupe (`z m`) valent aussi dans la grille.
     let image = matches!(
         action,
-        ToggleZoom
-            | Loupe
-            | LoupeZoomIn
+        LoupeZoomIn
             | LoupeZoomOut
             | LoupeScaleEntry
             | ZoomScaleEntry
@@ -204,6 +203,12 @@ mod tests {
     fn each_place_shows_its_own_keys() {
         // Plein écran : zoom, carte de netteté, recadrage ; pas le rendu des vignettes.
         assert!(has(Place::View, Action::ToggleZoom));
+        // 25/11/2026 : `z z` et `z m` aussi depuis la grille, et les pas de notation.
+        assert!(has(Place::Grid, Action::ToggleZoom));
+        assert!(has(Place::Grid, Action::Loupe));
+        assert!(has(Place::Grid, Action::StarsStep(true)));
+        assert!(has(Place::View, Action::ColorStep(false)));
+        assert!(has(Place::Grid, Action::FilterStarsTop));
         assert!(has(Place::View, Action::TogglePeaking));
         assert!(has(Place::View, Action::Crop));
         assert!(!has(Place::View, Action::GridRenderNext));

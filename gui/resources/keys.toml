@@ -50,18 +50,21 @@
 # replaced for yourself with [gui] leader in the configuration file.
 leader = "Ctrl+b"
 
-# Loupe: while this key is held, the image at 100 % under the pointer (fit view and
-# comparison). A key, Shift + a key ("Shift+z": it then holds while the key stays down,
-# Shift released or not), or "shift", "ctrl", "alt"; "none": no loupe. It must not be
-# bound to anything else. Can be replaced for yourself with [gui.zoom] loupe_key.
-# Shift+Z since 2026-11-25 (z like zoom): "m" went to the rating steps ("m l"…).
-loupe = "Shift+z"
+# Loupe held: while this key is held, the image at 100 % under the pointer (fit view and
+# comparison). A key, or "shift", "ctrl", "alt"; "none": none. It must not be bound to
+# anything else. Can be replaced for yourself with [gui.zoom] loupe_key. None by default
+# since 2026-11-25: "z m" turns the loupe on and off (below), "m" went to the rating
+# steps ("m l"…).
+loupe = "none"
 
 [common]
 
 # --- Basics ---
 "core.view.open" = ["Enter"]
-"core.view.zoom" = ["z"]
+# z z: zoom to 100 % (from the grid too), z z again or Escape back where you were (grid
+# or fitted full screen); z m: the loupe on, until z m again or Escape (2026-11-25).
+"core.view.zoom" = ["z z"]
+"core.view.loupe" = ["z m"]
 "core.view.back" = ["Escape"]
 # F1: every action, with a search. "?": the shortcuts of where you are (grid, full
 # screen, a panel…), over the screen. "?" comes with or without Shift depending on the

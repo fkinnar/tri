@@ -257,7 +257,7 @@ system one ("cold" measurements, experiments).
   a small area of the image the palette comes from, read in the background; elsewhere,
   the pixel of a capture of the window), then the box comes back; on an image, a
   **reticle** shows the averaged area (`[colours] pick_area`, 2 % of the long side), and
-  the loupe (Shift+Z held) magnifies it to aim precisely (user's idea, 2026-11-21); "OK" keeps the
+  the loupe (`z m`) magnifies it to aim precisely (user's idea, 2026-11-21); "OK" keeps the
   search.
   **Several colours** (#492, user's idea, 2026-11-23): at the top of the box, the colours
   looked for, as swatches like the others (`[gui.colour_search] max` slots, 5; feedback of
@@ -452,7 +452,7 @@ system one ("cold" measurements, experiments).
 - **Key hints** at the top right of the full screen view ("b : Camera render / RAW,
   z : 1:1…"): hidden by default since 2026-10-17 (it overlapped the image, F1 opens the
   full help with search); `[gui.view] key_hints = true` to bring it back.
-- **1:1 from the grid** (2026-10-17): `z` (keyboard only since 2026-11-07: in the grid,
+- **1:1 from the grid** (2026-10-17): `z z` (keyboard only since 2026-11-07: in the grid,
   the bar's "1:1" button gave way to the adjustable loupe) opens the selected
   image directly at 100 %, to check sharpness quickly; Esc goes back to the grid. With the
   keyboard and the button, the 1:1 is **centred on the focus point** when the camera
@@ -746,7 +746,7 @@ system one ("cold" measurements, experiments).
   image pixel per screen pixel) goes from fit to `max` (400 %). Keyboard, in **steps**
   like Lightroom: `+` / `-` (top row or numeric keypad: bound as characters, the key
   depending on the layout) next step up / down (`steps`), `*` 100 %, `/` fit (swapped on
-  2026-10-18, like Lightroom), `z` and double-click toggle fit / 100 %; you can **zoom out
+  2026-10-18, like Lightroom), `z z` and double-click toggle fit / 100 %; you can **zoom out
   below fit** down to `min` (10 %), the image smaller than the screen, centred; the 1:1
   button is lit only at 100 %. In the configuration, `steps`, `max`, `min` and
   `loupe_scale` are written in **percent** (2026-11-07: `max = 400`, easier to read than
@@ -765,11 +765,12 @@ system one ("cold" measurements, experiments).
   `<` impossible, egui only receives its character), after `loupe_delay_ms` (no flicker
   on a short press), a square of `loupe_size` points under the pointer shows the image at
   `loupe_scale` (100 %); its 1:1 is loaded for the occasion, the enlarged preview shown
-  while waiting ("loading 100 %…"). Shift+Z since 2026-11-25 (z for zoom; `m` went to
-  the rating steps): a key with Shift (`LoupeKey::ShiftKey`) brings the loupe with Shift,
-  then holds it while the key stays down, Shift released or not, to move it in small steps
-  (h / j / k / l); its repeat, Shift released, is not taken for the key alone (`z` would
-  cycle the zooms). In **comparison** too since 2026-11-06: the image
+  while waiting ("loading 100 %…"). Since 2026-11-25 (user's idea; `m` went to the
+  rating steps), the loupe is **turned on** with `z m` and stays until `z m` or Escape
+  (`loupe_toggled`, `TriApp::loupe_wanted`); no held key by default any more (`loupe =
+  "none"` in keys.toml, `loupe_key` still possible). **Zoom** moves to `z z` (from the
+  grid too); zoomed, `z z` or Escape go back where you came from: the grid if the zoom
+  started there, otherwise the fitted full screen (`zoom_from_grid`, `TriApp::unzoom`). In **comparison** too since 2026-11-06: the image
   under the pointer (`loupe_index`), drawn over the others.
 - **Back to the grid with the mouse** (issue #193): in full screen, a grid icon at the
   far right of the bottom bar (like Esc).
@@ -1356,7 +1357,7 @@ then the sharpness of the candidates is checked **at 100 %**.
   "computing 100 %" when applicable. The camera render reflects the camera's settings
   (contrast, film simulation); LibRaw's RAW render is more neutral, hence duller: this is
   expected.
-- **1:1**: `z` (centred), or double-click (the clicked point stays under the cursor).
+- **1:1**: `z z` (centred), or double-click (the clicked point stays under the cursor).
   Dragging with the mouse moves the image, never leaving an empty edge.
   - in JPEG: the embedded JPEG at its original size, ~70 ms. Honest label: "Camera
     JPEG · 1:1 (71 % of the sensor)" (4416 px out of 6240 for an X-T4). The camera's

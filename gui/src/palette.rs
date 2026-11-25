@@ -429,6 +429,12 @@ mod tests {
             &[],
             0,
         );
+        // Les titres qui citent le zoom (la loupe, trouvée par ses mots-clés, vient après
+        // : correspondance moins forte ; elle vaut en grille depuis le 25/11/2026).
+        let hits: Vec<_> = hits
+            .into_iter()
+            .filter(|h| h.title.to_lowercase().contains("zoom"))
+            .collect();
         let first_elsewhere = hits.iter().position(
             |h| matches!(h.item, Item::Action(a) if !cheatsheet::applies(a, Place::Grid)),
         );

@@ -597,9 +597,9 @@ pub enum Action {
     Back,
     /// Afficher / masquer l'aide des raccourcis.
     Help,
-    /// Loupe à 100 % sous le pointeur, tant qu'on tient sa touche (`loupe` de `keys.toml`,
-    /// `[gui.zoom] loupe_key`) : pour l'aide, la palette et l'aide « ici » seulement ;
-    /// elle ne se lie pas dans `[keys]` ([`Action::bindable`]).
+    /// Allumer / éteindre la loupe à 100 % sous le pointeur (`z m`, 25/11/2026 ; Échap
+    /// l'éteint aussi). Elle vient aussi tant qu'on tient `[gui.zoom] loupe_key` s'il y en
+    /// a une.
     Loupe,
     /// Passer en revue les développements (case de la section Vue), cochée ou non.
     ReviewDevelopments,
@@ -987,12 +987,6 @@ impl Action {
     pub fn from_id(id: &str) -> Option<Action> {
         let id = renamed_id(id);
         Action::ALL.into_iter().find(|a| a.id() == id)
-    }
-
-    /// Faux pour la loupe : sa touche se règle à part (`loupe` de `keys.toml`,
-    /// `[gui.zoom] loupe_key`), elle n'a pas de ligne dans `[keys]` ni dans `keys.toml`.
-    pub fn bindable(self) -> bool {
-        self != Action::Loupe
     }
 
     /// Plugin d'envoi d'une action [`Action::Send`] (`airdrop` pour
@@ -2092,7 +2086,7 @@ impl Defaults {
             };
             // Dans l'ordre du fichier : à touches égales, la première l'emporte.
             for (id, specs) in entries {
-                let Some(action) = Action::from_id(id).filter(|a| a.bindable()) else {
+                let Some(action) = Action::from_id(id) else {
                     let error = t!("keys-file-unknown-action");
                     warnings.push(t!(
                         "keys-file-error",
@@ -2313,7 +2307,7 @@ impl Keymap {
         let mut custom: Vec<(Vec<Chord>, Action, &str)> = Vec::new();
         let mut replaced: Vec<Action> = Vec::new();
         for (id, specs) in overrides {
-            let Some(action) = Action::from_id(id).filter(|a| a.bindable()) else {
+            let Some(action) = Action::from_id(id) else {
                 warnings.push(format!("[keys] : action inconnue « {id} »"));
                 continue;
             };
@@ -2463,21 +2457,9 @@ impl Keymap {
     /// Vrai si `key` seule (sans modificateur) déclenche une action ou commence une
     /// séquence, dans le panneau des images.
     pub fn binds(&self, key: Key) -> bool {
-        self.binds_chord(plain(key))
-    }
-
-    /// Vrai si Maj + `key` déclenche quelque chose (touche de loupe « Shift+z »).
-    pub fn binds_shifted(&self, key: Key) -> bool {
-        self.binds_chord(Chord {
-            shift: true,
-            ..plain(key)
-        })
-    }
-
-    fn binds_chord(&self, chord: Chord) -> bool {
         let mut images = self.clone();
         images.focus = Scope::Images;
-        images.lookup(&[chord]) != Lookup::None
+        images.lookup(&[plain(key)]) != Lookup::None
     }
 
     fn lookup(&self, keys: &[Chord]) -> Lookup {
@@ -2650,20 +2632,6 @@ impl Keymap {
     /// « 3, Maj+3 »). Une séquence qui commence par le leader l'écrit `<leader>` (« <leader>
     /// r », #175) : il est réglable, l'aide le montre à part.
     pub fn keys_for(&self, action: Action) -> Vec<String> {
-        // La loupe : sa touche, maintenue.
-        if action == Action::Loupe {
-            use crate::settings::LoupeKey;
-            return match self.loupe {
-                LoupeKey::Key(key) => vec![key_label(key)],
-                LoupeKey::ShiftKey(key) => {
-                    vec![format!("{}{}", t!("key-shift-prefix"), key_label(key))]
-                }
-                LoupeKey::Shift => vec![t!("key-shift-prefix").trim_end_matches('+').to_string()],
-                LoupeKey::Ctrl => vec!["Ctrl".to_string()],
-                LoupeKey::Alt => vec!["Alt".to_string()],
-                LoupeKey::None | LoupeKey::Default => Vec::new(),
-            };
-        }
         // Celles du jeu choisi (ou de `[keys]`) seulement, s'il y en a : en vim, « x »
         // supprime, sans Suppr (retour du 06/11/2026 : plus lisible) ; sinon les communes.
         let own = |k: &Vec<Chord>| self.own.iter().any(|(o, a)| o == k && *a == action);
@@ -3016,18 +2984,6 @@ pub fn key_named(name: &str) -> Option<Key> {
                 .copied()
                 .find(|k| k.name().to_lowercase() == lower)
         })
-}
-
-/// Retire un préfixe Maj (« Shift+ », « Maj+ », de toutes les langues) de `s`.
-pub fn strip_shift(s: &str) -> Option<&str> {
-    Language::ALL
-        .iter()
-        .map(|&l| {
-            crate::i18n::ensure();
-            tri::i18n::translate_in(l, "key-shift-prefix", None)
-        })
-        .chain(["Shift+".to_string()])
-        .find_map(|p| strip_prefix_ignore_case(s, &p))
 }
 
 /// Retire le préfixe `prefix` (« Maj+ ») de `s`, sans tenir compte de la casse.
@@ -4037,7 +3993,6 @@ mod tests {
             .collect();
         let missing: Vec<&str> = Action::ALL
             .iter()
-            .filter(|a| a.bindable())
             .map(|a| a.id())
             .filter(|id| !ids.iter().any(|i| i == id))
             .collect();
@@ -4166,7 +4121,7 @@ mod tests {
     #[test]
     fn first_profile_wins_on_conflict() {
         let km = Keymap::from_profiles(&[Profile::Vim, Profile::Classic]);
-        assert_eq!(km.action(Key::Z, Modifiers::NONE), Some(Action::ToggleZoom));
+        assert_eq!(km.action(Key::Enter, Modifiers::NONE), Some(Action::Open));
     }
 
     fn g() -> Chord {
@@ -4699,7 +4654,7 @@ mod tests {
             "zoom <core.view.zoom>, rendu <core.develop.render>, <core.dev.next>, \
              tri-gui <image>, <leader>",
         );
-        assert!(text.starts_with("zoom z, rendu "), "{text}");
+        assert!(text.starts_with("zoom zz, rendu "), "{text}");
         assert!(
             !text.contains("<leader>") && text.contains("Ctrl"),
             "{text}"

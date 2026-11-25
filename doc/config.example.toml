@@ -1267,11 +1267,12 @@ min = 10
 # Loupe à 100 % sous le pointeur tant qu'une touche est maintenue.
 #
 # Loupe, en vue ajustée et en comparaison : tant que cette touche est maintenue (une
-# touche libre, écrite comme dans [keys] : "m", "F3", "Shift+z"… ; ou "shift", "ctrl", "alt" ;
+# touche libre, écrite comme dans [keys] : "m", "F3"… ; ou "shift", "ctrl", "alt" ;
 # "none" : pas de loupe), l'image à 100 % (loupe_scale) sous le pointeur, dans un carré
 # de loupe_size points, après loupe_delay_ms (pour ne pas clignoter sur une pression
-# brève). Vide : celle des raccourcis par défaut (« loupe » de keys.toml). Une
-# touche déjà liée à une action est refusée (signalé).
+# brève). Vide : celle des raccourcis par défaut (« loupe » de keys.toml : aucune ;
+# <core.view.loupe> allume et éteint la loupe). Une touche déjà liée à une action est
+# refusée (signalé).
 loupe_key = ""
 loupe_delay_ms = 150
 loupe_size = 320.0
