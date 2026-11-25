@@ -116,6 +116,25 @@ ensuite. La nouvelle carte peut être montée **au même chemin** que la précé
 cartes du même boîtier ont le même nom de volume, `/media/…/disk`) : elle vient
 d'apparaître, c'est une autre carte.
 
+## Carte de plusieurs séances (25/11/2026, #507)
+
+Une carte peut garder plusieurs séances ; souvent une seule est à décharger.
+`Plan::sessions(day_cut)` range la carte par jour de prise de vue (date du fichier, posée
+par le boîtier, en heure locale ; une photo prise avant `[offload] day_cut` heures, 4 par
+défaut, compte pour la veille : une soirée qui finit après minuit reste une séance). Une
+paire RAW+JPEG reste dans la séance de sa première image. `Plan::subset` restreint
+l'inventaire aux images choisies : la copie vérifiée, l'historique et la suppression de la
+carte ensuite ne touchent qu'elles, jamais le reste de la carte.
+
+- **Boîte** : avec plusieurs séances, une ligne par jour (case, dossier, nombre d'images et
+  taille à copier, ou « déjà déchargée ») à la place du champ « Dossier de la séance ».
+  Cochées d'office : celles qui ont du nouveau. **Un dossier par séance cochée**
+  (`AAAA-MM-JJ_` à compléter), copiées l'une après l'autre dans le même fil ; les bilans
+  sont mis bout à bout (`Report::absorb`), la plus récente séance ouverte à la fin.
+- **Ligne de commande** : `tri --offload <carte> --session AAAA-MM-JJ` ne décharge que ce
+  jour-là (dossier nommé d'après lui) ; `--dry-run` liste les séances.
+- À venir (même issue) : choisir des photos dans une séance, depuis la grille de la carte.
+
 ## En arrière-plan (17/10/2026)
 
 Pour trier une séance pendant qu'une autre carte se décharge : pendant la copie,

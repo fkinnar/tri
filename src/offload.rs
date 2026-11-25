@@ -51,6 +51,10 @@ pub struct OffloadSettings {
     /// Calculer aperçus et analyses de chaque photo dès qu'elle est copiée (et vérifiée),
     /// pendant la suite de la copie (issue n° 40) : la séance est prête plus tôt.
     pub previews: bool,
+    /// Heure (0 à 23) où commence un jour de prise de vue, pour ranger une carte en
+    /// séances (#507) : une photo prise avant compte pour la veille (une soirée qui finit
+    /// après minuit reste une séance).
+    pub day_cut: u32,
 }
 
 impl Default for OffloadSettings {
@@ -66,6 +70,7 @@ impl Default for OffloadSettings {
             delete_after: false,
             delete_left: false,
             previews: true,
+            day_cut: 4,
         }
     }
 }
@@ -231,6 +236,62 @@ impl History {
         }
         self.known.insert(id);
         Ok(())
+    }
+}
+
+/// Une séance d'une carte (#507) : les images d'un même jour de prise de vue.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Session {
+    /// Jour « AAAA-MM-JJ » (heure locale, coupé à `[offload] day_cut`).
+    pub day: String,
+    /// Ses images, rangs dans [`Plan::items`], dans l'ordre de la carte.
+    pub items: Vec<usize>,
+}
+
+impl Session {
+    /// Nom de dossier proposé : le jour et `_` à compléter, comme [`suggest_folder`].
+    pub fn folder(&self) -> String {
+        format!("{}_", self.day)
+    }
+}
+
+impl Plan {
+    /// La carte rangée en séances (#507), de la plus ancienne à la plus récente : par jour
+    /// de prise de vue (date du fichier, que le boîtier pose à la prise de vue, en heure
+    /// locale), une photo prise avant `day_cut` heures comptant pour la veille. Une paire
+    /// RAW+JPEG (même dossier, même nom) reste dans la même séance, celle de sa première
+    /// image.
+    pub fn sessions(&self, day_cut: u32) -> Vec<Session> {
+        use std::collections::{BTreeMap, HashMap};
+        let day_of = |t: SystemTime| {
+            let local = chrono::DateTime::<chrono::Local>::from(t)
+                - chrono::Duration::hours(i64::from(day_cut.min(23)));
+            local.format("%Y-%m-%d").to_string()
+        };
+        let mut pair_day: HashMap<PathBuf, String> = HashMap::new();
+        let mut days: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+        for (i, item) in self.items.iter().enumerate() {
+            let stem = item.source.with_extension("");
+            let day = pair_day
+                .entry(stem)
+                .or_insert_with(|| day_of(item.modified))
+                .clone();
+            days.entry(day).or_default().push(i);
+        }
+        days.into_iter()
+            .map(|(day, items)| Session { day, items })
+            .collect()
+    }
+
+    /// Le même inventaire restreint aux images que `keep` garde (séances ou photos
+    /// choisies, #507) : copier, vérifier, supprimer de la carte ensuite ne touchent
+    /// qu'elles.
+    pub fn subset(&self, keep: impl Fn(&Item) -> bool) -> Plan {
+        Plan {
+            source: self.source.clone(),
+            items: self.items.iter().filter(|i| keep(i)).cloned().collect(),
+            ignored: self.ignored,
+        }
     }
 }
 
@@ -417,6 +478,23 @@ pub struct Report {
     pub out_of_space: bool,
     /// Durée.
     pub elapsed: Duration,
+}
+
+impl Report {
+    /// Ajoute le bilan `other` d'une autre séance de la même carte (#507 : un dossier par
+    /// séance, copiées l'une après l'autre) : listes mises bout à bout, durées additionnées ;
+    /// la destination devient la sienne (la dernière séance, la plus récente).
+    pub fn absorb(&mut self, other: Report) {
+        self.destination = other.destination;
+        self.copied.extend(other.copied);
+        self.skipped.extend(other.skipped);
+        self.already_there.extend(other.already_there);
+        self.left.extend(other.left);
+        self.errors.extend(other.errors);
+        self.cancelled |= other.cancelled;
+        self.out_of_space |= other.out_of_space;
+        self.elapsed += other.elapsed;
+    }
 }
 
 /// La destination est pleine (issue du 12/11/2026 : le déchargement échouait sans rien
@@ -763,6 +841,57 @@ pub fn delete_sources(report: &Report) -> Vec<(PathBuf, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_card_splits_into_sessions_by_day_with_the_night_cut() {
+        // #507 : deux séances sur la carte ; la soirée qui finit après minuit (avant
+        // `day_cut`) reste dans la sienne, la paire RAW+JPEG aussi.
+        use chrono::TimeZone;
+        let at = |d: u32, h: u32, m: u32| -> SystemTime {
+            chrono::Local
+                .with_ymd_and_hms(2026, 11, d, h, m, 0)
+                .unwrap()
+                .into()
+        };
+        let item = |name: &str, t: SystemTime| Item {
+            source: PathBuf::from("/carte/DCIM").join(name),
+            size: 1,
+            modified: t,
+            kind: media::kind_of(Path::new(name)).unwrap(),
+            known: false,
+        };
+        let plan = Plan {
+            source: PathBuf::from("/carte"),
+            items: vec![
+                item("DSCF0001.RAF", at(12, 10, 0)),
+                item("DSCF0002.RAF", at(12, 23, 30)),
+                item("DSCF0003.RAF", at(13, 1, 15)),
+                item("DSCF0003.JPG", at(13, 1, 15)),
+                item("DSCF0004.RAF", at(14, 9, 0)),
+            ],
+            ignored: 0,
+        };
+        let sessions = plan.sessions(4);
+        let days: Vec<&str> = sessions.iter().map(|s| s.day.as_str()).collect();
+        assert_eq!(days, ["2026-11-12", "2026-11-14"]);
+        assert_eq!(
+            sessions[0].items,
+            [0, 1, 2, 3],
+            "la nuit compte pour la veille"
+        );
+        assert_eq!(sessions[0].folder(), "2026-11-12_");
+        // Coupure à minuit : trois séances.
+        assert_eq!(plan.sessions(0).len(), 3);
+        // Restreint à une séance : seulement ses images.
+        let chosen: HashSet<PathBuf> = sessions[1]
+            .items
+            .iter()
+            .map(|&i| plan.items[i].source.clone())
+            .collect();
+        let one = plan.subset(|i| chosen.contains(&i.source));
+        assert_eq!(one.items.len(), 1);
+        assert_eq!(one.items[0].source.file_name().unwrap(), "DSCF0004.RAF");
+    }
 
     thread_local! {
         /// Copies à faire échouer « disque plein » dans ce fil (tests de [`run`]).

@@ -109,6 +109,25 @@ The new card may be mounted **at the same path** as the previous one (two cards 
 same camera have the same volume name, `/media/…/disk`): it has just appeared, so it is
 another card.
 
+## A card of several sessions (2026-11-25, #507)
+
+A card can hold several sessions; often only one is to be offloaded.
+`Plan::sessions(day_cut)` sorts the card by shooting day (the file date, set by the camera,
+in local time; a photo taken before `[offload] day_cut` o'clock, 4 by default, counts for
+the day before: an evening ending after midnight stays one session). A RAW+JPEG pair stays
+in the session of its first image. `Plan::subset` restricts the inventory to the chosen
+images: the verified copy, the history and deleting from the card afterwards only touch
+them, never the rest of the card.
+
+- **Dialog**: with several sessions, one row per day (checkbox, folder, number of images
+  and size to copy, or "already offloaded") instead of the "Session folder" field.
+  Checked by default: those with something new. **One folder per checked session**
+  (`YYYY-MM-DD_` to complete), copied one after the other in the same thread; the reports
+  are put end to end (`Report::absorb`), the newest session opened at the end.
+- **Command line**: `tri --offload <card> --session YYYY-MM-DD` only offloads that day
+  (folder named after it); `--dry-run` lists the sessions.
+- Coming (same issue): choosing photos within a session, from the card's grid.
+
 ## In the background (2026-10-17)
 
 To cull one session while another card is being offloaded: during the copy, "Continue in

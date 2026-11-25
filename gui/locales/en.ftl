@@ -1809,6 +1809,15 @@ offload-root = Root folder
 offload-session = Session folder
 offload-session-tip = Suggested: YYYY-MM-DD_ (date of the newest image to copy), to complete ("_Self") or replace entirely; the year, if wanted, goes in the root folder. Empty: straight into the root folder.
 offload-destination = Destination: { $path }
+offload-destinations = Destination: { $n } folders in { $path }
+offload-sessions = { $n } sessions on the card (one per shooting day), each in its own folder:
+offload-session-count = { $n ->
+    [0] nothing to copy
+    [one] 1 image, { $size }
+   *[other] { $n } images, { $size }
+}
+offload-session-known = already offloaded ({ $n } images)
+offload-no-session-chosen = No session checked.
 offload-raw-only = RAW only
 offload-keep-disk = Keep tri's data on this drive
 offload-keep-folder = Keep tri's data in the session folder

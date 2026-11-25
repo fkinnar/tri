@@ -1815,6 +1815,15 @@ offload-root = Dossier racine
 offload-session = Dossier de la séance
 offload-session-tip = Proposé : AAAA-MM-JJ_ (date de la plus récente image à copier), à compléter (« _Self ») ou à remplacer entièrement ; l'année, si on la veut, va dans le dossier racine. Vide : directement dans le dossier racine.
 offload-destination = Destination : { $path }
+offload-destinations = Destination : { $n } dossiers dans { $path }
+offload-sessions = { $n } séances sur la carte (une par jour de prise de vue), chacune dans son dossier :
+offload-session-count = { $n ->
+    [0] rien à copier
+    [one] 1 image, { $size }
+   *[other] { $n } images, { $size }
+}
+offload-session-known = déjà déchargée ({ $n } images)
+offload-no-session-chosen = Aucune séance cochée.
 offload-raw-only = RAW seulement
 offload-keep-disk = Garder les données de tri sur ce disque
 offload-keep-folder = Garder les données de tri dans le dossier de la séance

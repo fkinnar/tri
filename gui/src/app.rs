@@ -45162,6 +45162,79 @@ mod tests {
     }
 
     #[test]
+    fn a_card_of_several_sessions_offloads_the_checked_ones_each_in_its_folder() {
+        // #507 : trois jours sur la carte ; le premier décoché, les deux autres copiés,
+        // chacun dans son dossier ; rien d'autre ne quitte la carte.
+        use chrono::TimeZone;
+        let (mut h, dir) = harness();
+        let card = dir.path().join("CARTE");
+        let shots = card.join("DCIM/100_TEST");
+        std::fs::create_dir_all(&shots).unwrap();
+        for (name, day) in [("IMG0", 10), ("IMG1", 11), ("IMG2", 12), ("IMG3", 12)] {
+            let path = shots.join(format!("{name}.jpg"));
+            image::RgbImage::from_pixel(32, 24, image::Rgb([90, 90, 90]))
+                .save(&path)
+                .unwrap();
+            let at: std::time::SystemTime = chrono::Local
+                .with_ymd_and_hms(2026, 11, day, 12, 0, 0)
+                .unwrap()
+                .into();
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_modified(at)
+                .unwrap();
+        }
+        h.state_mut().tree = Tree::with_places(
+            vec![tri::places::Place {
+                name: "CARTE".into(),
+                path: card.clone(),
+                kind: tri::places::PlaceKind::Volume,
+            }],
+            false,
+        );
+        h.run_steps(2);
+        h.get_by_label("Décharger la carte…").click();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.query_by_label("Décharger").is_none() {
+            assert!(Instant::now() < deadline, "boîte jamais prête");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(h.query_by_label_contains("3 séances sur la carte").is_some());
+        settle_dialog(&mut h);
+        h.get_by_label("2026-11-10").click();
+        h.run_steps(2);
+        assert!(h.query_by_label_contains("3 à copier").is_some());
+        h.get_by_label("Décharger").click();
+        while h
+            .query_by_label_contains("3 fichiers copiés et vérifiés")
+            .is_none()
+        {
+            assert!(Instant::now() < deadline, "jamais copié");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let root = dir.path().join("photos-local");
+        let names = |d: &str| {
+            let mut n: Vec<String> = std::fs::read_dir(root.join(d))
+                .map(|r| {
+                    r.flatten()
+                        .map(|e| e.file_name().to_string_lossy().into_owned())
+                        .filter(|n| !n.starts_with('.'))
+                        .collect()
+                })
+                .unwrap_or_default();
+            n.sort();
+            n
+        };
+        assert_eq!(names("2026-11-11"), ["IMG1.jpg"]);
+        assert_eq!(names("2026-11-12"), ["IMG2.jpg", "IMG3.jpg"]);
+        assert!(names("2026-11-10").is_empty(), "séance décochée : pas copiée");
+    }
+
+    #[test]
     fn a_full_destination_brings_the_offload_back_until_answered() {
         // 12/11/2026 : destination pleine, le déchargement échouait sans rien dire. La copie
         // (ici en arrière-plan) s'arrête, la boîte revient avec ce qui est fait et ce qui
