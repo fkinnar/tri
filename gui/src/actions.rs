@@ -649,7 +649,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 309] = [
+    pub const ALL: [Action; 310] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
