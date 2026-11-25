@@ -554,6 +554,18 @@ fn accent_color_editor(ui: &mut Ui, value: &Value) -> (egui::Response, Option<Va
     (response, new)
 }
 
+/// Réglage qui désigne un membre d'une famille (`[versions.presets.<id>] profile` : un
+/// préréglage d'export) : la racine de la famille, et si « aucun » est permis (valeur
+/// vide). Montré en liste déroulante de ses membres.
+fn member_choice(section: &str, key: &str) -> Option<(&'static str, bool)> {
+    match (section, key) {
+        (s, "profile") if s.starts_with("versions.presets.") => Some(("export.profiles", true)),
+        ("iptc", "default") => Some(("iptc.sets", false)),
+        (s, "iptc") if s.starts_with("export.profiles.") => Some(("iptc.sets", true)),
+        _ => None,
+    }
+}
+
 /// Vrai si la clé désigne un dossier : saisie avec complétion par Tab.
 /// Valeurs possibles d'un réglage à choix (liste déroulante plutôt que texte libre). Un
 /// test vérifie que chacune est acceptée.
@@ -2021,40 +2033,44 @@ impl SettingsWindow {
                     }
                     widget = Some(r);
                 }
-                // Préréglage d'export d'un préréglage de recadrage : la liste des
-                // préréglages d'export (retour du 21/10/2026 : un champ texte laissait
-                // passer une faute de frappe), « aucun » en tête.
-                Value::Str(s)
-                    if section.starts_with("versions.presets.") && entry.key == "profile" =>
-                {
+                // Un membre d'une famille, plutôt qu'un nom à taper (retour du 21/10/2026 : un
+                // champ texte laissait passer une faute de frappe) : le préréglage d'export
+                // d'un préréglage de recadrage, « aucun » en tête ; le jeu de métadonnées de
+                // création proposé (`[iptc] default`, retour du 25/11/2026) ; celui d'un
+                // préréglage d'export, « aucun » en tête.
+                Value::Str(s) if member_choice(section, &entry.key).is_some() => {
+                    let (root, with_none) =
+                        member_choice(section, &entry.key).unwrap_or(("", false));
                     let mut v = s.clone();
-                    let profiles: Vec<(String, String)> = self
+                    let members: Vec<(String, String)> = self
                         .schema()
                         .sections
                         .iter()
                         .filter_map(|sec| match family(&sec.name) {
-                            Some((("export.profiles", _, _), id)) => {
+                            Some(((parent, _, _), id)) if parent == root => {
                                 Some((id.to_string(), member_name(&self.file, &sec.name)))
                             }
                             _ => None,
                         })
                         .collect();
                     let none = t!("settings-profile-none");
-                    let shown = if v.is_empty() {
+                    let shown = if v.is_empty() && with_none {
                         none.clone()
                     } else {
-                        profiles
+                        members
                             .iter()
                             .find(|(id, _)| *id == v)
                             .map_or_else(|| v.clone(), |(_, name)| name.clone())
                     };
-                    let combo = egui::ComboBox::from_id_salt(("settings_profile", &id))
+                    let combo = egui::ComboBox::from_id_salt(("settings_member", &id))
                         .selected_text(shown)
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut v, String::new(), none);
-                            for (pid, name) in &profiles {
-                                ui.selectable_value(&mut v, pid.clone(), name)
-                                    .on_hover_text(pid);
+                            if with_none {
+                                ui.selectable_value(&mut v, String::new(), none);
+                            }
+                            for (mid, name) in &members {
+                                ui.selectable_value(&mut v, mid.clone(), name)
+                                    .on_hover_text(mid);
                             }
                         });
                     widget = Some(combo.response);
@@ -3575,6 +3591,39 @@ mod tests {
                 .unwrap()
                 .contains("\"core.flag.accept\"")
         );
+    }
+
+    #[test]
+    fn sets_and_presets_are_chosen_from_a_list_of_members() {
+        // Retour du 25/11/2026 : `[iptc] default`, un nom de jeu à taper ; une liste.
+        assert_eq!(member_choice("iptc", "default"), Some(("iptc.sets", false)));
+        assert_eq!(
+            member_choice("export.profiles.web", "iptc"),
+            Some(("iptc.sets", true)),
+            "« aucun » : pas de métadonnées posées à l'export"
+        );
+        assert_eq!(
+            member_choice("versions.presets.story", "profile"),
+            Some(("export.profiles", true))
+        );
+        assert_eq!(member_choice("iptc.sets.mine", "creator"), None);
+        // Chaque réglage visé existe, et la famille a des membres.
+        let schema = schema();
+        for (section, key) in [
+            ("iptc", "default"),
+            ("export.profiles.web", "iptc"),
+            ("versions.presets.story", "profile"),
+        ] {
+            assert!(schema.default_of(section, key).is_some(), "{section}.{key}");
+            let (root, _) = member_choice(section, key).unwrap();
+            assert!(
+                schema
+                    .sections
+                    .iter()
+                    .any(|s| family(&s.name).is_some_and(|((parent, _, _), _)| parent == root)),
+                "{root}"
+            );
+        }
     }
 
     #[test]
