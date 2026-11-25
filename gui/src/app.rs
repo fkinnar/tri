@@ -4307,8 +4307,10 @@ impl TriApp {
             Ok(result) => {
                 let dir = opening.dir.clone();
                 self.opening = None;
-                self.release_held_folder();
+                // Installé d'abord : le dossier d'avant n'est plus affiché, rien à relire
+                // (25/11/2026 : relu avant, sur place, il figeait l'interface).
                 self.install_folder(&dir, result);
+                self.release_held_folder();
             }
             Err(mpsc::TryRecvError::Empty) => {}
             Err(mpsc::TryRecvError::Disconnected) => {
@@ -4339,6 +4341,8 @@ impl TriApp {
         }
         let notes_stopped = self.loading.take().is_some();
         self.stop_watch();
+        let dropped = tri::cache::hold_stamps_under(Some(&self.folder.dir));
+        trace(|| format!("relevés abandonnés du dossier quitté : {dropped}"));
         self.held = Some((self.folder.dir.clone(), notes_stopped));
     }
 
@@ -4348,11 +4352,14 @@ impl TriApp {
         let Some((dir, notes_stopped)) = self.held.take() else {
             return;
         };
+        tri::cache::hold_stamps_under(None);
         if let Some(engine) = &self.engine {
             engine.scheduler.set_paused(false);
         }
+        // Toujours affiché (ouverture annulée ou échouée) : seulement ses notes, relues en
+        // fond, jamais sa liste sur place (un NAS figeait l'interface).
         if notes_stopped && self.folder.dir == dir {
-            self.reload_folder(None);
+            self.start_loading();
         }
     }
 
