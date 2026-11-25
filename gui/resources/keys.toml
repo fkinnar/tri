@@ -344,6 +344,8 @@ loupe = "none"
 "core.folders.favorite_name" = ["n"]
 # Watch the folder (walked in the background for "All photos"): "w" like "watch".
 "core.folders.watch" = ["w"]
+# Light mode for the folder under the cursor (#597): only thumbnails in the background.
+"core.folders.light" = []
 # Connect to a network share: "c" (connect); forget it: Shift+C.
 "core.folders.connect" = ["c"]
 "core.folders.forget" = ["Shift+c"]

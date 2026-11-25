@@ -378,6 +378,8 @@ pub enum Action {
     FolderFavoriteName,
     /// Surveiller le dossier pointé (racine parcourue en fond, #561), ou plus.
     FolderWatch,
+    /// Mettre le dossier pointé en mode léger, ou l'en sortir (#597).
+    FolderLight,
     /// Panneau des dossiers : se connecter à un partage réseau (`\\nas\photo`,
     /// `smb://nas/photo`), tapé dans le champ de recherche (28/10/2026).
     FolderConnect,
@@ -644,7 +646,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 308] = [
+    pub const ALL: [Action; 309] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -829,6 +831,7 @@ impl Action {
         Action::FolderFavorite,
         Action::FolderFavoriteName,
         Action::FolderWatch,
+        Action::FolderLight,
         Action::FolderConnect,
         Action::FolderForget,
         Action::FolderCacheClear,
@@ -1189,8 +1192,8 @@ impl Action {
             FocusLeft | FocusRight | FocusNext | FocusSources | FocusImages | FocusTools
             | FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
             | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
-            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderWatch | FolderConnect
-            | FolderForget | FolderCacheClear | FolderReset | FolderOpenIn(_)
+            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderWatch | FolderLight
+            | FolderConnect | FolderForget | FolderCacheClear | FolderReset | FolderOpenIn(_)
             | FolderCompute(_) | FolderComputeAll | FolderRecreateAll | FolderCopy | FolderMove
             | MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft
@@ -1446,6 +1449,7 @@ impl Action {
             Action::FolderFavorite => "core.folders.favorite",
             Action::FolderFavoriteName => "core.folders.favorite_name",
             Action::FolderWatch => "core.folders.watch",
+            Action::FolderLight => "core.folders.light",
             Action::FolderConnect => "core.folders.connect",
             Action::FolderForget => "core.folders.forget",
             Action::FolderCacheClear => "core.folders.cache_clear",
@@ -1713,8 +1717,8 @@ impl Action {
         match self {
             FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
             | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
-            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderWatch | FolderConnect
-            | FolderForget | FolderCacheClear | FolderReset | FolderOpenIn(_)
+            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderWatch | FolderLight
+            | FolderConnect | FolderForget | FolderCacheClear | FolderReset | FolderOpenIn(_)
             | FolderCompute(_) | FolderComputeAll | FolderRecreateAll | FolderCopy | FolderMove
             | FolderSectionNext | FolderSectionPrev => Some(Scope::Folders),
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown

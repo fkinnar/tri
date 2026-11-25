@@ -49,6 +49,7 @@ pub mod i18n;
 pub mod index;
 pub mod io_watch;
 pub mod jpeg;
+pub mod light;
 pub mod locate;
 pub mod log;
 pub mod media;

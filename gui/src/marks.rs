@@ -1694,6 +1694,32 @@ pub fn eye(painter: &Painter, rect: Rect, color: Color32) {
     painter.circle_filled(c, rect.width() * 0.13, color);
 }
 
+/// Mode léger d'un dossier (#597) : une plume (deux courbes et la tige). `cut` : barrée,
+/// le dossier sort du mode léger.
+pub fn feather(painter: &Painter, rect: Rect, color: Color32, cut: bool) {
+    let s = rect.width().min(rect.height());
+    let p = |x: f32, y: f32| rect.center() + vec2((x - 0.5) * s, (y - 0.5) * s);
+    let stroke = Stroke::new((s / 12.0).max(1.0), color);
+    let (tip, base) = (p(0.84, 0.12), p(0.3, 0.66));
+    let side = |bulge: f32| -> Vec<Pos2> {
+        let ctrl = p(0.57 + bulge, 0.39 + bulge);
+        (0..=12)
+            .map(|k| {
+                let t = k as f32 / 12.0;
+                let a = base.lerp(ctrl, t);
+                let b = ctrl.lerp(tip, t);
+                a.lerp(b, t)
+            })
+            .collect()
+    };
+    painter.add(Shape::line(side(0.24), stroke));
+    painter.add(Shape::line(side(-0.24), stroke));
+    painter.line_segment([p(0.14, 0.86), tip], stroke);
+    if cut {
+        painter.line_segment([p(0.1, 0.1), p(0.9, 0.9)], stroke);
+    }
+}
+
 /// Couleurs mesurées (#492, en face de l'œil des couleurs perçues) : quatre pixels, les
 /// valeurs du fichier telles quelles.
 pub fn pixels(painter: &Painter, rect: Rect, color: Color32) {
