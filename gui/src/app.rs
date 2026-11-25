@@ -9755,13 +9755,16 @@ impl TriApp {
                         tri::files::TransferMode::Move
                     };
                     let at = CENTRED;
-                    self.file_dialog = Some(crate::files::FileDialog::transfer(
-                        crate::files::Source::Images(paths),
-                        mode,
-                        Some(&dest),
-                        self.data_dir.as_deref(),
-                        at,
-                    ));
+                    self.file_dialog = Some(
+                        crate::files::FileDialog::transfer(
+                            crate::files::Source::Images(paths),
+                            mode,
+                            Some(&dest),
+                            self.data_dir.as_deref(),
+                            at,
+                        )
+                        .with_carrier(self.carrier()),
+                    );
                 }
             }
         }
@@ -22810,13 +22813,16 @@ impl TriApp {
                 } else {
                     tri::files::TransferMode::Move
                 };
-                self.file_dialog = Some(crate::files::FileDialog::transfer(
-                    crate::files::Source::Images(paths),
-                    mode,
-                    None,
-                    self.data_dir.as_deref(),
-                    at,
-                ));
+                self.file_dialog = Some(
+                    crate::files::FileDialog::transfer(
+                        crate::files::Source::Images(paths),
+                        mode,
+                        None,
+                        self.data_dir.as_deref(),
+                        at,
+                    )
+                    .with_carrier(self.carrier()),
+                );
                 Ok(())
             }
             _ => Ok(()),
@@ -26246,13 +26252,26 @@ impl TriApp {
             tri::files::TransferMode::Move
         };
         let at = CENTRED;
-        self.file_dialog = Some(crate::files::FileDialog::transfer(
-            crate::files::Source::Folder(path),
-            mode,
-            dest,
-            self.data_dir.as_deref(),
-            at,
-        ));
+        self.file_dialog = Some(
+            crate::files::FileDialog::transfer(
+                crate::files::Source::Folder(path),
+                mode,
+                dest,
+                self.data_dir.as_deref(),
+                at,
+            )
+            .with_carrier(self.carrier()),
+        );
+    }
+
+    /// De quoi reprendre le cache des images copiées ou déplacées (#508) : le cache et
+    /// les réglages du moteur, dans le fil de la copie.
+    fn carrier(&self) -> Option<crate::files::Carrier> {
+        let engine = self.engine.as_ref()?;
+        let (cache, settings) = (engine.cache.clone(), engine.preview);
+        Some(Arc::new(move |files: &[(PathBuf, PathBuf)], copy: bool| {
+            preview::carry(&cache, &settings, files, copy);
+        }))
     }
 
     /// Ajoute le dossier pointé dans le panneau des dossiers aux favoris, ou l'en retire.
@@ -39151,6 +39170,55 @@ mod tests {
         run_until(&mut h, |app| app.file_dialog.is_none());
         assert!(dest.join("img1.jpg").exists() && photos.join("img1.jpg").exists());
         assert_eq!(h.state().files.len(), 2, "une copie ne retire rien");
+    }
+
+    #[test]
+    fn copied_images_bring_their_computed_previews_unless_unchecked() {
+        // #508 : la vignette déjà calculée suit la copie (rien à recalculer) ; la case
+        // décochée, rien ne suit.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let dest = dir.path().join("Copies");
+        std::fs::create_dir(&dest).unwrap();
+        let thumb = |h: &Harness<'_, TriApp>, path: PathBuf| {
+            let engine = h.state().engine.as_ref().unwrap();
+            let file = MediaFile {
+                path,
+                kind: tri::media::MediaKind::Flat,
+            };
+            let key = preview::key(&file, Level::Thumbnail, &engine.preview).unwrap();
+            engine.cache.contains(&key)
+        };
+        for name in ["img0.jpg", "img1.jpg"] {
+            for _ in 0..600 {
+                if thumb(&h, photos.join(name)) {
+                    break;
+                }
+                h.run_steps(1);
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            assert!(thumb(&h, photos.join(name)), "vignette calculée");
+        }
+        let copy = |h: &mut Harness<'_, TriApp>, index: usize, uncheck: bool| {
+            h.state_mut().select(index);
+            press(h, Key::C, CMD);
+            h.event(UiEvent::Text(dest.display().to_string()));
+            h.run_steps(2);
+            let label = t!("transfer-carry-cache");
+            assert!(h.query_by_label(&label).is_some(), "la case");
+            if uncheck {
+                h.get_by_label(&label).click();
+                h.run_steps(2);
+            }
+            h.get_by_label(&t!("transfer-confirm")).click();
+            run_until(h, |app| app.file_dialog.is_none());
+        };
+        copy(&mut h, 0, false);
+        assert!(thumb(&h, dest.join("img0.jpg")), "la vignette a suivi");
+        copy(&mut h, 1, true);
+        assert!(dest.join("img1.jpg").exists());
+        assert!(!thumb(&h, dest.join("img1.jpg")), "case décochée : rien");
     }
 
     #[test]

@@ -151,7 +151,18 @@ which only one image leaves) is **copied**, never moved: both images keep their 
   in the data folder, at most `[files] recent`, vanished ones omitted). Input completion:
   `complete_dir` (subfolders, case ignored, hidden ones only after a ".") and
   `common_prefix`.
-- Command line: `tri --copy|--move <image>...|<dossier> --to <dossier> [--dry-run]`.
+- Command line: `tri --copy|--move <image>...|<dossier> --to <dossier> [--no-cache]
+  [--dry-run]`.
+- **The cache follows** (#508, 2026-11-25): the previews, renders and analyses already
+  computed follow the copied or moved images (a card copied by hand, a selection filed
+  elsewhere) instead of being computed again. A cache entry's name comes from the file's
+  name, size and date and the settings, not from its folder: a `tri` copy (date kept)
+  finds the same names, and `preview::carry` copies (or moves) the entries into the new
+  folder's storage (`Cache::carry`), in the copy's thread, with the copies for the grid.
+  A developed render follows only if its sidecar does (its state is in the key).
+  "Bring the previews already computed" checkbox in the dialog (offered value:
+  `[files] carry_cache`), `--no-cache` on the command line. A moved folder keeps its
+  "Bring the cache" checkbox (its whole storage follows).
 - Interface: `y` (copy, vim's *yank*) and `Ctrl+X` (move, "cut"; `x` deletes, as in vim),
   on the selection, and right-click buttons; dialog with a field (Tab completes, up / down
   arrows: recent ones, missing folder created if only one level is missing), copy / move
