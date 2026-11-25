@@ -14231,7 +14231,12 @@ impl TriApp {
             // Échap.
             Action::Loupe => {
                 self.loupe_toggled = !self.loupe_toggled;
-                self.loupe_point = None;
+                // Allumée : au centre de l'image sélectionnée (retour du 25/11/2026 : au
+                // clavier, elle venait sous le pointeur, sur une autre vignette) ; la
+                // souris qui bouge la reprend.
+                self.loupe_point = self
+                    .loupe_toggled
+                    .then_some((self.selected, vec2(0.5, 0.5)));
                 if !self.loupe_toggled {
                     self.loupe_on = false;
                     self.loupe_since = None;
@@ -19724,11 +19729,12 @@ impl TriApp {
         if self.zoom.is_some() || !ctx.input(|i| self.loupe_wanted(i)) {
             return false;
         }
-        // L'image sous la loupe (comparaison : celle visée), sinon l'image affichée.
-        let index = if self.loupe_on {
-            self.loupe_index
-        } else {
-            self.selected
+        // L'image placée au clavier, sinon celle sous la loupe (comparaison : celle
+        // visée), sinon l'image affichée.
+        let index = match self.loupe_point {
+            Some((i, _)) => i,
+            None if self.loupe_on => self.loupe_index,
+            None => self.selected,
         };
         let Some(&rect) = self.loupe_rects.get(&index) else {
             return true;
@@ -25040,14 +25046,18 @@ impl TriApp {
     /// sélectionnée, dessinée par-dessus les autres et coupée à la grille.
     fn grid_loupe(&mut self, ctx: &egui::Context, area: Rect) {
         let pointer = ctx.input(|i| i.pointer.hover_pos());
-        let target = self
-            .grid_images
-            .iter()
-            .find(|(_, r)| pointer.is_some_and(|p| r.contains(p)))
+        // Placée au clavier (`z m`, touches de navigation) : cette vignette, même si le
+        // pointeur est sur une autre ; sinon celle sous le pointeur, puis la sélectionnée.
+        let keyboard = self
+            .loupe_point
+            .and_then(|(k, _)| self.grid_images.iter().find(|(i, _)| *i == k));
+        let target = keyboard
             .or_else(|| {
-                let keyboard = self.loupe_point.map(|(i, _)| i).unwrap_or(self.selected);
-                self.grid_images.iter().find(|(i, _)| *i == keyboard)
+                self.grid_images
+                    .iter()
+                    .find(|(_, r)| pointer.is_some_and(|p| r.contains(p)))
             })
+            .or_else(|| self.grid_images.iter().find(|(i, _)| *i == self.selected))
             .copied();
         let painter = ctx
             .layer_painter(egui::LayerId::new(
@@ -41471,6 +41481,36 @@ mod tests {
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().loupe_toggled);
         assert_eq!(h.state().mode, Mode::Grid);
+        // Allumée au clavier : sur la vignette sélectionnée, pas sous le pointeur
+        // (retour du 25/11/2026), et les flèches la déplacent dedans.
+        h.state_mut().gui.zoom.loupe_delay_ms = 0;
+        run_until(&mut h, |app| app.grid_images.len() >= 3);
+        let other = h
+            .state()
+            .grid_images
+            .iter()
+            .find(|(i, _)| *i == 2)
+            .map(|(_, r)| r.center())
+            .unwrap();
+        h.state_mut().select(0);
+        h.hover_at(other);
+        h.run_steps(2);
+        z(&mut h, Key::M);
+        run_until(&mut h, |app| app.loupe_on);
+        assert_eq!(h.state().loupe_index, 0, "la sélectionnée");
+        let before = h.state().loupe_point.map(|(_, p)| p);
+        for _ in 0..3 {
+            press(&mut h, Key::ArrowRight, Modifiers::NONE);
+            h.run_steps(2);
+        }
+        let after = h.state().loupe_point;
+        assert_eq!(after.map(|(i, _)| i), Some(0));
+        assert!(
+            after.map(|(_, p)| p) != before,
+            "déplacée : {before:?} → {after:?}"
+        );
+        assert_eq!(h.state().selected, 0, "la sélection ne bouge pas");
+        press(&mut h, Key::Escape, Modifiers::NONE);
         // Le zoom depuis la grille : `z z` y ramène, Échap aussi.
         z(&mut h, Key::Z);
         assert_eq!(h.state().mode, Mode::View);

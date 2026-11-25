@@ -767,7 +767,9 @@ system one ("cold" measurements, experiments).
   `loupe_scale` (100 %); its 1:1 is loaded for the occasion, the enlarged preview shown
   while waiting ("loading 100 %…"). Since 2026-11-25 (user's idea; `m` went to the
   rating steps), the loupe is **turned on** with `z m` and stays until `z m` or Escape
-  (`loupe_toggled`, `TriApp::loupe_wanted`); no held key by default any more (`loupe =
+  (`loupe_toggled`, `TriApp::loupe_wanted`), placed at the centre of the selected image
+  (in the grid, even with the pointer over another thumbnail; the navigation keys move
+  it, moving the mouse takes it back); no held key by default any more (`loupe =
   "none"` in keys.toml, `loupe_key` still possible). **Zoom** moves to `z z` (from the
   grid too); zoomed, `z z` or Escape go back where you came from: the grid if the zoom
   started there, otherwise the fitted full screen (`zoom_from_grid`, `TriApp::unzoom`). In **comparison** too since 2026-11-06: the image

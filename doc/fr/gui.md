@@ -804,7 +804,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   l'image à `loupe_scale` (100 %) ; son 1:1 est chargé pour l'occasion, l'aperçu agrandi
   en attendant (« 100 % en cours »). Depuis le 25/11/2026 (idée de l'utilisateur ;
   `m` passé aux pas de notation), la loupe s'**allume** par `z m` et reste jusqu'à `z m`
-  ou Échap (`loupe_toggled`, `TriApp::loupe_wanted`) ; plus de touche tenue par défaut
+  ou Échap (`loupe_toggled`, `TriApp::loupe_wanted`), posée au centre de l'image
+  sélectionnée (en grille, même si le pointeur est sur une autre vignette ; les touches de
+  navigation la déplacent, la souris qui bouge la reprend) ; plus de touche tenue par défaut
   (`loupe = "none"` dans keys.toml, `loupe_key` reste possible). Le **zoom** passe sur
   `z z` (aussi depuis la grille) ; zoomé, `z z` ou Échap ramènent d'où l'on venait : la
   grille si le zoom y a été lancé, sinon le plein écran ajusté (`zoom_from_grid`,
