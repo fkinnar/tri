@@ -1018,6 +1018,9 @@ struct Screenshot {
     started: Instant,
 }
 
+/// Résultat d'une éjection ou d'une déconnexion (message du système en cas de refus).
+type EjectResult = Result<(), String>;
+
 /// État de l'application.
 pub struct TriApp {
     /// Dossier ouvert : images et notes (moteur).
@@ -1091,7 +1094,8 @@ pub struct TriApp {
     /// Ce binaire : version distribuée ou build personnel (et son commit).
     build: tri::update::Build,
     /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
-    ejecting: Option<(PathBuf, Receiver<Result<(), String>>)>,
+    /// Éjection (ou déconnexion d'un partage réseau, `true`) en cours.
+    ejecting: Option<(PathBuf, Receiver<EjectResult>, bool)>,
     /// Montage en cours d'un support pas monté (#113) : périphérique, et dossier où il
     /// est monté à venir.
     mounting: Option<(PathBuf, Receiver<Mounted>)>,
@@ -1106,6 +1110,9 @@ pub struct TriApp {
     /// Retient un compte une fois connecté (`Server::save_login` ; remplacé dans les
     /// tests, qui ne touchent pas au trousseau).
     login_saver: fn(&tri::servers::Server, &tri::servers::Login) -> Result<(), String>,
+    /// Déconnecte un partage réseau monté (`places::disconnect` ; remplacé dans les
+    /// tests, qui ne démontent rien).
+    disconnector: fn(&Path) -> Result<(), String>,
     /// Boîte de connexion ouverte.
     login: Option<LoginBox>,
     /// Liste les partages d'un serveur (`Host::shares` ; remplacé dans les tests).
@@ -1459,6 +1466,11 @@ pub struct TriApp {
     /// Analyses « à la demande » absentes du cache, par case de `progress` (#564) : l'outil
     /// reste grisé tant qu'il en manque.
     analysis_missing: [usize; 7],
+    /// Racine du mode léger du dossier ouvert (#597) : le dossier choisi ou l'emplacement
+    /// réseau ; `None` hors du mode léger.
+    light_root: Option<PathBuf>,
+    /// Dernière image dont tout le cache a été demandé en mode léger (plein écran).
+    light_requested: Option<PathBuf>,
     engine: Option<Engine>,
     /// Voisinage réseau : serveurs annoncés (mDNS), et leur écoute (démarrée à la
     /// première image si `[neighbourhood] enabled` ; jamais dans les tests, qui ne
@@ -1468,6 +1480,11 @@ pub struct TriApp {
     neighbour_tried: bool,
     /// Ouverture d'un dossier lent en cours.
     opening: Option<Opening>,
+    /// Dossier laissé en attente pendant l'ouverture lente d'un autre (retour du
+    /// 25/11/2026 : sur un NAS, ses vignettes, ses notes et sa surveillance ralentissaient
+    /// l'ouverture) : son travail de fond est suspendu ; `true` si la lecture de ses notes
+    /// a été arrêtée (à refaire si l'ouverture est annulée).
+    held: Option<(PathBuf, bool)>,
     /// « Toutes les photos » (#561) : dossier d'où l'on y est venu (Échap y ramène).
     all_photos_from: Option<PathBuf>,
     /// Au lancement, on était dans « Toutes les photos » en quittant : on y repasse une
@@ -1809,6 +1826,10 @@ pub struct TriApp {
     /// Notes écrites sur place, comme avant (tests : ils relisent le disque aussitôt ;
     /// celui de l'écriture en fond le coupe).
     notes_inline: bool,
+    /// Relecture en fond des sidecars modifiés ailleurs ([`tri::notes::SidecarReload`]),
+    /// et ceux arrivés pendant qu'elle tournait (relus ensuite).
+    sidecar_reload: Option<mpsc::Receiver<tri::notes::SidecarReads>>,
+    sidecars_pending: Vec<PathBuf>,
     /// Image gardée en haut de la vue après un refiltrage, et son décalage sous le haut
     /// de sa rangée ([`Reveal::Anchor`]).
     scroll_anchor: Option<(PathBuf, f32)>,
@@ -2431,13 +2452,22 @@ impl TriApp {
         // fenêtre de réglages à jour tout de suite.
         // Analyses du dossier (#564) : le moteur les prend au dossier relu ; les outils
         // retirés ou grisés suivent tout de suite.
+        // Mode léger (#597) : le dossier ouvert relu s'il entre ou sort.
+        if new.light != self.settings.light {
+            self.settings.light = new.light.clone();
+            if self.light_root_of(&self.folder.dir) != self.light_root
+                && !self.folder.dir.as_os_str().is_empty()
+            {
+                self.reload_folder(None);
+            }
+        }
         if new.analysis != self.settings.analysis {
             self.settings.analysis = new.analysis;
             self.settings.scheduler.exposure = None;
             self.settings.sharpness.background = None;
             self.settings.similarity.background = None;
             if let Some(engine) = &self.engine {
-                engine.scheduler.set_analyses(self.settings.analysis());
+                engine.scheduler.set_analyses(self.analyses());
             }
             crate::actions::set_removed_tools(&self.settings.analysis());
             self.help_lines = None;
@@ -2684,6 +2714,7 @@ impl TriApp {
             connecting: None,
             connector: |server, login| server.connect(std::env::consts::OS, login),
             login_saver: |server, login| server.save_login(std::env::consts::OS, login),
+            disconnector: tri::places::disconnect,
             login: None,
             share_lister: |host| host.shares(std::env::consts::OS),
             shares: None,
@@ -2834,11 +2865,14 @@ impl TriApp {
             status: Vec::new(),
             progress: [Progress::default(); 7],
             analysis_missing: [0; 7],
+            light_root: None,
+            light_requested: None,
             engine: None,
             neighbourhood: Default::default(),
             neighbour_browser: None,
             neighbour_tried: cfg!(test),
             opening: None,
+            held: None,
             all_photos_from: None,
             reopen_all_photos,
             all_photos_last: None,
@@ -2986,6 +3020,8 @@ impl TriApp {
             writes: crate::bg_read::BgWrites::new("tri-writes"),
             note_writes: None,
             notes_inline: cfg!(test),
+            sidecar_reload: None,
+            sidecars_pending: Vec::new(),
             view_height: 0.0,
             reveal: None,
             scroll_anchor: None,
@@ -3591,6 +3627,7 @@ impl TriApp {
             Some(result) => self.install_folder(dir, result),
             None => {
                 trace(|| format!("dossier lent, lu en fond : {}", dir.display()));
+                self.hold_current_folder();
                 self.opening = Some(Opening {
                     dir: dir.to_path_buf(),
                     result: rx,
@@ -3708,6 +3745,84 @@ impl TriApp {
     /// Vrai si `path` est une racine surveillée.
     fn is_watched(&self, path: &Path) -> bool {
         self.watched_roots().iter().any(|r| r == path)
+    }
+
+    /// L'emplacement réseau (partage monté, iCloud) qui contient `path`, le plus profond.
+    fn network_root(&self, path: &Path) -> Option<PathBuf> {
+        self.tree
+            .places()
+            .iter()
+            .filter(|p| p.kind == PlaceKind::Network && path.starts_with(&p.path))
+            .max_by_key(|p| p.path.components().count())
+            .map(|p| p.path.clone())
+    }
+
+    /// Racine du mode léger qui s'applique à `path` (#597), `None` hors du mode léger.
+    fn light_root_of(&self, path: &Path) -> Option<PathBuf> {
+        self.settings
+            .light
+            .root_of(path, self.network_root(path).as_deref())
+    }
+
+    /// Analyses du dossier ouvert : celles des réglages, à la demande en mode léger.
+    fn analyses(&self) -> tri::scheduler::Analyses {
+        let analyses = self.settings.analysis();
+        if self.light_root.is_some() {
+            tri::light::lighten(analyses)
+        } else {
+            analyses
+        }
+    }
+
+    /// Met `path` en mode léger ou l'en sort : `[light] folders` et `except` réécrits, le
+    /// dossier ouvert relu s'il est concerné.
+    fn toggle_light(&mut self, path: PathBuf) {
+        let name = folder_name(&path);
+        let network = self.network_root(&path);
+        let on = self.light_root_of(&path).is_none();
+        let (folders, except) = self.settings.light.toggled(&path, network.as_deref(), on);
+        let Some(config) = self
+            .config_path
+            .clone()
+            .or_else(tri::settings::default_path)
+        else {
+            self.notice = Some((t!("settings-no-path"), true));
+            return;
+        };
+        let result = tri::config_edit::ConfigFile::open(&config).and_then(|mut file| {
+            file.set(
+                "light",
+                "folders",
+                &tri::config_edit::Value::Strings(folders.clone()),
+            )?;
+            file.set(
+                "light",
+                "except",
+                &tri::config_edit::Value::Strings(except.clone()),
+            )?;
+            tri::settings::parse::<AppSettings>(&file.text())?;
+            file.save()
+                .map_err(|e| format!("{} : {e}", config.display()))
+        });
+        if let Err(e) = result {
+            self.notice = Some((e, true));
+            return;
+        }
+        self.settings.light.folders = folders;
+        self.settings.light.except = except;
+        self.notice = Some((
+            if on {
+                t!("folders-light-on", name = &name)
+            } else {
+                t!("folders-light-off", name = &name)
+            },
+            false,
+        ));
+        if self.light_root_of(&self.folder.dir) != self.light_root
+            && !self.folder.dir.as_os_str().is_empty()
+        {
+            self.reload_folder(None);
+        }
     }
 
     /// Parcourt `roots` en fond ([`tri::roots::walk`]) ; un parcours déjà en cours : à la
@@ -4206,10 +4321,59 @@ impl TriApp {
             Ok(result) => {
                 let dir = opening.dir.clone();
                 self.opening = None;
+                // Installé d'abord : le dossier d'avant n'est plus affiché, rien à relire
+                // (25/11/2026 : relu avant, sur place, il figeait l'interface).
                 self.install_folder(&dir, result);
+                self.release_held_folder();
             }
             Err(mpsc::TryRecvError::Empty) => {}
-            Err(mpsc::TryRecvError::Disconnected) => self.opening = None,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                self.opening = None;
+                self.release_held_folder();
+            }
+        }
+    }
+
+    /// Arrête la surveillance du dossier sans attendre la fin d'un relevé en cours (retour
+    /// du 25/11/2026 : sur un NAS, attendre le relevé de 2285 fichiers figeait
+    /// l'interface au changement de dossier) ; le fil s'arrête de lui-même ensuite.
+    fn stop_watch(&mut self) {
+        if let Some((mut watch, _, _)) = self.watch.take() {
+            watch.detach();
+        }
+    }
+
+    /// Une ouverture lente commence : le travail de fond du dossier affiché est suspendu
+    /// (aperçus et analyses), la lecture de ses notes arrêtée et sa surveillance coupée,
+    /// pour laisser le disque (NAS) au dossier demandé.
+    fn hold_current_folder(&mut self) {
+        if self.held.is_some() || self.folder.is_none() {
+            return;
+        }
+        if let Some(engine) = &self.engine {
+            engine.scheduler.set_paused(true);
+        }
+        let notes_stopped = self.loading.take().is_some();
+        self.stop_watch();
+        let dropped = tri::cache::hold_stamps_under(Some(&self.folder.dir));
+        trace(|| format!("relevés abandonnés du dossier quitté : {dropped}"));
+        self.held = Some((self.folder.dir.clone(), notes_stopped));
+    }
+
+    /// Fin de l'ouverture (réussie, échouée ou annulée) : le travail de fond reprend ; le
+    /// dossier d'avant toujours affiché relit ses notes si leur lecture avait été arrêtée.
+    fn release_held_folder(&mut self) {
+        let Some((dir, notes_stopped)) = self.held.take() else {
+            return;
+        };
+        tri::cache::hold_stamps_under(None);
+        if let Some(engine) = &self.engine {
+            engine.scheduler.set_paused(false);
+        }
+        // Toujours affiché (ouverture annulée ou échouée) : seulement ses notes, relues en
+        // fond, jamais sa liste sur place (un NAS figeait l'interface).
+        if notes_stopped && self.folder.dir == dir {
+            self.start_loading();
         }
     }
 
@@ -4222,6 +4386,7 @@ impl TriApp {
                 false,
             ));
         }
+        self.release_held_folder();
     }
 
     /// Ouverture d'un dossier lent : son nom, les images trouvées, et « Annuler », au
@@ -4888,7 +5053,7 @@ impl TriApp {
         if action.tool().is_some_and(crate::actions::removed) {
             return Some(t!("analysis-removed"));
         }
-        let analyses = self.settings.analysis();
+        let analyses = self.analyses();
         let pending = |slot: usize| {
             let p = self.progress[slot];
             // Analyse « à la demande » (#564) : rien en fond ; grisé tant que le dossier
@@ -8729,7 +8894,11 @@ impl TriApp {
         let interval = self.settings.watch.interval_ms;
         // « Toutes les photos » : pas de dossier à surveiller (complété en fond).
         if self.folder.is_none() || interval == 0 || tri::folder::is_all_photos(&self.folder.dir) {
-            self.watch = None;
+            self.stop_watch();
+            return;
+        }
+        // Un autre dossier s'ouvre : celui-ci n'est plus surveillé en attendant.
+        if self.held.is_some() {
             return;
         }
         let depth = self.folder_depth();
@@ -8760,6 +8929,7 @@ impl TriApp {
                     tri::watch::FolderWatch::start_depth(&self.folder.dir, depth, pace, on_change)
                 }
             };
+            self.stop_watch();
             self.watch = Some((watch, rx, interval));
         }
         let Some((_, rx, _)) = &self.watch else {
@@ -8801,14 +8971,57 @@ impl TriApp {
             self.versions.clear();
             self.versions_epoch += 1;
             self.forget_grid_versions();
-            let changed = self.folder.notes.reload_sidecars(&sidecars);
-            trace(|| format!("XMP modifiés ailleurs : {}", changed.len()));
-            if !changed.is_empty() {
-                // Filtre ou tri sur les notes, couverture des piles : à revoir.
-                self.notes_changed();
-                self.stacks_dirty = true;
-                self.notice = Some((t!("watch-notes", count = changed.len()), false));
-            }
+            // Relus hors du fil de l'interface (un NAS ou iCloud froid figeait la
+            // fenêtre) ; une relecture déjà en cours : à sa suite.
+            self.sidecars_pending.extend(sidecars);
+        }
+    }
+
+    /// Relit en fond les sidecars modifiés ailleurs (`sidecars_pending`), puis applique
+    /// leurs notes ; une image notée entre-temps dans `tri` garde la sienne.
+    fn reload_sidecars(&mut self, ctx: &egui::Context) {
+        if let Some(rx) = &self.sidecar_reload {
+            let Ok(reads) = rx.try_recv() else {
+                return;
+            };
+            self.sidecar_reload = None;
+            self.sidecars_read(reads);
+        }
+        if self.sidecars_pending.is_empty() {
+            return;
+        }
+        let sidecars = std::mem::take(&mut self.sidecars_pending);
+        let plan = self.folder.notes.plan_reload(&sidecars);
+        if plan.is_empty() {
+            return;
+        }
+        // Tests : tout de suite (ils lisent les notes juste après).
+        if self.notes_inline {
+            let reads = plan.read();
+            self.sidecars_read(reads);
+            return;
+        }
+        let (tx, rx) = mpsc::channel();
+        let repaint = ctx.clone();
+        std::thread::Builder::new()
+            .name("tri-sidecars".into())
+            .spawn(move || {
+                let _ = tx.send(plan.read());
+                repaint.request_repaint();
+            })
+            .ok();
+        self.sidecar_reload = Some(rx);
+    }
+
+    /// Notes relues des sidecars modifiés ailleurs : appliquées.
+    fn sidecars_read(&mut self, reads: tri::notes::SidecarReads) {
+        let changed = self.folder.notes.apply_reload(reads);
+        trace(|| format!("XMP modifiés ailleurs : {}", changed.len()));
+        if !changed.is_empty() {
+            // Filtre ou tri sur les notes, couverture des piles : à revoir.
+            self.notes_changed();
+            self.stacks_dirty = true;
+            self.notice = Some((t!("watch-notes", count = changed.len()), false));
         }
     }
 
@@ -8825,6 +9038,7 @@ impl TriApp {
         let mut pointed: Option<usize> = None;
         let mut open = None;
         let mut eject = None;
+        let mut disconnect: Option<PathBuf> = None;
         let mut offload = None;
         let mut menu: Option<(PathBuf, Action)> = None;
         // Clic droit : garder le cache dans ce dossier / sur ce disque, ou plus ici.
@@ -9478,6 +9692,13 @@ impl TriApp {
                                                 entry(ui, Action::FolderCacheClear, text);
                                             }
                                         }
+                                        // Mode léger (#597).
+                                        let light = if self.light_root_of(&row.path).is_some() {
+                                            t!("folder-menu-light-off")
+                                        } else {
+                                            t!("folder-menu-light-on")
+                                        };
+                                        entry(ui, Action::FolderLight, light);
                                         // Cache, données, notes, versions au choix (#411).
                                         entry(
                                             ui,
@@ -9532,6 +9753,30 @@ impl TriApp {
                                 self.action_tip(Action::FolderWatch)
                             ));
                         }
+                        // Mode léger (#597) : où il commence, ou où il s'arrête.
+                        if let Some(on) = self
+                            .settings
+                            .light
+                            .mark(&row.path, self.network_root(&row.path).as_deref())
+                        {
+                            ui.add_space(3.0);
+                            let (rect, response) =
+                                ui.allocate_exact_size(vec2(size, size), Sense::hover());
+                            let color = ui.visuals().weak_text_color();
+                            marks::feather(ui.painter(), rect, color, !on);
+                            let text = if on {
+                                t!("folders-light")
+                            } else {
+                                t!("folders-light-except")
+                            };
+                            response.widget_info(|| {
+                                egui::WidgetInfo::labeled(egui::Role::Image, true, &text)
+                            });
+                            response.on_hover_text(format!(
+                                "{text}\n{}",
+                                self.action_tip(Action::FolderLight)
+                            ));
+                        }
                         if row.favorite {
                             let (rect, response) =
                                 ui.allocate_exact_size(vec2(size, size), Sense::hover());
@@ -9550,6 +9795,23 @@ impl TriApp {
                         if row.loading {
                             ui.add(egui::Spinner::new().size(size))
                                 .on_hover_text(t!("folders-reading"));
+                        }
+                        // Partage réseau monté : se déconnecter, comme dans le Finder (pas
+                        // de confirmation : rien n'est perdu, on se reconnecte).
+                        if row.kind == Some(PlaceKind::Network)
+                            && self.ejecting.is_none()
+                            && self.tree.can_disconnect(&row.path)
+                        {
+                            let (rect, response) = marks::clickable(ui, size, &t!("disconnect"));
+                            let c = if response.hovered() {
+                                Color32::from(self.gui.colors.error)
+                            } else {
+                                ui.visuals().text_color()
+                            };
+                            marks::eject(ui.painter(), rect, c);
+                            if response.clicked() {
+                                disconnect = Some(row.path.clone());
+                            }
                         }
                         if row.kind == Some(PlaceKind::Volume) || device {
                             let color = ui.visuals().text_color();
@@ -9722,6 +9984,7 @@ impl TriApp {
                 // de `folder_edit_action`), corrigé le 20/10/2026.
                 Action::FolderFavorite => self.toggle_favorite(),
                 Action::FolderWatch => self.toggle_watch(path),
+                Action::FolderLight => self.toggle_light(path),
                 Action::PairsToggle => self.toggle_pairs(),
                 Action::FolderFavoriteName => self.name_favorite(&ctx),
                 Action::FolderForget => self.forget_server(&path),
@@ -9774,6 +10037,10 @@ impl TriApp {
             } else {
                 self.open_folder(&path);
             }
+        }
+        if let Some(share) = disconnect {
+            let ctx = ui.ctx().clone();
+            self.start_eject(&ctx, share);
         }
         if eject.is_some() {
             self.eject_dialog = eject;
@@ -10089,7 +10356,9 @@ impl TriApp {
     /// secondes) ; ferme d'abord le dossier ouvert s'il est dessus (sinon le système
     /// refuse : fichiers ouverts). Le résultat s'affiche dans la barre d'état.
     fn start_eject(&mut self, ctx: &egui::Context, volume: PathBuf) {
-        if !self.tree.can_eject(&volume) {
+        // Partage réseau monté : déconnecté (comme l'icône d'éjection du Finder).
+        let network = self.tree.can_disconnect(&volume);
+        if !network && !self.tree.can_eject(&volume) {
             return; // volume fixé (configuration) : jamais
         }
         if !self.folder.is_none() && self.folder.dir.starts_with(&volume) {
@@ -10107,12 +10376,26 @@ impl TriApp {
         let repaint = ctx.clone();
         let target = volume.clone();
         let places = self.places.clone();
+        let disconnector = self.disconnector;
         std::thread::spawn(move || {
-            let _ = tx.send(tri::places::eject(&target, &places));
+            let result = if network {
+                disconnector(&target)
+            } else {
+                tri::places::eject(&target, &places)
+            };
+            let _ = tx.send(result);
             repaint.request_repaint();
         });
-        self.notice = Some((t!("ejecting", name = self.place_name(&volume)), false));
-        self.ejecting = Some((volume, rx));
+        let name = self.place_name(&volume);
+        self.notice = Some((
+            if network {
+                t!("disconnecting", name = name)
+            } else {
+                t!("ejecting", name = name)
+            },
+            false,
+        ));
+        self.ejecting = Some((volume, rx, network));
     }
 
     /// Ouvre la séance déchargée dans la grille, et la montre dans l'arborescence.
@@ -10357,7 +10640,7 @@ impl TriApp {
         for (folder, name, kind, result) in finished {
             // Analyse « à la demande » du dossier ouvert (#564) : relue dans le cache, son
             // outil se dégrise s'il ne manque plus rien.
-            let analyses = self.settings.analysis();
+            let analyses = self.analyses();
             reread |= folder == self.folder.dir
                 && Action::Compute(kind)
                     .tool()
@@ -11274,9 +11557,10 @@ impl TriApp {
 
     /// Fin d'une éjection : message, et liste des volumes relue.
     fn poll_eject(&mut self) {
-        let Some((path, rx)) = &self.ejecting else {
+        let Some((path, rx, network)) = &self.ejecting else {
             return;
         };
+        let network = *network;
         let Ok(result) = rx.try_recv() else {
             return;
         };
@@ -11285,7 +11569,12 @@ impl TriApp {
         // fichiers ouvert dessus) : proposer de réessayer, une fois l'application fermée.
         self.eject_failed = result.is_err().then(|| path.clone());
         self.notice = Some(match result {
+            Ok(()) if network => (t!("disconnected", name = &name), false),
             Ok(()) => (t!("ejected", name = &name), false),
+            Err(e) if network => (
+                t!("disconnect-failed", name = &name, error = e.to_string()),
+                true,
+            ),
             Err(e) => (
                 t!("eject-failed", name = &name, error = e.to_string()),
                 true,
@@ -11570,7 +11859,18 @@ impl TriApp {
         self.grid_levels.clear();
         self.grid_found.clear();
         self.grid_looked.clear();
+        // Mode léger (#597) : seulement les vignettes en fond, les analyses à la demande.
+        // Le moteur n'est prévenu qu'à l'entrée ou à la sortie du mode léger.
+        let was_light = self.light_root.is_some();
+        self.light_root = self.light_root_of(&self.folder.dir);
+        self.light_requested = None;
+        let light = self.light_root.is_some();
+        let analyses = self.analyses();
         if let Some(engine) = &mut self.engine {
+            if light != was_light {
+                engine.scheduler.set_light(light);
+                engine.scheduler.set_analyses(analyses);
+            }
             engine.generation = engine.scheduler.set_folder(self.files.clone());
             // Nouvelle liste : les vignettes visibles sont à redire.
             self.visible_sent = None;
@@ -14460,6 +14760,11 @@ impl TriApp {
                     self.toggle_watch(path);
                 }
             }
+            Action::FolderLight => {
+                if let Some(path) = self.tree.cursor_path() {
+                    self.toggle_light(path);
+                }
+            }
             Action::FolderFavoriteName => self.name_favorite(ctx),
             Action::FolderConnect => self.start_server_search(ctx),
             Action::FolderForget => {
@@ -15805,6 +16110,21 @@ impl TriApp {
             self.reveal = Some(Reveal::Minimal);
         }
         self.request_zoom();
+    }
+
+    /// Mode léger (#597) : une image ouverte en plein écran a tout son cache (aperçus et
+    /// analyses), demandé une fois par image.
+    fn request_light(&mut self) {
+        if self.light_root.is_none() || self.mode != Mode::View {
+            return;
+        }
+        if let Some(file) = self.files.get(self.selected)
+            && self.light_requested.as_ref() != Some(&file.path)
+            && let Some(engine) = &self.engine
+        {
+            engine.scheduler.request_all(self.selected);
+            self.light_requested = Some(file.path.clone());
+        }
     }
 
     /// Demande une image au scheduler, une seule fois tant qu'elle n'est pas arrivée.
@@ -20916,6 +21236,21 @@ impl TriApp {
         self.metadata_panel && !self.focus_mode && self.error.is_none() && !self.folder.is_none()
     }
 
+    /// Vrai si la case `slot` de `progress` est une analyse à la demande (#564, mode
+    /// léger #597) : rien n'y est calculé, le moteur cherche seulement dans le cache.
+    fn analysis_on_demand(&self, slot: usize) -> bool {
+        use crate::actions::Tool;
+        let analyses = self.analyses();
+        [
+            Tool::Exposure,
+            Tool::Sharpness,
+            Tool::Stacks,
+            Tool::Palettes,
+        ]
+        .into_iter()
+        .any(|t| t.slot() == slot && t.mode(&analyses) == tri::scheduler::Analysis::OnDemand)
+    }
+
     /// Tâches de fond en cours (issue n° 36) : notes, calculs du dossier, export, copies
     /// et déchargement en arrière-plan.
     fn tasks(&self, ui: &Ui) -> Vec<Task> {
@@ -20932,7 +21267,10 @@ impl TriApp {
             }
             now < t
         });
-        for (name, p) in [
+        // Analyse à la demande (#564, mode léger #597) : rien n'est calculé, le moteur ne
+        // fait que chercher dans le cache ce qui l'est déjà ; pas une tâche à montrer
+        // (retour du 25/11/2026 : « histogrammes 1/1126 » sur le NAS inquiétait).
+        for (slot, (name, p)) in [
             (t!("progress-notes"), notes),
             (t!("progress-thumbnails"), self.progress[0]),
             (t!("progress-embedded"), self.progress[1]),
@@ -20941,9 +21279,20 @@ impl TriApp {
             (t!("progress-sharpness"), self.progress[4]),
             (t!("progress-groups"), self.progress[5]),
             (t!("progress-palettes"), self.progress[6]),
-        ] {
-            // Rien à calculer en fond pour ce niveau, ou déjà fini.
-            if p.total == 0 || waiting || (self.gui.progress_hide_done && p.done >= p.total) {
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            // Rien à calculer en fond pour ce niveau, ou déjà fini. `slot` : la case de
+            // `progress` (les notes d'abord).
+            let slot = slot.wrapping_sub(1);
+            if p.total == 0
+                || waiting
+                || self.analysis_on_demand(slot)
+                // Dossier en attente pendant l'ouverture d'un autre : rien ne tourne.
+                || (self.held.is_some() && slot != usize::MAX)
+                || (self.gui.progress_hide_done && p.done >= p.total)
+            {
                 continue;
             }
             tasks.push(Task {
@@ -21292,6 +21641,13 @@ impl TriApp {
             } else {
                 folder_name(&self.folder.dir)
             });
+            // Mode léger (#597) : la plume et le mot, d'où il vient au survol.
+            if let Some(root) = &self.light_root {
+                let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
+                marks::feather(ui.painter(), rect, ui.visuals().weak_text_color(), false);
+                ui.weak(t!("status-light"))
+                    .on_hover_text(t!("status-light-tip", root = root.display().to_string()));
+            }
             ui.separator();
             ui.label(t!(
                 "status-images",
@@ -28497,6 +28853,7 @@ impl eframe::App for TriApp {
             ctx.request_repaint();
         }
         self.watch_folder(&ctx);
+        self.reload_sidecars(&ctx);
         self.save_folder_view();
         self.poll_eject();
         self.poll_mount();
@@ -28507,6 +28864,7 @@ impl eframe::App for TriApp {
             self.compute_action(&ctx, action, target);
         }
         self.poll_compute_tasks();
+        self.request_light();
         self.auto_develop(&ctx);
         self.run_script(&ctx);
         if ctx.input(|i| i.pointer.delta() != Vec2::ZERO) {
@@ -35551,6 +35909,55 @@ mod tests {
     }
 
     #[test]
+    fn a_folder_in_light_mode_computes_only_thumbnails_until_an_image_is_opened() {
+        // Mode léger (#597) : le clic droit l'écrit dans la configuration ; en fond,
+        // seulement les vignettes, les analyses à la demande ; une image ouverte a son
+        // aperçu ; la barre d'état et le panneau le rappellent.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "").unwrap();
+        h.state_mut().config_path = Some(config.clone());
+        h.state_mut().toggle_light(photos.clone());
+        assert!(
+            std::fs::read_to_string(&config)
+                .unwrap()
+                .contains("folders")
+        );
+        run_until(&mut h, |app| {
+            app.light_root.as_deref() == Some(photos.as_path())
+                && app.progress[0].total == 3
+                && app.progress[0].done == 3
+        });
+        assert_eq!(h.state().progress[2].total, 0, "aucun aperçu en fond");
+        assert_eq!(
+            h.state().analyses().exposure,
+            tri::scheduler::Analysis::OnDemand
+        );
+        assert_eq!(h.state().settings.light.mark(&photos, None), Some(true));
+        // Les analyses à la demande ne sont que cherchées dans le cache : pas des tâches.
+        assert!((3..=6).all(|slot| h.state().analysis_on_demand(slot)));
+        assert!(!h.state().analysis_on_demand(0), "les vignettes, si");
+        h.run_steps(2);
+        h.get_by_label(&t!("status-light"));
+
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::Open);
+        run_until(&mut h, |app| {
+            app.mode == Mode::View && app.ready(app.selected, Level::Standard)
+        });
+        run_until(&mut h, |app| app.light_requested.is_some());
+
+        // En sortir : le dossier relu, tout revient en fond.
+        h.state_mut().toggle_light(photos.clone());
+        run_until(&mut h, |app| {
+            app.light_root.is_none() && app.progress[2].total == 3
+        });
+        assert!(!std::fs::read_to_string(&config).unwrap().contains("photos"));
+    }
+
+    #[test]
     fn a_folder_not_found_is_asked_for_and_checked() {
         // Pas trouvé tout seul : la boîte demande où il est, refuse un dossier aux autres
         // photos, prend le bon.
@@ -39173,6 +39580,25 @@ mod tests {
     }
 
     #[test]
+    fn a_sidecar_changed_elsewhere_is_read_off_the_interface_thread() {
+        // Dernier accès disque connu sur le fil de l'interface (19/11/2026) : les XMP
+        // modifiés ailleurs sont relus en fond, puis la note change et c'est dit.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().notes_inline = false;
+        let image = h.state().files[0].path.clone();
+        let five = tri::xmp::Notes {
+            stars: 5,
+            ..Default::default()
+        };
+        let sidecar = tri::xmp::write(&image, &five, tri::xmp::Convention::Darktable).unwrap();
+        h.state_mut().sidecars_pending.push(sidecar);
+        run_until(&mut h, |app| app.folder.notes.notes(&image).stars == 5);
+        assert!(h.state().sidecar_reload.is_none());
+        assert!(h.state().notice.is_some(), "dit dans la barre d'état");
+    }
+
+    #[test]
     fn copied_images_bring_their_computed_previews_unless_unchecked() {
         // #508 : la vignette déjà calculée suit la copie (rien à recalculer) ; la case
         // décochée, rien ne suit.
@@ -39564,6 +39990,33 @@ mod tests {
         // Maj+D masque le panneau.
         press(&mut h, Key::D, Modifiers::SHIFT);
         assert!(h.query_by_label("Dossiers").is_none());
+    }
+
+    #[test]
+    fn a_mounted_share_is_disconnected_from_its_icon() {
+        // Retour du 25/11/2026 : comme dans le Finder, une icône à côté d'un partage
+        // monté le déconnecte (sans confirmation ; le dossier ouvert dessus est fermé).
+        let (mut h, dir) = harness();
+        let share = dir.path().join("photos");
+        h.state_mut().tree = Tree::with_places(
+            vec![tri::places::Place {
+                name: "kphoto".into(),
+                path: share.clone(),
+                kind: tri::places::PlaceKind::Network,
+            }],
+            false,
+        );
+        h.state_mut().disconnector = |_| Ok(());
+        h.run_steps(3);
+        assert_eq!(h.state().folder.dir, share);
+        h.get_by_label(&t!("disconnect")).click();
+        h.run_steps(2);
+        assert!(h.state().folder.is_none(), "dossier ouvert dessus : fermé");
+        run_until(&mut h, |app| app.ejecting.is_none());
+        assert_eq!(
+            h.state().notice.as_ref().map(|n| n.0.clone()),
+            Some(t!("disconnected", name = "kphoto"))
+        );
     }
 
     #[test]
@@ -44722,7 +45175,15 @@ mod tests {
         // Annulée tout de suite : le dossier d'avant reste.
         h.state_mut().open_folder(&other);
         assert!(h.state().opening.is_some(), "lue en fond");
+        // Retour du 25/11/2026 : le dossier affiché laisse le disque au dossier demandé.
+        assert_eq!(
+            h.state().held.as_ref().map(|(d, _)| d.clone()),
+            Some(photos.clone()),
+            "travail de fond suspendu"
+        );
+        assert!(h.state().loading.is_none() && h.state().watch.is_none());
         h.state_mut().cancel_opening();
+        assert!(h.state().held.is_none(), "annulée : il reprend");
         h.run_steps(5);
         assert_eq!(h.state().folder.dir, photos);
         assert!(
@@ -44741,6 +45202,7 @@ mod tests {
         }
         assert_eq!(h.state().folder.dir, std::path::absolute(&other).unwrap());
         assert_eq!(h.state().files.len(), 1);
+        assert!(h.state().held.is_none());
         // La boîte d'attente, et Échap qui annule (liste qui n'arrive jamais).
         let (_tx, rx) = mpsc::channel();
         h.state_mut().opening = Some(Opening {

@@ -49,6 +49,9 @@ pub mod i18n;
 pub mod index;
 pub mod io_watch;
 pub mod jpeg;
+#[cfg(target_os = "linux")]
+mod keyring;
+pub mod light;
 pub mod locate;
 pub mod log;
 pub mod media;

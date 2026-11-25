@@ -191,8 +191,10 @@ pub fn recognise(
     if !index.photos_in(&dir).ok()?.is_empty() {
         return None;
     }
-    // Quelques photos du dossier ouvert : leur nom et leur taille.
-    let mut mine: Vec<(OsString, u64)> = files
+    // Quelques photos du dossier ouvert, choisies par leur nom ; seule leur taille est
+    // relevée (25/11/2026 : relever celle des 2820 photos d'un dossier sur un NAS, une
+    // par une, retenait l'ouverture plusieurs minutes).
+    let names: Vec<Sample> = files
         .iter()
         .filter(|f| !crate::media::is_development(&f.path))
         .filter_map(|f| {
@@ -200,23 +202,20 @@ pub fn recognise(
             if path.parent() != Some(dir.as_path()) {
                 return None;
             }
-            let size = std::fs::metadata(&path).ok()?.len();
-            Some((path.file_name()?.to_os_string(), size))
-        })
-        .collect();
-    mine.sort();
-    let sample: Vec<(OsString, u64)> = pick_samples(
-        mine.iter()
-            .map(|(name, size)| Sample {
-                name: name.clone(),
-                size: *size,
+            Some(Sample {
+                name: path.file_name()?.to_os_string(),
+                size: 0,
                 fingerprint: None,
             })
-            .collect(),
-    )
-    .into_iter()
-    .map(|s| (s.name, s.size))
-    .collect();
+        })
+        .collect();
+    let sample: Vec<(OsString, u64)> = pick_samples(names)
+        .into_iter()
+        .filter_map(|s| {
+            let size = std::fs::metadata(dir.join(&s.name)).ok()?.len();
+            Some((s.name, size))
+        })
+        .collect();
     let sizes: Vec<u64> = sample.iter().map(|s| s.1).collect();
     let mut olds: Vec<PathBuf> = index
         .with_sizes(&sizes)

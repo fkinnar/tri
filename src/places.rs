@@ -829,6 +829,38 @@ pub fn eject(path: &Path, settings: &PlaceSettings) -> Result<(), String> {
     }
 }
 
+/// Vrai si `path` est un iCloud Drive (dans la section Réseau, mais rien à déconnecter).
+pub fn is_cloud_drive(path: &Path) -> bool {
+    let os = std::env::consts::OS;
+    home().is_some_and(|h| cloud_drives(os, &h).iter().any(|p| p.path == path))
+}
+
+/// Déconnecte le partage réseau monté en `path` (comme l'icône d'éjection du Finder) :
+/// `diskutil unmount` (macOS) ; `gio mount -u` (Linux, montage GVFS), sinon `umount`
+/// (montage NFS ou CIFS de l'utilisateur ; un montage de `/etc/fstab` réservé à
+/// l'administrateur est refusé par le système, message renvoyé) ; `net use <lettre>
+/// /delete` (Windows). Bloquant : à appeler hors du fil de l'interface.
+pub fn disconnect(path: &Path) -> Result<(), String> {
+    match std::env::consts::OS {
+        "macos" => run("diskutil", &["unmount".as_ref(), path.as_os_str()]),
+        "windows" => {
+            let letter = path.to_string_lossy();
+            let letter = letter.trim_end_matches(['\\', '/']);
+            run(
+                "net",
+                &[
+                    "use".as_ref(),
+                    letter.as_ref(),
+                    "/delete".as_ref(),
+                    "/y".as_ref(),
+                ],
+            )
+        }
+        _ => run("gio", &["mount".as_ref(), "-u".as_ref(), path.as_os_str()])
+            .or_else(|gio| run("umount", &[path.as_os_str()]).map_err(|e| format!("{gio}\n{e}"))),
+    }
+}
+
 /// Vrai si le refus d'éjecter dit que le volume est occupé (fichiers ouverts) : `udisksctl`
 /// (« target is busy », `DeviceBusy`), `umount`, `diskutil` (« dissented »), Windows.
 fn is_busy(message: &str) -> bool {
@@ -1833,6 +1865,14 @@ impl Tree {
             .any(|p| p.path == path && self.filter.ejectable(p))
     }
 
+    /// Vrai si `path` est un partage réseau monté qu'on peut déconnecter (pas iCloud).
+    pub fn can_disconnect(&self, path: &Path) -> bool {
+        self.places
+            .iter()
+            .any(|p| p.path == path && p.kind == PlaceKind::Network)
+            && !is_cloud_drive(path)
+    }
+
     /// Remplace les emplacements (liste fournie par un [`Monitor`]) ; ce qui était déplié
     /// le reste.
     pub fn set_places(&mut self, places: Vec<Place>) {
@@ -2416,6 +2456,40 @@ mod tests {
                 ("srv".to_string(), PlaceKind::Network),
             ]
         );
+    }
+
+    #[test]
+    fn a_mounted_share_can_be_disconnected_but_not_icloud() {
+        let share = PathBuf::from("/Volumes/photo");
+        let mut places = vec![
+            Place {
+                name: "photo".into(),
+                path: share.clone(),
+                kind: PlaceKind::Network,
+            },
+            Place {
+                name: "card".into(),
+                path: "/Volumes/SD".into(),
+                kind: PlaceKind::Volume,
+            },
+        ];
+        if let Some(home) = home() {
+            places.extend(cloud_drives(std::env::consts::OS, &home));
+        }
+        let icloud: Vec<PathBuf> = places
+            .iter()
+            .filter(|p| p.kind == PlaceKind::Network && p.path != share)
+            .map(|p| p.path.clone())
+            .collect();
+        let tree = Tree::with_places(places, false);
+        assert!(tree.can_disconnect(&share));
+        assert!(
+            !tree.can_disconnect(Path::new("/Volumes/SD")),
+            "un disque s'éjecte"
+        );
+        for path in icloud {
+            assert!(!tree.can_disconnect(&path), "iCloud : rien à déconnecter");
+        }
     }
 
     #[test]

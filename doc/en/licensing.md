@@ -55,7 +55,9 @@ sending by AirDrop (share sheet, `tri::send`), and `objc2-quartz-core`,
 `objc2-core-graphics` and `objc2-core-foundation` — macOS, colour space of the window
 (`display`) —, same project (madsmtm/objc2, active),
 already present through winit and wgpu — under Zlib OR Apache-2.0 OR MIT; `x11rb` — Linux, screen profile published by colord (`display`), already present
-through winit — under MIT OR Apache-2.0; `libc` — macOS and Linux, free room on a disk
+through winit — under MIT OR Apache-2.0; `zbus` — Linux, password remembered in the desktop
+keyring (Secret Service over D-Bus, `servers`), dbus2/zbus, pure Rust, very active, already in
+`Cargo.lock` through accesskit — under MIT; `libc` — macOS and Linux, free room on a disk
 (`offload::free_space`), rust-lang/libc, very active, already present through socket2,
 mio, turbojpeg… — under MIT OR Apache-2.0; `windows-sys` — Windows,
 ejecting a volume (`places::eject`), the screen profile (`display`) and free room on a disk (`offload::free_space`), Microsoft (microsoft/windows-rs, very active),
