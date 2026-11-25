@@ -150,6 +150,28 @@ fn targets(
         .collect()
 }
 
+/// Toute la carte en une seule séance (carte suivante vers la séance d'avant) : pas de
+/// ligne de séance, mais sa galerie.
+fn whole_card(plan: &Plan) -> Vec<SessionRow> {
+    let items: Vec<usize> = (0..plan.items.len()).collect();
+    let Some(first) = plan.sessions(0).into_iter().next() else {
+        return Vec::new();
+    };
+    let session = offload::Session {
+        day: first.day,
+        items,
+    };
+    vec![SessionRow {
+        folder: session.folder(),
+        count: 0,
+        bytes: 0,
+        picked: None,
+        on: true,
+        known: false,
+        session,
+    }]
+}
+
 /// Les séances de `plan` (#507) : une ligne par séance s'il y en a plusieurs ; une seule
 /// séance n'a pas de ligne, mais sa galerie (retour du 25/11/2026 : une carte d'un seul
 /// jour n'avait pas de « Choisir les photos… »). Cochées d'office : celles qui ont du
@@ -542,9 +564,10 @@ impl OffloadDialog {
                                 offload::suggest_folder(&plan, &self.settings).unwrap_or_default()
                             });
                             // Carte suivante vers la même séance (issue n° 37) : pas de
-                            // séances à choisir.
+                            // séances à choisir, toute la carte en une (sa galerie
+                            // gardée, retour du 26/11/2026).
                             let sessions = match self.folder_here {
-                                Some(_) => Vec::new(),
+                                Some(_) => whole_card(&plan),
                                 None => session_rows(&plan, &self.settings),
                             };
                             Stage::Ready {

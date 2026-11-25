@@ -46067,6 +46067,51 @@ mod tests {
     }
 
     #[test]
+    fn the_next_card_goes_to_the_same_session_and_keeps_its_gallery() {
+        // Carte suivante (issue n° 37) : le dossier de la séance d'avant proposé, toute la
+        // carte en une séance ; « Choisir les photos… » y manquait (retour du 26/11/2026).
+        let (mut h, dir) = harness();
+        let shots = dir.path().join("CARTE/DCIM/100_TEST");
+        std::fs::create_dir_all(&shots).unwrap();
+        for name in ["IMG0", "IMG1"] {
+            image::RgbImage::from_pixel(32, 24, image::Rgb([90, 90, 90]))
+                .save(shots.join(format!("{name}.jpg")))
+                .unwrap();
+        }
+        let ctx = h.ctx.clone();
+        let mut dialog = OffloadDialog::new(
+            dir.path().join("CARTE"),
+            CENTRED,
+            h.state().settings.offload.clone(),
+            None,
+            &ctx,
+        );
+        dialog.propose_session(&dir.path().join("Import/2026-11-25_Bruxelles"));
+        h.state_mut().offload = Some(dialog);
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.query_by_label("Décharger").is_none() {
+            assert!(Instant::now() < deadline, "boîte jamais prête");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        settle_dialog(&mut h);
+        assert!(h.query_by_label_contains("séances sur la carte").is_none());
+        assert!(
+            h.query_by_label(&t!("offload-pick")).is_some(),
+            "sa galerie"
+        );
+        h.get_by_label(&t!("offload-pick")).click();
+        h.run_steps(3);
+        let photos = h
+            .state()
+            .offload
+            .as_ref()
+            .and_then(|o| o.picker.as_ref())
+            .map(|(_, p)| p.checked.len());
+        assert_eq!(photos, Some(2), "toute la carte");
+    }
+
+    #[test]
     fn a_full_destination_brings_the_offload_back_until_answered() {
         // 12/11/2026 : destination pleine, le déchargement échouait sans rien dire. La copie
         // (ici en arrière-plan) s'arrête, la boîte revient avec ce qui est fait et ce qui
