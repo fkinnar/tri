@@ -122,9 +122,15 @@ fn targets(
     folder: &str,
 ) -> Result<Vec<(Plan, PathBuf)>, String> {
     let root = tri::settings::expand_home(root.trim());
-    if sessions.is_empty() {
+    // Une seule séance : le dossier du champ, les photos choisies dans sa galerie s'il y
+    // en a.
+    if sessions.len() <= 1 {
         let dest = offload::destination(&root, folder).map_err(|e| e.to_string())?;
-        return Ok(vec![(plan.clone(), dest)]);
+        let plan = match sessions.first() {
+            Some(row) => plan.subset(|i| row.keeps(i)),
+            None => plan.clone(),
+        };
+        return Ok(vec![(plan, dest)]);
     }
     sessions
         .iter()
@@ -144,14 +150,13 @@ fn targets(
         .collect()
 }
 
-/// Les séances de `plan` à proposer (#507) : aucune s'il n'y en a qu'une. Cochées
-/// d'office : celles qui ont du nouveau (toutes, si la carte est déjà déchargée).
+/// Les séances de `plan` (#507) : une ligne par séance s'il y en a plusieurs ; une seule
+/// séance n'a pas de ligne, mais sa galerie (retour du 25/11/2026 : une carte d'un seul
+/// jour n'avait pas de « Choisir les photos… »). Cochées d'office : celles qui ont du
+/// nouveau (toutes, si la carte est déjà déchargée).
 fn session_rows(plan: &Plan, settings: &OffloadSettings) -> Vec<SessionRow> {
     // Comptes remplis par la boîte, selon les choix du moment.
     let sessions = plan.sessions(settings.day_cut);
-    if sessions.len() < 2 {
-        return Vec::new();
-    }
     let mut rows: Vec<SessionRow> = sessions
         .into_iter()
         .map(|session| {
@@ -925,20 +930,37 @@ impl OffloadDialog {
                                     root_field.show(ui, root_field_id(), root, 300.0);
                                 });
                                 ui.end_row();
-                                if sessions.is_empty() {
+                                if sessions.len() <= 1 {
                                     ui.label(t!("offload-session"));
-                                    ui.add(
-                                        egui::TextEdit::singleline(folder)
-                                            .id(folder_field_id())
-                                            .desired_width(300.0),
-                                    )
-                                    .on_hover_text(t!("offload-session-tip"));
+                                    ui.horizontal(|ui| {
+                                        ui.add(
+                                            egui::TextEdit::singleline(folder)
+                                                .id(folder_field_id())
+                                                .desired_width(300.0),
+                                        )
+                                        .on_hover_text(t!("offload-session-tip"));
+                                        // Sa galerie, comme pour chaque séance d'une carte
+                                        // de plusieurs jours.
+                                        if let Some(row) = sessions.first() {
+                                            let label = match &row.picked {
+                                                Some(_) => t!("offload-pick-again"),
+                                                None => t!("offload-pick"),
+                                            };
+                                            if ui
+                                                .button(label)
+                                                .on_hover_text(t!("offload-pick-tip"))
+                                                .clicked()
+                                            {
+                                                pick = Some(0);
+                                            }
+                                        }
+                                    });
                                     ui.end_row();
                                 }
                             });
                         // Carte de plusieurs séances (#507) : une ligne par jour, cochée
                         // ou non, chacune dans son dossier.
-                        if !sessions.is_empty() {
+                        if sessions.len() > 1 {
                             ui.add_space(4.0);
                             ui.label(t!("offload-sessions", n = sessions.len()));
                             egui::Grid::new("offload_sessions")

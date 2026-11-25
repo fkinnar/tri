@@ -1851,8 +1851,14 @@ offload-progress = { $done } / { $total } files · { $mb } / { $total_mb } MB
 offload-background = Continue in the background
 offload-interrupt = Interrupt
 offload-done = { $verified ->
-    [yes] { $copied } files copied and verified
-   *[no] { $copied } files copied
+    [yes] { $copied ->
+        [one] { $copied } file copied and verified
+       *[other] { $copied } files copied and verified
+    }
+   *[no] { $copied ->
+        [one] { $copied } file copied
+       *[other] { $copied } files copied
+    }
 }, { $skipped } skipped (already offloaded), { $errors } errors.
 offload-done-cancelled = { " " }— interrupted
 offload-not-enough-room = Not enough room: { $size } to copy, { $free } free.
