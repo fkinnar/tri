@@ -9,6 +9,7 @@
 //! données) et proposés dans la section « Réseau » du panneau des dossiers. Voir
 //! `doc/en/servers.md`.
 
+use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -367,7 +368,7 @@ impl Server {
 
     /// Vrai si la boîte de connexion peut proposer de retenir le mot de passe sous `os` :
     /// gestionnaire d'identifiants de Windows, trousseau du bureau sous Linux
-    /// (`secret-tool`, lu par GVFS).
+    /// (Secret Service, lu par GVFS).
     pub fn can_save_login(&self, os: &str) -> bool {
         self.protocol.mountable(os) && matches!(os, "windows" | "linux")
     }
@@ -375,53 +376,66 @@ impl Server {
     /// Retient le compte `login` pour ce serveur, une fois la connexion réussie : la
     /// prochaine fois, le système ne demande plus rien. Windows : gestionnaire
     /// d'identifiants (`CredWrite`, comme `cmdkey /add`). Linux : trousseau du bureau
-    /// par `secret-tool`, sous les attributs que GVFS cherche (sans garantie : à vérifier
-    /// selon le bureau).
+    /// par D-Bus (Secret Service), sous les [attributs](Self::keyring_attributes) que GVFS
+    /// cherche.
     pub fn save_login(&self, os: &str, login: &Login) -> Result<(), String> {
         match os {
             "windows" => windows_save_login(&self.host, login),
-            "linux" => {
-                let mut args = vec![
-                    "store".to_string(),
-                    "--label".to_string(),
-                    format!("tri: {}", self.root().address()),
-                    "xdg:schema".to_string(),
-                    "org.gnome.keyring.NetworkPassword".to_string(),
-                    "user".to_string(),
-                    login.user.clone(),
-                    "server".to_string(),
-                    self.host.clone(),
-                    "protocol".to_string(),
-                    self.protocol.scheme().to_string(),
-                ];
-                if !login.domain.is_empty() {
-                    args.extend(["domain".to_string(), login.domain.clone()]);
-                }
-                if let Some(port) = self.port {
-                    args.extend(["port".to_string(), port.to_string()]);
-                }
-                let mut child = crate::process::command("secret-tool")
-                    .args(&args)
-                    .stdin(std::process::Stdio::piped())
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::piped())
-                    .spawn()
-                    .map_err(|e| crate::t!("servers-tool-missing", error = e.to_string()))?;
-                if let Some(mut stdin) = child.stdin.take() {
-                    stdin
-                        .write_all(login.password.as_bytes())
-                        .map_err(|e| e.to_string())?;
-                }
-                let output = child.wait_with_output().map_err(|e| e.to_string())?;
-                if output.status.success() {
-                    Ok(())
-                } else {
-                    Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
-                }
-            }
+            "linux" => linux_save_login(
+                &format!("tri: {}", self.root().address()),
+                &self.keyring_attributes(login),
+                login,
+            ),
             _ => Ok(()),
         }
     }
+
+    /// Attributs de l'élément du trousseau, ceux du schéma
+    /// `org.gnome.keyring.NetworkPassword` que GVFS cherche (sans garantie : à vérifier
+    /// selon le bureau). Domaine et port seulement s'ils sont connus.
+    pub fn keyring_attributes(&self, login: &Login) -> HashMap<String, String> {
+        let mut attributes = HashMap::from([
+            (
+                "xdg:schema".to_string(),
+                "org.gnome.keyring.NetworkPassword".to_string(),
+            ),
+            ("user".to_string(), login.user.clone()),
+            ("server".to_string(), self.host.clone()),
+            ("protocol".to_string(), self.protocol.scheme().to_string()),
+        ]);
+        if !login.domain.is_empty() {
+            attributes.insert("domain".to_string(), login.domain.clone());
+        }
+        if let Some(port) = self.port {
+            attributes.insert("port".to_string(), port.to_string());
+        }
+        attributes
+    }
+}
+
+/// Retient `login` dans le trousseau du bureau ([`crate::keyring`]).
+#[cfg(target_os = "linux")]
+fn linux_save_login(
+    label: &str,
+    attributes: &HashMap<String, String>,
+    login: &Login,
+) -> Result<(), String> {
+    use crate::keyring::KeyringError;
+    crate::keyring::store(label, attributes, &login.password).map_err(|e| match e {
+        KeyringError::Unavailable(error) => crate::t!("servers-keyring-unavailable", error = error),
+        KeyringError::NoDefault => crate::t!("servers-keyring-none"),
+        KeyringError::Dismissed => crate::t!("servers-keyring-dismissed"),
+        KeyringError::Failed(error) => error,
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+fn linux_save_login(
+    _label: &str,
+    _attributes: &HashMap<String, String>,
+    _login: &Login,
+) -> Result<(), String> {
+    Ok(())
 }
 
 /// Compte saisi dans la boîte de connexion.
@@ -1386,6 +1400,41 @@ mod tests {
             share: share.into(),
             folders: folders.iter().map(|f| f.to_string()).collect(),
         }
+    }
+
+    #[test]
+    fn a_remembered_password_is_filed_where_gvfs_looks_for_it() {
+        let mut nas = server("nas.local", "photos", &[]);
+        let login = Login {
+            user: "alice".into(),
+            password: "secret".into(),
+            ..Login::default()
+        };
+        let attributes = nas.keyring_attributes(&login);
+        let expected = |pairs: &[(&str, &str)]| {
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect::<HashMap<_, _>>()
+        };
+        assert_eq!(
+            attributes,
+            expected(&[
+                ("xdg:schema", "org.gnome.keyring.NetworkPassword"),
+                ("user", "alice"),
+                ("server", "nas.local"),
+                ("protocol", "smb"),
+            ])
+        );
+        nas.port = Some(4445);
+        let login = Login {
+            domain: "WORKGROUP".into(),
+            ..login
+        };
+        let attributes = nas.keyring_attributes(&login);
+        assert_eq!(attributes["domain"], "WORKGROUP");
+        assert_eq!(attributes["port"], "4445");
+        assert!(!attributes.values().any(|v| v == "secret"));
     }
 
     #[test]

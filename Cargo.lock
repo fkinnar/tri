@@ -3785,6 +3785,7 @@ dependencies = [
  "unic-langid",
  "walkdir",
  "windows-sys 0.61.2",
+ "zbus",
 ]
 
 [[package]]

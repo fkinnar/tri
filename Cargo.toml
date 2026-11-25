@@ -52,6 +52,12 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# Linux : retenir un mot de passe dans le trousseau du bureau (Secret Service par D-Bus,
+# `keyring`), sans l'outil `secret-tool`, absent de Linux Mint ; dbus2/zbus, pur Rust,
+# très actif, déjà dans Cargo.lock par accesskit (MIT).
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "5"
+
 # Windows : éjection d'un volume par l'API du système (`places::eject`, issue n° 192) ;
 # déjà présent par winit, std et d'autres (Microsoft, MIT / Apache-2.0).
 [target.'cfg(windows)'.dependencies]
