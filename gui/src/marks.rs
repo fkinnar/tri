@@ -1474,9 +1474,73 @@ pub fn controls(
 ) -> Option<Action> {
     let mut clicked = flag_controls(ui, notes, colors, size, tip);
     ui.add_space(size * 0.5);
+    // Une étoile / une couleur de moins et de plus de part et d'autre (25/11/2026), comme
+    // `m h` / `m l` et `m j` / `m k`.
+    clicked = step_control(ui, size, Action::StarsStep(false), tip).or(clicked);
     clicked = star_controls(ui, notes, colors, size, tip).or(clicked);
+    clicked = step_control(ui, size, Action::StarsStep(true), tip).or(clicked);
     ui.add_space(size * 0.5);
-    color_controls(ui, notes, colors, size, tip).or(clicked)
+    clicked = step_control(ui, size, Action::ColorStep(false), tip).or(clicked);
+    clicked = color_controls(ui, notes, colors, size, tip).or(clicked);
+    step_control(ui, size, Action::ColorStep(true), tip).or(clicked)
+}
+
+/// Chevron ‹ ou › d'un pas de note ([`Action::StarsStep`], [`Action::ColorStep`]) : un
+/// demi-carré, pour ne pas allonger la barre.
+fn step_control(
+    ui: &mut Ui,
+    size: f32,
+    action: Action,
+    tip: &dyn Fn(Action) -> String,
+) -> Option<Action> {
+    let up = matches!(action, Action::StarsStep(true) | Action::ColorStep(true));
+    let (rect, response) = ui.allocate_exact_size(vec2(size * 0.55, size), Sense::click());
+    let label = action.label();
+    response.widget_info(|| WidgetInfo::labeled(Role::Button, true, &label));
+    let response = response
+        .on_hover_text(tip(action))
+        .on_hover_cursor(CursorIcon::PointingHand);
+    if response.hovered() {
+        let fill = ui.visuals().widgets.hovered.weak_bg_fill;
+        ui.painter().rect_filled(rect.expand(2.0), 4.0, fill);
+    }
+    let color = ui.style().interact(&response).fg_stroke.color;
+    chevron(ui.painter(), rect, up, color);
+    response.clicked().then_some(action)
+}
+
+/// Chevron horizontal dans `rect` : vers la droite (`right`, ›) ou la gauche (‹).
+pub fn chevron(painter: &Painter, rect: Rect, right: bool, color: Color32) {
+    let (w, h) = (rect.width() * 0.32, rect.height() * 0.42);
+    let c = rect.center();
+    let (open, tip) = if right {
+        (c.x - w / 2.0, c.x + w / 2.0)
+    } else {
+        (c.x + w / 2.0, c.x - w / 2.0)
+    };
+    let stroke = Stroke::new((rect.height() * 0.08).max(1.2), color);
+    painter.line_segment([pos2(open, c.y - h / 2.0), pos2(tip, c.y)], stroke);
+    painter.line_segment([pos2(tip, c.y), pos2(open, c.y + h / 2.0)], stroke);
+}
+
+/// « Au plus haut » ([`Action::FilterStarsTop`], [`Action::FilterColorTop`]) : une flèche
+/// qui monte jusqu'à un trait, comme ⤒.
+pub fn to_top(painter: &Painter, rect: Rect, color: Color32) {
+    let side = rect.width();
+    let stroke = Stroke::new((side * 0.07).max(1.2), color);
+    let c = rect.center();
+    let (top, bottom, half) = (c.y - side * 0.26, c.y + side * 0.28, side * 0.2);
+    painter.line_segment([pos2(c.x - half, top), pos2(c.x + half, top)], stroke);
+    let head = top + side * 0.1;
+    painter.line_segment([pos2(c.x, head), pos2(c.x, bottom)], stroke);
+    painter.line_segment(
+        [pos2(c.x - half * 0.8, head + half * 0.8), pos2(c.x, head)],
+        stroke,
+    );
+    painter.line_segment(
+        [pos2(c.x + half * 0.8, head + half * 0.8), pos2(c.x, head)],
+        stroke,
+    );
 }
 
 /// Un contrôle de notation : son carré et vrai s'il est cliqué.

@@ -1254,10 +1254,10 @@ min = 10
 # Loupe at 100 % under the pointer while a key is held.
 #
 # Loupe, in the fitted view and in comparison: while this key is held (a free key,
-# written as in [keys]: "m", "F3"…; or "shift", "ctrl", "alt"; "none": no loupe), the
+# written as in [keys]: "m", "F3", "Shift+z"…; or "shift", "ctrl", "alt"; "none": no loupe), the
 # image at 100 % (loupe_scale) under the pointer, in a square of loupe_size points,
 # after loupe_delay_ms (so as not to flicker on a short press). Empty: the one of the
-# default shortcuts (keys.toml: m, for "magnify"). A key already bound to an action is
+# default shortcuts ("loupe" in keys.toml). A key already bound to an action is
 # refused (reported).
 loupe_key = ""
 loupe_delay_ms = 150

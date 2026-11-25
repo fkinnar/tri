@@ -173,6 +173,14 @@ impl AppSettings {
             LoupeKey::Key(key) if keymap.binds(key) => {
                 Err(t!("loupe-key-taken", key = crate::actions::key_label(key)))
             }
+            LoupeKey::ShiftKey(key) if keymap.binds_shifted(key) => Err(t!(
+                "loupe-key-taken",
+                key = format!(
+                    "{}{}",
+                    t!("key-shift-prefix"),
+                    crate::actions::key_label(key)
+                )
+            )),
             _ => Ok(loupe),
         };
         let mut loupe = defaults.loupe();
@@ -1323,6 +1331,10 @@ pub enum LoupeKey {
     None,
     /// Une touche (nom comme dans `[keys]` : « m », « Espace », « F3 »).
     Key(egui::Key),
+    /// Maj + une touche (« Shift+z », 25/11/2026 : `m` rendu aux notes) : la loupe vient
+    /// avec Maj, puis tient tant que la touche reste enfoncée, Maj lâchée ou non (h / j /
+    /// k / l la déplacent alors à petits pas).
+    ShiftKey(egui::Key),
     /// Celle des raccourcis par défaut (`loupe` de `keys.toml`) : `[gui.zoom] loupe_key`
     /// vide.
     #[default]
@@ -1339,10 +1351,16 @@ impl LoupeKey {
             "ctrl" => LoupeKey::Ctrl,
             "alt" => LoupeKey::Alt,
             "none" => LoupeKey::None,
-            _ => LoupeKey::Key(
-                crate::actions::key_named(name.trim())
-                    .ok_or_else(|| t!("loupe-key-unknown", key = name))?,
-            ),
+            _ => {
+                let name = name.trim();
+                let unknown = || t!("loupe-key-unknown", key = name);
+                match crate::actions::strip_shift(name) {
+                    Some(rest) => {
+                        LoupeKey::ShiftKey(crate::actions::key_named(rest).ok_or_else(unknown)?)
+                    }
+                    None => LoupeKey::Key(crate::actions::key_named(name).ok_or_else(unknown)?),
+                }
+            }
         })
     }
 }
@@ -1362,7 +1380,15 @@ impl LoupeKey {
             LoupeKey::Ctrl => input.modifiers.ctrl,
             LoupeKey::Alt => input.modifiers.alt,
             LoupeKey::None | LoupeKey::Default => false,
-            LoupeKey::Key(key) => input.key_down(key),
+            LoupeKey::Key(key) | LoupeKey::ShiftKey(key) => input.key_down(key),
+        }
+    }
+
+    /// La touche ordinaire de la loupe, avec ou sans Maj.
+    pub fn key(self) -> Option<egui::Key> {
+        match self {
+            LoupeKey::Key(key) | LoupeKey::ShiftKey(key) => Some(key),
+            _ => None,
         }
     }
 }
@@ -2426,6 +2452,8 @@ mod tests {
         );
         assert_eq!(parse("F3"), Ok(LoupeKey::Key(egui::Key::F3)));
         assert_eq!(parse("shift"), Ok(LoupeKey::Shift));
+        assert_eq!(parse("Shift+z"), Ok(LoupeKey::ShiftKey(egui::Key::Z)));
+        assert_eq!(parse("Maj+Z"), Ok(LoupeKey::ShiftKey(egui::Key::Z)));
         assert_eq!(parse("none"), Ok(LoupeKey::None));
         assert!(
             parse("touche-magique")
@@ -2433,16 +2461,19 @@ mod tests {
                 .contains("touche-magique")
         );
         assert_eq!(ZoomSettings::default().loupe_key, LoupeKey::Default);
-        // Celle de keys.toml (m), libre ; une touche déjà prise est refusée, et le dit :
+        // Celle de keys.toml (Maj+Z), libre ; une touche déjà prise est refusée, et le dit :
         // celle de keys.toml reste.
         let (keymap, warnings) = AppSettings::default().keymap();
         assert!(warnings.is_empty(), "{warnings:?}");
-        assert_eq!(keymap.loupe(), LoupeKey::Key(egui::Key::M));
+        assert_eq!(keymap.loupe(), LoupeKey::ShiftKey(egui::Key::Z));
         let mut taken = AppSettings::default();
         taken.gui.zoom.loupe_key = LoupeKey::Key(egui::Key::O);
         let (keymap, warnings) = taken.keymap();
         assert_eq!(warnings.len(), 1, "o : superpositions");
-        assert_eq!(keymap.loupe(), LoupeKey::Key(egui::Key::M));
+        assert_eq!(keymap.loupe(), LoupeKey::ShiftKey(egui::Key::Z));
+        // Maj + une touche déjà prise (Maj+P : accepter) : refusée aussi.
+        taken.gui.zoom.loupe_key = LoupeKey::ShiftKey(egui::Key::P);
+        assert_eq!(taken.keymap().1.len(), 1);
         taken.gui.zoom.loupe_key = LoupeKey::Key(egui::Key::F3);
         assert_eq!(taken.keymap().0.loupe(), LoupeKey::Key(egui::Key::F3));
     }

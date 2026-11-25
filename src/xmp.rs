@@ -182,6 +182,52 @@ impl Notes {
         }
     }
 
+    /// Une étoile de plus (`up`) ou de moins, entre 0 et 5 (25/11/2026 : en cours de tri,
+    /// la même touche d'une passe à l'autre).
+    pub fn step_stars(&mut self, up: bool) {
+        self.stars = if up {
+            (self.stars + 1).min(5)
+        } else {
+            self.stars.saturating_sub(1)
+        };
+    }
+
+    /// Rang dans `order` de la plus haute couleur de la photo (la plus loin dans la
+    /// liste) ; `None` sans couleur de la liste.
+    pub fn color_rank(&self, order: &[Color]) -> Option<usize> {
+        self.colors
+            .iter()
+            .filter_map(|c| order.iter().position(|k| k == c))
+            .max()
+    }
+
+    /// Couleur suivante (`up`) ou précédente dans `order` (`[sort] color_order`) : sans
+    /// couleur, la première de la liste, la suivante… ; en descendant, la première
+    /// redevient « sans couleur ». Au bout de la liste, rien ne change. La nouvelle couleur
+    /// remplace celles de la liste ; les couleurs hors de la liste restent avec `multiple`
+    /// (plusieurs couleurs par photo), sinon la photo n'en a qu'une.
+    pub fn step_color(&mut self, order: &[Color], up: bool, multiple: bool) {
+        if order.is_empty() {
+            return;
+        }
+        let new = match (self.color_rank(order), up) {
+            (None, false) => return,
+            (None, true) => Some(order[0]),
+            (Some(i), true) => Some(order[(i + 1).min(order.len() - 1)]),
+            (Some(0), false) => None,
+            (Some(i), false) => Some(order[i - 1]),
+        };
+        if multiple {
+            self.colors.retain(|c| !order.contains(c));
+        } else {
+            self.colors.clear();
+        }
+        if let Some(color) = new {
+            self.colors.push(color);
+            self.colors.sort();
+        }
+    }
+
     /// Retire toutes les couleurs.
     pub fn clear_colors(&mut self) {
         self.colors.clear();
@@ -2251,6 +2297,50 @@ fn remembered_notes(image: &Path) -> Notes {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ratings_step_up_and_down() {
+        let mut n = Notes::default();
+        n.step_stars(false);
+        assert_eq!(n.stars, 0, "pas sous 0");
+        for _ in 0..7 {
+            n.step_stars(true);
+        }
+        assert_eq!(n.stars, 5, "pas au-delà de 5");
+        n.step_stars(false);
+        assert_eq!(n.stars, 4);
+        // Couleurs : dans l'ordre choisi (rouge, jaune, vert), le bleu à part.
+        let order = [Color::Red, Color::Yellow, Color::Green];
+        let mut n = Notes::default();
+        n.step_color(&order, false, false);
+        assert!(n.colors.is_empty(), "sans couleur : rien en dessous");
+        n.step_color(&order, true, false);
+        assert_eq!(n.colors, [Color::Red]);
+        n.step_color(&order, true, false);
+        n.step_color(&order, true, false);
+        n.step_color(&order, true, false);
+        assert_eq!(n.colors, [Color::Green], "au bout de la liste");
+        n.step_color(&order, false, false);
+        assert_eq!(n.colors, [Color::Yellow]);
+        n.step_color(&order, false, false);
+        n.step_color(&order, false, false);
+        assert!(n.colors.is_empty(), "sous la première : plus de couleur");
+        // Hors de la liste : une seule couleur, elle est remplacée ; plusieurs, elle reste.
+        let blue = || Notes {
+            colors: vec![Color::Blue],
+            ..Notes::default()
+        };
+        let mut one = blue();
+        one.step_color(&order, true, false);
+        assert_eq!(one.colors, [Color::Red]);
+        let mut many = blue();
+        many.step_color(&order, true, true);
+        assert_eq!(many.colors, [Color::Red, Color::Blue]);
+        assert_eq!(many.color_rank(&order), Some(0));
+        many.step_color(&order, false, true);
+        assert_eq!(many.colors, [Color::Blue]);
+        assert_eq!(many.color_rank(&order), None);
+    }
 
     #[test]
     fn lists_of_a_darktable_development_live_in_its_sidecar() {

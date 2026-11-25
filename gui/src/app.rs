@@ -13797,8 +13797,13 @@ impl TriApp {
         let loupe = self.keymap.loupe();
         let is_loupe = |c: &crate::actions::Chord| {
             matches!(c.trigger, crate::actions::Trigger::Key(k)
-                if loupe == crate::settings::LoupeKey::Key(k) && !c.ctrl && !c.cmd)
+                if loupe.key() == Some(k) && !c.ctrl && !c.cmd)
         };
+        // Loupe sur Maj + une touche (Maj+Z), Maj lâchée la touche encore tenue : sa
+        // répétition n'est pas la touche seule (`z` ferait défiler les zooms).
+        if matches!(loupe, crate::settings::LoupeKey::ShiftKey(_)) {
+            chords.retain(|(c, repeat)| !(*repeat && is_loupe(c)));
+        }
         if chords.iter().any(|(c, _)| !is_loupe(c)) {
             self.mouse_active = false;
         }
@@ -14098,9 +14103,11 @@ impl TriApp {
             // Boîte de notation : seules les notes (pour son image) et la fermeture.
             if let Some((path, _)) = &self.rating_dialog {
                 match action {
-                    Action::Stars(_) | Action::Color(_) | Action::Flag(_) => {
-                        self.rate_path(path.clone(), action)
-                    }
+                    Action::Stars(_)
+                    | Action::StarsStep(_)
+                    | Action::Color(_)
+                    | Action::ColorStep(_)
+                    | Action::Flag(_) => self.rate_path(path.clone(), action),
                     _ if action.works_over_overlay() => self.perform(ctx, action),
                     _ => {}
                 }
@@ -14999,7 +15006,11 @@ impl TriApp {
             }
             Action::NavUp | Action::NavDown | Action::NavPageUp | Action::NavPageDown
                 if self.mode == Mode::View => {}
-            Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
+            Action::Stars(_)
+            | Action::StarsStep(_)
+            | Action::Color(_)
+            | Action::ColorStep(_)
+            | Action::Flag(_) => self.rate_selected(action),
             Action::ToggleAutoAdvance => self.auto_advance = !self.auto_advance,
             Action::FilterCount => self.filter_count = !self.filter_count,
             Action::FilterRestart => {
@@ -15127,6 +15138,50 @@ impl TriApp {
             }
             Action::FilterStars(stars) => {
                 self.notes_rule.stars = (stars > 0).then(|| self.stars_op.rule(stars));
+                self.apply_filter();
+            }
+            Action::FilterStarsTop => {
+                // La plus haute note des photos que les autres filtres laissent (sans le
+                // filtre d'étoiles en cours : « = 2 » cacherait les 3 étoiles).
+                let kept = self.notes_rule.stars.take();
+                self.refilter(Reveal::Minimal);
+                let top = self
+                    .files
+                    .iter()
+                    .map(|f| self.folder.notes.notes(&f.path).stars)
+                    .max()
+                    .unwrap_or(0);
+                if top == 0 {
+                    // Rien à viser : le filtre reste tel quel.
+                    self.notes_rule.stars = kept;
+                    self.hint = Some(t!("filter-stars-top-none"));
+                    self.apply_filter();
+                } else {
+                    self.perform(ctx, Action::FilterStars(top));
+                }
+            }
+            Action::FilterColorTop => {
+                let order = self.settings.sort.color_order.clone();
+                let kept = self.notes_rule.colors.take();
+                self.refilter(Reveal::Minimal);
+                let top = self
+                    .files
+                    .iter()
+                    .filter_map(|f| self.folder.notes.notes(&f.path).color_rank(&order))
+                    .max();
+                match top {
+                    // Seulement la couleur : « et » / « ou » et « sans couleur » restent.
+                    Some(rank) => {
+                        let mut rule = kept.unwrap_or_default();
+                        rule.any_of = vec![order[rank]];
+                        rule.all = self.colors_all;
+                        self.notes_rule.colors = Some(rule);
+                    }
+                    None => {
+                        self.notes_rule.colors = kept;
+                        self.hint = Some(t!("filter-color-top-none"));
+                    }
+                }
                 self.apply_filter();
             }
             Action::FilterStarsOp => {
@@ -15592,6 +15647,7 @@ impl TriApp {
     fn rate_many(&mut self, targets: &[PathBuf], action: Action) {
         let before = tri::history::snapshot(&self.folder.notes, targets);
         let multiple = self.settings.xmp.multiple_colors;
+        let order = self.settings.sort.color_order.clone();
         let add = match action {
             Action::Color(c) => !self.folder.notes.notes(&targets[0]).has_color(c),
             _ => true,
@@ -15611,6 +15667,8 @@ impl TriApp {
                     Action::Color(color) if n.has_color(color) != add => {
                         n.toggle_color(color, multiple)
                     }
+                    Action::StarsStep(up) => n.step_stars(up),
+                    Action::ColorStep(up) => n.step_color(&order, up, multiple),
                     Action::Flag(flag) => n.flag = flag,
                     _ => {}
                 },
@@ -15643,6 +15701,7 @@ impl TriApp {
         }
         let before = tri::history::snapshot(&self.folder.notes, std::slice::from_ref(&path));
         let multiple = self.settings.xmp.multiple_colors;
+        let order = self.settings.sort.color_order.clone();
         // Affichée tout de suite, écrite en fond (`note_writes`) : un échec revient à
         // l'image suivante, avec ce qui est vraiment sur le disque.
         let result = self.folder.notes.prepare_edit(
@@ -15650,6 +15709,8 @@ impl TriApp {
             |n| match action {
                 Action::Stars(stars) => n.set_stars(stars),
                 Action::Color(color) => n.toggle_color(color, multiple),
+                Action::StarsStep(up) => n.step_stars(up),
+                Action::ColorStep(up) => n.step_color(&order, up, multiple),
                 Action::Flag(flag) => n.flag = flag,
                 _ => {}
             },
@@ -16056,7 +16117,11 @@ impl TriApp {
                 }
             }
             Action::Compare => self.leave_compare(),
-            Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
+            Action::Stars(_)
+            | Action::StarsStep(_)
+            | Action::Color(_)
+            | Action::ColorStep(_)
+            | Action::Flag(_) => self.rate_selected(action),
             Action::FileRename
             | Action::FileDelete
             | Action::FileReveal
@@ -24104,9 +24169,13 @@ impl TriApp {
             // est une action ordinaire. Plus de liste des actions à exécuter : chaque
             // bouton oublié partait dans la notation et ne faisait rien (#240, puis le
             // 07/11/2026 : − et + de la loupe).
-            Some(action @ (Action::Stars(_) | Action::Color(_) | Action::Flag(_))) => {
-                self.rate_selected(action)
-            }
+            Some(
+                action @ (Action::Stars(_)
+                | Action::StarsStep(_)
+                | Action::Color(_)
+                | Action::ColorStep(_)
+                | Action::Flag(_)),
+            ) => self.rate_selected(action),
             Some(action) => {
                 let ctx = ui.ctx().clone();
                 self.perform(&ctx, action);
@@ -24443,6 +24512,15 @@ impl TriApp {
         self.apply_filter();
     }
 
+    /// Bouton « au plus haut » de la barre des filtres ; vrai s'il est cliqué.
+    fn top_button(&self, ui: &mut Ui, size: f32, action: Action) -> bool {
+        let (rect, response) =
+            marks::clickable_named(ui, size, &action.label(), &self.action_tip(action));
+        let color = ui.style().interact(&response).fg_stroke.color;
+        marks::to_top(ui.painter(), rect, color);
+        response.clicked()
+    }
+
     fn filter_bar(&mut self, ui: &mut Ui) {
         let mut clicked: Vec<Action> = Vec::new();
         let mut flag_toggle: Option<Flag> = None;
@@ -24480,6 +24558,10 @@ impl TriApp {
                 if response.clicked() {
                     clicked.push(Action::FilterStars(if n == current { 0 } else { n }));
                 }
+            }
+            // Les mieux notées (25/11/2026) : la plus haute note affichée, même comparaison.
+            if self.top_button(ui, size, Action::FilterStarsTop) {
+                clicked.push(Action::FilterStarsTop);
             }
             ui.separator();
             // Drapeaux : trois boutons combinables (acceptées, neutres, rejetées ;
@@ -24542,6 +24624,10 @@ impl TriApp {
                 if response.clicked() {
                     clicked.push(Action::FilterColor(color));
                 }
+            }
+            // La couleur la plus haute de l'ordre des couleurs, parmi les photos affichées.
+            if self.top_button(ui, size, Action::FilterColorTop) {
+                clicked.push(Action::FilterColorTop);
             }
             ui.separator();
             // Interrupteurs des filtres sur l'analyse et les développements : triangle
@@ -28871,7 +28957,9 @@ fn uses_cursor(action: Action) -> bool {
             | Action::NavPageDown
             | Action::Open
             | Action::Stars(_)
+            | Action::StarsStep(_)
             | Action::Color(_)
+            | Action::ColorStep(_)
             | Action::Flag(_)
             | Action::FileRename
             | Action::FileDelete
@@ -28897,7 +28985,9 @@ fn acts_on_selection(action: Action) -> bool {
     matches!(
         action,
         Action::Stars(_)
+            | Action::StarsStep(_)
             | Action::Color(_)
+            | Action::ColorStep(_)
             | Action::Flag(_)
             | Action::FileRename
             | Action::FileDelete
@@ -36846,11 +36936,11 @@ mod tests {
         assert_eq!(h.state().mode, Mode::Compare);
         h.state_mut().gui.zoom.loupe_delay_ms = 0;
         h.event(UiEvent::Key {
-            key: Key::M,
+            key: Key::Z,
             physical_key: None,
             pressed: true,
             repeat: false,
-            modifiers: Modifiers::NONE,
+            modifiers: Modifiers::SHIFT,
         });
         // `t` maintenue, le pointeur passe sur chaque image : la loupe suit. Balayé tant
         // qu'il faut : une image pas encore affichée n'a pas de loupe (CI Windows lente,
@@ -36892,11 +36982,11 @@ mod tests {
         run_until(&mut h, |app| app.loupe_rects.contains_key(&app.selected));
         h.state_mut().gui.zoom.loupe_delay_ms = 0;
         h.event(UiEvent::Key {
-            key: Key::M,
+            key: Key::Z,
             physical_key: None,
             pressed: true,
             repeat: false,
-            modifiers: Modifiers::NONE,
+            modifiers: Modifiers::SHIFT,
         });
         h.run_steps(3);
         let selected = h.state().selected;
@@ -36919,11 +37009,11 @@ mod tests {
         assert!(h.state().loupe_on, "la loupe est là, au point visé");
         // Touche relâchée : les flèches changent d'image de nouveau.
         h.event(UiEvent::Key {
-            key: Key::M,
+            key: Key::Z,
             physical_key: None,
             pressed: false,
             repeat: false,
-            modifiers: Modifiers::NONE,
+            modifiers: Modifiers::SHIFT,
         });
         h.run_steps(2);
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
@@ -36939,11 +37029,11 @@ mod tests {
         assert_eq!(h.state().mode, Mode::Grid);
         h.state_mut().gui.zoom.loupe_delay_ms = 0;
         h.event(UiEvent::Key {
-            key: Key::M,
+            key: Key::Z,
             physical_key: None,
             pressed: true,
             repeat: false,
-            modifiers: Modifiers::NONE,
+            modifiers: Modifiers::SHIFT,
         });
         // Sur la deuxième vignette : la loupe y est, son 1:1 demandé. Les vignettes
         // d'abord (lentes à venir sur les machines de la CI).
@@ -37021,11 +37111,11 @@ mod tests {
         }
         let plus = found.expect("une vignette sous la barre");
         h.event(UiEvent::Key {
-            key: Key::M,
+            key: Key::Z,
             physical_key: None,
             pressed: true,
             repeat: false,
-            modifiers: Modifiers::NONE,
+            modifiers: Modifiers::SHIFT,
         });
         h.hover_at(plus - vec2(1.0, 0.0));
         h.run_steps(1);
@@ -37229,11 +37319,11 @@ mod tests {
         // Paliers, la loupe tenue : Ctrl+K au suivant (400 %), Ctrl+J au précédent (sans
         // elle, c'est le zoom, 07/11/2026).
         h.event(UiEvent::Key {
-            key: Key::M,
+            key: Key::Z,
             physical_key: None,
             pressed: true,
             repeat: false,
-            modifiers: Modifiers::NONE,
+            modifiers: Modifiers::SHIFT,
         });
         h.run_steps(2);
         press(&mut h, Key::K, CMD);
@@ -37966,11 +38056,11 @@ mod tests {
         h.state_mut().mouse_active = true;
         for repeat in [false, true] {
             h.event(UiEvent::Key {
-                key: Key::M,
+                key: Key::Z,
                 physical_key: None,
                 pressed: true,
                 repeat,
-                modifiers: Modifiers::NONE,
+                modifiers: Modifiers::SHIFT,
             });
             h.run_steps(2);
         }
@@ -41316,7 +41406,11 @@ mod tests {
         h.run_steps(3);
         let rows = help_rows(&h.state().keymap, "loupe");
         let loupe = rows.iter().find(|(a, _)| *a == Action::Loupe);
-        assert_eq!(loupe.map(|(_, keys)| keys.as_str()), Some("m"), "{rows:?}");
+        assert_eq!(
+            loupe.map(|(_, keys)| keys.as_str()),
+            Some("Maj+z"),
+            "{rows:?}"
+        );
         // Pas de ligne dans [keys] : sa touche se règle à part.
         let mut overrides = std::collections::BTreeMap::new();
         overrides.insert("core.view.loupe".to_string(), vec!["x".to_string()]);
@@ -43977,11 +44071,11 @@ mod tests {
         assert!(!h.state().loupe_on, "Maj : plus de loupe");
         h.event(UiEvent::ModifiersChanged(Modifiers::NONE));
         let key = |pressed| UiEvent::Key {
-            key: Key::M,
+            key: Key::Z,
             physical_key: None,
             pressed,
             repeat: false,
-            modifiers: Modifiers::NONE,
+            modifiers: Modifiers::SHIFT,
         };
         h.event(key(true));
         h.run_steps(3);
@@ -45219,6 +45313,96 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().stars_op, tri::notes::StarsOp::AtLeast);
         assert_eq!(count(&h), 2, "au moins 4, de nouveau");
+    }
+
+    #[test]
+    fn ratings_step_and_the_filter_takes_the_highest() {
+        // 25/11/2026 : `m l` / `m h` une étoile de plus / de moins, `m k` / `m j` la
+        // couleur suivante / précédente ; `f *` et `f Maj+O` (ou les boutons) filtrent sur
+        // la plus haute, la comparaison gardée.
+        use tri::xmp::Color;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        let notes = |h: &Harness<'_, TriApp>, i: usize| {
+            let path = h.state().files[i].path.clone();
+            h.state().folder.notes.notes(&path).clone()
+        };
+        let seq = |h: &mut Harness<'_, TriApp>, second: Key| {
+            press(h, Key::M, Modifiers::NONE);
+            press(h, second, Modifiers::NONE);
+        };
+        h.state_mut().select(0);
+        seq(&mut h, Key::L);
+        seq(&mut h, Key::L);
+        seq(&mut h, Key::L);
+        seq(&mut h, Key::H);
+        assert_eq!(notes(&h, 0).stars, 2);
+        seq(&mut h, Key::K);
+        seq(&mut h, Key::K);
+        assert_eq!(notes(&h, 0).colors, [Color::Yellow], "rouge puis jaune");
+        h.state_mut().select(1);
+        // À la souris : les chevrons de la barre de notation.
+        h.get_by_label(&Action::StarsStep(true).label()).click();
+        h.run_steps(2);
+        h.get_by_label(&Action::ColorStep(true).label()).click();
+        h.run_steps(2);
+        assert_eq!(notes(&h, 1).stars, 1);
+        assert_eq!(notes(&h, 1).colors, [Color::Red]);
+        seq(&mut h, Key::J);
+        assert!(
+            notes(&h, 1).colors.is_empty(),
+            "sous le rouge : sans couleur"
+        );
+        seq(&mut h, Key::K);
+        let total = h.state().files.len();
+        let count = |h: &Harness<'_, TriApp>| h.state().files.len();
+        // Le plus haut : 2 étoiles, « au moins » gardé.
+        press(&mut h, Key::F, Modifiers::NONE);
+        type_text(&mut h, "*");
+        assert_eq!(
+            h.state().notes_rule.stars,
+            Some(tri::notes::StarsRule::AtLeast(2))
+        );
+        assert_eq!(count(&h), 1);
+        // « Exactement » : la comparaison reste, seul le nombre suit (1 étoile au plus
+        // haut une fois la première image redescendue).
+        h.state_mut().stars_op = tri::notes::StarsOp::Exactly;
+        act(&mut h, Action::FilterStars(1));
+        assert_eq!(count(&h), 1, "exactement 1");
+        h.get_by_label(&Action::FilterStarsTop.label()).click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state().notes_rule.stars,
+            Some(tri::notes::StarsRule::Exactly(2)),
+            "le plus haut cherché sans le filtre en cours"
+        );
+        act(&mut h, Action::FilterStars(0));
+        assert_eq!(count(&h), total);
+        // Couleurs : jaune est la plus haute (rouge, jaune, vert…).
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::O, Modifiers::SHIFT);
+        assert_eq!(
+            h.state()
+                .notes_rule
+                .colors
+                .as_ref()
+                .map(|r| r.any_of.clone()),
+            Some(vec![Color::Yellow])
+        );
+        assert_eq!(count(&h), 1);
+        // Sans étoile ni couleur nulle part : rien ne change, et c'est dit.
+        act(&mut h, Action::FilterClear);
+        for i in 0..2 {
+            h.state_mut().select(i);
+            act(&mut h, Action::Stars(0));
+            act(&mut h, Action::ColorStep(false));
+            act(&mut h, Action::ColorStep(false));
+        }
+        act(&mut h, Action::FilterStarsTop);
+        assert_eq!(h.state().notes_rule.stars, None);
+        assert_eq!(count(&h), total);
+        act(&mut h, Action::FilterColorTop);
+        assert_eq!(h.state().notes_rule.colors, None);
     }
 
     #[test]

@@ -141,7 +141,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   et le dit ; « Notes : n images en écriture » dans la barre d'état si ça dure
   (`[gui] notes_task_ms`) ; annuler et fermer attendent la fin des écritures ; la
   surveillance du dossier ignore les sidecars en cours d'écriture. Notes chargées à l'ouverture du dossier, avec celles déjà posées
-  par darktable, Lightroom ou digiKam. Affichage dessiné en formes (pas de glyphes, voir
+  par darktable, Lightroom ou digiKam. **Pas de notation** (idée de l'utilisateur,
+  25/11/2026 : en cours de tri, la même touche d'une passe à l'autre) : `m l` / `m h` une
+  étoile de plus / de moins (0 à 5), `m k` / `m j` la couleur suivante / précédente dans
+  l'ordre de `[sort] color_order` (sans couleur, puis la première de la liste… ; sous la
+  première, plus de couleur ; au bout, rien ne change ; `Notes::step_stars`,
+  `Notes::step_color`) ; à la souris, les chevrons ‹ › de part et d'autre des étoiles et
+  des couleurs du bandeau de notation. Sur une sélection, chaque image avance d'un pas. Affichage dessiné en formes (pas de glyphes, voir
   `marks.rs`) : drapeau (coche verte / croix rouge), étoiles dorées, pastilles de couleur,
   en bas à gauche de la vignette et du plein écran ; vignette d'une photo rejetée estompée
   (`[gui.grid] rejected_opacity`). Une écriture impossible (sidecar mal formé, disque en
@@ -161,7 +167,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     #165), `f 0` étoiles
     indifférentes, `f p` acceptées, `f u` sans les rejetées, `f x` rejetées (la même
     séquence retire le filtre), `f 6`…`f 9`, `f °`, `f ,`, `f .` couleurs (ajouter / retirer),
-    `f d` tout effacer (Échap ne fait que fermer le menu). Aussi après le leader
+    `f d` tout effacer (Échap ne fait que fermer le menu). **Au plus haut** (25/11/2026) :
+    `f *` (ou le bouton ⤒ après les étoiles) règle le filtre d'étoiles sur la plus haute
+    note des photos affichées, cherchée sans le filtre d'étoiles en cours, la comparaison
+    (≥ = ≤) gardée : après une passe de N à N + 1 étoiles, les N + 1 sans chercher le
+    chiffre, ou à froid les mieux notées ; `f Maj+O` (ou le ⤒ après les pastilles), la
+    couleur la plus haute de l'ordre des couleurs, seule la couleur changeant (« et » /
+    « ou » gardés). Sans étoile (ou sans couleur de l'ordre) parmi elles : rien ne change,
+    et c'est dit. Aussi après le leader
     (`<leader> f 3`) : son menu les range sous « f ». Chiffres : le caractère tapé.
   - Souris : **barre de filtres** en haut de la grille (`Maj+F` l'affiche ou la masque,
     `[gui] filter_bar`) : chaque clic déclenche la même action que le clavier (recliquer
@@ -256,7 +269,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (sur une vignette ou l'image en plein écran, la couleur moyenne d'une petite zone de
   l'image d'où la palette est tirée, lue en fond ; ailleurs, le pixel de la capture de la
   fenêtre), puis la boîte revient ; sur une image, un **collimateur** montre la zone
-  moyennée (`[colours] pick_area`, 2 % du grand côté), et la loupe (`m` maintenue)
+  moyennée (`[colours] pick_area`, 2 % du grand côté), et la loupe (Maj+Z maintenue)
   l'agrandit pour viser juste (idée de l'utilisateur, 21/11/2026) ; « Valider » garde la recherche.
   **Plusieurs couleurs** (#492, idée de l'utilisateur, 23/11/2026) : en haut de la boîte,
   les couleurs cherchées, en pastilles comme les autres (`[gui.colour_search] max`
@@ -789,7 +802,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   n'en reçoit que le caractère), après `loupe_delay_ms` (pas de clignotement sur une
   pression brève), un carré de `loupe_size` points sous le pointeur montre
   l'image à `loupe_scale` (100 %) ; son 1:1 est chargé pour l'occasion, l'aperçu agrandi
-  en attendant (« 100 % en cours »). En **comparaison** aussi depuis le 06/11/2026 :
+  en attendant (« 100 % en cours »). Maj+Z depuis le 25/11/2026 (z comme zoom ; `m`
+  passé aux pas de notation) : une touche avec Maj (`LoupeKey::ShiftKey`) fait venir la
+  loupe avec Maj, puis la tient tant que la touche reste enfoncée, Maj lâchée ou non, pour
+  la déplacer à petits pas (h / j / k / l) ; sa répétition, Maj lâchée, n'est pas prise
+  pour la touche seule (`z` ferait défiler les zooms). En **comparaison** aussi depuis le 06/11/2026 :
   l'image sous le pointeur (`loupe_index`), dessinée par-dessus les autres.
 - **Bouton « tout déplier »** à côté du curseur de similarité (`Maj+S`).
 - **Piles de développements** (30/10/2026, `Stacks::with_developments`, moteur
@@ -1930,6 +1947,8 @@ Notation, commune aux deux profils (17/10/2026, pensée aussi pour l'AZERTY) :
 | `core.rate.star.0` … `core.rate.star.5` | 0 … 5 (le caractère, d'où qu'il vienne) |
 | `core.rate.color.red` / `yellow` / `green` / `blue` | 6 / 7 / 8 / 9 (idem) |
 | `core.rate.color.purple` | ° / , / . |
+| `core.rate.star.up` / `down` | m l / m h |
+| `core.rate.color.up` / `down` | m k / m j |
 | `core.flag.accept` / `reject` / `none` | Maj+P / Maj+X / Maj+U |
 
 Depuis le 23/11/2026 (retour de l'utilisateur), un chiffre de `keys.toml` est le
