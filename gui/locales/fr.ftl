@@ -592,6 +592,9 @@ eject-question = Éjecter « { $name } » ?
 eject-open-folder = Le dossier ouvert est sur ce volume : il sera fermé.
 ejecting = Éjection de « { $name } »…
 ejected = « { $name } » éjecté : vous pouvez le retirer.
+disconnect = Se déconnecter
+disconnecting = Déconnexion de « { $name } »…
+disconnected = « { $name } » déconnecté.
 status-clear-tip = Cliquer pour effacer le message
 status-error-tip = Cliquer pour voir le détail dans le journal (et effacer le message)
 panel-section-adjust = Réglages
@@ -743,6 +746,7 @@ login-cancelled = Connexion à « { $name } » abandonnée.
 connected-not-saved = Connecté à « { $name } », mais le mot de passe n'a pas pu être retenu : { $error }
 server-forgotten = Partage « { $name } » oublié.
 eject-failed = « { $name } » non éjecté : { $error }
+disconnect-failed = « { $name } » non déconnecté : { $error }
 cache-unavailable = cache inaccessible : { $error }
 
 ## Comparaison, plein écran, barre d'état

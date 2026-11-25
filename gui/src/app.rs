@@ -1018,6 +1018,9 @@ struct Screenshot {
     started: Instant,
 }
 
+/// Résultat d'une éjection ou d'une déconnexion (message du système en cas de refus).
+type EjectResult = Result<(), String>;
+
 /// État de l'application.
 pub struct TriApp {
     /// Dossier ouvert : images et notes (moteur).
@@ -1091,7 +1094,8 @@ pub struct TriApp {
     /// Ce binaire : version distribuée ou build personnel (et son commit).
     build: tri::update::Build,
     /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
-    ejecting: Option<(PathBuf, Receiver<Result<(), String>>)>,
+    /// Éjection (ou déconnexion d'un partage réseau, `true`) en cours.
+    ejecting: Option<(PathBuf, Receiver<EjectResult>, bool)>,
     /// Montage en cours d'un support pas monté (#113) : périphérique, et dossier où il
     /// est monté à venir.
     mounting: Option<(PathBuf, Receiver<Mounted>)>,
@@ -1106,6 +1110,9 @@ pub struct TriApp {
     /// Retient un compte une fois connecté (`Server::save_login` ; remplacé dans les
     /// tests, qui ne touchent pas au trousseau).
     login_saver: fn(&tri::servers::Server, &tri::servers::Login) -> Result<(), String>,
+    /// Déconnecte un partage réseau monté (`places::disconnect` ; remplacé dans les
+    /// tests, qui ne démontent rien).
+    disconnector: fn(&Path) -> Result<(), String>,
     /// Boîte de connexion ouverte.
     login: Option<LoginBox>,
     /// Liste les partages d'un serveur (`Host::shares` ; remplacé dans les tests).
@@ -2684,6 +2691,7 @@ impl TriApp {
             connecting: None,
             connector: |server, login| server.connect(std::env::consts::OS, login),
             login_saver: |server, login| server.save_login(std::env::consts::OS, login),
+            disconnector: tri::places::disconnect,
             login: None,
             share_lister: |host| host.shares(std::env::consts::OS),
             shares: None,
@@ -8825,6 +8833,7 @@ impl TriApp {
         let mut pointed: Option<usize> = None;
         let mut open = None;
         let mut eject = None;
+        let mut disconnect: Option<PathBuf> = None;
         let mut offload = None;
         let mut menu: Option<(PathBuf, Action)> = None;
         // Clic droit : garder le cache dans ce dossier / sur ce disque, ou plus ici.
@@ -9551,6 +9560,23 @@ impl TriApp {
                             ui.add(egui::Spinner::new().size(size))
                                 .on_hover_text(t!("folders-reading"));
                         }
+                        // Partage réseau monté : se déconnecter, comme dans le Finder (pas
+                        // de confirmation : rien n'est perdu, on se reconnecte).
+                        if row.kind == Some(PlaceKind::Network)
+                            && self.ejecting.is_none()
+                            && self.tree.can_disconnect(&row.path)
+                        {
+                            let (rect, response) = marks::clickable(ui, size, &t!("disconnect"));
+                            let c = if response.hovered() {
+                                Color32::from(self.gui.colors.error)
+                            } else {
+                                ui.visuals().text_color()
+                            };
+                            marks::eject(ui.painter(), rect, c);
+                            if response.clicked() {
+                                disconnect = Some(row.path.clone());
+                            }
+                        }
                         if row.kind == Some(PlaceKind::Volume) || device {
                             let color = ui.visuals().text_color();
                             if !row.ejectable {
@@ -9774,6 +9800,10 @@ impl TriApp {
             } else {
                 self.open_folder(&path);
             }
+        }
+        if let Some(share) = disconnect {
+            let ctx = ui.ctx().clone();
+            self.start_eject(&ctx, share);
         }
         if eject.is_some() {
             self.eject_dialog = eject;
@@ -10089,7 +10119,9 @@ impl TriApp {
     /// secondes) ; ferme d'abord le dossier ouvert s'il est dessus (sinon le système
     /// refuse : fichiers ouverts). Le résultat s'affiche dans la barre d'état.
     fn start_eject(&mut self, ctx: &egui::Context, volume: PathBuf) {
-        if !self.tree.can_eject(&volume) {
+        // Partage réseau monté : déconnecté (comme l'icône d'éjection du Finder).
+        let network = self.tree.can_disconnect(&volume);
+        if !network && !self.tree.can_eject(&volume) {
             return; // volume fixé (configuration) : jamais
         }
         if !self.folder.is_none() && self.folder.dir.starts_with(&volume) {
@@ -10107,12 +10139,26 @@ impl TriApp {
         let repaint = ctx.clone();
         let target = volume.clone();
         let places = self.places.clone();
+        let disconnector = self.disconnector;
         std::thread::spawn(move || {
-            let _ = tx.send(tri::places::eject(&target, &places));
+            let result = if network {
+                disconnector(&target)
+            } else {
+                tri::places::eject(&target, &places)
+            };
+            let _ = tx.send(result);
             repaint.request_repaint();
         });
-        self.notice = Some((t!("ejecting", name = self.place_name(&volume)), false));
-        self.ejecting = Some((volume, rx));
+        let name = self.place_name(&volume);
+        self.notice = Some((
+            if network {
+                t!("disconnecting", name = name)
+            } else {
+                t!("ejecting", name = name)
+            },
+            false,
+        ));
+        self.ejecting = Some((volume, rx, network));
     }
 
     /// Ouvre la séance déchargée dans la grille, et la montre dans l'arborescence.
@@ -11274,9 +11320,10 @@ impl TriApp {
 
     /// Fin d'une éjection : message, et liste des volumes relue.
     fn poll_eject(&mut self) {
-        let Some((path, rx)) = &self.ejecting else {
+        let Some((path, rx, network)) = &self.ejecting else {
             return;
         };
+        let network = *network;
         let Ok(result) = rx.try_recv() else {
             return;
         };
@@ -11285,7 +11332,12 @@ impl TriApp {
         // fichiers ouvert dessus) : proposer de réessayer, une fois l'application fermée.
         self.eject_failed = result.is_err().then(|| path.clone());
         self.notice = Some(match result {
+            Ok(()) if network => (t!("disconnected", name = &name), false),
             Ok(()) => (t!("ejected", name = &name), false),
+            Err(e) if network => (
+                t!("disconnect-failed", name = &name, error = e.to_string()),
+                true,
+            ),
             Err(e) => (
                 t!("eject-failed", name = &name, error = e.to_string()),
                 true,
@@ -39537,6 +39589,33 @@ mod tests {
         // Maj+D masque le panneau.
         press(&mut h, Key::D, Modifiers::SHIFT);
         assert!(h.query_by_label("Dossiers").is_none());
+    }
+
+    #[test]
+    fn a_mounted_share_is_disconnected_from_its_icon() {
+        // Retour du 25/11/2026 : comme dans le Finder, une icône à côté d'un partage
+        // monté le déconnecte (sans confirmation ; le dossier ouvert dessus est fermé).
+        let (mut h, dir) = harness();
+        let share = dir.path().join("photos");
+        h.state_mut().tree = Tree::with_places(
+            vec![tri::places::Place {
+                name: "kphoto".into(),
+                path: share.clone(),
+                kind: tri::places::PlaceKind::Network,
+            }],
+            false,
+        );
+        h.state_mut().disconnector = |_| Ok(());
+        h.run_steps(3);
+        assert_eq!(h.state().folder.dir, share);
+        h.get_by_label(&t!("disconnect")).click();
+        h.run_steps(2);
+        assert!(h.state().folder.is_none(), "dossier ouvert dessus : fermé");
+        run_until(&mut h, |app| app.ejecting.is_none());
+        assert_eq!(
+            h.state().notice.as_ref().map(|n| n.0.clone()),
+            Some(t!("disconnected", name = "kphoto"))
+        );
     }
 
     #[test]

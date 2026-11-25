@@ -104,6 +104,16 @@ Les lignes d'emplacement de `Tree::rows` portent leur nature (`Row::kind`) et
 sauvegarde) ; `PlaceSettings::ejectable`, et `Tree::can_eject` à vérifier avant `eject`
 (l'interface le fait au moment de confirmer).
 
+## Déconnexion d'un partage (`disconnect(share)`, 25/11/2026)
+
+Comme dans le Finder, une icône d'éjection à côté d'un partage réseau monté le
+déconnecte, sans confirmation (rien n'est perdu : on se reconnecte) : `diskutil unmount`
+(macOS) ; `gio mount -u` (Linux, montage GVFS), sinon `umount` (montage NFS ou CIFS de
+l'utilisateur ; un montage de `/etc/fstab` réservé à l'administrateur est refusé, message
+du système affiché) ; `net use <lettre> /delete` (Windows). `Tree::can_disconnect` : un
+emplacement réseau, sauf iCloud Drive (`is_cloud_drive`). L'interface passe par le même
+fil que l'éjection : dossier ouvert dessus fermé d'abord, résultat dans la barre d'état.
+
 ## Dossiers personnels et réseau (20/10/2026)
 
 - **Dossiers habituels**, comme la barre latérale du Finder : Bureau, Documents,
