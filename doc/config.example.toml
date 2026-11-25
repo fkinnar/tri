@@ -304,7 +304,11 @@ print_threshold = 3.0
 #   déjà développée : JPEG boîtier, JPEG, TIFF…) ; la boîte d'export ne propose que les
 #   préréglages qui conviennent ;
 # sharpen : accentuation de sortie, "none", "screen" (écran) ou "print" (tirage), réglée
-#   dans [export.sharpening] ; une copie sans recompression n'est pas accentuée.
+#   dans [export.sharpening] ; une copie sans recompression n'est pas accentuée ;
+# metadata : métadonnées des fichiers écrits : "" (telles que le rendu les écrit),
+#   l'identifiant d'un jeu de métadonnées de création ([iptc.sets.<id>], ajouté) ou
+#   "strip" (toutes retirées, sauf le profil couleur et l'orientation : un export pour le
+#   web, sans boîtier, date ni GPS) ; ancien nom : iptc.
 [export.profiles.edit]
 # Vers un éditeur externe : TIFF 16 bits, ProPhoto (linéaire), pleine définition.
 name = ""
@@ -319,6 +323,7 @@ folder = "{source}/export"
 passthrough = true
 applies_to = "all"
 sharpen = "none"
+metadata = ""
 
 [export.profiles.asis]
 # JPEG tel quel : un JPEG d'origine est copié sans rien toucher (taille, espace couleur :
@@ -336,6 +341,7 @@ folder = "{source}/export"
 passthrough = true
 applies_to = "flat"
 sharpen = "none"
+metadata = ""
 
 [export.profiles.web]
 # Publication : JPEG sRGB, 2048 pixels au plus.
@@ -351,6 +357,39 @@ folder = "{source}/export"
 passthrough = true
 applies_to = "all"
 sharpen = "screen"
+metadata = ""
+
+[iptc]
+# Jeu de métadonnées de création proposé (auteur, copyright…).
+#
+# Métadonnées de création posées dans les images, en XMP : un RAW dans son sidecar, un
+# JPEG, TIFF, PNG, WebP ou HEIF dans le fichier, sans recompression. Sur demande
+# (<core.file.iptc>, ou tri --iptc en ligne de commande) et à l'export (clé metadata d'un
+# préréglage d'export). default : le jeu proposé.
+default = "mine"
+
+# Jeux de métadonnées de création : « Nouveau… » en crée un sur le modèle de celui montré.
+#
+# Jeux [iptc.sets.<identifiant>], autant que voulu ; un champ vide n'est pas posé. Champs :
+# creator (auteurs, séparés par « ; »), copyright, usage_terms (conditions d'utilisation),
+# web_statement (adresse des conditions ou du site), credit, title, caption (légende),
+# city, state (région), country. Variables : {year} (l'année de la date du fichier : la
+# prise de vue d'une photo du boîtier), {name} (le nom de l'image). Un champ déjà rempli
+# dans l'image est gardé, sauf s'il est cité dans replace.
+[iptc.sets.mine]
+# Mes métadonnées, à remplir : auteur, copyright (remplacé d'office), conditions…
+name = ""
+creator = ""
+copyright = ""
+usage_terms = ""
+web_statement = ""
+credit = ""
+title = ""
+caption = ""
+city = ""
+state = ""
+country = ""
+replace = ["copyright"]
 
 [versions]
 # Rapports ajoutés à la liste de la barre des versions (le « + » à côté du rapport

@@ -274,7 +274,17 @@ pub struct Profile {
     pub applies_to: AppliesTo,
     /// Accentuation de sortie : `"none"`, `"screen"`, `"print"`.
     pub sharpen: Sharpen,
+    /// Métadonnées des fichiers écrits (clé `metadata`, ancienne clé `iptc`) : vide,
+    /// telles que le rendu les écrit ; l'identifiant d'un jeu `[iptc.sets.<id>]`, ses
+    /// métadonnées de création ajoutées (#277) ; [`STRIP`], toutes retirées
+    /// ([`crate::strip`]).
+    pub metadata: String,
 }
+
+/// Valeur de `metadata` d'un profil : retirer toutes les métadonnées des fichiers écrits
+/// (idée de l'utilisateur, 25/11/2026 : un export pour le web, sans rien d'autre que
+/// l'image).
+pub const STRIP: &str = "strip";
 
 impl Profile {
     /// Profil de base d'un identifiant inconnu des profils fournis : JPEG sRGB.
@@ -295,6 +305,7 @@ impl Profile {
             passthrough: true,
             applies_to: AppliesTo::All,
             sharpen: Sharpen::None,
+            metadata: String::new(),
         }
     }
 
@@ -351,6 +362,7 @@ impl Profile {
             ("passthrough", Value::Bool(self.passthrough)),
             ("applies_to", Value::Str(self.applies_to.key().into())),
             ("sharpen", Value::Str(self.sharpen.key().into())),
+            ("metadata", Value::Str(self.metadata.clone())),
         ]
     }
 
@@ -492,6 +504,11 @@ struct ProfileToml {
     passthrough: Option<bool>,
     applies_to: Option<AppliesTo>,
     sharpen: Option<Sharpen>,
+    metadata: Option<String>,
+    /// Ancienne clé de `metadata` (#277), lue si `metadata` manque ; les deux présentes
+    /// (la fenêtre de réglages a écrit la nouvelle) : `metadata` l'emporte (25/11/2026 :
+    /// un alias refusait le fichier, « duplicate field »).
+    iptc: Option<String>,
 }
 
 /// Les profils d'export, dans l'ordre : profils fournis, puis ceux de l'utilisateur (par
@@ -561,6 +578,9 @@ impl<'de> Deserialize<'de> for Profiles {
             }
             if let Some(v) = t.sharpen {
                 p.sharpen = v;
+            }
+            if let Some(v) = t.metadata.or(t.iptc) {
+                p.metadata = v;
             }
         }
         // Profil incohérent (ProPhoto en JPEG…) : refusé dès la lecture, comme toute
@@ -1278,6 +1298,9 @@ pub struct Request<'a> {
     /// Rendu LibRaw (`[render]`) : le même qu'à l'écran, « on exporte ce qu'on regarde »
     /// (revue du 28/10/2026 : l'export prenait les valeurs par défaut).
     pub render: crate::raw::RenderOptions,
+    /// Métadonnées de création posées sur les fichiers écrits (#277, le jeu de la clé
+    /// `metadata` du profil ; jamais avec [`STRIP`]).
+    pub iptc: Option<&'a crate::iptc::IptcSet>,
 }
 
 impl<'a> Request<'a> {
@@ -1292,7 +1315,13 @@ impl<'a> Request<'a> {
             sharpening: Sharpening::default(),
             paired: None,
             render: crate::raw::RenderOptions::default(),
+            iptc: None,
         }
+    }
+
+    /// Métadonnées de création à poser sur les fichiers écrits.
+    pub fn iptc(self, iptc: Option<&'a crate::iptc::IptcSet>) -> Request<'a> {
+        Request { iptc, ..self }
     }
 
     /// Rendu LibRaw `render` (à pleine résolution, quoi qu'il en dise).
@@ -1634,6 +1663,22 @@ pub fn run(
         let step = |done: usize, _: usize, path: &Path| progress(offset + done, total, path);
         let part = export_libraw(&batch.flats, &flats, Local::LibRaw, cancel, step)?;
         report.merge(part);
+    }
+    // Toutes les métadonnées retirées (25/11/2026), ou celles de création ajoutées
+    // (#277) : dans chaque fichier écrit, sans recompression.
+    if req.profile.metadata == STRIP {
+        for file in &report.written {
+            if let Err(e) = crate::strip::strip(file) {
+                report.errors.push((file.clone(), e));
+            }
+        }
+    } else if let Some(set) = req.iptc.filter(|s| !s.is_empty()) {
+        for file in &report.written {
+            if let Err(e) = crate::iptc::stamp(file, set, crate::xmp::Convention::default(), false)
+            {
+                report.errors.push((file.clone(), e));
+            }
+        }
     }
     Ok(report)
 }
@@ -2739,6 +2784,82 @@ mod tests {
             .collect();
         assert_eq!(names, ["DSCF0001-camera.jpg", "autre.jpg"]);
         assert_eq!(report.passthrough, 2, "copiés tels quels");
+    }
+
+    #[test]
+    fn the_preset_s_creation_metadata_go_into_the_written_files() {
+        // #277 : la clé `iptc` d'un préréglage : le jeu posé dans chaque fichier écrit, une
+        // copie sans recompression comprise (seul le paquet XMP change).
+        let dir = tempfile::tempdir().unwrap();
+        let jpg = dir.path().join("photo.jpg");
+        image::RgbImage::from_pixel(30, 20, image::Rgb([90, 120, 150]))
+            .save(&jpg)
+            .unwrap();
+        let batch = Batch::new(std::slice::from_ref(&jpg), false);
+        let set = crate::iptc::IptcSet {
+            creator: "Ana Lima".into(),
+            ..Default::default()
+        };
+        let profile = Profiles::default().get("asis").unwrap().clone();
+        let report = run(
+            &batch,
+            Renderers::new(Renderer::Local(Local::LibRaw)),
+            &Request::new(&profile, "out").iptc(Some(&set)),
+            "-camera",
+            &AtomicBool::new(false),
+            |_, _, _| {},
+        )
+        .unwrap();
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        let written = &report.written[0];
+        assert_eq!(
+            crate::iptc::read(written),
+            [("creator", "Ana Lima".to_string())]
+        );
+        assert!(crate::iptc::read(&jpg).is_empty(), "l'original intact");
+    }
+
+    #[test]
+    fn a_preset_that_strips_metadata_writes_only_the_image() {
+        // 25/11/2026 : `metadata = "strip"` (export pour le web) : ni EXIF, ni XMP dans le
+        // fichier écrit, même un jeu de création demandé n'y entre pas ; l'original intact.
+        let dir = tempfile::tempdir().unwrap();
+        let jpg = dir.path().join("photo.jpg");
+        image::RgbImage::from_pixel(30, 20, image::Rgb([90, 120, 150]))
+            .save(&jpg)
+            .unwrap();
+        let set = crate::iptc::IptcSet {
+            creator: "Ana Lima".into(),
+            ..Default::default()
+        };
+        crate::iptc::stamp(&jpg, &set, crate::xmp::Convention::default(), false).unwrap();
+        let batch = Batch::new(std::slice::from_ref(&jpg), false);
+        let profile = Profile {
+            metadata: STRIP.into(),
+            ..Profiles::default().get("asis").unwrap().clone()
+        };
+        let report = run(
+            &batch,
+            Renderers::new(Renderer::Local(Local::LibRaw)),
+            &Request::new(&profile, "out").iptc(Some(&set)),
+            "-camera",
+            &AtomicBool::new(false),
+            |_, _, _| {},
+        )
+        .unwrap();
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        let written = std::fs::read(&report.written[0]).unwrap();
+        let has = |needle: &[u8]| written.windows(needle.len()).any(|w| w == needle);
+        assert!(!has(b"Ana Lima") && !has(b"x:xmpmeta"), "plus de XMP");
+        assert!(crate::iptc::read(&report.written[0]).is_empty());
+        assert!(!crate::iptc::read(&jpg).is_empty(), "l'original intact");
+        // L'ancienne clé `iptc` est toujours lue ; avec la nouvelle, celle-ci l'emporte.
+        let text = "[profiles.web]\niptc = \"mine\"\n";
+        let old: ExportSettings = toml::from_str(text).unwrap();
+        assert_eq!(old.profiles.get("web").unwrap().metadata, "mine");
+        let both = "[profiles.web]\niptc = \"mine\"\nmetadata = \"strip\"\n";
+        let both: ExportSettings = toml::from_str(both).unwrap();
+        assert_eq!(both.profiles.get("web").unwrap().metadata, STRIP);
     }
 
     #[test]

@@ -52,6 +52,7 @@ mod grid_read;
 mod grid_render;
 mod histogram;
 mod i18n;
+mod iptc_dialog;
 mod loader;
 mod locate_dialog;
 mod log_view;

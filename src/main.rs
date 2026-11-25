@@ -104,6 +104,7 @@ enum FileAction {
     Move,
     Export,
     Adjust,
+    Iptc,
 }
 
 #[derive(Default)]
@@ -114,6 +115,8 @@ struct Args {
     file_action: Option<FileAction>,
     /// Profil de `--export`.
     export_profile: Option<String>,
+    /// Jeu de `--iptc` (#277).
+    iptc_set: Option<String>,
     /// `--libraw` : export sans darktable, même s'il est installé.
     libraw: bool,
     /// `--embedded` : exporter le JPEG boîtier.
@@ -481,6 +484,10 @@ fn parse() -> AnyResult<Args> {
             "--export" => {
                 args.file_action = Some(FileAction::Export);
                 args.export_profile = Some(value()?);
+            }
+            "--iptc" => {
+                args.file_action = Some(FileAction::Iptc);
+                args.iptc_set = Some(value()?);
             }
             "--adjust" => args.file_action = Some(FileAction::Adjust),
             "--ev" => match value()?.as_str() {
@@ -1900,6 +1907,12 @@ fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> An
                 carry(&files)?;
             }
         }
+        FileAction::Iptc => {
+            let images: Vec<PathBuf> = std::iter::once(first)
+                .chain(args.rest.iter().map(PathBuf::from))
+                .collect();
+            iptc(settings, args, &images)?;
+        }
         FileAction::Export => {
             let images: Vec<PathBuf> = std::iter::once(first)
                 .chain(args.rest.iter().map(PathBuf::from))
@@ -2146,7 +2159,14 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
         .name(&name)
         .order(&order)
         .sharpening(settings.export.sharpening)
-        .render(settings.render.options());
+        .render(settings.render.options())
+        .iptc(
+            settings
+                .iptc
+                .set(&profile.metadata)
+                .filter(|_| !profile.metadata.is_empty() && profile.metadata != tri::export::STRIP)
+                .map(|(_, set)| set),
+        );
     let cancel = std::sync::atomic::AtomicBool::new(false);
     let progress = |done: usize, total: usize, path: &std::path::Path| {
         eprintln!("{done}/{total} {}", path.display());
@@ -2236,6 +2256,47 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
     }
     if report.failed > 0 {
         return Err(t!("cli-export-failed", failed = report.failed).into());
+    }
+    Ok(())
+}
+
+/// `--iptc <jeu> <image>…` : pose les métadonnées de création du jeu (#277) ; un dossier :
+/// toutes ses images.
+fn iptc(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResult<()> {
+    let id = args.iptc_set.clone().unwrap_or_default();
+    let (id, set) = settings
+        .iptc
+        .set(&id)
+        .ok_or_else(|| t!("cli-iptc-unknown", id = id.clone()))?;
+    if set.is_empty() {
+        return Err(t!("cli-iptc-empty", id = id.to_string()).into());
+    }
+    let mut files = Vec::new();
+    for image in images {
+        if image.is_dir() {
+            files.extend(tri::media::scan(image, 1)?.into_iter().map(|f| f.path));
+        } else {
+            files.push(image.clone());
+        }
+    }
+    let convention = settings.xmp.sidecar;
+    let (mut changed, mut failed) = (0, 0);
+    for file in &files {
+        match tri::iptc::stamp(file, set, convention, args.dry_run) {
+            Ok(true) => {
+                changed += 1;
+                println!("{}", file.display());
+            }
+            Ok(false) => {}
+            Err(e) => {
+                failed += 1;
+                eprintln!("{} : {e}", file.display());
+            }
+        }
+    }
+    println!("{}", t!("cli-iptc-done", n = changed, total = files.len()));
+    if failed > 0 {
+        return Err(t!("cli-some-not-done", n = failed).into());
     }
     Ok(())
 }

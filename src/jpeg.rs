@@ -162,7 +162,7 @@ mod turbo {
 
 /// Segments d'un JPEG avant les données compressées : (marqueur, début du segment, fin).
 /// `None` si ce n'est pas un JPEG lisible.
-fn segments(bytes: &[u8]) -> Option<Vec<(u8, usize, usize)>> {
+pub(crate) fn segments(bytes: &[u8]) -> Option<Vec<(u8, usize, usize)>> {
     if bytes.get(..2) != Some(&[0xFF, 0xD8]) {
         return None;
     }
@@ -245,6 +245,21 @@ pub fn set_orientation(bytes: &[u8], value: u16) -> Option<Vec<u8>> {
     }
     out.extend_from_slice(&bytes[rest..]);
     Some(out)
+}
+
+/// Orientation EXIF (1 à 8) d'un JPEG, si sa balise existe.
+pub fn orientation(bytes: &[u8]) -> Option<u16> {
+    let (_, start, end) = segments(bytes)?
+        .into_iter()
+        .find(|&(m, s, _)| m == 0xE1 && bytes.get(s + 4..s + 10) == Some(b"Exif\0\0"))?;
+    let tiff = bytes.get(start + 10..end)?;
+    let at = orientation_offset(tiff)?;
+    let b = [*tiff.get(at)?, *tiff.get(at + 1)?];
+    Some(if &tiff[..2] == b"MM" {
+        u16::from_be_bytes(b)
+    } else {
+        u16::from_le_bytes(b)
+    })
 }
 
 /// Profil ICC intégré d'un JPEG (segments APP2 `ICC_PROFILE`, remis bout à bout dans

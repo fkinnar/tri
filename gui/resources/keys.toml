@@ -292,6 +292,9 @@ loupe = "none"
 # e: open in the external editor; Shift+E: reveal in the file manager (explorer);
 # Cmd+E: export, like Lightroom; Cmd+Shift+E: the export report.
 "core.file.edit" = ["e"]
+# Creation metadata (author, copyright… a set of [iptc.sets]) on the selection: no
+# default shortcut (command palette, right-click).
+"core.file.iptc" = []
 "core.file.reveal" = ["Shift+e"]
 # From "All photos" (#561): the image in its own folder, highlighted. "g f" like
 # "go folder".

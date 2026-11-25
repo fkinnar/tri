@@ -204,6 +204,7 @@ action-core-file-reveal = { $os ->
    *[other] Afficher dans le gestionnaire de fichiers
 }
 action-core-file-edit = Ouvrir dans l'éditeur externe
+action-core-file-iptc = Poser les métadonnées de création (auteur, copyright…)
 action-core-file-copy = Copier vers…
 action-core-file-export-report = Rapport d'export
 action-core-file-export = Exporter…
@@ -1018,6 +1019,12 @@ export-name-tip = Un gabarit, sans extension : {"{"}name{"}"} (le nom de l'image
 export-no-developer = Aucun logiciel de développement trouvé : rendu de base par LibRaw.
 export-rapidraw-srgb = RapidRAW rend en sRGB : l'espace « { $color } » est converti depuis sRGB.
 export-passthrough = Sans recompression
+export-metadata = Métadonnées
+export-metadata-keep = Telles quelles
+export-metadata-keep-tip = Celles que le rendu écrit (boîtier, réglages, date…), rien d'ajouté
+export-metadata-set-tip = Ce jeu de métadonnées de création ajouté à chaque fichier (auteur, copyright…)
+export-metadata-strip = Retirer toutes les métadonnées
+export-metadata-strip-tip = Ni boîtier, ni date, ni GPS, ni auteur : seulement l'image, son profil couleur et son orientation, sans recompression
 export-passthrough-tip = JPEG d'origine copié tel quel, rendu boîtier écrit tel quel (orientation dans l'EXIF). Une image à réduire (taille du préréglage) est réencodée.
 export-versions = { $n ->
     [one] Exporter la version
@@ -2276,3 +2283,37 @@ offload-phase-syncing = Écriture sur le disque
 offload-phase-verifying = Vérification
 offload-raw-only-grouped = Les paires sont regroupées : il faut leurs JPEG. Décochez « Regrouper RAW et JPEG » pour ne copier que les RAW
 offload-group-pairs-raw-only = « RAW seulement » ne copie aucun JPEG : rien à regrouper. Décochez-la pour regrouper les paires
+
+iptc-title = { $n ->
+    [one] Métadonnées de création : 1 image
+   *[other] Métadonnées de création : { $n } images
+}
+iptc-set = Jeu
+iptc-set-mine = Mes métadonnées
+iptc-replaced = remplace l'existant
+iptc-where = Un champ déjà rempli dans l'image est gardé, sauf ceux qui remplacent. Un RAW les reçoit dans son sidecar, un JPEG ou un TIFF dans le fichier, sans recompression.
+iptc-apply = Poser
+iptc-edit = Modifier le jeu…
+iptc-empty = Ce jeu est vide : remplissez-le (auteur, copyright…) dans les réglages.
+iptc-running = Métadonnées de création : { $n } images en cours…
+iptc-done = { $n ->
+    [0] Métadonnées de création : rien à changer ({ $same } images déjà à jour).
+    [one] Métadonnées de création posées sur 1 image.
+   *[other] Métadonnées de création posées sur { $n } images.
+}
+iptc-failed = Métadonnées de création : { $n } images non modifiées ({ $first }…)
+iptc-field-creator = Auteur
+iptc-field-copyright = Copyright
+iptc-field-usage-terms = Conditions d'utilisation
+iptc-field-web-statement = Adresse des conditions
+iptc-field-credit = Crédit
+iptc-field-title = Titre
+iptc-field-caption = Légende
+iptc-field-city = Ville
+iptc-field-state = Région
+iptc-field-country = Pays
+settings-section-iptc = Métadonnées de création
+settings-section-iptc-sets = Jeux de métadonnées de création
+settings-section-iptc-sets-mine = Jeu de métadonnées « Mes métadonnées »
+settings-section-iptc-set-user = Jeu de métadonnées « { $id } »
+kw-core-file-iptc = iptc auteur copyright droits légende titre créateur crédit lieu

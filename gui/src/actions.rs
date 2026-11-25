@@ -279,6 +279,9 @@ pub enum Action {
     FileLocate,
     /// Ouvrir l'image dans l'éditeur externe.
     FileEdit,
+    /// Poser des métadonnées de création (auteur, copyright… : un jeu `[iptc.sets]`) sur la
+    /// sélection (#277).
+    FileIptc,
     /// Générer les sidecars de notes manquants (un logiciel ou tous) de la sélection ou
     /// du dossier (31/10/2026, suite de #253).
     Sidecars,
@@ -646,7 +649,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 309] = [
+    pub const ALL: [Action; 310] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -740,6 +743,7 @@ impl Action {
         Action::FileShowInFolder,
         Action::FileLocate,
         Action::FileEdit,
+        Action::FileIptc,
         Action::Sidecars,
         Action::EmbedNotes,
         Action::ImportNotes,
@@ -1182,9 +1186,9 @@ impl Action {
                 Group::Panels
             }
             FileActionsAllow | FileRename | FileDelete | FileReveal | FileShowInFolder
-            | FileLocate | FileEdit | FileCopy | FileMove | Sidecars | EmbedNotes | ImportNotes
-            | FileDeleteStack | FileDeletePhoto | FileCopyStack | FileExport | ExportReport
-            | Send(_) | Compute(_) | ComputeAll | RecreateAll => Group::Files,
+            | FileLocate | FileEdit | FileIptc | FileCopy | FileMove | Sidecars | EmbedNotes
+            | ImportNotes | FileDeleteStack | FileDeletePhoto | FileCopyStack | FileExport
+            | ExportReport | Send(_) | Compute(_) | ComputeAll | RecreateAll => Group::Files,
             Undo | Redo | History => Group::Edit,
             StackToggle | StackOpen | StackClose | StacksAll | GroupingWindow | StackMode
             | StackChoose | StackFirst | StackLast | StackEnterToggle | DevToggle | DevNext
@@ -1545,6 +1549,7 @@ impl Action {
             Action::FileShowInFolder => "core.file.show_in_folder",
             Action::FileLocate => "core.file.locate",
             Action::FileEdit => "core.file.edit",
+            Action::FileIptc => "core.file.iptc",
             Action::Sidecars => "core.file.sidecars",
             Action::EmbedNotes => "core.file.embed_notes",
             Action::ImportNotes => "core.file.import_notes",

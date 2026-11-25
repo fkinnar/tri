@@ -177,7 +177,7 @@ pub fn needs_restart(section: &str, key: &str) -> bool {
 
 /// Sections que l'utilisateur peut multiplier depuis la fenêtre (demandé le 19/10/2026) :
 /// (section parente, section d'exemple qui sert de modèle, libellé d'une section ajoutée).
-const FAMILIES: [(&str, &str, &str); 2] = [
+const FAMILIES: [(&str, &str, &str); 3] = [
     (
         "export.profiles",
         "export.profiles.web",
@@ -187,6 +187,12 @@ const FAMILIES: [(&str, &str, &str); 2] = [
         "versions.presets",
         "versions.presets.story",
         "settings-section-versions-preset-user",
+    ),
+    // Jeux de métadonnées de création (#277), sur le modèle du jeu fourni.
+    (
+        "iptc.sets",
+        "iptc.sets.mine",
+        "settings-section-iptc-set-user",
     ),
 ];
 
@@ -258,6 +264,8 @@ const CATEGORIES: [&[&str]; 6] = [
         "export",
         "export.profiles",
         "export.sharpening",
+        "iptc",
+        "iptc.sets",
         "versions",
         "versions.presets",
         "gui.crop",
@@ -306,6 +314,7 @@ fn builtin(section: &str) -> bool {
         Some((("export.profiles", _, _), id)) => {
             tri::export::Profile::defaults().iter().any(|p| p.id == id)
         }
+        Some((("iptc.sets", _, _), id)) => id == tri::iptc::MINE,
         Some((_, id)) => tri::versions::Preset::defaults().iter().any(|p| p.id == id),
         None => false,
     }
@@ -322,10 +331,10 @@ fn member_name(file: &ConfigFile, section: &str) -> String {
     {
         return name;
     }
-    let key = if parent == "export.profiles" {
-        format!("export-profile-{id}")
-    } else {
-        format!("preset-{id}")
+    let key = match parent {
+        "export.profiles" => format!("export-profile-{id}"),
+        "iptc.sets" => format!("iptc-set-{id}"),
+        _ => format!("preset-{id}"),
     };
     if builtin(section) && tri::i18n::has(tri::i18n::language(), &key) {
         tri::i18n::translate(&key, None)
@@ -544,6 +553,43 @@ fn accent_color_editor(ui: &mut Ui, value: &Value) -> (egui::Response, Option<Va
         })
         .inner;
     (response, new)
+}
+
+/// Réglage qui désigne un membre d'une famille (`[versions.presets.<id>] profile` : un
+/// préréglage d'export), montré en liste déroulante de ses membres.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct MemberChoice {
+    /// Racine de la famille.
+    root: &'static str,
+    /// Libellé de la valeur vide, en tête, si elle est permise.
+    empty: Option<&'static str>,
+    /// Valeur de plus, en fin de liste : (valeur, libellé).
+    extra: Option<(&'static str, &'static str)>,
+}
+
+/// Ancien nom d'une clé, encore lu par le moteur : sa valeur est montrée tant que la
+/// nouvelle clé manque, et retirée quand la nouvelle est écrite (`metadata` d'un préréglage
+/// d'export, anciennement `iptc`, 25/11/2026).
+fn legacy_key(section: &str, key: &str) -> Option<&'static str> {
+    (section.starts_with("export.profiles.") && key == "metadata").then_some("iptc")
+}
+
+fn member_choice(section: &str, key: &str) -> Option<MemberChoice> {
+    let choice = |root, empty, extra| Some(MemberChoice { root, empty, extra });
+    match (section, key) {
+        (s, "profile") if s.starts_with("versions.presets.") => {
+            choice("export.profiles", Some("settings-profile-none"), None)
+        }
+        ("iptc", "default") => choice("iptc.sets", None, None),
+        // Métadonnées d'un préréglage d'export (retour du 25/11/2026) : telles quelles, un
+        // jeu de création ajouté, ou toutes retirées.
+        (s, "metadata") if s.starts_with("export.profiles.") => choice(
+            "iptc.sets",
+            Some("export-metadata-keep"),
+            Some((tri::export::STRIP, "export-metadata-strip")),
+        ),
+        _ => None,
+    }
 }
 
 /// Vrai si la clé désigne un dossier : saisie avec complétion par Tab.
@@ -925,6 +971,9 @@ impl SettingsWindow {
                 all.iter().map(|p| p.id.clone()).collect(),
                 all.iter().find(|p| p.id == id)?.entries(),
             )
+        } else if parent == "iptc.sets" {
+            let all = &settings.iptc.sets.0;
+            (all.keys().cloned().collect(), all.get(id)?.entries())
         } else {
             let all = &settings.versions.presets.0;
             (
@@ -1058,6 +1107,7 @@ impl SettingsWindow {
     fn current(&self, section: &str, entry: &Entry) -> Value {
         self.file
             .get(section, &entry.key)
+            .or_else(|| legacy_key(section, &entry.key).and_then(|old| self.file.get(section, old)))
             .unwrap_or_else(|| entry.default.clone())
     }
 
@@ -1077,6 +1127,11 @@ impl SettingsWindow {
             written.and_then(|()| tri::settings::parse_message::<AppSettings>(&self.file.text()));
         match checked {
             Ok(settings) => {
+                // Ancien nom de la clé : il part avec la nouvelle valeur (sinon il
+                // reviendrait si la nouvelle était remise à sa valeur par défaut).
+                if let Some(old) = legacy_key(section, key) {
+                    self.file.remove(section, old);
+                }
                 self.errors.remove(&id);
                 self.dirty = true;
                 (self.keymap, self.key_warnings) = settings.keymap();
@@ -2010,40 +2065,51 @@ impl SettingsWindow {
                     }
                     widget = Some(r);
                 }
-                // Préréglage d'export d'un préréglage de recadrage : la liste des
-                // préréglages d'export (retour du 21/10/2026 : un champ texte laissait
-                // passer une faute de frappe), « aucun » en tête.
-                Value::Str(s)
-                    if section.starts_with("versions.presets.") && entry.key == "profile" =>
-                {
+                // Un membre d'une famille, plutôt qu'un nom à taper (retour du 21/10/2026 : un
+                // champ texte laissait passer une faute de frappe) : le préréglage d'export
+                // d'un préréglage de recadrage, « aucun » en tête ; le jeu de métadonnées de
+                // création proposé (`[iptc] default`, retour du 25/11/2026) ; celui d'un
+                // préréglage d'export, « aucun » en tête.
+                Value::Str(s) if member_choice(section, &entry.key).is_some() => {
+                    let Some(MemberChoice { root, empty, extra }) =
+                        member_choice(section, &entry.key)
+                    else {
+                        return;
+                    };
                     let mut v = s.clone();
-                    let profiles: Vec<(String, String)> = self
+                    let members: Vec<(String, String)> = self
                         .schema()
                         .sections
                         .iter()
                         .filter_map(|sec| match family(&sec.name) {
-                            Some((("export.profiles", _, _), id)) => {
+                            Some(((parent, _, _), id)) if parent == root => {
                                 Some((id.to_string(), member_name(&self.file, &sec.name)))
                             }
                             _ => None,
                         })
                         .collect();
-                    let none = t!("settings-profile-none");
-                    let shown = if v.is_empty() {
-                        none.clone()
-                    } else {
-                        profiles
+                    let empty = empty.map(|key| t!(key));
+                    let extra = extra.map(|(value, key)| (value, t!(key)));
+                    let shown = match (&empty, &extra) {
+                        (Some(label), _) if v.is_empty() => label.clone(),
+                        (_, Some((value, label))) if v == *value => label.clone(),
+                        _ => members
                             .iter()
                             .find(|(id, _)| *id == v)
-                            .map_or_else(|| v.clone(), |(_, name)| name.clone())
+                            .map_or_else(|| v.clone(), |(_, name)| name.clone()),
                     };
-                    let combo = egui::ComboBox::from_id_salt(("settings_profile", &id))
+                    let combo = egui::ComboBox::from_id_salt(("settings_member", &id))
                         .selected_text(shown)
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut v, String::new(), none);
-                            for (pid, name) in &profiles {
-                                ui.selectable_value(&mut v, pid.clone(), name)
-                                    .on_hover_text(pid);
+                            if let Some(label) = &empty {
+                                ui.selectable_value(&mut v, String::new(), label);
+                            }
+                            for (mid, name) in &members {
+                                ui.selectable_value(&mut v, mid.clone(), name)
+                                    .on_hover_text(mid);
+                            }
+                            if let Some((value, label)) = &extra {
+                                ui.selectable_value(&mut v, value.to_string(), label);
                             }
                         });
                     widget = Some(combo.response);
@@ -3564,6 +3630,82 @@ mod tests {
                 .unwrap()
                 .contains("\"core.flag.accept\"")
         );
+    }
+
+    #[test]
+    fn sets_and_presets_are_chosen_from_a_list_of_members() {
+        // Retour du 25/11/2026 : `[iptc] default`, un nom de jeu à taper ; une liste. Les
+        // métadonnées d'un préréglage d'export : telles quelles, un jeu, ou retirées.
+        assert_eq!(
+            member_choice("iptc", "default").map(|c| (c.root, c.empty)),
+            Some(("iptc.sets", None))
+        );
+        let export = member_choice("export.profiles.web", "metadata").unwrap();
+        assert_eq!(export.root, "iptc.sets");
+        assert_eq!(export.empty, Some("export-metadata-keep"));
+        assert_eq!(export.extra.map(|e| e.0), Some(tri::export::STRIP));
+        assert_eq!(
+            member_choice("versions.presets.story", "profile").map(|c| c.root),
+            Some("export.profiles")
+        );
+        assert_eq!(member_choice("iptc.sets.mine", "creator"), None);
+        // Chaque réglage visé existe, et la famille a des membres.
+        let schema = schema();
+        for (section, key) in [
+            ("iptc", "default"),
+            ("export.profiles.web", "metadata"),
+            ("versions.presets.story", "profile"),
+        ] {
+            assert!(schema.default_of(section, key).is_some(), "{section}.{key}");
+            let root = member_choice(section, key).unwrap().root;
+            assert!(
+                schema
+                    .sections
+                    .iter()
+                    .any(|s| family(&s.name).is_some_and(|((parent, _, _), _)| parent == root)),
+                "{root}"
+            );
+        }
+        // L'ancienne clé `iptc` : montrée, puis remplacée par `metadata` (25/11/2026 :
+        // les deux ensemble, le fichier était refusé).
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "[export.profiles.web]\niptc = \"mine\"\n").unwrap();
+        let mut w = SettingsWindow::open(&config).unwrap();
+        let section = "export.profiles.web";
+        let entry = schema
+            .sections
+            .iter()
+            .find(|s| s.name == section)
+            .and_then(|s| {
+                s.groups
+                    .iter()
+                    .flat_map(|g| &g.entries)
+                    .find(|e| e.key == "metadata")
+            })
+            .unwrap()
+            .clone();
+        assert_eq!(w.current(section, &entry), Value::Str("mine".into()));
+        assert!(
+            w.commit(
+                section,
+                "metadata",
+                Some(Value::Str(tri::export::STRIP.into()))
+            )
+            .is_some()
+        );
+        assert_eq!(
+            w.file.get(section, "iptc"),
+            None,
+            "l'ancienne clé est partie"
+        );
+        assert_eq!(
+            w.file.get(section, "metadata"),
+            Some(Value::Str(tri::export::STRIP.into()))
+        );
+        // « strip » accepté par le moteur.
+        let text = "[export.profiles.web]\nmetadata = \"strip\"\n";
+        assert!(tri::settings::parse::<AppSettings>(text).is_ok());
     }
 
     #[test]
