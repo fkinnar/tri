@@ -7,7 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use crate::filter::{Filter, Groups, retain};
 use crate::media::MediaFile;
@@ -113,11 +113,17 @@ fn read_entries(
     dir: &Path,
     images: &[PathBuf],
     done: Option<&AtomicUsize>,
+    stop: Option<&AtomicBool>,
 ) -> Vec<(PathBuf, Entry, Option<Vec<String>>)> {
+    let stopped = || stop.is_some_and(|s| s.load(Ordering::Relaxed));
+    if stopped() {
+        return Vec::new();
+    }
     let index = SidecarIndex::new(dir);
     let mut memory = crate::reconcile::Memory::open(dir);
     let entries = images
         .iter()
+        .take_while(|_| !stopped())
         .map(|image| {
             let (entry, merged) = read_notes(image, &index, &mut memory);
             if let Some(done) = done {
@@ -310,10 +316,22 @@ impl NoteBook {
         convention: Convention,
         done: &AtomicUsize,
     ) -> NoteBook {
+        NoteBook::load_until(files, convention, done, &AtomicBool::new(false))
+    }
+
+    /// Comme [`NoteBook::load_counting`], arrêtée dès que `stop` passe à vrai (dossier
+    /// quitté : sur un NAS, finir de lire ses sidecars ralentissait le dossier suivant) ;
+    /// le carnet est alors incomplet, à jeter.
+    pub fn load_until(
+        files: &[MediaFile],
+        convention: Convention,
+        done: &AtomicUsize,
+        stop: &AtomicBool,
+    ) -> NoteBook {
         let mut book = NoteBook::pending(files.iter().map(|f| f.path.as_path()), convention);
         book.touched = None;
         for (dir, images) in &book.by_dir {
-            for (image, entry, merged) in read_entries(dir, images, Some(done)) {
+            for (image, entry, merged) in read_entries(dir, images, Some(done), Some(stop)) {
                 if let Some(from) = merged {
                     book.merged.push((image.clone(), from));
                 }
@@ -605,7 +623,7 @@ impl NoteBook {
             by_dir.entry(dir_of(image)).or_default().push(image.clone());
         }
         for (dir, images) in by_dir {
-            for (image, entry, merged) in read_entries(&dir, &images, None) {
+            for (image, entry, merged) in read_entries(&dir, &images, None, None) {
                 if let Some(from) = merged {
                     self.merged.push((image.clone(), from));
                 }
@@ -1372,7 +1390,7 @@ impl PendingEdit {
         }
         let entries = by_dir
             .into_iter()
-            .flat_map(|(dir, images)| read_entries(&dir, &images, None))
+            .flat_map(|(dir, images)| read_entries(&dir, &images, None, None))
             .collect();
         EditDone {
             entries,
@@ -1566,6 +1584,29 @@ impl Filter for ConflictFilter<'_> {
 mod tests {
     use super::*;
     use crate::xmp;
+
+    #[test]
+    fn a_stopped_notes_reading_reads_nothing_more() {
+        // Dossier quitté pendant la lecture de ses notes : on s'arrête là.
+        let dir = tempfile::tempdir().unwrap();
+        let files: Vec<MediaFile> = (0..3)
+            .map(|i| {
+                let path = dir.path().join(format!("{i}.RAF"));
+                std::fs::write(&path, b"raw").unwrap();
+                MediaFile {
+                    path,
+                    kind: crate::media::MediaKind::Raw,
+                }
+            })
+            .collect();
+        let done = AtomicUsize::new(0);
+        let stop = AtomicBool::new(true);
+        NoteBook::load_until(&files, Convention::Darktable, &done, &stop);
+        assert_eq!(done.load(Ordering::Relaxed), 0, "aucun sidecar lu");
+        stop.store(false, Ordering::Relaxed);
+        NoteBook::load_until(&files, Convention::Darktable, &done, &stop);
+        assert_eq!(done.load(Ordering::Relaxed), 3);
+    }
 
     #[test]
     fn a_sidecar_reread_in_the_background_never_undoes_a_newer_rating() {

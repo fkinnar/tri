@@ -40,6 +40,8 @@ pub struct AppSettings {
     pub places: tri::places::PlaceSettings,
     /// `[watch]` (moteur) : surveillance du dossier ouvert.
     pub watch: tri::watch::WatchSettings,
+    /// `[light]` : mode léger des dossiers sur le réseau ou choisis (#597).
+    pub light: tri::light::LightSettings,
     /// `[sort]` (moteur) : ordre des couleurs du tri par couleur.
     pub sort: tri::sort::SortSettings,
     /// `[develop]` (moteur) : rendu par darktable.
@@ -97,6 +99,7 @@ impl AppSettings {
             sidecars: self.sidecars,
             places: self.places.clone(),
             watch: self.watch,
+            light: self.light.clone(),
             sort: self.sort.clone(),
             develop: self.develop.clone(),
             export: self.export.clone(),

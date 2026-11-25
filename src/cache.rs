@@ -240,6 +240,12 @@ static NOTIFY: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>> = std::sync::Onc
 
 /// Relevé demandé au fil des relevés différés (une fois par fichier en attente).
 fn read_in_background(path: &Path) {
+    if held_dir()
+        .as_deref()
+        .is_some_and(|dir| path.starts_with(dir))
+    {
+        return;
+    }
     let path = path.to_path_buf();
     defer_job(format!("stamp:{}", path.display()), move || {
         read_stamp(&path);
@@ -265,20 +271,9 @@ thread_local! {
 /// que la même (`id`) est en attente ; [`on_stamps_read`] est prévenu à la fin. Compte
 /// comme un accès différé ([`deferred_misses`]).
 pub fn defer_job(id: String, job: impl FnOnce() + Send + 'static) {
-    use std::sync::{Condvar, OnceLock};
-    type Job = (String, Box<dyn FnOnce() + Send>);
-    /// Lectures en attente, la plus récente au bout (servie d'abord : en défilant vite,
-    /// les vignettes visibles passent avant celles déjà dépassées, retour du 29/10/2026),
-    /// et celles en attente ou en cours, pour ne rien lire deux fois.
-    #[derive(Default)]
-    struct Queue {
-        stack: Vec<Job>,
-        pending: std::collections::HashSet<String>,
-    }
-    static QUEUE: OnceLock<(Mutex<Queue>, Condvar)> = OnceLock::new();
     MISSES.with(|m| m.set(m.get() + 1));
     static STARTED: std::sync::Once = std::sync::Once::new();
-    let (queue, wake) = QUEUE.get_or_init(Default::default);
+    let (queue, wake) = deferred_queue();
     // Fil lancé une fois la file en place.
     STARTED.call_once(|| {
         let _ = std::thread::Builder::new()
@@ -319,6 +314,57 @@ pub fn defer_job(id: String, job: impl FnOnce() + Send + 'static) {
     q.stack.push((id, Box::new(job)));
     drop(q);
     wake.notify_one();
+}
+
+static HELD: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+fn held_dir() -> Option<PathBuf> {
+    HELD.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+/// Met en attente les relevés différés des fichiers sous `dir` (`None` : plus rien en
+/// attente) : ceux déjà demandés sont abandonnés, les nouveaux refusés, le temps qu'un
+/// autre dossier s'ouvre (25/11/2026 : sur un NAS, la grille du dossier quitté les
+/// redemandait et ralentissait l'ouverture du suivant). Renvoie le nombre abandonné.
+pub fn hold_stamps_under(dir: Option<&Path>) -> usize {
+    *HELD.lock().unwrap_or_else(|e| e.into_inner()) = dir.map(Path::to_path_buf);
+    dir.map_or(0, drop_deferred_stamps_under)
+}
+
+/// Abandonne les relevés différés pas encore faits des fichiers sous `dir` ; ils seront
+/// redemandés au besoin. Renvoie leur nombre.
+fn drop_deferred_stamps_under(dir: &Path) -> usize {
+    let prefix = format!("stamp:{}", dir.display());
+    let (queue, _) = deferred_queue();
+    let mut q = queue.lock().unwrap_or_else(|e| e.into_inner());
+    let before = q.stack.len();
+    let mut dropped = Vec::new();
+    q.stack.retain(|(id, _)| {
+        let keep = !id.starts_with(&prefix);
+        if !keep {
+            dropped.push(id.clone());
+        }
+        keep
+    });
+    for id in dropped {
+        q.pending.remove(&id);
+    }
+    before - q.stack.len()
+}
+
+/// Lectures différées en attente, la plus récente au bout (servie d'abord : en défilant
+/// vite, les vignettes visibles passent avant celles déjà dépassées, retour du
+/// 29/10/2026), et celles en attente ou en cours, pour ne rien lire deux fois.
+#[derive(Default)]
+struct DeferredQueue {
+    stack: Vec<(String, Box<dyn FnOnce() + Send>)>,
+    pending: std::collections::HashSet<String>,
+}
+
+fn deferred_queue() -> &'static (Mutex<DeferredQueue>, std::sync::Condvar) {
+    static QUEUE: std::sync::OnceLock<(Mutex<DeferredQueue>, std::sync::Condvar)> =
+        std::sync::OnceLock::new();
+    QUEUE.get_or_init(Default::default)
 }
 
 /// Relève `path` sur le disque et le retient.
@@ -1197,6 +1243,25 @@ fn default_dir_for(os: &str, env: impl Fn(&str) -> Option<OsString>) -> Option<P
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deferred_stamps_of_a_folder_left_behind_are_dropped() {
+        let (queue, _) = deferred_queue();
+        // File remplie sans le fil (aucune lecture ne part pendant le test).
+        let mut q = queue.lock().unwrap();
+        for name in ["/nas/old/a.RAF", "/nas/old/b.RAF", "/nas/new/c.RAF"] {
+            let id = format!("stamp:{name}");
+            q.pending.insert(id.clone());
+            q.stack.push((id, Box::new(|| {})));
+        }
+        drop(q);
+        assert_eq!(drop_deferred_stamps_under(Path::new("/nas/old")), 2);
+        let mut q = queue.lock().unwrap();
+        assert!(q.pending.contains("stamp:/nas/new/c.RAF"));
+        assert!(!q.pending.contains("stamp:/nas/old/a.RAF"));
+        q.stack.retain(|(id, _)| !id.starts_with("stamp:/nas/"));
+        q.pending.retain(|id| !id.starts_with("stamp:/nas/"));
+    }
 
     // Les tests qui s'en servent comparent des chemins Unix : pas sous Windows.
     #[cfg(not(windows))]

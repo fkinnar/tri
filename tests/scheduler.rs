@@ -500,6 +500,76 @@ fn embedded_previews_are_scheduled_for_raw_files_only() {
 }
 
 #[test]
+fn light_mode_computes_only_thumbnails_and_the_previews_of_what_is_shown() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let mut all = files(6, MediaKind::Raw);
+    all.extend(files(2, MediaKind::Flat));
+    let (scheduler, events) = start(&fake, 2);
+    scheduler.set_light(true);
+    let generation = scheduler.set_folder(all);
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(scheduler.progress(Level::Thumbnail), complete(8));
+    assert!(
+        fake.order(Level::Embedded).is_empty(),
+        "aucun aperçu en fond"
+    );
+    assert!(fake.order(Level::Standard).is_empty());
+
+    // L'image affichée et ses voisines ont leur aperçu, à la demande.
+    scheduler.set_focus(2);
+    assert!(scheduler.wait_idle(LONG));
+    let mut shown = ready(&events, generation, Level::Embedded);
+    shown.sort();
+    assert_eq!(shown, [1, 2, 3]);
+    // Une image plate affichée : son aperçu standard.
+    scheduler.set_focus(7);
+    assert!(scheduler.wait_idle(LONG));
+    let mut standard = ready(&events, generation, Level::Standard);
+    standard.sort();
+    assert_eq!(standard, [6, 7]);
+    let mut embedded = fake.order(Level::Embedded);
+    embedded.sort();
+    assert_eq!(embedded, ["img1.RAF", "img2.RAF", "img3.RAF"]);
+
+    // Hors du mode léger, tout le dossier revient en fond.
+    scheduler.set_light(false);
+    scheduler.set_folder(files(3, MediaKind::Raw));
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(scheduler.progress(Level::Embedded), complete(3));
+}
+
+#[test]
+fn an_image_opened_in_light_mode_gets_its_whole_cache() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let (scheduler, _events) = start_with(
+        &fake,
+        Config {
+            light_workers: 2,
+            thumbnails_first: false,
+            raw_previews: RawPreviews::OnDemand,
+            exposure: Analysis::OnDemand,
+            sharpness: Analysis::OnDemand,
+            similarity: Analysis::Off,
+            palettes: Analysis::Off,
+            palette: None,
+        },
+    );
+    scheduler.set_light(true);
+    scheduler.set_folder(files(5, MediaKind::Raw));
+    scheduler.set_focus(2);
+    assert!(scheduler.wait_idle(LONG));
+    assert!(fake.order(Level::Exposure).is_empty(), "rien sans demande");
+    scheduler.request_all(2);
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(fake.order(Level::Exposure), ["img2.RAF"]);
+    assert_eq!(fake.order(Level::Sharpness), ["img2.RAF"]);
+    assert!(
+        fake.order(Level::Standard).is_empty(),
+        "rendus RAW toujours à la demande"
+    );
+}
+
+#[test]
 fn raw_renders_wait_for_embedded_previews_in_thumbnails_first_mode() {
     let fake = Fake::with_delay(Duration::from_millis(5));
     let all = files(10, MediaKind::Raw);

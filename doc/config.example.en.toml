@@ -410,6 +410,20 @@ issue_url = "https://github.com/fkinnar/tri/issues/new?template=bug.yml"
 # none: the version's page).
 formats = ["dmg", "msi", "AppImage", "deb", "tar.gz", "zip"]
 
+[light]
+# Light mode on the network: only thumbnails are computed in the background.
+#
+# Light mode (#597): only thumbnails are computed in the background. The preview of the
+# shown image and its neighbours comes when you look at them, analyses wait for
+# "Compute all" (right-click on the folder, one folder at a time). true: network places
+# (shares, iCloud) are in light mode by default.
+network = true
+# Folders in light mode, subfolders included (right-click > Light mode). Example:
+# folders = ["~/Photos/Archives"]
+folders = []
+# Folders taken out of light mode, subfolders included (right-click > Leave light mode).
+except = []
+
 [watch]
 # Watching the open folder: changes made elsewhere show up by themselves.
 #
