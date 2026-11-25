@@ -450,6 +450,21 @@ issue_url = "https://github.com/fkinnar/tri/issues/new?template=bug.yml"
 # choix ; aucun : la page de la version).
 formats = ["dmg", "msi", "AppImage", "deb", "tar.gz", "zip"]
 
+[light]
+# Mode léger sur le réseau : seules les vignettes sont calculées en fond.
+#
+# Mode léger (#597) : seules les vignettes sont calculées en fond. L'aperçu de l'image
+# affichée et de ses voisines vient quand on les regarde, les analyses attendent
+# « Tout calculer » (clic droit sur le dossier, un dossier à la fois). true : les
+# emplacements réseau (partages, iCloud) sont en mode léger d'office.
+network = true
+# Dossiers en mode léger, sous-dossiers compris (clic droit > Mode léger). Exemple :
+# folders = ["~/Photos/Archives"]
+folders = []
+# Dossiers sortis du mode léger, sous-dossiers compris (clic droit > Quitter le mode
+# léger).
+except = []
+
 [watch]
 # Surveillance du dossier ouvert : changements faits ailleurs pris en compte d'eux-
 # mêmes.

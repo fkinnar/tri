@@ -228,6 +228,7 @@ pub fn navigate(
         | Action::FolderFavorite
         | Action::FolderFavoriteName
         | Action::FolderWatch
+        | Action::FolderLight
         | Action::FolderConnect
         | Action::FolderForget
         | Action::FolderCacheClear

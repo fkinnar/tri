@@ -20,7 +20,11 @@ one "opens a folder".
   list can take time: the interface reads it in a thread, waits `[gui.folders]
   open_wait_ms` for it (150 ms: nothing changes on a local disk), then lets it finish in
   the background with a box in the middle ("Opening "shoot"… 340 images found", Cancel or
-  Escape); the previous folder stays on screen meanwhile. The same thread also reads the
+  Escape); the previous folder stays on screen meanwhile, but leaves the disk to the
+  requested folder (2026-11-25, on a NAS: its thumbnails, ratings and watch slowed the
+  opening down): its background work is paused, the reading of its ratings stopped (a
+  dropped `Loading` stops `NoteBook::load_until`), its watch cut; everything resumes if
+  the opening is cancelled. The same thread also reads the
   folder's ratings and sorting data (kept view, sliders, covers, stacks) and writes the
   position in the folder being left; the box says which step is under way (2026-11-19:
   on iCloud, the interface froze without a word between the click and the opening, then

@@ -226,6 +226,7 @@ const CATEGORIES: [&[&str]; 6] = [
         "offload",
         "places",
         "watch",
+        "light",
         "remote",
         "neighbourhood",
         "files",

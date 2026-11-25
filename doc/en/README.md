@@ -51,6 +51,7 @@ exists.
 | [overlay.md](overlay.md) | Module `tri::overlay`: overlays (grids, text, logo, format), plugins written in Rust or TOML files |
 | [send.md](send.md) | Module `tri::send`: send plugins (AirDrop) |
 | [update.md](update.md) | Module `tri::update`: checking for a new version, on demand |
+| [light.md](light.md) | Module `tri::light`: light mode (NAS, iCloud: only thumbnails in the background, the rest on demand) |
 | [watch.md](watch.md) | Module `tri::watch`: watching the open folder (images added, XMP modified elsewhere) |
 | [servers.md](servers.md) | Module `tri::servers`: network servers joined by their address (`\\nas\photo`, `smb://`, `ftp://`, `sftp://`, WebDAV, NFS) |
 | [neighbourhood.md](neighbourhood.md) | Module `tri::neighbourhood`: network neighbourhood, servers announced by Bonjour / mDNS |

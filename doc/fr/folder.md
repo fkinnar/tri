@@ -20,7 +20,11 @@ manipule quand on « ouvre un dossier ».
   NAS, même la liste peut prendre du temps : l'interface la lit dans un fil, l'attend
   `[gui.folders] open_wait_ms` (150 ms : un disque local ne voit rien changer), puis la
   laisse finir en fond avec une boîte au centre (« Ouverture de « séance »… 340 images
-  trouvées », Annuler ou Échap) ; le dossier d'avant reste affiché en attendant. Le même
+  trouvées », Annuler ou Échap) ; le dossier d'avant reste affiché en attendant, mais
+  laisse le disque au dossier demandé (25/11/2026, sur un NAS : ses vignettes, ses notes
+  et sa surveillance ralentissaient l'ouverture) : son travail de fond est suspendu, la
+  lecture de ses notes arrêtée (`Loading` abandonnée : `NoteBook::load_until` s'arrête),
+  sa surveillance coupée ; tout reprend si l'ouverture est annulée. Le même
   fil lit aussi les notes et les données de tri du dossier (vue retenue, curseurs,
   couvertures, piles) et écrit la position dans le dossier quitté ; la boîte dit l'étape
   en cours (19/11/2026 : sur iCloud, l'interface restait figée sans rien dire entre le

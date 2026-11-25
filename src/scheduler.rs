@@ -504,6 +504,9 @@ struct Running {
 struct State {
     thumbnails_first: bool,
     raw_previews: RawPreviews,
+    /// Mode léger du dossier (#597) : en fond, seulement les vignettes et les analyses ;
+    /// les aperçus de l'image affichée et de ses voisines à la demande.
+    light: bool,
     exposure: Analysis,
     sharpness: Analysis,
     similarity: Analysis,
@@ -544,6 +547,9 @@ impl State {
             self.raw_previews,
             (self.exposure, self.sharpness),
         );
+        if self.light {
+            levels.retain(|l| !matches!(l, Level::Embedded | Level::Standard));
+        }
         if self.similarity.is_on() {
             levels.push(Level::Similarity);
         }
@@ -784,6 +790,14 @@ impl Scheduler {
         s.palettes = analyses.palettes;
     }
 
+    /// Mode léger du dossier (#597) : en fond, seulement les vignettes (et les analyses
+    /// selon leur réglage) ; l'aperçu de l'image affichée et de ses voisines (boîtier pour
+    /// un RAW, standard pour une image plate) est demandé dès qu'elles sont affichées
+    /// ([`Scheduler::set_shown`]). Vaut au prochain [`Scheduler::set_folder`].
+    pub fn set_light(&self, light: bool) {
+        self.shared.lock().light = light;
+    }
+
     /// Change la politique des rendus RAW de fond (la grille montre les rendus LibRaw,
     /// #114) ; elle vaut au prochain [`Scheduler::set_folder`].
     pub fn set_raw_previews(&self, raw_previews: RawPreviews) {
@@ -909,6 +923,20 @@ impl Scheduler {
                 level: job.1,
             });
         }
+        if s.light {
+            // Mode léger : l'aperçu des images affichées n'est pas en fond, il est demandé.
+            for &i in &s.group.clone() {
+                let level = match s.files[i].kind {
+                    MediaKind::Raw => Level::Embedded,
+                    MediaKind::Flat => Level::Standard,
+                };
+                let job = (i, level);
+                if !s.pending.contains(&job) && !s.running.iter().any(|r| r.job == job) {
+                    s.pending.insert(job);
+                    s.on_demand.insert(job);
+                }
+            }
+        }
         // Un 1:1 en cours pour une image éloignée est annulé (signalé à sa fin).
         let group = s.group.clone();
         s.cancel_running(|r| !is_zoom_level(r.job.1) || rank_in(&group, r.job.0).is_some());
@@ -932,17 +960,38 @@ impl Scheduler {
             return;
         }
         let job = (index, level);
-        if rank_in(&s.group, index).is_none()
-            || index >= s.files.len()
-            || s.pending.contains(&job)
-            || s.running.iter().any(|r| r.job == job)
-        {
+        if rank_in(&s.group, index).is_none() || index >= s.files.len() {
+            return;
+        }
+        // Une analyse seulement lue dans le cache (à la demande, mode léger) : la demande
+        // la fait calculer.
+        let upgrade = s.pending.contains(&job) && s.cache_only(&job);
+        if !upgrade && (s.pending.contains(&job) || s.running.iter().any(|r| r.job == job)) {
             return;
         }
         s.pending.insert(job);
         s.on_demand.insert(job);
         drop(s);
         self.shared.work.notify_all();
+    }
+
+    /// Demande pour l'image affichée `index` tout ce que le travail de fond calculerait
+    /// hors du mode léger : aperçus et analyses (#597, une image ouverte en plein écran
+    /// a tout son cache, même dans un dossier de 2000 photos où l'on n'en garde que 25).
+    pub fn request_all(&self, index: usize) {
+        let levels = {
+            let mut s = self.shared.lock();
+            let Some(file) = s.files.get(index).cloned() else {
+                return;
+            };
+            let light = std::mem::replace(&mut s.light, false);
+            let levels = s.background_levels(&file);
+            s.light = light;
+            levels
+        };
+        for level in levels.into_iter().filter(|&l| l != Level::Thumbnail) {
+            self.request(index, level);
+        }
     }
 
     /// Met en pause (aucune nouvelle tâche n'est prise ; celles en cours se terminent) ou
