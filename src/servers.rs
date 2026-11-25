@@ -690,7 +690,8 @@ fn gio_mount(address: &str, user: Option<&str>, login: Option<&Login>) -> Result
     use std::process::Stdio;
     let mut child = crate::process::command("gio")
         .args(["mount", address])
-        .env("LC_ALL", "C")
+        .env("LC_ALL", "C.UTF-8")
+        .env_remove("LANGUAGE")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -751,7 +752,11 @@ fn gio_mount(address: &str, user: Option<&str>, login: Option<&Login>) -> Result
     }
 }
 
-/// Une erreur de `gio mount` (en anglais : `LC_ALL=C`) en cause expliquée.
+/// Une erreur de `gio mount` en cause expliquée. Les outils lancés le sont en anglais
+/// (`LC_ALL=C.UTF-8`) et sans `LANGUAGE` : sous Linux Mint, cette variable gardait leurs
+/// messages en français, et `C` seul remplaçait leurs accents par « ? » (« L?emplacement
+/// indiqu? n?est pas mont? », 25/11/2026) ; `UTF-8` garde aussi les accents des noms de
+/// partages.
 fn gio_error(stderr: &str, user: Option<&str>, login: Option<&Login>) -> ConnectError {
     let has = |words: &[&str]| words.iter().any(|w| stderr.contains(w));
     if has(&[
@@ -992,7 +997,8 @@ impl Host {
 fn run(args: &[&str]) -> Result<String, String> {
     let output = crate::process::command(args[0])
         .args(&args[1..])
-        .env("LC_ALL", "C")
+        .env("LC_ALL", "C.UTF-8")
+        .env_remove("LANGUAGE")
         .stdin(std::process::Stdio::null())
         .output()
         .map_err(|e| crate::t!("servers-tool-missing", error = e.to_string()))?;
