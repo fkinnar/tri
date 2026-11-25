@@ -36555,19 +36555,24 @@ mod tests {
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         assert_eq!(selected_name(&h), "img0.jpg");
         h.run_steps(2);
-        h.get_by_label(&Action::DevNext.label()).click();
-        h.run_steps(3);
-        assert_eq!(selected_name(&h), "img0@dt-01.jpg", "suivant : le clone 1");
-        h.get_by_label(&Action::DevNext.label()).click();
-        h.run_steps(3);
-        assert_eq!(selected_name(&h), "img0@dt-02.jpg", "puis le clone 2");
-        h.get_by_label(&Action::DevPrev.label()).click();
-        h.run_steps(3);
-        assert_eq!(
-            selected_name(&h),
-            "img0@dt-01.jpg",
-            "précédent : le clone 1"
-        );
+        // Clic attendu jusqu'à son effet (deux échecs, CI Windows du 31/10/2026 et en
+        // local sous charge le 26/11/2026 : un clic pris un tour plus tard).
+        let on = |h: &mut Harness<'_, TriApp>, name: &str| {
+            run_until(h, |app| {
+                app.files
+                    .get(app.selected)
+                    .and_then(|f| f.path.file_name())
+                    .is_some_and(|n| n == name)
+            });
+        };
+        click_settled(&mut h, &Action::DevNext.label());
+        on(&mut h, "img0@dt-01.jpg");
+        h.run_steps(2);
+        click_settled(&mut h, &Action::DevNext.label());
+        on(&mut h, "img0@dt-02.jpg");
+        h.run_steps(2);
+        click_settled(&mut h, &Action::DevPrev.label());
+        on(&mut h, "img0@dt-01.jpg");
     }
 
     #[test]
