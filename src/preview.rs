@@ -278,6 +278,43 @@ pub fn stamp(file: &MediaFile, level: Level, settings: &Settings) -> String {
     params
 }
 
+/// Les entrées déjà calculées des images copiées ou déplacées suivent leurs copies (#508) :
+/// `files` donne (avant, après) chaque fichier, une fois la copie faite (nom, taille et date
+/// gardés). Tous les niveaux aux réglages `settings`, et les copies pour la grille des
+/// aperçus ([`grid_key`], à la taille des vignettes). Un rendu développé ne suit que si son sidecar a suivi
+/// (son état entre dans la clé). `keep` : copie (les entrées restent aussi à l'ancienne
+/// place) ; sinon déplacement. Renvoie le nombre d'entrées reprises.
+pub fn carry(
+    cache: &Cache,
+    settings: &Settings,
+    files: &[(std::path::PathBuf, std::path::PathBuf)],
+    keep: bool,
+) -> usize {
+    let side = settings.sizes.thumbnail;
+    let mut carried = 0;
+    for (from, to) in files {
+        let (Some(kind), Some(folder)) = (crate::media::kind_of(to), from.parent()) else {
+            continue;
+        };
+        let file = MediaFile {
+            path: to.clone(),
+            kind,
+        };
+        for level in Level::ALL {
+            let grid = (level.is_image() && level != Level::Thumbnail)
+                .then(|| grid_key(&file, level, settings, side));
+            for key in std::iter::once(key(&file, level, settings)).chain(grid) {
+                if let Ok(key) = key
+                    && cache.carry(&key, folder, keep).unwrap_or(false)
+                {
+                    carried += 1;
+                }
+            }
+        }
+    }
+    carried
+}
+
 fn key_with(file: &MediaFile, level: Level, settings: &Settings, extra: &str) -> io::Result<Key> {
     let mut params = stamp(file, level, settings);
     // Développé : le développement du sidecar aussi (modifié dans le logiciel : le rendu
@@ -664,6 +701,66 @@ pub fn camera_exposure(cache: &Cache, file: &MediaFile, settings: &Settings) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn computed_entries_follow_a_copied_or_moved_image() {
+        // #508 : une copie (nom, taille et date gardés) retrouve ses aperçus et analyses
+        // au lieu de les recalculer ; un déplacement les emporte.
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache")).unwrap();
+        let settings = Settings::default();
+        let (a, b, c) = (
+            dir.path().join("a"),
+            dir.path().join("b"),
+            dir.path().join("c"),
+        );
+        for d in [&a, &b, &c] {
+            std::fs::create_dir(d).unwrap();
+        }
+        let photo = a.join("IMG_0001.jpg");
+        std::fs::write(&photo, b"jpeg").unwrap();
+        let file = |path: &std::path::Path| MediaFile {
+            path: path.to_path_buf(),
+            kind: MediaKind::Flat,
+        };
+        let levels = [Level::Thumbnail, Level::Exposure, Level::Standard];
+        for level in levels {
+            cache
+                .put_bytes(&key(&file(&photo), level, &settings).unwrap(), b"x")
+                .unwrap();
+        }
+        let side = settings.sizes.thumbnail;
+        let small = grid_key(&file(&photo), Level::Standard, &settings, side).unwrap();
+        cache.put_bytes(&small, b"s").unwrap();
+        // La copie de `tri` garde la date.
+        let copy = |to: &std::path::Path| {
+            std::fs::copy(&photo, to).unwrap();
+            let modified = std::fs::metadata(&photo).unwrap().modified().unwrap();
+            let f = std::fs::File::options().write(true).open(to).unwrap();
+            f.set_modified(modified).unwrap();
+        };
+        let in_b = b.join("IMG_0001.jpg");
+        copy(&in_b);
+        let n = carry(&cache, &settings, &[(photo.clone(), in_b.clone())], true);
+        assert_eq!(n, 4);
+        for level in levels {
+            assert!(cache.contains(&key(&file(&in_b), level, &settings).unwrap()));
+            assert!(cache.contains(&key(&file(&photo), level, &settings).unwrap()));
+        }
+        assert!(cache.contains(&grid_key(&file(&in_b), Level::Standard, &settings, side).unwrap()));
+        // Déplacée : plus rien à l'ancienne place.
+        let in_c = c.join("IMG_0001.jpg");
+        std::fs::rename(&in_b, &in_c).unwrap();
+        crate::cache::forget_stamps_under(&b);
+        let n = carry(&cache, &settings, &[(in_b.clone(), in_c.clone())], false);
+        assert_eq!(n, 4);
+        assert!(cache.contains(&key(&file(&in_c), Level::Exposure, &settings).unwrap()));
+        assert_eq!(
+            carry(&cache, &settings, &[(in_b.clone(), in_c.clone())], false),
+            0,
+            "déjà là : rien d'écrasé"
+        );
+    }
 
     #[test]
     fn half_size_rule() {

@@ -526,6 +526,13 @@ group_pairs = "ask"
 # 001), {folder} (folder in full), {folder_short} (without its
 # leading date), {camera} (camera model).
 rename_template = "{date}_{folder_short}_{n:3}"
+# Copying or moving images: their previews and analyses already computed follow them.
+#
+# Copy / move (<core.file.copy>, <core.file.move>, drag and drop, a whole folder): the
+# previews, renders and analyses already computed follow the images instead of being
+# computed again (a card copied by hand, for example). A developed render follows only if
+# its sidecar does. Value offered in the dialog, which has its checkbox.
+carry_cache = true
 
 [sharpness]
 # Threshold of the sharpness map: lower marks more edges.

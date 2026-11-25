@@ -497,6 +497,7 @@ cli-opt-cache = cache folder, instead of the settings' one
 cli-opt-dry-run = shows what would be done, without changing anything
 cli-opt-rewrite = also rewrites the ratings of existing sidecars
 cli-opt-permanent = permanent deletion, no trash
+cli-opt-no-cache = without carrying the previews already computed (`[files] carry_cache`)
 cli-opt-to = destination folder
 cli-opt-offload-to = root of the sessions (default: [offload] destination)
 cli-opt-export-to = folder, instead of the preset's
