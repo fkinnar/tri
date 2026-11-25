@@ -840,6 +840,51 @@ impl Cache {
         self.write_at(&path, level, folder, bytes)
     }
 
+    /// Reprend pour `key` (l'image à sa nouvelle place, copiée ou déplacée avec son nom, sa
+    /// taille et sa date) l'entrée que la même image avait dans `from_folder` (absolu) :
+    /// le nom d'une entrée ne dépend pas du dossier (#508), elle est recopiée (`keep`) ou
+    /// déplacée dans le rangement du nouveau dossier. Vrai si une entrée a suivi ; rien
+    /// n'est écrasé.
+    pub fn carry(&self, key: &Key, from_folder: &Path, keep: bool) -> io::Result<bool> {
+        let source = Key {
+            folder: std::path::absolute(from_folder)?,
+            ..key.clone()
+        };
+        if source.folder == key.folder {
+            return Ok(false);
+        }
+        for hash in [&key.hash, &key.earlier] {
+            let from = self.entry_file(&source, hash);
+            if !from.is_file() {
+                continue;
+            }
+            let to = self.entry_file(key, hash);
+            if to.exists() {
+                return Ok(false);
+            }
+            if !keep {
+                let dir = to
+                    .parent()
+                    .expect("une entrée a toujours un dossier parent");
+                fs::create_dir_all(dir)?;
+                let marker = dir.join(SOURCE);
+                if !marker.exists() {
+                    fs::write(&marker, self.shard(key.level, &key.folder).1)?;
+                }
+                if fs::rename(&from, &to).is_ok() {
+                    return Ok(true);
+                }
+            }
+            let bytes = fs::read(&from)?;
+            self.write_at(&to, key.level, &key.folder, &bytes)?;
+            if !keep {
+                let _ = fs::remove_file(&from);
+            }
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     /// Écriture atomique d'une entrée : fichier temporaire, puis renommage.
     fn write_entry(&self, key: &Key, bytes: &[u8]) -> io::Result<()> {
         let path = self.entry_path(key);

@@ -157,7 +157,18 @@ gardent leurs notes.
   `destinations` du dossier de données, `[files] recent` au plus, disparues omises).
   Complétion de la saisie : `complete_dir` (sous-dossiers, casse ignorée, cachés
   seulement après un « . ») et `common_prefix`.
-- Ligne de commande : `tri --copy|--move <image>...|<dossier> --to <dossier> [--dry-run]`.
+- Ligne de commande : `tri --copy|--move <image>...|<dossier> --to <dossier> [--no-cache]
+  [--dry-run]`.
+- **Le cache suit** (#508, 25/11/2026) : les aperçus, rendus et analyses déjà calculés
+  suivent les images copiées ou déplacées (une carte copiée à la main, une sélection
+  rangée ailleurs) au lieu d'être recalculés. Le nom d'une entrée du cache vient du nom,
+  de la taille et de la date du fichier et des réglages, pas de son dossier : une copie de
+  `tri` (date gardée) retrouve les mêmes noms, et `preview::carry` recopie (ou déplace)
+  les entrées dans le rangement du nouveau dossier (`Cache::carry`), dans le fil de la
+  copie, avec les copies pour la grille. Un rendu développé ne suit que si son sidecar
+  suit (son état entre dans la clé). Case « Emporter les aperçus déjà calculés » dans la
+  boîte (valeur proposée : `[files] carry_cache`), `--no-cache` en ligne de commande. Un
+  dossier déplacé garde sa case « Emporter le cache » (tout son rangement suit).
 - Interface : `y` (copier, *yank* de vim) et `Ctrl+X` (déplacer, « couper » ; `x` supprime,
   comme dans vim), sur la sélection,
   et boutons du clic droit ; boîte avec champ (Tab complète, flèches haut / bas : récentes,

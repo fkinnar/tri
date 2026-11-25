@@ -566,6 +566,13 @@ group_pairs = "ask"
 # (compteur ; {n:3} = 001), {folder} (dossier en entier), {folder_short} (sans la date
 # en tête), {camera} (appareil).
 rename_template = "{date}_{folder_short}_{n:3}"
+# Copier ou déplacer des images : leurs aperçus et analyses déjà calculés les suivent.
+#
+# Copier / déplacer (<core.file.copy>, <core.file.move>, glisser-déposer, un dossier entier) : les
+# aperçus, rendus et analyses déjà calculés suivent les images au lieu d'être recalculés
+# (une carte copiée à la main, par exemple). Un rendu développé ne suit que si son sidecar
+# suit. Valeur proposée dans la boîte, qui a sa case.
+carry_cache = true
 
 [sharpness]
 # Seuil de la carte de netteté : plus bas, plus de contours marqués.
