@@ -49,6 +49,10 @@ pub struct FileSettings {
     pub group_pairs: crate::pairs::Grouping,
     /// Renommage par lot (#439) : gabarit proposé la première fois ([`crate::naming`]).
     pub rename_template: String,
+    /// Copier / déplacer : les aperçus et analyses déjà calculés suivent les images
+    /// (#508, [`crate::preview::carry`]) au lieu d'être recalculés ; réglable dans la
+    /// boîte, ceci est la valeur proposée.
+    pub carry_cache: bool,
 }
 
 impl Default for FileSettings {
@@ -61,6 +65,7 @@ impl Default for FileSettings {
             allow_actions: false,
             group_pairs: crate::pairs::Grouping::Ask,
             rename_template: "{date}_{folder_short}_{n:3}".into(),
+            carry_cache: true,
         }
     }
 }

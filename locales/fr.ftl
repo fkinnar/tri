@@ -495,6 +495,7 @@ cli-opt-cache = dossier du cache, à la place de celui des réglages
 cli-opt-dry-run = montre ce qui serait fait, sans rien changer
 cli-opt-rewrite = réécrit aussi les notes des sidecars existants
 cli-opt-permanent = suppression définitive, sans corbeille
+cli-opt-no-cache = sans reprendre les aperçus déjà calculés (`[files] carry_cache`)
 cli-opt-to = dossier de destination
 cli-opt-offload-to = racine des séances (défaut : [offload] destination)
 cli-opt-export-to = dossier, à la place de celui du préréglage
