@@ -62,6 +62,8 @@ pub struct AppSettings {
     pub adjust: tri::adjust::AdjustSettings,
     /// `[files]` (moteur).
     pub files: tri::files::FileSettings,
+    /// `[iptc]` (moteur) : métadonnées de création (#277).
+    pub iptc: tri::iptc::IptcSettings,
     /// `[sharpness]` (moteur).
     pub sharpness: tri::sharpness::SharpnessSettings,
     /// `[similarity]` (moteur) : regroupement des images semblables.
@@ -110,6 +112,7 @@ impl AppSettings {
             log: self.log.clone(),
             adjust: self.adjust,
             files: self.files.clone(),
+            iptc: self.iptc.clone(),
             sharpness: self.sharpness,
             similarity: self.similarity,
             palette: self.palette,

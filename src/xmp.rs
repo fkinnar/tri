@@ -892,7 +892,7 @@ pub fn convert<'a>(
 }
 
 /// Paquet XMP minimal d'un nouveau sidecar.
-const NEW_PACKET: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+pub(crate) const NEW_PACKET: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="tri">
  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
   <rdf:Description rdf:about=""
@@ -1805,21 +1805,24 @@ fn write_colors(
     items: &[String],
     indent: &str,
 ) -> Result<()> {
-    write_seq(
+    write_property(
         writer,
         scopes,
         (ns::DARKTABLE, "colorlabels", "darktable"),
+        Shape::Seq,
         items,
         indent,
     )
 }
 
-/// Écrit `<préfixe:local><rdf:Seq><rdf:li>…</rdf:li>…` (textes échappés), avec
-/// l'indentation `indent` ; l'espace de noms est déclaré sur l'élément s'il ne l'est pas.
-fn write_seq(
+/// Écrit `<préfixe:local><rdf:Seq><rdf:li>…</rdf:li>…` (`rdf:Alt` en `x-default`, ou le
+/// texte seul selon `shape` ; textes échappés), avec l'indentation `indent` ; l'espace de
+/// noms est déclaré sur l'élément s'il ne l'est pas.
+fn write_property(
     writer: &mut Writer<Vec<u8>>,
     scopes: &Scopes,
     (uri, local, preferred): (&str, &str, &str),
+    shape: Shape,
     items: &[String],
     indent: &str,
 ) -> Result<()> {
@@ -1838,13 +1841,21 @@ fn write_seq(
     if declare {
         start.push_attribute((format!("xmlns:{prefix}").as_str(), uri));
     }
-    let seq = format!("{rdf}:Seq");
+    let seq = match shape {
+        Shape::Alt => format!("{rdf}:Alt"),
+        _ => format!("{rdf}:Seq"),
+    };
     let li = format!("{rdf}:li");
     w(
         writer,
         Event::Text(BytesText::from_escaped(indent.to_string())),
     )?;
     w(writer, Event::Start(start))?;
+    if shape == Shape::Text {
+        let text = quick_xml::escape::partial_escape(items[0].as_str());
+        w(writer, Event::Text(BytesText::from_escaped(text)))?;
+        return w(writer, Event::End(BytesEnd::new(tag)));
+    }
     w(
         writer,
         Event::Text(BytesText::from_escaped(format!("{indent} "))),
@@ -1855,7 +1866,11 @@ fn write_seq(
             writer,
             Event::Text(BytesText::from_escaped(format!("{indent}  "))),
         )?;
-        w(writer, Event::Start(BytesStart::new(li.clone())))?;
+        let mut start_li = BytesStart::new(li.clone());
+        if shape == Shape::Alt {
+            start_li.push_attribute(("xml:lang", "x-default"));
+        }
+        w(writer, Event::Start(start_li))?;
         // Seuls &, < et > échappés : un JSON reste lisible (pas de &quot;).
         let text = quick_xml::escape::partial_escape(item.as_str());
         w(writer, Event::Text(BytesText::from_escaped(text)))?;
@@ -1988,6 +2003,144 @@ pub fn apply_list(xml: &str, field: ListField, items: &[String]) -> Result<Strin
     if read_list(xml, field)? == items {
         return Ok(xml.to_string());
     }
+    let property = Property {
+        uri: field.uri,
+        local: field.local,
+        prefix: field.prefix,
+        shape: Shape::Seq,
+    };
+    rewrite_property(xml, property, items)
+}
+
+/// Forme d'une propriété XMP (#277).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shape {
+    /// Un texte (`photoshop:City`).
+    Text,
+    /// Une liste ordonnée, `rdf:Seq` (`dc:creator`).
+    Seq,
+    /// Un texte par langue, `rdf:Alt` (`dc:rights`) : écrit en `x-default`.
+    Alt,
+}
+
+/// Une propriété XMP quelconque (métadonnées de création, #277).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Property {
+    /// Espace de noms.
+    pub uri: &'static str,
+    /// Nom local.
+    pub local: &'static str,
+    /// Préfixe usuel.
+    pub prefix: &'static str,
+    /// Forme.
+    pub shape: Shape,
+}
+
+/// Valeurs de la propriété `p` dans un paquet XMP, d'un `rdf:Description` de premier
+/// niveau, en attribut ou en élément : le texte, ou les éléments de sa liste (pour `Alt`,
+/// les langues dans l'ordre, `x-default` d'abord écrit par les logiciels). `None` si
+/// elle est absente.
+pub fn read_property(xml: &str, p: Property) -> Result<Option<Vec<String>>> {
+    let mut reader = new_reader(xml);
+    let mut scopes = Scopes::default();
+    let mut depth = 0usize;
+    let mut description: Option<usize> = None;
+    let mut inside: Option<usize> = None;
+    let mut text = String::new();
+    let mut in_li = false;
+    let mut items: Vec<String> = Vec::new();
+    let mut found = false;
+    let ours = |scopes: &Scopes, qname: &str| {
+        scopes
+            .resolve(qname)
+            .is_some_and(|(u, l)| u == p.uri && l == p.local)
+    };
+    loop {
+        let event = reader.read_event()?;
+        match &event {
+            Event::Start(e) | Event::Empty(e) => {
+                scopes.push(e)?;
+                depth += 1;
+                let qname = name_of(e);
+                let empty = matches!(event, Event::Empty(_));
+                if is_rdf(&scopes, &qname, "Description") && description.is_none() {
+                    for attr in e.attributes().flatten() {
+                        let key = attr.key.as_ref().to_string();
+                        if !key.starts_with("xmlns") && ours(&scopes, &key) {
+                            let value = attr
+                                .normalized_value(XmlVersion::Implicit1_0)
+                                .map_err(|e| XmpError::Malformed(e.to_string()))?;
+                            return Ok(Some(vec![value.into_owned()]));
+                        }
+                    }
+                    if !empty {
+                        description = Some(depth);
+                    }
+                } else if description == Some(depth - 1) && ours(&scopes, &qname) {
+                    found = true;
+                    if !empty {
+                        inside = Some(depth);
+                        text.clear();
+                    }
+                } else if inside.is_some() && is_rdf(&scopes, &qname, "li") {
+                    if empty {
+                        items.push(String::new());
+                    } else {
+                        in_li = true;
+                        text.clear();
+                    }
+                }
+                if empty {
+                    scopes.pop();
+                    depth -= 1;
+                }
+            }
+            Event::Text(t) if inside.is_some() => text.push_str(t),
+            Event::GeneralRef(r) if inside.is_some() => {
+                if let Some(c) = r.resolve_char_ref().ok().flatten() {
+                    text.push(c);
+                } else if let Some(c) = predefined_entity(r) {
+                    text.push(c);
+                }
+            }
+            Event::End(e) => {
+                let qname = e.name().as_ref().to_string();
+                if in_li && is_rdf(&scopes, &qname, "li") {
+                    items.push(std::mem::take(&mut text));
+                    in_li = false;
+                }
+                if inside == Some(depth) {
+                    // Un texte simple : pas de liste dedans.
+                    if items.is_empty() && !text.trim().is_empty() {
+                        items.push(text.trim().to_string());
+                    }
+                    return Ok(Some(items));
+                }
+                if description == Some(depth) {
+                    description = None;
+                }
+                scopes.pop();
+                depth -= 1;
+            }
+            Event::Eof => break,
+            _ => {}
+        }
+    }
+    Ok(found.then_some(items))
+}
+
+/// Écrit la propriété `p` avec `values` (vide : retirée) dans le premier
+/// `rdf:Description`, en élément ; une forme attribut ou un élément ailleurs est retiré.
+/// Tout le reste est recopié tel quel ; paquet inchangé si la valeur l'est déjà.
+pub fn apply_property(xml: &str, p: Property, values: &[String]) -> Result<String> {
+    let current = read_property(xml, p)?;
+    if current.as_deref().unwrap_or_default() == values {
+        return Ok(xml.to_string());
+    }
+    rewrite_property(xml, p, values)
+}
+
+fn rewrite_property(xml: &str, field: Property, items: &[String]) -> Result<String> {
     let mut reader = new_reader(xml);
     let mut writer = Writer::new(Vec::new());
     let mut scopes = Scopes::default();
@@ -1999,6 +2152,7 @@ pub fn apply_list(xml: &str, field: ListField, items: &[String]) -> Result<Strin
     let mut pending: Option<Event<'static>> = None;
     let mut child_indent = String::from("\n   ");
     let name = (field.uri, field.local, field.prefix);
+    let shape = field.shape;
     let write = |writer: &mut Writer<Vec<u8>>, event: Event<'_>| -> Result<()> {
         writer
             .write_event(event)
@@ -2058,6 +2212,32 @@ pub fn apply_list(xml: &str, field: ListField, items: &[String]) -> Result<Strin
                 // Premier niveau seulement : un rdf:Description niché dans une propriété
                 // prenait la place du principal, et la liste n'était jamais écrite.
                 if is_rdf(&scopes, &qname, "Description") && inside_description.is_none() {
+                    // Forme attribut (`photoshop:City="…"`) : retirée, l'élément la remplace.
+                    let attr_of = |key: &str| {
+                        !key.starts_with("xmlns")
+                            && scopes
+                                .resolve(key)
+                                .is_some_and(|(u, l)| u == field.uri && l == field.local)
+                    };
+                    let stale = e.attributes().flatten().any(|a| attr_of(a.key.as_ref()));
+                    let trimmed;
+                    let e = if stale {
+                        let mut start = BytesStart::new(qname.clone());
+                        for a in e.attributes().flatten() {
+                            if !attr_of(a.key.as_ref()) {
+                                start.push_attribute(a);
+                            }
+                        }
+                        trimmed = start;
+                        &trimmed
+                    } else {
+                        e
+                    };
+                    let event = if is_empty {
+                        Event::Empty(e.borrow())
+                    } else {
+                        Event::Start(e.borrow())
+                    };
                     let is_first = !done_first;
                     done_first = true;
                     if is_first {
@@ -2066,7 +2246,14 @@ pub fn apply_list(xml: &str, field: ListField, items: &[String]) -> Result<Strin
                     if is_empty {
                         if is_first && !items.is_empty() {
                             write(&mut writer, Event::Start(e.borrow()))?;
-                            write_seq(&mut writer, &scopes, name, items, &child_indent)?;
+                            write_property(
+                                &mut writer,
+                                &scopes,
+                                name,
+                                shape,
+                                items,
+                                &child_indent,
+                            )?;
                             write(&mut writer, Event::End(e.to_end()))?;
                         } else {
                             write(&mut writer, event.clone())?;
@@ -2088,7 +2275,7 @@ pub fn apply_list(xml: &str, field: ListField, items: &[String]) -> Result<Strin
             Event::End(ref e) => {
                 if inside_description == Some(depth) {
                     if first == Some(depth) && !items.is_empty() {
-                        write_seq(&mut writer, &scopes, name, items, &child_indent)?;
+                        write_property(&mut writer, &scopes, name, shape, items, &child_indent)?;
                     }
                     inside_description = None;
                 }

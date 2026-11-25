@@ -204,6 +204,7 @@ action-core-file-reveal = { $os ->
    *[other] Show in the file manager
 }
 action-core-file-edit = Open in the external editor
+action-core-file-iptc = Put the creation metadata (author, copyright…)
 action-core-file-copy = Copy to…
 action-core-file-export-report = Export report
 action-core-file-export = Export…
@@ -1015,6 +1016,12 @@ export-name-tip = A template, without extension: {"{"}name{"}"} (the image's nam
 export-no-developer = No development software found: base render by LibRaw.
 export-rapidraw-srgb = RapidRAW renders in sRGB: the “{ $color }” space is converted from sRGB.
 export-passthrough = Without recompression
+export-metadata = Metadata
+export-metadata-keep = As they are
+export-metadata-keep-tip = Those the render writes (camera, settings, date…), nothing added
+export-metadata-set-tip = This set of creation metadata added to each file (author, copyright…)
+export-metadata-strip = Remove all metadata
+export-metadata-strip-tip = No camera, date, GPS or author: only the image, its colour profile and its orientation, without recompression
 export-passthrough-tip = Original JPEG copied as is, camera render written as is (orientation in the EXIF). An image to shrink (preset size) is re-encoded.
 export-versions = { $n ->
     [one] Export the version
@@ -2240,3 +2247,37 @@ offload-phase-syncing = Writing to the disk
 offload-phase-verifying = Verifying
 offload-raw-only-grouped = The pairs are grouped: their JPEGs are needed. Uncheck "Group RAW and JPEG" to copy the RAW files only
 offload-group-pairs-raw-only = "RAW only" copies no JPEG: nothing to group. Uncheck it to group the pairs
+
+iptc-title = { $n ->
+    [one] Creation metadata: 1 image
+   *[other] Creation metadata: { $n } images
+}
+iptc-set = Set
+iptc-set-mine = My metadata
+iptc-replaced = replaces what is there
+iptc-where = A field already filled in the image is kept, except those that replace. A RAW gets them in its sidecar, a JPEG or a TIFF in the file, without recompression.
+iptc-apply = Apply
+iptc-edit = Edit the set…
+iptc-empty = This set is empty: fill it in (author, copyright…) in the settings.
+iptc-running = Creation metadata: { $n } images in progress…
+iptc-done = { $n ->
+    [0] Creation metadata: nothing to change ({ $same } images already up to date).
+    [one] Creation metadata put on 1 image.
+   *[other] Creation metadata put on { $n } images.
+}
+iptc-failed = Creation metadata: { $n } images not changed ({ $first }…)
+iptc-field-creator = Author
+iptc-field-copyright = Copyright
+iptc-field-usage-terms = Usage terms
+iptc-field-web-statement = Terms address
+iptc-field-credit = Credit
+iptc-field-title = Title
+iptc-field-caption = Caption
+iptc-field-city = City
+iptc-field-state = State
+iptc-field-country = Country
+settings-section-iptc = Creation metadata
+settings-section-iptc-sets = Creation metadata sets
+settings-section-iptc-sets-mine = Metadata set "My metadata"
+settings-section-iptc-set-user = Metadata set "{ $id }"
+kw-core-file-iptc = iptc author copyright rights caption title creator credit location

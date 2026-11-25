@@ -30,6 +30,16 @@ metadata-dimensions = Dimensions
 metadata-dimensions-value = { $width } × { $height }
 metadata-dimensions-note = { $mpx } Mpx
 metadata-file = Fichier
+metadata-iptc-creator = Auteur
+metadata-iptc-copyright = Copyright
+metadata-iptc-usage-terms = Conditions
+metadata-iptc-web-statement = Adresse des conditions
+metadata-iptc-credit = Crédit
+metadata-iptc-title = Titre
+metadata-iptc-caption = Légende
+metadata-iptc-city = Ville
+metadata-iptc-state = Région
+metadata-iptc-country = Pays
 metadata-size-kb = { $size } ko
 metadata-size-mb = { $size } Mo
 program-manual = Manuel
@@ -151,6 +161,8 @@ xmp-no-description = sidecar XMP sans rdf:Description (non modifié)
 notes-conflict = notes en désaccord entre ses sources (sidecars, image) : à trancher d'abord
 embed-unsupported = ce format d'image ne porte pas de notes (JPEG, PNG, WebP, TIFF, HEIC seulement)
 embed-io = notes dans l'image : { $error }
+strip-unreadable = fichier illisible : métadonnées non retirées
+strip-unsupported = format non pris en charge : métadonnées non retirées (JPEG, PNG ou TIFF seulement)
 embed-write-failed = écriture des notes dans l'image impossible ({ $error }) ; une copie complète est gardée à côté : { $copy }
 embed-verify-failed = notes relues dans l'image différentes de celles écrites
 embed-malformed = image mal formée, laissée telle quelle
@@ -335,6 +347,14 @@ cli-export-done = { $n ->
    *[other] { $n } fichiers écrits
 }
 cli-export-failed = { $failed } images sans fichier écrit (illisibles par Darktable ?)
+cli-iptc-done = { $n ->
+    [0] aucune image changée (sur { $total })
+    [one] 1 image sur { $total } a reçu les métadonnées
+   *[other] { $n } images sur { $total } ont reçu les métadonnées
+}
+cli-iptc-unknown = jeu de métadonnées inconnu : « { $id } » ([iptc.sets.<id>])
+cli-iptc-empty = le jeu « { $id } » est vide : remplissez-le dans [iptc.sets.{ $id }]
+cli-some-not-done = { $n } images non traitées
 cli-groups-header = image	suivante	distance	écart (s)	avec la pause
 cli-groups-summary = { $n } images, { $groups } groupes au seuil { $threshold } ({ $ms } ms par empreinte)
 cli-cache-cleared = cache vidé ({ $level })
@@ -436,6 +456,7 @@ cli-ph-name = nom
 cli-ph-card = carte
 cli-ph-root = racine
 cli-ph-preset = préréglage
+cli-ph-set = jeu
 cli-ph-reference = référence
 cli-ph-level = niveau
 cli-ph-file = fichier
@@ -453,6 +474,7 @@ cli-cmd-copy = Copie ou déplace les images (ou un dossier entier), leurs paires
 cli-cmd-reveal = Montre l'image dans le gestionnaire de fichiers.
 cli-cmd-edit = Ouvre les images dans l'éditeur externe ([files] editor).
 cli-cmd-export = Exporte les images avec un préréglage d'export (darktable s'il est installé, sinon LibRaw).
+cli-cmd-iptc = Pose les métadonnées de création d'un jeu ([iptc.sets.<id>] : auteur, copyright…) : un RAW dans son sidecar, un JPEG ou un TIFF dans le fichier, sans recompression.
 cli-cmd-adjust = Harmonise l'exposition et la balance des images sur la première (la référence) et écrit le résultat.
 cli-cmd-offload = Décharge une carte : copie vérifiée des nouvelles images vers le dossier de la séance.
 cli-cmd-exposure = Exposition de chaque image : marge avant saturation, pixels saturés et bouchés.

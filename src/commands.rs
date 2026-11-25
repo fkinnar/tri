@@ -227,6 +227,14 @@ pub const COMMANDS: &[Command] = &[
         example: "tri --export web <images> --dry-run",
     },
     Command {
+        id: "iptc",
+        theme: Theme::Export,
+        syntax: "tri --iptc <set> <image>…|<folder> [--dry-run]",
+        main: &["--iptc"],
+        options: opts!["--dry-run"],
+        example: "tri --iptc mine <images> --dry-run",
+    },
+    Command {
         id: "adjust",
         theme: Theme::Export,
         syntax: "tri --adjust <reference> <image>… --to <folder> [--ev EV|auto] [--neutral auto|x,y,w,h] [--kelvin K[,tint]|daylight|cloudy|shade|tungsten|fluorescent|flash] [--creative-ev EV] [--warmth EV] [--tint EV] [--contrast %] [--saturation %] [--mono neutral|red|orange|yellow|green|blue|r,g,b] [--embedded] [--side N]",

@@ -145,6 +145,7 @@ pub fn navigate(
         | Action::FileShowInFolder
         | Action::FileLocate
         | Action::FileEdit
+        | Action::FileIptc
         | Action::FileCopy
         | Action::FileMove
         | Action::FileDeleteStack

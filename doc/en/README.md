@@ -46,6 +46,7 @@ exists.
 | [develop.md](develop.md) | Module `tri::develop`: rendering by darktable (plugin driving `darktable-cli`) |
 | [versions.md](versions.md) | Module `tri::versions`: crops of a photo (versions), stored in the XMP |
 | [export.md](export.md) | Module `tri::export`: JPEG / TIFF / PNG export with presets (darktable), no ProPhoto in 8 bits; `tri::export_log`: export report |
+| [export.md](export.md) | … including `tri::strip`: removing the metadata of exported files (without recompression) |
 | [fuzzy.md](fuzzy.md) | Module `tri::fuzzy`: fuzzy search (filter by name, folders, help) |
 | [overlay.md](overlay.md) | Module `tri::overlay`: overlays (grids, text, logo, format), plugins written in Rust or TOML files |
 | [send.md](send.md) | Module `tri::send`: send plugins (AirDrop) |
@@ -63,6 +64,7 @@ exists.
 | [pp3.md](pp3.md) | Module `tri::pp3`: ratings in RawTherapee (`.pp3`) and ART (`.arp`) profiles, same format |
 | [sidecars.md](sidecars.md) | Module `tri::sidecars`: the formats of the notes sidecars (XMP, `.rrdata`, `.pp3`, `.arp`), all written, the missing ones created according to `[sidecars]` or on demand |
 | [embedded.md](embedded.md) | Module `tri::embedded`: ratings written into the images themselves (JPEG, PNG, WebP, TIFF, HEIC), read without a sidecar, written and read back on demand |
+| [iptc.md](iptc.md) | Module `tri::iptc`: creation metadata (author, copyright…) as XMP, by sets, when exporting and on demand (#277) |
 | [store.md](store.md) | Module `tri::store`: a folder's data (filters, sliders, covers, ratings memory) in its `.tri/` or on the machine, one switch with the cache |
 | [reset.md](reset.md) | Module `tri::reset`: resetting a folder (cache, tri's data, ratings reset in the sidecars, versions), one dialog with checkboxes |
 | [reconcile.md](reconcile.md) | Module `tri::reconcile`: ratings coming from several sources (sidecars, image), field by field merge and conflicts, `.tri/notes.json` memory |

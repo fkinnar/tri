@@ -388,7 +388,25 @@ son développement, sans rien dire. Il est maintenant rendu par son logiciel
   (`Render::Developed(RawTherapee | Art)`) passe aussi par là ; en ligne de commande,
   RawTherapee et ART rendent leurs développements s'ils sont trouvés.
 
-## Créer un profil depuis l'interface
+## Métadonnées des fichiers écrits (`metadata`, 25/11/2026)
+
+Clé `metadata` d'un préréglage, et liste « Métadonnées » de la boîte d'export (réglée sur
+celle du préréglage, modifiable pour cette fois) :
+
+- `""` : telles que le rendu les écrit (darktable, LibRaw, copie sans recompression) ;
+- l'identifiant d'un jeu de métadonnées de création : ajouté à chaque fichier écrit
+  (voir [iptc.md](iptc.md)) ;
+- `"strip"` (`export::STRIP`) : **toutes retirées** (`tri::strip`, idée de
+  l'utilisateur : un export pour le web, quelques octets de moins, ni boîtier, ni date, ni
+  position GPS). Sans recompression : seuls les blocs de métadonnées partent, les pixels
+  restent octet pour octet. Gardés : le **profil couleur** (ICC) et l'**orientation**
+  (remise dans un EXIF minimal). JPEG : segments EXIF, XMP, IPTC, commentaires, aperçus
+  MPF après la fin de l'image ; PNG : `eXIf`, `tEXt`, `zTXt`, `iTXt`, `tIME` ; TIFF :
+  balises de description de l'IFD0 (boîtier, logiciel, date, auteur, droits, XMP, IPTC,
+  EXIF, GPS), leurs données mises à zéro dans le fichier. Autre format : erreur dans le
+  bilan de l'export.
+
+
 
 Demandé le 19/10/2026 : plus besoin d'éditer le fichier. Dans la fenêtre de réglages
 (`Ctrl+,`), une seule entrée **« Profils d'export »** à gauche (retour du 20/10/2026 : une

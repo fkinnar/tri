@@ -48,6 +48,7 @@ pub mod history;
 pub mod i18n;
 pub mod index;
 pub mod io_watch;
+pub mod iptc;
 pub mod jpeg;
 #[cfg(target_os = "linux")]
 mod keyring;
@@ -83,6 +84,7 @@ pub mod sidecars;
 pub mod similarity;
 pub mod sort;
 pub mod store;
+pub mod strip;
 pub mod update;
 pub mod versions;
 pub mod watch;

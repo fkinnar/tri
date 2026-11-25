@@ -46,6 +46,7 @@ existe.
 | [develop.md](develop.md) | Module `tri::develop` : rendu par darktable (plugin qui pilote `darktable-cli`) |
 | [versions.md](versions.md) | Module `tri::versions` : recadrages d'une photo (versions), stockés dans le XMP |
 | [export.md](export.md) | Module `tri::export` : export JPEG / TIFF / PNG par préréglages (darktable), pas de ProPhoto en 8 bits ; `tri::export_log` : rapport d'export |
+| [export.md](export.md) | … dont `tri::strip` : retrait des métadonnées des fichiers exportés (sans recompression) |
 | [fuzzy.md](fuzzy.md) | Module `tri::fuzzy` : recherche floue (filtre par nom, dossiers, aide) |
 | [overlay.md](overlay.md) | Module `tri::overlay` : superpositions (grilles, texte, logo, format), plugins écrits en Rust ou fichiers TOML |
 | [send.md](send.md) | Module `tri::send` : plugins d'envoi (AirDrop) |
@@ -63,6 +64,7 @@ existe.
 | [pp3.md](pp3.md) | Module `tri::pp3` : notes dans les profils de RawTherapee (`.pp3`) et d'ART (`.arp`), même format |
 | [sidecars.md](sidecars.md) | Module `tri::sidecars` : les formats de sidecars de notes (XMP, `.rrdata`, `.pp3`, `.arp`), tous écrits, les manquants créés selon `[sidecars]` ou à la demande |
 | [embedded.md](embedded.md) | Module `tri::embedded` : notes inscrites dans les images elles-mêmes (JPEG, PNG, WebP, TIFF, HEIC), lues sans sidecar, inscrites et relues sur demande |
+| [iptc.md](iptc.md) | Module `tri::iptc` : métadonnées de création (auteur, copyright…) en XMP, par jeux, à l'export et sur demande (#277) |
 | [store.md](store.md) | Module `tri::store` : données de tri d'un dossier (filtres, curseurs, couvertures, mémoire des notes) dans son `.tri/` ou sur la machine, un seul interrupteur avec le cache |
 | [reset.md](reset.md) | Module `tri::reset` : réinitialiser un dossier (cache, données de tri, notes remises à zéro dans les sidecars, versions), une boîte à cases |
 | [reconcile.md](reconcile.md) | Module `tri::reconcile` : notes venues de plusieurs sources (sidecars, image), fusion champ par champ et conflits, mémoire `.tri/notes.json` |
