@@ -50,16 +50,21 @@
 # replaced for yourself with [gui] leader in the configuration file.
 leader = "Ctrl+b"
 
-# Loupe: while this key is held, the image at 100 % under the pointer (fit view and
-# comparison). A key, or "shift", "ctrl", "alt"; "none": no loupe. It must not be bound
-# to anything else. Can be replaced for yourself with [gui.zoom] loupe_key.
-loupe = "m"
+# Loupe held: while this key is held, the image at 100 % under the pointer (fit view and
+# comparison). A key, or "shift", "ctrl", "alt"; "none": none. It must not be bound to
+# anything else. Can be replaced for yourself with [gui.zoom] loupe_key. None by default
+# since 2026-11-25: "z m" turns the loupe on and off (below), "m" went to the rating
+# steps ("m l"…).
+loupe = "none"
 
 [common]
 
 # --- Basics ---
 "core.view.open" = ["Enter"]
-"core.view.zoom" = ["z"]
+# z z: zoom to 100 % (from the grid too), z z again or Escape back where you were (grid
+# or fitted full screen); z m: the loupe on, until z m again or Escape (2026-11-25).
+"core.view.zoom" = ["z z"]
+"core.view.loupe" = ["z m"]
 "core.view.back" = ["Escape"]
 # F1: every action, with a search. "?": the shortcuts of where you are (grid, full
 # screen, a panel…), over the screen. "?" comes with or without Shift depending on the
@@ -118,6 +123,13 @@ loupe = "m"
 "core.flag.accept" = ["Shift+p"]
 "core.flag.reject" = ["Shift+x"]
 "core.flag.none" = ["Shift+u"]
+# m (marks), then the direction of hjkl: one star more (l) or less (h), the next (k) or
+# previous (j) colour in the order of [sort] color_order (none, then the first one…).
+# Same keys from one pass to the next while sorting (2026-11-25).
+"core.rate.star.up" = ["m l"]
+"core.rate.star.down" = ["m h"]
+"core.rate.color.up" = ["m k"]
+"core.rate.color.down" = ["m j"]
 
 # --- Selection and comparison ---
 # Space selects; Shift+Space selects a range, like the visual mode of vim. Escape also
@@ -193,6 +205,9 @@ loupe = "m"
 "core.filter.stars.5" = ["f 5"]
 # Comparison: at least, exactly, at most (issue #165).
 "core.filter.stars.op" = ["f ="]
+# The highest stars among the photos shown ("*" like a star), the comparison kept; the
+# highest colour in the order of [sort] color_order (Shift + "o", the colour filter).
+"core.filter.stars.top" = ["f *"]
 "core.filter.flag.accepted" = ["f p", "f Shift+p"]
 "core.filter.flag.not_rejected" = ["f u", "f Shift+u"]
 "core.filter.flag.rejected" = ["f x", "f Shift+x"]
@@ -201,6 +216,7 @@ loupe = "m"
 "core.filter.color.green" = ["f 8"]
 "core.filter.color.blue" = ["f 9"]
 "core.filter.color.purple" = ["f °", "f ,", "f ."]
+"core.filter.color.top" = ["f Shift+o"]
 "core.filter.colors.all" = []
 "core.filter.clear" = ["f d"]
 "core.filter.blurry" = ["f b"]

@@ -96,6 +96,8 @@ pub fn navigate(
         Action::FilterCycle
         | Action::FilterStars(_)
         | Action::FilterStarsOp
+        | Action::FilterStarsTop
+        | Action::FilterColorTop
         | Action::FilterFlag(_)
         | Action::FilterColor(_)
         | Action::FilterColorsAll
@@ -304,7 +306,9 @@ pub fn navigate(
         | Action::AdjustPaste
         | Action::Quit
         | Action::Stars(_)
+        | Action::StarsStep(_)
         | Action::Color(_)
+        | Action::ColorStep(_)
         | Action::Flag(_) => selected,
     }
 }

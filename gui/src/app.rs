@@ -2027,6 +2027,12 @@ pub struct TriApp {
     /// Loupe : touche maintenue depuis…, et loupe affichée.
     loupe_since: Option<Instant>,
     loupe_on: bool,
+    /// Loupe allumée par `z m` (25/11/2026, idée de l'utilisateur), jusqu'à `z m` ou
+    /// Échap : comme la touche de loupe tenue.
+    loupe_toggled: bool,
+    /// Zoom lancé depuis la grille (`z z` sur une vignette) : `z z` ou Échap y ramènent
+    /// (25/11/2026) ; sinon, au plein écran ajusté.
+    zoom_from_grid: bool,
     /// Loupe placée au clavier (touches de navigation, la touche de loupe maintenue) :
     /// l'image et le point visé, relatif à l'image (0 à 1) ; `None` : sous le pointeur.
     loupe_point: Option<(usize, Vec2)>,
@@ -3077,6 +3083,8 @@ impl TriApp {
             fit_scale: 1.0,
             loupe_since: None,
             loupe_on: false,
+            loupe_toggled: false,
+            zoom_from_grid: false,
             loupe_point: None,
             loupe_rects: HashMap::new(),
             loupe_sizes: HashMap::new(),
@@ -14098,9 +14106,11 @@ impl TriApp {
             // Boîte de notation : seules les notes (pour son image) et la fermeture.
             if let Some((path, _)) = &self.rating_dialog {
                 match action {
-                    Action::Stars(_) | Action::Color(_) | Action::Flag(_) => {
-                        self.rate_path(path.clone(), action)
-                    }
+                    Action::Stars(_)
+                    | Action::StarsStep(_)
+                    | Action::Color(_)
+                    | Action::ColorStep(_)
+                    | Action::Flag(_) => self.rate_path(path.clone(), action),
                     _ if action.works_over_overlay() => self.perform(ctx, action),
                     _ => {}
                 }
@@ -14193,9 +14203,7 @@ impl TriApp {
             }
             // Sans la loupe tenue : le zoom (un seul couple de touches, la touche tenue
             // choisit ce qu'il règle ; décidé le 07/11/2026).
-            Action::LoupeZoomIn | Action::LoupeZoomOut
-                if !ctx.input(|i| self.keymap.loupe().held(i)) =>
-            {
+            Action::LoupeZoomIn | Action::LoupeZoomOut if !ctx.input(|i| self.loupe_wanted(i)) => {
                 let zoom = if action == Action::LoupeZoomIn {
                     Action::ZoomIn
                 } else {
@@ -14219,10 +14227,20 @@ impl TriApp {
                 self.loupe_entry = Some((String::new(), Instant::now()));
                 self.notice = Some((self.entry_notice("_"), false));
             }
-            // La loupe se tient (palette, aide) : rappeler sa touche.
+            // Allumer / éteindre la loupe (`z m`, 25/11/2026) : elle reste jusqu'à `z m` ou
+            // Échap.
             Action::Loupe => {
-                let keys = self.keys_text(Action::Loupe);
-                self.notice = Some((t!("loupe-hold", keys = keys), false));
+                self.loupe_toggled = !self.loupe_toggled;
+                // Allumée : au centre de l'image sélectionnée (retour du 25/11/2026 : au
+                // clavier, elle venait sous le pointeur, sur une autre vignette) ; la
+                // souris qui bouge la reprend.
+                self.loupe_point = self
+                    .loupe_toggled
+                    .then_some((self.selected, vec2(0.5, 0.5)));
+                if !self.loupe_toggled {
+                    self.loupe_on = false;
+                    self.loupe_since = None;
+                }
             }
             Action::ReviewDevelopments => {
                 if let Some(why) = self.action_unusable(action) {
@@ -14492,6 +14510,12 @@ impl TriApp {
                     self.help = false;
                 } else if self.rating_dialog.is_some() {
                     self.rating_dialog = None;
+                } else if self.loupe_toggled {
+                    // Loupe allumée (`z m`) : l'éteindre d'abord.
+                    self.perform(ctx, Action::Loupe);
+                } else if self.zoom.is_some() && matches!(self.mode, Mode::View | Mode::Compare) {
+                    // Zoomé : retour d'où l'on venait, grille ou plein écran ajusté.
+                    self.unzoom();
                 } else if self.selection.is_visual() {
                     self.selection.end_visual(false);
                 } else if self.mode == Mode::Compare {
@@ -14629,13 +14653,20 @@ impl TriApp {
                 self.peaking = true;
             }
             Action::ToggleZoom => {
+                // Déjà zoomé : retour d'où l'on venait (grille, ou plein écran ajusté).
+                if self.zoom.is_some() && matches!(self.mode, Mode::View | Mode::Compare) {
+                    self.unzoom();
+                    return;
+                }
                 // Depuis la grille : plein écran directement à 1:1 (vérifier vite la netteté
                 // d'une vignette ; Échap ramène à la grille).
-                if self.mode == Mode::Grid && !self.files.is_empty() {
+                let from_grid = self.mode == Mode::Grid && !self.files.is_empty();
+                if from_grid {
                     self.mode = Mode::View;
                     self.zoom = None;
                     self.tell_shown();
                 }
+                self.zoom_from_grid = from_grid;
                 if matches!(self.mode, Mode::View | Mode::Compare) {
                     self.zoom_scale = 1.0;
                     self.zoom = match self.zoom {
@@ -14999,7 +15030,11 @@ impl TriApp {
             }
             Action::NavUp | Action::NavDown | Action::NavPageUp | Action::NavPageDown
                 if self.mode == Mode::View => {}
-            Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
+            Action::Stars(_)
+            | Action::StarsStep(_)
+            | Action::Color(_)
+            | Action::ColorStep(_)
+            | Action::Flag(_) => self.rate_selected(action),
             Action::ToggleAutoAdvance => self.auto_advance = !self.auto_advance,
             Action::FilterCount => self.filter_count = !self.filter_count,
             Action::FilterRestart => {
@@ -15127,6 +15162,50 @@ impl TriApp {
             }
             Action::FilterStars(stars) => {
                 self.notes_rule.stars = (stars > 0).then(|| self.stars_op.rule(stars));
+                self.apply_filter();
+            }
+            Action::FilterStarsTop => {
+                // La plus haute note des photos que les autres filtres laissent (sans le
+                // filtre d'étoiles en cours : « = 2 » cacherait les 3 étoiles).
+                let kept = self.notes_rule.stars.take();
+                self.refilter(Reveal::Minimal);
+                let top = self
+                    .files
+                    .iter()
+                    .map(|f| self.folder.notes.notes(&f.path).stars)
+                    .max()
+                    .unwrap_or(0);
+                if top == 0 {
+                    // Rien à viser : le filtre reste tel quel.
+                    self.notes_rule.stars = kept;
+                    self.hint = Some(t!("filter-stars-top-none"));
+                    self.apply_filter();
+                } else {
+                    self.perform(ctx, Action::FilterStars(top));
+                }
+            }
+            Action::FilterColorTop => {
+                let order = self.settings.sort.color_order.clone();
+                let kept = self.notes_rule.colors.take();
+                self.refilter(Reveal::Minimal);
+                let top = self
+                    .files
+                    .iter()
+                    .filter_map(|f| self.folder.notes.notes(&f.path).color_rank(&order))
+                    .max();
+                match top {
+                    // Seulement la couleur : « et » / « ou » et « sans couleur » restent.
+                    Some(rank) => {
+                        let mut rule = kept.unwrap_or_default();
+                        rule.any_of = vec![order[rank]];
+                        rule.all = self.colors_all;
+                        self.notes_rule.colors = Some(rule);
+                    }
+                    None => {
+                        self.notes_rule.colors = kept;
+                        self.hint = Some(t!("filter-color-top-none"));
+                    }
+                }
                 self.apply_filter();
             }
             Action::FilterStarsOp => {
@@ -15592,6 +15671,7 @@ impl TriApp {
     fn rate_many(&mut self, targets: &[PathBuf], action: Action) {
         let before = tri::history::snapshot(&self.folder.notes, targets);
         let multiple = self.settings.xmp.multiple_colors;
+        let order = self.settings.sort.color_order.clone();
         let add = match action {
             Action::Color(c) => !self.folder.notes.notes(&targets[0]).has_color(c),
             _ => true,
@@ -15611,6 +15691,8 @@ impl TriApp {
                     Action::Color(color) if n.has_color(color) != add => {
                         n.toggle_color(color, multiple)
                     }
+                    Action::StarsStep(up) => n.step_stars(up),
+                    Action::ColorStep(up) => n.step_color(&order, up, multiple),
                     Action::Flag(flag) => n.flag = flag,
                     _ => {}
                 },
@@ -15643,6 +15725,7 @@ impl TriApp {
         }
         let before = tri::history::snapshot(&self.folder.notes, std::slice::from_ref(&path));
         let multiple = self.settings.xmp.multiple_colors;
+        let order = self.settings.sort.color_order.clone();
         // Affichée tout de suite, écrite en fond (`note_writes`) : un échec revient à
         // l'image suivante, avec ce qui est vraiment sur le disque.
         let result = self.folder.notes.prepare_edit(
@@ -15650,6 +15733,8 @@ impl TriApp {
             |n| match action {
                 Action::Stars(stars) => n.set_stars(stars),
                 Action::Color(color) => n.toggle_color(color, multiple),
+                Action::StarsStep(up) => n.step_stars(up),
+                Action::ColorStep(up) => n.step_color(&order, up, multiple),
                 Action::Flag(flag) => n.flag = flag,
                 _ => {}
             },
@@ -16056,7 +16141,11 @@ impl TriApp {
                 }
             }
             Action::Compare => self.leave_compare(),
-            Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
+            Action::Stars(_)
+            | Action::StarsStep(_)
+            | Action::Color(_)
+            | Action::ColorStep(_)
+            | Action::Flag(_) => self.rate_selected(action),
             Action::FileRename
             | Action::FileDelete
             | Action::FileReveal
@@ -19248,8 +19337,7 @@ impl TriApp {
     /// cran (`[gui.zoom] loupe_wheel_step` points de défilement), et rien d'autre ne
     /// défile (la grille reste en place).
     fn loupe_wheel_input(&mut self, ctx: &egui::Context) {
-        let loupe = self.keymap.loupe();
-        if self.zoom.is_some() || !ctx.input(|i| loupe.held(i)) {
+        if self.zoom.is_some() || !ctx.input(|i| self.loupe_wanted(i)) {
             self.loupe_wheel = 0.0;
             return;
         }
@@ -19289,6 +19377,22 @@ impl TriApp {
         }
     }
 
+    /// Quitte le zoom : la grille s'il y a été lancé, sinon la vue ajustée.
+    fn unzoom(&mut self) {
+        self.zoom = None;
+        self.zoom_anchor = None;
+        if std::mem::take(&mut self.zoom_from_grid) && self.mode == Mode::View {
+            self.mode = Mode::Grid;
+            self.reveal = Some(Reveal::Minimal);
+        }
+    }
+
+    /// Vrai si la loupe est demandée : allumée (`z m`), ou sa touche tenue (`[gui.zoom]
+    /// loupe_key`, aucune par défaut depuis le 25/11/2026).
+    fn loupe_wanted(&self, input: &egui::InputState) -> bool {
+        self.loupe_toggled || self.keymap.loupe().held(input)
+    }
+
     /// Réglage d'échelle de la barre du bas (07/11/2026, retour de l'utilisateur : un seul
     /// pour le zoom et la loupe) : une icône, −, la valeur, + (posés de droite à gauche).
     /// La touche de loupe tenue (et en grille, sans zoom), il règle la loupe et l'icône
@@ -19297,11 +19401,10 @@ impl TriApp {
     /// valeur la fait taper (Entrée applique, Échap annule). L'action cliquée, s'il y en a
     /// une.
     fn scale_control(&mut self, ui: &mut Ui, icon: f32) -> Option<Action> {
-        let key = self.keymap.loupe();
-        let held = ui.input(|i| key.held(i));
+        let held = ui.input(|i| self.loupe_wanted(i));
         let loupe = match &self.scale_edit {
             Some(edit) => edit.loupe,
-            None => key != crate::settings::LoupeKey::None && (self.mode == Mode::Grid || held),
+            None => self.mode == Mode::Grid || held,
         };
         let percent = |scale: f32| (scale * 100.0).round() as u32;
         let hand = egui::CursorIcon::PointingHand;
@@ -19602,7 +19705,7 @@ impl TriApp {
         // + / - (zoom), la loupe tenue : son grossissement (comme Ctrl+K / Ctrl+J).
         if matches!(action, Action::ZoomIn | Action::ZoomOut)
             && self.zoom.is_none()
-            && ctx.input(|i| self.keymap.loupe().held(i))
+            && ctx.input(|i| self.loupe_wanted(i))
         {
             let up = if action == Action::ZoomIn {
                 Action::LoupeZoomIn
@@ -19623,15 +19726,15 @@ impl TriApp {
             Action::PanDown => (0.0, 1.0, true),
             _ => return false,
         };
-        let loupe = self.keymap.loupe();
-        if self.zoom.is_some() || !ctx.input(|i| loupe.held(i)) {
+        if self.zoom.is_some() || !ctx.input(|i| self.loupe_wanted(i)) {
             return false;
         }
-        // L'image sous la loupe (comparaison : celle visée), sinon l'image affichée.
-        let index = if self.loupe_on {
-            self.loupe_index
-        } else {
-            self.selected
+        // L'image placée au clavier, sinon celle sous la loupe (comparaison : celle
+        // visée), sinon l'image affichée.
+        let index = match self.loupe_point {
+            Some((i, _)) => i,
+            None if self.loupe_on => self.loupe_index,
+            None => self.selected,
         };
         let Some(&rect) = self.loupe_rects.get(&index) else {
             return true;
@@ -19681,8 +19784,7 @@ impl TriApp {
         image_rect: Option<Rect>,
     ) {
         let z = self.gui.zoom.clone();
-        let loupe = self.keymap.loupe();
-        let held = ctx.input(|i| loupe.held(i));
+        let held = ctx.input(|i| self.loupe_wanted(i));
         // La souris qui bouge reprend la loupe au clavier.
         if !held || ctx.input(|i| i.pointer.delta() != Vec2::ZERO) {
             self.loupe_point = None;
@@ -24080,7 +24182,6 @@ impl TriApp {
                 // étroite : les notes d'abord).
                 let scale_room = 4.0 * (icon + ui.spacing().item_spacing.x);
                 if self.mode == Mode::Grid
-                    && self.keymap.loupe() != crate::settings::LoupeKey::None
                     && ui.available_width() - self.gui.dialogs.spacing >= scale_room
                 {
                     ui.separator();
@@ -24104,9 +24205,13 @@ impl TriApp {
             // est une action ordinaire. Plus de liste des actions à exécuter : chaque
             // bouton oublié partait dans la notation et ne faisait rien (#240, puis le
             // 07/11/2026 : − et + de la loupe).
-            Some(action @ (Action::Stars(_) | Action::Color(_) | Action::Flag(_))) => {
-                self.rate_selected(action)
-            }
+            Some(
+                action @ (Action::Stars(_)
+                | Action::StarsStep(_)
+                | Action::Color(_)
+                | Action::ColorStep(_)
+                | Action::Flag(_)),
+            ) => self.rate_selected(action),
             Some(action) => {
                 let ctx = ui.ctx().clone();
                 self.perform(&ctx, action);
@@ -24443,6 +24548,15 @@ impl TriApp {
         self.apply_filter();
     }
 
+    /// Bouton « au plus haut » de la barre des filtres ; vrai s'il est cliqué.
+    fn top_button(&self, ui: &mut Ui, size: f32, action: Action) -> bool {
+        let (rect, response) =
+            marks::clickable_named(ui, size, &action.label(), &self.action_tip(action));
+        let color = ui.style().interact(&response).fg_stroke.color;
+        marks::to_top(ui.painter(), rect, color);
+        response.clicked()
+    }
+
     fn filter_bar(&mut self, ui: &mut Ui) {
         let mut clicked: Vec<Action> = Vec::new();
         let mut flag_toggle: Option<Flag> = None;
@@ -24480,6 +24594,10 @@ impl TriApp {
                 if response.clicked() {
                     clicked.push(Action::FilterStars(if n == current { 0 } else { n }));
                 }
+            }
+            // Les mieux notées (25/11/2026) : la plus haute note affichée, même comparaison.
+            if self.top_button(ui, size, Action::FilterStarsTop) {
+                clicked.push(Action::FilterStarsTop);
             }
             ui.separator();
             // Drapeaux : trois boutons combinables (acceptées, neutres, rejetées ;
@@ -24542,6 +24660,10 @@ impl TriApp {
                 if response.clicked() {
                     clicked.push(Action::FilterColor(color));
                 }
+            }
+            // La couleur la plus haute de l'ordre des couleurs, parmi les photos affichées.
+            if self.top_button(ui, size, Action::FilterColorTop) {
+                clicked.push(Action::FilterColorTop);
             }
             ui.separator();
             // Interrupteurs des filtres sur l'analyse et les développements : triangle
@@ -24924,14 +25046,18 @@ impl TriApp {
     /// sélectionnée, dessinée par-dessus les autres et coupée à la grille.
     fn grid_loupe(&mut self, ctx: &egui::Context, area: Rect) {
         let pointer = ctx.input(|i| i.pointer.hover_pos());
-        let target = self
-            .grid_images
-            .iter()
-            .find(|(_, r)| pointer.is_some_and(|p| r.contains(p)))
+        // Placée au clavier (`z m`, touches de navigation) : cette vignette, même si le
+        // pointeur est sur une autre ; sinon celle sous le pointeur, puis la sélectionnée.
+        let keyboard = self
+            .loupe_point
+            .and_then(|(k, _)| self.grid_images.iter().find(|(i, _)| *i == k));
+        let target = keyboard
             .or_else(|| {
-                let keyboard = self.loupe_point.map(|(i, _)| i).unwrap_or(self.selected);
-                self.grid_images.iter().find(|(i, _)| *i == keyboard)
+                self.grid_images
+                    .iter()
+                    .find(|(_, r)| pointer.is_some_and(|p| r.contains(p)))
             })
+            .or_else(|| self.grid_images.iter().find(|(i, _)| *i == self.selected))
             .copied();
         let painter = ctx
             .layer_painter(egui::LayerId::new(
@@ -28099,7 +28225,6 @@ impl TriApp {
                                                     // Lien vers les réglages (15/11/2026) : au survol
                                                     // de la ligne, changer ce raccourci.
                                                     if let Some(action) = Action::from_id(id)
-                                                        && action.bindable()
                                                         && ui.rect_contains_pointer(row)
                                                         && ui
                                                             .small_button(t!("help-edit-keys"))
@@ -28871,7 +28996,9 @@ fn uses_cursor(action: Action) -> bool {
             | Action::NavPageDown
             | Action::Open
             | Action::Stars(_)
+            | Action::StarsStep(_)
             | Action::Color(_)
+            | Action::ColorStep(_)
             | Action::Flag(_)
             | Action::FileRename
             | Action::FileDelete
@@ -28897,7 +29024,9 @@ fn acts_on_selection(action: Action) -> bool {
     matches!(
         action,
         Action::Stars(_)
+            | Action::StarsStep(_)
             | Action::Color(_)
+            | Action::ColorStep(_)
             | Action::Flag(_)
             | Action::FileRename
             | Action::FileDelete
@@ -31293,6 +31422,14 @@ mod tests {
         // Notes lues en fond (issue n° 15) : les tests partent, comme l'utilisateur après
         // un instant, d'un dossier dont les notes sont connues.
         run_until(&mut harness, |app| app.loading.is_none());
+        // Loupe tenue sur F3 (libre) : aucune par défaut depuis le 25/11/2026 (`z m`
+        // l'allume), les tests de la loupe tenue la gardent.
+        let keymap = harness
+            .state()
+            .keymap
+            .clone()
+            .with_loupe(crate::settings::LoupeKey::Key(Key::F3));
+        harness.state_mut().keymap = keymap;
         (harness, dir)
     }
 
@@ -31367,7 +31504,7 @@ mod tests {
             crate::actions::Keymap::from_profiles(&[crate::actions::Profile::Vim])
                 .with_leader("Ctrl+b")
                 .unwrap()
-                .with_loupe(crate::settings::LoupeKey::Key(Key::M));
+                .with_loupe(crate::settings::LoupeKey::Key(Key::F3));
     }
 
     #[test]
@@ -31847,7 +31984,9 @@ mod tests {
         h.run_steps(3);
         press(&mut h, Key::Questionmark, Modifiers::SHIFT);
         h.run_steps(2);
-        let zoom = Action::ToggleZoom.label();
+        // La carte de netteté : en plein écran seulement (le zoom vaut aussi dans la grille
+        // depuis le 25/11/2026).
+        let zoom = Action::TogglePeaking.label();
         let stars = Action::Stars(3).label();
         let shown =
             |h: &Harness<'_, TriApp>, label: &str| h.query_all_by_label(label).next().is_some();
@@ -31883,9 +32022,9 @@ mod tests {
         // `?` ferme pendant qu'on tape ; rouverte, la recherche est vide.
         press(&mut h, Key::Questionmark, Modifiers::SHIFT);
         h.run_steps(2);
-        type_text(&mut h, "zo");
+        type_text(&mut h, "nett");
         h.run_steps(2);
-        assert!(!shown(&h, &zoom), "pas de zoom dans la grille");
+        assert!(!shown(&h, &zoom), "pas de netteté dans la grille");
         press(&mut h, Key::Questionmark, Modifiers::SHIFT);
         assert!(h.state().help_here.is_none());
         press(&mut h, Key::Questionmark, Modifiers::SHIFT);
@@ -36846,7 +36985,7 @@ mod tests {
         assert_eq!(h.state().mode, Mode::Compare);
         h.state_mut().gui.zoom.loupe_delay_ms = 0;
         h.event(UiEvent::Key {
-            key: Key::M,
+            key: Key::F3,
             physical_key: None,
             pressed: true,
             repeat: false,
@@ -36892,7 +37031,7 @@ mod tests {
         run_until(&mut h, |app| app.loupe_rects.contains_key(&app.selected));
         h.state_mut().gui.zoom.loupe_delay_ms = 0;
         h.event(UiEvent::Key {
-            key: Key::M,
+            key: Key::F3,
             physical_key: None,
             pressed: true,
             repeat: false,
@@ -36919,7 +37058,7 @@ mod tests {
         assert!(h.state().loupe_on, "la loupe est là, au point visé");
         // Touche relâchée : les flèches changent d'image de nouveau.
         h.event(UiEvent::Key {
-            key: Key::M,
+            key: Key::F3,
             physical_key: None,
             pressed: false,
             repeat: false,
@@ -36939,7 +37078,7 @@ mod tests {
         assert_eq!(h.state().mode, Mode::Grid);
         h.state_mut().gui.zoom.loupe_delay_ms = 0;
         h.event(UiEvent::Key {
-            key: Key::M,
+            key: Key::F3,
             physical_key: None,
             pressed: true,
             repeat: false,
@@ -37021,7 +37160,7 @@ mod tests {
         }
         let plus = found.expect("une vignette sous la barre");
         h.event(UiEvent::Key {
-            key: Key::M,
+            key: Key::F3,
             physical_key: None,
             pressed: true,
             repeat: false,
@@ -37229,7 +37368,7 @@ mod tests {
         // Paliers, la loupe tenue : Ctrl+K au suivant (400 %), Ctrl+J au précédent (sans
         // elle, c'est le zoom, 07/11/2026).
         h.event(UiEvent::Key {
-            key: Key::M,
+            key: Key::F3,
             physical_key: None,
             pressed: true,
             repeat: false,
@@ -37388,7 +37527,11 @@ mod tests {
         h.run_steps(5);
         assert!(h.state().zoom.is_some());
         assert!(h.query_by_label(&t!("compare-no-full")).is_some());
-        // Revenu à la grille : plus rien d'écarté, les 1:1 pourront revenir.
+        // Échap dézoome d'abord (25/11/2026), puis ramène à la grille : plus rien
+        // d'écarté, les 1:1 pourront revenir.
+        act(&mut h, Action::Back);
+        assert!(h.state().zoom.is_none());
+        assert_eq!(h.state().mode, Mode::Compare);
         act(&mut h, Action::Back);
         h.run_steps(3);
         assert!(h.state().over_budget.is_empty());
@@ -37591,6 +37734,7 @@ mod tests {
         assert!(path.ends_with("img0.jpg"));
         assert_eq!(t, threshold, "au centre : le seuil des réglages");
         press(&mut h, Key::Z, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::NONE);
         run_until(&mut h, |s| {
             s.peaking_texture
                 .as_ref()
@@ -37618,6 +37762,7 @@ mod tests {
             &[(Key::P, Modifiers::NONE), (Key::K, Modifiers::NONE)],
         );
         assert_eq!(h.state().blur_strictness, 0.0, "retour juste au centre");
+        press(&mut h, Key::Z, Modifiers::NONE);
         press(&mut h, Key::Z, Modifiers::NONE);
         // Ctrl+P : couleur suivante, en boucle sur les couleurs configurées.
         let n = h.state().gui.sharpness.colors.len();
@@ -37966,7 +38111,7 @@ mod tests {
         h.state_mut().mouse_active = true;
         for repeat in [false, true] {
             h.event(UiEvent::Key {
-                key: Key::M,
+                key: Key::F3,
                 physical_key: None,
                 pressed: true,
                 repeat,
@@ -38784,6 +38929,7 @@ mod tests {
     fn z_from_the_grid_opens_at_one_to_one_and_the_bar_has_a_one_to_one_button() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
+        press(&mut h, Key::Z, Modifiers::NONE);
         press(&mut h, Key::Z, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().zoom.is_some(), "directement à 1:1");
@@ -41309,23 +41455,84 @@ mod tests {
     }
 
     #[test]
-    fn the_loupe_is_in_the_help_with_its_held_key() {
-        // Retour du 06/11/2026 : « loupe » ne trouvait que le zoom ; la loupe est une
-        // touche maintenue, réglée à part (`loupe` de keys.toml).
+    fn the_loupe_and_the_zoom_toggle_and_escape_goes_back() {
+        // 25/11/2026 (idée de l'utilisateur) : `z m` allume la loupe jusqu'à `z m` ou
+        // Échap ; `z z` zoome, et zoomé, `z z` ou Échap ramènent d'où l'on venait.
         let (mut h, _dir) = harness();
         h.run_steps(3);
         let rows = help_rows(&h.state().keymap, "loupe");
-        let loupe = rows.iter().find(|(a, _)| *a == Action::Loupe);
-        assert_eq!(loupe.map(|(_, keys)| keys.as_str()), Some("m"), "{rows:?}");
-        // Pas de ligne dans [keys] : sa touche se règle à part.
-        let mut overrides = std::collections::BTreeMap::new();
-        overrides.insert("core.view.loupe".to_string(), vec!["x".to_string()]);
-        let (_, warnings) = h.state().keymap.clone().with_overrides(&overrides);
-        assert_eq!(warnings.len(), 1, "{warnings:?}");
-        // Lancée (palette) : rappeler qu'il faut la maintenir.
-        act(&mut h, Action::Loupe);
-        let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
-        assert!(notice.contains('m'), "{notice}");
+        let keys = |a: Action| {
+            rows.iter()
+                .find(|(r, _)| *r == a)
+                .map(|(_, k)| k.clone())
+                .unwrap_or_default()
+        };
+        assert_eq!(keys(Action::Loupe), "zm", "{rows:?}");
+        let z = |h: &mut Harness<'_, TriApp>, second: Key| {
+            press(h, Key::Z, Modifiers::NONE);
+            press(h, second, Modifiers::NONE);
+        };
+        // La loupe : allumée, éteinte par `z m` puis par Échap, sans quitter la grille.
+        z(&mut h, Key::M);
+        assert!(h.state().loupe_toggled);
+        z(&mut h, Key::M);
+        assert!(!h.state().loupe_toggled);
+        z(&mut h, Key::M);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(!h.state().loupe_toggled);
+        assert_eq!(h.state().mode, Mode::Grid);
+        // Allumée au clavier : sur la vignette sélectionnée, pas sous le pointeur
+        // (retour du 25/11/2026), et les flèches la déplacent dedans.
+        h.state_mut().gui.zoom.loupe_delay_ms = 0;
+        run_until(&mut h, |app| app.grid_images.len() >= 3);
+        let other = h
+            .state()
+            .grid_images
+            .iter()
+            .find(|(i, _)| *i == 2)
+            .map(|(_, r)| r.center())
+            .unwrap();
+        h.state_mut().select(0);
+        h.hover_at(other);
+        h.run_steps(2);
+        z(&mut h, Key::M);
+        run_until(&mut h, |app| app.loupe_on);
+        assert_eq!(h.state().loupe_index, 0, "la sélectionnée");
+        let before = h.state().loupe_point.map(|(_, p)| p);
+        for _ in 0..3 {
+            press(&mut h, Key::ArrowRight, Modifiers::NONE);
+            h.run_steps(2);
+        }
+        let after = h.state().loupe_point;
+        assert_eq!(after.map(|(i, _)| i), Some(0));
+        assert!(
+            after.map(|(_, p)| p) != before,
+            "déplacée : {before:?} → {after:?}"
+        );
+        assert_eq!(h.state().selected, 0, "la sélection ne bouge pas");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        // Le zoom depuis la grille : `z z` y ramène, Échap aussi.
+        z(&mut h, Key::Z);
+        assert_eq!(h.state().mode, Mode::View);
+        assert!(h.state().zoom.is_some());
+        z(&mut h, Key::Z);
+        assert_eq!(h.state().mode, Mode::Grid);
+        assert!(h.state().zoom.is_none());
+        z(&mut h, Key::Z);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid);
+        // Depuis le plein écran ajusté : retour à l'ajusté, puis Échap à la grille.
+        act(&mut h, Action::Open);
+        z(&mut h, Key::Z);
+        assert!(h.state().zoom.is_some());
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        assert!(h.state().zoom.is_none());
+        z(&mut h, Key::Z);
+        z(&mut h, Key::Z);
+        assert_eq!(h.state().mode, Mode::View);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid);
     }
 
     #[test]
@@ -41766,6 +41973,7 @@ mod tests {
             match mode {
                 1 => {
                     press(&mut h, Key::Enter, Modifiers::NONE);
+                    press(&mut h, Key::Z, Modifiers::NONE);
                     press(&mut h, Key::Z, Modifiers::NONE);
                 }
                 2 => {
@@ -43967,7 +44175,9 @@ mod tests {
         assert_eq!(h.state().zoom_scale, h.state().gui.zoom.max, "plafonné");
         // Loupe : `t` maintenue (défaut), en vue ajustée ; Maj ne la montre plus.
         press(&mut h, Key::Z, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::NONE);
         if h.state().zoom.is_some() {
+            press(&mut h, Key::Z, Modifiers::NONE);
             press(&mut h, Key::Z, Modifiers::NONE);
         }
         h.state_mut().gui.zoom.loupe_delay_ms = 0;
@@ -43977,7 +44187,7 @@ mod tests {
         assert!(!h.state().loupe_on, "Maj : plus de loupe");
         h.event(UiEvent::ModifiersChanged(Modifiers::NONE));
         let key = |pressed| UiEvent::Key {
-            key: Key::M,
+            key: Key::F3,
             physical_key: None,
             pressed,
             repeat: false,
@@ -45219,6 +45429,96 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().stars_op, tri::notes::StarsOp::AtLeast);
         assert_eq!(count(&h), 2, "au moins 4, de nouveau");
+    }
+
+    #[test]
+    fn ratings_step_and_the_filter_takes_the_highest() {
+        // 25/11/2026 : `m l` / `m h` une étoile de plus / de moins, `m k` / `m j` la
+        // couleur suivante / précédente ; `f *` et `f Maj+O` (ou les boutons) filtrent sur
+        // la plus haute, la comparaison gardée.
+        use tri::xmp::Color;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        let notes = |h: &Harness<'_, TriApp>, i: usize| {
+            let path = h.state().files[i].path.clone();
+            h.state().folder.notes.notes(&path).clone()
+        };
+        let seq = |h: &mut Harness<'_, TriApp>, second: Key| {
+            press(h, Key::M, Modifiers::NONE);
+            press(h, second, Modifiers::NONE);
+        };
+        h.state_mut().select(0);
+        seq(&mut h, Key::L);
+        seq(&mut h, Key::L);
+        seq(&mut h, Key::L);
+        seq(&mut h, Key::H);
+        assert_eq!(notes(&h, 0).stars, 2);
+        seq(&mut h, Key::K);
+        seq(&mut h, Key::K);
+        assert_eq!(notes(&h, 0).colors, [Color::Yellow], "rouge puis jaune");
+        h.state_mut().select(1);
+        // À la souris : les chevrons de la barre de notation.
+        h.get_by_label(&Action::StarsStep(true).label()).click();
+        h.run_steps(2);
+        h.get_by_label(&Action::ColorStep(true).label()).click();
+        h.run_steps(2);
+        assert_eq!(notes(&h, 1).stars, 1);
+        assert_eq!(notes(&h, 1).colors, [Color::Red]);
+        seq(&mut h, Key::J);
+        assert!(
+            notes(&h, 1).colors.is_empty(),
+            "sous le rouge : sans couleur"
+        );
+        seq(&mut h, Key::K);
+        let total = h.state().files.len();
+        let count = |h: &Harness<'_, TriApp>| h.state().files.len();
+        // Le plus haut : 2 étoiles, « au moins » gardé.
+        press(&mut h, Key::F, Modifiers::NONE);
+        type_text(&mut h, "*");
+        assert_eq!(
+            h.state().notes_rule.stars,
+            Some(tri::notes::StarsRule::AtLeast(2))
+        );
+        assert_eq!(count(&h), 1);
+        // « Exactement » : la comparaison reste, seul le nombre suit (1 étoile au plus
+        // haut une fois la première image redescendue).
+        h.state_mut().stars_op = tri::notes::StarsOp::Exactly;
+        act(&mut h, Action::FilterStars(1));
+        assert_eq!(count(&h), 1, "exactement 1");
+        h.get_by_label(&Action::FilterStarsTop.label()).click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state().notes_rule.stars,
+            Some(tri::notes::StarsRule::Exactly(2)),
+            "le plus haut cherché sans le filtre en cours"
+        );
+        act(&mut h, Action::FilterStars(0));
+        assert_eq!(count(&h), total);
+        // Couleurs : jaune est la plus haute (rouge, jaune, vert…).
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::O, Modifiers::SHIFT);
+        assert_eq!(
+            h.state()
+                .notes_rule
+                .colors
+                .as_ref()
+                .map(|r| r.any_of.clone()),
+            Some(vec![Color::Yellow])
+        );
+        assert_eq!(count(&h), 1);
+        // Sans étoile ni couleur nulle part : rien ne change, et c'est dit.
+        act(&mut h, Action::FilterClear);
+        for i in 0..2 {
+            h.state_mut().select(i);
+            act(&mut h, Action::Stars(0));
+            act(&mut h, Action::ColorStep(false));
+            act(&mut h, Action::ColorStep(false));
+        }
+        act(&mut h, Action::FilterStarsTop);
+        assert_eq!(h.state().notes_rule.stars, None);
+        assert_eq!(count(&h), total);
+        act(&mut h, Action::FilterColorTop);
+        assert_eq!(h.state().notes_rule.colors, None);
     }
 
     #[test]
@@ -48179,6 +48479,7 @@ mod tests {
         let file = h.state().files[0].clone();
         assert_eq!(h.state().source_for(&file), Source::Embedded);
         press(&mut h, Key::Z, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::NONE);
         let level = view::zoom_level(file.kind, Source::Embedded, DT);
         run_until(&mut h, |app| app.big.contains(&(file.path.clone(), level)));
         assert_eq!(h.state().source, Source::Developed, "le choix reste");
@@ -48189,6 +48490,7 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         // Depuis la grille, z ouvre le plein écran directement à 100 %.
+        press(&mut h, Key::Z, Modifiers::NONE);
         press(&mut h, Key::Z, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().zoom.is_some());
@@ -48203,6 +48505,7 @@ mod tests {
         assert!(h.state().zoom.is_some());
         run_until(&mut h, |app| app.status[1].full == Avail::Ready);
         press(&mut h, Key::Z, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::NONE);
         assert!(h.state().zoom.is_none());
     }
 
@@ -48211,6 +48514,7 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         press(&mut h, Key::Enter, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::NONE);
         press(&mut h, Key::Z, Modifiers::NONE);
         h.state_mut().zoom = Some(vec2(0.3, 0.6));
         press(&mut h, Key::R, Modifiers::NONE);
@@ -48244,6 +48548,7 @@ mod tests {
         press(&mut h, Key::ArrowRight, Modifiers::SHIFT);
         assert!(h.state().zoom.is_none(), "sans zoom : sans effet");
         press(&mut h, Key::Enter, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::NONE);
         press(&mut h, Key::Z, Modifiers::NONE);
         run_until(&mut h, |app| {
             let path = app.files[0].path.clone();

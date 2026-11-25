@@ -139,7 +139,13 @@ system one ("cold" measurements, experiments).
   left of the thumbnail and of the full screen view; thumbnail of a rejected photo faded
   (`[gui.grid] rejected_opacity`). A failed write (malformed sidecar, read-only disk) is
   reported in the status bar, and the displayed rating stays the one on disk. A single
-  colour per photo by default (`[xmp] multiple_colors`).
+  colour per photo by default (`[xmp] multiple_colors`). **Rating steps** (user's idea,
+  2026-11-25: while sorting, the same key from one pass to the next): `m l` / `m h` one
+  star more / less (0 to 5), `m k` / `m j` the next / previous colour in the order of
+  `[sort] color_order` (none, then the first in the list…; below the first, no colour;
+  at the end, nothing changes; `Notes::step_stars`, `Notes::step_color`); with the mouse,
+  the ‹ › chevrons on either side of the stars and the colours of the rating bar. On a
+  selection, each image moves one step.
 - **Filters** (2026-10-17): type (all / RAW / flat) and ratings (at least n stars;
   picked, without rejected or rejected; one or more colours), combined. Several colours
   chosen: one of them ("or"); with several colours per photo (`[xmp] multiple_colors`),
@@ -153,7 +159,13 @@ system one ("cold" measurements, experiments).
     `f p` picked,
     `f u` without rejected, `f x` rejected (the same sequence removes the filter),
     `f 6`…`f 9`, `f °`, `f ,`, `f .` colours (add / remove), `f d` clear everything (Esc only closes the
-    menu). After the leader too (`<leader> f 3`): its menu lists them under "f".
+    menu). **Highest** (2026-11-25): `f *` (or the ⤒ button after the stars) sets the star
+    filter to the highest rating of the photos shown, looked for without the current star
+    filter, the comparison (≥ = ≤) kept: after a pass from N to N + 1 stars, the N + 1
+    without looking for the digit, or from scratch the best rated; `f Shift+O` (or the ⤒
+    after the dots), the highest colour of the colour order, only the colour changing
+    ("and" / "or" kept). No stars (or no colour of the order) among them: nothing changes,
+    and it is said. After the leader too (`<leader> f 3`): its menu lists them under "f".
     Digits: the typed character.
   - Mouse: **filter bar** at the top of the grid (`Shift+F` shows or hides it,
     `[gui] filter_bar`): each click triggers the same action as the keyboard (clicking the
@@ -245,7 +257,7 @@ system one ("cold" measurements, experiments).
   a small area of the image the palette comes from, read in the background; elsewhere,
   the pixel of a capture of the window), then the box comes back; on an image, a
   **reticle** shows the averaged area (`[colours] pick_area`, 2 % of the long side), and
-  the loupe (`m` held) magnifies it to aim precisely (user's idea, 2026-11-21); "OK" keeps the
+  the loupe (`z m`) magnifies it to aim precisely (user's idea, 2026-11-21); "OK" keeps the
   search.
   **Several colours** (#492, user's idea, 2026-11-23): at the top of the box, the colours
   looked for, as swatches like the others (`[gui.colour_search] max` slots, 5; feedback of
@@ -440,7 +452,7 @@ system one ("cold" measurements, experiments).
 - **Key hints** at the top right of the full screen view ("b : Camera render / RAW,
   z : 1:1…"): hidden by default since 2026-10-17 (it overlapped the image, F1 opens the
   full help with search); `[gui.view] key_hints = true` to bring it back.
-- **1:1 from the grid** (2026-10-17): `z` (keyboard only since 2026-11-07: in the grid,
+- **1:1 from the grid** (2026-10-17): `z z` (keyboard only since 2026-11-07: in the grid,
   the bar's "1:1" button gave way to the adjustable loupe) opens the selected
   image directly at 100 %, to check sharpness quickly; Esc goes back to the grid. With the
   keyboard and the button, the 1:1 is **centred on the focus point** when the camera
@@ -734,7 +746,7 @@ system one ("cold" measurements, experiments).
   image pixel per screen pixel) goes from fit to `max` (400 %). Keyboard, in **steps**
   like Lightroom: `+` / `-` (top row or numeric keypad: bound as characters, the key
   depending on the layout) next step up / down (`steps`), `*` 100 %, `/` fit (swapped on
-  2026-10-18, like Lightroom), `z` and double-click toggle fit / 100 %; you can **zoom out
+  2026-10-18, like Lightroom), `z z` and double-click toggle fit / 100 %; you can **zoom out
   below fit** down to `min` (10 %), the image smaller than the screen, centred; the 1:1
   button is lit only at 100 %. In the configuration, `steps`, `max`, `min` and
   `loupe_scale` are written in **percent** (2026-11-07: `max = 400`, easier to read than
@@ -753,7 +765,14 @@ system one ("cold" measurements, experiments).
   `<` impossible, egui only receives its character), after `loupe_delay_ms` (no flicker
   on a short press), a square of `loupe_size` points under the pointer shows the image at
   `loupe_scale` (100 %); its 1:1 is loaded for the occasion, the enlarged preview shown
-  while waiting ("loading 100 %…"). In **comparison** too since 2026-11-06: the image
+  while waiting ("loading 100 %…"). Since 2026-11-25 (user's idea; `m` went to the
+  rating steps), the loupe is **turned on** with `z m` and stays until `z m` or Escape
+  (`loupe_toggled`, `TriApp::loupe_wanted`), placed at the centre of the selected image
+  (in the grid, even with the pointer over another thumbnail; the navigation keys move
+  it, moving the mouse takes it back); no held key by default any more (`loupe =
+  "none"` in keys.toml, `loupe_key` still possible). **Zoom** moves to `z z` (from the
+  grid too); zoomed, `z z` or Escape go back where you came from: the grid if the zoom
+  started there, otherwise the fitted full screen (`zoom_from_grid`, `TriApp::unzoom`). In **comparison** too since 2026-11-06: the image
   under the pointer (`loupe_index`), drawn over the others.
 - **Back to the grid with the mouse** (issue #193): in full screen, a grid icon at the
   far right of the bottom bar (like Esc).
@@ -1340,7 +1359,7 @@ then the sharpness of the candidates is checked **at 100 %**.
   "computing 100 %" when applicable. The camera render reflects the camera's settings
   (contrast, film simulation); LibRaw's RAW render is more neutral, hence duller: this is
   expected.
-- **1:1**: `z` (centred), or double-click (the clicked point stays under the cursor).
+- **1:1**: `z z` (centred), or double-click (the clicked point stays under the cursor).
   Dragging with the mouse moves the image, never leaving an empty edge.
   - in JPEG: the embedded JPEG at its original size, ~70 ms. Honest label: "Camera
     JPEG · 1:1 (71 % of the sensor)" (4416 px out of 6240 for an X-T4). The camera's
@@ -1823,6 +1842,8 @@ Rating, common to both profiles (2026-10-17, designed for AZERTY too):
 | `core.rate.star.0` … `core.rate.star.5` | 0 … 5 (the character, wherever it comes from) |
 | `core.rate.color.red` / `yellow` / `green` / `blue` | 6 / 7 / 8 / 9 (likewise) |
 | `core.rate.color.purple` | ° / , / . |
+| `core.rate.star.up` / `down` | m l / m h |
+| `core.rate.color.up` / `down` | m k / m j |
 | `core.flag.accept` / `reject` / `none` | Shift+P / Shift+X / Shift+U |
 
 Since 2026-11-23 (user's feedback), a digit in `keys.toml` is the typed **character**,

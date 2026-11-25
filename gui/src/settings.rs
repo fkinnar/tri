@@ -2433,16 +2433,16 @@ mod tests {
                 .contains("touche-magique")
         );
         assert_eq!(ZoomSettings::default().loupe_key, LoupeKey::Default);
-        // Celle de keys.toml (m), libre ; une touche déjà prise est refusée, et le dit :
-        // celle de keys.toml reste.
+        // Celle de keys.toml : aucune depuis le 25/11/2026 (`z m` allume la loupe) ; une
+        // touche déjà prise est refusée, et le dit : celle de keys.toml reste.
         let (keymap, warnings) = AppSettings::default().keymap();
         assert!(warnings.is_empty(), "{warnings:?}");
-        assert_eq!(keymap.loupe(), LoupeKey::Key(egui::Key::M));
+        assert_eq!(keymap.loupe(), LoupeKey::None);
         let mut taken = AppSettings::default();
         taken.gui.zoom.loupe_key = LoupeKey::Key(egui::Key::O);
         let (keymap, warnings) = taken.keymap();
         assert_eq!(warnings.len(), 1, "o : superpositions");
-        assert_eq!(keymap.loupe(), LoupeKey::Key(egui::Key::M));
+        assert_eq!(keymap.loupe(), LoupeKey::None);
         taken.gui.zoom.loupe_key = LoupeKey::Key(egui::Key::F3);
         assert_eq!(taken.keymap().0.loupe(), LoupeKey::Key(egui::Key::F3));
     }

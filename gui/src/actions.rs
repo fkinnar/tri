@@ -165,10 +165,17 @@ pub enum Action {
     FilterStars(u8),
     /// Comparaison du filtre d'étoiles suivante : au moins, exactement, au plus (#165).
     FilterStarsOp,
+    /// Filtre d'étoiles sur la note la plus haute des photos affichées, la comparaison
+    /// gardée (idée de l'utilisateur, 25/11/2026 : après une passe de N à N + 1 étoiles,
+    /// voir les N + 1 sans chercher le chiffre).
+    FilterStarsTop,
     /// Filtre sur le drapeau (activer / désactiver).
     FilterFlag(FlagFilter),
     /// Filtre : ajouter ou retirer une couleur.
     FilterColor(Color),
+    /// Filtre de couleurs sur la couleur la plus haute des photos affichées, dans l'ordre
+    /// de `[sort] color_order` (25/11/2026, comme [`Action::FilterStarsTop`]).
+    FilterColorTop,
     /// Filtre de couleurs : toutes les couleurs choisies (et) ou l'une d'elles (ou) ; avec
     /// plusieurs couleurs par photo (`[xmp] multiple_colors`, 12/11/2026).
     FilterColorsAll,
@@ -590,9 +597,9 @@ pub enum Action {
     Back,
     /// Afficher / masquer l'aide des raccourcis.
     Help,
-    /// Loupe à 100 % sous le pointeur, tant qu'on tient sa touche (`loupe` de `keys.toml`,
-    /// `[gui.zoom] loupe_key`) : pour l'aide, la palette et l'aide « ici » seulement ;
-    /// elle ne se lie pas dans `[keys]` ([`Action::bindable`]).
+    /// Allumer / éteindre la loupe à 100 % sous le pointeur (`z m`, 25/11/2026 ; Échap
+    /// l'éteint aussi). Elle vient aussi tant qu'on tient `[gui.zoom] loupe_key` s'il y en
+    /// a une.
     Loupe,
     /// Passer en revue les développements (case de la section Vue), cochée ou non.
     ReviewDevelopments,
@@ -621,6 +628,12 @@ pub enum Action {
     Log,
     /// Noter : 0 à 5 étoiles.
     Stars(u8),
+    /// Une étoile de plus (vrai) ou de moins (idée de l'utilisateur, 25/11/2026 : en cours
+    /// de tri, la même touche d'une passe à l'autre).
+    StarsStep(bool),
+    /// Couleur suivante (vrai) ou précédente dans l'ordre de `[sort] color_order` : sans
+    /// couleur, puis la première de la liste, et ainsi de suite.
+    ColorStep(bool),
     /// Ajouter ou retirer une couleur.
     Color(Color),
     /// Accepter, rejeter, ou retirer le drapeau.
@@ -631,7 +644,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 302] = [
+    pub const ALL: [Action; 308] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -648,6 +661,7 @@ impl Action {
         Action::FilterStars(4),
         Action::FilterStars(5),
         Action::FilterStarsOp,
+        Action::FilterStarsTop,
         Action::FilterFlag(FlagFilter::Accepted),
         Action::FilterFlag(FlagFilter::NotRejected),
         Action::FilterFlag(FlagFilter::Rejected),
@@ -656,6 +670,7 @@ impl Action {
         Action::FilterColor(Color::Green),
         Action::FilterColor(Color::Blue),
         Action::FilterColor(Color::Purple),
+        Action::FilterColorTop,
         Action::FilterColorsAll,
         Action::FilterClear,
         Action::FilterBlurry,
@@ -954,11 +969,15 @@ impl Action {
         Action::Stars(3),
         Action::Stars(4),
         Action::Stars(5),
+        Action::StarsStep(true),
+        Action::StarsStep(false),
         Action::Color(Color::Red),
         Action::Color(Color::Yellow),
         Action::Color(Color::Green),
         Action::Color(Color::Blue),
         Action::Color(Color::Purple),
+        Action::ColorStep(true),
+        Action::ColorStep(false),
         Action::Flag(Flag::Accepted),
         Action::Flag(Flag::Rejected),
         Action::Flag(Flag::None),
@@ -968,12 +987,6 @@ impl Action {
     pub fn from_id(id: &str) -> Option<Action> {
         let id = renamed_id(id);
         Action::ALL.into_iter().find(|a| a.id() == id)
-    }
-
-    /// Faux pour la loupe : sa touche se règle à part (`loupe` de `keys.toml`,
-    /// `[gui.zoom] loupe_key`), elle n'a pas de ligne dans `[keys]` ni dans `keys.toml`.
-    pub fn bindable(self) -> bool {
-        self != Action::Loupe
     }
 
     /// Plugin d'envoi d'une action [`Action::Send`] (`airdrop` pour
@@ -1152,14 +1165,15 @@ impl Action {
             | VersionRowsPrev | VersionRatioCustom | VersionExportNext | VersionExportPrev
             | VersionName | VersionSavePreset | VersionReset | VersionsCompare
             | VersionsOriginal | VersionsExportAll => Group::Crop,
-            Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
-            FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
-            | FilterColorsAll | FilterClear | FilterBlurry | FilterWellExposed | FilterStack
-            | FilterInvert | FilterDeveloped | FilterConflicts | FilterPalette
-            | FilterPaletteColour | SetReference | FilterSimilar | FilterRestart | FilterCount
-            | SortNext | SortReverse | SortBy(_) | FilterKind(_) | GridRenderNext | Render(_) => {
-                Group::Filters
+            Stars(_) | StarsStep(_) | Color(_) | ColorStep(_) | Flag(_) | ToggleAutoAdvance => {
+                Group::Rating
             }
+            FilterCycle | FilterStars(_) | FilterStarsOp | FilterStarsTop | FilterFlag(_)
+            | FilterColor(_) | FilterColorTop | FilterColorsAll | FilterClear | FilterBlurry
+            | FilterWellExposed | FilterStack | FilterInvert | FilterDeveloped
+            | FilterConflicts | FilterPalette | FilterPaletteColour | SetReference
+            | FilterSimilar | FilterRestart | FilterCount | SortNext | SortReverse | SortBy(_)
+            | FilterKind(_) | GridRenderNext | Render(_) => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders | AllPhotos => {
                 Group::Panels
@@ -1241,8 +1255,10 @@ impl Action {
             FilterCycle
                 | FilterStars(_)
                 | FilterStarsOp
+                | FilterStarsTop
                 | FilterFlag(_)
                 | FilterColor(_)
+                | FilterColorTop
                 | FilterColorsAll
                 | FilterClear
                 | FilterBlurry
@@ -1276,6 +1292,8 @@ impl Action {
             Action::FilterStars(4) => "core.filter.stars.4",
             Action::FilterStars(_) => "core.filter.stars.5",
             Action::FilterStarsOp => "core.filter.stars.op",
+            Action::FilterStarsTop => "core.filter.stars.top",
+            Action::FilterColorTop => "core.filter.color.top",
             Action::FilterFlag(FlagFilter::Accepted) => "core.filter.flag.accepted",
             Action::FilterFlag(FlagFilter::NotRejected) => "core.filter.flag.not_rejected",
             Action::FilterFlag(FlagFilter::Rejected) => "core.filter.flag.rejected",
@@ -1597,6 +1615,10 @@ impl Action {
             Action::Stars(3) => "core.rate.star.3",
             Action::Stars(4) => "core.rate.star.4",
             Action::Stars(_) => "core.rate.star.5",
+            Action::StarsStep(true) => "core.rate.star.up",
+            Action::StarsStep(false) => "core.rate.star.down",
+            Action::ColorStep(true) => "core.rate.color.up",
+            Action::ColorStep(false) => "core.rate.color.down",
             Action::Color(Color::Red) => "core.rate.color.red",
             Action::Color(Color::Yellow) => "core.rate.color.yellow",
             Action::Color(Color::Green) => "core.rate.color.green",
@@ -2064,7 +2086,7 @@ impl Defaults {
             };
             // Dans l'ordre du fichier : à touches égales, la première l'emporte.
             for (id, specs) in entries {
-                let Some(action) = Action::from_id(id).filter(|a| a.bindable()) else {
+                let Some(action) = Action::from_id(id) else {
                     let error = t!("keys-file-unknown-action");
                     warnings.push(t!(
                         "keys-file-error",
@@ -2285,7 +2307,7 @@ impl Keymap {
         let mut custom: Vec<(Vec<Chord>, Action, &str)> = Vec::new();
         let mut replaced: Vec<Action> = Vec::new();
         for (id, specs) in overrides {
-            let Some(action) = Action::from_id(id).filter(|a| a.bindable()) else {
+            let Some(action) = Action::from_id(id) else {
                 warnings.push(format!("[keys] : action inconnue « {id} »"));
                 continue;
             };
@@ -2610,17 +2632,6 @@ impl Keymap {
     /// « 3, Maj+3 »). Une séquence qui commence par le leader l'écrit `<leader>` (« <leader>
     /// r », #175) : il est réglable, l'aide le montre à part.
     pub fn keys_for(&self, action: Action) -> Vec<String> {
-        // La loupe : sa touche, maintenue.
-        if action == Action::Loupe {
-            use crate::settings::LoupeKey;
-            return match self.loupe {
-                LoupeKey::Key(key) => vec![key_label(key)],
-                LoupeKey::Shift => vec![t!("key-shift-prefix").trim_end_matches('+').to_string()],
-                LoupeKey::Ctrl => vec!["Ctrl".to_string()],
-                LoupeKey::Alt => vec!["Alt".to_string()],
-                LoupeKey::None | LoupeKey::Default => Vec::new(),
-            };
-        }
         // Celles du jeu choisi (ou de `[keys]`) seulement, s'il y en a : en vim, « x »
         // supprime, sans Suppr (retour du 06/11/2026 : plus lisible) ; sinon les communes.
         let own = |k: &Vec<Chord>| self.own.iter().any(|(o, a)| o == k && *a == action);
@@ -3982,7 +3993,6 @@ mod tests {
             .collect();
         let missing: Vec<&str> = Action::ALL
             .iter()
-            .filter(|a| a.bindable())
             .map(|a| a.id())
             .filter(|id| !ids.iter().any(|i| i == id))
             .collect();
@@ -4111,7 +4121,7 @@ mod tests {
     #[test]
     fn first_profile_wins_on_conflict() {
         let km = Keymap::from_profiles(&[Profile::Vim, Profile::Classic]);
-        assert_eq!(km.action(Key::Z, Modifiers::NONE), Some(Action::ToggleZoom));
+        assert_eq!(km.action(Key::Enter, Modifiers::NONE), Some(Action::Open));
     }
 
     fn g() -> Chord {
@@ -4644,7 +4654,7 @@ mod tests {
             "zoom <core.view.zoom>, rendu <core.develop.render>, <core.dev.next>, \
              tri-gui <image>, <leader>",
         );
-        assert!(text.starts_with("zoom z, rendu "), "{text}");
+        assert!(text.starts_with("zoom zz, rendu "), "{text}");
         assert!(
             !text.contains("<leader>") && text.contains("Ctrl"),
             "{text}"

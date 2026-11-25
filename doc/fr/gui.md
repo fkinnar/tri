@@ -141,7 +141,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   et le dit ; « Notes : n images en écriture » dans la barre d'état si ça dure
   (`[gui] notes_task_ms`) ; annuler et fermer attendent la fin des écritures ; la
   surveillance du dossier ignore les sidecars en cours d'écriture. Notes chargées à l'ouverture du dossier, avec celles déjà posées
-  par darktable, Lightroom ou digiKam. Affichage dessiné en formes (pas de glyphes, voir
+  par darktable, Lightroom ou digiKam. **Pas de notation** (idée de l'utilisateur,
+  25/11/2026 : en cours de tri, la même touche d'une passe à l'autre) : `m l` / `m h` une
+  étoile de plus / de moins (0 à 5), `m k` / `m j` la couleur suivante / précédente dans
+  l'ordre de `[sort] color_order` (sans couleur, puis la première de la liste… ; sous la
+  première, plus de couleur ; au bout, rien ne change ; `Notes::step_stars`,
+  `Notes::step_color`) ; à la souris, les chevrons ‹ › de part et d'autre des étoiles et
+  des couleurs du bandeau de notation. Sur une sélection, chaque image avance d'un pas. Affichage dessiné en formes (pas de glyphes, voir
   `marks.rs`) : drapeau (coche verte / croix rouge), étoiles dorées, pastilles de couleur,
   en bas à gauche de la vignette et du plein écran ; vignette d'une photo rejetée estompée
   (`[gui.grid] rejected_opacity`). Une écriture impossible (sidecar mal formé, disque en
@@ -161,7 +167,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     #165), `f 0` étoiles
     indifférentes, `f p` acceptées, `f u` sans les rejetées, `f x` rejetées (la même
     séquence retire le filtre), `f 6`…`f 9`, `f °`, `f ,`, `f .` couleurs (ajouter / retirer),
-    `f d` tout effacer (Échap ne fait que fermer le menu). Aussi après le leader
+    `f d` tout effacer (Échap ne fait que fermer le menu). **Au plus haut** (25/11/2026) :
+    `f *` (ou le bouton ⤒ après les étoiles) règle le filtre d'étoiles sur la plus haute
+    note des photos affichées, cherchée sans le filtre d'étoiles en cours, la comparaison
+    (≥ = ≤) gardée : après une passe de N à N + 1 étoiles, les N + 1 sans chercher le
+    chiffre, ou à froid les mieux notées ; `f Maj+O` (ou le ⤒ après les pastilles), la
+    couleur la plus haute de l'ordre des couleurs, seule la couleur changeant (« et » /
+    « ou » gardés). Sans étoile (ou sans couleur de l'ordre) parmi elles : rien ne change,
+    et c'est dit. Aussi après le leader
     (`<leader> f 3`) : son menu les range sous « f ». Chiffres : le caractère tapé.
   - Souris : **barre de filtres** en haut de la grille (`Maj+F` l'affiche ou la masque,
     `[gui] filter_bar`) : chaque clic déclenche la même action que le clavier (recliquer
@@ -256,7 +269,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (sur une vignette ou l'image en plein écran, la couleur moyenne d'une petite zone de
   l'image d'où la palette est tirée, lue en fond ; ailleurs, le pixel de la capture de la
   fenêtre), puis la boîte revient ; sur une image, un **collimateur** montre la zone
-  moyennée (`[colours] pick_area`, 2 % du grand côté), et la loupe (`m` maintenue)
+  moyennée (`[colours] pick_area`, 2 % du grand côté), et la loupe (`z m`)
   l'agrandit pour viser juste (idée de l'utilisateur, 21/11/2026) ; « Valider » garde la recherche.
   **Plusieurs couleurs** (#492, idée de l'utilisateur, 23/11/2026) : en haut de la boîte,
   les couleurs cherchées, en pastilles comme les autres (`[gui.colour_search] max`
@@ -460,7 +473,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Aide-mémoire des touches** en haut à droite du plein écran (« b : rendu boîtier / RAW,
   z : 1:1… ») : masqué par défaut depuis le 17/10/2026 (il mordait sur l'image, F1 ouvre
   l'aide complète avec recherche) ; `[gui.view] key_hints = true` pour le retrouver.
-- **1:1 depuis la grille** (17/10/2026) : `z` (au clavier seulement depuis le 07/11/2026 :
+- **1:1 depuis la grille** (17/10/2026) : `z z` (au clavier seulement depuis le 07/11/2026 :
   en grille, le bouton « 1:1 » du bandeau a laissé la place à la loupe réglable) ouvre
   l'image sélectionnée directement à 100 %, pour vérifier vite la netteté ; Échap ramène
   à la grille. Au clavier et au bouton, le 1:1 est **centré sur le collimateur** quand le
@@ -766,7 +779,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   pixel de l'image par pixel de l'écran) va de l'ajusté à `max` (400 %). Clavier, par
   **paliers** comme Lightroom : `+` / `-` (rangée du haut ou pavé numérique : liés comme
   caractères, la touche dépendant de la disposition) palier supérieur / inférieur
-  (`steps`), `*` 100 %, `/` ajusté (inversés le 18/10/2026, comme Lightroom), `z` et le
+  (`steps`), `*` 100 %, `/` ajusté (inversés le 18/10/2026, comme Lightroom), `z z` et le
   double-clic basculent ajusté / 100 % ; on peut **dézoomer sous l'ajusté** jusqu'à
   `min` (10 %), l'image plus petite que l'écran, centrée ; le bouton 1:1 n'est allumé
   qu'à 100 %. Dans la configuration, `steps`, `max`, `min` et `loupe_scale` s'écrivent
@@ -789,7 +802,15 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   n'en reçoit que le caractère), après `loupe_delay_ms` (pas de clignotement sur une
   pression brève), un carré de `loupe_size` points sous le pointeur montre
   l'image à `loupe_scale` (100 %) ; son 1:1 est chargé pour l'occasion, l'aperçu agrandi
-  en attendant (« 100 % en cours »). En **comparaison** aussi depuis le 06/11/2026 :
+  en attendant (« 100 % en cours »). Depuis le 25/11/2026 (idée de l'utilisateur ;
+  `m` passé aux pas de notation), la loupe s'**allume** par `z m` et reste jusqu'à `z m`
+  ou Échap (`loupe_toggled`, `TriApp::loupe_wanted`), posée au centre de l'image
+  sélectionnée (en grille, même si le pointeur est sur une autre vignette ; les touches de
+  navigation la déplacent, la souris qui bouge la reprend) ; plus de touche tenue par défaut
+  (`loupe = "none"` dans keys.toml, `loupe_key` reste possible). Le **zoom** passe sur
+  `z z` (aussi depuis la grille) ; zoomé, `z z` ou Échap ramènent d'où l'on venait : la
+  grille si le zoom y a été lancé, sinon le plein écran ajusté (`zoom_from_grid`,
+  `TriApp::unzoom`). En **comparaison** aussi depuis le 06/11/2026 :
   l'image sous le pointeur (`loupe_index`), dessinée par-dessus les autres.
 - **Bouton « tout déplier »** à côté du curseur de similarité (`Maj+S`).
 - **Piles de développements** (30/10/2026, `Stacks::with_developments`, moteur
@@ -1434,7 +1455,7 @@ puis on vérifie la netteté des candidates **à 100 %**.
   et « calcul du 100 % en cours » le cas échéant. Le rendu boîtier reflète les réglages du
   boîtier (contraste, simulation de film) ; le rendu RAW de LibRaw est plus neutre, donc
   plus terne : c'est attendu.
-- **1:1** : `z` (centré), ou double-clic (le point cliqué reste sous le curseur). Glisser
+- **1:1** : `z z` (centré), ou double-clic (le point cliqué reste sous le curseur). Glisser
   avec la souris déplace l'image, sans jamais laisser de bord vide.
   - en JPEG : le JPEG embarqué à sa taille d'origine, ~70 ms. Étiquette honnête : « JPEG
     boîtier · 1:1 (71 % du capteur) » (4416 px sur 6240 pour un X-T4). Netteté et débruitage
@@ -1930,6 +1951,8 @@ Notation, commune aux deux profils (17/10/2026, pensée aussi pour l'AZERTY) :
 | `core.rate.star.0` … `core.rate.star.5` | 0 … 5 (le caractère, d'où qu'il vienne) |
 | `core.rate.color.red` / `yellow` / `green` / `blue` | 6 / 7 / 8 / 9 (idem) |
 | `core.rate.color.purple` | ° / , / . |
+| `core.rate.star.up` / `down` | m l / m h |
+| `core.rate.color.up` / `down` | m k / m j |
 | `core.flag.accept` / `reject` / `none` | Maj+P / Maj+X / Maj+U |
 
 Depuis le 23/11/2026 (retour de l'utilisateur), un chiffre de `keys.toml` est le
