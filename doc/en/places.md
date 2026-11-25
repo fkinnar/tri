@@ -100,6 +100,16 @@ designates external disks that are always plugged in (work, backup);
 `PlaceSettings::ejectable`, and `Tree::can_eject` to check before `eject` (the interface
 does so when confirming).
 
+## Disconnecting a share (`disconnect(share)`, 2026-11-25)
+
+As in the Finder, an eject icon next to a mounted network share disconnects it, without
+confirmation (nothing is lost: you connect again): `diskutil unmount` (macOS); `gio mount
+-u` (Linux, GVFS mount), otherwise `umount` (the user's NFS or CIFS mount; an
+administrator-only `/etc/fstab` mount is refused, the system's message is shown); `net
+use <letter> /delete` (Windows). `Tree::can_disconnect`: a network place, except iCloud
+Drive (`is_cloud_drive`). The interface goes through the same thread as ejection: the
+open folder on it is closed first, the result goes to the status bar.
+
 ## Personal and network folders (2026-10-20)
 
 - **Usual folders**, like the Finder sidebar: Desktop, Documents, Downloads, Pictures,

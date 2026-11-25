@@ -592,6 +592,9 @@ eject-question = Eject "{ $name }"?
 eject-open-folder = The open folder is on this volume: it will be closed.
 ejecting = Ejecting "{ $name }"…
 ejected = "{ $name }" ejected: you can remove it.
+disconnect = Disconnect
+disconnecting = Disconnecting "{ $name }"…
+disconnected = "{ $name }" disconnected.
 status-clear-tip = Click to clear the message
 status-error-tip = Click to see the detail in the log (and clear the message)
 panel-section-adjust = Adjustments
@@ -743,6 +746,7 @@ login-cancelled = Connection to "{ $name }" given up.
 connected-not-saved = Connected to "{ $name }", but the password could not be remembered: { $error }
 server-forgotten = Share "{ $name }" forgotten.
 eject-failed = "{ $name }" not ejected: { $error }
+disconnect-failed = "{ $name }" not disconnected: { $error }
 cache-unavailable = cache unavailable: { $error }
 
 ## Comparison, full screen, status bar
