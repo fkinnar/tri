@@ -48,9 +48,10 @@
 //!   tri --delete <image>... [--permanent] [--dry-run]
 //!       met les images, leurs paires et leurs sidecars à la corbeille (`--permanent` :
 //!       suppression définitive) ;
-//!   tri --copy|--move <image>... --to <dossier> [--dry-run]
+//!   tri --copy|--move <image>... --to <dossier> [--no-cache] [--dry-run]
 //!       copie ou déplace les images, leurs paires et leurs sidecars (copies vérifiées ;
-//!       entre deux volumes, originaux supprimés seulement après) ;
+//!       entre deux volumes, originaux supprimés seulement après) ; leurs aperçus déjà
+//!       calculés suivent (`[files] carry_cache`, sauf `--no-cache`) ;
 //!   tri --reveal <image>
 //!       montre l'image dans le gestionnaire de fichiers ;
 //!   tri --edit <image>...
@@ -118,6 +119,8 @@ struct Args {
     /// `--passthrough` : JPEG sans recompression si possible.
     passthrough: bool,
     permanent: bool,
+    /// `--no-cache` : copier / déplacer sans reprendre les aperçus déjà calculés (#508).
+    no_cache: bool,
     kind: KindFilter,
     depth: Option<usize>,
     previews: bool,
@@ -492,6 +495,7 @@ fn parse() -> AnyResult<Args> {
             "--color" => args.notes.colors = Some(parse_colors(&value()?)?),
             "--flag" => args.notes.flag = Some(parse_flag(&value()?)?),
             "--permanent" => args.permanent = true,
+            "--no-cache" => args.no_cache = true,
             "--exposure" => args.exposure = true,
             "--metadata" => args.metadata = true,
             "--sharpness" => args.sharpness = true,
@@ -1813,6 +1817,15 @@ fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> An
             } else {
                 tri::files::TransferMode::Move
             };
+            // Les aperçus déjà calculés suivent les images (#508).
+            let carry = |files: &[(PathBuf, PathBuf)]| -> AnyResult<()> {
+                if s.carry_cache && !args.no_cache {
+                    let cache = settings.open_cache()?;
+                    let copy = mode == tri::files::TransferMode::Copy;
+                    tri::preview::carry(&cache, &settings.preview(None), files, copy);
+                }
+                Ok(())
+            };
             // Un dossier seul : copié ou déplacé en entier, sous-dossiers compris.
             if let [dir] = images.as_slice()
                 && dir.is_dir()
@@ -1824,6 +1837,7 @@ fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> An
                         eprint!("\r{done}/{total}");
                     })?;
                     eprintln!();
+                    carry(&plan.files)?;
                 }
                 return Ok(());
             }
@@ -1844,6 +1858,8 @@ fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> An
                     eprint!("\r{done}/{total}");
                 })?;
                 eprintln!();
+                let files: Vec<_> = plan.files.iter().chain(&plan.shared).cloned().collect();
+                carry(&files)?;
             }
         }
         FileAction::Export => {
