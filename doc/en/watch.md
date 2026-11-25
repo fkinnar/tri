@@ -47,7 +47,12 @@ the interface); a scan started before the request is made again.
 - sidecars only: `NoteBook::reload_sidecars` rereads the ratings of only the images
   concerned (`IMG.RAF.xmp` → `IMG.RAF`, `IMG.xmp` → `IMG.RAF` and `IMG.JPG`) and returns
   those that really changed: nothing when `tri` has just written them. The ratings filter
-  and the stack covers are then updated.
+  and the stack covers are then updated. In the interface, **off its thread** since
+  2026-11-25 (the last known disk access left there: a cold NAS or iCloud froze the
+  window): `plan_reload` picks the images, without disk; `SidecarReload::read` reads in a
+  separate thread; `apply_reload` applies, except to images rated in `tri` meanwhile (their
+  newer rating wins) or of another folder opened since. Sidecars arriving during a reread
+  are reread after it.
 
 Watching restarts with each folder opened, or if the interval changes in the settings.
 Its starting state is taken with the ratings, in the background (`folder::Loading`), then

@@ -1809,6 +1809,10 @@ pub struct TriApp {
     /// Notes écrites sur place, comme avant (tests : ils relisent le disque aussitôt ;
     /// celui de l'écriture en fond le coupe).
     notes_inline: bool,
+    /// Relecture en fond des sidecars modifiés ailleurs ([`tri::notes::SidecarReload`]),
+    /// et ceux arrivés pendant qu'elle tournait (relus ensuite).
+    sidecar_reload: Option<mpsc::Receiver<tri::notes::SidecarReads>>,
+    sidecars_pending: Vec<PathBuf>,
     /// Image gardée en haut de la vue après un refiltrage, et son décalage sous le haut
     /// de sa rangée ([`Reveal::Anchor`]).
     scroll_anchor: Option<(PathBuf, f32)>,
@@ -2986,6 +2990,8 @@ impl TriApp {
             writes: crate::bg_read::BgWrites::new("tri-writes"),
             note_writes: None,
             notes_inline: cfg!(test),
+            sidecar_reload: None,
+            sidecars_pending: Vec::new(),
             view_height: 0.0,
             reveal: None,
             scroll_anchor: None,
@@ -8801,14 +8807,57 @@ impl TriApp {
             self.versions.clear();
             self.versions_epoch += 1;
             self.forget_grid_versions();
-            let changed = self.folder.notes.reload_sidecars(&sidecars);
-            trace(|| format!("XMP modifiés ailleurs : {}", changed.len()));
-            if !changed.is_empty() {
-                // Filtre ou tri sur les notes, couverture des piles : à revoir.
-                self.notes_changed();
-                self.stacks_dirty = true;
-                self.notice = Some((t!("watch-notes", count = changed.len()), false));
-            }
+            // Relus hors du fil de l'interface (un NAS ou iCloud froid figeait la
+            // fenêtre) ; une relecture déjà en cours : à sa suite.
+            self.sidecars_pending.extend(sidecars);
+        }
+    }
+
+    /// Relit en fond les sidecars modifiés ailleurs (`sidecars_pending`), puis applique
+    /// leurs notes ; une image notée entre-temps dans `tri` garde la sienne.
+    fn reload_sidecars(&mut self, ctx: &egui::Context) {
+        if let Some(rx) = &self.sidecar_reload {
+            let Ok(reads) = rx.try_recv() else {
+                return;
+            };
+            self.sidecar_reload = None;
+            self.sidecars_read(reads);
+        }
+        if self.sidecars_pending.is_empty() {
+            return;
+        }
+        let sidecars = std::mem::take(&mut self.sidecars_pending);
+        let plan = self.folder.notes.plan_reload(&sidecars);
+        if plan.is_empty() {
+            return;
+        }
+        // Tests : tout de suite (ils lisent les notes juste après).
+        if self.notes_inline {
+            let reads = plan.read();
+            self.sidecars_read(reads);
+            return;
+        }
+        let (tx, rx) = mpsc::channel();
+        let repaint = ctx.clone();
+        std::thread::Builder::new()
+            .name("tri-sidecars".into())
+            .spawn(move || {
+                let _ = tx.send(plan.read());
+                repaint.request_repaint();
+            })
+            .ok();
+        self.sidecar_reload = Some(rx);
+    }
+
+    /// Notes relues des sidecars modifiés ailleurs : appliquées.
+    fn sidecars_read(&mut self, reads: tri::notes::SidecarReads) {
+        let changed = self.folder.notes.apply_reload(reads);
+        trace(|| format!("XMP modifiés ailleurs : {}", changed.len()));
+        if !changed.is_empty() {
+            // Filtre ou tri sur les notes, couverture des piles : à revoir.
+            self.notes_changed();
+            self.stacks_dirty = true;
+            self.notice = Some((t!("watch-notes", count = changed.len()), false));
         }
     }
 
@@ -28463,6 +28512,7 @@ impl eframe::App for TriApp {
             ctx.request_repaint();
         }
         self.watch_folder(&ctx);
+        self.reload_sidecars(&ctx);
         self.save_folder_view();
         self.poll_eject();
         self.poll_mount();
@@ -39124,6 +39174,25 @@ mod tests {
         run_until(&mut h, |app| app.file_dialog.is_none());
         assert!(dest.join("img1.jpg").exists() && photos.join("img1.jpg").exists());
         assert_eq!(h.state().files.len(), 2, "une copie ne retire rien");
+    }
+
+    #[test]
+    fn a_sidecar_changed_elsewhere_is_read_off_the_interface_thread() {
+        // Dernier accès disque connu sur le fil de l'interface (19/11/2026) : les XMP
+        // modifiés ailleurs sont relus en fond, puis la note change et c'est dit.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().notes_inline = false;
+        let image = h.state().files[0].path.clone();
+        let five = tri::xmp::Notes {
+            stars: 5,
+            ..Default::default()
+        };
+        let sidecar = tri::xmp::write(&image, &five, tri::xmp::Convention::Darktable).unwrap();
+        h.state_mut().sidecars_pending.push(sidecar);
+        run_until(&mut h, |app| app.folder.notes.notes(&image).stars == 5);
+        assert!(h.state().sidecar_reload.is_none());
+        assert!(h.state().notice.is_some(), "dit dans la barre d'état");
     }
 
     #[test]
