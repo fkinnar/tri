@@ -49,7 +49,12 @@ montage iCloud figeait l'interface) ; un relevé commencé avant la demande est 
 - sidecars seulement : `NoteBook::reload_sidecars` relit les notes des seules images
   concernées (`IMG.RAF.xmp` → `IMG.RAF`, `IMG.xmp` → `IMG.RAF` et `IMG.JPG`) et renvoie
   celles qui ont vraiment changé : rien quand c'est `tri` qui vient d'écrire. Le filtre
-  sur les notes et les couvertures des piles sont alors revus.
+  sur les notes et les couvertures des piles sont alors revus. Dans l'interface, **hors
+  de son fil** depuis le 25/11/2026 (le dernier accès disque connu qui y restait : un NAS
+  ou iCloud froid figeait la fenêtre) : `plan_reload` choisit les images, sans disque ;
+  `SidecarReload::read` lit dans un fil à part ; `apply_reload` applique, sauf aux images
+  notées dans `tri` entre-temps (leur note, plus récente, l'emporte) ou d'un autre dossier
+  ouvert depuis. Des sidecars arrivés pendant une relecture sont relus à sa suite.
 
 La surveillance repart à chaque dossier ouvert, ou si l'intervalle change dans les
 réglages. Son état de départ est relevé avec les notes, en fond (`folder::Loading`), puis

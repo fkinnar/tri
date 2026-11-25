@@ -190,9 +190,9 @@ pub const COMMANDS: &[Command] = &[
     Command {
         id: "copy",
         theme: Theme::Files,
-        syntax: "tri --copy|--move <image>…|<folder> --to <folder> [--dry-run]",
+        syntax: "tri --copy|--move <image>…|<folder> --to <folder> [--no-cache] [--dry-run]",
         main: &["--copy", "--move"],
-        options: opts!["--to", "--dry-run"],
+        options: opts!["--to", "--no-cache", "--dry-run"],
         example: "tri --copy <images> --to <destination> --dry-run",
     },
     Command {

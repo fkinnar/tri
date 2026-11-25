@@ -593,6 +593,9 @@ eject-question = Éjecter « { $name } » ?
 eject-open-folder = Le dossier ouvert est sur ce volume : il sera fermé.
 ejecting = Éjection de « { $name } »…
 ejected = « { $name } » éjecté : vous pouvez le retirer.
+disconnect = Se déconnecter
+disconnecting = Déconnexion de « { $name } »…
+disconnected = « { $name } » déconnecté.
 status-clear-tip = Cliquer pour effacer le message
 status-error-tip = Cliquer pour voir le détail dans le journal (et effacer le message)
 panel-section-adjust = Réglages
@@ -744,6 +747,7 @@ login-cancelled = Connexion à « { $name } » abandonnée.
 connected-not-saved = Connecté à « { $name } », mais le mot de passe n'a pas pu être retenu : { $error }
 server-forgotten = Partage « { $name } » oublié.
 eject-failed = « { $name } » non éjecté : { $error }
+disconnect-failed = « { $name } » non déconnecté : { $error }
 cache-unavailable = cache inaccessible : { $error }
 
 ## Comparaison, plein écran, barre d'état
@@ -1122,6 +1126,8 @@ transfer-hint = Tab : compléter · flèches haut / bas : destinations récentes
 transfer-recent = Récentes
 transfer-bring-cache = Emporter le cache
 transfer-bring-cache-tip = Vignettes, aperçus et analyses suivent le dossier : rien à recalculer
+transfer-carry-cache = Emporter les aperçus déjà calculés
+transfer-carry-cache-tip = Vignettes, aperçus et analyses suivent les images : rien à recalculer (un rendu développé, seulement si son sidecar suit)
 transfer-cache-dropped = Vignettes, aperçus et analyses seront recalculés à la nouvelle place.
 transfer-cache-computer = Il reste dans le cache de cet ordinateur : les autres ordinateurs ne le verront pas.
 transfer-cache-kept = Il rejoint le cache gardé avec les photos dans « { $place } ».

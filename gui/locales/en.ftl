@@ -593,6 +593,9 @@ eject-question = Eject "{ $name }"?
 eject-open-folder = The open folder is on this volume: it will be closed.
 ejecting = Ejecting "{ $name }"…
 ejected = "{ $name }" ejected: you can remove it.
+disconnect = Disconnect
+disconnecting = Disconnecting "{ $name }"…
+disconnected = "{ $name }" disconnected.
 status-clear-tip = Click to clear the message
 status-error-tip = Click to see the detail in the log (and clear the message)
 panel-section-adjust = Adjustments
@@ -744,6 +747,7 @@ login-cancelled = Connection to "{ $name }" given up.
 connected-not-saved = Connected to "{ $name }", but the password could not be remembered: { $error }
 server-forgotten = Share "{ $name }" forgotten.
 eject-failed = "{ $name }" not ejected: { $error }
+disconnect-failed = "{ $name }" not disconnected: { $error }
 cache-unavailable = cache unavailable: { $error }
 
 ## Comparison, full screen, status bar
@@ -1122,6 +1126,8 @@ transfer-hint = Tab: complete · up / down arrows: recent destinations
 transfer-recent = Recent
 transfer-bring-cache = Bring the cache along
 transfer-bring-cache-tip = Thumbnails, previews and analyses follow the folder: nothing to compute again
+transfer-carry-cache = Bring the previews already computed
+transfer-carry-cache-tip = Thumbnails, previews and analyses follow the images: nothing to compute again (a developed render only if its sidecar follows)
 transfer-cache-dropped = Thumbnails, previews and analyses will be computed again at the new place.
 transfer-cache-computer = It stays in this computer's cache: other computers will not see it.
 transfer-cache-kept = It joins the cache kept with the photos in "{ $place }".

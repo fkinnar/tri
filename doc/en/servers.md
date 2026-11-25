@@ -47,7 +47,7 @@ the password"; then `connect` is called again with the `Login`.
 | --- | --- | --- |
 | Windows | UNC path read directly (`\\nas\photo`); access refused (codes 5, 86, 1326, 1244): the box, then `WNetAddConnection2` | Windows credentials; "Remember": Credential Manager (`CredWrite`, like `cmdkey /add`) |
 | macOS | `osascript -e 'mount volume "smb://…"'`, mounted in `/Volumes` | system dialog, keychain (no `tri` box) |
-| Linux | `gio mount smb://…` (GVFS, like Nemo and Nautilus), its questions answered by `tri` | GNOME keyring if already saved; otherwise the box; "Remember": `secret-tool` (desktop keyring, attributes read by GVFS; best effort) |
+| Linux | `gio mount smb://…` (GVFS, like Nemo and Nautilus), its questions answered by `tri` | GNOME keyring if already saved; otherwise the box; "Remember": desktop keyring over D-Bus (Secret Service, attributes read by GVFS), without the `secret-tool` command, missing on Linux Mint |
 
 On Linux, `gio mount` asks its questions on its output (`User [fabrice]: `,
 `Domain [WORKGROUP]: `, `Password: `, `LC_ALL=C`); `tri` reads them as they come and

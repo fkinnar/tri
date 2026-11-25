@@ -55,7 +55,9 @@ envoi par AirDrop (feuille de partage, `tri::send`), et `objc2-quartz-core`,
 `objc2-core-graphics` et `objc2-core-foundation` — macOS, espace couleur de la fenêtre
 (`display`) —, même projet (madsmtm/objc2, actif),
 déjà présents par winit et wgpu — sous Zlib OR Apache-2.0 OR MIT ; `x11rb` — Linux, profil de l'écran publié par colord (`display`), déjà présent par
-winit — sous MIT OR Apache-2.0 ; `libc` — macOS et Linux, place libre d'un disque
+winit — sous MIT OR Apache-2.0 ; `zbus` — Linux, mot de passe retenu dans le trousseau du
+bureau (Secret Service par D-Bus, `servers`), dbus2/zbus, pur Rust, très actif, déjà dans
+`Cargo.lock` par accesskit — sous MIT ; `libc` — macOS et Linux, place libre d'un disque
 (`offload::free_space`), rust-lang/libc, très actif, déjà présent par socket2, mio,
 turbojpeg… — sous MIT OR Apache-2.0 ; `windows-sys` — Windows,
 éjection d'un volume (`places::eject`), profil de l'écran (`display`) et place libre d'un disque (`offload::free_space`), Microsoft (microsoft/windows-rs, très actif),
