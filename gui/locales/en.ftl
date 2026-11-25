@@ -1013,6 +1013,12 @@ export-name-tip = A template, without extension: {"{"}name{"}"} (the image's nam
 export-no-developer = No development software found: base render by LibRaw.
 export-rapidraw-srgb = RapidRAW renders in sRGB: the “{ $color }” space is converted from sRGB.
 export-passthrough = Without recompression
+export-metadata = Metadata
+export-metadata-keep = As they are
+export-metadata-keep-tip = Those the render writes (camera, settings, date…), nothing added
+export-metadata-set-tip = This set of creation metadata added to each file (author, copyright…)
+export-metadata-strip = Remove all metadata
+export-metadata-strip-tip = No camera, date, GPS or author: only the image, its colour profile and its orientation, without recompression
 export-passthrough-tip = Original JPEG copied as is, camera render written as is (orientation in the EXIF). An image to shrink (preset size) is re-encoded.
 export-versions = { $n ->
     [one] Export the version

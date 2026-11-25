@@ -43,9 +43,11 @@ ExifTool).
   the mechanism of ratings written into images, generalised by `embedded::Change`). A RAW
   gets it in its **sidecar** (the newest, otherwise the one of `[xmp] sidecar`), which
   development software takes up when exporting.
-- **When exporting**: the `iptc` key of an export preset (`iptc = "mine"`) puts the set on
-  each written file, a copy without recompression included (`Request::iptc`, at the end of
-  `export::run`).
+- **When exporting**: the `metadata` key of an export preset (`metadata = "mine"`; former
+  name `iptc`, still read) puts the set on each written file, a copy without recompression
+  included (`Request::iptc`, at the end of `export::run`). The export dialog has the same
+  "Metadata" list (2026-11-25), set to the preset's: as they are, a set, or all removed
+  (`"strip"`, see [export.md](export.md)).
 - **On demand**: the `core.file.iptc` action (palette, no default shortcut) opens the
   "Creation metadata" dialog on the selection: the set (a list if there are several), what
   it puts ("replaces what is there" for those in `replace`), "Apply" (in the background),

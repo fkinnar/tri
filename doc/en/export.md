@@ -381,7 +381,24 @@ development, silently. It is now rendered by its software (`export_profile_tool`
   (`Render::Developed(RawTherapee | Art)`) goes through it too; on the command line,
   RawTherapee and ART render their developments when found.
 
-## Creating a profile from the interface
+## Metadata of the written files (`metadata`, 2026-11-25)
+
+The `metadata` key of a preset, and the "Metadata" list of the export dialog (set to the
+preset's, can be changed for this time):
+
+- `""`: as the render writes them (darktable, LibRaw, copy without recompression);
+- the id of a set of creation metadata: added to each written file (see
+  [iptc.md](iptc.md));
+- `"strip"` (`export::STRIP`): **all removed** (`tri::strip`, the user's idea: an export
+  for the web, a few bytes less, no camera, date or GPS position). Without recompression:
+  only the metadata blocks go, the pixels stay byte for byte. Kept: the **colour
+  profile** (ICC) and the **orientation** (put back in a minimal EXIF). JPEG: EXIF, XMP,
+  IPTC segments, comments, MPF previews after the end of the image; PNG: `eXIf`, `tEXt`,
+  `zTXt`, `iTXt`, `tIME`; TIFF: the IFD0 description tags (camera, software, date,
+  author, rights, XMP, IPTC, EXIF, GPS), their data zeroed in the file. Another format:
+  an error in the export report.
+
+
 
 Requested on 2026-10-19: no more need to edit the file. In the settings window
 (`Ctrl+,`), a single **"Export presets"** entry on the left (feedback from 2026-10-20:

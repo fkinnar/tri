@@ -116,6 +116,12 @@ pub struct ExportDialog {
     /// Images qui ont des versions : la case « Exporter les versions » (retour du
     /// 16/11/2026).
     versions: Option<VersionsChoice>,
+    /// Métadonnées des fichiers écrits (liste de la boîte, retour du 25/11/2026) et le
+    /// profil dont elles viennent : elles reprennent la valeur du profil quand on en
+    /// change (voir [`Profile::metadata`]).
+    metadata: (String, usize),
+    /// Jeux de métadonnées de création proposés : (identifiant, nom affiché).
+    sets: Vec<(String, String)>,
 }
 
 /// Case « Exporter les versions » de la boîte, quand des images en ont.
@@ -285,6 +291,8 @@ impl ExportDialog {
             field: Default::default(),
             at,
             fresh: true,
+            metadata: (String::new(), usize::MAX),
+            sets: Vec::new(),
         }
     }
 
@@ -493,6 +501,7 @@ impl ExportDialog {
                         });
                     }
                 }
+                self.metadata_choice(ui);
                 if let Some(reason) = &unsupported {
                     ui.colored_label(ui.visuals().error_fg_color, reason);
                 }
@@ -534,6 +543,7 @@ impl ExportDialog {
                 profile: Box::new(tri::export::Profile {
                     passthrough: self.passthrough.0,
                     file_name: name,
+                    metadata: self.metadata.0.clone(),
                     ..profile.clone()
                 }),
                 folder,
@@ -552,6 +562,51 @@ impl ExportDialog {
         } else {
             Outcome::Open
         }
+    }
+
+    /// Les jeux de métadonnées de création à proposer, (identifiant, nom affiché).
+    pub fn with_metadata_sets(mut self, sets: Vec<(String, String)>) -> ExportDialog {
+        self.sets = sets;
+        self
+    }
+
+    /// Liste « Métadonnées » (retour du 25/11/2026) : telles que le rendu les écrit, un jeu
+    /// de métadonnées de création ajouté, ou toutes retirées ; celle du préréglage
+    /// d'abord.
+    fn metadata_choice(&mut self, ui: &mut egui::Ui) {
+        if self.metadata.1 != self.choice {
+            let from_profile = self.profiles.get(self.choice).map(|p| p.metadata.clone());
+            self.metadata = (from_profile.unwrap_or_default(), self.choice);
+        }
+        let keep = t!("export-metadata-keep");
+        let strip = t!("export-metadata-strip");
+        let current = &self.metadata.0;
+        let shown = if current.is_empty() {
+            keep.clone()
+        } else if current == tri::export::STRIP {
+            strip.clone()
+        } else {
+            self.sets
+                .iter()
+                .find(|(id, _)| id == current)
+                .map_or_else(|| current.clone(), |(_, name)| name.clone())
+        };
+        ui.horizontal(|ui| {
+            ui.label(t!("export-metadata"));
+            egui::ComboBox::from_id_salt("export_metadata")
+                .selected_text(shown)
+                .show_ui(ui, |ui| {
+                    let value = &mut self.metadata.0;
+                    ui.selectable_value(value, String::new(), keep)
+                        .on_hover_text(t!("export-metadata-keep-tip"));
+                    for (id, name) in &self.sets {
+                        ui.selectable_value(value, id.clone(), name)
+                            .on_hover_text(t!("export-metadata-set-tip"));
+                    }
+                    ui.selectable_value(value, tri::export::STRIP.to_string(), strip)
+                        .on_hover_text(t!("export-metadata-strip-tip"));
+                });
+        });
     }
 
     /// Ce qui part, en clair : « 1 RAW, développé par darktable · 1 JPEG de l'appareil
@@ -1053,6 +1108,7 @@ fn report_entry(
 mod tests {
     use super::*;
     use crate::view::Source;
+    use egui_kittest::kittest::Queryable;
 
     #[test]
     fn what_is_exported_is_what_is_looked_at() {
@@ -1133,5 +1189,40 @@ mod tests {
             moved,
             "préréglage inchangé depuis le dossier"
         );
+    }
+
+    #[test]
+    fn metadata_follow_the_preset_and_can_be_changed_for_this_time() {
+        // 25/11/2026 : une liste « Métadonnées » réglée sur celle du préréglage : telles
+        // quelles, un jeu de création, ou toutes retirées.
+        crate::i18n::ensure();
+        let images = [PathBuf::from("a/DSCF1.RAF")];
+        let mut settings = tri::export::ExportSettings::default();
+        for p in &mut settings.profiles.0 {
+            p.metadata = "mine".into();
+        }
+        let dialog = ExportDialog::new(&images, &settings, None, true, Render::LibRaw, Pos2::ZERO)
+            .with_metadata_sets(vec![("mine".into(), "Mes métadonnées".into())]);
+        // L'état : la boîte, et les métadonnées du préréglage parti.
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(700.0, 500.0))
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, (d, sent): &mut (ExportDialog, Option<String>)| {
+                    if let Outcome::Start { profile, .. } = d.show(ui.ctx()) {
+                        *sent = Some(profile.metadata.clone());
+                    }
+                },
+                (dialog, None),
+            );
+        h.run_steps(3);
+        assert_eq!(h.state().0.metadata.0, "mine", "celui du préréglage");
+        assert!(h.query_by_label(&t!("export-metadata")).is_some(), "la liste");
+        // Pour cette fois : toutes retirées ; le préréglage parti les emporte.
+        h.state_mut().0.metadata.0 = tri::export::STRIP.into();
+        h.run_steps(2);
+        h.get_by_label(&t!("export-button")).click();
+        h.run_steps(2);
+        assert_eq!(h.state().1.as_deref(), Some(tri::export::STRIP));
     }
 }

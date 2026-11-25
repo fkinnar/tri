@@ -43,9 +43,11 @@ de développement identique pour ExifTool).
   (`embedded::rewrite`, la mécanique des notes inscrites dans les images, généralisée par
   `embedded::Change`). Un RAW le reçoit dans son **sidecar** (le plus récent, sinon celui
   de `[xmp] sidecar`), que les logiciels de développement reprennent à l'export.
-- **À l'export** : la clé `iptc` d'un préréglage d'export (`iptc = "mine"`) pose le jeu sur
-  chaque fichier écrit, une copie sans recompression comprise (`Request::iptc`, à la fin de
-  `export::run`).
+- **À l'export** : la clé `metadata` d'un préréglage d'export (`metadata = "mine"` ;
+  ancien nom `iptc`, toujours lu) pose le jeu sur chaque fichier écrit, une copie sans
+  recompression comprise (`Request::iptc`, à la fin de `export::run`). La boîte d'export
+  a la même liste « Métadonnées » (25/11/2026), réglée sur celle du préréglage : telles
+  quelles, un jeu, ou toutes retirées (`"strip"`, voir [export.md](export.md)).
 - **Sur demande** : l'action `core.file.iptc` (palette, sans raccourci par défaut) ouvre la
   boîte « Métadonnées de création » sur la sélection : le jeu (liste s'il y en a
   plusieurs), ce qu'il pose (« remplace l'existant » pour ceux de `replace`), « Poser »

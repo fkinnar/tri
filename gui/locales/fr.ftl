@@ -1016,6 +1016,12 @@ export-name-tip = Un gabarit, sans extension : {"{"}name{"}"} (le nom de l'image
 export-no-developer = Aucun logiciel de développement trouvé : rendu de base par LibRaw.
 export-rapidraw-srgb = RapidRAW rend en sRGB : l'espace « { $color } » est converti depuis sRGB.
 export-passthrough = Sans recompression
+export-metadata = Métadonnées
+export-metadata-keep = Telles quelles
+export-metadata-keep-tip = Celles que le rendu écrit (boîtier, réglages, date…), rien d'ajouté
+export-metadata-set-tip = Ce jeu de métadonnées de création ajouté à chaque fichier (auteur, copyright…)
+export-metadata-strip = Retirer toutes les métadonnées
+export-metadata-strip-tip = Ni boîtier, ni date, ni GPS, ni auteur : seulement l'image, son profil couleur et son orientation, sans recompression
 export-passthrough-tip = JPEG d'origine copié tel quel, rendu boîtier écrit tel quel (orientation dans l'EXIF). Une image à réduire (taille du préréglage) est réencodée.
 export-versions = { $n ->
     [one] Exporter la version

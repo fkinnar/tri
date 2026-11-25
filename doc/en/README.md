@@ -46,6 +46,7 @@ exists.
 | [develop.md](develop.md) | Module `tri::develop`: rendering by darktable (plugin driving `darktable-cli`) |
 | [versions.md](versions.md) | Module `tri::versions`: crops of a photo (versions), stored in the XMP |
 | [export.md](export.md) | Module `tri::export`: JPEG / TIFF / PNG export with presets (darktable), no ProPhoto in 8 bits; `tri::export_log`: export report |
+| [export.md](export.md) | … including `tri::strip`: removing the metadata of exported files (without recompression) |
 | [fuzzy.md](fuzzy.md) | Module `tri::fuzzy`: fuzzy search (filter by name, folders, help) |
 | [overlay.md](overlay.md) | Module `tri::overlay`: overlays (grids, text, logo, format), plugins written in Rust or TOML files |
 | [send.md](send.md) | Module `tri::send`: send plugins (AirDrop) |

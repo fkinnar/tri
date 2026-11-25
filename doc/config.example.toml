@@ -305,8 +305,10 @@ print_threshold = 3.0
 #   préréglages qui conviennent ;
 # sharpen : accentuation de sortie, "none", "screen" (écran) ou "print" (tirage), réglée
 #   dans [export.sharpening] ; une copie sans recompression n'est pas accentuée ;
-# iptc : jeu de métadonnées de création ([iptc.sets.<id>]) posé sur les fichiers écrits,
-#   "" : aucun.
+# metadata : métadonnées des fichiers écrits : "" (telles que le rendu les écrit),
+#   l'identifiant d'un jeu de métadonnées de création ([iptc.sets.<id>], ajouté) ou
+#   "strip" (toutes retirées, sauf le profil couleur et l'orientation : un export pour le
+#   web, sans boîtier, date ni GPS) ; ancien nom : iptc.
 [export.profiles.edit]
 # Vers un éditeur externe : TIFF 16 bits, ProPhoto (linéaire), pleine définition.
 name = ""
@@ -321,7 +323,7 @@ folder = "{source}/export"
 passthrough = true
 applies_to = "all"
 sharpen = "none"
-iptc = ""
+metadata = ""
 
 [export.profiles.asis]
 # JPEG tel quel : un JPEG d'origine est copié sans rien toucher (taille, espace couleur :
@@ -339,7 +341,7 @@ folder = "{source}/export"
 passthrough = true
 applies_to = "flat"
 sharpen = "none"
-iptc = ""
+metadata = ""
 
 [export.profiles.web]
 # Publication : JPEG sRGB, 2048 pixels au plus.
@@ -355,14 +357,14 @@ folder = "{source}/export"
 passthrough = true
 applies_to = "all"
 sharpen = "screen"
-iptc = ""
+metadata = ""
 
 [iptc]
 # Jeu de métadonnées de création proposé (auteur, copyright…).
 #
 # Métadonnées de création posées dans les images, en XMP : un RAW dans son sidecar, un
 # JPEG, TIFF, PNG, WebP ou HEIF dans le fichier, sans recompression. Sur demande
-# (<core.file.iptc>, ou tri --iptc en ligne de commande) et à l'export (clé iptc d'un
+# (<core.file.iptc>, ou tri --iptc en ligne de commande) et à l'export (clé metadata d'un
 # préréglage d'export). default : le jeu proposé.
 default = "mine"
 

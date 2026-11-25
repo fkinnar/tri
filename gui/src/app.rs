@@ -22865,6 +22865,7 @@ impl TriApp {
                 )
                 .with_folders(self.export_folders.clone())
                 .with_names(self.export_names.clone())
+                .with_metadata_sets(self.metadata_sets())
                 .with_cut(tri::export::Cut {
                     crop: version.crop,
                     name: version.name.clone(),
@@ -22914,6 +22915,7 @@ impl TriApp {
                 )
                 .with_folders(self.export_folders.clone())
                 .with_names(self.export_names.clone())
+                .with_metadata_sets(self.metadata_sets())
                 .with_versions(
                     counts.iter().sum(),
                     counts.iter().filter(|&&n| n > 0).count(),
@@ -23185,6 +23187,22 @@ impl TriApp {
         }
     }
 
+    /// Jeux de métadonnées de création proposés à l'export : (identifiant, nom affiché).
+    fn metadata_sets(&self) -> Vec<(String, String)> {
+        self.settings
+            .iptc
+            .sets
+            .0
+            .keys()
+            .map(|id| {
+                (
+                    id.clone(),
+                    crate::iptc_dialog::set_name(id, &self.settings.iptc),
+                )
+            })
+            .collect()
+    }
+
     /// Lance l'export en fond (darktable) ; un seul à la fois : pendant un autre, il
     /// attend son tour dans la file (#400), avec tout ce qu'il exporte déjà décidé
     /// (images, préréglage, dossier, rendu).
@@ -23246,11 +23264,11 @@ impl TriApp {
         };
         trace(|| format!("export : {} images vers {folder}", images.len()));
         // Métadonnées de création du profil (#277).
-        let iptc = (!profile.iptc.is_empty())
+        let iptc = (!profile.metadata.is_empty() && profile.metadata != tri::export::STRIP)
             .then(|| {
                 self.settings
                     .iptc
-                    .set(&profile.iptc)
+                    .set(&profile.metadata)
                     .map(|(_, s)| s.clone())
             })
             .flatten();

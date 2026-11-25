@@ -555,13 +555,31 @@ fn accent_color_editor(ui: &mut Ui, value: &Value) -> (egui::Response, Option<Va
 }
 
 /// Réglage qui désigne un membre d'une famille (`[versions.presets.<id>] profile` : un
-/// préréglage d'export) : la racine de la famille, et si « aucun » est permis (valeur
-/// vide). Montré en liste déroulante de ses membres.
-fn member_choice(section: &str, key: &str) -> Option<(&'static str, bool)> {
+/// préréglage d'export), montré en liste déroulante de ses membres.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct MemberChoice {
+    /// Racine de la famille.
+    root: &'static str,
+    /// Libellé de la valeur vide, en tête, si elle est permise.
+    empty: Option<&'static str>,
+    /// Valeur de plus, en fin de liste : (valeur, libellé).
+    extra: Option<(&'static str, &'static str)>,
+}
+
+fn member_choice(section: &str, key: &str) -> Option<MemberChoice> {
+    let choice = |root, empty, extra| Some(MemberChoice { root, empty, extra });
     match (section, key) {
-        (s, "profile") if s.starts_with("versions.presets.") => Some(("export.profiles", true)),
-        ("iptc", "default") => Some(("iptc.sets", false)),
-        (s, "iptc") if s.starts_with("export.profiles.") => Some(("iptc.sets", true)),
+        (s, "profile") if s.starts_with("versions.presets.") => {
+            choice("export.profiles", Some("settings-profile-none"), None)
+        }
+        ("iptc", "default") => choice("iptc.sets", None, None),
+        // Métadonnées d'un préréglage d'export (retour du 25/11/2026) : telles quelles, un
+        // jeu de création ajouté, ou toutes retirées.
+        (s, "metadata") if s.starts_with("export.profiles.") => choice(
+            "iptc.sets",
+            Some("export-metadata-keep"),
+            Some((tri::export::STRIP, "export-metadata-strip")),
+        ),
         _ => None,
     }
 }
@@ -2039,8 +2057,11 @@ impl SettingsWindow {
                 // création proposé (`[iptc] default`, retour du 25/11/2026) ; celui d'un
                 // préréglage d'export, « aucun » en tête.
                 Value::Str(s) if member_choice(section, &entry.key).is_some() => {
-                    let (root, with_none) =
-                        member_choice(section, &entry.key).unwrap_or(("", false));
+                    let Some(MemberChoice { root, empty, extra }) =
+                        member_choice(section, &entry.key)
+                    else {
+                        return;
+                    };
                     let mut v = s.clone();
                     let members: Vec<(String, String)> = self
                         .schema()
@@ -2053,24 +2074,28 @@ impl SettingsWindow {
                             _ => None,
                         })
                         .collect();
-                    let none = t!("settings-profile-none");
-                    let shown = if v.is_empty() && with_none {
-                        none.clone()
-                    } else {
-                        members
+                    let empty = empty.map(|key| t!(key));
+                    let extra = extra.map(|(value, key)| (value, t!(key)));
+                    let shown = match (&empty, &extra) {
+                        (Some(label), _) if v.is_empty() => label.clone(),
+                        (_, Some((value, label))) if v == *value => label.clone(),
+                        _ => members
                             .iter()
                             .find(|(id, _)| *id == v)
-                            .map_or_else(|| v.clone(), |(_, name)| name.clone())
+                            .map_or_else(|| v.clone(), |(_, name)| name.clone()),
                     };
                     let combo = egui::ComboBox::from_id_salt(("settings_member", &id))
                         .selected_text(shown)
                         .show_ui(ui, |ui| {
-                            if with_none {
-                                ui.selectable_value(&mut v, String::new(), none);
+                            if let Some(label) = &empty {
+                                ui.selectable_value(&mut v, String::new(), label);
                             }
                             for (mid, name) in &members {
                                 ui.selectable_value(&mut v, mid.clone(), name)
                                     .on_hover_text(mid);
+                            }
+                            if let Some((value, label)) = &extra {
+                                ui.selectable_value(&mut v, value.to_string(), label);
                             }
                         });
                     widget = Some(combo.response);
@@ -3595,27 +3620,30 @@ mod tests {
 
     #[test]
     fn sets_and_presets_are_chosen_from_a_list_of_members() {
-        // Retour du 25/11/2026 : `[iptc] default`, un nom de jeu à taper ; une liste.
-        assert_eq!(member_choice("iptc", "default"), Some(("iptc.sets", false)));
+        // Retour du 25/11/2026 : `[iptc] default`, un nom de jeu à taper ; une liste. Les
+        // métadonnées d'un préréglage d'export : telles quelles, un jeu, ou retirées.
         assert_eq!(
-            member_choice("export.profiles.web", "iptc"),
-            Some(("iptc.sets", true)),
-            "« aucun » : pas de métadonnées posées à l'export"
+            member_choice("iptc", "default").map(|c| (c.root, c.empty)),
+            Some(("iptc.sets", None))
         );
+        let export = member_choice("export.profiles.web", "metadata").unwrap();
+        assert_eq!(export.root, "iptc.sets");
+        assert_eq!(export.empty, Some("export-metadata-keep"));
+        assert_eq!(export.extra.map(|e| e.0), Some(tri::export::STRIP));
         assert_eq!(
-            member_choice("versions.presets.story", "profile"),
-            Some(("export.profiles", true))
+            member_choice("versions.presets.story", "profile").map(|c| c.root),
+            Some("export.profiles")
         );
         assert_eq!(member_choice("iptc.sets.mine", "creator"), None);
         // Chaque réglage visé existe, et la famille a des membres.
         let schema = schema();
         for (section, key) in [
             ("iptc", "default"),
-            ("export.profiles.web", "iptc"),
+            ("export.profiles.web", "metadata"),
             ("versions.presets.story", "profile"),
         ] {
             assert!(schema.default_of(section, key).is_some(), "{section}.{key}");
-            let (root, _) = member_choice(section, key).unwrap();
+            let root = member_choice(section, key).unwrap().root;
             assert!(
                 schema
                     .sections
@@ -3624,6 +3652,9 @@ mod tests {
                 "{root}"
             );
         }
+        // « strip » accepté par le moteur.
+        let text = "[export.profiles.web]\nmetadata = \"strip\"\n";
+        assert!(tri::settings::parse::<AppSettings>(text).is_ok());
     }
 
     #[test]

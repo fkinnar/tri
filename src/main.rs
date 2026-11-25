@@ -2125,8 +2125,8 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
         .iptc(
             settings
                 .iptc
-                .set(&profile.iptc)
-                .filter(|_| !profile.iptc.is_empty())
+                .set(&profile.metadata)
+                .filter(|_| !profile.metadata.is_empty() && profile.metadata != tri::export::STRIP)
                 .map(|(_, set)| set),
         );
     let cancel = std::sync::atomic::AtomicBool::new(false);
