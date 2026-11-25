@@ -49,7 +49,7 @@ mot de passe, « Retenir le mot de passe » ; puis `connect` est rappelé avec l
 | --- | --- | --- |
 | Windows | chemin UNC lu directement (`\\nas\photo`) ; accès refusé (codes 5, 86, 1326, 1244) : la boîte, puis `WNetAddConnection2` | identifiants de Windows ; « Retenir » : gestionnaire d'identifiants (`CredWrite`, comme `cmdkey /add`) |
 | macOS | `osascript -e 'mount volume "smb://…"'`, monté dans `/Volumes` | boîte du système, trousseau (pas de boîte `tri`) |
-| Linux | `gio mount smb://…` (GVFS, comme Nemo et Nautilus), questions répondues par `tri` | trousseau GNOME s'il est déjà enregistré ; sinon la boîte ; « Retenir » : `secret-tool` (trousseau du bureau, attributs lus par GVFS ; sans garantie) |
+| Linux | `gio mount smb://…` (GVFS, comme Nemo et Nautilus), questions répondues par `tri` | trousseau GNOME s'il est déjà enregistré ; sinon la boîte ; « Retenir » : trousseau du bureau par D-Bus (Secret Service, attributs lus par GVFS), sans l'outil `secret-tool`, absent de Linux Mint |
 
 Sous Linux, `gio mount` pose ses questions sur sa sortie (`User [fabrice]: `,
 `Domain [WORKGROUP]: `, `Password: `, `LC_ALL=C`) ; `tri` les lit au fil de l'eau et
