@@ -751,6 +751,7 @@ impl OffloadDialog {
                 &items,
                 row.picked.as_ref(),
                 self.settings.skip_known,
+                self.settings.raw_only,
                 ctx,
             );
             self.picker = Some((i, picker));

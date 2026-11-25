@@ -1856,6 +1856,7 @@ offload-pick-exclude = { $n ->
 }
 offload-pick-exclude-tip = Already offloaded (here or elsewhere): unchecked and not copied again. Unchecked, they can be copied again.
 offload-pick-known = already copied
+offload-pick-partly = partly copied
 offload-raw-only = RAW only
 offload-keep-disk = Keep tri's data on this drive
 offload-keep-folder = Keep tri's data in the session folder

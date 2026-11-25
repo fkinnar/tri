@@ -1862,6 +1862,7 @@ offload-pick-exclude = { $n ->
 }
 offload-pick-exclude-tip = Déjà déchargées (ici ou ailleurs) : décochées et pas recopiées. Décochée, on peut les recopier.
 offload-pick-known = déjà copiée
+offload-pick-partly = en partie copiée
 offload-raw-only = RAW seulement
 offload-keep-disk = Garder les données de tri sur ce disque
 offload-keep-folder = Garder les données de tri dans le dossier de la séance

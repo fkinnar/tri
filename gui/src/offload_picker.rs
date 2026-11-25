@@ -25,8 +25,27 @@ struct Photo {
     /// Heure de prise de vue (« 14:32 »).
     time: String,
     size: u64,
-    /// Déjà déchargée (tous ses fichiers, d'après l'historique ou la destination).
-    known: bool,
+    /// Pour chaque fichier de `files` : son type et s'il est déjà déchargé (d'après
+    /// l'historique ou la destination).
+    copied: Vec<(MediaKind, bool)>,
+}
+
+impl Photo {
+    /// Déjà copiée : tous les fichiers que la copie prendrait le sont (avec « RAW
+    /// seulement », le RAW d'une paire suffit ; retour du 26/11/2026 : des RAW copiés
+    /// seuls laissaient leur photo cochée sans rien dire).
+    fn copied(&self, raw_only: bool) -> bool {
+        let has_raw = self.copied.iter().any(|(k, _)| *k == MediaKind::Raw);
+        self.copied
+            .iter()
+            .filter(|(k, _)| !(raw_only && has_raw) || *k == MediaKind::Raw)
+            .all(|(_, known)| *known)
+    }
+
+    /// En partie copiée : un de ses fichiers l'est, pas tous ceux à copier.
+    fn partly(&self, raw_only: bool) -> bool {
+        !self.copied(raw_only) && self.copied.iter().any(|(_, known)| *known)
+    }
 }
 
 /// Ce que devient la boîte.
@@ -65,6 +84,8 @@ pub struct Picker {
     /// Photos déjà déchargées exclues (retour du 25/11/2026) : décochées et pas
     /// cochables ; décochée, elles se cochent comme les autres (recopiées).
     pub(crate) exclude_known: bool,
+    /// « RAW seulement » de la boîte : ce que la copie prendra de chaque photo.
+    raw_only: bool,
 }
 
 /// Réglages des images de la galerie : vignettes de 320 px, grand à 1600 px.
@@ -96,6 +117,7 @@ impl Picker {
         items: &[&Item],
         chosen: Option<&HashSet<PathBuf>>,
         exclude_known: bool,
+        raw_only: bool,
         ctx: &egui::Context,
     ) -> Picker {
         let mut photos: Vec<Photo> = Vec::new();
@@ -108,7 +130,7 @@ impl Picker {
                 Some(photo) => {
                     photo.files.push(item.source.clone());
                     photo.size += item.size;
-                    photo.known &= item.known;
+                    photo.copied.push((item.kind, item.known));
                     if item.kind == MediaKind::Flat {
                         photo.shown = MediaFile {
                             path: item.source.clone(),
@@ -130,14 +152,14 @@ impl Picker {
                         .format("%H:%M")
                         .to_string(),
                     size: item.size,
-                    known: item.known,
+                    copied: vec![(item.kind, item.known)],
                 }),
             }
         }
         let checked = photos
             .iter()
             .map(|p| {
-                !(exclude_known && p.known)
+                !(exclude_known && p.copied(raw_only))
                     && chosen.is_none_or(|c| p.files.iter().any(|f| c.contains(f)))
             })
             .collect();
@@ -174,12 +196,13 @@ impl Picker {
             anchor: 0,
             visual: None,
             exclude_known,
+            raw_only,
         }
     }
 
     /// Vrai si la photo `i` ne peut pas être cochée (déjà déchargée, exclue).
     fn locked(&self, i: usize) -> bool {
-        self.exclude_known && self.photos[i].known
+        self.exclude_known && self.photos[i].copied(self.raw_only)
     }
 
     /// Coche ou décoche la photo `i` (une photo exclue reste décochée).
@@ -191,7 +214,7 @@ impl Picker {
     fn exclude(&mut self, on: bool) {
         self.exclude_known = on;
         for i in 0..self.photos.len() {
-            if self.photos[i].known {
+            if self.photos[i].copied(self.raw_only) {
                 self.checked[i] = !on;
             }
         }
@@ -388,7 +411,11 @@ impl Picker {
                     if ui.button(t!("offload-pick-none")).clicked() {
                         self.checked.iter_mut().for_each(|c| *c = false);
                     }
-                    let known = self.photos.iter().filter(|p| p.known).count();
+                    let known = self
+                        .photos
+                        .iter()
+                        .filter(|p| p.copied(self.raw_only))
+                        .count();
                     if known > 0 {
                         let mut on = self.exclude_known;
                         if ui
@@ -512,15 +539,16 @@ impl Picker {
                             }
                         }
                         let photo = &self.photos[i];
-                        let caption = if photo.known {
-                            format!(
-                                "{}  {} · {}",
-                                photo.name,
-                                photo.time,
-                                t!("offload-pick-known")
-                            )
+                        let state = if photo.copied(self.raw_only) {
+                            Some(t!("offload-pick-known"))
+                        } else if photo.partly(self.raw_only) {
+                            Some(t!("offload-pick-partly"))
                         } else {
-                            format!("{}  {}", photo.name, photo.time)
+                            None
+                        };
+                        let caption = match state {
+                            Some(state) => format!("{}  {} · {state}", photo.name, photo.time),
+                            None => format!("{}  {}", photo.name, photo.time),
                         };
                         ui.painter().text(
                             egui::pos2(cell.left(), image.bottom() + 2.0),
@@ -617,11 +645,16 @@ mod tests {
     use super::*;
 
     fn item(name: &str, known: bool) -> Item {
+        let kind = if name.ends_with(".RAF") {
+            MediaKind::Raw
+        } else {
+            MediaKind::Flat
+        };
         Item {
             source: PathBuf::from(format!("/carte/{name}")),
             size: 10,
             modified: std::time::SystemTime::UNIX_EPOCH,
-            kind: MediaKind::Raw,
+            kind,
             known,
         }
     }
@@ -633,7 +666,7 @@ mod tests {
         let items = [item("A.RAF", true), item("B.RAF", false)];
         let refs: Vec<&Item> = items.iter().collect();
         let ctx = egui::Context::default();
-        let mut p = Picker::new("2026-11-25", &refs, None, true, &ctx);
+        let mut p = Picker::new("2026-11-25", &refs, None, true, false, &ctx);
         assert_eq!(p.checked, [false, true], "déjà copiée : décochée");
         // Exclue : on ne peut pas la cocher, ni seule ni avec toutes.
         p.set(0, true);
@@ -649,5 +682,29 @@ mod tests {
         p.exclude(true);
         assert_eq!(p.checked, [false, true]);
         p.cancel.store(true, Ordering::Relaxed);
+    }
+
+    #[test]
+    fn a_pair_whose_raw_alone_was_copied_depends_on_raw_only() {
+        // Retour du 26/11/2026 : 7 RAW copiés seuls (« RAW seulement »), leurs photos
+        // restaient cochées sans rien dire. Avec « RAW seulement », elles sont copiées ;
+        // sans, il reste leur JPEG : « en partie copiée », cochée.
+        crate::i18n::ensure();
+        let items = [
+            item("A.RAF", true),
+            item("A.JPG", false),
+            item("B.RAF", false),
+        ];
+        let refs: Vec<&Item> = items.iter().collect();
+        let ctx = egui::Context::default();
+        let raw_only = Picker::new("2026-11-25", &refs, None, true, true, &ctx);
+        assert_eq!(raw_only.checked, [false, true]);
+        assert!(raw_only.photos[0].copied(true));
+        raw_only.cancel.store(true, Ordering::Relaxed);
+        let all = Picker::new("2026-11-25", &refs, None, true, false, &ctx);
+        assert_eq!(all.checked, [true, true], "son JPEG reste à copier");
+        assert!(all.photos[0].partly(false));
+        assert!(!all.photos[1].partly(false));
+        all.cancel.store(true, Ordering::Relaxed);
     }
 }
