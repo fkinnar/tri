@@ -45202,7 +45202,10 @@ mod tests {
             h.run_steps(1);
             std::thread::sleep(Duration::from_millis(10));
         }
-        assert!(h.query_by_label_contains("3 séances sur la carte").is_some());
+        assert!(
+            h.query_by_label_contains("3 séances sur la carte")
+                .is_some()
+        );
         settle_dialog(&mut h);
         h.get_by_label("2026-11-10").click();
         h.run_steps(2);
@@ -45231,7 +45234,10 @@ mod tests {
         };
         assert_eq!(names("2026-11-11"), ["IMG1.jpg"]);
         assert_eq!(names("2026-11-12"), ["IMG2.jpg", "IMG3.jpg"]);
-        assert!(names("2026-11-10").is_empty(), "séance décochée : pas copiée");
+        assert!(
+            names("2026-11-10").is_empty(),
+            "séance décochée : pas copiée"
+        );
     }
 
     #[test]
