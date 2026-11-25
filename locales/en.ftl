@@ -30,6 +30,16 @@ metadata-dimensions = Dimensions
 metadata-dimensions-value = { $width } × { $height }
 metadata-dimensions-note = { $mpx } MP
 metadata-file = File
+metadata-iptc-creator = Author
+metadata-iptc-copyright = Copyright
+metadata-iptc-usage-terms = Terms
+metadata-iptc-web-statement = Terms address
+metadata-iptc-credit = Credit
+metadata-iptc-title = Title
+metadata-iptc-caption = Caption
+metadata-iptc-city = City
+metadata-iptc-state = State
+metadata-iptc-country = Country
 metadata-size-kb = { $size } kB
 metadata-size-mb = { $size } MB
 program-manual = Manual
@@ -331,6 +341,14 @@ cli-export-done = { $n ->
    *[other] { $n } files written
 }
 cli-export-failed = { $failed } images without a written file (unreadable by Darktable?)
+cli-iptc-done = { $n ->
+    [0] no image changed (out of { $total })
+    [one] 1 image out of { $total } received the metadata
+   *[other] { $n } images out of { $total } received the metadata
+}
+cli-iptc-unknown = unknown metadata set: "{ $id }" ([iptc.sets.<id>])
+cli-iptc-empty = the set "{ $id }" is empty: fill it in [iptc.sets.{ $id }]
+cli-some-not-done = { $n } images not processed
 cli-groups-header = image	next	distance	gap (s)	with the pause
 cli-groups-summary = { $n } images, { $groups } groups at threshold { $threshold } ({ $ms } ms per signature)
 cli-cache-cleared = cache cleared ({ $level })
@@ -432,6 +450,7 @@ cli-ph-name = name
 cli-ph-card = card
 cli-ph-root = root
 cli-ph-preset = preset
+cli-ph-set = set
 cli-ph-reference = reference
 cli-ph-level = level
 cli-ph-file = file
@@ -449,6 +468,7 @@ cli-cmd-copy = Copies or moves the images (or a whole folder), their pairs and t
 cli-cmd-reveal = Shows the image in the file manager.
 cli-cmd-edit = Opens the images in the external editor ([files] editor).
 cli-cmd-export = Exports the images with an export preset (darktable if installed, LibRaw otherwise).
+cli-cmd-iptc = Puts the creation metadata of a set ([iptc.sets.<id>]: author, copyright…): a RAW in its sidecar, a JPEG or a TIFF in the file, without recompression.
 cli-cmd-adjust = Matches the exposure and balance of the images to the first one (the reference) and writes the result.
 cli-cmd-offload = Offloads a card: verified copy of the new images to the session folder.
 cli-cmd-exposure = Exposure of each image: headroom before clipping, clipped and crushed pixels.

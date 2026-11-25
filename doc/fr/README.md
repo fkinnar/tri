@@ -62,6 +62,7 @@ existe.
 | [pp3.md](pp3.md) | Module `tri::pp3` : notes dans les profils de RawTherapee (`.pp3`) et d'ART (`.arp`), même format |
 | [sidecars.md](sidecars.md) | Module `tri::sidecars` : les formats de sidecars de notes (XMP, `.rrdata`, `.pp3`, `.arp`), tous écrits, les manquants créés selon `[sidecars]` ou à la demande |
 | [embedded.md](embedded.md) | Module `tri::embedded` : notes inscrites dans les images elles-mêmes (JPEG, PNG, WebP, TIFF, HEIC), lues sans sidecar, inscrites et relues sur demande |
+| [iptc.md](iptc.md) | Module `tri::iptc` : métadonnées de création (auteur, copyright…) en XMP, par jeux, à l'export et sur demande (#277) |
 | [store.md](store.md) | Module `tri::store` : données de tri d'un dossier (filtres, curseurs, couvertures, mémoire des notes) dans son `.tri/` ou sur la machine, un seul interrupteur avec le cache |
 | [reset.md](reset.md) | Module `tri::reset` : réinitialiser un dossier (cache, données de tri, notes remises à zéro dans les sidecars, versions), une boîte à cases |
 | [reconcile.md](reconcile.md) | Module `tri::reconcile` : notes venues de plusieurs sources (sidecars, image), fusion champ par champ et conflits, mémoire `.tri/notes.json` |

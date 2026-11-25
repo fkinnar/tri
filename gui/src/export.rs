@@ -750,6 +750,8 @@ pub struct Order {
     pub render: tri::raw::RenderOptions,
     /// Suffixe du JPEG d'une paire exporté avec son RAW.
     pub pair_suffix: String,
+    /// Métadonnées de création (jeu de la clé `iptc` du profil, #277).
+    pub iptc: Option<tri::iptc::IptcSet>,
 }
 
 /// Export en cours, dans un fil à part (darktable : plusieurs secondes par image).
@@ -788,6 +790,7 @@ impl Job {
             sharpening,
             render,
             pair_suffix,
+            iptc,
         } = order;
         // Dossier montré : celui de la première image (relatif : un par dossier d'images).
         let dest = images
@@ -811,7 +814,8 @@ impl Job {
                     .order(&images)
                     .cut(cut.as_ref())
                     .sharpening(sharpening)
-                    .render(render);
+                    .render(render)
+                    .iptc(iptc.as_ref());
                 use tri::export::{Local, Renderer, Renderers};
                 let local = match tools.render {
                     Render::Embedded => Local::Embedded,

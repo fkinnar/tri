@@ -57,6 +57,8 @@ pub struct Metadata {
     pub focus_point: Option<(f32, f32)>,
     /// Orientation EXIF d'un quart de tour (5 à 8) : dimensions à échanger.
     quarter_turn: bool,
+    /// Métadonnées de création (#277) : (clé de [`crate::iptc::FIELDS`], valeur).
+    pub creation: Vec<(&'static str, String)>,
 }
 
 /// Erreurs de lecture.
@@ -95,6 +97,7 @@ pub fn read(file: &MediaFile) -> Result<Metadata, MetadataError> {
         MediaKind::Flat => read_flat(&path),
     };
     m.file_size = file_size;
+    m.creation = crate::iptc::read(&file.path);
     Ok(m)
 }
 
@@ -371,6 +374,11 @@ impl Metadata {
                 n => crate::t!("metadata-size-mb", size = decimal_text(n as f64 / 1e6, 1)),
             }),
         );
+        // Auteur, copyright… (#277).
+        for (key, value) in &self.creation {
+            let label = crate::t!(&format!("metadata-iptc-{}", key.replace('_', "-")));
+            rows.push(Row::new(label, value.clone()));
+        }
         rows
     }
 }
@@ -525,6 +533,7 @@ mod tests {
             file_size: 26_300_000,
             focus_point: None,
             quarter_turn: false,
+            creation: vec![("creator", "Ana Lima".into())],
         }
     }
 

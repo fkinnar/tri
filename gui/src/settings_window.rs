@@ -177,7 +177,7 @@ pub fn needs_restart(section: &str, key: &str) -> bool {
 
 /// Sections que l'utilisateur peut multiplier depuis la fenêtre (demandé le 19/10/2026) :
 /// (section parente, section d'exemple qui sert de modèle, libellé d'une section ajoutée).
-const FAMILIES: [(&str, &str, &str); 2] = [
+const FAMILIES: [(&str, &str, &str); 3] = [
     (
         "export.profiles",
         "export.profiles.web",
@@ -187,6 +187,12 @@ const FAMILIES: [(&str, &str, &str); 2] = [
         "versions.presets",
         "versions.presets.story",
         "settings-section-versions-preset-user",
+    ),
+    // Jeux de métadonnées de création (#277), sur le modèle du jeu fourni.
+    (
+        "iptc.sets",
+        "iptc.sets.mine",
+        "settings-section-iptc-set-user",
     ),
 ];
 
@@ -257,6 +263,8 @@ const CATEGORIES: [&[&str]; 6] = [
         "export",
         "export.profiles",
         "export.sharpening",
+        "iptc",
+        "iptc.sets",
         "versions",
         "versions.presets",
         "gui.crop",
@@ -305,6 +313,7 @@ fn builtin(section: &str) -> bool {
         Some((("export.profiles", _, _), id)) => {
             tri::export::Profile::defaults().iter().any(|p| p.id == id)
         }
+        Some((("iptc.sets", _, _), id)) => id == tri::iptc::MINE,
         Some((_, id)) => tri::versions::Preset::defaults().iter().any(|p| p.id == id),
         None => false,
     }
@@ -321,10 +330,10 @@ fn member_name(file: &ConfigFile, section: &str) -> String {
     {
         return name;
     }
-    let key = if parent == "export.profiles" {
-        format!("export-profile-{id}")
-    } else {
-        format!("preset-{id}")
+    let key = match parent {
+        "export.profiles" => format!("export-profile-{id}"),
+        "iptc.sets" => format!("iptc-set-{id}"),
+        _ => format!("preset-{id}"),
     };
     if builtin(section) && tri::i18n::has(tri::i18n::language(), &key) {
         tri::i18n::translate(&key, None)
@@ -924,6 +933,9 @@ impl SettingsWindow {
                 all.iter().map(|p| p.id.clone()).collect(),
                 all.iter().find(|p| p.id == id)?.entries(),
             )
+        } else if parent == "iptc.sets" {
+            let all = &settings.iptc.sets.0;
+            (all.keys().cloned().collect(), all.get(id)?.entries())
         } else {
             let all = &settings.versions.presets.0;
             (

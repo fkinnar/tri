@@ -301,7 +301,8 @@ print_threshold = 3.0
 #   (image already developed: camera render, JPEG, TIFF…); the export dialog only offers the
 #   presets that fit;
 # sharpen: output sharpening, "none", "screen" or "print", set
-#   in [export.sharpening]; a copy without recompression is not sharpened.
+#   in [export.sharpening]; a copy without recompression is not sharpened;
+# iptc: set of creation metadata ([iptc.sets.<id>]) put on the written files, "": none.
 [export.profiles.edit]
 # For an external editor: 16-bit TIFF, ProPhoto (linear), full resolution.
 name = ""
@@ -316,6 +317,7 @@ folder = "{source}/export"
 passthrough = true
 applies_to = "all"
 sharpen = "none"
+iptc = ""
 
 [export.profiles.asis]
 # JPEG as is: an original JPEG is copied without touching anything (size, colour space:
@@ -333,6 +335,7 @@ folder = "{source}/export"
 passthrough = true
 applies_to = "flat"
 sharpen = "none"
+iptc = ""
 
 [export.profiles.web]
 # Publishing: sRGB JPEG, 2048 pixels at most.
@@ -348,6 +351,38 @@ folder = "{source}/export"
 passthrough = true
 applies_to = "all"
 sharpen = "screen"
+iptc = ""
+
+[iptc]
+# Creation metadata set offered (author, copyright…).
+#
+# Creation metadata put into the images, as XMP: a RAW in its sidecar, a JPEG, TIFF,
+# PNG, WebP or HEIF in the file, without recompression. On demand (<core.file.iptc>, or
+# tri --iptc on the command line) and when exporting (iptc key of an export preset).
+# default: the set offered.
+default = "mine"
+
+# Creation metadata sets: "New…" creates one modelled on the one shown.
+#
+# Sets [iptc.sets.<identifier>], as many as wanted; an empty field is not set. Fields:
+# creator (authors, separated by ";"), copyright, usage_terms, web_statement (address of
+# the terms or of the site), credit, title, caption, city, state, country. Variables:
+# {year} (the year of the file's date: the shooting for a camera photo), {name} (the
+# image's name). A field already filled in the image is kept, unless replace names it.
+[iptc.sets.mine]
+# My metadata, to fill in: author, copyright (always replaced), terms…
+name = ""
+creator = ""
+copyright = ""
+usage_terms = ""
+web_statement = ""
+credit = ""
+title = ""
+caption = ""
+city = ""
+state = ""
+country = ""
+replace = ["copyright"]
 
 [versions]
 # Ratios added to the list of the version bar (the "+" next to the custom ratio writes

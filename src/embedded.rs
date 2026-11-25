@@ -90,18 +90,79 @@ struct Found {
 /// Notes inscrites dans `path` ; `None` si l'image n'en porte aucune (ni paquet XMP avec
 /// des notes, ni note EXIF), ou n'est pas d'un format qui en porte.
 pub fn read(path: &Path) -> io::Result<Option<Notes>> {
+    Ok(scan(path)?.and_then(|found| notes_of(&found)))
+}
+
+/// Ce que dit l'en-tête de `path` ; `None` pour un format qui ne porte rien.
+fn scan(path: &Path) -> io::Result<Option<Found>> {
     let Some(container) = Container::of(path) else {
         return Ok(None);
     };
     let mut file = io::BufReader::new(File::open(path)?);
-    let found = match container {
+    Ok(Some(match container {
         Container::Jpeg => scan_jpeg(&mut file)?,
         Container::Png => scan_png(&mut file)?,
         Container::Webp => scan_webp(&mut file)?,
         Container::Tiff => scan_tiff(&mut file)?,
         Container::Heif => scan_heif(&mut file)?,
+    }))
+}
+
+/// Le paquet XMP embarqué dans `path`, en texte ; `None` s'il n'y en a pas.
+pub fn read_packet(path: &Path) -> io::Result<Option<String>> {
+    Ok(scan(path)?
+        .and_then(|found| found.xmp)
+        .and_then(|x| String::from_utf8(x).ok()))
+}
+
+/// Ce qu'on change dans le paquet XMP d'une image : les notes (et leur écho EXIF), ou une
+/// réécriture quelconque du paquet (métadonnées de création, #277).
+pub enum Change<'a> {
+    /// Les notes, comme [`write`].
+    Notes(&'a Notes),
+    /// Le paquet (existant, ou neuf) réécrit par cette fonction.
+    Packet(&'a dyn Fn(&str) -> Result<String, String>),
+}
+
+impl Change<'_> {
+    fn notes(&self) -> Option<&Notes> {
+        match self {
+            Change::Notes(n) => Some(n),
+            Change::Packet(_) => None,
+        }
+    }
+}
+
+/// Réécrit le paquet XMP embarqué de `path` par `edit` (un paquet neuf s'il n'y en a pas),
+/// sans recompression, comme [`write`] ; le reste du fichier est gardé octet pour octet.
+/// Renvoie vrai si le fichier a changé ; relu ensuite, `edit` ne doit plus rien y changer.
+pub fn rewrite(path: &Path, edit: &dyn Fn(&str) -> Result<String, String>) -> Result<bool, String> {
+    let io = |e: io::Error| t!("embed-io", error = e.to_string());
+    let Some(updated) = updated(path, &Change::Packet(edit))? else {
+        return Ok(false);
     };
-    Ok(notes_of(&found))
+    replace_file(path, &updated)?;
+    let back = read_packet(path).map_err(io)?.unwrap_or_default();
+    if edit(&back)? != back {
+        return Err(t!("embed-verify-failed"));
+    }
+    Ok(true)
+}
+
+/// Écrit `bytes` à la place de `path` (copie de sécurité `.tri.tmp` d'abord).
+fn replace_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let io = |e: io::Error| t!("embed-io", error = e.to_string());
+    let tmp = tmp_path(path);
+    std::fs::write(&tmp, bytes).map_err(io)?;
+    if let Err(e) = std::fs::write(path, bytes) {
+        return Err(t!(
+            "embed-write-failed",
+            error = e.to_string(),
+            copy = tmp.display().to_string()
+        ));
+    }
+    let _ = std::fs::remove_file(&tmp);
+    Ok(())
 }
 
 /// Notes de ce qui a été trouvé : le XMP d'abord, la note EXIF à défaut.
@@ -127,19 +188,10 @@ fn notes_of(found: &Found) -> Option<Notes> {
 /// (ou, si l'écriture elle-même a échoué, sa copie `.tri.tmp` est gardée à côté).
 pub fn write(path: &Path, notes: &Notes) -> Result<bool, String> {
     let io = |e: io::Error| t!("embed-io", error = e.to_string());
-    let Some(updated) = updated(path, notes)? else {
+    let Some(updated) = updated(path, &Change::Notes(notes))? else {
         return Ok(false);
     };
-    let tmp = tmp_path(path);
-    std::fs::write(&tmp, &updated).map_err(io)?;
-    if let Err(e) = std::fs::write(path, &updated) {
-        return Err(t!(
-            "embed-write-failed",
-            error = e.to_string(),
-            copy = tmp.display().to_string()
-        ));
-    }
-    let _ = std::fs::remove_file(&tmp);
+    replace_file(path, &updated)?;
     // Relu : ce qui compte est ce qui est sur le disque.
     let back = read(path).map_err(io)?.unwrap_or_default();
     if !same_notes(&back, notes) {
@@ -150,11 +202,11 @@ pub fn write(path: &Path, notes: &Notes) -> Result<bool, String> {
 
 /// Vrai si [`write`] changerait l'image (`--dry-run`) ; mêmes erreurs.
 pub fn would_change(path: &Path, notes: &Notes) -> Result<bool, String> {
-    updated(path, notes).map(|u| u.is_some())
+    updated(path, &Change::Notes(notes)).map(|u| u.is_some())
 }
 
 /// Contenu de `path` avec `notes` inscrites ; `None` s'il ne change pas.
-fn updated(path: &Path, notes: &Notes) -> Result<Option<Vec<u8>>, String> {
+fn updated(path: &Path, notes: &Change<'_>) -> Result<Option<Vec<u8>>, String> {
     let container = Container::of(path).ok_or_else(|| t!("embed-unsupported"))?;
     let bytes = std::fs::read(path).map_err(|e| t!("embed-io", error = e.to_string()))?;
     match container {
@@ -179,9 +231,9 @@ fn tmp_path(path: &Path) -> PathBuf {
 
 /// Paquet XMP mis à jour avec `notes` (`existing` complété, ou un paquet neuf) ; `None`
 /// s'il ne change pas.
-fn updated_packet(existing: Option<&[u8]>, notes: &Notes) -> Result<Option<Vec<u8>>, String> {
+fn updated_packet(existing: Option<&[u8]>, change: &Change<'_>) -> Result<Option<Vec<u8>>, String> {
     // Pas de paquet créé pour ne rien dire : une image jamais notée reste telle quelle.
-    if existing.is_none() && *notes == Notes::default() {
+    if existing.is_none() && change.notes().is_some_and(|n| *n == Notes::default()) {
         return Ok(None);
     }
     let base = match existing {
@@ -190,7 +242,10 @@ fn updated_packet(existing: Option<&[u8]>, notes: &Notes) -> Result<Option<Vec<u
             .to_string(),
         None => new_packet(),
     };
-    let updated = xmp::apply(&base, notes).map_err(|e| e.to_string())?;
+    let updated = match change {
+        Change::Notes(notes) => xmp::apply(&base, notes).map_err(|e| e.to_string())?,
+        Change::Packet(edit) => edit(&base)?,
+    };
     if existing.is_some() && updated == base {
         return Ok(None);
     }
@@ -417,7 +472,7 @@ const MAX_XMP: usize = 16 << 20;
 /// dans le paquet), sinon ajouté en fin de fichier avec une copie de l'IFD0 qui le désigne
 /// (l'ancien IFD0 reste, inutilisé : les données qu'il désigne ne bougent pas) ; les notes
 /// EXIF présentes, sur place.
-fn update_tiff(bytes: &[u8], notes: &Notes) -> Result<Option<Vec<u8>>, String> {
+fn update_tiff(bytes: &[u8], notes: &Change<'_>) -> Result<Option<Vec<u8>>, String> {
     let malformed = || t!("embed-malformed");
     if bytes.get(2..4) == Some(&[0, 43]) || bytes.get(2..4) == Some(&[43, 0]) {
         return Err(t!("embed-bigtiff"));
@@ -429,7 +484,9 @@ fn update_tiff(bytes: &[u8], notes: &Notes) -> Result<Option<Vec<u8>>, String> {
     let existing = old.and_then(|e| t.data(e));
     let packet = updated_packet(existing, notes)?;
     let mut out = bytes.to_vec();
-    let mut changed = patch_tiff_rating(&mut out, notes);
+    let mut changed = notes
+        .notes()
+        .is_some_and(|n| patch_tiff_rating(&mut out, n));
     let Some(packet) = packet else {
         return Ok(changed.then_some(out));
     };
@@ -596,7 +653,7 @@ fn scan_jpeg<R: Read + Seek>(r: &mut R) -> io::Result<Found> {
 
 /// JPEG mis à jour : le segment XMP remplacé à sa place, ou ajouté après les en-têtes JFIF
 /// et EXIF ; les notes EXIF présentes, sur place.
-fn update_jpeg(bytes: &[u8], notes: &Notes) -> Result<Option<Vec<u8>>, String> {
+fn update_jpeg(bytes: &[u8], notes: &Change<'_>) -> Result<Option<Vec<u8>>, String> {
     let segs = jpeg_segments(bytes).ok_or_else(|| t!("embed-malformed"))?;
     let data = |&(_, s, e): &(u8, usize, usize)| &bytes[s + 4..e];
     let xmp_seg = segs
@@ -611,7 +668,9 @@ fn update_jpeg(bytes: &[u8], notes: &Notes) -> Result<Option<Vec<u8>>, String> {
         .iter()
         .find(|s| s.0 == 0xE1 && data(s).starts_with(JPEG_EXIF))
     {
-        changed = patch_tiff_rating(&mut out[s + 4 + JPEG_EXIF.len()..e], notes);
+        changed = notes
+            .notes()
+            .is_some_and(|n| patch_tiff_rating(&mut out[s + 4 + JPEG_EXIF.len()..e], n));
     }
     let Some(packet) = packet else {
         return Ok(changed.then_some(out));
@@ -705,7 +764,7 @@ fn scan_png<R: Read + Seek>(r: &mut R) -> io::Result<Found> {
 
 /// PNG mis à jour : le chunk XMP remplacé à sa place, ou ajouté après `IHDR` ; la note
 /// EXIF présente (`eXIf`), sur place.
-fn update_png(bytes: &[u8], notes: &Notes) -> Result<Option<Vec<u8>>, String> {
+fn update_png(bytes: &[u8], notes: &Change<'_>) -> Result<Option<Vec<u8>>, String> {
     use img_parts::Bytes;
     use img_parts::png::{Png, PngChunk};
     let mut png = Png::from_bytes(Bytes::copy_from_slice(bytes))
@@ -725,7 +784,10 @@ fn update_png(bytes: &[u8], notes: &Notes) -> Result<Option<Vec<u8>>, String> {
     for chunk in png.chunks_mut() {
         if chunk.kind() == *b"eXIf" {
             let mut exif = chunk.contents().to_vec();
-            if patch_tiff_rating(&mut exif, notes) {
+            if notes
+                .notes()
+                .is_some_and(|n| patch_tiff_rating(&mut exif, n))
+            {
                 *chunk = PngChunk::new(*b"eXIf", Bytes::from(exif));
                 changed = true;
             }
@@ -793,7 +855,7 @@ fn scan_webp<R: Read + Seek>(r: &mut R) -> io::Result<Found> {
 
 /// WebP mis à jour : le chunk XMP remplacé, ou ajouté en fin (un WebP simple devient
 /// étendu, `VP8X`, ce que fait `img-parts`) ; la note EXIF présente, sur place.
-fn update_webp(bytes: &[u8], notes: &Notes) -> Result<Option<Vec<u8>>, String> {
+fn update_webp(bytes: &[u8], notes: &Change<'_>) -> Result<Option<Vec<u8>>, String> {
     use img_parts::webp::{CHUNK_EXIF, CHUNK_XMP, WebP};
     use img_parts::{Bytes, ImageICC, riff::RiffChunk, riff::RiffContent};
     let mut webp = WebP::from_bytes(Bytes::copy_from_slice(bytes))
@@ -814,7 +876,10 @@ fn update_webp(bytes: &[u8], notes: &Notes) -> Result<Option<Vec<u8>>, String> {
             } else {
                 0
             };
-            if patch_tiff_rating(&mut exif[offset..], notes) {
+            if notes
+                .notes()
+                .is_some_and(|n| patch_tiff_rating(&mut exif[offset..], n))
+            {
                 *data = Bytes::from(exif);
                 changed = true;
             }
@@ -1220,7 +1285,7 @@ fn scan_heif<R: Read + Seek>(r: &mut R) -> io::Result<Found> {
 }
 
 /// HEIF mis à jour (voir l'en-tête de cette partie).
-fn update_heif(bytes: &[u8], notes: &Notes) -> Result<Option<Vec<u8>>, String> {
+fn update_heif(bytes: &[u8], notes: &Change<'_>) -> Result<Option<Vec<u8>>, String> {
     let malformed = || t!("embed-malformed");
     let top = iso_boxes(bytes, 0, bytes.len()).ok_or_else(malformed)?;
     if top.first().map(|b| &b.kind) != Some(b"ftyp") {

@@ -1490,6 +1490,9 @@ pub struct TriApp {
     locating: Option<Locating>,
     /// La boîte « Retrouver… » (pas trouvé automatiquement).
     locate_dialog: Option<crate::locate_dialog::LocateDialog>,
+    /// Boîte « Métadonnées de création » (#277), et la pose en cours en fond.
+    iptc_dialog: Option<crate::iptc_dialog::IptcDialog>,
+    iptc_job: Option<std::sync::mpsc::Receiver<EmbedReport>>,
     /// Tests : les racines où « Retrouver » cherche (sinon les emplacements du panneau).
     #[cfg(test)]
     locate_roots: Option<Vec<PathBuf>>,
@@ -2846,6 +2849,8 @@ impl TriApp {
             missing_dirs: HashMap::new(),
             locating: None,
             locate_dialog: None,
+            iptc_dialog: None,
+            iptc_job: None,
             #[cfg(test)]
             locate_roots: None,
             index_in_tests: false,
@@ -15088,6 +15093,7 @@ impl TriApp {
             | Action::FileDelete
             | Action::FileReveal
             | Action::FileEdit
+            | Action::FileIptc
             | Action::FileCopy
             | Action::FileMove
             | Action::FileExport
@@ -15106,6 +15112,7 @@ impl TriApp {
                     }
                     Action::FileDelete
                     | Action::FileEdit
+                    | Action::FileIptc
                     | Action::FileCopy
                     | Action::FileMove
                     | Action::FileExport
@@ -22687,6 +22694,13 @@ impl TriApp {
                 self.embed_notes(paths.clone());
                 Ok(())
             }
+            Action::FileIptc => {
+                self.iptc_dialog = Some(crate::iptc_dialog::IptcDialog::new(
+                    paths.clone(),
+                    &self.settings.iptc,
+                ));
+                Ok(())
+            }
             Action::ImportNotes => {
                 self.import_notes(&paths);
                 Ok(())
@@ -23124,6 +23138,15 @@ impl TriApp {
             render,
         };
         trace(|| format!("export : {} images vers {folder}", images.len()));
+        // Métadonnées de création du profil (#277).
+        let iptc = (!profile.iptc.is_empty())
+            .then(|| {
+                self.settings
+                    .iptc
+                    .set(&profile.iptc)
+                    .map(|(_, s)| s.clone())
+            })
+            .flatten();
         let order = crate::export::Order {
             images,
             profile,
@@ -23132,6 +23155,7 @@ impl TriApp {
             sharpening: self.settings.export.sharpening,
             render: self.settings.render.options(),
             pair_suffix: self.settings.export.camera_suffix.clone(),
+            iptc,
         };
         if self.export_job.is_none() {
             self.export_job = Some(crate::export::Job::start(tools, order, ctx));
@@ -26151,6 +26175,80 @@ impl TriApp {
         }
     }
 
+    /// Boîte « Métadonnées de création » (#277) et son bilan.
+    fn iptc_dialog(&mut self, ctx: &egui::Context) {
+        if let Some(rx) = &self.iptc_job
+            && let Ok(report) = rx.try_recv()
+        {
+            self.iptc_job = None;
+            self.notice = Some(match report.errors.first() {
+                Some(first) => (
+                    t!(
+                        "iptc-failed",
+                        n = report.errors.len(),
+                        first = first.clone()
+                    ),
+                    true,
+                ),
+                None => (
+                    t!("iptc-done", n = report.written, same = report.unchanged),
+                    false,
+                ),
+            });
+        }
+        let Some(dialog) = &mut self.iptc_dialog else {
+            return;
+        };
+        match dialog.show(ctx, &self.settings.iptc) {
+            None => {}
+            Some(crate::iptc_dialog::Request::Close) => self.iptc_dialog = None,
+            Some(crate::iptc_dialog::Request::Settings(section)) => {
+                self.iptc_dialog = None;
+                self.open_settings();
+                if let Some(window) = &mut self.settings_window {
+                    window.show_section(&section);
+                }
+            }
+            Some(crate::iptc_dialog::Request::Apply(id)) => {
+                let images = std::mem::take(&mut dialog.images);
+                self.iptc_dialog = None;
+                let Some((_, set)) = self.settings.iptc.set(&id) else {
+                    return;
+                };
+                let set = set.clone();
+                let convention = self.settings.xmp.sidecar;
+                // Les développements sont des rendus : leurs photos reçoivent le jeu.
+                let images: Vec<PathBuf> = images
+                    .into_iter()
+                    .filter(|p| tri::developments::get(p).is_none())
+                    .collect();
+                self.notice = Some((t!("iptc-running", n = images.len()), false));
+                let (tx, rx) = std::sync::mpsc::channel();
+                let repaint = self.repaint.clone();
+                std::thread::Builder::new()
+                    .name("tri-iptc".into())
+                    .spawn(move || {
+                        let mut report = EmbedReport::default();
+                        for path in images {
+                            match tri::iptc::stamp(&path, &set, convention, false) {
+                                Ok(true) => report.written += 1,
+                                Ok(false) => report.unchanged += 1,
+                                Err(e) => {
+                                    report.errors.push(format!("{} : {e}", folder_name(&path)))
+                                }
+                            }
+                        }
+                        let _ = tx.send(report);
+                        if let Some(ctx) = repaint {
+                            ctx.request_repaint();
+                        }
+                    })
+                    .ok();
+                self.iptc_job = Some(rx);
+            }
+        }
+    }
+
     /// Bilan de l'inscription des notes en fond, une fois finie.
     fn poll_embed(&mut self) {
         let Some(rx) = &self.embed_job else { return };
@@ -28844,6 +28942,7 @@ impl eframe::App for TriApp {
         self.reset_dialog(&ctx);
         self.pairs_dialog(&ctx);
         self.locate_dialog(&ctx);
+        self.iptc_dialog(&ctx);
         self.remote_dialog(&ctx);
         self.login_dialog(&ctx);
         self.update_dialog(&ctx);
@@ -39124,6 +39223,37 @@ mod tests {
         run_until(&mut h, |app| app.file_dialog.is_none());
         assert!(dest.join("img1.jpg").exists() && photos.join("img1.jpg").exists());
         assert_eq!(h.state().files.len(), 2, "une copie ne retire rien");
+    }
+
+    #[test]
+    fn creation_metadata_go_into_the_selected_images() {
+        // #277 : le jeu fourni, vide, renvoie aux réglages ; rempli, « Poser » l'écrit dans
+        // le JPEG sans recompression, puis le panneau des métadonnées le montre.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        act(&mut h, Action::FileIptc);
+        assert!(h.query_by_label(&t!("iptc-empty")).is_some());
+        h.get_by_label(&t!("cancel")).click();
+        h.run_steps(2);
+        assert!(h.state().iptc_dialog.is_none());
+        let set = &mut h.state_mut().settings.iptc.sets.0;
+        let mine = set.get_mut(tri::iptc::MINE).unwrap();
+        mine.creator = "Ana Lima".into();
+        mine.copyright = "© {year} Ana Lima".into();
+        act(&mut h, Action::FileIptc);
+        assert!(
+            h.query_by_label("Ana Lima").is_some(),
+            "ce qu'il pose, rappelé"
+        );
+        h.get_by_label(&t!("iptc-apply")).click();
+        h.run_steps(2);
+        run_until(&mut h, |app| app.iptc_job.is_none());
+        let image = h.state().files[h.state().selected].path.clone();
+        let read = tri::iptc::read(&image);
+        assert_eq!(read[0], ("creator", "Ana Lima".to_string()));
+        assert!(read[1].1.starts_with("© 20"), "{read:?}");
+        let notice = h.state().notice.clone().map(|n| n.0).unwrap_or_default();
+        assert!(notice.contains("1 image"), "{notice}");
     }
 
     #[test]
