@@ -81,7 +81,7 @@ fn badge(painter: &Painter, center: Pos2, radius: f32, accepted: bool, fill: Col
 /// [`badge`] avec la couleur du signe `glyph` (estompée avec la pastille, bandeau de
 /// notation : retour du 31/10/2026, les drapeaux non choisis en couleur fondue comme les
 /// pastilles de couleur, plus en gris).
-fn badge_with_glyph(
+pub(crate) fn badge_with_glyph(
     painter: &Painter,
     center: Pos2,
     radius: f32,

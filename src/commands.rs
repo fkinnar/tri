@@ -258,9 +258,10 @@ pub const COMMANDS: &[Command] = &[
     Command {
         id: "offload",
         theme: Theme::Offload,
-        syntax: "tri --offload <card> [--to <root>] [--folder <name>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]",
+        syntax: "tri --offload <card> [--session <day>] [--to <root>] [--folder <name>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]",
         main: &["--offload"],
         options: opts![
+            "--session",
             "--to",
             "--folder",
             "--raw-only",

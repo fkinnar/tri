@@ -62,6 +62,7 @@ mod menu_groups;
 mod meta;
 mod note_writes;
 mod offload;
+mod offload_picker;
 mod pairs_dialog;
 mod palette;
 mod palette_view;

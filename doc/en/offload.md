@@ -109,6 +109,37 @@ The new card may be mounted **at the same path** as the previous one (two cards 
 same camera have the same volume name, `/media/…/disk`): it has just appeared, so it is
 another card.
 
+## A card of several sessions (2026-11-25, #507)
+
+A card can hold several sessions; often only one is to be offloaded.
+`Plan::sessions(day_cut)` sorts the card by shooting day (the file date, set by the camera,
+in local time; a photo taken before `[offload] day_cut` o'clock, 4 by default, counts for
+the day before: an evening ending after midnight stays one session). A RAW+JPEG pair stays
+in the session of its first image. `Plan::subset` restricts the inventory to the chosen
+images: the verified copy, the history and deleting from the card afterwards only touch
+them, never the rest of the card.
+
+- **Dialog**: with several sessions, one row per day (checkbox, folder, number of images
+  and size to copy, or "already offloaded") instead of the "Session folder" field.
+  Checked by default: those with something new. **One folder per checked session**
+  (`YYYY-MM-DD_` to complete), copied one after the other in the same thread; the reports
+  are put end to end (`Report::absorb`), the newest session opened at the end.
+- **Command line**: `tri --offload <card> --session YYYY-MM-DD` only offloads that day
+  (folder named after it); `--dry-run` lists the sessions.
+- **Choosing the photos** of a session ("Choose the photos…" on its row,
+  `offload_picker.rs`): a gallery instead of the dialog (user's idea, 2026-11-25: simpler
+  than `tri`'s grid, which would have had to open on the card and then be given back as it
+  was). Thumbnails from the embedded JPEGs, read in the background on the card without
+  cache; a RAW+JPEG pair is one photo; adjustable size (slider); a check on each photo,
+  all checked at first, "Select all" / "Deselect all" and the count. The grid's gestures:
+  click = cursor (it does not uncheck everything, unlike the Finder), Cmd/Ctrl+click
+  toggles, Shift+click checks the range, click on the check; Space toggles, `v` /
+  Shift+Space the visual mode (moving checks), Shift + arrows extend, arrows or hjkl,
+  Cmd/Ctrl+A all, with Shift none. Double-click or Enter: the photo large, fitted (the
+  embedded preview, no 1:1), arrows for the next one. Escape leaves the visual mode, the
+  large view, then closes without changing anything; OK goes back to the dialog ("Change
+  the choice…"), only the selection is copied.
+
 ## In the background (2026-10-17)
 
 To cull one session while another card is being offloaded: during the copy, "Continue in

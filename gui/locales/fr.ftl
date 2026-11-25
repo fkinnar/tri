@@ -1838,6 +1838,31 @@ offload-root = Dossier racine
 offload-session = Dossier de la séance
 offload-session-tip = Proposé : AAAA-MM-JJ_ (date de la plus récente image à copier), à compléter (« _Self ») ou à remplacer entièrement ; l'année, si on la veut, va dans le dossier racine. Vide : directement dans le dossier racine.
 offload-destination = Destination : { $path }
+offload-destinations = Destination : { $n } dossiers dans { $path }
+offload-sessions = { $n } séances sur la carte (une par jour de prise de vue), chacune dans son dossier :
+offload-session-count = { $n ->
+    [0] rien à copier
+    [one] 1 image, { $size }
+   *[other] { $n } images, { $size }
+}
+offload-session-known = déjà déchargée ({ $n } images)
+offload-no-session-chosen = Aucune séance cochée.
+offload-pick = Choisir les photos…
+offload-pick-again = Changer le choix…
+offload-pick-tip = Les photos de la séance en vignettes, pour cocher celles à décharger
+offload-pick-title = Photos du { $day } à décharger
+offload-pick-all = Tout sélectionner
+offload-pick-none = Tout désélectionner
+offload-pick-count = { $n } / { $total } photos, { $size }
+offload-pick-size = Taille
+offload-pick-ok = Valider
+offload-pick-exclude = { $n ->
+    [one] Exclure la photo déjà copiée
+   *[other] Exclure les { $n } photos déjà copiées
+}
+offload-pick-exclude-tip = Déjà déchargées (ici ou ailleurs) : décochées et pas recopiées. Décochée, on peut les recopier.
+offload-pick-known = déjà copiée
+offload-pick-partly = en partie copiée
 offload-raw-only = RAW seulement
 offload-keep-disk = Garder les données de tri sur ce disque
 offload-keep-folder = Garder les données de tri dans le dossier de la séance
@@ -1860,8 +1885,14 @@ offload-progress = { $done } / { $total } fichiers · { $mb } / { $total_mb } Mo
 offload-background = Continuer en arrière-plan
 offload-interrupt = Interrompre
 offload-done = { $verified ->
-    [yes] { $copied } fichiers copiés et vérifiés
-   *[no] { $copied } fichiers copiés
+    [yes] { $copied ->
+        [one] { $copied } fichier copié et vérifié
+       *[other] { $copied } fichiers copiés et vérifiés
+    }
+   *[no] { $copied ->
+        [one] { $copied } fichier copié
+       *[other] { $copied } fichiers copiés
+    }
 }, { $skipped } ignorés (déjà déchargés), { $errors } erreurs.
 offload-done-cancelled = { " " }— interrompu
 offload-not-enough-room = Pas assez de place : { $size } à copier, { $free } libres.

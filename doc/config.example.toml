@@ -544,6 +544,12 @@ delete_left = false
 # séance est prête plus tôt. Case de la boîte de déchargement ; en ligne de commande,
 # --previews.
 previews = true
+# Heure où commence un jour de prise de vue, pour ranger une carte en séances.
+#
+# Carte de plusieurs séances (une par jour de prise de vue) : une photo prise avant cette
+# heure (0 à 23) compte pour la veille, pour qu'une soirée qui finit après minuit reste une
+# séance. 0 : coupure à minuit.
+day_cut = 4
 
 [files]
 # Renommer, supprimer, copier ou déplacer une image : l'autre image de sa paire RAW+JPEG

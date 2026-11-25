@@ -14270,7 +14270,8 @@ impl TriApp {
             }
             // Boîte de déchargement : seule la fermeture (pas pendant la copie).
             if let Some(dialog) = self.offload.as_ref().filter(|d| !d.is_hidden()) {
-                if action == Action::Back && !dialog.is_running() {
+                // Galerie d'une séance ouverte : elle prend Échap elle-même.
+                if action == Action::Back && !dialog.is_running() && dialog.picker.is_none() {
                     self.close_offload();
                 } else if action.works_over_overlay() && action != Action::Back {
                     self.perform(ctx, action);
@@ -26119,6 +26120,20 @@ impl TriApp {
                     }
                 }
                 Step::ViewRender => self.open_view_render = true,
+                Step::Offload(card) => {
+                    self.offload = Some(OffloadDialog::new(
+                        card,
+                        CENTRED,
+                        self.settings.offload.clone(),
+                        self.settings.data_dir(),
+                        ctx,
+                    ));
+                }
+                Step::OffloadPick(i) => {
+                    if let Some(dialog) = &mut self.offload {
+                        dialog.pick_session(i, ctx);
+                    }
+                }
                 Step::OpeningBox(stage) => {
                     // Une lecture qui n'arrive jamais : la boîte reste, pour la capture.
                     let (tx, result) = mpsc::channel();
@@ -29405,6 +29420,11 @@ enum Step {
     /// Taper des touches, comme au clavier (`keys:Ctrl+b r`, écrites comme dans
     /// `keys.toml`) : séquences et menu des suites compris.
     Keys(Vec<crate::actions::Chord>),
+    /// Ouvrir la boîte de déchargement d'un dossier comme d'une carte
+    /// (`offload:/chemin/carte`), pour la capture.
+    Offload(PathBuf),
+    /// Ouvrir la galerie de la séance n de la boîte de déchargement (`offload_pick:1`).
+    OffloadPick(usize),
 }
 
 fn startup_actions() -> Vec<Step> {
@@ -29462,6 +29482,13 @@ fn parse_actions(list: &str) -> Vec<Step> {
                 None if id.starts_with("search:") => {
                     Some(Step::Search(id["search:".len()..].to_string()))
                 }
+                None if id.starts_with("offload:") => {
+                    Some(Step::Offload(PathBuf::from(&id["offload:".len()..])))
+                }
+                None if id.starts_with("offload_pick:") => id["offload_pick:".len()..]
+                    .parse()
+                    .ok()
+                    .map(Step::OffloadPick),
                 None if id.starts_with("keys:") => crate::actions::parse_keys(&id["keys:".len()..])
                     .ok()
                     .map(Step::Keys),
@@ -36528,19 +36555,24 @@ mod tests {
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         assert_eq!(selected_name(&h), "img0.jpg");
         h.run_steps(2);
-        h.get_by_label(&Action::DevNext.label()).click();
-        h.run_steps(3);
-        assert_eq!(selected_name(&h), "img0@dt-01.jpg", "suivant : le clone 1");
-        h.get_by_label(&Action::DevNext.label()).click();
-        h.run_steps(3);
-        assert_eq!(selected_name(&h), "img0@dt-02.jpg", "puis le clone 2");
-        h.get_by_label(&Action::DevPrev.label()).click();
-        h.run_steps(3);
-        assert_eq!(
-            selected_name(&h),
-            "img0@dt-01.jpg",
-            "précédent : le clone 1"
-        );
+        // Clic attendu jusqu'à son effet (deux échecs, CI Windows du 31/10/2026 et en
+        // local sous charge le 26/11/2026 : un clic pris un tour plus tard).
+        let on = |h: &mut Harness<'_, TriApp>, name: &str| {
+            run_until(h, |app| {
+                app.files
+                    .get(app.selected)
+                    .and_then(|f| f.path.file_name())
+                    .is_some_and(|n| n == name)
+            });
+        };
+        click_settled(&mut h, &Action::DevNext.label());
+        on(&mut h, "img0@dt-01.jpg");
+        h.run_steps(2);
+        click_settled(&mut h, &Action::DevNext.label());
+        on(&mut h, "img0@dt-02.jpg");
+        h.run_steps(2);
+        click_settled(&mut h, &Action::DevPrev.label());
+        on(&mut h, "img0@dt-01.jpg");
     }
 
     #[test]
@@ -45840,6 +45872,315 @@ mod tests {
     }
 
     #[test]
+    fn a_card_of_several_sessions_offloads_the_checked_ones_each_in_its_folder() {
+        // #507 : trois jours sur la carte ; le premier décoché, les deux autres copiés,
+        // chacun dans son dossier ; rien d'autre ne quitte la carte.
+        use chrono::TimeZone;
+        let (mut h, dir) = harness();
+        let card = dir.path().join("CARTE");
+        let shots = card.join("DCIM/100_TEST");
+        std::fs::create_dir_all(&shots).unwrap();
+        for (name, day) in [("IMG0", 10), ("IMG1", 11), ("IMG2", 12), ("IMG3", 12)] {
+            let path = shots.join(format!("{name}.jpg"));
+            image::RgbImage::from_pixel(32, 24, image::Rgb([90, 90, 90]))
+                .save(&path)
+                .unwrap();
+            let at: std::time::SystemTime = chrono::Local
+                .with_ymd_and_hms(2026, 11, day, 12, 0, 0)
+                .unwrap()
+                .into();
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_modified(at)
+                .unwrap();
+        }
+        h.state_mut().tree = Tree::with_places(
+            vec![tri::places::Place {
+                name: "CARTE".into(),
+                path: card.clone(),
+                kind: tri::places::PlaceKind::Volume,
+            }],
+            false,
+        );
+        h.run_steps(2);
+        h.get_by_label("Décharger la carte…").click();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.query_by_label("Décharger").is_none() {
+            assert!(Instant::now() < deadline, "boîte jamais prête");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            h.query_by_label_contains("3 séances sur la carte")
+                .is_some()
+        );
+        settle_dialog(&mut h);
+        h.get_by_label("2026-11-10").click();
+        h.run_steps(2);
+        assert!(h.query_by_label_contains("3 à copier").is_some());
+        // Les photos du 12 en galerie (retour du 25/11/2026) : tout décoché (Cmd+Maj+A),
+        // Espace coche la première ; le mode visuel coche en avançant, Échap n'en sort que
+        // lui ; le choix est gardé en rouvrant.
+        let pick = t!("offload-pick");
+        h.get_all_by_label(&pick).nth(2).unwrap().click();
+        h.run_steps(3);
+        let picker = |h: &Harness<'_, TriApp>| {
+            h.state()
+                .offload
+                .as_ref()
+                .and_then(|o| o.picker.as_ref())
+                .map(|(_, p)| (p.checked.clone(), p.visual))
+        };
+        assert_eq!(picker(&h).map(|p| p.0), Some(vec![true, true]));
+        press(&mut h, Key::A, CMD | Modifiers::SHIFT);
+        press(&mut h, Key::Space, Modifiers::NONE);
+        assert_eq!(picker(&h).map(|p| p.0), Some(vec![true, false]));
+        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(picker(&h).map(|p| p.0), Some(vec![true, true]));
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(
+            picker(&h).map(|p| p.1),
+            Some(None),
+            "Échap : sorti du visuel seulement"
+        );
+        press(&mut h, Key::Space, Modifiers::NONE);
+        assert_eq!(picker(&h).map(|p| p.0), Some(vec![true, false]));
+        h.get_by_label(&t!("offload-pick-ok")).click();
+        h.run_steps(3);
+        assert!(picker(&h).is_none(), "la boîte revient");
+        assert!(h.query_by_label_contains("2 à copier").is_some());
+        assert!(h.query_by_label(&t!("offload-pick-again")).is_some());
+        h.get_by_label("Décharger").click();
+        while h
+            .query_by_label_contains("2 fichiers copiés et vérifiés")
+            .is_none()
+        {
+            assert!(Instant::now() < deadline, "jamais copié");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let root = dir.path().join("photos-local");
+        let names = |d: &str| {
+            let mut n: Vec<String> = std::fs::read_dir(root.join(d))
+                .map(|r| {
+                    r.flatten()
+                        .map(|e| e.file_name().to_string_lossy().into_owned())
+                        .filter(|n| !n.starts_with('.'))
+                        .collect()
+                })
+                .unwrap_or_default();
+            n.sort();
+            n
+        };
+        assert_eq!(names("2026-11-11"), ["IMG1.jpg"]);
+        assert_eq!(
+            names("2026-11-12"),
+            ["IMG2.jpg"],
+            "seulement la photo choisie"
+        );
+        assert!(shots.join("IMG3.jpg").exists());
+        assert!(
+            names("2026-11-10").is_empty(),
+            "séance décochée : pas copiée"
+        );
+    }
+
+    #[test]
+    fn a_card_of_one_day_has_its_gallery_too() {
+        // Retour du 25/11/2026 : une carte d'un seul jour n'avait pas de « Choisir les
+        // photos… » (seulement les cartes de plusieurs séances) ; il est à côté du dossier.
+        use chrono::TimeZone;
+        let (mut h, dir) = harness();
+        let card = dir.path().join("CARTE");
+        let shots = card.join("DCIM/100_TEST");
+        std::fs::create_dir_all(&shots).unwrap();
+        for name in ["IMG0", "IMG1"] {
+            let path = shots.join(format!("{name}.jpg"));
+            image::RgbImage::from_pixel(32, 24, image::Rgb([90, 90, 90]))
+                .save(&path)
+                .unwrap();
+            let at: std::time::SystemTime = chrono::Local
+                .with_ymd_and_hms(2026, 11, 12, 12, 0, 0)
+                .unwrap()
+                .into();
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_modified(at)
+                .unwrap();
+        }
+        h.state_mut().tree = Tree::with_places(
+            vec![tri::places::Place {
+                name: "CARTE".into(),
+                path: card.clone(),
+                kind: tri::places::PlaceKind::Volume,
+            }],
+            false,
+        );
+        h.run_steps(2);
+        h.get_by_label("Décharger la carte…").click();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.query_by_label("Décharger").is_none() {
+            assert!(Instant::now() < deadline, "boîte jamais prête");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        settle_dialog(&mut h);
+        assert!(h.query_by_label_contains("séances sur la carte").is_none());
+        h.get_by_label(&t!("offload-pick")).click();
+        h.run_steps(3);
+        let checked = |h: &Harness<'_, TriApp>| {
+            h.state()
+                .offload
+                .as_ref()
+                .and_then(|o| o.picker.as_ref())
+                .map(|(_, p)| p.checked.clone())
+        };
+        assert_eq!(checked(&h), Some(vec![true, true]));
+        press(&mut h, Key::Space, Modifiers::NONE);
+        assert_eq!(checked(&h), Some(vec![false, true]));
+        h.get_by_label(&t!("offload-pick-ok")).click();
+        h.run_steps(3);
+        assert!(h.query_by_label(&t!("offload-pick-again")).is_some());
+        h.get_by_label("Décharger").click();
+        while h
+            .query_by_label_contains("1 fichier copié et vérifié,")
+            .is_none()
+        {
+            assert!(Instant::now() < deadline, "jamais copié");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        // Dans le dossier de la séance, quel que soit son nom.
+        let mut copied: Vec<String> = Vec::new();
+        let mut dirs = vec![dir.path().join("photos-local")];
+        while let Some(d) = dirs.pop() {
+            for e in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+                let name = e.file_name().to_string_lossy().into_owned();
+                if e.path().is_dir() {
+                    dirs.push(e.path());
+                } else if name.starts_with("IMG") {
+                    copied.push(name);
+                }
+            }
+        }
+        assert_eq!(copied, ["IMG1.jpg"], "seulement la photo choisie");
+    }
+
+    #[test]
+    fn the_next_card_goes_to_the_same_session_and_keeps_its_gallery() {
+        // Carte suivante (issue n° 37) : le dossier de la séance d'avant proposé, toute la
+        // carte en une séance ; « Choisir les photos… » y manquait (retour du 26/11/2026).
+        let (mut h, dir) = harness();
+        let shots = dir.path().join("CARTE/DCIM/100_TEST");
+        std::fs::create_dir_all(&shots).unwrap();
+        for name in ["IMG0", "IMG1"] {
+            image::RgbImage::from_pixel(32, 24, image::Rgb([90, 90, 90]))
+                .save(shots.join(format!("{name}.jpg")))
+                .unwrap();
+        }
+        let ctx = h.ctx.clone();
+        let mut dialog = OffloadDialog::new(
+            dir.path().join("CARTE"),
+            CENTRED,
+            h.state().settings.offload.clone(),
+            None,
+            &ctx,
+        );
+        dialog.propose_session(&dir.path().join("Import/2026-11-25_Bruxelles"));
+        h.state_mut().offload = Some(dialog);
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.query_by_label("Décharger").is_none() {
+            assert!(Instant::now() < deadline, "boîte jamais prête");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        settle_dialog(&mut h);
+        assert!(h.query_by_label_contains("séances sur la carte").is_none());
+        assert!(
+            h.query_by_label(&t!("offload-pick")).is_some(),
+            "sa galerie"
+        );
+        h.get_by_label(&t!("offload-pick")).click();
+        h.run_steps(3);
+        let photos = h
+            .state()
+            .offload
+            .as_ref()
+            .and_then(|o| o.picker.as_ref())
+            .map(|(_, p)| p.checked.len());
+        assert_eq!(photos, Some(2), "toute la carte");
+    }
+
+    #[test]
+    fn raws_offloaded_alone_are_known_in_the_gallery() {
+        // Retour du 26/11/2026 : RAW seuls déchargés, la galerie les cochait encore.
+        let (mut h, dir) = harness();
+        let shots = dir.path().join("CARTE/DCIM/100_TEST");
+        std::fs::create_dir_all(&shots).unwrap();
+        for name in ["A", "B"] {
+            std::fs::write(shots.join(format!("{name}.RAF")), format!("raw {name}")).unwrap();
+            image::RgbImage::from_pixel(32, 24, image::Rgb([90, 90, 90]))
+                .save(shots.join(format!("{name}.JPG")))
+                .unwrap();
+        }
+        let ctx = h.ctx.clone();
+        let data = h.state().settings.data_dir();
+        let mut settings = h.state().settings.offload.clone();
+        settings.raw_only = true;
+        settings.previews = false;
+        let open = |h: &mut Harness<'_, TriApp>, settings: &tri::offload::OffloadSettings| {
+            let dialog = OffloadDialog::new(
+                dir.path().join("CARTE"),
+                CENTRED,
+                settings.clone(),
+                data.clone(),
+                &ctx,
+            );
+            h.state_mut().offload = Some(dialog);
+            let deadline = Instant::now() + Duration::from_secs(20);
+            while h.query_by_label("Décharger").is_none() {
+                assert!(Instant::now() < deadline, "boîte jamais prête");
+                h.run_steps(1);
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            settle_dialog(h);
+        };
+        // Premier déchargement : les RAW seuls.
+        open(&mut h, &settings);
+        h.get_by_label("Décharger").click();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.query_by_label_contains("2 fichiers copiés").is_none() {
+            assert!(Instant::now() < deadline, "jamais copié");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        h.state_mut().offload = None;
+        h.run_steps(2);
+        let checked = |h: &mut Harness<'_, TriApp>| {
+            h.get_by_label(&t!("offload-pick")).click();
+            h.run_steps(3);
+            h.state()
+                .offload
+                .as_ref()
+                .and_then(|o| o.picker.as_ref())
+                .map(|(_, p)| p.checked.clone())
+        };
+        // La carte remise, toujours « RAW seulement » : les deux photos sont copiées.
+        open(&mut h, &settings);
+        assert_eq!(checked(&mut h), Some(vec![false, false]));
+        h.state_mut().offload = None;
+        // Sans « RAW seulement » : leur JPEG reste à copier.
+        settings.raw_only = false;
+        open(&mut h, &settings);
+        assert_eq!(checked(&mut h), Some(vec![true, true]));
+    }
+
+    #[test]
     fn a_full_destination_brings_the_offload_back_until_answered() {
         // 12/11/2026 : destination pleine, le déchargement échouait sans rien dire. La copie
         // (ici en arrière-plan) s'arrête, la boîte revient avec ce qui est fait et ce qui
@@ -45937,7 +46278,7 @@ mod tests {
         settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
         while h
-            .query_by_label_contains("1 fichiers copiés et vérifiés")
+            .query_by_label_contains("1 fichier copié et vérifié")
             .is_none()
         {
             assert!(Instant::now() < deadline, "jamais copié");
@@ -46306,7 +46647,7 @@ mod tests {
         wait_for(&mut h, "1 à copier");
         settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
-        wait_for(&mut h, "1 fichiers copiés et vérifiés");
+        wait_for(&mut h, "1 fichier copié et vérifié");
         let session = h.state().offload.as_ref().unwrap().destination().unwrap();
         // CARTE2 arrive : la boîte repart sur elle, même séance proposée.
         let ctx = h.ctx.clone();
@@ -46315,7 +46656,7 @@ mod tests {
         wait_for(&mut h, "1 à copier");
         settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
-        wait_for(&mut h, "1 fichiers copiés et vérifiés");
+        wait_for(&mut h, "1 fichier copié et vérifié");
         assert!(session.join("A.jpg").is_file() && session.join("B.jpg").is_file());
     }
 
@@ -46350,7 +46691,7 @@ mod tests {
         wait_for(&mut h, "1 à copier");
         settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
-        wait_for(&mut h, "1 fichiers copiés et vérifiés");
+        wait_for(&mut h, "1 fichier copié et vérifié");
         let session = h.state().offload.as_ref().unwrap().destination().unwrap();
         h.get_by_label("Fermer").click();
         h.run_steps(2);
@@ -46367,7 +46708,7 @@ mod tests {
         wait_for(&mut h, "1 à copier");
         settle_dialog(&mut h);
         h.get_by_label("Décharger").click();
-        wait_for(&mut h, "1 fichiers copiés et vérifiés");
+        wait_for(&mut h, "1 fichier copié et vérifié");
         assert!(session.join("A.jpg").is_file() && session.join("B.jpg").is_file());
         // Refermée sans décharger : plus de carte suivante proposée.
         h.get_by_label("Fermer").click();

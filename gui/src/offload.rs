@@ -85,9 +85,122 @@ enum Message {
     Done(Report),
 }
 
-/// Images déjà dans une destination : (destination, (RAW seulement, ignorer les déjà
+/// Images déjà dans les destinations : (destinations, (RAW seulement, ignorer les déjà
 /// déchargées), (nombre, octets)).
-type Present = (PathBuf, (bool, bool), (usize, u64));
+type Present = (Vec<PathBuf>, (bool, bool), (usize, u64));
+
+/// Une séance de la carte dans la boîte (#507) : cochée ou non, et son dossier.
+#[derive(Clone, Debug)]
+struct SessionRow {
+    session: offload::Session,
+    on: bool,
+    folder: String,
+    /// Images et octets à copier, et si toutes sont déjà déchargées.
+    count: usize,
+    bytes: u64,
+    known: bool,
+    /// Photos choisies dans la galerie ([`crate::offload_picker`]) : leurs fichiers ;
+    /// `None` : toute la séance.
+    picked: Option<std::collections::HashSet<PathBuf>>,
+}
+
+impl SessionRow {
+    /// Vrai si l'image `item` (de cette séance) fait partie du choix.
+    fn keeps(&self, item: &offload::Item) -> bool {
+        self.picked
+            .as_ref()
+            .is_none_or(|p| p.contains(&item.source))
+    }
+}
+
+/// Ce que la copie fera : (images, dossier) par séance cochée, ou la carte entière vers
+/// `folder` quand elle n'a qu'une séance (`sessions` vide).
+fn targets(
+    plan: &Plan,
+    sessions: &[SessionRow],
+    root: &str,
+    folder: &str,
+) -> Result<Vec<(Plan, PathBuf)>, String> {
+    let root = tri::settings::expand_home(root.trim());
+    // Une seule séance : le dossier du champ, les photos choisies dans sa galerie s'il y
+    // en a.
+    if sessions.len() <= 1 {
+        let dest = offload::destination(&root, folder).map_err(|e| e.to_string())?;
+        let plan = match sessions.first() {
+            Some(row) => plan.subset(|i| row.keeps(i)),
+            None => plan.clone(),
+        };
+        return Ok(vec![(plan, dest)]);
+    }
+    sessions
+        .iter()
+        .filter(|row| row.on)
+        .map(|row| {
+            let dest = offload::destination(&root, &row.folder).map_err(|e| e.to_string())?;
+            let chosen: std::collections::HashSet<&Path> = row
+                .session
+                .items
+                .iter()
+                .map(|&i| &plan.items[i])
+                .filter(|i| row.keeps(i))
+                .map(|i| i.source.as_path())
+                .collect();
+            Ok((plan.subset(|i| chosen.contains(i.source.as_path())), dest))
+        })
+        .collect()
+}
+
+/// Toute la carte en une seule séance (carte suivante vers la séance d'avant) : pas de
+/// ligne de séance, mais sa galerie.
+fn whole_card(plan: &Plan) -> Vec<SessionRow> {
+    let items: Vec<usize> = (0..plan.items.len()).collect();
+    let Some(first) = plan.sessions(0).into_iter().next() else {
+        return Vec::new();
+    };
+    let session = offload::Session {
+        day: first.day,
+        items,
+    };
+    vec![SessionRow {
+        folder: session.folder(),
+        count: 0,
+        bytes: 0,
+        picked: None,
+        on: true,
+        known: false,
+        session,
+    }]
+}
+
+/// Les séances de `plan` (#507) : une ligne par séance s'il y en a plusieurs ; une seule
+/// séance n'a pas de ligne, mais sa galerie (retour du 25/11/2026 : une carte d'un seul
+/// jour n'avait pas de « Choisir les photos… »). Cochées d'office : celles qui ont du
+/// nouveau (toutes, si la carte est déjà déchargée).
+fn session_rows(plan: &Plan, settings: &OffloadSettings) -> Vec<SessionRow> {
+    // Comptes remplis par la boîte, selon les choix du moment.
+    let sessions = plan.sessions(settings.day_cut);
+    let mut rows: Vec<SessionRow> = sessions
+        .into_iter()
+        .map(|session| {
+            let known = session.items.iter().all(|&i| plan.items[i].known);
+            SessionRow {
+                folder: session.folder(),
+                count: 0,
+                bytes: 0,
+                picked: None,
+                on: !known,
+                known,
+                session,
+            }
+        })
+        .collect();
+    if rows.iter().all(|r| !r.on) {
+        for row in &mut rows {
+            row.on = true;
+        }
+    }
+    rows
+}
 
 enum Stage {
     /// Inventaire de la carte en cours.
@@ -108,6 +221,9 @@ enum Stage {
         /// déjà déchargées), (nombre, octets)), recalculé seulement quand la destination
         /// ou ces choix changent.
         present: Option<Present>,
+        /// Séances de la carte (#507), quand elle en a plusieurs : un dossier par séance
+        /// cochée.
+        sessions: Vec<SessionRow>,
     },
     /// Copie en cours.
     Running {
@@ -167,6 +283,9 @@ pub struct OffloadDialog {
     group_pairs: tri::pairs::Grouping,
     /// Case « Regrouper RAW et JPEG » touchée (#392) ; `None` : le réglage.
     pub(crate) pairs_choice: Option<bool>,
+    /// Galerie ouverte pour choisir les photos d'une séance (#507) : (rang de la séance,
+    /// galerie) ; la boîte de déchargement revient à sa fermeture.
+    pub(crate) picker: Option<(usize, crate::offload_picker::Picker)>,
 }
 
 impl OffloadDialog {
@@ -194,6 +313,7 @@ impl OffloadDialog {
             keep_choice: None,
             group_pairs: tri::pairs::Grouping::Ask,
             pairs_choice: None,
+            picker: None,
         }
     }
 
@@ -443,7 +563,15 @@ impl OffloadDialog {
                             let folder = self.folder_here.clone().unwrap_or_else(|| {
                                 offload::suggest_folder(&plan, &self.settings).unwrap_or_default()
                             });
+                            // Carte suivante vers la même séance (issue n° 37) : pas de
+                            // séances à choisir, toute la carte en une (sa galerie
+                            // gardée, retour du 26/11/2026).
+                            let sessions = match self.folder_here {
+                                Some(_) => whole_card(&plan),
+                                None => session_rows(&plan, &self.settings),
+                            };
                             Stage::Ready {
+                                sessions,
                                 plan,
                                 history: Some(history),
                                 root: self.root_here.clone().unwrap_or_else(|| {
@@ -505,19 +633,24 @@ impl OffloadDialog {
             root,
             folder,
             error,
+            sessions,
             ..
         } = &mut self.stage
         else {
             return;
         };
-        let destination =
-            match offload::destination(&tri::settings::expand_home(root.trim()), folder) {
-                Ok(d) => d,
-                Err(e) => {
-                    *error = Some(e.to_string());
-                    return;
-                }
-            };
+        // Un dossier par séance cochée (#507), sinon la carte entière vers `folder`.
+        let runs = match targets(plan, sessions, root, folder) {
+            Ok(runs) if !runs.is_empty() => runs,
+            Ok(_) => {
+                *error = Some(t!("offload-no-session-chosen"));
+                return;
+            }
+            Err(e) => {
+                *error = Some(e);
+                return;
+            }
+        };
         // Racine retenue pour les prochains déchargements (pas celle d'un « décharger
         // ici », choisie pour cette fois).
         if let Some(data) = self.data.as_ref().filter(|_| self.root_here.is_none()) {
@@ -526,75 +659,96 @@ impl OffloadDialog {
         let (tx, rx) = mpsc::channel();
         let (answer, answers) = mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
-        let (plan, mut history) = (plan.clone(), history.take().unwrap_or_default());
+        let mut history = history.take().unwrap_or_default();
         let (settings, stop, repaint) = (self.settings.clone(), cancel.clone(), ctx.clone());
         let previews = self.previews.take().filter(|_| settings.previews);
         // « Garder les données de tri » : posé avant la copie, le cache se remplit
         // directement à sa place.
-        let keep_at = keep_root(self.keep.as_ref(), &destination)
-            .filter(|(_, disk)| self.keep_choice.unwrap_or(*disk))
-            .map(|(root, _)| root);
+        let keep_choice = self.keep_choice;
+        let keeps: Vec<Option<PathBuf>> = runs
+            .iter()
+            .map(|(_, destination)| {
+                keep_root(self.keep.as_ref(), destination)
+                    .filter(|(_, disk)| keep_choice.unwrap_or(*disk))
+                    .map(|(root, _)| root)
+            })
+            .collect();
         let keep_cache = self.keep.as_ref().map(|k| k.cache.clone());
         let location_too = self.keep_choice != Some(false);
         // Paires de la séance regroupées ou non (#392), retenu une fois la copie faite
         // (le dossier existe, ses données de tri à leur place).
-        let pairs = self.pairs_decision().filter(|_| plan.pairs(&settings) > 0);
+        let decision = self.pairs_decision();
         let data = self.data.clone();
         std::thread::spawn(move || {
-            let progress_tx = tx.clone();
-            let progress_ctx = repaint.clone();
-            let (full_tx, full_ctx) = (tx.clone(), repaint.clone());
-            if let (Some(root), Some(cache)) = (&keep_at, &keep_cache) {
-                // Un échec (disque en lecture seule) laisse tout sur la machine.
-                let _ = std::fs::create_dir_all(&destination)
-                    .and_then(|()| cache.use_disk(root).map(|_| ()));
-            }
-            if let Some(p) = previews.as_ref().filter(|_| location_too) {
-                session_cache(p, &destination);
-                p.scheduler.set_folder(Vec::new());
-            }
-            let report = offload::run(
-                &plan,
-                &destination,
-                &settings,
-                &mut history,
-                &stop,
-                |p| {
-                    let _ = progress_tx.send(Message::Progress(p.clone()));
-                    progress_ctx.request_repaint();
-                },
-                |copy| {
-                    if let (Some(p), Some(kind)) = (&previews, tri::media::kind_of(copy)) {
-                        p.scheduler.add_files(vec![tri::media::MediaFile {
-                            path: copy.to_path_buf(),
-                            kind,
-                        }]);
-                    }
-                },
-                // Destination pleine : on attend la réponse de l'utilisateur (Interrompre
-                // ou la boîte fermée valent abandon).
-                |full| {
-                    let _ = full_tx.send(Message::Full(full.clone()));
-                    full_ctx.request_repaint();
-                    loop {
-                        match answers.recv_timeout(std::time::Duration::from_millis(100)) {
-                            Ok(retry) => return retry,
-                            Err(mpsc::RecvTimeoutError::Disconnected) => return false,
-                            Err(mpsc::RecvTimeoutError::Timeout) => {
-                                if stop.load(Ordering::Relaxed) {
-                                    return false;
+            let mut all: Option<Report> = None;
+            for ((plan, destination), keep_at) in runs.into_iter().zip(keeps) {
+                if stop.load(Ordering::Relaxed) {
+                    break;
+                }
+                let pairs = decision.filter(|_| plan.pairs(&settings) > 0);
+                let progress_tx = tx.clone();
+                let progress_ctx = repaint.clone();
+                let (full_tx, full_ctx) = (tx.clone(), repaint.clone());
+                if let (Some(root), Some(cache)) = (&keep_at, &keep_cache) {
+                    // Un échec (disque en lecture seule) laisse tout sur la machine.
+                    let _ = std::fs::create_dir_all(&destination)
+                        .and_then(|()| cache.use_disk(root).map(|_| ()));
+                }
+                if let Some(p) = previews.as_ref().filter(|_| location_too) {
+                    session_cache(p, &destination);
+                    p.scheduler.set_folder(Vec::new());
+                }
+                let report = offload::run(
+                    &plan,
+                    &destination,
+                    &settings,
+                    &mut history,
+                    &stop,
+                    |p| {
+                        let _ = progress_tx.send(Message::Progress(p.clone()));
+                        progress_ctx.request_repaint();
+                    },
+                    |copy| {
+                        if let (Some(p), Some(kind)) = (&previews, tri::media::kind_of(copy)) {
+                            p.scheduler.add_files(vec![tri::media::MediaFile {
+                                path: copy.to_path_buf(),
+                                kind,
+                            }]);
+                        }
+                    },
+                    // Destination pleine : on attend la réponse de l'utilisateur (Interrompre
+                    // ou la boîte fermée valent abandon).
+                    |full| {
+                        let _ = full_tx.send(Message::Full(full.clone()));
+                        full_ctx.request_repaint();
+                        loop {
+                            match answers.recv_timeout(std::time::Duration::from_millis(100)) {
+                                Ok(retry) => return retry,
+                                Err(mpsc::RecvTimeoutError::Disconnected) => return false,
+                                Err(mpsc::RecvTimeoutError::Timeout) => {
+                                    if stop.load(Ordering::Relaxed) {
+                                        return false;
+                                    }
                                 }
                             }
                         }
-                    }
-                },
-            );
-            if let Some(grouped) = pairs
-                && destination.is_dir()
-            {
-                let _ = tri::pairs::decide(data.as_deref(), &destination, Some(grouped));
+                    },
+                );
+                if let Some(grouped) = pairs
+                    && destination.is_dir()
+                {
+                    let _ = tri::pairs::decide(data.as_deref(), &destination, Some(grouped));
+                }
+                let stopped = report.cancelled || report.out_of_space;
+                match &mut all {
+                    Some(all) => all.absorb(report),
+                    None => all = Some(report),
+                }
+                if stopped {
+                    break;
+                }
             }
-            let _ = tx.send(Message::Done(report));
+            let _ = tx.send(Message::Done(all.unwrap_or_default()));
             repaint.request_repaint();
         });
         self.stage = Stage::Running {
@@ -608,9 +762,50 @@ impl OffloadDialog {
         };
     }
 
+    /// Ouvre la galerie de la séance `i` (« Choisir les photos… », #507).
+    pub fn pick_session(&mut self, i: usize, ctx: &egui::Context) {
+        if let Stage::Ready { plan, sessions, .. } = &self.stage
+            && let Some(row) = sessions.get(i)
+        {
+            let items: Vec<&offload::Item> =
+                row.session.items.iter().map(|&k| &plan.items[k]).collect();
+            let picker = crate::offload_picker::Picker::new(
+                &row.session.day,
+                &items,
+                row.picked.as_ref(),
+                self.settings.skip_known,
+                self.settings.raw_only,
+                ctx,
+            );
+            self.picker = Some((i, picker));
+        }
+    }
+
     /// Dessine la boîte (modale, près du clic) ; renvoie ce que l'utilisateur a demandé.
     pub fn show(&mut self, ctx: &egui::Context) -> Option<Request> {
         self.poll();
+        // Galerie d'une séance ouverte : elle seule, la boîte revient ensuite.
+        if let Some((row, picker)) = &mut self.picker {
+            let outcome = picker.show(ctx, crate::marks::accent_mark(ctx));
+            let row = *row;
+            match outcome {
+                crate::offload_picker::Outcome::Open => return None,
+                crate::offload_picker::Outcome::Done(files, exclude_known) => {
+                    // La case de la galerie est celle de la boîte (« Recopier »).
+                    self.settings.skip_known = exclude_known;
+                    if let Stage::Ready { sessions, .. } = &mut self.stage
+                        && let Some(r) = sessions.get_mut(row)
+                    {
+                        let all = r.session.items.len() == files.len();
+                        r.picked = (!all).then_some(files);
+                        r.on = true;
+                    }
+                    self.picker = None;
+                }
+                crate::offload_picker::Outcome::Cancelled => self.picker = None,
+            }
+        }
+        let mut pick: Option<usize> = None;
         // Fin de la copie sous les yeux de l'utilisateur : suites cochées, séance ouverte.
         let mut request = self.finish(true);
         let mut start = false;
@@ -664,26 +859,66 @@ impl OffloadDialog {
                         error,
                         free,
                         present,
+                        sessions,
                         ..
                     } => {
                         let settings = &mut self.settings;
-                        let dest =
-                            offload::destination(&tri::settings::expand_home(root.trim()), folder)
-                                .ok();
+                        // Comptes des séances selon les choix du moment (RAW seulement, déjà
+                        // déchargées).
+                        for row in sessions.iter_mut() {
+                            let copy = row
+                                .session
+                                .items
+                                .iter()
+                                .map(|&i| &plan.items[i])
+                                .filter(|i| row.keeps(i))
+                                .filter(|i| !(settings.skip_known && i.known))
+                                .filter(|i| {
+                                    !settings.raw_only || i.kind == tri::media::MediaKind::Raw
+                                });
+                            (row.count, row.bytes) =
+                                copy.fold((0, 0), |(n, b), i| (n + 1, b + i.size));
+                        }
+                        let chosen = targets(plan, sessions, root, folder).ok();
+                        let dests: Vec<PathBuf> =
+                            chosen.iter().flatten().map(|(_, d)| d.clone()).collect();
+                        let dest = dests.first().cloned();
+                        // Plusieurs séances : seulement les cochées comptent.
+                        let merged;
+                        let plan: &Plan = if sessions.is_empty() {
+                            plan
+                        } else {
+                            let on: std::collections::HashSet<&Path> = sessions
+                                .iter()
+                                .filter(|r| r.on)
+                                .flat_map(|r| {
+                                    r.session
+                                        .items
+                                        .iter()
+                                        .map(|&i| &plan.items[i])
+                                        .filter(|i| r.keeps(i))
+                                })
+                                .map(|i| i.source.as_path())
+                                .collect();
+                            merged = plan.subset(|i| on.contains(i.source.as_path()));
+                            &merged
+                        };
                         // Doublons jugés sur la destination choisie (même nom, même taille ;
                         // la copie compare ensuite les contenus).
                         let choices = (settings.raw_only, settings.skip_known);
-                        let fresh = match (&dest, &*present) {
-                            (Some(d), Some((p, made, _))) => p != d || *made != choices,
-                            (Some(_), None) => true,
-                            (None, _) => false,
+                        let fresh = match &*present {
+                            Some((p, made, _)) => *p != dests || *made != choices,
+                            None => !dests.is_empty(),
                         };
-                        if fresh && let Some(d) = &dest {
-                            let found = offload::already_in(plan, settings, d);
-                            *present = Some((d.clone(), choices, found));
+                        if fresh && let Some(chosen) = &chosen {
+                            let found = chosen.iter().fold((0, 0), |(n, b), (p, d)| {
+                                let (m, c) = offload::already_in(p, settings, d);
+                                (n + m, b + c)
+                            });
+                            *present = Some((dests.clone(), choices, found));
                         }
-                        let (there, there_bytes) = match (&dest, &*present) {
-                            (Some(d), Some((p, _, found))) if p == d => *found,
+                        let (there, there_bytes) = match &*present {
+                            Some((p, _, found)) if *p == dests => *found,
                             _ => (0, 0),
                         };
                         let selected = plan.to_copy(settings).count();
@@ -722,19 +957,97 @@ impl OffloadDialog {
                                     root_field.show(ui, root_field_id(), root, 300.0);
                                 });
                                 ui.end_row();
-                                ui.label(t!("offload-session"));
-                                ui.add(
-                                    egui::TextEdit::singleline(folder)
-                                        .id(folder_field_id())
-                                        .desired_width(300.0),
-                                )
-                                .on_hover_text(t!("offload-session-tip"));
-                                ui.end_row();
+                                if sessions.len() <= 1 {
+                                    ui.label(t!("offload-session"));
+                                    ui.horizontal(|ui| {
+                                        ui.add(
+                                            egui::TextEdit::singleline(folder)
+                                                .id(folder_field_id())
+                                                .desired_width(300.0),
+                                        )
+                                        .on_hover_text(t!("offload-session-tip"));
+                                        // Sa galerie, comme pour chaque séance d'une carte
+                                        // de plusieurs jours.
+                                        if let Some(row) = sessions.first() {
+                                            let label = match &row.picked {
+                                                Some(_) => t!("offload-pick-again"),
+                                                None => t!("offload-pick"),
+                                            };
+                                            if ui
+                                                .button(label)
+                                                .on_hover_text(t!("offload-pick-tip"))
+                                                .clicked()
+                                            {
+                                                pick = Some(0);
+                                            }
+                                        }
+                                    });
+                                    ui.end_row();
+                                }
                             });
+                        // Carte de plusieurs séances (#507) : une ligne par jour, cochée
+                        // ou non, chacune dans son dossier.
+                        if sessions.len() > 1 {
+                            ui.add_space(4.0);
+                            ui.label(t!("offload-sessions", n = sessions.len()));
+                            egui::Grid::new("offload_sessions")
+                                .num_columns(4)
+                                .show(ui, |ui| {
+                                    for (i, row) in sessions.iter_mut().enumerate() {
+                                        ui.checkbox(&mut row.on, row.session.day.as_str());
+                                        // Largeur imposée : dans la grille, le champ se
+                                        // réduisait à quelques caractères.
+                                        let h = ui.spacing().interact_size.y;
+                                        ui.add_enabled_ui(row.on, |ui| {
+                                            ui.add_sized(
+                                                [220.0, h],
+                                                egui::TextEdit::singleline(&mut row.folder).id(
+                                                    egui::Id::unique(("offload_session_folder", i)),
+                                                ),
+                                            )
+                                            .on_hover_text(t!("offload-session-tip"));
+                                        });
+                                        let text = if row.known && row.picked.is_none() {
+                                            t!("offload-session-known", n = row.session.items.len())
+                                        } else {
+                                            t!(
+                                                "offload-session-count",
+                                                n = row.count,
+                                                size = size_text(row.bytes)
+                                            )
+                                        };
+                                        ui.weak(text);
+                                        let label = match &row.picked {
+                                            Some(_) => t!("offload-pick-again"),
+                                            None => t!("offload-pick"),
+                                        };
+                                        if ui
+                                            .button(label)
+                                            .on_hover_text(t!("offload-pick-tip"))
+                                            .clicked()
+                                        {
+                                            pick = Some(i);
+                                        }
+                                        ui.end_row();
+                                    }
+                                });
+                        }
                         // Pas assez de place : le bouton le dit (« Décharger quand même »).
                         let mut short = false;
                         if let Some(dest) = &dest {
-                            ui.weak(t!("offload-destination", path = dest.display().to_string()));
+                            if dests.len() > 1 {
+                                let root = dest.parent().unwrap_or(dest);
+                                ui.weak(t!(
+                                    "offload-destinations",
+                                    n = dests.len(),
+                                    path = root.display().to_string()
+                                ));
+                            } else {
+                                ui.weak(t!(
+                                    "offload-destination",
+                                    path = dest.display().to_string()
+                                ));
+                            }
                             // Pas assez de place : dit avant la copie (elle peut encore
                             // passer, des images étant peut-être déjà là, ou de la place
                             // faite entre-temps).
@@ -1025,6 +1338,11 @@ impl OffloadDialog {
             });
         if let Some(source) = new_source {
             self.change_source(source, ctx);
+        }
+        // « Choisir les photos… » d'une séance : sa galerie, à la place de la boîte.
+        if let Some(i) = pick {
+            self.pick_session(i, ctx);
+            return request;
         }
         if start {
             self.start(ctx);

@@ -20,13 +20,15 @@
 //!       saturation, pixels saturés et bouchés, voir `tri::exposure` ;
 //!   tri <dossier> --metadata [--raw|--flat] [--depth N]
 //!       métadonnées de prise de vue de chaque image, voir `tri::metadata` ;
-//!   tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
+//!   tri --offload <carte> [--session <AAAA-MM-JJ>] [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
 //!       décharge une carte : copie vérifiée des images vers <racine>/<nom> (défauts :
 //!       `[offload] destination`, nom proposé AAAA/AAAA-MM-JJ), sans les fichiers déjà
 //!       déchargés ; `--raw-only` laisse les JPEG sur la carte ; `--previews` calcule
 //!       ensuite vignettes et aperçus ; `--delete-copied` supprime de la carte les
 //!       fichiers copiés et vérifiés (`--delete-left` : aussi les JPEG laissés par
-//!       `--raw-only`), `--eject` éjecte la carte ;
+//!       `--raw-only`), `--eject` éjecte la carte ; `--session` ne décharge qu'une
+//!       séance (un jour de prise de vue, `[offload] day_cut`), dont la date nomme le
+//!       dossier ; `--dry-run` liste les séances de la carte ;
 //!   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
 //!       recopie les notes (étoiles, couleurs, accepté / rejeté) dans les sidecars de
 //!       l'autre convention (`--dry-run` : sans rien écrire), voir `tri::xmp::convert` ;
@@ -175,6 +177,8 @@ struct Args {
     offload: Option<PathBuf>,
     to: Option<PathBuf>,
     folder: Option<String>,
+    /// `--session AAAA-MM-JJ` : décharger une seule séance de la carte (#507).
+    session: Option<String>,
     /// Gabarit des noms d'export (`--name`), à la place de celui du préréglage.
     name: Option<String>,
     raw_only: bool,
@@ -540,6 +544,7 @@ fn parse() -> AnyResult<Args> {
             "--offload" => args.offload = Some(value()?.into()),
             "--to" => args.to = Some(value()?.into()),
             "--folder" => args.folder = Some(value()?),
+            "--session" => args.session = Some(value()?),
             "--name" => args.name = Some(value()?),
             "--raw-only" => args.raw_only = true,
             "--eject" => args.eject = true,
@@ -876,12 +881,45 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
         History::open_configured(s, settings.data_dir().as_deref())?
     };
     let plan = offload::plan(card, &history)?;
+    // Séances de la carte (#507) : listées à l'essai, ou une seule déchargée.
+    let sessions = plan.sessions(s.day_cut);
+    if args.dry_run && sessions.len() > 1 {
+        for session in &sessions {
+            println!(
+                "{}",
+                t!(
+                    "cli-offload-session",
+                    day = session.day.clone(),
+                    n = session.items.len()
+                )
+            );
+        }
+    }
+    let (plan, session_folder) = match &args.session {
+        Some(day) => {
+            let session = sessions
+                .iter()
+                .find(|x| x.day == *day)
+                .ok_or_else(|| t!("cli-offload-no-session", day = day.clone()))?;
+            let chosen: std::collections::HashSet<&std::path::Path> = session
+                .items
+                .iter()
+                .map(|&i| plan.items[i].source.as_path())
+                .collect();
+            (
+                plan.subset(|i| chosen.contains(i.source.as_path())),
+                Some(session.folder()),
+            )
+        }
+        None => (plan, None),
+    };
     let root = args.to.clone().unwrap_or_else(|| {
         settings::expand_home(&offload::root(s, settings.data_dir().as_deref()))
     });
-    let folder = match &args.folder {
-        Some(f) => f.clone(),
-        None => offload::suggest_folder(&plan, s).unwrap_or_default(),
+    let folder = match (&args.folder, session_folder) {
+        (Some(f), _) => f.clone(),
+        (None, Some(f)) => f,
+        (None, None) => offload::suggest_folder(&plan, s).unwrap_or_default(),
     };
     let known = plan.items.iter().filter(|i| i.known).count();
     println!(

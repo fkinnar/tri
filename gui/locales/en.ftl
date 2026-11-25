@@ -1832,6 +1832,31 @@ offload-root = Root folder
 offload-session = Session folder
 offload-session-tip = Suggested: YYYY-MM-DD_ (date of the newest image to copy), to complete ("_Self") or replace entirely; the year, if wanted, goes in the root folder. Empty: straight into the root folder.
 offload-destination = Destination: { $path }
+offload-destinations = Destination: { $n } folders in { $path }
+offload-sessions = { $n } sessions on the card (one per shooting day), each in its own folder:
+offload-session-count = { $n ->
+    [0] nothing to copy
+    [one] 1 image, { $size }
+   *[other] { $n } images, { $size }
+}
+offload-session-known = already offloaded ({ $n } images)
+offload-no-session-chosen = No session checked.
+offload-pick = Choose the photos…
+offload-pick-again = Change the choice…
+offload-pick-tip = The session's photos as thumbnails, to check those to offload
+offload-pick-title = Photos of { $day } to offload
+offload-pick-all = Select all
+offload-pick-none = Deselect all
+offload-pick-count = { $n } / { $total } photos, { $size }
+offload-pick-size = Size
+offload-pick-ok = OK
+offload-pick-exclude = { $n ->
+    [one] Exclude the photo already copied
+   *[other] Exclude the { $n } photos already copied
+}
+offload-pick-exclude-tip = Already offloaded (here or elsewhere): unchecked and not copied again. Unchecked, they can be copied again.
+offload-pick-known = already copied
+offload-pick-partly = partly copied
 offload-raw-only = RAW only
 offload-keep-disk = Keep tri's data on this drive
 offload-keep-folder = Keep tri's data in the session folder
@@ -1854,8 +1879,14 @@ offload-progress = { $done } / { $total } files · { $mb } / { $total_mb } MB
 offload-background = Continue in the background
 offload-interrupt = Interrupt
 offload-done = { $verified ->
-    [yes] { $copied } files copied and verified
-   *[no] { $copied } files copied
+    [yes] { $copied ->
+        [one] { $copied } file copied and verified
+       *[other] { $copied } files copied and verified
+    }
+   *[no] { $copied ->
+        [one] { $copied } file copied
+       *[other] { $copied } files copied
+    }
 }, { $skipped } skipped (already offloaded), { $errors } errors.
 offload-done-cancelled = { " " }— interrupted
 offload-not-enough-room = Not enough room: { $size } to copy, { $free } free.

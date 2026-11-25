@@ -539,6 +539,12 @@ delete_left = false
 # of each photo as soon as it is copied, while the copy goes on: the session is ready
 # sooner. Checkbox of the offload dialog; on the command line, --previews.
 previews = true
+# Hour when a shooting day starts, to sort a card into sessions.
+#
+# Card with several sessions (one per shooting day): a photo taken before this hour (0 to
+# 23) counts for the day before, so that an evening ending after midnight stays one
+# session. 0: cut at midnight.
+day_cut = 4
 
 [files]
 # Renaming, deleting, copying or moving an image: the other image of its RAW+JPEG pair
