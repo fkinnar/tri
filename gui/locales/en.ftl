@@ -1818,6 +1818,15 @@ offload-session-count = { $n ->
 }
 offload-session-known = already offloaded ({ $n } images)
 offload-no-session-chosen = No session checked.
+offload-pick = Choose the photos…
+offload-pick-again = Change the choice…
+offload-pick-tip = The session's photos as thumbnails, to check those to offload
+offload-pick-title = Photos of { $day } to offload
+offload-pick-all = Select all
+offload-pick-none = Deselect all
+offload-pick-count = { $n } / { $total } photos, { $size }
+offload-pick-size = Size
+offload-pick-ok = OK
 offload-raw-only = RAW only
 offload-keep-disk = Keep tri's data on this drive
 offload-keep-folder = Keep tri's data in the session folder

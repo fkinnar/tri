@@ -99,6 +99,18 @@ struct SessionRow {
     count: usize,
     bytes: u64,
     known: bool,
+    /// Photos choisies dans la galerie ([`crate::offload_picker`]) : leurs fichiers ;
+    /// `None` : toute la séance.
+    picked: Option<std::collections::HashSet<PathBuf>>,
+}
+
+impl SessionRow {
+    /// Vrai si l'image `item` (de cette séance) fait partie du choix.
+    fn keeps(&self, item: &offload::Item) -> bool {
+        self.picked
+            .as_ref()
+            .is_none_or(|p| p.contains(&item.source))
+    }
 }
 
 /// Ce que la copie fera : (images, dossier) par séance cochée, ou la carte entière vers
@@ -123,7 +135,9 @@ fn targets(
                 .session
                 .items
                 .iter()
-                .map(|&i| plan.items[i].source.as_path())
+                .map(|&i| &plan.items[i])
+                .filter(|i| row.keeps(i))
+                .map(|i| i.source.as_path())
                 .collect();
             Ok((plan.subset(|i| chosen.contains(i.source.as_path())), dest))
         })
@@ -146,6 +160,7 @@ fn session_rows(plan: &Plan, settings: &OffloadSettings) -> Vec<SessionRow> {
                 folder: session.folder(),
                 count: 0,
                 bytes: 0,
+                picked: None,
                 on: !known,
                 known,
                 session,
@@ -241,6 +256,9 @@ pub struct OffloadDialog {
     group_pairs: tri::pairs::Grouping,
     /// Case « Regrouper RAW et JPEG » touchée (#392) ; `None` : le réglage.
     pub(crate) pairs_choice: Option<bool>,
+    /// Galerie ouverte pour choisir les photos d'une séance (#507) : (rang de la séance,
+    /// galerie) ; la boîte de déchargement revient à sa fermeture.
+    pub(crate) picker: Option<(usize, crate::offload_picker::Picker)>,
 }
 
 impl OffloadDialog {
@@ -268,6 +286,7 @@ impl OffloadDialog {
             keep_choice: None,
             group_pairs: tri::pairs::Grouping::Ask,
             pairs_choice: None,
+            picker: None,
         }
     }
 
@@ -715,9 +734,46 @@ impl OffloadDialog {
         };
     }
 
+    /// Ouvre la galerie de la séance `i` (« Choisir les photos… », #507).
+    pub fn pick_session(&mut self, i: usize, ctx: &egui::Context) {
+        if let Stage::Ready { plan, sessions, .. } = &self.stage
+            && let Some(row) = sessions.get(i)
+        {
+            let items: Vec<&offload::Item> =
+                row.session.items.iter().map(|&k| &plan.items[k]).collect();
+            let picker = crate::offload_picker::Picker::new(
+                &row.session.day,
+                &items,
+                row.picked.as_ref(),
+                ctx,
+            );
+            self.picker = Some((i, picker));
+        }
+    }
+
     /// Dessine la boîte (modale, près du clic) ; renvoie ce que l'utilisateur a demandé.
     pub fn show(&mut self, ctx: &egui::Context) -> Option<Request> {
         self.poll();
+        // Galerie d'une séance ouverte : elle seule, la boîte revient ensuite.
+        if let Some((row, picker)) = &mut self.picker {
+            let outcome = picker.show(ctx, crate::marks::accent_mark(ctx));
+            let row = *row;
+            match outcome {
+                crate::offload_picker::Outcome::Open => return None,
+                crate::offload_picker::Outcome::Done(files) => {
+                    if let Stage::Ready { sessions, .. } = &mut self.stage
+                        && let Some(r) = sessions.get_mut(row)
+                    {
+                        let all = r.session.items.len() == files.len();
+                        r.picked = (!all).then_some(files);
+                        r.on = true;
+                    }
+                    self.picker = None;
+                }
+                crate::offload_picker::Outcome::Cancelled => self.picker = None,
+            }
+        }
+        let mut pick: Option<usize> = None;
         // Fin de la copie sous les yeux de l'utilisateur : suites cochées, séance ouverte.
         let mut request = self.finish(true);
         let mut start = false;
@@ -783,6 +839,7 @@ impl OffloadDialog {
                                 .items
                                 .iter()
                                 .map(|&i| &plan.items[i])
+                                .filter(|i| row.keeps(i))
                                 .filter(|i| !(settings.skip_known && i.known))
                                 .filter(|i| {
                                     !settings.raw_only || i.kind == tri::media::MediaKind::Raw
@@ -802,8 +859,14 @@ impl OffloadDialog {
                             let on: std::collections::HashSet<&Path> = sessions
                                 .iter()
                                 .filter(|r| r.on)
-                                .flat_map(|r| r.session.items.iter())
-                                .map(|&i| plan.items[i].source.as_path())
+                                .flat_map(|r| {
+                                    r.session
+                                        .items
+                                        .iter()
+                                        .map(|&i| &plan.items[i])
+                                        .filter(|i| r.keeps(i))
+                                })
+                                .map(|i| i.source.as_path())
                                 .collect();
                             merged = plan.subset(|i| on.contains(i.source.as_path()));
                             &merged
@@ -879,18 +942,23 @@ impl OffloadDialog {
                             ui.add_space(4.0);
                             ui.label(t!("offload-sessions", n = sessions.len()));
                             egui::Grid::new("offload_sessions")
-                                .num_columns(3)
+                                .num_columns(4)
                                 .show(ui, |ui| {
                                     for (i, row) in sessions.iter_mut().enumerate() {
                                         ui.checkbox(&mut row.on, row.session.day.as_str());
-                                        ui.add_enabled(
-                                            row.on,
-                                            egui::TextEdit::singleline(&mut row.folder)
-                                                .id(egui::Id::unique(("offload_session_folder", i)))
-                                                .desired_width(220.0),
-                                        )
-                                        .on_hover_text(t!("offload-session-tip"));
-                                        let text = if row.known {
+                                        // Largeur imposée : dans la grille, le champ se
+                                        // réduisait à quelques caractères.
+                                        let h = ui.spacing().interact_size.y;
+                                        ui.add_enabled_ui(row.on, |ui| {
+                                            ui.add_sized(
+                                                [220.0, h],
+                                                egui::TextEdit::singleline(&mut row.folder).id(
+                                                    egui::Id::unique(("offload_session_folder", i)),
+                                                ),
+                                            )
+                                            .on_hover_text(t!("offload-session-tip"));
+                                        });
+                                        let text = if row.known && row.picked.is_none() {
                                             t!("offload-session-known", n = row.session.items.len())
                                         } else {
                                             t!(
@@ -900,6 +968,17 @@ impl OffloadDialog {
                                             )
                                         };
                                         ui.weak(text);
+                                        let label = match &row.picked {
+                                            Some(_) => t!("offload-pick-again"),
+                                            None => t!("offload-pick"),
+                                        };
+                                        if ui
+                                            .button(label)
+                                            .on_hover_text(t!("offload-pick-tip"))
+                                            .clicked()
+                                        {
+                                            pick = Some(i);
+                                        }
                                         ui.end_row();
                                     }
                                 });
@@ -1210,6 +1289,11 @@ impl OffloadDialog {
             });
         if let Some(source) = new_source {
             self.change_source(source, ctx);
+        }
+        // « Choisir les photos… » d'une séance : sa galerie, à la place de la boîte.
+        if let Some(i) = pick {
+            self.pick_session(i, ctx);
+            return request;
         }
         if start {
             self.start(ctx);

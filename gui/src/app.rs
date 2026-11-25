@@ -13962,7 +13962,8 @@ impl TriApp {
             }
             // Boîte de déchargement : seule la fermeture (pas pendant la copie).
             if let Some(dialog) = self.offload.as_ref().filter(|d| !d.is_hidden()) {
-                if action == Action::Back && !dialog.is_running() {
+                // Galerie d'une séance ouverte : elle prend Échap elle-même.
+                if action == Action::Back && !dialog.is_running() && dialog.picker.is_none() {
                     self.close_offload();
                 } else if action.works_over_overlay() && action != Action::Back {
                     self.perform(ctx, action);
@@ -25715,6 +25716,20 @@ impl TriApp {
                     }
                 }
                 Step::ViewRender => self.open_view_render = true,
+                Step::Offload(card) => {
+                    self.offload = Some(OffloadDialog::new(
+                        card,
+                        CENTRED,
+                        self.settings.offload.clone(),
+                        self.settings.data_dir(),
+                        ctx,
+                    ));
+                }
+                Step::OffloadPick(i) => {
+                    if let Some(dialog) = &mut self.offload {
+                        dialog.pick_session(i, ctx);
+                    }
+                }
                 Step::OpeningBox(stage) => {
                     // Une lecture qui n'arrive jamais : la boîte reste, pour la capture.
                     let (tx, result) = mpsc::channel();
@@ -28911,6 +28926,11 @@ enum Step {
     /// Taper des touches, comme au clavier (`keys:Ctrl+b r`, écrites comme dans
     /// `keys.toml`) : séquences et menu des suites compris.
     Keys(Vec<crate::actions::Chord>),
+    /// Ouvrir la boîte de déchargement d'un dossier comme d'une carte
+    /// (`offload:/chemin/carte`), pour la capture.
+    Offload(PathBuf),
+    /// Ouvrir la galerie de la séance n de la boîte de déchargement (`offload_pick:1`).
+    OffloadPick(usize),
 }
 
 fn startup_actions() -> Vec<Step> {
@@ -28968,6 +28988,13 @@ fn parse_actions(list: &str) -> Vec<Step> {
                 None if id.starts_with("search:") => {
                     Some(Step::Search(id["search:".len()..].to_string()))
                 }
+                None if id.starts_with("offload:") => {
+                    Some(Step::Offload(PathBuf::from(&id["offload:".len()..])))
+                }
+                None if id.starts_with("offload_pick:") => id["offload_pick:".len()..]
+                    .parse()
+                    .ok()
+                    .map(Step::OffloadPick),
                 None if id.starts_with("keys:") => crate::actions::parse_keys(&id["keys:".len()..])
                     .ok()
                     .map(Step::Keys),
@@ -45210,9 +45237,42 @@ mod tests {
         h.get_by_label("2026-11-10").click();
         h.run_steps(2);
         assert!(h.query_by_label_contains("3 à copier").is_some());
+        // Les photos du 12 en galerie (retour du 25/11/2026) : tout décoché (Cmd+Maj+A),
+        // Espace coche la première ; le mode visuel coche en avançant, Échap n'en sort que
+        // lui ; le choix est gardé en rouvrant.
+        let pick = t!("offload-pick");
+        h.get_all_by_label(&pick).nth(2).unwrap().click();
+        h.run_steps(3);
+        let picker = |h: &Harness<'_, TriApp>| {
+            h.state()
+                .offload
+                .as_ref()
+                .and_then(|o| o.picker.as_ref())
+                .map(|(_, p)| (p.checked.clone(), p.visual))
+        };
+        assert_eq!(picker(&h).map(|p| p.0), Some(vec![true, true]));
+        press(&mut h, Key::A, CMD | Modifiers::SHIFT);
+        press(&mut h, Key::Space, Modifiers::NONE);
+        assert_eq!(picker(&h).map(|p| p.0), Some(vec![true, false]));
+        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(picker(&h).map(|p| p.0), Some(vec![true, true]));
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(
+            picker(&h).map(|p| p.1),
+            Some(None),
+            "Échap : sorti du visuel seulement"
+        );
+        press(&mut h, Key::Space, Modifiers::NONE);
+        assert_eq!(picker(&h).map(|p| p.0), Some(vec![true, false]));
+        h.get_by_label(&t!("offload-pick-ok")).click();
+        h.run_steps(3);
+        assert!(picker(&h).is_none(), "la boîte revient");
+        assert!(h.query_by_label_contains("2 à copier").is_some());
+        assert!(h.query_by_label(&t!("offload-pick-again")).is_some());
         h.get_by_label("Décharger").click();
         while h
-            .query_by_label_contains("3 fichiers copiés et vérifiés")
+            .query_by_label_contains("2 fichiers copiés et vérifiés")
             .is_none()
         {
             assert!(Instant::now() < deadline, "jamais copié");
@@ -45233,7 +45293,12 @@ mod tests {
             n
         };
         assert_eq!(names("2026-11-11"), ["IMG1.jpg"]);
-        assert_eq!(names("2026-11-12"), ["IMG2.jpg", "IMG3.jpg"]);
+        assert_eq!(
+            names("2026-11-12"),
+            ["IMG2.jpg"],
+            "seulement la photo choisie"
+        );
+        assert!(shots.join("IMG3.jpg").exists());
         assert!(
             names("2026-11-10").is_empty(),
             "séance décochée : pas copiée"

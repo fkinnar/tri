@@ -126,7 +126,19 @@ them, never the rest of the card.
   are put end to end (`Report::absorb`), the newest session opened at the end.
 - **Command line**: `tri --offload <card> --session YYYY-MM-DD` only offloads that day
   (folder named after it); `--dry-run` lists the sessions.
-- Coming (same issue): choosing photos within a session, from the card's grid.
+- **Choosing the photos** of a session ("Choose the photos…" on its row,
+  `offload_picker.rs`): a gallery instead of the dialog (user's idea, 2026-11-25: simpler
+  than `tri`'s grid, which would have had to open on the card and then be given back as it
+  was). Thumbnails from the embedded JPEGs, read in the background on the card without
+  cache; a RAW+JPEG pair is one photo; adjustable size (slider); a check on each photo,
+  all checked at first, "Select all" / "Deselect all" and the count. The grid's gestures:
+  click = cursor (it does not uncheck everything, unlike the Finder), Cmd/Ctrl+click
+  toggles, Shift+click checks the range, click on the check; Space toggles, `v` /
+  Shift+Space the visual mode (moving checks), Shift + arrows extend, arrows or hjkl,
+  Cmd/Ctrl+A all, with Shift none. Double-click or Enter: the photo large, fitted (the
+  embedded preview, no 1:1), arrows for the next one. Escape leaves the visual mode, the
+  large view, then closes without changing anything; OK goes back to the dialog ("Change
+  the choice…"), only the selection is copied.
 
 ## In the background (2026-10-17)
 

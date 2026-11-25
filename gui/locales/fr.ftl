@@ -1824,6 +1824,15 @@ offload-session-count = { $n ->
 }
 offload-session-known = déjà déchargée ({ $n } images)
 offload-no-session-chosen = Aucune séance cochée.
+offload-pick = Choisir les photos…
+offload-pick-again = Changer le choix…
+offload-pick-tip = Les photos de la séance en vignettes, pour cocher celles à décharger
+offload-pick-title = Photos du { $day } à décharger
+offload-pick-all = Tout sélectionner
+offload-pick-none = Tout désélectionner
+offload-pick-count = { $n } / { $total } photos, { $size }
+offload-pick-size = Taille
+offload-pick-ok = Valider
 offload-raw-only = RAW seulement
 offload-keep-disk = Garder les données de tri sur ce disque
 offload-keep-folder = Garder les données de tri dans le dossier de la séance

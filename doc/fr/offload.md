@@ -133,7 +133,19 @@ carte ensuite ne touchent qu'elles, jamais le reste de la carte.
   sont mis bout à bout (`Report::absorb`), la plus récente séance ouverte à la fin.
 - **Ligne de commande** : `tri --offload <carte> --session AAAA-MM-JJ` ne décharge que ce
   jour-là (dossier nommé d'après lui) ; `--dry-run` liste les séances.
-- À venir (même issue) : choisir des photos dans une séance, depuis la grille de la carte.
+- **Choisir les photos** d'une séance (« Choisir les photos… » sur sa ligne,
+  `offload_picker.rs`) : une galerie à la place de la boîte (idée de l'utilisateur,
+  25/11/2026 : plus simple que la grille de `tri`, qu'il aurait fallu ouvrir sur la carte
+  puis rendre telle quelle). Vignettes tirées des JPEG embarqués, lues en fond sur la
+  carte sans cache ; une paire RAW+JPEG est une photo ; taille réglable (curseur) ; coche
+  sur chaque photo, toutes cochées au départ, « Tout sélectionner » / « Tout
+  désélectionner » et le compte. Gestes de la grille : clic = curseur (il ne décoche pas
+  tout, contrairement au Finder), Cmd/Ctrl+clic bascule, Maj+clic coche la plage, clic sur
+  la coche ; Espace bascule, `v` / Maj+Espace le mode visuel (les déplacements cochent),
+  Maj + flèches étendent, flèches ou hjkl, Cmd/Ctrl+A tout, avec Maj rien. Double-clic ou
+  Entrée : la photo en grand, ajustée (l'aperçu embarqué, pas de 1:1), flèches pour la
+  suivante. Échap sort du visuel, de la vue en grand, puis ferme sans rien changer ;
+  Valider revient à la boîte (« Changer le choix… »), seule la sélection est copiée.
 
 ## En arrière-plan (17/10/2026)
 
