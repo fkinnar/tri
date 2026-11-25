@@ -21069,6 +21069,21 @@ impl TriApp {
         self.metadata_panel && !self.focus_mode && self.error.is_none() && !self.folder.is_none()
     }
 
+    /// Vrai si la case `slot` de `progress` est une analyse à la demande (#564, mode
+    /// léger #597) : rien n'y est calculé, le moteur cherche seulement dans le cache.
+    fn analysis_on_demand(&self, slot: usize) -> bool {
+        use crate::actions::Tool;
+        let analyses = self.analyses();
+        [
+            Tool::Exposure,
+            Tool::Sharpness,
+            Tool::Stacks,
+            Tool::Palettes,
+        ]
+        .into_iter()
+        .any(|t| t.slot() == slot && t.mode(&analyses) == tri::scheduler::Analysis::OnDemand)
+    }
+
     /// Tâches de fond en cours (issue n° 36) : notes, calculs du dossier, export, copies
     /// et déchargement en arrière-plan.
     fn tasks(&self, ui: &Ui) -> Vec<Task> {
@@ -21085,7 +21100,10 @@ impl TriApp {
             }
             now < t
         });
-        for (name, p) in [
+        // Analyse à la demande (#564, mode léger #597) : rien n'est calculé, le moteur ne
+        // fait que chercher dans le cache ce qui l'est déjà ; pas une tâche à montrer
+        // (retour du 25/11/2026 : « histogrammes 1/1126 » sur le NAS inquiétait).
+        for (slot, (name, p)) in [
             (t!("progress-notes"), notes),
             (t!("progress-thumbnails"), self.progress[0]),
             (t!("progress-embedded"), self.progress[1]),
@@ -21094,9 +21112,18 @@ impl TriApp {
             (t!("progress-sharpness"), self.progress[4]),
             (t!("progress-groups"), self.progress[5]),
             (t!("progress-palettes"), self.progress[6]),
-        ] {
-            // Rien à calculer en fond pour ce niveau, ou déjà fini.
-            if p.total == 0 || waiting || (self.gui.progress_hide_done && p.done >= p.total) {
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            // Rien à calculer en fond pour ce niveau, ou déjà fini. `slot` : la case de
+            // `progress` (les notes d'abord).
+            let slot = slot.wrapping_sub(1);
+            if p.total == 0
+                || waiting
+                || self.analysis_on_demand(slot)
+                || (self.gui.progress_hide_done && p.done >= p.total)
+            {
                 continue;
             }
             tasks.push(Task {
@@ -35697,6 +35724,9 @@ mod tests {
             tri::scheduler::Analysis::OnDemand
         );
         assert_eq!(h.state().settings.light.mark(&photos, None), Some(true));
+        // Les analyses à la demande ne sont que cherchées dans le cache : pas des tâches.
+        assert!((3..=6).all(|slot| h.state().analysis_on_demand(slot)));
+        assert!(!h.state().analysis_on_demand(0), "les vignettes, si");
         h.run_steps(2);
         h.get_by_label(&t!("status-light"));
 
