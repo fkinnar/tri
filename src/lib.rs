@@ -50,6 +50,8 @@ pub mod index;
 pub mod io_watch;
 pub mod iptc;
 pub mod jpeg;
+#[cfg(target_os = "linux")]
+mod keyring;
 pub mod locate;
 pub mod log;
 pub mod media;
