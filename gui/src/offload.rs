@@ -750,6 +750,7 @@ impl OffloadDialog {
                 &row.session.day,
                 &items,
                 row.picked.as_ref(),
+                self.settings.skip_known,
                 ctx,
             );
             self.picker = Some((i, picker));
@@ -765,7 +766,9 @@ impl OffloadDialog {
             let row = *row;
             match outcome {
                 crate::offload_picker::Outcome::Open => return None,
-                crate::offload_picker::Outcome::Done(files) => {
+                crate::offload_picker::Outcome::Done(files, exclude_known) => {
+                    // La case de la galerie est celle de la boîte (« Recopier »).
+                    self.settings.skip_known = exclude_known;
                     if let Stage::Ready { sessions, .. } = &mut self.stage
                         && let Some(r) = sessions.get_mut(row)
                     {

@@ -1849,6 +1849,12 @@ offload-pick-none = Tout désélectionner
 offload-pick-count = { $n } / { $total } photos, { $size }
 offload-pick-size = Taille
 offload-pick-ok = Valider
+offload-pick-exclude = { $n ->
+    [one] Exclure la photo déjà copiée
+   *[other] Exclure les { $n } photos déjà copiées
+}
+offload-pick-exclude-tip = Déjà déchargées (ici ou ailleurs) : décochées et pas recopiées. Décochée, on peut les recopier.
+offload-pick-known = déjà copiée
 offload-raw-only = RAW seulement
 offload-keep-disk = Garder les données de tri sur ce disque
 offload-keep-folder = Garder les données de tri dans le dossier de la séance

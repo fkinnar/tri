@@ -25,14 +25,17 @@ struct Photo {
     /// Heure de prise de vue (« 14:32 »).
     time: String,
     size: u64,
+    /// Déjà déchargée (tous ses fichiers, d'après l'historique ou la destination).
+    known: bool,
 }
 
 /// Ce que devient la boîte.
 pub enum Outcome {
     /// Encore ouverte.
     Open,
-    /// Validée : les fichiers des photos cochées.
-    Done(HashSet<PathBuf>),
+    /// Validée : les fichiers des photos cochées, et si les photos déjà déchargées sont
+    /// exclues (la case de la galerie, celle de la boîte de déchargement).
+    Done(HashSet<PathBuf>, bool),
     /// Fermée sans rien changer.
     Cancelled,
 }
@@ -59,6 +62,9 @@ pub struct Picker {
     /// Mode visuel (`v`, Maj+Espace, comme la grille) : son départ ; les déplacements
     /// cochent la plage parcourue.
     pub(crate) visual: Option<usize>,
+    /// Photos déjà déchargées exclues (retour du 25/11/2026) : décochées et pas
+    /// cochables ; décochée, elles se cochent comme les autres (recopiées).
+    pub(crate) exclude_known: bool,
 }
 
 /// Réglages des images de la galerie : vignettes de 320 px, grand à 1600 px.
@@ -89,6 +95,7 @@ impl Picker {
         day: &str,
         items: &[&Item],
         chosen: Option<&HashSet<PathBuf>>,
+        exclude_known: bool,
         ctx: &egui::Context,
     ) -> Picker {
         let mut photos: Vec<Photo> = Vec::new();
@@ -101,6 +108,7 @@ impl Picker {
                 Some(photo) => {
                     photo.files.push(item.source.clone());
                     photo.size += item.size;
+                    photo.known &= item.known;
                     if item.kind == MediaKind::Flat {
                         photo.shown = MediaFile {
                             path: item.source.clone(),
@@ -122,12 +130,16 @@ impl Picker {
                         .format("%H:%M")
                         .to_string(),
                     size: item.size,
+                    known: item.known,
                 }),
             }
         }
         let checked = photos
             .iter()
-            .map(|p| chosen.is_none_or(|c| p.files.iter().any(|f| c.contains(f))))
+            .map(|p| {
+                !(exclude_known && p.known)
+                    && chosen.is_none_or(|c| p.files.iter().any(|f| c.contains(f)))
+            })
             .collect();
         let cancel = Arc::new(AtomicBool::new(false));
         let (tx, rx) = mpsc::channel();
@@ -161,14 +173,35 @@ impl Picker {
             columns: 1,
             anchor: 0,
             visual: None,
+            exclude_known,
+        }
+    }
+
+    /// Vrai si la photo `i` ne peut pas être cochée (déjà déchargée, exclue).
+    fn locked(&self, i: usize) -> bool {
+        self.exclude_known && self.photos[i].known
+    }
+
+    /// Coche ou décoche la photo `i` (une photo exclue reste décochée).
+    fn set(&mut self, i: usize, on: bool) {
+        self.checked[i] = on && !self.locked(i);
+    }
+
+    /// Exclut les photos déjà déchargées (décochées) ou les reprend (cochées).
+    fn exclude(&mut self, on: bool) {
+        self.exclude_known = on;
+        for i in 0..self.photos.len() {
+            if self.photos[i].known {
+                self.checked[i] = !on;
+            }
         }
     }
 
     /// Coche les photos de `a` à `b` (dans un sens ou l'autre).
     fn check_range(&mut self, a: usize, b: usize) {
         let (lo, hi) = (a.min(b), a.max(b));
-        for c in &mut self.checked[lo..=hi.min(self.photos.len().saturating_sub(1))] {
-            *c = true;
+        for i in lo..=hi.min(self.photos.len().saturating_sub(1)) {
+            self.set(i, true);
         }
     }
 
@@ -285,11 +318,11 @@ impl Picker {
             }
             match key {
                 Key::Space if shift => self.toggle_visual(),
-                Key::Space => self.checked[self.cursor] = !self.checked[self.cursor],
+                Key::Space => self.set(self.cursor, !self.checked[self.cursor]),
                 Key::V if !command => self.toggle_visual(),
                 Key::A if command => {
                     let on = !shift;
-                    self.checked.iter_mut().for_each(|c| *c = on);
+                    (0..self.photos.len()).for_each(|i| self.set(i, on));
                 }
                 Key::Enter => match self.enlarged {
                     Some(_) => self.enlarged = None,
@@ -319,7 +352,7 @@ impl Picker {
         self.visual = match self.visual {
             Some(_) => None,
             None => {
-                self.checked[self.cursor] = true;
+                self.set(self.cursor, true);
                 self.anchor = self.cursor;
                 Some(self.cursor)
             }
@@ -350,10 +383,21 @@ impl Picker {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     if ui.button(t!("offload-pick-all")).clicked() {
-                        self.checked.iter_mut().for_each(|c| *c = true);
+                        (0..self.photos.len()).for_each(|i| self.set(i, true));
                     }
                     if ui.button(t!("offload-pick-none")).clicked() {
                         self.checked.iter_mut().for_each(|c| *c = false);
+                    }
+                    let known = self.photos.iter().filter(|p| p.known).count();
+                    if known > 0 {
+                        let mut on = self.exclude_known;
+                        if ui
+                            .checkbox(&mut on, t!("offload-pick-exclude", n = known))
+                            .on_hover_text(t!("offload-pick-exclude-tip"))
+                            .changed()
+                        {
+                            self.exclude(on);
+                        }
                     }
                     ui.label(t!(
                         "offload-pick-count",
@@ -382,7 +426,7 @@ impl Picker {
                 });
             });
         if done {
-            Outcome::Done(self.chosen())
+            Outcome::Done(self.chosen(), self.exclude_known)
         } else if cancel || modal.should_close() {
             Outcome::Cancelled
         } else {
@@ -468,10 +512,20 @@ impl Picker {
                             }
                         }
                         let photo = &self.photos[i];
+                        let caption = if photo.known {
+                            format!(
+                                "{}  {} · {}",
+                                photo.name,
+                                photo.time,
+                                t!("offload-pick-known")
+                            )
+                        } else {
+                            format!("{}  {}", photo.name, photo.time)
+                        };
                         ui.painter().text(
                             egui::pos2(cell.left(), image.bottom() + 2.0),
                             egui::Align2::LEFT_TOP,
-                            format!("{}  {}", photo.name, photo.time),
+                            caption,
                             egui::TextStyle::Small.resolve(ui.style()),
                             ui.visuals().text_color(),
                         );
@@ -486,7 +540,7 @@ impl Picker {
                         let checked = self.check(ui, i, image, accent);
                         let modifiers = ui.input(|input| input.modifiers);
                         if checked {
-                            self.checked[i] = !self.checked[i];
+                            self.set(i, !self.checked[i]);
                             self.cursor = i;
                             self.anchor = i;
                         } else if response.double_clicked() {
@@ -497,7 +551,7 @@ impl Picker {
                             // curseur (il ne décoche pas tout, comme le Finder : les photos
                             // partent toutes cochées).
                             if modifiers.command {
-                                self.checked[i] = !self.checked[i];
+                                self.set(i, !self.checked[i]);
                                 self.cursor = i;
                                 self.anchor = i;
                             } else {
@@ -541,7 +595,7 @@ impl Picker {
             ),
         }
         if self.check(ui, i, area, accent) {
-            self.checked[i] = !self.checked[i];
+            self.set(i, !self.checked[i]);
         } else if response.double_clicked() {
             self.enlarged = None;
         }
@@ -555,5 +609,45 @@ impl Picker {
                 self.photos.len()
             ));
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn item(name: &str, known: bool) -> Item {
+        Item {
+            source: PathBuf::from(format!("/carte/{name}")),
+            size: 10,
+            modified: std::time::SystemTime::UNIX_EPOCH,
+            kind: MediaKind::Raw,
+            known,
+        }
+    }
+
+    #[test]
+    fn photos_already_copied_are_left_out_unless_asked() {
+        // Retour du 25/11/2026 : la galerie cochait aussi les photos déjà déchargées.
+        crate::i18n::ensure();
+        let items = [item("A.RAF", true), item("B.RAF", false)];
+        let refs: Vec<&Item> = items.iter().collect();
+        let ctx = egui::Context::default();
+        let mut p = Picker::new("2026-11-25", &refs, None, true, &ctx);
+        assert_eq!(p.checked, [false, true], "déjà copiée : décochée");
+        // Exclue : on ne peut pas la cocher, ni seule ni avec toutes.
+        p.set(0, true);
+        p.check_range(0, 1);
+        assert_eq!(p.checked, [false, true]);
+        // Plus exclue : cochée, et cochable.
+        p.exclude(false);
+        assert_eq!(p.checked, [true, true]);
+        p.set(0, false);
+        p.set(0, true);
+        assert!(p.checked[0]);
+        // De nouveau exclue : décochée.
+        p.exclude(true);
+        assert_eq!(p.checked, [false, true]);
+        p.cancel.store(true, Ordering::Relaxed);
     }
 }

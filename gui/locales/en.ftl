@@ -1843,6 +1843,12 @@ offload-pick-none = Deselect all
 offload-pick-count = { $n } / { $total } photos, { $size }
 offload-pick-size = Size
 offload-pick-ok = OK
+offload-pick-exclude = { $n ->
+    [one] Exclude the photo already copied
+   *[other] Exclude the { $n } photos already copied
+}
+offload-pick-exclude-tip = Already offloaded (here or elsewhere): unchecked and not copied again. Unchecked, they can be copied again.
+offload-pick-known = already copied
 offload-raw-only = RAW only
 offload-keep-disk = Keep tri's data on this drive
 offload-keep-folder = Keep tri's data in the session folder
