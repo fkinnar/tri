@@ -1876,10 +1876,32 @@ impl Tree {
     /// Remplace les emplacements (liste fournie par un [`Monitor`]) ; ce qui était déplié
     /// le reste.
     pub fn set_places(&mut self, places: Vec<Place>) {
+        let before: HashSet<PathBuf> = self.places.iter().map(|p| p.path.clone()).collect();
         self.places = places;
         self.add_servers();
         self.add_neighbours();
         self.check_favorites();
+        // Un volume revenu (carte remise) : ce qu'on en avait lu est relu. Déplié quand il
+        // a été éjecté, il gardait l'échec de sa lecture d'alors, « illisible » (retour du
+        // 26/11/2026).
+        let arrived: Vec<PathBuf> = self
+            .places
+            .iter()
+            .filter(|p| !before.contains(&p.path))
+            .map(|p| p.path.clone())
+            .collect();
+        for root in arrived {
+            self.children.retain(|p, _| !p.starts_with(&root));
+            let unfolded: Vec<PathBuf> = self
+                .expanded
+                .iter()
+                .map(|(_, p)| p.clone())
+                .filter(|p| p.starts_with(&root))
+                .collect();
+            for path in unfolded {
+                self.read_children(&path);
+            }
+        }
     }
 
     /// Relit les emplacements (carte SD insérée entre-temps) et les dossiers dépliés.
@@ -2841,5 +2863,31 @@ mod tests {
             mount_point_of(mounts, Path::new("/dev/sdb1")),
             Some(PathBuf::from("/media/fab/MA CARTE"))
         );
+    }
+
+    #[test]
+    fn a_card_put_back_is_read_again() {
+        // Retour du 26/11/2026 : dépliée, éjectée puis remise, la carte restait
+        // « illisible » (l'échec de sa lecture une fois partie).
+        let dir = tempfile::tempdir().unwrap();
+        let card = dir.path().join("CARTE");
+        std::fs::create_dir_all(card.join("DCIM")).unwrap();
+        let place = Place {
+            name: "CARTE".into(),
+            path: card.clone(),
+            kind: PlaceKind::Volume,
+        };
+        let mut tree = Tree::with_places(vec![place.clone()], false);
+        tree.expand(&card);
+        let row = |tree: &Tree| tree.rows().into_iter().find(|r| r.path == card).unwrap();
+        assert!(row(&tree).error.is_none());
+        // Éjectée : lue partie, elle est illisible.
+        std::fs::remove_dir_all(&card).unwrap();
+        tree.set_places(Vec::new());
+        tree.reload();
+        // Remise.
+        std::fs::create_dir_all(card.join("DCIM")).unwrap();
+        tree.set_places(vec![place]);
+        assert!(row(&tree).error.is_none(), "relue");
     }
 }

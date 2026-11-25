@@ -46112,6 +46112,70 @@ mod tests {
     }
 
     #[test]
+    fn raws_offloaded_alone_are_known_in_the_gallery() {
+        // Retour du 26/11/2026 : RAW seuls déchargés, la galerie les cochait encore.
+        let (mut h, dir) = harness();
+        let shots = dir.path().join("CARTE/DCIM/100_TEST");
+        std::fs::create_dir_all(&shots).unwrap();
+        for name in ["A", "B"] {
+            std::fs::write(shots.join(format!("{name}.RAF")), format!("raw {name}")).unwrap();
+            image::RgbImage::from_pixel(32, 24, image::Rgb([90, 90, 90]))
+                .save(shots.join(format!("{name}.JPG")))
+                .unwrap();
+        }
+        let ctx = h.ctx.clone();
+        let data = h.state().settings.data_dir();
+        let mut settings = h.state().settings.offload.clone();
+        settings.raw_only = true;
+        settings.previews = false;
+        let open = |h: &mut Harness<'_, TriApp>, settings: &tri::offload::OffloadSettings| {
+            let dialog = OffloadDialog::new(
+                dir.path().join("CARTE"),
+                CENTRED,
+                settings.clone(),
+                data.clone(),
+                &ctx,
+            );
+            h.state_mut().offload = Some(dialog);
+            let deadline = Instant::now() + Duration::from_secs(20);
+            while h.query_by_label("Décharger").is_none() {
+                assert!(Instant::now() < deadline, "boîte jamais prête");
+                h.run_steps(1);
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            settle_dialog(h);
+        };
+        // Premier déchargement : les RAW seuls.
+        open(&mut h, &settings);
+        h.get_by_label("Décharger").click();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.query_by_label_contains("2 fichiers copiés").is_none() {
+            assert!(Instant::now() < deadline, "jamais copié");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        h.state_mut().offload = None;
+        h.run_steps(2);
+        let checked = |h: &mut Harness<'_, TriApp>| {
+            h.get_by_label(&t!("offload-pick")).click();
+            h.run_steps(3);
+            h.state()
+                .offload
+                .as_ref()
+                .and_then(|o| o.picker.as_ref())
+                .map(|(_, p)| p.checked.clone())
+        };
+        // La carte remise, toujours « RAW seulement » : les deux photos sont copiées.
+        open(&mut h, &settings);
+        assert_eq!(checked(&mut h), Some(vec![false, false]));
+        h.state_mut().offload = None;
+        // Sans « RAW seulement » : leur JPEG reste à copier.
+        settings.raw_only = false;
+        open(&mut h, &settings);
+        assert_eq!(checked(&mut h), Some(vec![true, true]));
+    }
+
+    #[test]
     fn a_full_destination_brings_the_offload_back_until_answered() {
         // 12/11/2026 : destination pleine, le déchargement échouait sans rien dire. La copie
         // (ici en arrière-plan) s'arrête, la boîte revient avec ce qui est fait et ce qui
