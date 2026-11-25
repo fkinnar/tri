@@ -1473,6 +1473,11 @@ pub struct TriApp {
     neighbour_tried: bool,
     /// Ouverture d'un dossier lent en cours.
     opening: Option<Opening>,
+    /// Dossier laissé en attente pendant l'ouverture lente d'un autre (retour du
+    /// 25/11/2026 : sur un NAS, ses vignettes, ses notes et sa surveillance ralentissaient
+    /// l'ouverture) : son travail de fond est suspendu ; `true` si la lecture de ses notes
+    /// a été arrêtée (à refaire si l'ouverture est annulée).
+    held: Option<(PathBuf, bool)>,
     /// « Toutes les photos » (#561) : dossier d'où l'on y est venu (Échap y ramène).
     all_photos_from: Option<PathBuf>,
     /// Au lancement, on était dans « Toutes les photos » en quittant : on y repasse une
@@ -2855,6 +2860,7 @@ impl TriApp {
             neighbour_browser: None,
             neighbour_tried: cfg!(test),
             opening: None,
+            held: None,
             all_photos_from: None,
             reopen_all_photos,
             all_photos_last: None,
@@ -3607,6 +3613,7 @@ impl TriApp {
             Some(result) => self.install_folder(dir, result),
             None => {
                 trace(|| format!("dossier lent, lu en fond : {}", dir.display()));
+                self.hold_current_folder();
                 self.opening = Some(Opening {
                     dir: dir.to_path_buf(),
                     result: rx,
@@ -4300,10 +4307,43 @@ impl TriApp {
             Ok(result) => {
                 let dir = opening.dir.clone();
                 self.opening = None;
+                self.release_held_folder();
                 self.install_folder(&dir, result);
             }
             Err(mpsc::TryRecvError::Empty) => {}
-            Err(mpsc::TryRecvError::Disconnected) => self.opening = None,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                self.opening = None;
+                self.release_held_folder();
+            }
+        }
+    }
+
+    /// Une ouverture lente commence : le travail de fond du dossier affiché est suspendu
+    /// (aperçus et analyses), la lecture de ses notes arrêtée et sa surveillance coupée,
+    /// pour laisser le disque (NAS) au dossier demandé.
+    fn hold_current_folder(&mut self) {
+        if self.held.is_some() || self.folder.is_none() {
+            return;
+        }
+        if let Some(engine) = &self.engine {
+            engine.scheduler.set_paused(true);
+        }
+        let notes_stopped = self.loading.take().is_some();
+        self.watch = None;
+        self.held = Some((self.folder.dir.clone(), notes_stopped));
+    }
+
+    /// Fin de l'ouverture (réussie, échouée ou annulée) : le travail de fond reprend ; le
+    /// dossier d'avant toujours affiché relit ses notes si leur lecture avait été arrêtée.
+    fn release_held_folder(&mut self) {
+        let Some((dir, notes_stopped)) = self.held.take() else {
+            return;
+        };
+        if let Some(engine) = &self.engine {
+            engine.scheduler.set_paused(false);
+        }
+        if notes_stopped && self.folder.dir == dir {
+            self.reload_folder(None);
         }
     }
 
@@ -4316,6 +4356,7 @@ impl TriApp {
                 false,
             ));
         }
+        self.release_held_folder();
     }
 
     /// Ouverture d'un dossier lent : son nom, les images trouvées, et « Annuler », au
@@ -8824,6 +8865,10 @@ impl TriApp {
         // « Toutes les photos » : pas de dossier à surveiller (complété en fond).
         if self.folder.is_none() || interval == 0 || tri::folder::is_all_photos(&self.folder.dir) {
             self.watch = None;
+            return;
+        }
+        // Un autre dossier s'ouvre : celui-ci n'est plus surveillé en attendant.
+        if self.held.is_some() {
             return;
         }
         let depth = self.folder_depth();
@@ -44868,7 +44913,15 @@ mod tests {
         // Annulée tout de suite : le dossier d'avant reste.
         h.state_mut().open_folder(&other);
         assert!(h.state().opening.is_some(), "lue en fond");
+        // Retour du 25/11/2026 : le dossier affiché laisse le disque au dossier demandé.
+        assert_eq!(
+            h.state().held.as_ref().map(|(d, _)| d.clone()),
+            Some(photos.clone()),
+            "travail de fond suspendu"
+        );
+        assert!(h.state().loading.is_none() && h.state().watch.is_none());
         h.state_mut().cancel_opening();
+        assert!(h.state().held.is_none(), "annulée : il reprend");
         h.run_steps(5);
         assert_eq!(h.state().folder.dir, photos);
         assert!(
@@ -44887,6 +44940,7 @@ mod tests {
         }
         assert_eq!(h.state().folder.dir, std::path::absolute(&other).unwrap());
         assert_eq!(h.state().files.len(), 1);
+        assert!(h.state().held.is_none());
         // La boîte d'attente, et Échap qui annule (liste qui n'arrive jamais).
         let (_tx, rx) = mpsc::channel();
         h.state_mut().opening = Some(Opening {

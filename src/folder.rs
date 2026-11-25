@@ -200,6 +200,16 @@ pub struct Loading {
     done: Arc<AtomicUsize>,
     total: usize,
     result: Receiver<Loaded>,
+    /// Mis à vrai quand la lecture est abandonnée ([`Drop`]) : le fil s'arrête.
+    stop: Arc<AtomicBool>,
+}
+
+/// Abandonnée (dossier quitté) : la lecture s'arrête au lieu d'aller au bout (sur un NAS,
+/// elle ralentissait le dossier suivant, retour du 25/11/2026).
+impl Drop for Loading {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+    }
 }
 
 impl Loading {
@@ -213,11 +223,16 @@ impl Loading {
         let dir = folder.dir.clone();
         let convention = folder.notes.convention();
         let counter = done.clone();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopping = stop.clone();
         let spawned = std::thread::Builder::new()
             .name("tri-folder".into())
             .spawn(move || {
                 settle(&dir, &files);
-                let notes = NoteBook::load_counting(&files, convention, &counter);
+                let notes = NoteBook::load_until(&files, convention, &counter, &stopping);
+                if stopping.load(Ordering::Relaxed) {
+                    return;
+                }
                 let snapshot = watch
                     .then(|| crate::watch::Snapshot::of_depth(&dir, depth).ok())
                     .flatten();
@@ -235,12 +250,14 @@ impl Loading {
                 done,
                 total,
                 result: rx,
+                stop,
             };
         }
         Loading {
             done,
             total,
             result,
+            stop,
         }
     }
 
