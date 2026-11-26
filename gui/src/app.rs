@@ -36798,7 +36798,18 @@ mod tests {
         run_until(&mut h, |app| {
             names(app) == ["img2.jpg", "img0.jpg", "img1.jpg"]
         });
-        assert!(h.state().capture_progress.total > 0, "dates lues seules");
+        // Dates lues seules, sauf si les empreintes (calculées en fond, rapides sur une
+        // machine rapide) les avaient déjà toutes apportées avant le choix du tri.
+        let app = h.state();
+        let from_signatures = app.folder.files.iter().all(|f| {
+            app.signatures
+                .get(&f.path)
+                .is_some_and(|s| s.time.is_some())
+        });
+        assert!(
+            app.capture_progress.total > 0 || from_signatures,
+            "dates lues seules"
+        );
     }
 
     #[test]
