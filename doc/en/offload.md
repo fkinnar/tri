@@ -163,7 +163,8 @@ Brussels, the afternoon in Antwerp, two sessions on the same day.
   the one before. With the mouse, as on an editing table (the owner's idea): a toolbar
   always visible at the top, **scissors** (a click between two photos cuts, the aimed cut
   lights up) and **glue** (a click on a session's header joins it to the one before); the
-  pointer becomes the tool, Alt gives the other one, Escape goes back to selecting.
+  pointer becomes the tool, Alt or Ctrl (Cmd on macOS) gives the other one (on Linux Mint,
+  Alt+click moves the window), Escape goes back to selecting.
   Right-clicking a photo cuts or joins too. Checks, gestures and the large view as in the gallery of one
   session, which stays on each row. Validating rebuilds the dialog's rows: a session is
   checked if one of its photos is, with its choice of photos; a folder typed by hand is

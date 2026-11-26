@@ -171,8 +171,8 @@ jour.
   ou la recoud à la précédente. À la souris, comme sur une table de montage (idée de
   l'utilisateur) : une barre d'outils toujours visible en haut, **ciseaux** (un clic entre
   deux photos coupe, la coupure visée s'allume) et **colle** (un clic sur le bandeau
-  d'une séance la recoud à la précédente) ; le pointeur devient l'outil, Alt donne
-  l'autre, Échap revient à la sélection. Le clic droit sur une photo coupe ou recoud
+  d'une séance la recoud à la précédente) ; le pointeur devient l'outil, Alt ou Ctrl (Cmd sur macOS) donne
+  l'autre (sous Linux Mint, Alt+clic déplace la fenêtre), Échap revient à la sélection. Le clic droit sur une photo coupe ou recoud
   aussi. Coches, gestes et vue en grand comme
   dans la galerie d'une séance, qui reste sur chaque ligne. Valider refait les lignes de
   la boîte : une séance est cochée si l'une de ses photos l'est, avec son choix de

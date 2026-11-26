@@ -46251,6 +46251,17 @@ mod tests {
             starts(&h),
             Some(vec![None, Some(tri::offload::CutReason::Chosen), None])
         );
+        // Ctrl / Cmd avec les ciseaux : la colle (Alt+clic déplace la fenêtre sous Mint).
+        h.event(egui::Event::ModifiersChanged(CMD));
+        h.run_steps(2);
+        h.get_by_label(&t!("offload-tool-join", n = 2))
+            .click_modifiers(CMD);
+        h.run_steps(2);
+        assert_eq!(starts(&h), Some(vec![None, None, None]));
+        // Et la colle pour de bon.
+        h.get_by_label(&t!("offload-tool-cut-at", name = "IMG1"))
+            .click();
+        h.run_steps(2);
         h.get_by_label(&t!("offload-tool-glue")).click();
         h.run_steps(2);
         h.get_by_label(&t!("offload-tool-join", n = 2)).click();

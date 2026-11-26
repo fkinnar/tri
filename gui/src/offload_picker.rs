@@ -578,12 +578,12 @@ impl Picker {
                             (
                                 Tool::Scissors,
                                 t!("offload-tool-scissors"),
-                                t!("offload-tool-scissors-tip"),
+                                t!("offload-tool-scissors-tip", key = inverse_key()),
                             ),
                             (
                                 Tool::Glue,
                                 t!("offload-tool-glue"),
-                                t!("offload-tool-glue-tip"),
+                                t!("offload-tool-glue-tip", key = inverse_key()),
                             ),
                         ] {
                             let on = self.tool == tool;
@@ -680,8 +680,8 @@ impl Picker {
     }
 
     /// Ciseaux ou colle (#600) : entre deux photos d'une même séance, un clic coupe ; sur
-    /// le bandeau d'une séance (pas la première), un clic la recoud à la précédente. Alt
-    /// donne l'autre outil. Le pointeur devient l'outil, la coupure ou le bandeau visé
+    /// le bandeau d'une séance (pas la première), un clic la recoud à la précédente. Alt ou
+    /// Ctrl (Cmd sur macOS) donne l'autre outil. Le pointeur devient l'outil, la coupure ou le bandeau visé
     /// s'allume. Renvoie (photo, une séance y commence) pour un clic.
     fn tool_zones(
         &self,
@@ -693,7 +693,9 @@ impl Picker {
         accent: Color32,
     ) -> Option<(usize, bool)> {
         let starts = self.starts.as_deref()?;
-        let alt = ui.input(|i| i.modifiers.alt);
+        // Alt, ou Ctrl (Cmd sur macOS) : sous Linux Mint (Cinnamon), Alt+clic déplace la
+        // fenêtre et n'arrive jamais à `tri` (retour du 26/11/2026).
+        let alt = ui.input(|i| i.modifiers.alt || i.modifiers.command);
         let tool = match (self.tool, alt) {
             (Tool::Scissors, false) | (Tool::Glue, true) => Tool::Scissors,
             _ => Tool::Glue,
@@ -1027,6 +1029,15 @@ impl Picker {
                 self.photos.len()
             ));
         });
+    }
+}
+
+/// Les touches qui donnent l'autre outil, pour les bulles d'aide.
+fn inverse_key() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "Alt / Cmd"
+    } else {
+        "Alt / Ctrl"
     }
 }
 
