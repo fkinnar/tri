@@ -130,6 +130,8 @@ history-rename-many = { $n } photos renamed
 history-reset = Reset of “{ $name }”
 history-copy-dir = folder { $name } copied to { $dest }
 history-move-dir = folder { $name } moved to { $dest }
+history-copy-dirs = { $n } folders copied to { $dest }
+history-move-dirs = { $n } folders moved to { $dest }
 history-copy = { $n ->
     [one] 1 image copied to { $dest }
    *[other] { $n } images copied to { $dest }

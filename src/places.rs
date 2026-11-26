@@ -1493,6 +1493,13 @@ pub struct Tree {
     /// peut paraître deux fois ; le rang départage, le dossier retrouve la ligne quand
     /// d'autres apparaissent au-dessus).
     cursor: Option<(usize, PathBuf)>,
+    /// Dossiers choisis (#606 : supprimer, copier, déplacer plusieurs dossiers d'un coup),
+    /// dans l'ordre du choix.
+    selection: Vec<PathBuf>,
+    /// Départ des plages (Maj+clic) : le dernier dossier choisi un à un.
+    anchor: Option<PathBuf>,
+    /// Mode visuel (Maj+Espace) : son départ ; les déplacements choisissent la plage.
+    visual: Option<PathBuf>,
     /// Favoris, dans l'ordre ([`favorites`]), et ceux qui existent (montrés en tête).
     favorites: Vec<PathBuf>,
     present: Vec<PathBuf>,
@@ -1648,6 +1655,9 @@ impl Tree {
             expanded: Default::default(),
             children: Default::default(),
             cursor: None,
+            selection: Vec::new(),
+            anchor: None,
+            visual: None,
             favorites: Vec::new(),
             present: Vec::new(),
             names: HashMap::new(),
@@ -1965,18 +1975,134 @@ impl Tree {
     }
 
     /// Descend (`delta` > 0) ou monte de `delta` lignes ; sans ligne pointée, la première.
+    /// En mode visuel, la plage parcourue est choisie.
     pub fn move_cursor(&mut self, delta: isize) {
         let next = match self.cursor() {
             Some(i) => i.saturating_add_signed(delta),
             None => 0,
         };
         self.set_cursor(next);
+        self.follow_visual();
+    }
+
+    // --- Sélection de plusieurs dossiers (#606) -----------------------------------------
+
+    /// Dossiers choisis, dans l'ordre du choix (vide : aucun).
+    pub fn selection(&self) -> &[PathBuf] {
+        &self.selection
+    }
+
+    /// Vrai si `path` est choisi.
+    pub fn is_selected(&self, path: &Path) -> bool {
+        self.selection.iter().any(|p| p == path)
+    }
+
+    /// Ajoute la ligne `index` au choix, ou l'en retire (Cmd/Ctrl+clic, Espace) ; elle
+    /// devient le départ des plages. La ligne pointée y entre d'abord si rien n'est choisi
+    /// (on part de là où l'on est, comme dans la grille).
+    pub fn toggle_selected(&mut self, index: usize) {
+        let Some(path) = self.rows().get(index).map(|r| r.path.clone()) else {
+            return;
+        };
+        if let Some(at) = self.selection.iter().position(|p| *p == path) {
+            self.selection.remove(at);
+        } else {
+            self.selection.push(path.clone());
+        }
+        self.anchor = Some(path);
+    }
+
+    /// Choisit les lignes du départ des plages (sinon la ligne pointée) jusqu'à `index`
+    /// (Maj+clic), à la place du choix d'avant.
+    pub fn select_range(&mut self, index: usize) {
+        let rows = self.rows();
+        let from = self
+            .anchor
+            .as_ref()
+            .and_then(|a| rows.iter().position(|r| r.path == *a))
+            .or_else(|| self.cursor())
+            .unwrap_or(index);
+        let (lo, hi) = (
+            from.min(index),
+            from.max(index).min(rows.len().saturating_sub(1)),
+        );
+        self.selection = rows[lo..=hi].iter().map(|r| r.path.clone()).collect();
+        self.selection.dedup();
+        if self.anchor.is_none() {
+            self.anchor = rows.get(from).map(|r| r.path.clone());
+        }
+    }
+
+    /// Entre dans le mode visuel (la ligne pointée choisie) ou en sort (Maj+Espace).
+    pub fn toggle_visual(&mut self) {
+        if self.visual.take().is_some() {
+            return;
+        }
+        let Some(path) = self.cursor_path() else {
+            return;
+        };
+        self.visual = Some(path.clone());
+        self.anchor = Some(path);
+        self.follow_visual();
+    }
+
+    /// Vrai en mode visuel.
+    pub fn in_visual(&self) -> bool {
+        self.visual.is_some()
+    }
+
+    /// Mode visuel : la plage de son départ à la ligne pointée est choisie.
+    fn follow_visual(&mut self) {
+        if self.visual.is_some()
+            && let Some(i) = self.cursor()
+        {
+            self.anchor.clone_from(&self.visual);
+            self.select_range(i);
+        }
+    }
+
+    /// Vide le choix et sort du mode visuel. Vrai s'il y avait quelque chose à vider.
+    pub fn clear_selection(&mut self) -> bool {
+        let had = !self.selection.is_empty() || self.visual.is_some();
+        self.selection.clear();
+        self.visual = None;
+        self.anchor = None;
+        had
+    }
+
+    /// Les dossiers sur lesquels agir (supprimer, copier, déplacer) : le choix s'il y en
+    /// a un, sinon la ligne pointée. Jamais un emplacement (volume, dossier personnel,
+    /// favori en tête) ; un dossier dont un parent est aussi choisi est laissé de côté
+    /// (il part avec lui).
+    pub fn acting(&self) -> Vec<PathBuf> {
+        let chosen: Vec<PathBuf> = if self.selection.is_empty() {
+            self.cursor_path().into_iter().collect()
+        } else {
+            self.selection.clone()
+        };
+        let roots: Vec<PathBuf> = self
+            .rows()
+            .into_iter()
+            .filter(|r| r.depth == 0)
+            .map(|r| r.path)
+            .collect();
+        chosen
+            .iter()
+            .filter(|p| !roots.contains(p))
+            .filter(|p| {
+                !chosen
+                    .iter()
+                    .any(|other| other != *p && p.starts_with(other))
+            })
+            .cloned()
+            .collect()
     }
 
     /// Première (`first`) ou dernière ligne.
     pub fn cursor_to_end(&mut self, first: bool) {
         let last = self.rows().len().saturating_sub(1);
         self.set_cursor(if first { 0 } else { last });
+        self.follow_visual();
     }
 
     /// Droite : déplie la ligne pointée ; déjà dépliée, descend sur son premier
@@ -2164,6 +2290,69 @@ mod tests {
             std::thread::sleep(delay);
             subfolders(dir, hidden)
         })
+    }
+
+    #[test]
+    fn several_folders_are_chosen_and_acted_upon_together() {
+        // #606 : Cmd/Ctrl+clic, Maj+clic, mode visuel ; jamais l'emplacement ; un
+        // sous-dossier d'un dossier choisi part avec lui.
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["a", "b", "c", "d"] {
+            std::fs::create_dir(dir.path().join(name)).unwrap();
+        }
+        std::fs::create_dir(dir.path().join("b/sous")).unwrap();
+        let place = Place {
+            name: "Photos".into(),
+            path: dir.path().to_path_buf(),
+            kind: PlaceKind::Home,
+        };
+        let mut tree = Tree::with_places(vec![place], false);
+        tree.expand(dir.path());
+        let at = |tree: &Tree, name: &str| {
+            tree.rows()
+                .iter()
+                .position(|r| r.path == dir.path().join(name))
+                .unwrap()
+        };
+        let names = |paths: Vec<PathBuf>| -> Vec<String> {
+            paths
+                .iter()
+                .map(|p| p.strip_prefix(dir.path()).unwrap().display().to_string())
+                .collect()
+        };
+        // Rien de choisi : la ligne pointée ; l'emplacement, jamais.
+        tree.set_cursor(0);
+        assert!(tree.acting().is_empty(), "pas l'emplacement");
+        tree.set_cursor(at(&tree, "a"));
+        assert_eq!(names(tree.acting()), ["a"]);
+        // Cmd/Ctrl+clic : a et c ; encore c : retiré.
+        tree.toggle_selected(at(&tree, "a"));
+        tree.toggle_selected(at(&tree, "c"));
+        assert_eq!(names(tree.acting()), ["a", "c"]);
+        tree.toggle_selected(at(&tree, "c"));
+        assert_eq!(names(tree.acting()), ["a"]);
+        // Maj+clic : du dernier dossier cliqué (a) à d.
+        tree.clear_selection();
+        tree.toggle_selected(at(&tree, "a"));
+        tree.select_range(at(&tree, "d"));
+        assert_eq!(names(tree.acting()), ["a", "b", "c", "d"]);
+        // Un sous-dossier d'un dossier choisi part avec lui.
+        tree.expand(&dir.path().join("b"));
+        tree.toggle_selected(at(&tree, "b/sous"));
+        assert!(tree.is_selected(&dir.path().join("b/sous")));
+        assert_eq!(names(tree.acting()), ["a", "b", "c", "d"]);
+        // Mode visuel : la plage suit le curseur.
+        assert!(tree.clear_selection());
+        tree.set_cursor(at(&tree, "a"));
+        tree.toggle_visual();
+        tree.move_cursor(1);
+        assert_eq!(names(tree.acting()), ["a", "b"]);
+        tree.cursor_to_end(false);
+        assert_eq!(names(tree.acting()), ["a", "b", "c", "d"]);
+        tree.toggle_visual();
+        assert!(!tree.in_visual());
+        assert!(tree.clear_selection());
+        assert!(!tree.clear_selection(), "plus rien");
     }
 
     #[test]

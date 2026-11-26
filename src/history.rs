@@ -99,6 +99,9 @@ pub enum Step {
     /// Réglages de visualisation (`tri::adjust`) d'une ou plusieurs images : élément de
     /// `tri:Adjust` avant et après, par image (« Appliquer à la sélection » : un pas).
     Adjust(Vec<AdjustChange>),
+    /// Plusieurs pas faits d'un geste (#606 : plusieurs dossiers copiés ou déplacés
+    /// ensemble), défaits ensemble (dans l'ordre inverse) et refaits ensemble.
+    Many(Vec<Step>),
     /// Réinitialisation d'un dossier ([`crate::reset`], issue n° 411) : notes remises à
     /// zéro et versions retirées, défaites ensemble.
     Reset {
@@ -282,6 +285,38 @@ impl Step {
     /// Description courte, pour la liste de l'historique et la barre d'état.
     pub fn describe(&self) -> String {
         match self {
+            Step::Many(steps) => match steps.as_slice() {
+                [one] => one.describe(),
+                _ => {
+                    let dirs: Vec<&DirTransfer> = steps
+                        .iter()
+                        .filter_map(|s| match s {
+                            Step::TransferDir { plan, .. } => Some(plan),
+                            _ => None,
+                        })
+                        .collect();
+                    match dirs.first() {
+                        Some(first) if dirs.len() == steps.len() => {
+                            let dest = first.to.parent().unwrap_or(Path::new(""));
+                            let dest = dest.display().to_string();
+                            let n = dirs.len();
+                            match first.mode {
+                                TransferMode::Copy => {
+                                    crate::t!("history-copy-dirs", n = n, dest = dest)
+                                }
+                                TransferMode::Move => {
+                                    crate::t!("history-move-dirs", n = n, dest = dest)
+                                }
+                            }
+                        }
+                        _ => steps
+                            .iter()
+                            .map(Step::describe)
+                            .collect::<Vec<_>>()
+                            .join(" ; "),
+                    }
+                }
+            },
             Step::Notes(changes) => {
                 let first = &changes[0];
                 let what = note_diff(&first.before, &first.after);
@@ -357,6 +392,7 @@ impl Step {
     /// Images à montrer après avoir défait ou refait ce pas (là où elles sont alors).
     pub fn images(&self, undone: bool) -> Vec<PathBuf> {
         match self {
+            Step::Many(steps) => steps.iter().flat_map(|s| s.images(undone)).collect(),
             Step::Notes(changes) => changes.iter().map(|c| c.image.clone()).collect(),
             Step::Rename(plan) => plan
                 .moves
@@ -401,6 +437,12 @@ impl Step {
     /// Défait ce pas. `convention` : celle des sidecars (notes).
     fn undo(&mut self, convention: Convention) -> Result<()> {
         match self {
+            Step::Many(steps) => {
+                for step in steps.iter_mut().rev() {
+                    step.undo(convention)?;
+                }
+                Ok(())
+            }
             Step::Notes(changes) => set_notes(changes, convention, true),
             Step::Reset {
                 notes, versions, ..
@@ -566,6 +608,12 @@ impl Step {
     /// Refait ce pas (défait plus tôt).
     fn redo(&mut self, convention: Convention) -> Result<()> {
         match self {
+            Step::Many(steps) => {
+                for step in steps.iter_mut() {
+                    step.redo(convention)?;
+                }
+                Ok(())
+            }
             Step::Notes(changes) => set_notes(changes, convention, false),
             Step::Reset {
                 notes, versions, ..
@@ -632,9 +680,10 @@ impl Step {
                         return Err(HistoryError::Missing(p.clone()));
                     }
                 }
-                *items = match group.images.as_slice() {
-                    [one] if one.is_dir() => files::delete_dir(one, true)?,
-                    _ => files::delete(&group, true)?,
+                *items = if group.images.iter().all(|p| p.is_dir()) {
+                    files::delete_dirs(&group.images, true)?
+                } else {
+                    files::delete(&group, true)?
                 };
                 Ok(())
             }
@@ -1085,6 +1134,38 @@ mod tests {
         assert!(seance.join("JPEG/A.JPG").exists() && !archive.join("Séance").exists());
         history.redo(Convention::Darktable).unwrap();
         assert!(!seance.exists() && archive.join("Séance/A.RAF").exists());
+    }
+
+    #[test]
+    fn several_folders_moved_together_are_one_step() {
+        // #606 : deux dossiers déplacés d'un geste, défaits et refaits ensemble.
+        let dir = tempfile::tempdir().unwrap();
+        let archive = dir.path().join("Archive");
+        std::fs::create_dir(&archive).unwrap();
+        let folders = [dir.path().join("Alice"), dir.path().join("Bob")];
+        for f in &folders {
+            std::fs::create_dir(f).unwrap();
+            touch(f, &["A.RAF"]);
+        }
+        let steps = folders
+            .iter()
+            .map(|f| {
+                let plan = files::plan_transfer_dir(f, &archive, TransferMode::Move).unwrap();
+                files::transfer_dir(&plan, |_, _| {}).unwrap();
+                transfer_dir_step(plan)
+            })
+            .collect();
+        let step = Step::Many(steps);
+        assert!(step.describe().contains('2'), "{}", step.describe());
+        let mut history = History::new(10);
+        history.push(step);
+        assert!(archive.join("Alice/A.RAF").exists() && archive.join("Bob/A.RAF").exists());
+        history.undo(Convention::Darktable).unwrap();
+        assert!(folders.iter().all(|f| f.join("A.RAF").exists()));
+        assert!(!archive.join("Alice").exists() && !archive.join("Bob").exists());
+        history.redo(Convention::Darktable).unwrap();
+        assert!(folders.iter().all(|f| !f.exists()));
+        assert!(archive.join("Bob/A.RAF").exists());
     }
 
     #[test]
