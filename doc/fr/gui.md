@@ -84,7 +84,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   moteur : fichier abîmé, ou lecture ratée sur un partage SMB), d'après les événements
   `Failed` des vignettes ; une ligne du panneau Filtre, comme « En conflit », montrée
   seulement s'il y en a (ou allumé) ; refiltré une fois les vignettes passées. Une image
-  recalculée avec succès en sort.
+  recalculée avec succès en sort. Une photo de « Toutes les photos » dont le dossier est
+  introuvable ou sur un disque débranché n'est pas illisible mais absente : pas dans ce
+  filtre (retour du 26/11/2026).
   **Dossier regroupé** (#392, 14/11/2026) : « Photos » = paires + RAW seuls + JPEG seuls,
   chacun une ligne et une case du filtre à trois cases ; sous « Développements », aussi
   « JPEG boîtier » (le JPEG des paires) et « LibRaw ». Les développements montrent toujours deux

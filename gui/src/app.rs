@@ -3809,6 +3809,14 @@ impl TriApp {
         }
     }
 
+    /// Vrai si la vignette de `path` n'a pas pu être calculée alors que son dossier est là
+    /// (filtre « illisibles ») : une photo de « Toutes les photos » dont le dossier est
+    /// introuvable ou sur un disque débranché n'est pas illisible, elle est absente
+    /// (retour du 26/11/2026).
+    fn is_unreadable(&self, path: &Path) -> bool {
+        self.unreadable.contains(path) && self.missing_dir(path).is_none()
+    }
+
     /// « Toutes les photos » : le dossier de `path` s'il est injoignable, et vrai si c'est
     /// son disque qui est débranché (faux : introuvable, « Retrouver son dossier »).
     fn missing_dir(&self, path: &Path) -> Option<(PathBuf, bool)> {
@@ -5632,7 +5640,7 @@ impl TriApp {
             }
         }
         // Illisibles : même forme, et seulement quand il y en a (ou qu'il est allumé).
-        if !self.unreadable.is_empty() || self.unreadable_only {
+        if self.unreadable_only || self.unreadable.iter().any(|p| self.is_unreadable(p)) {
             let tip = t!("filter-unreadable-tip");
             let size = self.gui.grid.marks + 4.0;
             let (item, key) = self.side_begin(false);
@@ -12150,7 +12158,7 @@ impl TriApp {
                 .into_iter()
                 .map(|g| {
                     g.into_iter()
-                        .filter(|f| self.unreadable.contains(&f.path))
+                        .filter(|f| self.is_unreadable(&f.path))
                         .collect()
                 })
                 .filter(|g: &Vec<MediaFile>| !g.is_empty())
@@ -36862,6 +36870,16 @@ mod tests {
         h.run_steps(2);
         assert!(!h.state().unreadable_only, "f e");
         assert_eq!(h.state().files.len(), 4);
+        // Dossier introuvable ou disque débranché (« Toutes les photos ») : absente, pas
+        // illisible (retour du 26/11/2026).
+        let photos = dir.path().join("photos");
+        h.state_mut().missing_dirs.insert(photos, true);
+        h.run_steps(2);
+        assert!(!h.state().is_unreadable(&bad));
+        assert!(
+            h.query_by_label(&t!("filter-unreadable")).is_none(),
+            "plus de ligne"
+        );
     }
 
     #[test]
