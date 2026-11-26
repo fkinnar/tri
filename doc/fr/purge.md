@@ -51,7 +51,7 @@ le dit disparu que s'il n'existe plus **et** que son plus proche parent existant
 ni :
 
 - un dossier de montage (`/Volumes`, `/media`, `/media/<utilisateur>`,
-  `/run/media/<utilisateur>`, `/mnt`, `/net`, GVFS, `Library/CloudStorage`) ;
+  `/run/media/<utilisateur>`, `/run`, `/mnt`, `/net`, GVFS, `Library/CloudStorage`) ;
 - un dossier **vide** (point de montage d'un NAS en NFS, volume absent) ;
 - la racine d'un disque (trop incertain) ;
 - ou rien (lecteur Windows absent).

@@ -123,7 +123,7 @@ impl Report {
 /// Vrai si `folder` (absolu) a disparu : il n'existe plus **et** son volume est là. Un
 /// dossier sur un disque débranché, une carte retirée, un partage pas monté n'a pas
 /// disparu : son plus proche parent existant est un point de montage vide ou un dossier
-/// de montage (`/Volumes`, `/media/<utilisateur>`, `/run/media/<utilisateur>`, `/mnt`,
+/// de montage (`/Volumes`, `/media/<utilisateur>`, `/run/media/<utilisateur>`, `/run`, `/mnt`,
 /// GVFS…), la racine d'un disque, ou rien n'existe au-dessus (lecteur Windows absent).
 pub fn gone(folder: &Path) -> bool {
     if !folder.is_absolute() || !matches!(folder.try_exists(), Ok(false)) {
@@ -154,6 +154,8 @@ fn mount_container(dir: &Path) -> bool {
         "/Volumes",
         "/media",
         "/mnt",
+        // `/run/media` pas encore créé (Ubuntu, aucun disque branché depuis le démarrage).
+        "/run",
         "/run/media",
         "/net",
         "/Network",

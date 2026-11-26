@@ -47,7 +47,7 @@ their `folder` file) of gone folders. A `.tri/` in a folder or on a disk is neve
 Unplugged disk, removed card, offline NAS, share not mounted: `gone(folder)` only says it
 is gone if it no longer exists **and** its nearest existing parent is none of:
 
-- a mount container (`/Volumes`, `/media`, `/media/<user>`, `/run/media/<user>`, `/mnt`,
+- a mount container (`/Volumes`, `/media`, `/media/<user>`, `/run/media/<user>`, `/run`, `/mnt`,
   `/net`, GVFS, `Library/CloudStorage`);
 - an **empty** folder (mount point of an NFS NAS whose volume is absent);
 - the root of a disk (too uncertain);
