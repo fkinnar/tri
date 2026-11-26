@@ -121,9 +121,11 @@ fn read_entries(
     if stopped() {
         return Vec::new();
     }
+    let start = std::time::Instant::now();
     let index = SidecarIndex::new(dir);
     let mut memory = crate::reconcile::Memory::open(dir);
     let mut cache = ReadCache::open(dir);
+    cache.stats.listing = start.elapsed();
     let entries: Vec<_> = images
         .iter()
         .take_while(|_| !stopped())
@@ -138,7 +140,11 @@ fn read_entries(
     // Lecture seule partout (ni dossier, ni données) : rien n'est retenu, on relira.
     let _ = memory.save();
     // Tout le dossier lu : les images qui n'y sont plus quittent le cache.
-    cache.save(!stopped() && entries.len() == images.len() && done.is_some());
+    let written = cache.save(!stopped() && entries.len() == images.len() && done.is_some());
+    // Lecture de tout le dossier (pas une image notée) : le bilan au journal.
+    if done.is_some() {
+        cache.report(entries.len(), &written);
+    }
     entries
 }
 
@@ -154,6 +160,31 @@ struct ReadCache {
     images: HashMap<String, Cached>,
     seen: HashSet<String>,
     changed: bool,
+    /// Bilan de la lecture, pour le journal ([`ReadCache::report`]).
+    stats: ReadStats,
+}
+
+/// Ce que le cache a donné pendant une lecture (diagnostic du 26/11/2026 : sur le NAS de
+/// l'utilisateur, tout était encore relu à la deuxième ouverture).
+#[derive(Default)]
+struct ReadStats {
+    /// Images dans le cache à l'ouverture.
+    loaded: usize,
+    hits: usize,
+    /// Pas dans le cache.
+    absent: usize,
+    /// Sources différentes (liste, date ou taille).
+    sources: usize,
+    /// Mémoire des notes différente.
+    memory: usize,
+    /// Date ou taille d'une source illisible, ou sidecar ailleurs que dans le dossier.
+    unstamped: usize,
+    /// Un exemple de sources différentes : nom, avant, maintenant.
+    example: Option<String>,
+    /// Temps passé à lister le dossier, à relever dates et tailles, à relire et fusionner.
+    listing: std::time::Duration,
+    stamping: std::time::Duration,
+    reading: std::time::Duration,
 }
 
 /// Ce qu'une lecture a donné pour une image.
@@ -183,11 +214,47 @@ impl ReadCache {
         let images = crate::store::read_local(&data, dir, crate::store::NOTES_READ)
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
             .unwrap_or_default();
-        ReadCache {
+        let mut cache = ReadCache {
             path: Some((data, dir.to_path_buf())),
             images,
             ..ReadCache::default()
-        }
+        };
+        cache.stats.loaded = cache.images.len();
+        cache
+    }
+
+    /// Une ligne au journal sur ce que le cache a donné pour `count` images.
+    fn report(&self, count: usize, written: &Option<String>) {
+        let Some((data, dir)) = &self.path else {
+            return;
+        };
+        let s = &self.stats;
+        crate::log::info(
+            "notes",
+            &format!(
+                "{}: {count} images, {} from the read cache, {} read again",
+                dir.display(),
+                s.hits,
+                count - s.hits
+            ),
+            &format!(
+                "cache entries at opening: {}\nnot cached: {}\nsources changed: {}\n\
+                 ratings memory changed: {}\nsources without date or size: {}\n\
+                 example: {}\ncache: {} ({})\n\
+                 time: listing {:.1} s, dates and sizes {:.1} s, reading again {:.1} s",
+                s.loaded,
+                s.absent,
+                s.sources,
+                s.memory,
+                s.unstamped,
+                s.example.as_deref().unwrap_or("-"),
+                crate::store::local_path(data, dir, crate::store::NOTES_READ).display(),
+                written.as_deref().unwrap_or("unchanged"),
+                s.listing.as_secs_f32(),
+                s.stamping.as_secs_f32(),
+                s.reading.as_secs_f32(),
+            ),
+        );
     }
 
     fn get(&mut self, name: &str) -> Option<&Cached> {
@@ -205,7 +272,8 @@ impl ReadCache {
     }
 
     /// Écrit le cache s'il a changé ; `prune` : oublie les images pas lues cette fois.
-    fn save(mut self, prune: bool) {
+    /// Renvoie ce qui s'est passé, pour le journal (`None` : rien à écrire).
+    fn save(&mut self, prune: bool) -> Option<String> {
         if prune {
             let before = self.images.len();
             let seen = std::mem::take(&mut self.seen);
@@ -213,11 +281,18 @@ impl ReadCache {
             self.changed |= self.images.len() != before;
         }
         let (true, Some((data, dir))) = (self.changed, &self.path) else {
-            return;
+            return None;
         };
-        if let Ok(bytes) = serde_json::to_vec(&self.images) {
-            let _ = crate::store::write_local(data, dir, crate::store::NOTES_READ, &bytes);
-        }
+        let bytes = serde_json::to_vec(&self.images).map_err(|e| e.to_string());
+        Some(
+            match bytes.and_then(|b| {
+                crate::store::write_local(data, dir, crate::store::NOTES_READ, &b)
+                    .map_err(|e| e.to_string())
+            }) {
+                Ok(()) => format!("written, {} images", self.images.len()),
+                Err(e) => format!("not written: {e}"),
+            },
+        )
     }
 }
 
@@ -259,6 +334,7 @@ fn read_notes(
     let name = file_name(image);
     // Les sources telles qu'elles sont (date, taille), sans les ouvrir.
     let dir = dir_of(image);
+    let start = std::time::Instant::now();
     let stamped: Option<Vec<(String, crate::reconcile::Stamp)>> = sidecars
         .iter()
         .map(|p| (p.parent() == Some(dir.as_path())).then_some(p.as_path()))
@@ -268,12 +344,32 @@ fn read_notes(
             Some((file_name(p), crate::reconcile::Stamp::of(p).ok()?))
         })
         .collect();
+    cache.stats.stamping += start.elapsed();
     let print = memory_print(memory, &name);
-    if let Some(stamped) = &stamped
-        && let Some(c) = cache.get(&name)
-        && c.sources == *stamped
-        && c.memory == print
-    {
+    let hit = match (&stamped, cache.get(&name)) {
+        (None, _) => {
+            cache.stats.unstamped += 1;
+            None
+        }
+        (Some(_), None) => {
+            cache.stats.absent += 1;
+            None
+        }
+        (Some(now), Some(c)) if c.sources != *now => {
+            let example = format!("{name}: {:?} -> {now:?}", c.sources);
+            let stats = &mut cache.stats;
+            stats.sources += 1;
+            stats.example.get_or_insert(example);
+            None
+        }
+        (Some(_), Some(c)) if c.memory != print => {
+            cache.stats.memory += 1;
+            None
+        }
+        (Some(_), Some(c)) => Some(c.clone()),
+    };
+    if let Some(c) = hit {
+        cache.stats.hits += 1;
         let notes = Notes {
             stars: c.stars,
             flag: c.flag,
@@ -287,7 +383,9 @@ fn read_notes(
         };
         return (entry, None);
     }
+    let start = std::time::Instant::now();
     let (entry, merged) = reconcile_notes(image, &name, sidecars, memory);
+    cache.stats.reading += start.elapsed();
     // Sans source (RAW sans sidecar), rien n'est ouvert : rien à garder.
     let cached = stamped
         .filter(|s| !s.is_empty() && entry.error.is_none() && entry.conflict.is_none())

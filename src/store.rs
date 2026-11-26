@@ -187,6 +187,12 @@ pub fn read(data: Option<&Path>, folder: &Path, name: &str) -> Option<Vec<u8>> {
         .find_map(|p| std::fs::read(p).ok())
 }
 
+/// Chemin du fichier `name` gardé pour `folder` dans le dossier de données `data`
+/// ([`write_local`]).
+pub fn local_path(data: &Path, folder: &Path, name: &str) -> PathBuf {
+    fallback_dir(data, folder).join(name)
+}
+
 /// Contenu du fichier `name` gardé pour `folder` dans le dossier de données `data`
 /// seulement ([`write_local`]).
 pub fn read_local(data: &Path, folder: &Path, name: &str) -> Option<Vec<u8>> {
