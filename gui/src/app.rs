@@ -1518,6 +1518,13 @@ pub struct TriApp {
     index_in_tests: bool,
     /// Parcours des racines surveillées en cours (#561).
     roots_walk: Option<RootsWalk>,
+    /// Dossiers vus par l'index (26/11/2026 : ce que « Toutes les photos » connaît), relus
+    /// en fond de temps en temps ; l'état par dossier en mémoire jusqu'à la relecture
+    /// suivante ou un changement de l'arborescence.
+    seen_dirs: Option<tri::index::SeenDirs>,
+    seen_read: Option<Receiver<tri::index::SeenDirs>>,
+    seen_at: Option<Instant>,
+    seen_memo: std::cell::RefCell<(usize, HashMap<PathBuf, tri::index::Seen>)>,
     /// Racines à parcourir après celui en cours (un disque branché pendant un parcours).
     roots_pending: Vec<PathBuf>,
     /// Fin du dernier parcours (reparcourir après une période d'inactivité).
@@ -2889,6 +2896,10 @@ impl TriApp {
             locate_roots: None,
             index_in_tests: false,
             roots_walk: None,
+            seen_dirs: None,
+            seen_read: None,
+            seen_at: None,
+            seen_memo: Default::default(),
             roots_pending: Vec::new(),
             roots_last_walk: None,
             last_activity: Instant::now(),
@@ -3934,6 +3945,76 @@ impl TriApp {
 
     /// Parcourt `roots` en fond ([`tri::roots::walk`]) ; un parcours déjà en cours : à la
     /// suite. Jamais dans les tests (sauf `index_in_tests`).
+    /// Relit en fond les dossiers vus par l'index, au plus toutes les 10 s (ouvertures et
+    /// parcours en ajoutent) ; reprend la lecture arrivée.
+    fn refresh_seen(&mut self) {
+        if let Some(rx) = &self.seen_read {
+            match rx.try_recv() {
+                Ok(dirs) => {
+                    self.seen_dirs = Some(dirs);
+                    self.seen_read = None;
+                    self.seen_memo.borrow_mut().1.clear();
+                }
+                // Pas de base (pas encore d'index) ou lecture ratée : réessayé plus tard.
+                Err(mpsc::TryRecvError::Disconnected) => self.seen_read = None,
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        if self.seen_read.is_some()
+            || self
+                .seen_at
+                .is_some_and(|t| t.elapsed() < Duration::from_secs(10))
+        {
+            return;
+        }
+        let Some(data) = self.settings.data_dir() else {
+            return;
+        };
+        self.seen_at = Some(Instant::now());
+        let (tx, rx) = mpsc::channel();
+        let repaint = self.repaint.clone();
+        let _ = std::thread::Builder::new()
+            .name("tri-seen".into())
+            .spawn(move || {
+                let db = data.join("index.sqlite");
+                if db.exists()
+                    && let Ok(dirs) = tri::index::Index::open(&db).and_then(|i| i.seen_dirs())
+                {
+                    let _ = tx.send(dirs);
+                    if let Some(ctx) = repaint {
+                        ctx.request_repaint();
+                    }
+                }
+            });
+        self.seen_read = Some(rx);
+    }
+
+    /// Ce que « Toutes les photos » connaît du dossier `dir` (`None` : pas encore lu).
+    fn seen_state(&self, dir: &Path, rows: usize) -> Option<tri::index::Seen> {
+        let seen = self.seen_dirs.as_ref()?;
+        let mut memo = self.seen_memo.borrow_mut();
+        // L'arborescence a changé (dépliée, relue) : l'état d'un parent peut changer.
+        if memo.0 != rows {
+            *memo = (rows, HashMap::new());
+        }
+        if let Some(state) = memo.1.get(dir) {
+            return Some(*state);
+        }
+        let state = seen.state(dir, &|d| self.tree.children_of(d));
+        memo.1.insert(dir.to_path_buf(), state);
+        Some(state)
+    }
+
+    /// Parcourt `dir` une fois pour « Toutes les photos » (sans le surveiller ensuite).
+    fn add_to_all_photos(&mut self, dir: PathBuf) {
+        self.notice = Some((
+            t!("folders-adding-all-photos", name = folder_name(&dir)),
+            false,
+        ));
+        self.start_roots_walk(vec![dir]);
+        self.seen_at = None;
+    }
+
     fn start_roots_walk(&mut self, roots: Vec<PathBuf>) {
         if roots.is_empty() || (cfg!(test) && !self.index_in_tests) || !self.settings.index.enabled
         {
@@ -9283,6 +9364,9 @@ impl TriApp {
         let moved =
             ui.input(|i| i.pointer.delta() != Vec2::ZERO) && ui.ctx().dragged_id().is_none();
         let mut hover_point: Option<usize> = None;
+        // Ce que « Toutes les photos » connaît de chaque dossier (26/11/2026).
+        self.refresh_seen();
+        let seen_rows = self.tree.rows().len();
         let all_except = self.all_photos_filter().except;
         // ∅ cliqué : le dossier à remettre dans « Toutes les photos ».
         let mut all_toggle: Option<PathBuf> = None;
@@ -9414,7 +9498,21 @@ impl TriApp {
                             })
                             .inner
                         } else {
-                            ui.selectable_label(chosen, &row.name)
+                            // Pas encore vu : le nom en gris (26/11/2026).
+                            let unseen = !chosen
+                                && self.seen_state(&row.path, seen_rows)
+                                    == Some(tri::index::Seen::Not);
+                            let text = if unseen {
+                                egui::RichText::new(&row.name).color(ui.visuals().weak_text_color())
+                            } else {
+                                egui::RichText::new(&row.name)
+                            };
+                            let label = ui.selectable_label(chosen, text);
+                            if unseen {
+                                label.on_hover_text(t!("folders-seen-not"))
+                            } else {
+                                label
+                            }
                         };
                         // Dossier à son propre réglage des notes dans les images : un repère
                         // (à l'accent : toujours ; gris : jamais).
@@ -9593,6 +9691,16 @@ impl TriApp {
                                         t!("folder-menu-watch-add")
                                     };
                                     entry(ui, Action::FolderWatch, watch);
+                                    // Pas tout à fait dans « Toutes les photos » : un parcours.
+                                    if self.seen_state(&row.path, seen_rows)
+                                        != Some(tri::index::Seen::Full)
+                                    {
+                                        entry(
+                                            ui,
+                                            Action::FolderAddAllPhotos,
+                                            t!("folder-menu-add-all-photos"),
+                                        );
+                                    }
                                     if row.favorite {
                                         entry(
                                             ui,
@@ -9881,6 +9989,23 @@ impl TriApp {
                             });
                             response.on_hover_text(&text);
                         }
+                        // En partie dans « Toutes les photos » : un ◐.
+                        if !device
+                            && !server
+                            && self.seen_state(&row.path, seen_rows)
+                                == Some(tri::index::Seen::Partly)
+                        {
+                            ui.add_space(3.0);
+                            let (rect, response) =
+                                ui.allocate_exact_size(vec2(size, size), Sense::hover());
+                            let color = ui.visuals().weak_text_color();
+                            marks::half_seen(ui.painter(), rect, color);
+                            let text = t!("folders-seen-partly");
+                            response.widget_info(|| {
+                                egui::WidgetInfo::labeled(egui::Role::Image, true, &text)
+                            });
+                            response.on_hover_text(text);
+                        }
                         if self.is_watched(&row.path) {
                             // Un peu d'air après le nom (retour du 22/11/2026 : l'œil, plus
                             // large que l'étoile, le touchait presque).
@@ -10166,6 +10291,7 @@ impl TriApp {
                 // de `folder_edit_action`), corrigé le 20/10/2026.
                 Action::FolderFavorite => self.toggle_favorite(),
                 Action::FolderWatch => self.toggle_watch(path),
+                Action::FolderAddAllPhotos => self.add_to_all_photos(path),
                 Action::FolderAllPhotos => self.toggle_all_photos_folder(path),
                 Action::FolderLight => self.toggle_light(path),
                 Action::PairsToggle => self.toggle_pairs(),
@@ -14958,6 +15084,11 @@ impl TriApp {
             Action::FolderLight => {
                 if let Some(path) = self.tree.cursor_path() {
                     self.toggle_light(path);
+                }
+            }
+            Action::FolderAddAllPhotos => {
+                if let Some(path) = self.tree.cursor_path() {
+                    self.add_to_all_photos(path);
                 }
             }
             Action::FolderAllPhotos => {
@@ -36101,6 +36232,61 @@ mod tests {
                 && app.select_after_open.is_none()
         });
         assert_eq!(h.state().files[h.state().selected].path, green_path);
+    }
+
+    #[test]
+    fn the_folders_panel_tells_what_all_photos_knows() {
+        // 26/11/2026 : pas vu (nom gris), en partie (◐), vu ; « Ajouter à Toutes les
+        // photos » au clic droit de ce qui n'est pas tout à fait vu.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let root = dir.path().join("racine");
+        for d in ["vu", "pas-vu"] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        {
+            let db = dir.path().join("data").join("index.sqlite");
+            let mut index = tri::index::Index::open(&db).unwrap();
+            index.seen(&root.join("vu"), 1, &[]).unwrap();
+        }
+        h.state_mut().tree = Tree::with_places(
+            vec![tri::places::Place {
+                name: "Test".into(),
+                path: dir.path().to_path_buf(),
+                kind: tri::places::PlaceKind::Home,
+            }],
+            false,
+        );
+        h.state_mut().tree.expand(dir.path());
+        h.state_mut().tree.expand(&root);
+        h.state_mut().seen_at = None;
+        run_until(&mut h, |app| app.seen_dirs.is_some());
+        h.run_steps(2);
+        let rows = h.state().tree.rows().len();
+        let state = |h: &Harness<'_, TriApp>, d: &Path| h.state().seen_state(d, rows);
+        use tri::index::Seen;
+        assert_eq!(state(&h, &root.join("vu")), Some(Seen::Full));
+        assert_eq!(state(&h, &root.join("pas-vu")), Some(Seen::Not));
+        assert_eq!(state(&h, &root), Some(Seen::Partly));
+        assert_eq!(
+            h.query_all_by_label(&t!("folders-seen-partly")).count(),
+            2,
+            "le ◐ de racine et de l'emplacement"
+        );
+        h.get_by_label("pas-vu").click_secondary();
+        h.run_steps(2);
+        assert!(
+            h.query_by_label(&t!("folder-menu-add-all-photos"))
+                .is_some()
+        );
+        h.get_by_label(&t!("folder-menu-add-all-photos")).click();
+        h.run_steps(2);
+        assert!(
+            h.state()
+                .notice
+                .as_ref()
+                .is_some_and(|(n, _)| n.contains("pas-vu"))
+        );
     }
 
     #[test]
