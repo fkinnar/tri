@@ -72,7 +72,7 @@ fn all_photos_come_from_the_index_then_from_the_reachable_folders() {
             .seen(gone.parent().unwrap(), 1, &[stamp(&gone)])
             .unwrap();
     }
-    let folder = Folder::all_photos(&db, Convention::Darktable).unwrap();
+    let folder = Folder::all_photos(&db, Convention::Darktable, &Default::default()).unwrap();
     assert!(tri::folder::is_all_photos(&folder.dir));
     assert_eq!(folder.files.len(), 2);
     // Ajoutée depuis : trouvée en relisant son dossier.

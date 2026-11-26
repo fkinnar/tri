@@ -831,6 +831,10 @@ walk_idle_minutes = 10
 walk_depth = 16
 # Pause between two folders of a walk (ms), so nothing is slowed down.
 walk_pause_ms = 2
+# Folders taken out of "All photos", subfolders included.
+#
+# Right-click on a folder: "Take out of All photos". Example: ["~/Pictures/Archives"].
+all_photos_except = []
 
 [similarity]
 # Long side of the small image the fingerprint is taken from (pixels): being small, it

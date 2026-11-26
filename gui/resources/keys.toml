@@ -352,6 +352,9 @@ loupe = "none"
 # Walk the folder under the cursor once for "All photos" (subfolders included), without
 # watching it afterwards.
 "core.folders.add_all_photos" = []
+# Take the folder under the cursor out of "All photos" (subfolders included), or put it
+# back.
+"core.folders.all_photos" = []
 # Offload gallery of the whole card (#600): start a session at the photo under the
 # cursor, or join it to the one before.
 "core.offload.cut" = ["c"]

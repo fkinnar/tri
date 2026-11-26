@@ -386,6 +386,9 @@ pub enum Action {
     /// Parcourir une fois le dossier pointé (et ses sous-dossiers) pour « Toutes les
     /// photos », sans le surveiller ensuite.
     FolderAddAllPhotos,
+    /// Sortir le dossier pointé de « Toutes les photos » (sous-dossiers compris), ou l'y
+    /// remettre.
+    FolderAllPhotos,
     /// Galerie de toute la carte (déchargement, #600) : commencer une séance à la photo
     /// pointée, ou la recoudre à la précédente.
     OffloadCut,
@@ -655,7 +658,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 312] = [
+    pub const ALL: [Action; 313] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -843,6 +846,7 @@ impl Action {
         Action::FolderWatch,
         Action::FolderLight,
         Action::FolderAddAllPhotos,
+        Action::FolderAllPhotos,
         Action::OffloadCut,
         Action::FolderConnect,
         Action::FolderForget,
@@ -1205,12 +1209,12 @@ impl Action {
             | FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
             | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
             | FolderDelete | FolderFavorite | FolderFavoriteName | FolderWatch | FolderLight
-            | FolderAddAllPhotos | FolderConnect | FolderForget | FolderCacheClear
-            | FolderReset | FolderOpenIn(_) | FolderCompute(_) | FolderComputeAll
-            | FolderRecreateAll | FolderCopy | FolderMove | MetaUp | MetaDown | MetaCopy
-            | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll | PanelSectionNext
-            | PanelSectionPrev | PanelActivate | PanelLeft | PanelRight | FolderSectionNext
-            | FolderSectionPrev => Group::Panels,
+            | FolderAllPhotos | FolderAddAllPhotos | FolderConnect | FolderForget
+            | FolderCacheClear | FolderReset | FolderOpenIn(_) | FolderCompute(_)
+            | FolderComputeAll | FolderRecreateAll | FolderCopy | FolderMove | MetaUp
+            | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll
+            | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft | PanelRight
+            | FolderSectionNext | FolderSectionPrev => Group::Panels,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare | OffloadCut => {
                 Group::Selection
             }
@@ -1466,6 +1470,7 @@ impl Action {
             Action::FolderWatch => "core.folders.watch",
             Action::FolderLight => "core.folders.light",
             Action::FolderAddAllPhotos => "core.folders.add_all_photos",
+            Action::FolderAllPhotos => "core.folders.all_photos",
             Action::OffloadCut => "core.offload.cut",
             Action::FolderConnect => "core.folders.connect",
             Action::FolderForget => "core.folders.forget",
@@ -1739,10 +1744,10 @@ impl Action {
             FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
             | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
             | FolderDelete | FolderFavorite | FolderFavoriteName | FolderWatch | FolderLight
-            | FolderAddAllPhotos | FolderConnect | FolderForget | FolderCacheClear
-            | FolderReset | FolderOpenIn(_) | FolderCompute(_) | FolderComputeAll
-            | FolderRecreateAll | FolderCopy | FolderMove | FolderSectionNext
-            | FolderSectionPrev => Some(Scope::Folders),
+            | FolderAllPhotos | FolderAddAllPhotos | FolderConnect | FolderForget
+            | FolderCacheClear | FolderReset | FolderOpenIn(_) | FolderCompute(_)
+            | FolderComputeAll | FolderRecreateAll | FolderCopy | FolderMove
+            | FolderSectionNext | FolderSectionPrev => Some(Scope::Folders),
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft
             | PanelRight => Some(Scope::Metadata),

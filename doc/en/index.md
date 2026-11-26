@@ -65,6 +65,18 @@ In the folders panel (read in the background, at most every 10 s): a folder not 
 its **name in grey**, a partly seen one a **◐** after its name (tooltips). **"Add to All
 photos"** on right-click for what is not quite seen (action `core.folders.add_all_photos`):
 walked once in the background, like a watched root but without watching it afterwards.
+### Folders taken out of "All photos" (2026-11-26)
+
+The owner's idea: a NAS, archives… not seen in "All photos". **Folders taken out**,
+subfolders included (`[index] all_photos_except`), are left out of it
+(`folder::AllPhotosFilter`, `Folder::all_photos(db, convention, filter)`): right-click
+"Take out of All photos" / "Put back…" (action `core.folders.all_photos`, no key by
+default); an **∅** (empty set) next to the folder, which a click puts back
+(`folder::all_photos_except_toggled`: taking a folder out covers its subfolders already
+out, putting it back also removes the parent that took it out). A "network" switch on the
+"All photos" line was tried then removed: case by case is simpler.
+
+The photos stay in the index (nothing is forgotten): only what is shown changes.
 
 ## Similarity fingerprints (schema 3)
 
@@ -182,6 +194,7 @@ out):
 | `enabled` | `true` | record palettes in the index |
 | `fingerprint_kb` | 32 | KB read at the start and end of a file for its fingerprint |
 | `batch` | 256 | palettes recorded per write, at most |
+| `all_photos_except` | `[]` | folders taken out of "All photos", subfolders included |
 
 ## Measurements (2026-11-22)
 

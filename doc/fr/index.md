@@ -67,6 +67,19 @@ a son **nom en gris**, un dossier en partie un **◐** après son nom (bulles d'
 **« Ajouter à Toutes les photos »** au clic droit de ce qui n'est pas tout à fait vu
 (action `core.folders.add_all_photos`) : un parcours en fond, une fois, comme une racine
 surveillée mais sans la surveiller ensuite.
+### Dossiers sortis de « Toutes les photos » (26/11/2026)
+
+Idée de l'utilisateur : un NAS, des archives… ne pas les voir dans « Toutes les photos ».
+Les **dossiers sortis**, sous-dossiers compris (`[index] all_photos_except`), en sont
+laissés de côté (`folder::AllPhotosFilter`, `Folder::all_photos(base, convention, filtre)`) :
+clic droit « Sortir de Toutes les photos » / « Remettre… » (action
+`core.folders.all_photos`, sans touche par défaut) ; un **∅** (ensemble vide) à côté du
+dossier, qu'un clic remet (`folder::all_photos_except_toggled` : sortir un dossier couvre
+ses sous-dossiers déjà sortis, le remettre retire aussi le parent qui le sortait). Un
+interrupteur « réseau » sur la ligne « Toutes les photos » a été essayé puis retiré : au
+cas par cas, c'est plus simple.
+
+Les photos restent dans l'index (rien n'est oublié) : seul l'affichage change.
 
 ## Empreintes de similitude (schéma 3)
 
@@ -187,6 +200,7 @@ disque amovible qu'on branche (`walk_plugged`), **jamais une carte d'appareil** 
 | `enabled` | `true` | noter les palettes dans l'index |
 | `fingerprint_kb` | 32 | Ko lus au début et à la fin d'un fichier pour son empreinte |
 | `batch` | 256 | palettes notées par écriture, au plus |
+| `all_photos_except` | `[]` | dossiers sortis de « Toutes les photos », sous-dossiers compris |
 
 ## Mesures (22/11/2026)
 

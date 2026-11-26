@@ -230,6 +230,7 @@ pub fn navigate(
         | Action::FolderWatch
         | Action::FolderLight
         | Action::FolderAddAllPhotos
+        | Action::FolderAllPhotos
         | Action::OffloadCut
         | Action::FolderConnect
         | Action::FolderForget
