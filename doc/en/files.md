@@ -239,14 +239,17 @@ Asked by the owner: delete or move several folders without taking them one by on
 selection lives in the engine (`places::Tree`: `toggle_selected`, `select_range`,
 `toggle_visual`, `clear_selection`, `acting`); the interface only draws it.
 
-- **Mouse**: Cmd/Ctrl+click adds or removes a folder, Shift+click selects the range from
-  the last one clicked; neither opens the folder. A plain click opens the folder and ends
-  the selection. Chosen folders are highlighted like the open folder.
+- **Mouse**: Cmd/Ctrl+click adds or removes a folder (on the first one, the open
+  folder, highlighted, joins the selection too, as in the Finder), Shift+click selects the range from
+  the last one clicked (otherwise the open folder); neither opens the folder. A plain click opens the folder and ends
+  the selection. Chosen folders have the accent background; the folder shown in the grid, a neutral
+  grey one (accent if it is chosen too), so the two are not confused.
 - **Keyboard** (the panel has the keyboard, leader then `h`): the same actions as in the
   grid, `core.select.toggle` (Space) and `core.select.visual` (Shift+Space: moving selects
   the range); `core.view.back` (Escape) clears the selection first.
 - **What is acted on** (`Tree::acting`): the selection if there is one, otherwise the
-  pointed row; never a place (volume, home folder, favourite at the top); a folder whose
+  pointed row; never a place (volume, home folder, favourite at the top), which cannot be chosen
+  anyway; a folder whose
   parent is also chosen goes with it. Right-click or drag on a chosen folder: the whole
   selection; on another one: that one only.
 - **Delete**: one confirmation with the names and the total contents, `delete_dirs` (to the

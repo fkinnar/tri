@@ -9320,7 +9320,7 @@ impl TriApp {
                             }
                         }
                         let current = row.path == self.folder.dir;
-                        // Dossier choisi (#606) : surligné comme le dossier ouvert.
+                        // Dossier choisi (#606) : fond accent (le dossier ouvert : gris).
                         let chosen = self.tree.is_selected(&row.path);
                         let label = if device || server {
                             let tip = if row.kind == Some(PlaceKind::Neighbour) {
@@ -9338,8 +9338,19 @@ impl TriApp {
                             };
                             ui.selectable_label(false, egui::RichText::new(&row.name).weak())
                                 .on_hover_text(tip)
+                        } else if current && !chosen {
+                            // Dossier affiché dans la grille : un fond gris neutre ; l'accent
+                            // est pour les dossiers choisis, ceux sur lesquels on agit (retour
+                            // du 26/11/2026 : les deux se confondaient).
+                            ui.scope(|ui| {
+                                let visuals = ui.visuals_mut();
+                                visuals.selection.bg_fill = visuals.widgets.inactive.bg_fill;
+                                visuals.selection.stroke.color = visuals.strong_text_color();
+                                ui.selectable_label(true, &row.name)
+                            })
+                            .inner
                         } else {
-                            ui.selectable_label(current || chosen, &row.name)
+                            ui.selectable_label(chosen, &row.name)
                         };
                         // Dossier à son propre réglage des notes dans les images : un repère
                         // (à l'accent : toujours ; gris : jamais).
@@ -9965,9 +9976,12 @@ impl TriApp {
         // Clic sur un dossier : il devient la ligne pointée et le panneau prend le clavier,
         // comme un clic dans les métadonnées (retour du 22/10/2026 : pas cohérent).
         if let Some(i) = pointed {
+            // Le dossier ouvert (surligné) est celui où l'on était : la souris, elle, a
+            // déjà déplacé la ligne pointée.
+            let here = (!self.folder.is_none()).then(|| self.folder.dir.clone());
             match chose {
-                Some((i, true)) => self.tree.select_range(i),
-                Some((i, false)) => self.tree.toggle_selected(i),
+                Some((i, true)) => self.tree.select_range(i, here.as_deref()),
+                Some((i, false)) => self.tree.toggle_selected(i, here.as_deref()),
                 // Un clic simple ouvre le dossier : le choix d'avant est fini.
                 None => {
                     self.tree.clear_selection();
@@ -14901,7 +14915,7 @@ impl TriApp {
             // touches que dans la grille.
             Action::SelectToggle if self.effective_focus() == crate::actions::Scope::Folders => {
                 if let Some(i) = self.tree.cursor() {
-                    self.tree.toggle_selected(i);
+                    self.tree.toggle_selected(i, None);
                 }
             }
             Action::SelectVisual if self.effective_focus() == crate::actions::Scope::Folders => {
@@ -44239,6 +44253,48 @@ mod tests {
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().tree.selection().is_empty());
         assert_eq!(h.state().focus, Scope::Folders);
+    }
+
+    #[test]
+    fn the_open_folder_joins_the_choice_on_the_first_ctrl_click() {
+        // Retour du 26/11/2026 : dossier ouvert d'un clic, Ctrl+clic sur un autre, `x` :
+        // un seul supprimé.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let seances = dir.path().join("séances");
+        for name in ["alice", "bob", "carol"] {
+            std::fs::create_dir_all(seances.join(name)).unwrap();
+        }
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        h.state_mut().tree.expand(&seances);
+        h.run_steps(2);
+        h.get_by_label("alice").click();
+        h.run_steps(4);
+        h.get_by_label("bob").click_modifiers(CMD);
+        h.run_steps(2);
+        assert_eq!(
+            h.state().tree.acting(),
+            [seances.join("alice"), seances.join("bob")]
+        );
+        // Maj+clic : la plage part aussi du dossier ouvert (carol, ouvert d'un clic).
+        h.get_by_label("carol").click();
+        h.run_steps(4);
+        assert!(
+            h.state().tree.selection().is_empty(),
+            "clic simple : choix fini"
+        );
+        h.get_by_label("bob").click_modifiers(Modifiers::SHIFT);
+        h.run_steps(2);
+        assert_eq!(
+            h.state().tree.acting(),
+            [seances.join("bob"), seances.join("carol")]
+        );
     }
 
     #[test]
