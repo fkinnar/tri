@@ -84,6 +84,8 @@ pub enum Request {
 
 enum Message {
     Progress(Progress),
+    /// Séance en cours de copie : (rang à partir de 1, nombre), carte de plusieurs séances.
+    Session(usize, usize),
     /// Destination pleine : la copie attend la réponse (réessayer ou abandonner).
     Full(OutOfSpace),
     Done(Report),
@@ -277,6 +279,9 @@ enum Stage {
         /// quand rien ne bouge).
         started: std::time::Instant,
         last_activity: std::time::Instant,
+        /// Séance en cours de copie (rang, nombre), quand il y en a plusieurs (retour du
+        /// 26/11/2026 : dit dans le titre).
+        session: Option<(usize, usize)>,
     },
     /// Bilan.
     Done {
@@ -577,6 +582,26 @@ impl OffloadDialog {
         })
     }
 
+    /// Tests : une copie en cours, à la séance `i` sur `n`.
+    #[cfg(test)]
+    pub fn simulate_session(&mut self, i: usize, n: usize) -> Sender<bool> {
+        let (tx, rx) = mpsc::channel();
+        let (answer, _answers) = mpsc::channel();
+        let _ = tx.send(Message::Session(i, n));
+        std::mem::forget(tx);
+        self.stage = Stage::Running {
+            rx,
+            progress: Progress::default(),
+            started: std::time::Instant::now(),
+            last_activity: std::time::Instant::now(),
+            session: None,
+            cancel: Arc::new(AtomicBool::new(false)),
+            full: None,
+            answer: answer.clone(),
+        };
+        answer
+    }
+
     /// Tests : une copie en arrière-plan qui vient de trouver la destination pleine
     /// ([`Message::Full`], comme `run` l'envoie) ; renvoie de quoi lire la réponse.
     #[cfg(test)]
@@ -589,6 +614,7 @@ impl OffloadDialog {
             progress: Progress::default(),
             started: std::time::Instant::now(),
             last_activity: std::time::Instant::now(),
+            session: None,
             cancel: Arc::new(AtomicBool::new(false)),
             full: None,
             answer,
@@ -647,10 +673,12 @@ impl OffloadDialog {
                 progress,
                 full,
                 last_activity,
+                session,
                 ..
             } => {
                 for message in rx.try_iter() {
                     match message {
+                        Message::Session(i, n) => *session = Some((i, n)),
                         Message::Progress(p) => {
                             if p != *progress {
                                 *last_activity = std::time::Instant::now();
@@ -738,9 +766,13 @@ impl OffloadDialog {
         let data = self.data.clone();
         std::thread::spawn(move || {
             let mut all: Option<Report> = None;
-            for ((plan, destination), keep_at) in runs.into_iter().zip(keeps) {
+            let count = runs.len();
+            for (k, ((plan, destination), keep_at)) in runs.into_iter().zip(keeps).enumerate() {
                 if stop.load(Ordering::Relaxed) {
                     break;
+                }
+                if count > 1 {
+                    let _ = tx.send(Message::Session(k + 1, count));
                 }
                 let pairs = decision.filter(|_| plan.pairs(&settings) > 0);
                 let progress_tx = tx.clone();
@@ -821,6 +853,7 @@ impl OffloadDialog {
             progress: Progress::default(),
             started: std::time::Instant::now(),
             last_activity: std::time::Instant::now(),
+            session: None,
             cancel,
             full: None,
             answer,
@@ -959,7 +992,15 @@ impl OffloadDialog {
             || source.display().to_string(),
             |n| n.to_string_lossy().into_owned(),
         );
-        let title = t!("offload-title", name = &name);
+        let mut title = t!("offload-title", name = &name);
+        // Plusieurs séances : laquelle est en cours de copie.
+        if let Stage::Running {
+            session: Some((i, n)),
+            ..
+        } = &self.stage
+        {
+            title.push_str(&t!("offload-title-session", i = *i, n = *n));
+        }
         let modal = crate::app::modal_at("offload_dialog", self.at)
             .title(title)
             .show(ctx, |ui| {

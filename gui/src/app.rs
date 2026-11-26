@@ -46442,6 +46442,27 @@ mod tests {
     }
 
     #[test]
+    fn the_copy_says_which_session_it_is_on() {
+        // Retour du 26/11/2026 : une carte de plusieurs séances, « séance 2 / 3 » dans le
+        // titre pendant la copie.
+        let (mut h, dir) = harness();
+        let card = dir.path().join("CARTE");
+        std::fs::create_dir_all(&card).unwrap();
+        let ctx = h.ctx.clone();
+        let mut dialog = OffloadDialog::new(
+            card,
+            CENTRED,
+            h.state().settings.offload.clone(),
+            None,
+            &ctx,
+        );
+        let _keep = dialog.simulate_session(2, 3);
+        h.state_mut().offload = Some(dialog);
+        h.run_steps(3);
+        assert!(h.query_by_label_contains("séance 2 / 3").is_some());
+    }
+
+    #[test]
     fn a_full_destination_brings_the_offload_back_until_answered() {
         // 12/11/2026 : destination pleine, le déchargement échouait sans rien dire. La copie
         // (ici en arrière-plan) s'arrête, la boîte revient avec ce qui est fait et ce qui

@@ -1834,6 +1834,7 @@ offload-status = offloading "{ $name }" { $done }/{ $total }
 offload-summary = "{ $name }": { $copied } copied, { $skipped } skipped, { $errors } errors
 offload-summary-cancelled = , interrupted
 offload-title = Offload "{ $name }"
+offload-title-session = {" "}· session { $i } / { $n }
 offload-planning = listing the card…
 offload-images = { $n ->
     [one] { $n } image

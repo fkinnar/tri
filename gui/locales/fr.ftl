@@ -1834,6 +1834,7 @@ offload-status = déchargement de « { $name } » { $done }/{ $total }
 offload-summary = « { $name } » : { $copied } copiés, { $skipped } ignorés, { $errors } erreurs
 offload-summary-cancelled = , interrompu
 offload-title = Décharger « { $name } »
+offload-title-session = {" "}· séance { $i } / { $n }
 offload-planning = inventaire de la carte…
 offload-images = { $n ->
     [one] { $n } image
