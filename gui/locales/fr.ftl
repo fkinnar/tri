@@ -1878,6 +1878,7 @@ offload-tool-scissors-tip = Ciseaux : cliquer entre deux photos pour couper la s
 offload-tool-glue = Colle
 offload-tool-glue-tip = Colle : cliquer sur le bandeau d'une séance pour la recoller à la précédente ({ $key } : les ciseaux).
 offload-tool-cut-at = Couper avant { $name }
+offload-tool-cut-after = Couper après { $name }
 offload-tool-join = Recoller la séance { $n } à la précédente
 offload-cuts = Séances…
 offload-cuts-tip = Toute la carte en vignettes, séance par séance : couper ou recoudre (touche c, ou clic droit sur une photo). Coupures proposées : chaque nouveau jour, et chaque pause de prise de vue assez longue.

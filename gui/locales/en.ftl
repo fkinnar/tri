@@ -1872,6 +1872,7 @@ offload-tool-scissors-tip = Scissors: click between two photos to cut the sessio
 offload-tool-glue = Glue
 offload-tool-glue-tip = Glue: click on a session's header to join it to the one before ({ $key }: scissors).
 offload-tool-cut-at = Cut before { $name }
+offload-tool-cut-after = Cut after { $name }
 offload-tool-join = Join session { $n } to the one before
 offload-cuts = Sessions…
 offload-cuts-tip = The whole card as thumbnails, session by session: cut or join (key c, or right-click on a photo). Proposed cuts: each new day, and each long enough pause in shooting.

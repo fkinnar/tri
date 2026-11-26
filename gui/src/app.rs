@@ -46258,6 +46258,54 @@ mod tests {
             .click_modifiers(CMD);
         h.run_steps(2);
         assert_eq!(starts(&h), Some(vec![None, None, None]));
+        // En fin de ligne aussi : deux photos par ligne, « couper après IMG1 » coupe
+        // avant IMG2, en tête de la ligne suivante.
+        let mut side = 200.0;
+        loop {
+            if let Some((_, p)) = h
+                .state_mut()
+                .offload
+                .as_mut()
+                .and_then(|o| o.picker.as_mut())
+            {
+                p.side = side;
+            }
+            h.run_steps(2);
+            let columns = h
+                .state()
+                .offload
+                .as_ref()
+                .and_then(|o| o.picker.as_ref())
+                .map(|(_, p)| p.columns);
+            if columns == Some(2) {
+                break;
+            }
+            side += 20.0;
+            assert!(side < 2000.0, "jamais deux photos par ligne");
+        }
+        h.get_by_label(&t!("offload-tool-cut-after", name = "IMG1"))
+            .click();
+        h.run_steps(2);
+        assert_eq!(
+            starts(&h),
+            Some(vec![None, None, Some(tri::offload::CutReason::Chosen)])
+        );
+        h.get_by_label(&t!("offload-tool-glue")).click();
+        h.run_steps(2);
+        h.get_by_label(&t!("offload-tool-join", n = 2)).click();
+        h.run_steps(2);
+        assert_eq!(starts(&h), Some(vec![None, None, None]));
+        h.get_by_label(&t!("offload-tool-scissors")).click();
+        h.run_steps(2);
+        if let Some((_, p)) = h
+            .state_mut()
+            .offload
+            .as_mut()
+            .and_then(|o| o.picker.as_mut())
+        {
+            p.side = 160.0;
+        }
+        h.run_steps(2);
         // Et la colle pour de bon.
         h.get_by_label(&t!("offload-tool-cut-at", name = "IMG1"))
             .click();

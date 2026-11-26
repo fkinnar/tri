@@ -93,7 +93,7 @@ pub struct Picker {
     pub(crate) checked: Vec<bool>,
     cursor: usize,
     /// Côté des vignettes (points), réglé par le curseur.
-    side: f32,
+    pub(crate) side: f32,
     /// Photo montrée en grand.
     pub(crate) enlarged: Option<usize>,
     thumbs: Vec<Option<TextureHandle>>,
@@ -102,7 +102,7 @@ pub struct Picker {
     big_rx: Option<Receiver<(usize, ColorImage)>>,
     cancel: Arc<AtomicBool>,
     /// Colonnes de la dernière image dessinée (flèches haut / bas).
-    columns: usize,
+    pub(crate) columns: usize,
     /// Départ d'une plage (Maj+clic, Maj+flèches) : la dernière photo touchée.
     anchor: usize,
     /// Mode visuel (`v`, Maj+Espace, comme la grille) : son départ ; les déplacements
@@ -703,49 +703,69 @@ impl Picker {
         let reach = 12.0;
         let mut clicked = None;
         let stroke = egui::Stroke::new(3.0, accent);
+        // Zones : (photo, zone, trait de la coupure visée (x), libellé).
+        let mut zones: Vec<(usize, egui::Rect, Option<f32>, String)> = Vec::new();
         for (i, &start) in starts.iter().enumerate().skip(1) {
-            let zone = match (tool, start) {
+            match (tool, start) {
                 (Tool::Scissors, None) => {
-                    let left = grid.cells[i].x + origin.x;
-                    let top = grid.cells[i].y + origin.y;
-                    egui::Rect::from_min_max(
-                        egui::pos2(
-                            left - (left - (grid.cells[i - 1].x + origin.x + image.x))
-                                .clamp(0.0, 8.0)
-                                - reach,
-                            top,
+                    let (here, before) = (grid.cells[i] + origin, grid.cells[i - 1] + origin);
+                    let name = self.photos[i].name.clone();
+                    // Devant la photo (l'écart avec la précédente, sur la même ligne).
+                    let gap = (here.x - (before.x + image.x)).clamp(0.0, 8.0);
+                    zones.push((
+                        i,
+                        egui::Rect::from_min_max(
+                            egui::pos2(here.x - gap - reach, here.y),
+                            egui::pos2(here.x + reach, here.y + image.y),
                         ),
-                        egui::pos2(left + reach, top + image.y),
-                    )
+                        Some(here.x - gap / 2.0),
+                        t!("offload-tool-cut-at", name = name),
+                    ));
+                    // En tête de ligne : aussi après la dernière photo de la ligne d'avant
+                    // (retour du 26/11/2026).
+                    if here.y != before.y {
+                        let right = before.x + image.x;
+                        zones.push((
+                            i,
+                            egui::Rect::from_min_max(
+                                egui::pos2(right - reach, before.y),
+                                egui::pos2(right + 8.0 + reach, before.y + image.y),
+                            ),
+                            Some(right + 4.0),
+                            t!(
+                                "offload-tool-cut-after",
+                                name = self.photos[i - 1].name.clone()
+                            ),
+                        ));
+                    }
                 }
                 (Tool::Glue, Some(_)) => {
-                    let Some(&(_, y)) = grid.headers.iter().find(|(first, _)| *first == i) else {
+                    let Some(k) = grid.headers.iter().position(|(first, _)| *first == i) else {
                         continue;
                     };
-                    egui::Rect::from_min_size(
-                        egui::pos2(origin.x + grid.left, origin.y + y),
-                        vec2(grid.width, header_h),
-                    )
+                    zones.push((
+                        i,
+                        egui::Rect::from_min_size(
+                            egui::pos2(origin.x + grid.left, origin.y + grid.headers[k].1),
+                            vec2(grid.width, header_h),
+                        ),
+                        None,
+                        t!("offload-tool-join", n = k + 1),
+                    ));
                 }
-                _ => continue,
-            };
-            let id = ui.scope_id().with(("offload_tool_zone", i));
+                _ => {}
+            }
+        }
+        for (n, (i, zone, line, label)) in zones.into_iter().enumerate() {
+            let id = ui.scope_id().with(("offload_tool_zone", n));
             let response = ui.interact(zone, id, Sense::click());
-            let label = match tool {
-                Tool::Scissors => t!("offload-tool-cut-at", name = self.photos[i].name.clone()),
-                _ => t!(
-                    "offload-tool-join",
-                    n = grid.headers.iter().position(|(f, _)| *f == i).unwrap_or(0) + 1
-                ),
-            };
             response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &label));
             if response.hovered() {
-                match tool {
-                    Tool::Scissors => {
-                        let x = grid.cells[i].x + origin.x - 4.0;
+                match line {
+                    Some(x) => {
                         ui.painter().vline(x, zone.y_range().expand(4.0), stroke);
                     }
-                    _ => {
+                    None => {
                         ui.painter()
                             .rect_stroke(zone, 4.0, stroke, egui::StrokeKind::Inside);
                     }
@@ -1052,7 +1072,7 @@ fn draw_tool(painter: &egui::Painter, rect: egui::Rect, tool: Tool, color: Color
 /// Places des vignettes de la galerie (#600, #601) : en lignes centrées dans la largeur,
 /// chaque séance (galerie de toute la carte) sur une nouvelle ligne, sous son bandeau.
 struct Grid {
-    columns: usize,
+    pub(crate) columns: usize,
     /// Marge à gauche des lignes (centrées), et leur largeur.
     left: f32,
     width: f32,

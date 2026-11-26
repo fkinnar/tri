@@ -170,7 +170,7 @@ jour.
   jour, pause, coupure choisie). Au clavier, `c` commence une séance à la photo pointée,
   ou la recoud à la précédente. À la souris, comme sur une table de montage (idée de
   l'utilisateur) : une barre d'outils toujours visible en haut, **ciseaux** (un clic entre
-  deux photos coupe, la coupure visée s'allume) et **colle** (un clic sur le bandeau
+  deux photos coupe, aussi après la dernière photo d'une ligne ; la coupure visée s'allume) et **colle** (un clic sur le bandeau
   d'une séance la recoud à la précédente) ; le pointeur devient l'outil, Alt ou Ctrl (Cmd sur macOS) donne
   l'autre (sous Linux Mint, Alt+clic déplace la fenêtre), Échap revient à la sélection. Le clic droit sur une photo coupe ou recoud
   aussi. Coches, gestes et vue en grand comme
