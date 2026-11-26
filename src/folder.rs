@@ -84,27 +84,18 @@ pub fn all_photos_dir() -> PathBuf {
     PathBuf::from("\0tri-all-photos")
 }
 
-/// Ce que « Toutes les photos » laisse de côté : les photos des emplacements réseau
-/// (`network` : leurs racines, sauf si elles sont montrées) et celles des dossiers sortis
-/// (sous-dossiers compris).
+/// Ce que « Toutes les photos » laisse de côté : les dossiers sortis, sous-dossiers
+/// compris (idée de l'utilisateur, 26/11/2026 : un NAS, des archives…).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AllPhotosFilter {
-    /// Racines des emplacements réseau dont les photos sont laissées de côté.
-    pub network: Vec<PathBuf>,
     /// Dossiers sortis (absolus).
     pub except: Vec<PathBuf>,
 }
 
 impl AllPhotosFilter {
-    /// Le filtre des réglages `[index]` : `network` les racines des emplacements réseau
-    /// connus (gardées si `all_photos_network`).
-    pub fn of(settings: &crate::index::IndexSettings, network: Vec<PathBuf>) -> AllPhotosFilter {
+    /// Le filtre des réglages `[index]`.
+    pub fn of(settings: &crate::index::IndexSettings) -> AllPhotosFilter {
         AllPhotosFilter {
-            network: if settings.all_photos_network {
-                Vec::new()
-            } else {
-                network
-            },
             except: settings
                 .all_photos_except
                 .iter()
@@ -115,11 +106,7 @@ impl AllPhotosFilter {
 
     /// Vrai si la photo `path` est montrée.
     pub fn keeps(&self, path: &Path) -> bool {
-        !self
-            .network
-            .iter()
-            .chain(&self.except)
-            .any(|root| path.starts_with(root))
+        !self.except.iter().any(|root| path.starts_with(root))
     }
 
     /// Vrai si le dossier `dir` (ou un dossier au-dessus) est sorti de « Toutes les
@@ -172,7 +159,7 @@ impl Folder {
     ) -> io::Result<Folder> {
         let index = crate::index::Index::open(db).map_err(io::Error::other)?;
         let mut photos = index.photos(None).map_err(io::Error::other)?;
-        // Réseau et dossiers sortis laissés de côté (26/11/2026).
+        // Dossiers sortis laissés de côté (26/11/2026).
         photos.retain(|(path, _, _)| filter.keeps(path));
         crate::cache::seed_stamps(
             photos
@@ -810,15 +797,14 @@ mod tests {
     }
 
     #[test]
-    fn all_photos_leaves_out_the_network_and_folders_taken_out() {
-        // 26/11/2026 : le réseau (sauf s'il est montré) et les dossiers sortis.
+    fn all_photos_leaves_out_folders_taken_out() {
+        // 26/11/2026 : les dossiers sortis, sous-dossiers compris.
         let settings = crate::index::IndexSettings {
             all_photos_except: vec!["/photos/vieux".into()],
             ..Default::default()
         };
-        let filter = AllPhotosFilter::of(&settings, vec![PathBuf::from("/nas")]);
+        let filter = AllPhotosFilter::of(&settings);
         assert!(filter.keeps(Path::new("/photos/2026/A.RAF")));
-        assert!(!filter.keeps(Path::new("/nas/2026/A.RAF")), "réseau");
         assert!(
             !filter.keeps(Path::new("/photos/vieux/2001/A.JPG")),
             "sorti, sous-dossiers compris"
@@ -827,14 +813,6 @@ mod tests {
             filter.excluding(Path::new("/photos/vieux/2001")),
             Some(Path::new("/photos/vieux"))
         );
-        let shown = AllPhotosFilter::of(
-            &crate::index::IndexSettings {
-                all_photos_network: true,
-                ..settings.clone()
-            },
-            vec![PathBuf::from("/nas")],
-        );
-        assert!(shown.keeps(Path::new("/nas/2026/A.RAF")), "réseau montré");
         // Sortir un dossier couvre ses sous-dossiers déjà sortis ; le remettre retire
         // aussi le parent qui le sortait.
         let except = vec!["/photos/vieux/2001".to_string()];

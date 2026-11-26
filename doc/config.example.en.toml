@@ -831,11 +831,6 @@ walk_idle_minutes = 10
 walk_depth = 16
 # Pause between two folders of a walk (ms), so nothing is slowed down.
 walk_pause_ms = 2
-# "All photos" also shows the photos of network places (NAS, shares).
-#
-# Not by default: what is on the machine comes first. Switch on the "All photos" line of
-# the folders panel.
-all_photos_network = false
 # Folders taken out of "All photos", subfolders included.
 #
 # Right-click on a folder: "Take out of All photos". Example: ["~/Pictures/Archives"].

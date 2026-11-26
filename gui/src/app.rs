@@ -3806,17 +3806,9 @@ impl TriApp {
             .map(|p| p.path.clone())
     }
 
-    /// Ce que « Toutes les photos » laisse de côté : les emplacements réseau connus (sauf
-    /// s'ils sont montrés) et les dossiers sortis (26/11/2026).
+    /// Ce que « Toutes les photos » laisse de côté : les dossiers sortis (26/11/2026).
     fn all_photos_filter(&self) -> tri::folder::AllPhotosFilter {
-        let network = self
-            .tree
-            .places()
-            .iter()
-            .filter(|p| p.kind == PlaceKind::Network)
-            .map(|p| p.path.clone())
-            .collect();
-        tri::folder::AllPhotosFilter::of(&self.settings.index, network)
+        tri::folder::AllPhotosFilter::of(&self.settings.index)
     }
 
     /// Écrit `[index] key = value` dans le fichier de configuration (vérifié avant), puis
@@ -3842,18 +3834,6 @@ impl TriApp {
             return false;
         }
         true
-    }
-
-    /// Montre les photos des emplacements réseau dans « Toutes les photos », ou les y cache
-    /// (interrupteur de sa ligne, 26/11/2026).
-    fn toggle_all_photos_network(&mut self) {
-        let on = !self.settings.index.all_photos_network;
-        if self.set_index_setting("all_photos_network", tri::config_edit::Value::Bool(on)) {
-            self.settings.index.all_photos_network = on;
-            if tri::folder::is_all_photos(&self.folder.dir) {
-                self.reload_folder(None);
-            }
-        }
     }
 
     /// Sort `path` de « Toutes les photos » (sous-dossiers compris), ou l'y remet.
@@ -9282,47 +9262,13 @@ impl TriApp {
                         w.bg_fill = Color32::TRANSPARENT;
                         w.bg_stroke = egui::Stroke::NONE;
                     }
-                    let clicked = ui
-                        .selectable_label(open_here, t!("all-photos"))
+                    ui.selectable_label(open_here, t!("all-photos"))
                         .on_hover_cursor(egui::CursorIcon::PointingHand)
                         .on_hover_text(&tip)
-                        .clicked();
-                    // Les photos des emplacements réseau, montrées ou non (26/11/2026).
-                    let on = self.settings.index.all_photos_network;
-                    let size = ui.spacing().interact_size.y;
-                    let (label, hint) = if on {
-                        (t!("all-photos-network-on"), t!("all-photos-network-on-tip"))
-                    } else {
-                        (
-                            t!("all-photos-network-off"),
-                            t!("all-photos-network-off-tip"),
-                        )
-                    };
-                    // Sans cadre : la couleur du texte allumée, grisée et barrée éteinte
-                    // (retour du 26/11/2026).
-                    let (rect, response) = marks::icon_toggle(ui, size, &label, &hint, false);
-                    let color = if on {
-                        ui.visuals().text_color()
-                    } else {
-                        ui.visuals().weak_text_color()
-                    };
-                    marks::server(ui.painter(), rect.shrink(size * 0.15), color);
-                    if !on {
-                        ui.painter().line_segment(
-                            [
-                                rect.shrink(size * 0.2).left_bottom(),
-                                rect.shrink(size * 0.2).right_top(),
-                            ],
-                            egui::Stroke::new(1.5, color),
-                        );
-                    }
-                    (clicked, response.clicked())
+                        .clicked()
                 })
                 .inner;
-            let (clicked, network) = clicked;
-            if network {
-                self.toggle_all_photos_network();
-            } else if clicked && !open_here {
+            if clicked && !open_here {
                 self.toggle_all_photos();
             }
             ui.add_space(gap);
@@ -36158,10 +36104,8 @@ mod tests {
     }
 
     #[test]
-    fn all_photos_keeps_to_this_machine_and_leaves_out_folders_taken_out() {
-        // 26/11/2026 : les photos du réseau cachées par défaut, montrées par l'interrupteur
-        // de la ligne « Toutes les photos » ; un dossier sorti (clic droit), remis par un
-        // clic sur son ∅.
+    fn all_photos_leaves_out_folders_taken_out_and_takes_them_back() {
+        // 26/11/2026 : un dossier sorti (clic droit), remis par un clic sur son ∅.
         let (mut h, dir) = harness();
         h.run_steps(3);
         let local = dir.path().join("local");
@@ -36225,13 +36169,7 @@ mod tests {
                 && app.opening.is_none()
                 && app.all_photos_completion.is_none()
         });
-        assert_eq!(names(&h), ["a.jpg"], "le réseau caché par défaut");
-        h.get_by_label(&t!("all-photos-network-off")).click();
-        run_until(&mut h, |app| app.opening.is_none() && app.files.len() == 2);
         assert_eq!(names(&h), ["a.jpg", "b.jpg"]);
-        assert!(h.state().settings.index.all_photos_network);
-        let config = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
-        assert!(config.contains("all_photos_network = true"), "{config}");
         // Sortir « local » : ses photos partent.
         h.state_mut().toggle_all_photos_folder(local.clone());
         run_until(&mut h, |app| app.opening.is_none() && app.files.len() == 1);

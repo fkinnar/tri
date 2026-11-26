@@ -838,11 +838,6 @@ walk_idle_minutes = 10
 walk_depth = 16
 # Pause entre deux dossiers d'un parcours (ms), pour ne rien gêner.
 walk_pause_ms = 2
-# « Toutes les photos » montre aussi les photos des emplacements réseau (NAS, partages).
-#
-# Non par défaut : on s'intéresse d'abord à ce qui est sur la machine. Interrupteur sur la
-# ligne « Toutes les photos » du panneau des dossiers.
-all_photos_network = false
 # Dossiers sortis de « Toutes les photos », sous-dossiers compris.
 #
 # Clic droit sur un dossier : « Sortir de Toutes les photos ». Exemple :
