@@ -155,7 +155,14 @@ Brussels, the afternoon in Antwerp, two sessions on the same day.
   the photos in shooting order (a RAW+JPEG pair is one photo, never cut);
   `Plan::sessions_at(&cuts, day_cut)` cuts the card.
 - **Folder names**: the day (`YYYY-MM-DD_`), and the start time when other sessions of the
-  card are on the same day (`2026-11-25_0900_`, `2026-11-25_1300_`).
+  card are on the same day (`2026-11-25_0900_`, `2026-11-25_1300_`); two sessions starting
+  in the same minute: `-2`, `-3`… (never two sessions in the same folder).
+- **Group the selection** (the owner's idea: portraits of two people taken in turn, one
+  folder each): the checked photos make a session of their own, even if they do not
+  follow each other; then all are checked again (the checks were used to choose). A
+  session becomes a set of photos (`Plan::sessions_of`: the files of each session), shown
+  at the time of its first photo; scissors and glue work inside each (joining merges a
+  session with the one before it in the gallery).
 - **Gallery of the whole card** ("Sessions…" in the dialog, next to the folder or the
   session rows): the sessions one after the other, each on a new row under a header
   (number, day, times, checked photos, why it starts there: new day, pause, chosen cut).
@@ -230,7 +237,7 @@ grouping, as when a folder is opened.
 - `suggest_folder(&plan, &settings)`, `destination(racine, nom)`;
 - `run(&plan, destination, &réglages, &mut historique, &annulation, progression,
   copie) -> Report` (`copie`: each copy as soon as it is made, for the previews) (copied, skipped, errors, interrupted, duration); `Progress`: files (without those left on the card) and bytes (a skipped file, already offloaded or already there, counts at once: the bar follows the files), and the current step (`Phase`: preparing, copying, writing to the disk `sync_all`, verifying; #470, to tell a slow copy from a stuck one). The dialog shows the step, the file, the throughput, and "Nothing has moved for n s" after 3 s without progress;
-- `Plan::shots`, `Plan::proposed_cuts`, `Plan::sessions`, `Plan::sessions_at` (`Cut`, `CutReason`, `Session`), `History::forget`;
+- `Plan::shots`, `Plan::proposed_cuts`, `Plan::sessions`, `Plan::sessions_at`, `Plan::sessions_of` (`Cut`, `CutReason`, `Session`), `History::forget`;
 - `delete_sources(&report)`.
 
 ## Command line

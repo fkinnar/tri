@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use eframe::egui::{self, Pos2};
-use tri::offload::{self, Cut, History, OffloadSettings, OutOfSpace, Plan, Progress, Report};
+use tri::offload::{self, History, OffloadSettings, OutOfSpace, Plan, Progress, Report};
 use tri::scheduler::Scheduler;
 
 /// De quoi calculer les aperçus de la séance pendant la copie (issue n° 40) : un
@@ -158,14 +158,13 @@ fn targets(
 /// [`OffloadDialog::picker`].
 pub(crate) const WHOLE_CARD: usize = usize::MAX;
 
-/// Les séances de `plan` coupé à `cuts` (#507, #600) : une ligne par séance s'il y en a
+/// Les lignes des séances `sessions` de `plan` (#507, #600) : une ligne par séance s'il y en a
 /// plusieurs ; une seule séance n'a pas de ligne, mais sa galerie (retour du 25/11/2026 :
 /// une carte d'un seul jour n'avait pas de « Choisir les photos… »). Cochées d'office :
 /// celles qui ont du nouveau (toutes, si la carte est déjà déchargée). Sans coupures :
 /// toute la carte en une séance (carte suivante vers la séance d'avant, issue n° 37).
-fn session_rows(plan: &Plan, cuts: &[Cut], settings: &OffloadSettings) -> Vec<SessionRow> {
+fn session_rows(plan: &Plan, sessions: Vec<offload::Session>) -> Vec<SessionRow> {
     // Comptes remplis par la boîte, selon les choix du moment.
-    let sessions = plan.sessions_at(cuts, settings.day_cut);
     let mut rows: Vec<SessionRow> = sessions
         .into_iter()
         .map(|session| {
@@ -190,17 +189,16 @@ fn session_rows(plan: &Plan, cuts: &[Cut], settings: &OffloadSettings) -> Vec<Se
 }
 
 /// Les séances après un passage dans la galerie de toute la carte (#600) : coupées à
-/// `cuts`, cochées si l'une de leurs photos l'est (`files`), avec leur choix de photos ;
+/// `sessions`, cochées si l'une de leurs photos l'est (`files`), avec leur choix de photos ;
 /// le dossier tapé à la main d'une séance qui commence toujours au même endroit est
 /// gardé.
-fn rows_after_cuts(
+fn rows_after_gallery(
     plan: &Plan,
-    cuts: &[Cut],
-    settings: &OffloadSettings,
+    sessions: Vec<offload::Session>,
     before: &[SessionRow],
     files: &HashSet<PathBuf>,
 ) -> Vec<SessionRow> {
-    let mut rows = session_rows(plan, cuts, settings);
+    let mut rows = session_rows(plan, sessions);
     for row in &mut rows {
         let sources: Vec<&PathBuf> = row
             .session
@@ -262,9 +260,6 @@ enum Stage {
         /// Séances de la carte (#507), quand elle en a plusieurs : un dossier par séance
         /// cochée.
         sessions: Vec<SessionRow>,
-        /// Coupures de la carte en séances (#600) : proposées, puis changées dans la
-        /// galerie de toute la carte.
-        cuts: Vec<Cut>,
         /// « Oublier cette carte » (#602) : confirmation demandée, puis le nombre
         /// d'images oubliées (ou l'erreur).
         forget: Option<Option<Result<usize, String>>>,
@@ -616,13 +611,12 @@ impl OffloadDialog {
                             // Carte suivante vers la même séance (issue n° 37) : pas de
                             // séances à choisir, toute la carte en une (sa galerie
                             // gardée, retour du 26/11/2026).
-                            let cuts = match self.folder_here {
-                                Some(_) => Vec::new(),
-                                None => plan.proposed_cuts(&self.settings),
+                            let sessions = match self.folder_here {
+                                Some(_) => plan.sessions_at(&[], self.settings.day_cut),
+                                None => plan.sessions(&self.settings),
                             };
                             Stage::Ready {
-                                sessions: session_rows(&plan, &cuts, &self.settings),
-                                cuts,
+                                sessions: session_rows(&plan, sessions),
                                 forget: None,
                                 plan,
                                 history: Some(history),
@@ -859,17 +853,13 @@ impl OffloadDialog {
     /// carte ([`WHOLE_CARD`], « Séances… », #600).
     pub fn pick_session(&mut self, i: usize, ctx: &egui::Context) {
         if i == WHOLE_CARD
-            && let Stage::Ready {
-                plan,
-                sessions,
-                cuts,
-                ..
-            } = &self.stage
+            && let Stage::Ready { plan, sessions, .. } = &self.stage
         {
             let chosen = chosen_files(plan, sessions);
+            let list: Vec<offload::Session> = sessions.iter().map(|r| r.session.clone()).collect();
             let picker = crate::offload_picker::Picker::sessions(
                 plan,
-                cuts,
+                &list,
                 chosen.as_ref(),
                 self.settings.skip_known,
                 self.settings.raw_only,
@@ -906,23 +896,21 @@ impl OffloadDialog {
             let row = *row;
             match outcome {
                 crate::offload_picker::Outcome::Open => return None,
-                crate::offload_picker::Outcome::Done(files, exclude_known, new_cuts) => {
+                crate::offload_picker::Outcome::Done(files, exclude_known, parts) => {
                     // La case de la galerie est celle de la boîte (« Recopier »).
                     self.settings.skip_known = exclude_known;
                     if let Stage::Ready {
                         plan,
                         sessions,
-                        cuts,
                         folder,
                         ..
                     } = &mut self.stage
-                        && let Some(new_cuts) = new_cuts
+                        && let Some(parts) = parts
                     {
                         // Toute la carte (#600) : les séances refaites, chacune avec son
                         // choix de photos.
-                        *sessions =
-                            rows_after_cuts(plan, &new_cuts, &self.settings, sessions, &files);
-                        *cuts = new_cuts;
+                        let made = plan.sessions_of(&parts, self.settings.day_cut);
+                        *sessions = rows_after_gallery(plan, made, sessions, &files);
                         if let [one] = sessions.as_slice()
                             && self.folder_here.is_none()
                         {

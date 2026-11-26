@@ -13,7 +13,7 @@ use std::sync::mpsc::{self, Receiver};
 use eframe::egui::{self, Color32, ColorImage, Key, Sense, TextureHandle, vec2};
 use tri::cache::Level;
 use tri::media::{MediaFile, MediaKind};
-use tri::offload::{Cut, CutReason, Item, Plan};
+use tri::offload::{CutReason, Item, Plan, Session};
 
 /// Une photo de la séance : une image, ou une paire RAW+JPEG cochée d'un bloc.
 struct Photo {
@@ -62,14 +62,28 @@ pub(crate) enum Tool {
     Glue,
 }
 
+/// Une séance rendue par la galerie de toute la carte : les fichiers de ses photos, et
+/// pourquoi elle commence là ([`Plan::sessions_of`]).
+pub type Part = (Vec<PathBuf>, Option<CutReason>);
+
+/// Les séances de la galerie de toute la carte (#600) : celle de chaque photo, et
+/// pourquoi chacune commence. Une séance n'est pas forcément d'un seul tenant (photos
+/// regroupées à la main) ; la galerie les montre l'une après l'autre, chacune à l'heure de
+/// sa première photo.
+#[derive(Clone, Debug)]
+pub(crate) struct Split {
+    of: Vec<usize>,
+    reasons: Vec<Option<CutReason>>,
+}
+
 /// Ce que devient la boîte.
 pub enum Outcome {
     /// Encore ouverte.
     Open,
     /// Validée : les fichiers des photos cochées, si les photos déjà déchargées sont
-    /// exclues (la case de la galerie, celle de la boîte de déchargement), et les
-    /// coupures en séances (galerie de toute la carte, #600).
-    Done(HashSet<PathBuf>, bool, Option<Vec<Cut>>),
+    /// exclues (la case de la galerie, celle de la boîte de déchargement), et les séances
+    /// (galerie de toute la carte, #600 : pour [`Plan::sessions_of`]).
+    Done(HashSet<PathBuf>, bool, Option<Vec<Part>>),
     /// Fermée sans rien changer.
     Cancelled,
 }
@@ -79,9 +93,9 @@ pub struct Picker {
     day: String,
     /// Titre de la boîte.
     title: String,
-    /// Galerie de toute la carte (#600) : pour chaque photo, si une séance commence là
-    /// (et pourquoi) ; `None` : galerie d'une séance, sans coupures.
-    pub(crate) starts: Option<Vec<Option<CutReason>>>,
+    /// Galerie de toute la carte (#600) : ses séances ; `None` : galerie d'une séance,
+    /// sans coupures.
+    pub(crate) split: Option<Split>,
     /// Places des photos dans la galerie à la dernière image (flèches haut / bas, d'une
     /// ligne à l'autre malgré les bandeaux des séances).
     places: Vec<egui::Pos2>,
@@ -240,7 +254,7 @@ impl Picker {
         Picker {
             day: day.to_string(),
             title: t!("offload-pick-title", day = day.to_string()),
-            starts: None,
+            split: None,
             places: Vec::new(),
             follow: false,
             tool: Tool::Select,
@@ -263,12 +277,12 @@ impl Picker {
         }
     }
 
-    /// Galerie de toute la carte `plan` coupée à `cuts` (« Séances… », #600) : chaque
-    /// séance commence sur une ligne, sous un bandeau ; on coupe et on recoud ici.
+    /// Galerie de toute la carte `plan` rangée en `sessions` (« Séances… », #600) : chaque
+    /// séance commence sur une ligne, sous un bandeau ; on coupe, recoud et regroupe ici.
     /// `chosen` : les fichiers déjà choisis, sinon tout est coché.
     pub fn sessions(
         plan: &Plan,
-        cuts: &[Cut],
+        sessions: &[Session],
         chosen: Option<&HashSet<PathBuf>>,
         exclude_known: bool,
         raw_only: bool,
@@ -290,52 +304,142 @@ impl Picker {
             ctx,
         );
         picker.title = t!("offload-cuts-title");
-        let mut starts = vec![None; picker.photos.len()];
-        for cut in cuts {
-            if let Some(i) = picker
-                .photos
-                .iter()
-                .position(|p| p.files.contains(&cut.first))
-                && i > 0
-            {
-                starts[i] = Some(cut.reason);
-            }
-        }
-        picker.starts = Some(starts);
+        let session_of: std::collections::HashMap<&PathBuf, usize> = sessions
+            .iter()
+            .enumerate()
+            .flat_map(|(k, s)| s.items.iter().map(move |&i| (&plan.items[i].source, k)))
+            .collect();
+        let mut reasons: Vec<Option<CutReason>> = sessions.iter().map(|s| s.reason).collect();
+        let of = picker
+            .photos
+            .iter()
+            .map(|p| {
+                p.files
+                    .iter()
+                    .find_map(|f| session_of.get(f).copied())
+                    .unwrap_or_else(|| {
+                        // Absente des séances (ne devrait pas arriver) : la sienne.
+                        reasons.push(Some(CutReason::Chosen));
+                        reasons.len() - 1
+                    })
+            })
+            .collect();
+        picker.split = Some(Split { of, reasons });
         picker
     }
 
-    /// Commence une séance à la photo `i`, ou recoud les deux séances si elle en
-    /// commence déjà une (pas avant la première photo).
+    /// L'ordre des photos dans la galerie : séance après séance (chacune à sa première
+    /// photo), dans l'ordre de prise de vue dans chacune.
+    pub(crate) fn order(&self) -> Vec<usize> {
+        let n = self.photos.len();
+        let mut order: Vec<usize> = (0..n).collect();
+        if let Some(split) = &self.split {
+            let mut first = vec![usize::MAX; split.reasons.len()];
+            for (i, &id) in split.of.iter().enumerate() {
+                first[id] = first[id].min(i);
+            }
+            order.sort_by_key(|&i| (first[split.of[i]], i));
+        }
+        order
+    }
+
+    /// Pour chaque place de `order`, si une séance y commence (galerie de toute la carte).
+    fn begins(&self, order: &[usize]) -> Option<Vec<bool>> {
+        let split = self.split.as_ref()?;
+        Some(
+            (0..order.len())
+                .map(|p| p == 0 || split.of[order[p]] != split.of[order[p - 1]])
+                .collect(),
+        )
+    }
+
+    /// Pour chaque photo, si une séance y commence (sauf la première de la galerie) et
+    /// pourquoi.
+    #[cfg(test)]
+    pub(crate) fn starts(&self) -> Option<Vec<Option<CutReason>>> {
+        let split = self.split.as_ref()?;
+        let order = self.order();
+        let begins = self.begins(&order)?;
+        let mut starts = vec![None; order.len()];
+        for (p, &i) in order.iter().enumerate().skip(1) {
+            if begins[p] {
+                starts[i] = Some(split.reasons[split.of[i]].unwrap_or(CutReason::Chosen));
+            }
+        }
+        Some(starts)
+    }
+
+    /// Commence une séance à la photo `i` (avec les photos de sa séance prises après
+    /// elle), ou, si elle en commence déjà une, recoud cette séance à celle d'avant dans
+    /// la galerie.
     pub(crate) fn toggle_cut(&mut self, i: usize) {
-        if let Some(starts) = &mut self.starts
-            && i > 0
-            && i < starts.len()
-        {
-            starts[i] = match starts[i] {
-                Some(_) => None,
-                None => Some(CutReason::Chosen),
-            };
+        let order = self.order();
+        let Some(split) = &mut self.split else {
+            return;
+        };
+        let Some(p) = order.iter().position(|&k| k == i) else {
+            return;
+        };
+        let id = split.of[i];
+        let first = (0..split.of.len()).find(|&k| split.of[k] == id);
+        if first == Some(i) {
+            if p == 0 {
+                return;
+            }
+            let before = split.of[order[p - 1]];
+            split
+                .of
+                .iter_mut()
+                .filter(|k| **k == id)
+                .for_each(|k| *k = before);
+        } else {
+            split.reasons.push(Some(CutReason::Chosen));
+            let new = split.reasons.len() - 1;
+            for k in i..split.of.len() {
+                if split.of[k] == id {
+                    split.of[k] = new;
+                }
+            }
         }
     }
 
-    /// Les coupures de la galerie de toute la carte.
-    pub(crate) fn cuts(&self) -> Option<Vec<Cut>> {
-        let starts = self.starts.as_ref()?;
-        Some(
-            starts
-                .iter()
-                .enumerate()
-                .filter_map(|(i, reason)| {
-                    let photo = &self.photos[i];
-                    reason.map(|reason| Cut {
-                        first: photo.files[0].clone(),
-                        at: photo.at,
-                        reason,
-                    })
-                })
-                .collect(),
-        )
+    /// Les photos cochées forment une nouvelle séance (#600 : les portraits de deux
+    /// personnes pris en alternance) ; puis toutes repartent cochées (les coches ont servi
+    /// à choisir). Rien si aucune ou toutes sont cochées.
+    pub(crate) fn group_checked(&mut self) {
+        let n = self.photos.len();
+        let chosen = self.checked.iter().filter(|c| **c).count();
+        let Some(split) = &mut self.split else {
+            return;
+        };
+        if chosen == 0 || chosen == n {
+            return;
+        }
+        split.reasons.push(Some(CutReason::Grouped));
+        let new = split.reasons.len() - 1;
+        for (k, on) in self.checked.iter().enumerate() {
+            if *on {
+                split.of[k] = new;
+            }
+        }
+        (0..n).for_each(|k| self.set(k, true));
+    }
+
+    /// Les séances de la galerie de toute la carte, pour [`Plan::sessions_of`].
+    pub(crate) fn parts(&self) -> Option<Vec<Part>> {
+        let split = self.split.as_ref()?;
+        let order = self.order();
+        let begins = self.begins(&order)?;
+        let mut parts: Vec<Part> = Vec::new();
+        for (p, &i) in order.iter().enumerate() {
+            if begins[p] {
+                parts.push((Vec::new(), split.reasons[split.of[i]]));
+            }
+            if let Some(part) = parts.last_mut() {
+                part.0.extend(self.photos[i].files.iter().cloned());
+            }
+        }
+        Some(parts)
     }
 
     /// Vrai si la photo `i` ne peut pas être cochée (déjà déchargée, exclue).
@@ -358,10 +462,14 @@ impl Picker {
         }
     }
 
-    /// Coche les photos de `a` à `b` (dans un sens ou l'autre).
+    /// Coche les photos de `a` à `b` (dans un sens ou l'autre, dans l'ordre de la
+    /// galerie).
     fn check_range(&mut self, a: usize, b: usize) {
-        let (lo, hi) = (a.min(b), a.max(b));
-        for i in lo..=hi.min(self.photos.len().saturating_sub(1)) {
+        let order = self.order();
+        let place = |i: usize| order.iter().position(|&k| k == i).unwrap_or(i);
+        let (pa, pb) = (place(a), place(b));
+        let (lo, hi) = (pa.min(pb), pa.max(pb));
+        for &i in order.iter().take(hi + 1).skip(lo) {
             self.set(i, true);
         }
     }
@@ -455,9 +563,12 @@ impl Picker {
                 self.columns.max(1)
             };
             let last = n.saturating_sub(1);
+            // Gauche / droite dans l'ordre de la galerie (séances regroupées).
+            let order = self.order();
+            let here = order.iter().position(|&k| k == self.cursor).unwrap_or(0);
             let moved = match key {
-                Key::ArrowLeft | Key::H if !command => Some(self.cursor.saturating_sub(1)),
-                Key::ArrowRight | Key::L if !command => Some((self.cursor + 1).min(last)),
+                Key::ArrowLeft | Key::H if !command => order.get(here.saturating_sub(1)).copied(),
+                Key::ArrowRight | Key::L if !command => order.get((here + 1).min(last)).copied(),
                 Key::ArrowUp | Key::K if !command && step > 0 => Some(
                     self.vertical(false)
                         .unwrap_or(self.cursor.saturating_sub(step)),
@@ -572,7 +683,7 @@ impl Picker {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     // Table de montage (#600) : ciseaux et colle, toujours visibles.
-                    if self.starts.is_some() && self.enlarged.is_none() {
+                    if self.split.is_some() && self.enlarged.is_none() {
                         let size = ui.spacing().interact_size.y + 4.0;
                         for (tool, label, tip) in [
                             (
@@ -598,6 +709,20 @@ impl Picker {
                             if response.clicked() {
                                 self.tool = if on { Tool::Select } else { tool };
                             }
+                        }
+                        // Les photos cochées en une séance à part (#600), toujours à sa
+                        // place, grisé quand il n'y a rien à grouper.
+                        let chosen = self.checked.iter().filter(|c| **c).count();
+                        if ui
+                            .add_enabled(
+                                chosen > 0 && chosen < self.photos.len(),
+                                egui::Button::new(t!("offload-group")),
+                            )
+                            .on_hover_text(t!("offload-group-tip"))
+                            .on_disabled_hover_text(t!("offload-group-tip"))
+                            .clicked()
+                        {
+                            self.group_checked();
                         }
                         ui.separator();
                     }
@@ -649,7 +774,7 @@ impl Picker {
                 });
             });
         if done {
-            Outcome::Done(self.chosen(), self.exclude_known, self.cuts())
+            Outcome::Done(self.chosen(), self.exclude_known, self.parts())
         } else if cancel || modal.should_close() {
             Outcome::Cancelled
         } else {
@@ -683,16 +808,18 @@ impl Picker {
     /// le bandeau d'une séance (pas la première), un clic la recoud à la précédente. Alt ou
     /// Ctrl (Cmd sur macOS) donne l'autre outil. Le pointeur devient l'outil, la coupure ou le bandeau visé
     /// s'allume. Renvoie (photo, une séance y commence) pour un clic.
+    #[allow(clippy::too_many_arguments)]
     fn tool_zones(
         &self,
         ui: &mut egui::Ui,
         grid: &Grid,
+        order: &[usize],
         origin: egui::Vec2,
         image: egui::Vec2,
         header_h: f32,
         accent: Color32,
-    ) -> Option<(usize, bool)> {
-        let starts = self.starts.as_deref()?;
+    ) -> Option<usize> {
+        let begins = self.begins(order)?;
         // Alt, ou Ctrl (Cmd sur macOS) : sous Linux Mint (Cinnamon), Alt+clic déplace la
         // fenêtre et n'arrive jamais à `tri` (retour du 26/11/2026).
         let alt = ui.input(|i| i.modifiers.alt || i.modifiers.command);
@@ -705,10 +832,11 @@ impl Picker {
         let stroke = egui::Stroke::new(3.0, accent);
         // Zones : (photo, zone, trait de la coupure visée (x), libellé).
         let mut zones: Vec<(usize, egui::Rect, Option<f32>, String)> = Vec::new();
-        for (i, &start) in starts.iter().enumerate().skip(1) {
-            match (tool, start) {
-                (Tool::Scissors, None) => {
-                    let (here, before) = (grid.cells[i] + origin, grid.cells[i - 1] + origin);
+        for (p, &begin) in begins.iter().enumerate().skip(1) {
+            let i = order[p];
+            match (tool, begin) {
+                (Tool::Scissors, false) => {
+                    let (here, before) = (grid.cells[p] + origin, grid.cells[p - 1] + origin);
                     let name = self.photos[i].name.clone();
                     // Devant la photo (l'écart avec la précédente, sur la même ligne).
                     let gap = (here.x - (before.x + image.x)).clamp(0.0, 8.0);
@@ -734,13 +862,13 @@ impl Picker {
                             Some(right + 4.0),
                             t!(
                                 "offload-tool-cut-after",
-                                name = self.photos[i - 1].name.clone()
+                                name = self.photos[order[p - 1]].name.clone()
                             ),
                         ));
                     }
                 }
-                (Tool::Glue, Some(_)) => {
-                    let Some(k) = grid.headers.iter().position(|(first, _)| *first == i) else {
+                (Tool::Glue, true) => {
+                    let Some(k) = grid.headers.iter().position(|(first, _)| *first == p) else {
                         continue;
                     };
                     zones.push((
@@ -772,7 +900,7 @@ impl Picker {
                 }
             }
             if response.clicked() {
-                clicked = Some((i, tool == Tool::Scissors));
+                clicked = Some(i);
             }
         }
         // Le pointeur devient l'outil, au-dessus de tout.
@@ -792,14 +920,19 @@ impl Picker {
     }
 
     /// Bandeau d'une séance de la galerie de toute la carte : son numéro, ses heures, son
-    /// nombre de photos (cochées), et pourquoi elle commence là.
-    fn header(&self, first: usize, number: usize) -> String {
-        let starts = self.starts.as_deref().unwrap_or_default();
-        let end = (first + 1..self.photos.len())
-            .find(|&i| starts[i].is_some())
-            .unwrap_or(self.photos.len());
-        let chosen = self.checked[first..end].iter().filter(|c| **c).count();
-        let reason = match starts[first] {
+    /// nombre de photos (cochées), et pourquoi elle commence là. `first` : sa place dans
+    /// `order`.
+    fn header(&self, order: &[usize], begins: &[bool], first: usize, number: usize) -> String {
+        let end = (first + 1..order.len())
+            .find(|&p| begins[p])
+            .unwrap_or(order.len());
+        let photos = &order[first..end];
+        let chosen = photos.iter().filter(|&&i| self.checked[i]).count();
+        let reason = self
+            .split
+            .as_ref()
+            .and_then(|s| s.reasons[s.of[order[first]]]);
+        let reason = match reason {
             _ if first == 0 => String::new(),
             Some(CutReason::Day) => t!("offload-cut-day"),
             Some(CutReason::Pause(d)) => {
@@ -809,19 +942,24 @@ impl Picker {
                     time = format!("{} h {:02}", minutes / 60, minutes % 60)
                 )
             }
+            Some(CutReason::Grouped) => t!("offload-cut-grouped"),
             Some(CutReason::Chosen) | None => t!("offload-cut-chosen"),
         };
-        let day = chrono::DateTime::<chrono::Local>::from(self.photos[first].at)
+        let (a, b) = (
+            &self.photos[photos[0]],
+            &self.photos[photos[photos.len() - 1]],
+        );
+        let day = chrono::DateTime::<chrono::Local>::from(a.at)
             .format("%Y-%m-%d")
             .to_string();
         let header = t!(
             "offload-cuts-header",
             n = number,
             day = day,
-            start = self.photos[first].time.clone(),
-            end = self.photos[end - 1].time.clone(),
+            start = a.time.clone(),
+            end = b.time.clone(),
             chosen = chosen,
-            count = end - first
+            count = photos.len()
         );
         if reason.is_empty() {
             header
@@ -841,9 +979,11 @@ impl Picker {
         let gap = 8.0;
         let label_h = ui.text_style_height(&egui::TextStyle::Small) + 4.0;
         let header_h = ui.text_style_height(&egui::TextStyle::Body) + 8.0;
+        let order = self.order();
+        let begins = self.begins(&order);
         let grid = layout(
             self.photos.len(),
-            self.starts.as_deref(),
+            begins.as_deref(),
             size.x,
             vec2(side, side + label_h),
             gap,
@@ -852,10 +992,10 @@ impl Picker {
         self.columns = grid.columns;
         let mut open = None;
         let mut cut = None;
-        // Ciseaux ou colle : (photo, séance qui y commence ou non).
-        let mut edit: Option<(usize, bool)> = None;
+        // Ciseaux ou colle : la photo où couper ou recoudre.
+        let mut edit: Option<usize> = None;
         let follow = std::mem::take(&mut self.follow);
-        let tooling = self.starts.is_some() && self.tool != Tool::Select;
+        let tooling = self.split.is_some() && self.tool != Tool::Select;
         egui::ScrollArea::vertical()
             .max_height(size.y)
             .min_scrolled_height(size.y)
@@ -873,15 +1013,19 @@ impl Picker {
                     ui.painter().text(
                         band.left_center() + vec2(8.0, 0.0),
                         egui::Align2::LEFT_CENTER,
-                        self.header(first, k + 1),
+                        self.header(&order, begins.as_deref().unwrap_or_default(), first, k + 1),
                         egui::TextStyle::Body.resolve(ui.style()),
                         ui.visuals().strong_text_color(),
                     );
                 }
-                self.places.clone_from(&grid.cells);
-                for i in 0..self.photos.len() {
+                // Places par photo (flèches haut / bas).
+                self.places = vec![egui::Pos2::ZERO; order.len()];
+                for (p, &i) in order.iter().enumerate() {
+                    self.places[i] = grid.cells[p];
+                }
+                for (p, &i) in order.iter().enumerate() {
                     let cell = egui::Rect::from_min_size(
-                        grid.cells[i] + origin,
+                        grid.cells[p] + origin,
                         vec2(side, side + label_h),
                     );
                     let id = ui.scope_id().with(("offload_pick_cell", i));
@@ -973,10 +1117,10 @@ impl Picker {
                         }
                     }
                     // Galerie de toute la carte : couper ou recoudre au clic droit.
-                    if let Some(starts) = &self.starts
-                        && i > 0
+                    if let Some(begins) = &begins
+                        && p > 0
                     {
-                        let label = if starts[i].is_some() {
+                        let label = if begins[p] {
                             t!("offload-cut-remove")
                         } else {
                             t!("offload-cut-here")
@@ -990,16 +1134,22 @@ impl Picker {
                     }
                 }
                 if tooling {
-                    edit = self.tool_zones(ui, &grid, origin, vec2(side, side), header_h, accent);
+                    edit = self.tool_zones(
+                        ui,
+                        &grid,
+                        &order,
+                        origin,
+                        vec2(side, side),
+                        header_h,
+                        accent,
+                    );
                 }
             });
         if let Some(i) = cut {
             self.toggle_cut(i);
         }
-        if let Some((i, on)) = edit
-            && let Some(starts) = &mut self.starts
-        {
-            starts[i] = on.then_some(CutReason::Chosen);
+        if let Some(i) = edit {
+            self.toggle_cut(i);
         }
         if let Some(i) = open {
             self.enlarge(i, ctx);
@@ -1085,7 +1235,7 @@ struct Grid {
 
 fn layout(
     n: usize,
-    starts: Option<&[Option<CutReason>]>,
+    starts: Option<&[bool]>,
     width: f32,
     cell: egui::Vec2,
     gap: f32,
@@ -1102,7 +1252,7 @@ fn layout(
     let (mut cells, mut headers) = (Vec::with_capacity(n), Vec::new());
     let (mut y, mut col) = (0.0, 0);
     for i in 0..n {
-        let starts_here = starts.is_some_and(|s| i == 0 || s[i].is_some());
+        let starts_here = starts.is_some_and(|s| i == 0 || s[i]);
         if starts_here {
             if col > 0 {
                 y += cell.y + gap;
@@ -1208,7 +1358,7 @@ mod tests {
             (1000.0 - 210.0) / 2.0,
             "deux photos, centrées"
         );
-        let starts = [None, None, None, Some(CutReason::Chosen), None];
+        let starts = [true, false, false, true, false];
         let grid = layout(5, Some(&starts), 340.0, cell, 10.0, 20.0);
         assert_eq!(grid.columns, 3);
         assert_eq!(grid.headers, [(0, 0.0), (3, 160.0)]);
@@ -1242,7 +1392,8 @@ mod tests {
         };
         let cuts = plan.proposed_cuts(&tri::offload::OffloadSettings::default());
         let ctx = egui::Context::default();
-        let mut p = Picker::sessions(&plan, &cuts, None, true, false, None, &ctx);
+        let sessions = plan.sessions_at(&cuts, 4);
+        let mut p = Picker::sessions(&plan, &sessions, None, true, false, None, &ctx);
         let names: Vec<&str> = p.photos.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(
             names,
@@ -1250,25 +1401,41 @@ mod tests {
             "dans l'ordre de prise de vue, paire d'un bloc"
         );
         assert!(matches!(
-            p.starts.as_deref(),
+            p.starts().as_deref(),
             Some([None, None, Some(CutReason::Pause(_))])
         ));
         // Couper avant B, recoudre avant C ; pas de coupure avant la première.
         p.toggle_cut(1);
         p.toggle_cut(2);
         p.toggle_cut(0);
-        let cuts = p.cuts().unwrap();
-        assert_eq!(cuts.len(), 1);
-        assert_eq!(cuts[0].first, PathBuf::from("/carte/B.RAF"));
-        assert_eq!(cuts[0].reason, CutReason::Chosen);
-        let sessions = plan.sessions_at(&cuts, 4);
+        assert_eq!(p.starts(), Some(vec![None, Some(CutReason::Chosen), None]));
+        let sessions = plan.sessions_of(&p.parts().unwrap(), 4);
         assert_eq!(sessions.len(), 2);
         assert_eq!(sessions[1].items, [0, 3]);
+        assert_eq!(sessions[1].reason, Some(CutReason::Chosen));
+        // Regrouper A et C (qui ne se suivent pas) : une séance à part, placée à A ; B
+        // reste seule. Puis tout repart coché.
+        p.checked = vec![true, false, true];
+        p.group_checked();
+        assert_eq!(p.checked, [true, true, true]);
+        assert_eq!(p.order(), [0, 2, 1], "A et C d'abord, à l'heure de A");
+        let sessions = plan.sessions_of(&p.parts().unwrap(), 4);
+        let items: Vec<&[usize]> = sessions.iter().map(|s| s.items.as_slice()).collect();
+        assert_eq!(items, [&[1, 2, 3][..], &[0]]);
+        // Couper dans la séance regroupée (avant C) : C seule, à son heure, après B ; la
+        // recoudre la joint à la séance d'avant dans la galerie (B).
+        p.toggle_cut(2);
+        assert_eq!(p.order(), [0, 1, 2]);
+        assert_eq!(plan.sessions_of(&p.parts().unwrap(), 4).len(), 3);
+        p.toggle_cut(2);
+        let sessions = plan.sessions_of(&p.parts().unwrap(), 4);
+        let items: Vec<&[usize]> = sessions.iter().map(|s| s.items.as_slice()).collect();
+        assert_eq!(items, [&[1, 2][..], &[0, 3]]);
         // La galerie d'une séance n'a pas de coupures.
         let refs: Vec<&Item> = plan.items.iter().collect();
         let mut one = Picker::new("2026-11-25", &refs, None, true, false, None, &ctx);
         one.toggle_cut(1);
-        assert!(one.cuts().is_none());
+        assert!(one.parts().is_none());
         p.cancel.store(true, Ordering::Relaxed);
         one.cancel.store(true, Ordering::Relaxed);
     }

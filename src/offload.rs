@@ -310,6 +310,9 @@ pub enum CutReason {
     Pause(Duration),
     /// Coupure posée à la main.
     Chosen,
+    /// Photos regroupées à la main, qui ne se suivaient pas forcément (#600 : les
+    /// portraits de deux personnes pris en alternance, un dossier chacune).
+    Grouped,
 }
 
 /// Une coupure de la carte (#600) : une séance commence à la photo `first`. Repérée par
@@ -377,6 +380,32 @@ impl Session {
     /// proposé sans le `_` final). Ce que `--session` reconnaît.
     pub fn name(&self) -> &str {
         self.folder.trim_end_matches('_')
+    }
+}
+
+/// Noms de dossier proposés (#600) : le jour, avec l'heure de début quand d'autres séances
+/// sont du même jour ; deux séances qui commencent à la même minute (deux personnes
+/// photographiées en alternance) : `-2`, `-3`… pour ne jamais copier deux séances dans le
+/// même dossier.
+fn name_sessions(sessions: &mut [Session]) {
+    let mut taken: HashSet<String> = HashSet::new();
+    for i in 0..sessions.len() {
+        let shared = sessions
+            .iter()
+            .enumerate()
+            .any(|(j, s)| j != i && s.day == sessions[i].day);
+        let base = if shared {
+            format!("{}_{}", sessions[i].day, clock(sessions[i].start))
+        } else {
+            sessions[i].day.clone()
+        };
+        let mut name = base.clone();
+        let mut n = 2;
+        while !taken.insert(name.clone()) {
+            name = format!("{base}-{n}");
+            n += 1;
+        }
+        sessions[i].folder = format!("{name}_");
     }
 }
 
@@ -450,7 +479,7 @@ impl Plan {
             let rank = |c: &Cut| match c.reason {
                 CutReason::Day => Duration::MAX,
                 CutReason::Pause(d) => d,
-                CutReason::Chosen => Duration::ZERO,
+                CutReason::Chosen | CutReason::Grouped => Duration::ZERO,
             };
             cuts.sort_by_key(|c| std::cmp::Reverse(rank(c)));
             cuts.truncate(max);
@@ -493,17 +522,57 @@ impl Plan {
                 }),
             }
         }
-        for i in 0..sessions.len() {
-            let shared = sessions
+        name_sessions(&mut sessions);
+        sessions
+    }
+
+    /// La carte en séances données une à une (#600 : photos regroupées à la main, qui ne
+    /// se suivent pas forcément) : pour chacune, les fichiers de ses images (une image
+    /// d'une paire suffit : la paire entière suit) et pourquoi elle commence là. Rangées
+    /// par l'heure de leur première photo, leurs images dans l'ordre de prise de vue ; une
+    /// séance vide disparaît, une image citée deux fois va dans la première, une image
+    /// citée nulle part est laissée de côté.
+    pub fn sessions_of(
+        &self,
+        parts: &[(Vec<PathBuf>, Option<CutReason>)],
+        day_cut: u32,
+    ) -> Vec<Session> {
+        use std::collections::HashMap;
+        let part_of: HashMap<&Path, usize> = parts
+            .iter()
+            .enumerate()
+            .rev()
+            .flat_map(|(k, (files, _))| files.iter().map(move |f| (f.as_path(), k)))
+            .collect();
+        let mut grouped: Vec<Vec<Shot>> = vec![Vec::new(); parts.len()];
+        for shot in self.shots() {
+            if let Some(k) = shot
+                .items
                 .iter()
-                .enumerate()
-                .any(|(j, s)| j != i && s.day == sessions[i].day);
-            sessions[i].folder = if shared {
-                format!("{}_{}_", sessions[i].day, clock(sessions[i].start))
-            } else {
-                format!("{}_", sessions[i].day)
-            };
+                .filter_map(|&i| part_of.get(self.items[i].source.as_path()).copied())
+                .min()
+            {
+                grouped[k].push(shot);
+            }
         }
+        let mut sessions: Vec<Session> = grouped
+            .into_iter()
+            .zip(parts)
+            .filter(|(shots, _)| !shots.is_empty())
+            .map(|(shots, (_, reason))| Session {
+                day: shooting_day(shots[0].time, day_cut),
+                start: shots[0].time,
+                end: shots[shots.len() - 1].time,
+                reason: *reason,
+                items: shots.iter().flat_map(|s| s.items.iter().copied()).collect(),
+                folder: String::new(),
+            })
+            .collect();
+        sessions.sort_by_key(|s| (s.start, s.items[0]));
+        if let Some(first) = sessions.first_mut() {
+            first.reason = None;
+        }
+        name_sessions(&mut sessions);
         sessions
     }
 
@@ -1238,6 +1307,46 @@ mod tests {
         let sessions = plan.sessions_at(&[Cut::before(&plan, &shots[1], CutReason::Chosen)], 4);
         let items: Vec<&[usize]> = sessions.iter().map(|s| s.items.as_slice()).collect();
         assert_eq!(items, [&[0][..], &[1, 2]]);
+    }
+
+    #[test]
+    fn photos_grouped_by_hand_make_their_own_sessions() {
+        // #600 : les portraits de deux personnes pris en alternance, un dossier chacune.
+        let plan = timed_card(&[
+            ("A1.RAF", 25, 10, 0),
+            ("B1.RAF", 25, 10, 0),
+            ("B1.JPG", 25, 10, 0),
+            ("A2.RAF", 25, 10, 1),
+            ("B2.RAF", 25, 10, 2),
+            ("C.RAF", 26, 9, 0),
+        ]);
+        let files = |names: &[&str]| -> Vec<PathBuf> {
+            names
+                .iter()
+                .map(|n| PathBuf::from("/carte/DCIM").join(n))
+                .collect()
+        };
+        let sessions = plan.sessions_of(
+            &[
+                (files(&["A1.RAF", "A2.RAF", "C.RAF"]), None),
+                (files(&["B1.JPG", "B2.RAF"]), Some(CutReason::Grouped)),
+                // Une séance vide disparaît ; C est déjà dans la première.
+                (files(&["C.RAF"]), Some(CutReason::Chosen)),
+                (Vec::new(), Some(CutReason::Chosen)),
+            ],
+            4,
+        );
+        let items: Vec<&[usize]> = sessions.iter().map(|s| s.items.as_slice()).collect();
+        assert_eq!(
+            items,
+            [&[0, 3, 5][..], &[1, 2, 4]],
+            "la paire suit son JPEG"
+        );
+        assert_eq!(sessions[0].reason, None);
+        assert_eq!(sessions[1].reason, Some(CutReason::Grouped));
+        // Le même jour, à la même minute : jamais le même dossier.
+        let folders: Vec<String> = sessions.iter().map(Session::folder).collect();
+        assert_eq!(folders, ["2026-11-25_1000_", "2026-11-25_1000-2_"]);
     }
 
     #[test]

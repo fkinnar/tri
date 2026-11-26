@@ -46237,7 +46237,7 @@ mod tests {
                 .offload
                 .as_ref()
                 .and_then(|o| o.picker.as_ref())
-                .and_then(|(_, p)| p.starts.clone())
+                .and_then(|(_, p)| p.starts())
         };
         assert_eq!(starts(&h), Some(vec![None, None, None]));
         // À la souris, comme sur une table de montage : les ciseaux entre la 1re et la 2e

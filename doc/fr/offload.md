@@ -163,7 +163,15 @@ jour.
   `Plan::shots` donne les photos dans l'ordre de prise de vue (une paire RAW+JPEG est une
   photo, jamais coupée) ; `Plan::sessions_at(&coupures, day_cut)` coupe la carte.
 - **Noms de dossier** : le jour (`AAAA-MM-JJ_`), et l'heure de début quand d'autres
-  séances de la carte sont du même jour (`2026-11-25_0900_`, `2026-11-25_1300_`).
+  séances de la carte sont du même jour (`2026-11-25_0900_`, `2026-11-25_1300_`) ; deux
+  séances qui commencent à la même minute : `-2`, `-3`… (jamais deux séances dans le même
+  dossier).
+- **Grouper la sélection** (idée de l'utilisateur : les portraits de deux personnes pris
+  en alternance, un dossier chacune) : les photos cochées forment une séance à part, même
+  si elles ne se suivent pas ; puis toutes repartent cochées (les coches ont servi à
+  choisir). Une séance devient un ensemble de photos (`Plan::sessions_of` : les fichiers
+  de chaque séance), montrée à l'heure de sa première photo ; ciseaux et colle marchent
+  dans chacune (recoudre joint une séance à celle d'avant dans la galerie).
 - **Galerie de toute la carte** (« Séances… » dans la boîte, à côté du dossier ou des
   lignes de séances) : les séances l'une après l'autre, chacune sur une nouvelle ligne sous
   un bandeau (numéro, jour, heures, photos cochées, pourquoi elle commence là : nouveau
@@ -241,7 +249,7 @@ histogrammes, netteté, regroupement, comme à l'ouverture d'un dossier.
 - `suggest_folder(&plan, &réglages)`, `destination(racine, nom)` ;
 - `run(&plan, destination, &réglages, &mut historique, &annulation, progression,
   copie) -> Report` (`copie` : chaque copie dès qu'elle est faite, pour les aperçus) (copiés, ignorés, erreurs, interrompu, durée) ; `Progress` : fichiers (sans ceux laissés sur la carte) et octets (un fichier passé, déjà déchargé ou déjà présent, compte d'un coup : la barre suit les fichiers), et l'étape en cours (`Phase` : préparation, copie, écriture sur le disque `sync_all`, vérification ; #470, pour distinguer une copie lente d'une copie bloquée). La boîte montre l'étape, le fichier, le débit, et « Rien n'a bougé depuis n s » au-delà de 3 s sans avancement ;
-- `Plan::shots`, `Plan::proposed_cuts`, `Plan::sessions`, `Plan::sessions_at` (`Cut`, `CutReason`, `Session`), `History::forget` ;
+- `Plan::shots`, `Plan::proposed_cuts`, `Plan::sessions`, `Plan::sessions_at`, `Plan::sessions_of` (`Cut`, `CutReason`, `Session`), `History::forget` ;
 - `delete_sources(&report)`.
 
 ## Ligne de commande
