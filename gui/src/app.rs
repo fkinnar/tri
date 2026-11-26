@@ -46240,6 +46240,31 @@ mod tests {
                 .and_then(|(_, p)| p.starts.clone())
         };
         assert_eq!(starts(&h), Some(vec![None, None, None]));
+        // À la souris, comme sur une table de montage : les ciseaux entre la 1re et la 2e
+        // photo, puis la colle sur le bandeau de la 2e séance.
+        h.get_by_label(&t!("offload-tool-scissors")).click();
+        h.run_steps(2);
+        h.get_by_label(&t!("offload-tool-cut-at", name = "IMG1"))
+            .click();
+        h.run_steps(2);
+        assert_eq!(
+            starts(&h),
+            Some(vec![None, Some(tri::offload::CutReason::Chosen), None])
+        );
+        h.get_by_label(&t!("offload-tool-glue")).click();
+        h.run_steps(2);
+        h.get_by_label(&t!("offload-tool-join", n = 2)).click();
+        h.run_steps(2);
+        assert_eq!(starts(&h), Some(vec![None, None, None]));
+        // Échap rend la sélection, sans fermer la galerie.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(
+            h.state()
+                .offload
+                .as_ref()
+                .and_then(|o| o.picker.as_ref())
+                .is_some_and(|(_, p)| p.tool == crate::offload_picker::Tool::Select)
+        );
         // Couper avant la troisième photo (c), au clavier.
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         press(&mut h, Key::ArrowRight, Modifiers::NONE);

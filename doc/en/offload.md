@@ -159,13 +159,22 @@ Brussels, the afternoon in Antwerp, two sessions on the same day.
 - **Gallery of the whole card** ("Sessions…" in the dialog, next to the folder or the
   session rows): the sessions one after the other, each on a new row under a header
   (number, day, times, checked photos, why it starts there: new day, pause, chosen cut).
-  `c` (or right-click on a photo) starts a session at the photo under the cursor, or joins
-  it to the one before. Checks, gestures and the large view as in the gallery of one
+  With the keyboard, `c` starts a session at the photo under the cursor, or joins it to
+  the one before. With the mouse, as on an editing table (the owner's idea): a toolbar
+  always visible at the top, **scissors** (a click between two photos cuts, the aimed cut
+  lights up) and **glue** (a click on a session's header joins it to the one before); the
+  pointer becomes the tool, Alt gives the other one, Escape goes back to selecting.
+  Right-clicking a photo cuts or joins too. Checks, gestures and the large view as in the gallery of one
   session, which stays on each row. Validating rebuilds the dialog's rows: a session is
   checked if one of its photos is, with its choice of photos; a folder typed by hand is
   kept if its session still starts at the same place. Cuts only last while the dialog is
   open.
 - The gallery's thumbnails are centred in the window (#601).
+- **Gallery images kept** (the owner's idea): thumbnails and large previews are stored in
+  the engine cache, under the same keys as the grid. The same card opens faster, and the
+  copy carries these entries (`preview::carry`, like a `tri` copy, #592; moved if the card
+  is emptied afterwards): the offloaded session shows its thumbnails at once.
+  `offload::run` gives (card file, copy) for each copy for this.
 
 ## Forgetting a card (2026-11-26, #602)
 

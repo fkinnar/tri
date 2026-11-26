@@ -167,13 +167,24 @@ jour.
 - **Galerie de toute la carte** (« Séances… » dans la boîte, à côté du dossier ou des
   lignes de séances) : les séances l'une après l'autre, chacune sur une nouvelle ligne sous
   un bandeau (numéro, jour, heures, photos cochées, pourquoi elle commence là : nouveau
-  jour, pause, coupure choisie). `c` (ou clic droit sur une photo) commence une séance à
-  la photo pointée, ou la recoud à la précédente. Coches, gestes et vue en grand comme
+  jour, pause, coupure choisie). Au clavier, `c` commence une séance à la photo pointée,
+  ou la recoud à la précédente. À la souris, comme sur une table de montage (idée de
+  l'utilisateur) : une barre d'outils toujours visible en haut, **ciseaux** (un clic entre
+  deux photos coupe, la coupure visée s'allume) et **colle** (un clic sur le bandeau
+  d'une séance la recoud à la précédente) ; le pointeur devient l'outil, Alt donne
+  l'autre, Échap revient à la sélection. Le clic droit sur une photo coupe ou recoud
+  aussi. Coches, gestes et vue en grand comme
   dans la galerie d'une séance, qui reste sur chaque ligne. Valider refait les lignes de
   la boîte : une séance est cochée si l'une de ses photos l'est, avec son choix de
   photos ; un dossier tapé à la main est gardé si sa séance commence au même endroit.
   Les coupures ne valent que le temps de la boîte.
 - Les vignettes de la galerie sont centrées dans la fenêtre (#601).
+- **Images de la galerie gardées** (idée de l'utilisateur) : vignettes et grands aperçus
+  sont rangés dans le cache du moteur, aux mêmes clés que la grille. La même carte
+  rouverte va plus vite, et la copie emporte ces entrées (`preview::carry`, comme une
+  copie de `tri`, #592 ; déplacées si la carte est vidée ensuite) : la séance déchargée
+  montre tout de suite ses vignettes. `offload::run` donne pour cela (fichier de la
+  carte, copie) à chaque copie.
 
 ## Oublier une carte (26/11/2026, #602)
 

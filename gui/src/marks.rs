@@ -1720,6 +1720,48 @@ pub fn feather(painter: &Painter, rect: Rect, color: Color32, cut: bool) {
     }
 }
 
+/// Ciseaux (galerie de la carte, #600 : couper entre deux photos) : deux anneaux en bas à
+/// gauche, deux lames croisées vers le haut à droite.
+pub fn scissors(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let p = |x: f32, y: f32| rect.center() + vec2((x - 0.5) * s, (y - 0.5) * s);
+    let stroke = Stroke::new((s / 11.0).max(1.2), color);
+    let r = 0.11;
+    // Les deux lames passent par le pivot, chacune depuis son anneau.
+    let pivot = (0.52, 0.48);
+    for ring in [(0.18, 0.64), (0.36, 0.82)] {
+        painter.circle_stroke(p(ring.0, ring.1), r * s, stroke);
+        let (dx, dy) = (pivot.0 - ring.0, pivot.1 - ring.1);
+        let len = (dx * dx + dy * dy).sqrt();
+        let start = (ring.0 + dx / len * r, ring.1 + dy / len * r);
+        let tip = (pivot.0 + dx * 1.15, pivot.1 + dy * 1.15);
+        painter.line_segment([p(start.0, start.1), p(tip.0, tip.1)], stroke);
+    }
+    painter.circle_filled(p(pivot.0, pivot.1), s * 0.05, color);
+}
+
+/// Tube de colle (galerie de la carte, #600 : recoller deux séances) : le tube couché, son
+/// bec, une goutte dessous.
+pub fn glue(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let p = |x: f32, y: f32| rect.center() + vec2((x - 0.5) * s, (y - 0.5) * s);
+    let stroke = Stroke::new((s / 12.0).max(1.2), color);
+    let body = Rect::from_min_max(p(0.14, 0.3), p(0.6, 0.56));
+    painter.rect_stroke(body, s * 0.06, stroke, egui::StrokeKind::Middle);
+    painter.line_segment([p(0.08, 0.27), p(0.08, 0.59)], stroke);
+    painter.add(Shape::convex_polygon(
+        vec![p(0.6, 0.35), p(0.74, 0.4), p(0.74, 0.46), p(0.6, 0.51)],
+        Color32::TRANSPARENT,
+        stroke,
+    ));
+    painter.line_segment([p(0.74, 0.43), p(0.88, 0.43)], stroke);
+    painter.add(Shape::convex_polygon(
+        vec![p(0.86, 0.56), p(0.92, 0.7), p(0.86, 0.76), p(0.8, 0.7)],
+        color,
+        Stroke::NONE,
+    ));
+}
+
 /// Couleurs mesurées (#492, en face de l'œil des couleurs perçues) : quatre pixels, les
 /// valeurs du fichier telles quelles.
 pub fn pixels(painter: &Painter, rect: Rect, color: Color32) {

@@ -50,6 +50,18 @@ impl Photo {
     }
 }
 
+/// Outil de la galerie de toute la carte (#600, idée de l'utilisateur : une table de
+/// montage) ; Alt donne l'autre.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Tool {
+    /// Cocher, agrandir (les gestes de la galerie d'une séance).
+    Select,
+    /// Couper entre deux photos.
+    Scissors,
+    /// Recoller une séance à la précédente (clic sur son bandeau).
+    Glue,
+}
+
 /// Ce que devient la boîte.
 pub enum Outcome {
     /// Encore ouverte.
@@ -75,6 +87,8 @@ pub struct Picker {
     places: Vec<egui::Pos2>,
     /// Faire défiler jusqu'au curseur (déplacé au clavier).
     follow: bool,
+    /// Outil de la galerie de toute la carte.
+    pub(crate) tool: Tool,
     photos: Vec<Photo>,
     pub(crate) checked: Vec<bool>,
     cursor: usize,
@@ -229,6 +243,7 @@ impl Picker {
             starts: None,
             places: Vec::new(),
             follow: false,
+            tool: Tool::Select,
             thumbs: (0..photos.len()).map(|_| None).collect(),
             photos,
             checked,
@@ -478,6 +493,11 @@ impl Picker {
                     Some(_) => self.enlarged = None,
                     None => self.enlarge(self.cursor, ctx),
                 },
+                Key::Escape if self.tool != Tool::Select => {
+                    // Pris ici : la boîte ne se ferme pas avec.
+                    ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape));
+                    self.tool = Tool::Select;
+                }
                 Key::Escape => {
                     if self.visual.is_some() || self.enlarged.is_some() {
                         // Pris ici : la boîte ne se ferme pas avec.
@@ -551,6 +571,36 @@ impl Picker {
             .width(Some(width))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
+                    // Table de montage (#600) : ciseaux et colle, toujours visibles.
+                    if self.starts.is_some() && self.enlarged.is_none() {
+                        let size = ui.spacing().interact_size.y + 4.0;
+                        for (tool, label, tip) in [
+                            (
+                                Tool::Scissors,
+                                t!("offload-tool-scissors"),
+                                t!("offload-tool-scissors-tip"),
+                            ),
+                            (
+                                Tool::Glue,
+                                t!("offload-tool-glue"),
+                                t!("offload-tool-glue-tip"),
+                            ),
+                        ] {
+                            let on = self.tool == tool;
+                            let (rect, response) =
+                                crate::marks::icon_toggle(ui, size, &label, &tip, on);
+                            let color = if on {
+                                accent
+                            } else {
+                                ui.visuals().text_color()
+                            };
+                            draw_tool(ui.painter(), rect.shrink(3.0), tool, color);
+                            if response.clicked() {
+                                self.tool = if on { Tool::Select } else { tool };
+                            }
+                        }
+                        ui.separator();
+                    }
                     if ui.button(t!("offload-pick-all")).clicked() {
                         (0..self.photos.len()).for_each(|i| self.set(i, true));
                     }
@@ -629,6 +679,96 @@ impl Picker {
         response.clicked()
     }
 
+    /// Ciseaux ou colle (#600) : entre deux photos d'une même séance, un clic coupe ; sur
+    /// le bandeau d'une séance (pas la première), un clic la recoud à la précédente. Alt
+    /// donne l'autre outil. Le pointeur devient l'outil, la coupure ou le bandeau visé
+    /// s'allume. Renvoie (photo, une séance y commence) pour un clic.
+    fn tool_zones(
+        &self,
+        ui: &mut egui::Ui,
+        grid: &Grid,
+        origin: egui::Vec2,
+        image: egui::Vec2,
+        header_h: f32,
+        accent: Color32,
+    ) -> Option<(usize, bool)> {
+        let starts = self.starts.as_deref()?;
+        let alt = ui.input(|i| i.modifiers.alt);
+        let tool = match (self.tool, alt) {
+            (Tool::Scissors, false) | (Tool::Glue, true) => Tool::Scissors,
+            _ => Tool::Glue,
+        };
+        let reach = 12.0;
+        let mut clicked = None;
+        let stroke = egui::Stroke::new(3.0, accent);
+        for (i, &start) in starts.iter().enumerate().skip(1) {
+            let zone = match (tool, start) {
+                (Tool::Scissors, None) => {
+                    let left = grid.cells[i].x + origin.x;
+                    let top = grid.cells[i].y + origin.y;
+                    egui::Rect::from_min_max(
+                        egui::pos2(
+                            left - (left - (grid.cells[i - 1].x + origin.x + image.x))
+                                .clamp(0.0, 8.0)
+                                - reach,
+                            top,
+                        ),
+                        egui::pos2(left + reach, top + image.y),
+                    )
+                }
+                (Tool::Glue, Some(_)) => {
+                    let Some(&(_, y)) = grid.headers.iter().find(|(first, _)| *first == i) else {
+                        continue;
+                    };
+                    egui::Rect::from_min_size(
+                        egui::pos2(origin.x + grid.left, origin.y + y),
+                        vec2(grid.width, header_h),
+                    )
+                }
+                _ => continue,
+            };
+            let id = ui.scope_id().with(("offload_tool_zone", i));
+            let response = ui.interact(zone, id, Sense::click());
+            let label = match tool {
+                Tool::Scissors => t!("offload-tool-cut-at", name = self.photos[i].name.clone()),
+                _ => t!(
+                    "offload-tool-join",
+                    n = grid.headers.iter().position(|(f, _)| *f == i).unwrap_or(0) + 1
+                ),
+            };
+            response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &label));
+            if response.hovered() {
+                match tool {
+                    Tool::Scissors => {
+                        let x = grid.cells[i].x + origin.x - 4.0;
+                        ui.painter().vline(x, zone.y_range().expand(4.0), stroke);
+                    }
+                    _ => {
+                        ui.painter()
+                            .rect_stroke(zone, 4.0, stroke, egui::StrokeKind::Inside);
+                    }
+                }
+            }
+            if response.clicked() {
+                clicked = Some((i, tool == Tool::Scissors));
+            }
+        }
+        // Le pointeur devient l'outil, au-dessus de tout.
+        if let Some(pointer) = ui.ctx().pointer_hover_pos()
+            && ui.clip_rect().contains(pointer)
+        {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::None);
+            let painter = ui.ctx().layer_painter(egui::LayerId::new(
+                egui::Order::Tooltip,
+                egui::Id::unique("offload_tool_pointer"),
+            ));
+            let rect = egui::Rect::from_center_size(pointer, vec2(22.0, 22.0));
+            painter.circle_filled(pointer, 13.0, Color32::from_black_alpha(140));
+            draw_tool(&painter, rect, tool, Color32::WHITE);
+        }
+        clicked
+    }
+
     /// Bandeau d'une séance de la galerie de toute la carte : son numéro, ses heures, son
     /// nombre de photos (cochées), et pourquoi elle commence là.
     fn header(&self, first: usize, number: usize) -> String {
@@ -690,7 +830,10 @@ impl Picker {
         self.columns = grid.columns;
         let mut open = None;
         let mut cut = None;
+        // Ciseaux ou colle : (photo, séance qui y commence ou non).
+        let mut edit: Option<(usize, bool)> = None;
         let follow = std::mem::take(&mut self.follow);
+        let tooling = self.starts.is_some() && self.tool != Tool::Select;
         egui::ScrollArea::vertical()
             .max_height(size.y)
             .min_scrolled_height(size.y)
@@ -783,6 +926,9 @@ impl Picker {
                             egui::StrokeKind::Outside,
                         );
                     }
+                    if tooling {
+                        continue;
+                    }
                     let checked = self.check(ui, i, image, accent);
                     let modifiers = ui.input(|input| input.modifiers);
                     if checked {
@@ -821,9 +967,17 @@ impl Picker {
                         });
                     }
                 }
+                if tooling {
+                    edit = self.tool_zones(ui, &grid, origin, vec2(side, side), header_h, accent);
+                }
             });
         if let Some(i) = cut {
             self.toggle_cut(i);
+        }
+        if let Some((i, on)) = edit
+            && let Some(starts) = &mut self.starts
+        {
+            starts[i] = on.then_some(CutReason::Chosen);
         }
         if let Some(i) = open {
             self.enlarge(i, ctx);
@@ -873,6 +1027,14 @@ impl Picker {
                 self.photos.len()
             ));
         });
+    }
+}
+
+/// L'icône d'un outil de la table de montage.
+fn draw_tool(painter: &egui::Painter, rect: egui::Rect, tool: Tool, color: Color32) {
+    match tool {
+        Tool::Scissors => crate::marks::scissors(painter, rect, color),
+        _ => crate::marks::glue(painter, rect, color),
     }
 }
 
