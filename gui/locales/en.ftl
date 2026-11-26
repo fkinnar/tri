@@ -1833,7 +1833,7 @@ offload-session = Session folder
 offload-session-tip = Suggested: YYYY-MM-DD_ (date of the newest image to copy), to complete ("_Self") or replace entirely; the year, if wanted, goes in the root folder. Empty: straight into the root folder.
 offload-destination = Destination: { $path }
 offload-destinations = Destination: { $n } folders in { $path }
-offload-sessions = { $n } sessions on the card (one per shooting day), each in its own folder:
+offload-sessions = { $n } sessions on the card, each in its own folder:
 offload-session-count = { $n ->
     [0] nothing to copy
     [one] 1 image, { $size }
@@ -1857,6 +1857,38 @@ offload-pick-exclude = { $n ->
 offload-pick-exclude-tip = Already offloaded (here or elsewhere): unchecked and not copied again. Unchecked, they can be copied again.
 offload-pick-known = already copied
 offload-pick-partly = partly copied
+offload-cuts-title = Sessions of the card
+offload-cuts-header = Session { $n } · { $day } · { $start }–{ $end } · { $chosen } / { $count } { $count ->
+    [one] photo
+   *[other] photos
+}
+offload-cut-day = new day
+offload-cut-pause = after a { $time } pause
+offload-cut-chosen = chosen cut
+offload-group = Group the selection
+offload-group-tip = The checked photos make a session of their own, in its own folder, even if they do not follow each other (two people photographed in turn). Then all the photos are checked again.
+offload-cut-grouped = grouped photos
+offload-cut-here = Start a session here (c)
+offload-cut-remove = Join with the session before (c)
+offload-tool-scissors = Scissors
+offload-tool-scissors-tip = Scissors: click between two photos to cut the session there ({ $key }: glue).
+offload-tool-glue = Glue
+offload-tool-glue-tip = Glue: click on a session's header to join it to the one before ({ $key }: scissors).
+offload-tool-cut-at = Cut before { $name }
+offload-tool-cut-after = Cut after { $name }
+offload-tool-join = Join session { $n } to the one before
+offload-cuts = Sessions…
+offload-cuts-tip = The whole card as thumbnails, session by session: cut or join (key c, or right-click on a photo). Proposed cuts: each new day, and each long enough pause in shooting.
+offload-forget = Forget this card
+offload-forget-tip = Forget that its photos were offloaded: removed from the history, they become new again. The copies already made are not touched (neither deleted, nor forgotten by their folder).
+offload-forget-confirm = { $n ->
+    [one] Forget the offloaded photo of this card?
+   *[other] Forget the { $n } offloaded images of this card?
+}
+offload-forgot = { $n ->
+    [one] { $n } image forgotten
+   *[other] { $n } images forgotten
+}
 offload-raw-only = RAW only
 offload-keep-disk = Keep tri's data on this drive
 offload-keep-folder = Keep tri's data in the session folder

@@ -1839,7 +1839,7 @@ offload-session = Dossier de la séance
 offload-session-tip = Proposé : AAAA-MM-JJ_ (date de la plus récente image à copier), à compléter (« _Self ») ou à remplacer entièrement ; l'année, si on la veut, va dans le dossier racine. Vide : directement dans le dossier racine.
 offload-destination = Destination : { $path }
 offload-destinations = Destination : { $n } dossiers dans { $path }
-offload-sessions = { $n } séances sur la carte (une par jour de prise de vue), chacune dans son dossier :
+offload-sessions = { $n } séances sur la carte, chacune dans son dossier :
 offload-session-count = { $n ->
     [0] rien à copier
     [one] 1 image, { $size }
@@ -1863,6 +1863,38 @@ offload-pick-exclude = { $n ->
 offload-pick-exclude-tip = Déjà déchargées (ici ou ailleurs) : décochées et pas recopiées. Décochée, on peut les recopier.
 offload-pick-known = déjà copiée
 offload-pick-partly = en partie copiée
+offload-cuts-title = Séances de la carte
+offload-cuts-header = Séance { $n } · { $day } · { $start }–{ $end } · { $chosen } / { $count } { $count ->
+    [one] photo
+   *[other] photos
+}
+offload-cut-day = nouveau jour
+offload-cut-pause = après { $time } de pause
+offload-cut-chosen = coupure choisie
+offload-group = Grouper la sélection
+offload-group-tip = Les photos cochées forment une séance à part, dans son propre dossier, même si elles ne se suivent pas (deux personnes photographiées en alternance). Ensuite, toutes les photos repartent cochées.
+offload-cut-grouped = photos groupées
+offload-cut-here = Commencer une séance ici (c)
+offload-cut-remove = Recoudre avec la séance d'avant (c)
+offload-tool-scissors = Ciseaux
+offload-tool-scissors-tip = Ciseaux : cliquer entre deux photos pour couper la séance là ({ $key } : la colle).
+offload-tool-glue = Colle
+offload-tool-glue-tip = Colle : cliquer sur le bandeau d'une séance pour la recoller à la précédente ({ $key } : les ciseaux).
+offload-tool-cut-at = Couper avant { $name }
+offload-tool-cut-after = Couper après { $name }
+offload-tool-join = Recoller la séance { $n } à la précédente
+offload-cuts = Séances…
+offload-cuts-tip = Toute la carte en vignettes, séance par séance : couper ou recoudre (touche c, ou clic droit sur une photo). Coupures proposées : chaque nouveau jour, et chaque pause de prise de vue assez longue.
+offload-forget = Oublier cette carte
+offload-forget-tip = Oublier que ses photos ont été déchargées : retirées de l'historique, elles redeviennent nouvelles. Les copies déjà faites ne sont pas touchées (ni effacées, ni oubliées par leur dossier).
+offload-forget-confirm = { $n ->
+    [one] Oublier la photo déchargée de cette carte ?
+   *[other] Oublier les { $n } images déchargées de cette carte ?
+}
+offload-forgot = { $n ->
+    [one] { $n } image oubliée
+   *[other] { $n } images oubliées
+}
 offload-raw-only = RAW seulement
 offload-keep-disk = Garder les données de tri sur ce disque
 offload-keep-folder = Garder les données de tri dans le dossier de la séance

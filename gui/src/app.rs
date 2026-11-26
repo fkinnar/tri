@@ -10430,6 +10430,7 @@ impl TriApp {
         dialog.set_previews(crate::offload::SessionPreviews {
             scheduler: scheduler.clone(),
             cache: engine.cache.clone(),
+            preview: engine.preview,
             location: self.settings.cache.location,
             places: self.settings.places.clone(),
         });
@@ -29485,6 +29486,7 @@ fn parse_actions(list: &str) -> Vec<Step> {
                 None if id.starts_with("offload:") => {
                     Some(Step::Offload(PathBuf::from(&id["offload:".len()..])))
                 }
+                None if id == "offload_cuts" => Some(Step::OffloadPick(crate::offload::WHOLE_CARD)),
                 None if id.starts_with("offload_pick:") => id["offload_pick:".len()..]
                     .parse()
                     .ok()
@@ -45917,7 +45919,7 @@ mod tests {
                 .is_some()
         );
         settle_dialog(&mut h);
-        h.get_by_label("2026-11-10").click();
+        h.get_by_label("2026-11-10  12:00–12:00").click();
         h.run_steps(2);
         assert!(h.query_by_label_contains("3 à copier").is_some());
         // Les photos du 12 en galerie (retour du 25/11/2026) : tout décoché (Cmd+Maj+A),
@@ -46178,6 +46180,198 @@ mod tests {
         settings.raw_only = false;
         open(&mut h, &settings);
         assert_eq!(checked(&mut h), Some(vec![true, true]));
+    }
+
+    #[test]
+    fn a_card_is_cut_into_sessions_in_its_gallery_then_forgotten() {
+        // #600 : un seul jour, coupé à la main dans la galerie de toute la carte ; deux
+        // séances, nommées par leur heure. #602 : la carte déchargée puis oubliée.
+        use chrono::TimeZone;
+        let (mut h, dir) = harness();
+        let shots = dir.path().join("CARTE/DCIM/100_TEST");
+        std::fs::create_dir_all(&shots).unwrap();
+        for (name, hour) in [("IMG0", 9), ("IMG1", 10), ("IMG2", 13)] {
+            let path = shots.join(format!("{name}.jpg"));
+            image::RgbImage::from_pixel(32, 24, image::Rgb([90, 90, 90]))
+                .save(&path)
+                .unwrap();
+            let at: std::time::SystemTime = chrono::Local
+                .with_ymd_and_hms(2026, 11, 25, hour, 0, 0)
+                .unwrap()
+                .into();
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_modified(at)
+                .unwrap();
+        }
+        let ctx = h.ctx.clone();
+        let data = h.state().settings.data_dir();
+        let mut settings = h.state().settings.offload.clone();
+        settings.previews = false;
+        settings.split_pause_minutes = 0;
+        let open = |h: &mut Harness<'_, TriApp>| {
+            let dialog = OffloadDialog::new(
+                dir.path().join("CARTE"),
+                CENTRED,
+                settings.clone(),
+                data.clone(),
+                &ctx,
+            );
+            h.state_mut().offload = Some(dialog);
+            let deadline = Instant::now() + Duration::from_secs(20);
+            while h.query_by_label("Décharger").is_none() {
+                assert!(Instant::now() < deadline, "boîte jamais prête");
+                h.run_steps(1);
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            settle_dialog(h);
+        };
+        open(&mut h);
+        assert!(h.query_by_label_contains("séances sur la carte").is_none());
+        h.get_by_label(&t!("offload-cuts")).click();
+        h.run_steps(3);
+        let starts = |h: &Harness<'_, TriApp>| {
+            h.state()
+                .offload
+                .as_ref()
+                .and_then(|o| o.picker.as_ref())
+                .and_then(|(_, p)| p.starts())
+        };
+        assert_eq!(starts(&h), Some(vec![None, None, None]));
+        // À la souris, comme sur une table de montage : les ciseaux entre la 1re et la 2e
+        // photo, puis la colle sur le bandeau de la 2e séance.
+        h.get_by_label(&t!("offload-tool-scissors")).click();
+        h.run_steps(2);
+        h.get_by_label(&t!("offload-tool-cut-at", name = "IMG1"))
+            .click();
+        h.run_steps(2);
+        assert_eq!(
+            starts(&h),
+            Some(vec![None, Some(tri::offload::CutReason::Chosen), None])
+        );
+        // Ctrl / Cmd avec les ciseaux : la colle (Alt+clic déplace la fenêtre sous Mint).
+        h.event(egui::Event::ModifiersChanged(CMD));
+        h.run_steps(2);
+        h.get_by_label(&t!("offload-tool-join", n = 2))
+            .click_modifiers(CMD);
+        h.run_steps(2);
+        assert_eq!(starts(&h), Some(vec![None, None, None]));
+        // En fin de ligne aussi : deux photos par ligne, « couper après IMG1 » coupe
+        // avant IMG2, en tête de la ligne suivante.
+        let mut side = 200.0;
+        loop {
+            if let Some((_, p)) = h
+                .state_mut()
+                .offload
+                .as_mut()
+                .and_then(|o| o.picker.as_mut())
+            {
+                p.side = side;
+            }
+            h.run_steps(2);
+            let columns = h
+                .state()
+                .offload
+                .as_ref()
+                .and_then(|o| o.picker.as_ref())
+                .map(|(_, p)| p.columns);
+            if columns == Some(2) {
+                break;
+            }
+            side += 20.0;
+            assert!(side < 2000.0, "jamais deux photos par ligne");
+        }
+        h.get_by_label(&t!("offload-tool-cut-after", name = "IMG1"))
+            .click();
+        h.run_steps(2);
+        assert_eq!(
+            starts(&h),
+            Some(vec![None, None, Some(tri::offload::CutReason::Chosen)])
+        );
+        h.get_by_label(&t!("offload-tool-glue")).click();
+        h.run_steps(2);
+        h.get_by_label(&t!("offload-tool-join", n = 2)).click();
+        h.run_steps(2);
+        assert_eq!(starts(&h), Some(vec![None, None, None]));
+        h.get_by_label(&t!("offload-tool-scissors")).click();
+        h.run_steps(2);
+        if let Some((_, p)) = h
+            .state_mut()
+            .offload
+            .as_mut()
+            .and_then(|o| o.picker.as_mut())
+        {
+            p.side = 160.0;
+        }
+        h.run_steps(2);
+        // Et la colle pour de bon.
+        h.get_by_label(&t!("offload-tool-cut-at", name = "IMG1"))
+            .click();
+        h.run_steps(2);
+        h.get_by_label(&t!("offload-tool-glue")).click();
+        h.run_steps(2);
+        h.get_by_label(&t!("offload-tool-join", n = 2)).click();
+        h.run_steps(2);
+        assert_eq!(starts(&h), Some(vec![None, None, None]));
+        // Échap rend la sélection, sans fermer la galerie.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(
+            h.state()
+                .offload
+                .as_ref()
+                .and_then(|o| o.picker.as_ref())
+                .is_some_and(|(_, p)| p.tool == crate::offload_picker::Tool::Select)
+        );
+        // Couper avant la troisième photo (c), au clavier.
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
+        assert_eq!(
+            starts(&h),
+            Some(vec![None, None, Some(tri::offload::CutReason::Chosen)])
+        );
+        h.get_by_label(&t!("offload-pick-ok")).click();
+        h.run_steps(3);
+        assert!(
+            h.query_by_label_contains("2 séances sur la carte")
+                .is_some()
+        );
+        h.get_by_label("2026-11-25  13:00–13:00").click();
+        h.run_steps(2);
+        h.get_by_label("Décharger").click();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h
+            .query_by_label_contains("2 fichiers copiés et vérifiés")
+            .is_none()
+        {
+            assert!(Instant::now() < deadline, "jamais copié");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let root = dir.path().join("photos-local");
+        assert!(root.join("2026-11-25_0900").join("IMG1.jpg").exists());
+        assert!(!root.join("2026-11-25_1300").exists(), "séance décochée");
+        h.state_mut().offload = None;
+        h.run_steps(2);
+        // Remise : deux images connues ; oubliées, elles redeviennent nouvelles.
+        open(&mut h);
+        h.get_by_label(&t!("offload-forget")).click();
+        h.run_steps(2);
+        assert!(
+            h.query_by_label_contains(&t!("offload-forget-confirm", n = 2))
+                .is_some()
+        );
+        h.get_all_by_label(&t!("offload-forget"))
+            .last()
+            .unwrap()
+            .click();
+        h.run_steps(2);
+        assert!(h.query_by_label(&t!("offload-forgot", n = 2)).is_some());
+        let history = tri::offload::History::open_configured(&settings, data.as_deref()).unwrap();
+        let plan = tri::offload::plan(&dir.path().join("CARTE"), &history).unwrap();
+        assert!(plan.items.iter().all(|i| !i.known), "oubliées pour de bon");
     }
 
     #[test]

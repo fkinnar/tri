@@ -55,6 +55,15 @@ pub struct OffloadSettings {
     /// séances (#507) : une photo prise avant compte pour la veille (une soirée qui finit
     /// après minuit reste une séance).
     pub day_cut: u32,
+    /// Couper la carte en séances à chaque changement de jour (#600) : une coupure
+    /// proposée parmi d'autres ; non : les jours ne coupent rien.
+    pub split_days: bool,
+    /// Couper la carte là où la prise de vue s'est arrêtée au moins tant de minutes
+    /// (#600 : le matin à Bruxelles, l'après-midi à Anvers) ; 0 : jamais.
+    pub split_pause_minutes: u32,
+    /// Nombre de séances au plus d'une carte (#600) : au-delà, seules les plus longues
+    /// pauses coupent.
+    pub max_sessions: usize,
 }
 
 impl Default for OffloadSettings {
@@ -71,6 +80,9 @@ impl Default for OffloadSettings {
             delete_left: false,
             previews: true,
             day_cut: 4,
+            split_days: true,
+            split_pause_minutes: 120,
+            max_sessions: 30,
         }
     }
 }
@@ -214,6 +226,56 @@ impl History {
         History::default()
     }
 
+    /// Oublie les images `items` (#602 : une carte de test à réutiliser) : retire leurs
+    /// lignes de l'historique (fichier réécrit d'un bloc ; les autres lignes, même
+    /// illisibles, restent telles quelles). Les copies ne sont pas touchées. Renvoie le
+    /// nombre d'images oubliées.
+    pub fn forget<'a>(&mut self, items: impl IntoIterator<Item = &'a Item>) -> io::Result<usize> {
+        let ids: HashSet<Identity> = items
+            .into_iter()
+            .map(Item::identity)
+            .filter(|id| self.known.contains(id))
+            .collect();
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        if let Some(path) = &self.path {
+            let text = match fs::read_to_string(path) {
+                Ok(text) => text,
+                Err(e) if e.kind() == io::ErrorKind::NotFound => String::new(),
+                Err(e) => return Err(e),
+            };
+            let kept: String = text
+                .lines()
+                .filter(|line| {
+                    let mut f = line.split('\t');
+                    let id = match (f.next(), f.next(), f.next()) {
+                        (Some(name), Some(size), Some(modified)) => {
+                            match (size.parse(), modified.parse()) {
+                                (Ok(size), Ok(modified_ns)) => Some(Identity {
+                                    name: name.to_string(),
+                                    size,
+                                    modified_ns,
+                                }),
+                                _ => None,
+                            }
+                        }
+                        _ => None,
+                    };
+                    id.is_none_or(|id| !ids.contains(&id))
+                })
+                .flat_map(|line| [line, "\n"])
+                .collect();
+            let tmp = path.with_extension("tsv.tmp");
+            fs::write(&tmp, kept)?;
+            fs::rename(&tmp, path)?;
+        }
+        for id in &ids {
+            self.known.remove(id);
+        }
+        Ok(ids.len())
+    }
+
     fn contains(&self, item: &Item) -> bool {
         self.known.contains(&item.identity())
     }
@@ -239,48 +301,279 @@ impl History {
     }
 }
 
-/// Une séance d'une carte (#507) : les images d'un même jour de prise de vue.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Session {
-    /// Jour « AAAA-MM-JJ » (heure locale, coupé à `[offload] day_cut`).
-    pub day: String,
-    /// Ses images, rangs dans [`Plan::items`], dans l'ordre de la carte.
-    pub items: Vec<usize>,
+/// Pourquoi une séance commence là (#600).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CutReason {
+    /// Un nouveau jour de prise de vue (`[offload] day_cut`).
+    Day,
+    /// La prise de vue s'est arrêtée tant de temps.
+    Pause(Duration),
+    /// Coupure posée à la main.
+    Chosen,
+    /// Photos regroupées à la main, qui ne se suivaient pas forcément (#600 : les
+    /// portraits de deux personnes pris en alternance, un dossier chacune).
+    Grouped,
 }
 
-impl Session {
-    /// Nom de dossier proposé : le jour et `_` à compléter, comme [`suggest_folder`].
-    pub fn folder(&self) -> String {
-        format!("{}_", self.day)
+/// Une coupure de la carte (#600) : une séance commence à la photo `first`. Repérée par
+/// son fichier, pas par l'heure : une carte FAT date ses fichiers à 2 s près, les photos
+/// d'une rafale ont souvent la même heure.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Cut {
+    /// Un fichier de la première photo de la séance (sur la carte).
+    pub first: PathBuf,
+    /// Son heure de prise de vue.
+    pub at: SystemTime,
+    /// Pourquoi.
+    pub reason: CutReason,
+}
+
+impl Cut {
+    /// Coupure avant la photo `shot` de `plan`.
+    pub fn before(plan: &Plan, shot: &Shot, reason: CutReason) -> Cut {
+        Cut {
+            first: plan.items[shot.items[0]].source.clone(),
+            at: shot.time,
+            reason,
+        }
     }
 }
 
-impl Plan {
-    /// La carte rangée en séances (#507), de la plus ancienne à la plus récente : par jour
-    /// de prise de vue (date du fichier, que le boîtier pose à la prise de vue, en heure
-    /// locale), une photo prise avant `day_cut` heures comptant pour la veille. Une paire
-    /// RAW+JPEG (même dossier, même nom) reste dans la même séance, celle de sa première
-    /// image.
-    pub fn sessions(&self, day_cut: u32) -> Vec<Session> {
-        use std::collections::{BTreeMap, HashMap};
-        let day_of = |t: SystemTime| {
-            let local = chrono::DateTime::<chrono::Local>::from(t)
-                - chrono::Duration::hours(i64::from(day_cut.min(23)));
-            local.format("%Y-%m-%d").to_string()
+/// Une photo de la carte : une image, ou une paire RAW+JPEG (même dossier, même nom),
+/// jamais séparée d'une séance à l'autre.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Shot {
+    /// Heure de prise de vue (la plus ancienne des images de la paire).
+    pub time: SystemTime,
+    /// Ses images, rangs dans [`Plan::items`].
+    pub items: Vec<usize>,
+}
+
+/// Une séance d'une carte (#507, #600) : des photos prises d'affilée, entre deux
+/// coupures.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Session {
+    /// Jour « AAAA-MM-JJ » de sa première photo (heure locale, coupé à `day_cut`).
+    pub day: String,
+    /// Heure de prise de vue de sa première photo.
+    pub start: SystemTime,
+    /// Heure de prise de vue de sa dernière photo.
+    pub end: SystemTime,
+    /// Pourquoi elle commence là (`None` : la première de la carte).
+    pub reason: Option<CutReason>,
+    /// Ses images, rangs dans [`Plan::items`], dans l'ordre de prise de vue (une paire à
+    /// la suite).
+    pub items: Vec<usize>,
+    /// Nom de dossier proposé, voir [`Session::folder`].
+    folder: String,
+}
+
+impl Session {
+    /// Nom de dossier proposé : le jour et `_` à compléter, comme [`suggest_folder`] ;
+    /// avec l'heure de début quand d'autres séances de la carte sont du même jour
+    /// (`2026-11-25_0900_`, `2026-11-25_1300_`, choix du 26/11/2026).
+    pub fn folder(&self) -> String {
+        self.folder.clone()
+    }
+
+    /// Nom court : le jour, et l'heure de début quand le jour en a plusieurs (le dossier
+    /// proposé sans le `_` final). Ce que `--session` reconnaît.
+    pub fn name(&self) -> &str {
+        self.folder.trim_end_matches('_')
+    }
+}
+
+/// Noms de dossier proposés (#600) : le jour, avec l'heure de début quand d'autres séances
+/// sont du même jour ; deux séances qui commencent à la même minute (deux personnes
+/// photographiées en alternance) : `-2`, `-3`… pour ne jamais copier deux séances dans le
+/// même dossier.
+fn name_sessions(sessions: &mut [Session]) {
+    let mut taken: HashSet<String> = HashSet::new();
+    for i in 0..sessions.len() {
+        let shared = sessions
+            .iter()
+            .enumerate()
+            .any(|(j, s)| j != i && s.day == sessions[i].day);
+        let base = if shared {
+            format!("{}_{}", sessions[i].day, clock(sessions[i].start))
+        } else {
+            sessions[i].day.clone()
         };
-        let mut pair_day: HashMap<PathBuf, String> = HashMap::new();
-        let mut days: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+        let mut name = base.clone();
+        let mut n = 2;
+        while !taken.insert(name.clone()) {
+            name = format!("{base}-{n}");
+            n += 1;
+        }
+        sessions[i].folder = format!("{name}_");
+    }
+}
+
+/// Heure locale « HHMM » de `t`.
+fn clock(t: SystemTime) -> String {
+    chrono::DateTime::<chrono::Local>::from(t)
+        .format("%H%M")
+        .to_string()
+}
+
+/// Jour de prise de vue de `t` (heure locale ; avant `day_cut` heures, la veille).
+fn shooting_day(t: SystemTime, day_cut: u32) -> String {
+    let local = chrono::DateTime::<chrono::Local>::from(t)
+        - chrono::Duration::hours(i64::from(day_cut.min(23)));
+    local.format("%Y-%m-%d").to_string()
+}
+
+impl Plan {
+    /// Les photos de la carte dans l'ordre de prise de vue (à égalité, de la carte) ; une
+    /// paire RAW+JPEG est une photo.
+    pub fn shots(&self) -> Vec<Shot> {
+        use std::collections::HashMap;
+        let mut by_stem: HashMap<PathBuf, usize> = HashMap::new();
+        let mut shots: Vec<Shot> = Vec::new();
         for (i, item) in self.items.iter().enumerate() {
             let stem = item.source.with_extension("");
-            let day = pair_day
-                .entry(stem)
-                .or_insert_with(|| day_of(item.modified))
-                .clone();
-            days.entry(day).or_default().push(i);
+            match by_stem.get(&stem) {
+                Some(&s) => {
+                    let shot = &mut shots[s];
+                    shot.items.push(i);
+                    shot.time = shot.time.min(item.modified);
+                }
+                None => {
+                    by_stem.insert(stem, shots.len());
+                    shots.push(Shot {
+                        time: item.modified,
+                        items: vec![i],
+                    });
+                }
+            }
         }
-        days.into_iter()
-            .map(|(day, items)| Session { day, items })
-            .collect()
+        shots.sort_by_key(|s| (s.time, s.items[0]));
+        shots
+    }
+
+    /// Coupures proposées (#600) : à chaque changement de jour (`split_days`, coupé à
+    /// `day_cut`) et là où la prise de vue s'est arrêtée au moins `split_pause_minutes`.
+    /// Au-delà de `max_sessions` séances, les jours d'abord, puis les plus longues pauses.
+    pub fn proposed_cuts(&self, settings: &OffloadSettings) -> Vec<Cut> {
+        let shots = self.shots();
+        let pause = Duration::from_secs(u64::from(settings.split_pause_minutes) * 60);
+        let mut cuts: Vec<Cut> = shots
+            .windows(2)
+            .filter_map(|w| {
+                let (a, b) = (w[0].time, w[1].time);
+                let gap = b.duration_since(a).unwrap_or_default();
+                let reason = if settings.split_days
+                    && shooting_day(a, settings.day_cut) != shooting_day(b, settings.day_cut)
+                {
+                    CutReason::Day
+                } else if settings.split_pause_minutes > 0 && gap >= pause {
+                    CutReason::Pause(gap)
+                } else {
+                    return None;
+                };
+                Some(Cut::before(self, &w[1], reason))
+            })
+            .collect();
+        let max = settings.max_sessions.max(1) - 1;
+        if cuts.len() > max {
+            let rank = |c: &Cut| match c.reason {
+                CutReason::Day => Duration::MAX,
+                CutReason::Pause(d) => d,
+                CutReason::Chosen | CutReason::Grouped => Duration::ZERO,
+            };
+            cuts.sort_by_key(|c| std::cmp::Reverse(rank(c)));
+            cuts.truncate(max);
+            cuts.sort_by_key(|c| c.at);
+        }
+        cuts
+    }
+
+    /// La carte coupée en séances aux coupures proposées (#507, #600), de la plus
+    /// ancienne à la plus récente.
+    pub fn sessions(&self, settings: &OffloadSettings) -> Vec<Session> {
+        self.sessions_at(&self.proposed_cuts(settings), settings.day_cut)
+    }
+
+    /// La carte coupée en séances à `cuts` (dans n'importe quel ordre ; une coupure avant
+    /// la première photo, en double ou sur un fichier absent ne fait rien) : une séance
+    /// commence à chaque photo désignée. Une paire RAW+JPEG reste entière.
+    pub fn sessions_at(&self, cuts: &[Cut], day_cut: u32) -> Vec<Session> {
+        use std::collections::HashMap;
+        let starts: HashMap<&Path, CutReason> =
+            cuts.iter().map(|c| (c.first.as_path(), c.reason)).collect();
+        let mut sessions: Vec<Session> = Vec::new();
+        for shot in self.shots() {
+            let reason = shot
+                .items
+                .iter()
+                .find_map(|&i| starts.get(self.items[i].source.as_path()).copied());
+            match sessions.last_mut() {
+                Some(session) if reason.is_none() => {
+                    session.end = shot.time;
+                    session.items.extend(&shot.items);
+                }
+                _ => sessions.push(Session {
+                    day: shooting_day(shot.time, day_cut),
+                    start: shot.time,
+                    end: shot.time,
+                    reason: reason.filter(|_| !sessions.is_empty()),
+                    items: shot.items.clone(),
+                    folder: String::new(),
+                }),
+            }
+        }
+        name_sessions(&mut sessions);
+        sessions
+    }
+
+    /// La carte en séances données une à une (#600 : photos regroupées à la main, qui ne
+    /// se suivent pas forcément) : pour chacune, les fichiers de ses images (une image
+    /// d'une paire suffit : la paire entière suit) et pourquoi elle commence là. Rangées
+    /// par l'heure de leur première photo, leurs images dans l'ordre de prise de vue ; une
+    /// séance vide disparaît, une image citée deux fois va dans la première, une image
+    /// citée nulle part est laissée de côté.
+    pub fn sessions_of(
+        &self,
+        parts: &[(Vec<PathBuf>, Option<CutReason>)],
+        day_cut: u32,
+    ) -> Vec<Session> {
+        use std::collections::HashMap;
+        let part_of: HashMap<&Path, usize> = parts
+            .iter()
+            .enumerate()
+            .rev()
+            .flat_map(|(k, (files, _))| files.iter().map(move |f| (f.as_path(), k)))
+            .collect();
+        let mut grouped: Vec<Vec<Shot>> = vec![Vec::new(); parts.len()];
+        for shot in self.shots() {
+            if let Some(k) = shot
+                .items
+                .iter()
+                .filter_map(|&i| part_of.get(self.items[i].source.as_path()).copied())
+                .min()
+            {
+                grouped[k].push(shot);
+            }
+        }
+        let mut sessions: Vec<Session> = grouped
+            .into_iter()
+            .zip(parts)
+            .filter(|(shots, _)| !shots.is_empty())
+            .map(|(shots, (_, reason))| Session {
+                day: shooting_day(shots[0].time, day_cut),
+                start: shots[0].time,
+                end: shots[shots.len() - 1].time,
+                reason: *reason,
+                items: shots.iter().flat_map(|s| s.items.iter().copied()).collect(),
+                folder: String::new(),
+            })
+            .collect();
+        sessions.sort_by_key(|s| (s.start, s.items[0]));
+        if let Some(first) = sessions.first_mut() {
+            first.reason = None;
+        }
+        name_sessions(&mut sessions);
+        sessions
     }
 
     /// Le même inventaire restreint aux images que `keep` garde (séances ou photos
@@ -575,7 +868,7 @@ fn free_space_of(path: &Path) -> io::Result<u64> {
 /// sous-dossiers de la carte, `DCIM/100_FUJI`…, ne sont pas reproduits). Un nom déjà pris
 /// par un *autre* fichier reçoit un suffixe (`DSCF0001-2.RAF`) ; une copie identique déjà
 /// présente est ignorée. `cancel` interrompt entre deux fichiers (la copie en cours est
-/// abandonnée et effacée). `copied` reçoit chaque copie dès qu'elle est faite (et
+/// abandonnée et effacée). `copied` reçoit (fichier de la carte, copie) dès que la copie est faite (et
 /// vérifiée), ou trouvée identique dans la destination : de quoi calculer ses aperçus
 /// pendant la suite de la copie.
 ///
@@ -590,7 +883,7 @@ pub fn run(
     history: &mut History,
     cancel: &AtomicBool,
     mut progress: impl FnMut(&Progress),
-    mut copied: impl FnMut(&Path),
+    mut copied: impl FnMut(&Path, &Path),
     mut full: impl FnMut(&OutOfSpace) -> bool,
 ) -> Report {
     let start = std::time::Instant::now();
@@ -670,12 +963,12 @@ pub fn run(
                             .errors
                             .push((item.source.clone(), format!("historique : {e}")));
                     }
-                    copied(&copy);
+                    copied(&item.source, &copy);
                     report.copied.push((item.source.clone(), copy));
                 }
                 Ok(Outcome::AlreadyThere(copy)) => {
                     let _ = history.record(item, &copy);
-                    copied(&copy);
+                    copied(&item.source, &copy);
                     report.skipped.push(item.source.clone());
                     report.already_there.push((item.source.clone(), copy));
                 }
@@ -871,7 +1164,12 @@ mod tests {
             ],
             ignored: 0,
         };
-        let sessions = plan.sessions(4);
+        // Les jours seuls (la journée du 12 a 13 h de pause : coupée sinon, #600).
+        let settings = OffloadSettings {
+            split_pause_minutes: 0,
+            ..OffloadSettings::default()
+        };
+        let sessions = plan.sessions(&settings);
         let days: Vec<&str> = sessions.iter().map(|s| s.day.as_str()).collect();
         assert_eq!(days, ["2026-11-12", "2026-11-14"]);
         assert_eq!(
@@ -881,7 +1179,18 @@ mod tests {
         );
         assert_eq!(sessions[0].folder(), "2026-11-12_");
         // Coupure à minuit : trois séances.
-        assert_eq!(plan.sessions(0).len(), 3);
+        let midnight = OffloadSettings {
+            day_cut: 0,
+            ..settings.clone()
+        };
+        assert_eq!(plan.sessions(&midnight).len(), 3);
+        // Sans les jours, ni pause assez longue : une seule séance.
+        let whole = OffloadSettings {
+            split_days: false,
+            split_pause_minutes: 0,
+            ..settings.clone()
+        };
+        assert_eq!(plan.sessions(&whole).len(), 1);
         // Restreint à une séance : seulement ses images.
         let chosen: HashSet<PathBuf> = sessions[1]
             .items
@@ -891,6 +1200,203 @@ mod tests {
         let one = plan.subset(|i| chosen.contains(&i.source));
         assert_eq!(one.items.len(), 1);
         assert_eq!(one.items[0].source.file_name().unwrap(), "DSCF0004.RAF");
+    }
+
+    /// Une carte de test : (nom, jour de novembre, heure, minute) par image.
+    fn timed_card(images: &[(&str, u32, u32, u32)]) -> Plan {
+        use chrono::TimeZone;
+        Plan {
+            source: PathBuf::from("/carte"),
+            items: images
+                .iter()
+                .map(|&(name, d, h, m)| Item {
+                    source: PathBuf::from("/carte/DCIM").join(name),
+                    size: 1,
+                    modified: chrono::Local
+                        .with_ymd_and_hms(2026, 11, d, h, m, 0)
+                        .unwrap()
+                        .into(),
+                    kind: media::kind_of(Path::new(name)).unwrap(),
+                    known: false,
+                })
+                .collect(),
+            ignored: 0,
+        }
+    }
+
+    #[test]
+    fn a_long_pause_cuts_a_day_in_two_named_by_their_start() {
+        // #600 : le matin à Bruxelles, l'après-midi à Anvers.
+        let plan = timed_card(&[
+            ("DSCF0001.RAF", 25, 9, 0),
+            ("DSCF0002.RAF", 25, 10, 30),
+            ("DSCF0003.RAF", 25, 13, 0),
+            ("DSCF0003.JPG", 25, 13, 0),
+            ("DSCF0004.RAF", 25, 14, 0),
+            ("DSCF0005.RAF", 26, 9, 0),
+        ]);
+        let settings = OffloadSettings::default();
+        let cuts = plan.proposed_cuts(&settings);
+        assert_eq!(cuts.len(), 2);
+        assert_eq!(
+            cuts[0].reason,
+            CutReason::Pause(Duration::from_secs(150 * 60))
+        );
+        assert_eq!(cuts[1].reason, CutReason::Day);
+        let sessions = plan.sessions(&settings);
+        let folders: Vec<String> = sessions.iter().map(Session::folder).collect();
+        assert_eq!(
+            folders,
+            ["2026-11-25_0900_", "2026-11-25_1300_", "2026-11-26_"],
+            "l'heure seulement quand le jour a plusieurs séances"
+        );
+        assert_eq!(sessions[1].items, [2, 3, 4], "la paire reste entière");
+        assert_eq!(
+            sessions[1].reason,
+            Some(CutReason::Pause(Duration::from_secs(150 * 60)))
+        );
+        assert_eq!(sessions[0].reason, None);
+        assert_eq!(sessions[1].name(), "2026-11-25_1300");
+        // Une pause plus courte que le réglage ne coupe pas.
+        let long = OffloadSettings {
+            split_pause_minutes: 180,
+            ..settings.clone()
+        };
+        assert_eq!(plan.sessions(&long).len(), 2);
+    }
+
+    #[test]
+    fn chosen_cuts_split_anywhere_but_never_a_pair() {
+        let plan = timed_card(&[
+            ("DSCF0002.RAF", 25, 9, 10),
+            ("DSCF0001.RAF", 25, 9, 0),
+            ("DSCF0002.JPG", 25, 9, 11),
+            ("DSCF0003.RAF", 25, 9, 20),
+        ]);
+        let shots = plan.shots();
+        assert_eq!(shots.len(), 3, "une paire est une photo");
+        assert_eq!(shots[0].items, [1], "dans l'ordre de prise de vue");
+        assert_eq!(shots[1].items, [0, 2]);
+        let cut = |shot: &Shot| Cut::before(&plan, shot, CutReason::Chosen);
+        // Coupure sur le JPEG de la paire : la paire entière passe à la suivante ; une
+        // coupure avant la première photo ou en double ne fait rien.
+        let on_jpeg = Cut {
+            first: plan.items[2].source.clone(),
+            ..cut(&shots[1])
+        };
+        let sessions = plan.sessions_at(
+            &[cut(&shots[2]), on_jpeg, cut(&shots[0]), cut(&shots[1])],
+            4,
+        );
+        let items: Vec<&[usize]> = sessions.iter().map(|s| s.items.as_slice()).collect();
+        assert_eq!(items, [&[1][..], &[0, 2], &[3]]);
+        assert_eq!(sessions[0].reason, None);
+        assert_eq!(sessions[2].reason, Some(CutReason::Chosen));
+        assert_eq!(sessions[1].folder(), "2026-11-25_0910_");
+    }
+
+    #[test]
+    fn a_cut_inside_a_burst_of_the_same_second_falls_where_placed() {
+        // Une carte FAT date à 2 s près : trois photos de la même seconde.
+        let plan = timed_card(&[
+            ("A.RAF", 25, 9, 0),
+            ("B.RAF", 25, 9, 0),
+            ("C.RAF", 25, 9, 0),
+        ]);
+        let shots = plan.shots();
+        let sessions = plan.sessions_at(&[Cut::before(&plan, &shots[1], CutReason::Chosen)], 4);
+        let items: Vec<&[usize]> = sessions.iter().map(|s| s.items.as_slice()).collect();
+        assert_eq!(items, [&[0][..], &[1, 2]]);
+    }
+
+    #[test]
+    fn photos_grouped_by_hand_make_their_own_sessions() {
+        // #600 : les portraits de deux personnes pris en alternance, un dossier chacune.
+        let plan = timed_card(&[
+            ("A1.RAF", 25, 10, 0),
+            ("B1.RAF", 25, 10, 0),
+            ("B1.JPG", 25, 10, 0),
+            ("A2.RAF", 25, 10, 1),
+            ("B2.RAF", 25, 10, 2),
+            ("C.RAF", 26, 9, 0),
+        ]);
+        let files = |names: &[&str]| -> Vec<PathBuf> {
+            names
+                .iter()
+                .map(|n| PathBuf::from("/carte/DCIM").join(n))
+                .collect()
+        };
+        let sessions = plan.sessions_of(
+            &[
+                (files(&["A1.RAF", "A2.RAF", "C.RAF"]), None),
+                (files(&["B1.JPG", "B2.RAF"]), Some(CutReason::Grouped)),
+                // Une séance vide disparaît ; C est déjà dans la première.
+                (files(&["C.RAF"]), Some(CutReason::Chosen)),
+                (Vec::new(), Some(CutReason::Chosen)),
+            ],
+            4,
+        );
+        let items: Vec<&[usize]> = sessions.iter().map(|s| s.items.as_slice()).collect();
+        assert_eq!(
+            items,
+            [&[0, 3, 5][..], &[1, 2, 4]],
+            "la paire suit son JPEG"
+        );
+        assert_eq!(sessions[0].reason, None);
+        assert_eq!(sessions[1].reason, Some(CutReason::Grouped));
+        // Le même jour, à la même minute : jamais le même dossier.
+        let folders: Vec<String> = sessions.iter().map(Session::folder).collect();
+        assert_eq!(folders, ["2026-11-25_1000_", "2026-11-25_1000-2_"]);
+    }
+
+    #[test]
+    fn too_many_cuts_keep_the_days_then_the_longest_pauses() {
+        let plan = timed_card(&[
+            ("A.RAF", 25, 9, 0),
+            ("B.RAF", 25, 12, 0),
+            ("C.RAF", 25, 18, 0),
+            ("D.RAF", 26, 9, 0),
+        ]);
+        let settings = OffloadSettings {
+            max_sessions: 3,
+            ..OffloadSettings::default()
+        };
+        let cuts = plan.proposed_cuts(&settings);
+        let reasons: Vec<CutReason> = cuts.iter().map(|c| c.reason).collect();
+        assert_eq!(
+            reasons,
+            [
+                CutReason::Pause(Duration::from_secs(6 * 3600)),
+                CutReason::Day
+            ]
+        );
+    }
+
+    #[test]
+    fn a_forgotten_card_is_no_longer_known_and_other_lines_stay() {
+        // #602 : oublier une carte de test, sans toucher au reste de l'historique.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("offload-history.tsv");
+        let mut history = History::open(&path).unwrap();
+        let plan = timed_card(&[("A.RAF", 25, 9, 0), ("B.RAF", 25, 9, 1)]);
+        let other = timed_card(&[("Z.RAF", 20, 9, 0)]);
+        for item in plan.items.iter().chain(&other.items) {
+            history.record(item, Path::new("/copie")).unwrap();
+        }
+        fs::write(
+            &path,
+            fs::read_to_string(&path).unwrap() + "ligne étrange\n",
+        )
+        .unwrap();
+        assert_eq!(history.forget(&plan.items[..1]).unwrap(), 1);
+        assert!(!history.contains(&plan.items[0]) && history.contains(&plan.items[1]));
+        // Relu du fichier : oubliée là aussi, le reste intact.
+        let reread = History::open(&path).unwrap();
+        assert!(!reread.contains(&plan.items[0]));
+        assert!(reread.contains(&plan.items[1]) && reread.contains(&other.items[0]));
+        assert!(fs::read_to_string(&path).unwrap().contains("ligne étrange"));
+        // Rien à oublier : rien d'écrit.
+        assert_eq!(history.forget(&plan.items[..1]).unwrap(), 0);
     }
 
     thread_local! {
@@ -934,7 +1440,7 @@ mod tests {
             &mut History::in_memory(),
             &AtomicBool::new(false),
             |_| {},
-            |_| {
+            |_, _| {
                 copies += 1;
                 if copies == 1 {
                     FULL.with(|f| f.set(2));
@@ -975,7 +1481,7 @@ mod tests {
                     phases.push(p.phase);
                 }
             },
-            |_| {},
+            |_, _| {},
             |_| false,
         );
         let one = [Phase::Writing, Phase::Syncing, Phase::Verifying];
@@ -996,7 +1502,7 @@ mod tests {
             &mut History::in_memory(),
             &AtomicBool::new(false),
             |_| {},
-            |_| {
+            |_, _| {
                 copies += 1;
                 FULL.with(|f| f.set(1));
             },

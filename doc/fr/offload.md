@@ -119,20 +119,20 @@ d'apparaître, c'est une autre carte.
 ## Carte de plusieurs séances (25/11/2026, #507)
 
 Une carte peut garder plusieurs séances ; souvent une seule est à décharger.
-`Plan::sessions(day_cut)` range la carte par jour de prise de vue (date du fichier, posée
+`Plan::sessions(&réglages)` coupait d'abord la carte par jour de prise de vue (#600 : aussi aux pauses, voir plus bas) (date du fichier, posée
 par le boîtier, en heure locale ; une photo prise avant `[offload] day_cut` heures, 4 par
 défaut, compte pour la veille : une soirée qui finit après minuit reste une séance). Une
 paire RAW+JPEG reste dans la séance de sa première image. `Plan::subset` restreint
 l'inventaire aux images choisies : la copie vérifiée, l'historique et la suppression de la
 carte ensuite ne touchent qu'elles, jamais le reste de la carte.
 
-- **Boîte** : avec plusieurs séances, une ligne par jour (case, dossier, nombre d'images et
+- **Boîte** : avec plusieurs séances, une ligne par séance (case avec le jour et les heures, dossier, nombre d'images et
   taille à copier, ou « déjà déchargée ») à la place du champ « Dossier de la séance ».
   Cochées d'office : celles qui ont du nouveau. **Un dossier par séance cochée**
   (`AAAA-MM-JJ_` à compléter), copiées l'une après l'autre dans le même fil ; les bilans
   sont mis bout à bout (`Report::absorb`), la plus récente séance ouverte à la fin.
 - **Ligne de commande** : `tri --offload <carte> --session AAAA-MM-JJ` ne décharge que ce
-  jour-là (dossier nommé d'après lui) ; `--dry-run` liste les séances.
+  jour-là (dossier nommé d'après lui ; `AAAA-MM-JJ_HHMM` quand le jour a plusieurs séances) ; `--dry-run` liste les séances.
 - **Choisir les photos** d'une séance (« Choisir les photos… » sur sa ligne,
   `offload_picker.rs`) : une galerie à la place de la boîte (idée de l'utilisateur,
   25/11/2026 : plus simple que la grille de `tri`, qu'il aurait fallu ouvrir sur la carte
@@ -146,6 +146,61 @@ carte ensuite ne touchent qu'elles, jamais le reste de la carte.
   Entrée : la photo en grand, ajustée (l'aperçu embarqué, pas de 1:1), flèches pour la
   suivante. Échap sort du visuel, de la vue en grand, puis ferme sans rien changer ;
   Valider revient à la boîte (« Changer le choix… »), seule la sélection est copiée.
+
+## Séances coupées où l'on veut (26/11/2026, #600)
+
+Les jours ne sont qu'un cas particulier (décision de l'utilisateur) : la carte est coupée
+en séances **là où l'on veut**, et les changements de jour sont une des coupures
+proposées. Exemple : le matin à Bruxelles, l'après-midi à Anvers, deux séances le même
+jour.
+
+- **Coupures proposées** (`Plan::proposed_cuts`) : à chaque changement de jour
+  (`[offload] split_days`, coupé à `day_cut`) et là où la prise de vue s'est arrêtée au
+  moins `split_pause_minutes` (120 par défaut, 0 : jamais). Au plus `max_sessions`
+  séances (30) : au-delà, les jours puis les plus longues pauses.
+- **Une coupure désigne sa première photo** (`Cut::first`, un fichier), pas une heure : une
+  carte FAT date ses fichiers à 2 s près, les photos d'une rafale ont souvent la même.
+  `Plan::shots` donne les photos dans l'ordre de prise de vue (une paire RAW+JPEG est une
+  photo, jamais coupée) ; `Plan::sessions_at(&coupures, day_cut)` coupe la carte.
+- **Noms de dossier** : le jour (`AAAA-MM-JJ_`), et l'heure de début quand d'autres
+  séances de la carte sont du même jour (`2026-11-25_0900_`, `2026-11-25_1300_`) ; deux
+  séances qui commencent à la même minute : `-2`, `-3`… (jamais deux séances dans le même
+  dossier).
+- **Grouper la sélection** (idée de l'utilisateur : les portraits de deux personnes pris
+  en alternance, un dossier chacune) : les photos cochées forment une séance à part, même
+  si elles ne se suivent pas ; puis toutes repartent cochées (les coches ont servi à
+  choisir). Une séance devient un ensemble de photos (`Plan::sessions_of` : les fichiers
+  de chaque séance), montrée à l'heure de sa première photo ; ciseaux et colle marchent
+  dans chacune (recoudre joint une séance à celle d'avant dans la galerie).
+- **Galerie de toute la carte** (« Séances… » dans la boîte, à côté du dossier ou des
+  lignes de séances) : les séances l'une après l'autre, chacune sur une nouvelle ligne sous
+  un bandeau (numéro, jour, heures, photos cochées, pourquoi elle commence là : nouveau
+  jour, pause, coupure choisie). Au clavier, `c` commence une séance à la photo pointée,
+  ou la recoud à la précédente. À la souris, comme sur une table de montage (idée de
+  l'utilisateur) : une barre d'outils toujours visible en haut, **ciseaux** (un clic entre
+  deux photos coupe, aussi après la dernière photo d'une ligne ; la coupure visée s'allume) et **colle** (un clic sur le bandeau
+  d'une séance la recoud à la précédente) ; le pointeur devient l'outil, Alt ou Ctrl (Cmd sur macOS) donne
+  l'autre (sous Linux Mint, Alt+clic déplace la fenêtre), Échap revient à la sélection. Le clic droit sur une photo coupe ou recoud
+  aussi. Coches, gestes et vue en grand comme
+  dans la galerie d'une séance, qui reste sur chaque ligne. Valider refait les lignes de
+  la boîte : une séance est cochée si l'une de ses photos l'est, avec son choix de
+  photos ; un dossier tapé à la main est gardé si sa séance commence au même endroit.
+  Les coupures ne valent que le temps de la boîte.
+- Les vignettes de la galerie sont centrées dans la fenêtre (#601).
+- **Images de la galerie gardées** (idée de l'utilisateur) : vignettes et grands aperçus
+  sont rangés dans le cache du moteur, aux mêmes clés que la grille. La même carte
+  rouverte va plus vite, et la copie emporte ces entrées (`preview::carry`, comme une
+  copie de `tri`, #592 ; déplacées si la carte est vidée ensuite) : la séance déchargée
+  montre tout de suite ses vignettes. `offload::run` donne pour cela (fichier de la
+  carte, copie) à chaque copie.
+
+## Oublier une carte (26/11/2026, #602)
+
+« Oublier cette carte » (boîte de déchargement, quand des images sont déjà connues ;
+confirmé) et `tri --offload <carte> --forget` : `History::forget` retire de l'historique
+les lignes des images de la carte (fichier réécrit d'un bloc, les autres lignes gardées
+telles quelles). Les images redeviennent nouvelles ; les copies déjà faites ne sont pas
+touchées. Usage : réutiliser une carte de test.
 
 ## En arrière-plan (17/10/2026)
 
@@ -194,12 +249,13 @@ histogrammes, netteté, regroupement, comme à l'ouverture d'un dossier.
 - `suggest_folder(&plan, &réglages)`, `destination(racine, nom)` ;
 - `run(&plan, destination, &réglages, &mut historique, &annulation, progression,
   copie) -> Report` (`copie` : chaque copie dès qu'elle est faite, pour les aperçus) (copiés, ignorés, erreurs, interrompu, durée) ; `Progress` : fichiers (sans ceux laissés sur la carte) et octets (un fichier passé, déjà déchargé ou déjà présent, compte d'un coup : la barre suit les fichiers), et l'étape en cours (`Phase` : préparation, copie, écriture sur le disque `sync_all`, vérification ; #470, pour distinguer une copie lente d'une copie bloquée). La boîte montre l'étape, le fichier, le débit, et « Rien n'a bougé depuis n s » au-delà de 3 s sans avancement ;
+- `Plan::shots`, `Plan::proposed_cuts`, `Plan::sessions`, `Plan::sessions_at`, `Plan::sessions_of` (`Cut`, `CutReason`, `Session`), `History::forget` ;
 - `delete_sources(&report)`.
 
 ## Ligne de commande
 
 ```
-tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied] [--eject]
+tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied] [--eject] [--session <nom>] [--forget]
 ```
 
 En ligne de commande, rien ne se fait sur la carte sans option explicite (`--eject`,

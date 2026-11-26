@@ -249,7 +249,12 @@ cli-destination = destination : { $path }
 cli-already-there = { $n } images déjà dans la destination (ignorées si identiques)
 cli-to-copy = à copier
 cli-offload-session = séance { $day } : { $n } images
-cli-offload-no-session = pas de séance du { $day } sur la carte
+cli-offload-no-session = pas de séance « { $day } » sur la carte (jour AAAA-MM-JJ, ou AAAA-MM-JJ_HHMM quand le jour en a plusieurs)
+cli-offload-forgot = { $n ->
+    [0] rien à oublier : aucune image de la carte dans l'historique
+    [one] { $n } image de la carte oubliée de l'historique
+   *[other] { $n } images de la carte oubliées de l'historique
+}
 cli-offload-progress = { $done }/{ $total } fichiers   { $mb }/{ $total_mb } Mo
 cli-rate-bad-stars = nombre d'étoiles invalide : { $value } (0 à 5)
 cli-rate-bad-color = couleur inconnue : { $value } (red, yellow, green, blue, purple ou none)
@@ -542,7 +547,8 @@ cli-opt-contrast = contraste, en pour cent
 cli-opt-saturation = saturation, en pour cent
 cli-opt-mono = noir et blanc : un préréglage ou trois pourcentages r,v,b
 cli-opt-folder = nom du dossier de la séance (défaut : AAAA-MM-JJ)
-cli-opt-session = une seule séance de la carte (un jour de prise de vue)
+cli-opt-session = une seule séance de la carte (le jour, ou le jour et l'heure de début quand il en a plusieurs : AAAA-MM-JJ_HHMM)
+cli-opt-forget = oublie que la carte a été déchargée (historique seulement, les copies restent)
 cli-opt-raw-only = laisse les JPEG sur la carte
 cli-opt-previews = calcule ensuite vignettes et aperçus
 cli-opt-delete-copied = supprime de la carte les fichiers copiés et vérifiés
