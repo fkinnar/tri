@@ -9320,7 +9320,7 @@ impl TriApp {
                             }
                         }
                         let current = row.path == self.folder.dir;
-                        // Dossier choisi (#606) : surligné comme le dossier ouvert.
+                        // Dossier choisi (#606) : fond accent (le dossier ouvert : gris).
                         let chosen = self.tree.is_selected(&row.path);
                         let label = if device || server {
                             let tip = if row.kind == Some(PlaceKind::Neighbour) {
@@ -9338,8 +9338,19 @@ impl TriApp {
                             };
                             ui.selectable_label(false, egui::RichText::new(&row.name).weak())
                                 .on_hover_text(tip)
+                        } else if current && !chosen {
+                            // Dossier affiché dans la grille : un fond gris neutre ; l'accent
+                            // est pour les dossiers choisis, ceux sur lesquels on agit (retour
+                            // du 26/11/2026 : les deux se confondaient).
+                            ui.scope(|ui| {
+                                let visuals = ui.visuals_mut();
+                                visuals.selection.bg_fill = visuals.widgets.inactive.bg_fill;
+                                visuals.selection.stroke.color = visuals.strong_text_color();
+                                ui.selectable_label(true, &row.name)
+                            })
+                            .inner
                         } else {
-                            ui.selectable_label(current || chosen, &row.name)
+                            ui.selectable_label(chosen, &row.name)
                         };
                         // Dossier à son propre réglage des notes dans les images : un repère
                         // (à l'accent : toujours ; gris : jamais).

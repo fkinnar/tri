@@ -242,7 +242,8 @@ selection lives in the engine (`places::Tree`: `toggle_selected`, `select_range`
 - **Mouse**: Cmd/Ctrl+click adds or removes a folder (on the first one, the open
   folder, highlighted, joins the selection too, as in the Finder), Shift+click selects the range from
   the last one clicked (otherwise the open folder); neither opens the folder. A plain click opens the folder and ends
-  the selection. Chosen folders are highlighted like the open folder.
+  the selection. Chosen folders have the accent background; the folder shown in the grid, a neutral
+  grey one (accent if it is chosen too), so the two are not confused.
 - **Keyboard** (the panel has the keyboard, leader then `h`): the same actions as in the
   grid, `core.select.toggle` (Space) and `core.select.visual` (Shift+Space: moving selects
   the range); `core.view.back` (Escape) clears the selection first.

@@ -252,7 +252,8 @@ Demandé par l'utilisateur : supprimer ou déplacer plusieurs dossiers sans les 
 - **Souris** : Cmd/Ctrl+clic ajoute ou retire un dossier (au premier, le dossier ouvert,
   surligné, entre aussi dans le choix, comme dans le Finder), Maj+clic choisit la plage depuis
   le dernier cliqué (sinon le dossier ouvert) ; ni l'un ni l'autre n'ouvre le dossier. Un clic simple ouvre le
-  dossier et finit le choix. Les dossiers choisis sont surlignés comme le dossier ouvert.
+  dossier et finit le choix. Les dossiers choisis ont le fond accent ; le dossier affiché dans la grille, un fond
+  gris neutre (accent s'il est aussi choisi), pour ne pas les confondre.
 - **Clavier** (le panneau a le clavier, leader puis `h`) : les mêmes actions que dans la
   grille, `core.select.toggle` (Espace) et `core.select.visual` (Maj+Espace : les
   déplacements choisissent la plage) ; `core.view.back` (Échap) vide d'abord le choix.
