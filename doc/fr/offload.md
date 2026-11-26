@@ -111,7 +111,8 @@ Retours du soir même : la boîte n'est pas obligée d'être restée ouverte. Bi
 ou copie faite en arrière-plan : l'application garde le dernier déchargement fini
 (`TriApp::last_offload` : séance et choix de la boîte), et une carte d'appareil (avec un
 dossier `DCIM`) branchée ensuite ouvre la boîte sur elle, vers cette séance
-(`OffloadDialog::propose_session`). Refermée sans décharger, plus rien n'est proposé
+(`OffloadDialog::propose_session`) — seulement si elle n'a qu'une séance : une carte de
+plusieurs séances (la même, rebranchée) garde ses lignes (retour du 26/11/2026). Refermée sans décharger, plus rien n'est proposé
 ensuite. La nouvelle carte peut être montée **au même chemin** que la précédente (deux
 cartes du même boîtier ont le même nom de volume, `/media/…/disk`) : elle vient
 d'apparaître, c'est une autre carte.
@@ -141,7 +142,7 @@ carte ensuite ne touchent qu'elles, jamais le reste de la carte.
   sur chaque photo, toutes cochées au départ, « Tout sélectionner » / « Tout
   désélectionner » et le compte. Gestes de la grille : clic = curseur (il ne décoche pas
   tout, contrairement au Finder), Cmd/Ctrl+clic bascule, Maj+clic coche la plage, clic sur
-  la coche ; Espace bascule, `v` / Maj+Espace le mode visuel (les déplacements cochent),
+  la coche ; Espace bascule, Maj+Espace le mode visuel (les déplacements cochent),
   Maj + flèches étendent, flèches ou hjkl, Cmd/Ctrl+A tout, avec Maj rien. Double-clic ou
   Entrée : la photo en grand, ajustée (l'aperçu embarqué, pas de 1:1), flèches pour la
   suivante. Échap sort du visuel, de la vue en grand, puis ferme sans rien changer ;
@@ -175,7 +176,9 @@ jour.
 - **Galerie de toute la carte** (« Séances… » dans la boîte, à côté du dossier ou des
   lignes de séances) : les séances l'une après l'autre, chacune sur une nouvelle ligne sous
   un bandeau (numéro, jour, heures, photos cochées, pourquoi elle commence là : nouveau
-  jour, pause, coupure choisie). Au clavier, `c` commence une séance à la photo pointée,
+  jour, pause, coupure choisie). Au clavier, `c` (action `core.offload.cut`, réglable dans `[keys]` comme toutes les
+  touches de la galerie, qui passent par les actions de la grille) commence une séance à
+  la photo pointée,
   ou la recoud à la précédente. À la souris, comme sur une table de montage (idée de
   l'utilisateur) : une barre d'outils toujours visible en haut, **ciseaux** (un clic entre
   deux photos coupe, aussi après la dernière photo d'une ligne ; la coupure visée s'allume) et **colle** (un clic sur le bandeau

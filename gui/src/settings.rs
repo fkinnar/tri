@@ -54,6 +54,8 @@ pub struct AppSettings {
     pub exposure: tri::exposure::ExposureSettings,
     /// `[offload]` (moteur).
     pub offload: tri::offload::OffloadSettings,
+    /// `[purge]` (moteur) : ménage de ce qui grandit sans limite (#604).
+    pub purge: tri::purge::PurgeSettings,
     /// `[data]` (moteur).
     pub data: tri::settings::DataSection,
     /// `[log]` (moteur) : journal de l'application.
@@ -108,6 +110,7 @@ impl AppSettings {
             versions: self.versions.clone(),
             exposure: self.exposure,
             offload: self.offload.clone(),
+            purge: self.purge.clone(),
             data: self.data.clone(),
             log: self.log.clone(),
             adjust: self.adjust,

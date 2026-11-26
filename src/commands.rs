@@ -342,6 +342,14 @@ pub const COMMANDS: &[Command] = &[
         example: "tri <folder> --clear-cache",
     },
     Command {
+        id: "purge",
+        theme: Theme::Cache,
+        syntax: "tri --purge [--dry-run]",
+        main: &["--purge"],
+        options: opts!["--dry-run"],
+        example: "tri --purge --dry-run",
+    },
+    Command {
         id: "cache-usage",
         theme: Theme::Cache,
         syntax: "tri --cache-usage [--cache <folder>]",

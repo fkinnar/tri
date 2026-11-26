@@ -349,6 +349,9 @@ loupe = "none"
 "core.folders.watch" = ["w"]
 # Light mode for the folder under the cursor (#597): only thumbnails in the background.
 "core.folders.light" = []
+# Offload gallery of the whole card (#600): start a session at the photo under the
+# cursor, or join it to the one before.
+"core.offload.cut" = ["c"]
 # Connect to a network share: "c" (connect); forget it: Shift+C.
 "core.folders.connect" = ["c"]
 "core.folders.forget" = ["Shift+c"]

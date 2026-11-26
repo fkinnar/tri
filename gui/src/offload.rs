@@ -84,6 +84,8 @@ pub enum Request {
 
 enum Message {
     Progress(Progress),
+    /// Séance en cours de copie : (rang à partir de 1, nombre), carte de plusieurs séances.
+    Session(usize, usize),
     /// Destination pleine : la copie attend la réponse (réessayer ou abandonner).
     Full(OutOfSpace),
     Done(Report),
@@ -277,6 +279,9 @@ enum Stage {
         /// quand rien ne bouge).
         started: std::time::Instant,
         last_activity: std::time::Instant,
+        /// Séance en cours de copie (rang, nombre), quand il y en a plusieurs (retour du
+        /// 26/11/2026 : dit dans le titre).
+        session: Option<(usize, usize)>,
     },
     /// Bilan.
     Done {
@@ -329,6 +334,8 @@ pub struct OffloadDialog {
     /// sont rangés (la même carte rouverte va plus vite), et suivent les copies (la séance
     /// déchargée les retrouve, comme une copie de `tri`, #592).
     gallery: Option<(tri::cache::Cache, tri::preview::Settings)>,
+    /// Raccourcis de l'application, pour la galerie ([`OffloadDialog::set_keys`]).
+    keymap: Option<crate::actions::Keymap>,
 }
 
 impl OffloadDialog {
@@ -358,7 +365,13 @@ impl OffloadDialog {
             pairs_choice: None,
             picker: None,
             gallery: None,
+            keymap: None,
         }
+    }
+
+    /// Les raccourcis de l'application (`keys.toml`, `[keys]`) pour la galerie.
+    pub fn set_keys(&mut self, keymap: crate::actions::Keymap) {
+        self.keymap = Some(keymap);
     }
 
     /// « Décharger ici » (panneau des dossiers) : la boîte, racine `root` proposée, depuis
@@ -569,6 +582,26 @@ impl OffloadDialog {
         })
     }
 
+    /// Tests : une copie en cours, à la séance `i` sur `n`.
+    #[cfg(test)]
+    pub fn simulate_session(&mut self, i: usize, n: usize) -> Sender<bool> {
+        let (tx, rx) = mpsc::channel();
+        let (answer, _answers) = mpsc::channel();
+        let _ = tx.send(Message::Session(i, n));
+        std::mem::forget(tx);
+        self.stage = Stage::Running {
+            rx,
+            progress: Progress::default(),
+            started: std::time::Instant::now(),
+            last_activity: std::time::Instant::now(),
+            session: None,
+            cancel: Arc::new(AtomicBool::new(false)),
+            full: None,
+            answer: answer.clone(),
+        };
+        answer
+    }
+
     /// Tests : une copie en arrière-plan qui vient de trouver la destination pleine
     /// ([`Message::Full`], comme `run` l'envoie) ; renvoie de quoi lire la réponse.
     #[cfg(test)]
@@ -581,6 +614,7 @@ impl OffloadDialog {
             progress: Progress::default(),
             started: std::time::Instant::now(),
             last_activity: std::time::Instant::now(),
+            session: None,
             cancel: Arc::new(AtomicBool::new(false)),
             full: None,
             answer,
@@ -605,15 +639,22 @@ impl OffloadDialog {
                 if let Ok(result) = rx.try_recv() {
                     self.stage = match result {
                         Ok((plan, history)) => {
+                            // Carte suivante vers la même séance (issue n° 37) : toute la
+                            // carte en une (sa galerie gardée, retour du 26/11/2026)…
+                            // seulement si elle n'a qu'une séance : une carte de plusieurs
+                            // séances (la même rebranchée, retour du 26/11/2026) n'est pas
+                            // la suite de la précédente, elle a ses lignes.
+                            let proposed = plan.sessions(&self.settings);
+                            if proposed.len() > 1 {
+                                self.folder_here = None;
+                                self.root_here = None;
+                            }
                             let folder = self.folder_here.clone().unwrap_or_else(|| {
                                 offload::suggest_folder(&plan, &self.settings).unwrap_or_default()
                             });
-                            // Carte suivante vers la même séance (issue n° 37) : pas de
-                            // séances à choisir, toute la carte en une (sa galerie
-                            // gardée, retour du 26/11/2026).
                             let sessions = match self.folder_here {
                                 Some(_) => plan.sessions_at(&[], self.settings.day_cut),
-                                None => plan.sessions(&self.settings),
+                                None => proposed,
                             };
                             Stage::Ready {
                                 sessions: session_rows(&plan, sessions),
@@ -639,10 +680,12 @@ impl OffloadDialog {
                 progress,
                 full,
                 last_activity,
+                session,
                 ..
             } => {
                 for message in rx.try_iter() {
                     match message {
+                        Message::Session(i, n) => *session = Some((i, n)),
                         Message::Progress(p) => {
                             if p != *progress {
                                 *last_activity = std::time::Instant::now();
@@ -730,9 +773,13 @@ impl OffloadDialog {
         let data = self.data.clone();
         std::thread::spawn(move || {
             let mut all: Option<Report> = None;
-            for ((plan, destination), keep_at) in runs.into_iter().zip(keeps) {
+            let count = runs.len();
+            for (k, ((plan, destination), keep_at)) in runs.into_iter().zip(keeps).enumerate() {
                 if stop.load(Ordering::Relaxed) {
                     break;
+                }
+                if count > 1 {
+                    let _ = tx.send(Message::Session(k + 1, count));
                 }
                 let pairs = decision.filter(|_| plan.pairs(&settings) > 0);
                 let progress_tx = tx.clone();
@@ -813,6 +860,7 @@ impl OffloadDialog {
             progress: Progress::default(),
             started: std::time::Instant::now(),
             last_activity: std::time::Instant::now(),
+            session: None,
             cancel,
             full: None,
             answer,
@@ -866,6 +914,10 @@ impl OffloadDialog {
                 self.gallery.clone(),
                 ctx,
             );
+            let picker = match &self.keymap {
+                Some(keys) => picker.with_keys(keys.clone()),
+                None => picker,
+            };
             self.picker = Some((WHOLE_CARD, picker));
             return;
         }
@@ -883,6 +935,10 @@ impl OffloadDialog {
                 self.gallery.clone(),
                 ctx,
             );
+            let picker = match &self.keymap {
+                Some(keys) => picker.with_keys(keys.clone()),
+                None => picker,
+            };
             self.picker = Some((i, picker));
         }
     }
@@ -930,6 +986,9 @@ impl OffloadDialog {
         }
         let mut pick: Option<usize> = None;
         let mut forget_now = false;
+        // « Oublier cette carte » à confirmer : le nombre d'images connues, et l'erreur
+        // d'un essai précédent.
+        let mut ask_forget: Option<(usize, Option<String>)> = None;
         // Fin de la copie sous les yeux de l'utilisateur : suites cochées, séance ouverte.
         let mut request = self.finish(true);
         let mut start = false;
@@ -940,7 +999,15 @@ impl OffloadDialog {
             || source.display().to_string(),
             |n| n.to_string_lossy().into_owned(),
         );
-        let title = t!("offload-title", name = &name);
+        let mut title = t!("offload-title", name = &name);
+        // Plusieurs séances : laquelle est en cours de copie.
+        if let Stage::Running {
+            session: Some((i, n)),
+            ..
+        } = &self.stage
+        {
+            title.push_str(&t!("offload-title-session", i = *i, n = *n));
+        }
         let modal = crate::app::modal_at("offload_dialog", self.at)
             .title(title)
             .show(ctx, |ui| {
@@ -1004,6 +1071,9 @@ impl OffloadDialog {
                             (row.count, row.bytes) =
                                 copy.fold((0, 0), |(n, b), i| (n + 1, b + i.size));
                         }
+                        // Images connues de toute la carte : « Oublier cette carte » les
+                        // oublie toutes, cochées ou non (#602).
+                        let card_known = plan.items.iter().filter(|i| i.known).count();
                         let chosen = targets(plan, sessions, root, folder).ok();
                         let dests: Vec<PathBuf> =
                             chosen.iter().flatten().map(|(_, d)| d.clone()).collect();
@@ -1255,44 +1325,57 @@ impl OffloadDialog {
                         // Ce qui a déjà été déchargé, n'importe où (historique global ;
                         // retour du 12/11/2026) n'est pas recopié ; cochée, si (une même
                         // carte déchargée à deux endroits). Seulement s'il y en a.
+                        // « Décharger à nouveau » et, à sa droite, « Oublier cette carte »
+                        // (#602 ; retour du 26/11/2026) : confirmé sur la même ligne, puis
+                        // le bilan.
                         let mut again = !settings.skip_known;
-                        let skip = known > 0
-                            && ui
-                                .checkbox(&mut again, t!("offload-again", n = known))
-                                .on_hover_text(t!("offload-again-tip"))
-                                .changed();
+                        let mut skip = false;
+                        if card_known > 0 || matches!(forget, Some(None | Some(Err(_)))) {
+                            ui.horizontal(|ui| {
+                                // Bouton à la hauteur d'une case (retour du 26/11/2026 : mal
+                                // aligné avec le texte, et la ligne plus haute que les autres).
+                                ui.spacing_mut().button_padding.y = 0.0;
+                                if known > 0 {
+                                    skip = ui
+                                        .checkbox(&mut again, t!("offload-again", n = known))
+                                        .on_hover_text(t!("offload-again-tip"))
+                                        .changed();
+                                }
+                                match forget {
+                                    None if card_known > 0 => {
+                                        if ui
+                                            .button(t!("offload-forget"))
+                                            .on_hover_text(t!("offload-forget-tip"))
+                                            .clicked()
+                                        {
+                                            *forget = Some(None);
+                                        }
+                                    }
+                                    Some(None) => {
+                                        // Confirmé dans une petite boîte (retour du
+                                        // 26/11/2026), le bouton reste à sa place.
+                                        ui.add_enabled(
+                                            false,
+                                            egui::Button::new(t!("offload-forget")),
+                                        );
+                                        ask_forget = Some((card_known, None));
+                                    }
+                                    // Fait : la case disparaît, ça suffit (retour du 26/11/2026).
+                                    None | Some(Some(Ok(_))) => {}
+                                    // L'erreur est dans la petite boîte, restée ouverte
+                                    // (retour du 26/11/2026).
+                                    Some(Some(Err(e))) => {
+                                        ui.add_enabled(
+                                            false,
+                                            egui::Button::new(t!("offload-forget")),
+                                        );
+                                        ask_forget = Some((card_known, Some(e.clone())));
+                                    }
+                                }
+                            });
+                        }
                         if skip {
                             settings.skip_known = !again;
-                        }
-                        // Oublier la carte (#602) : confirmé d'abord, puis le bilan.
-                        match forget {
-                            None if known > 0 => {
-                                if ui
-                                    .button(t!("offload-forget"))
-                                    .on_hover_text(t!("offload-forget-tip"))
-                                    .clicked()
-                                {
-                                    *forget = Some(None);
-                                }
-                            }
-                            Some(None) => {
-                                ui.horizontal(|ui| {
-                                    ui.label(t!("offload-forget-confirm", n = known));
-                                    if ui.button(t!("offload-forget")).clicked() {
-                                        forget_now = true;
-                                    }
-                                    if ui.button(t!("cancel")).clicked() {
-                                        *forget = None;
-                                    }
-                                });
-                            }
-                            Some(Some(Ok(n))) => {
-                                ui.weak(t!("offload-forgot", n = *n));
-                            }
-                            Some(Some(Err(e))) => {
-                                ui.colored_label(ui.visuals().error_fg_color, e.as_str());
-                            }
-                            None => {}
                         }
                         if (raw || skip)
                             && offload::suggest_folder(plan, &before).as_deref()
@@ -1520,6 +1603,31 @@ impl OffloadDialog {
             });
         if let Some(source) = new_source {
             self.change_source(source, ctx);
+        }
+        // Confirmé dans une petite boîte au-dessus (retour du 26/11/2026).
+        if let Some((known, error)) = ask_forget {
+            let (mut yes, mut no) = (false, false);
+            let popup = crate::app::modal_at("offload_forget", crate::app::CENTRED)
+                .title(t!("offload-forget-confirm", n = known))
+                .show(ctx, |ui| {
+                    ui.label(t!("offload-forget-tip"));
+                    if let Some(e) = &error {
+                        ui.add_space(4.0);
+                        ui.colored_label(ui.visuals().error_fg_color, e.as_str());
+                    }
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        yes = ui.button(t!("offload-forget")).clicked();
+                        no = ui.button(t!("cancel")).clicked();
+                    });
+                });
+            if yes {
+                forget_now = true;
+            } else if (no || popup.should_close())
+                && let Stage::Ready { forget, .. } = &mut self.stage
+            {
+                *forget = None;
+            }
         }
         if forget_now {
             self.forget_card();

@@ -368,6 +368,7 @@ action-core-folders-favorite = Dossiers : ajouter aux favoris ou en retirer
 action-core-folders-favorite_name = Dossiers : nommer le favori
 action-core-folders-watch = Dossiers : surveiller le dossier ou ne plus le surveiller
 action-core-folders-light = Dossiers : mettre le dossier en mode léger ou l'en sortir
+action-core-offload-cut = Déchargement : commencer une séance à la photo pointée, ou la recoudre à la précédente
 action-core-folders-connect = Dossiers : se connecter à un partage réseau
 action-core-folders-forget = Dossiers : oublier le partage réseau mémorisé
 action-core-folders-cache_clear = Dossiers : vider le cache gardé dans le dossier ou le disque
@@ -1257,6 +1258,26 @@ cache-clear = Vider
 cache-clear-all = Tout vider
 cache-clear-confirm = Vider
 cache-clear-cancel = Annuler
+cache-purge-ask = Nettoyer…
+cache-purge = Nettoyer
+cache-purge-tip = Ménage selon la section Ménage [purge] : historique des déchargements, cache des dossiers disparus ou pas ouverts depuis longtemps, données de tri des dossiers disparus. Ce qui partirait est montré d'abord.
+cache-purging = Ménage en cours…
+cache-purge-nothing = Rien à nettoyer.
+cache-purge-would = Partiraient : { $history } entrées de l'historique des déchargements (archivées), { $size } de cache, les données de tri de { $folders } dossiers disparus.
+cache-purge-done = Nettoyé : { $history } entrées de l'historique des déchargements archivées, { $size } de cache libérés, les données de tri de { $folders } dossiers disparus supprimées.
+settings-section-purge = Ménage
+settings-choice-purge-offload-history-1w = 1 semaine
+settings-choice-purge-offload-history-1m = 1 mois
+settings-choice-purge-offload-history-3m = 3 mois
+settings-choice-purge-offload-history-1y = 1 an
+settings-choice-purge-offload-history-3y = 3 ans
+settings-choice-purge-offload-history-never = Toujours
+settings-choice-purge-cache-unused-1w = 1 semaine
+settings-choice-purge-cache-unused-1m = 1 mois
+settings-choice-purge-cache-unused-3m = 3 mois
+settings-choice-purge-cache-unused-1y = 1 an
+settings-choice-purge-cache-unused-3y = 3 ans
+settings-choice-purge-cache-unused-never = Jamais
 cache-clearing = Vidage en cours…
 cache-freed = { $size } libérés
 cache-clear-failed = Vidage impossible : { $error }
@@ -1817,6 +1838,7 @@ offload-status = déchargement de « { $name } » { $done }/{ $total }
 offload-summary = « { $name } » : { $copied } copiés, { $skipped } ignorés, { $errors } erreurs
 offload-summary-cancelled = , interrompu
 offload-title = Décharger « { $name } »
+offload-title-session = {" "}· séance { $i } / { $n }
 offload-planning = inventaire de la carte…
 offload-images = { $n ->
     [one] { $n } image
@@ -1894,10 +1916,6 @@ offload-forget-tip = Oublier que ses photos ont été déchargées : retirées d
 offload-forget-confirm = { $n ->
     [one] Oublier la photo déchargée de cette carte ?
    *[other] Oublier les { $n } images déchargées de cette carte ?
-}
-offload-forgot = { $n ->
-    [one] { $n } image oubliée
-   *[other] { $n } images oubliées
 }
 offload-raw-only = RAW seulement
 offload-keep-disk = Garder les données de tri sur ce disque

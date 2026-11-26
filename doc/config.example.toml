@@ -565,6 +565,34 @@ split_pause_minutes = 120
 # Au-delà, seuls les changements de jour puis les plus longues pauses coupent.
 max_sessions = 30
 
+[purge]
+# Historique des déchargements : garder les entrées des photos de moins de…
+#
+# Une carte qui revient avec des photos de plus de quelques semaines est très peu
+# probable : les entrées des photos plus anciennes (date de prise de vue) partent dans
+# l'archive offload-history-archive.tsv, à côté, jamais relue. "1w", "1m", "3m", "1y",
+# "3y" ou "never".
+offload_history = "1y"
+# Cache : supprimer les aperçus des dossiers pas ouverts depuis…
+#
+# "1w", "1m", "3m", "1y", "3y" ou "never". Les recalculer prend du temps : à choisir selon
+# la place disponible. Les caches gardés sur un disque (.tri) ne sont jamais touchés.
+cache_unused = "never"
+# Cache : supprimer les aperçus des dossiers qui n'existent plus.
+#
+# Un dossier sur un disque débranché, une carte retirée ou un NAS hors ligne n'a pas
+# disparu : il garde son cache.
+cache_gone = true
+# Supprimer les données de tri (filtres, curseurs…) des dossiers qui n'existent plus.
+#
+# Celles gardées dans le .tri d'un dossier ou d'un disque ne sont jamais touchées.
+folder_data_gone = true
+# Ménage automatique au plus une fois par tant d'heures (0 : jamais d'office).
+#
+# En fond, au lancement de l'interface. À la main : « Nettoyer » dans le panneau du cache,
+# ou tri --purge en ligne de commande.
+interval_hours = 24
+
 [files]
 # Renommer, supprimer, copier ou déplacer une image : l'autre image de sa paire RAW+JPEG
 # (même nom, autre extension) suit. Ses sidecars XMP suivent toujours.

@@ -368,6 +368,7 @@ action-core-folders-favorite = Folders: add to or remove from favourites
 action-core-folders-favorite_name = Folders: name the favourite
 action-core-folders-watch = Folders: watch the folder or stop watching it
 action-core-folders-light = Folders: put the folder in light mode or take it out
+action-core-offload-cut = Offload: start a session at the photo under the cursor, or join it to the one before
 action-core-folders-connect = Folders: connect to a network share
 action-core-folders-forget = Folders: forget the remembered network share
 action-core-folders-cache_clear = Folders: clear the cache kept in the folder or drive
@@ -1257,6 +1258,26 @@ cache-clear = Clear
 cache-clear-all = Clear all
 cache-clear-confirm = Clear
 cache-clear-cancel = Cancel
+cache-purge-ask = Clean up…
+cache-purge = Clean up
+cache-purge-tip = Clean-up according to the Clean-up section [purge]: offload history, cache of folders that are gone or not opened for a long time, sorting data of gone folders. What would go is shown first.
+cache-purging = Cleaning up…
+cache-purge-nothing = Nothing to clean up.
+cache-purge-would = Would go: { $history } offload history entries (archived), { $size } of cache, the sorting data of { $folders } gone folders.
+cache-purge-done = Cleaned up: { $history } offload history entries archived, { $size } of cache freed, the sorting data of { $folders } gone folders deleted.
+settings-section-purge = Clean-up
+settings-choice-purge-offload-history-1w = 1 week
+settings-choice-purge-offload-history-1m = 1 month
+settings-choice-purge-offload-history-3m = 3 months
+settings-choice-purge-offload-history-1y = 1 year
+settings-choice-purge-offload-history-3y = 3 years
+settings-choice-purge-offload-history-never = Always
+settings-choice-purge-cache-unused-1w = 1 week
+settings-choice-purge-cache-unused-1m = 1 month
+settings-choice-purge-cache-unused-3m = 3 months
+settings-choice-purge-cache-unused-1y = 1 year
+settings-choice-purge-cache-unused-3y = 3 years
+settings-choice-purge-cache-unused-never = Never
 cache-clearing = Clearing…
 cache-freed = { $size } freed
 cache-clear-failed = Could not clear: { $error }
@@ -1817,6 +1838,7 @@ offload-status = offloading "{ $name }" { $done }/{ $total }
 offload-summary = "{ $name }": { $copied } copied, { $skipped } skipped, { $errors } errors
 offload-summary-cancelled = , interrupted
 offload-title = Offload "{ $name }"
+offload-title-session = {" "}· session { $i } / { $n }
 offload-planning = listing the card…
 offload-images = { $n ->
     [one] { $n } image
@@ -1888,10 +1910,6 @@ offload-forget-tip = Forget that its photos were offloaded: removed from the his
 offload-forget-confirm = { $n ->
     [one] Forget the offloaded photo of this card?
    *[other] Forget the { $n } offloaded images of this card?
-}
-offload-forgot = { $n ->
-    [one] { $n } image forgotten
-   *[other] { $n } images forgotten
 }
 offload-raw-only = RAW only
 offload-keep-disk = Keep tri's data on this drive

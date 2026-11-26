@@ -383,6 +383,9 @@ pub enum Action {
     FolderWatch,
     /// Mettre le dossier pointé en mode léger, ou l'en sortir (#597).
     FolderLight,
+    /// Galerie de toute la carte (déchargement, #600) : commencer une séance à la photo
+    /// pointée, ou la recoudre à la précédente.
+    OffloadCut,
     /// Panneau des dossiers : se connecter à un partage réseau (`\\nas\photo`,
     /// `smb://nas/photo`), tapé dans le champ de recherche (28/10/2026).
     FolderConnect,
@@ -649,7 +652,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 310] = [
+    pub const ALL: [Action; 311] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -836,6 +839,7 @@ impl Action {
         Action::FolderFavoriteName,
         Action::FolderWatch,
         Action::FolderLight,
+        Action::OffloadCut,
         Action::FolderConnect,
         Action::FolderForget,
         Action::FolderCacheClear,
@@ -1202,7 +1206,9 @@ impl Action {
             | MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft
             | PanelRight | FolderSectionNext | FolderSectionPrev => Group::Panels,
-            SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
+            SelectToggle | SelectVisual | SelectAll | SelectClear | Compare | OffloadCut => {
+                Group::Selection
+            }
             Help | HelpHere | Palette | Settings | CheckUpdate | ReportIssue | Log | Quit => {
                 Group::App
             }
@@ -1454,6 +1460,7 @@ impl Action {
             Action::FolderFavoriteName => "core.folders.favorite_name",
             Action::FolderWatch => "core.folders.watch",
             Action::FolderLight => "core.folders.light",
+            Action::OffloadCut => "core.offload.cut",
             Action::FolderConnect => "core.folders.connect",
             Action::FolderForget => "core.folders.forget",
             Action::FolderCacheClear => "core.folders.cache_clear",
@@ -1713,6 +1720,9 @@ pub enum Scope {
     Histogram,
     /// Le recadrage (plein écran).
     Crop,
+    /// La galerie de toute la carte (boîte de déchargement, #600) : ses touches propres
+    /// (`c` coupe) l'emportent sur celles des images.
+    Offload,
 }
 
 impl Action {
@@ -1739,6 +1749,7 @@ impl Action {
             HistogramRed | HistogramGreen | HistogramBlue | HistogramAll | HistogramLuminance
             | HistogramPhoto | HistogramCamera | HistogramAfter | HistogramScale
             | HistogramChannel => Some(Scope::Histogram),
+            OffloadCut => Some(Scope::Offload),
             _ => None,
         }
     }

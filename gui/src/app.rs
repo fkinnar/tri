@@ -3499,6 +3499,38 @@ impl TriApp {
     /// Ouvre le dossier `dir` à la place du dossier courant (panneau des dossiers). Les
     /// filtres sont gardés ; la sélection repart de la première image. En cas d'erreur, le
     /// message remplace la grille, le panneau reste là pour choisir un autre dossier.
+    /// Ménage automatique (#604) : en fond, un peu après le lancement (l'ouverture du
+    /// dossier d'abord), au plus une fois par `[purge] interval_hours` ; le bilan va dans
+    /// le journal.
+    #[cfg_attr(test, allow(dead_code))]
+    fn start_purge(&self, cache: tri::cache::Cache) {
+        let settings = self.settings.purge.clone();
+        let Some(data) = self.settings.data_dir() else {
+            return;
+        };
+        let history = tri::offload::history_path(&self.settings.offload, Some(&data));
+        let _ = std::thread::Builder::new()
+            .name("tri-purge".into())
+            .spawn(move || {
+                std::thread::sleep(Duration::from_secs(20));
+                let now = std::time::SystemTime::now();
+                if !tri::purge::due(&data, &settings, now) {
+                    return;
+                }
+                let report =
+                    tri::purge::run(&settings, Some(&cache), Some(&data), history, now, false);
+                let _ = tri::purge::mark_done(&data);
+                if !report.is_empty() || !report.errors.is_empty() {
+                    tri::log::write(
+                        tri::log::Level::Info,
+                        "purge",
+                        &crate::cache_panel::purge_text(&report, false),
+                        &report.errors.join("\n"),
+                    );
+                }
+            });
+    }
+
     fn open_folder(&mut self, dir: &Path) {
         // On quitte « Toutes les photos » : sa photo courante, pour y revenir.
         if tri::folder::is_all_photos(&self.folder.dir)
@@ -3524,6 +3556,15 @@ impl TriApp {
         );
         let data = self.settings.data_dir();
         let cache = self.engine.as_ref().map(|e| e.cache.clone());
+        // Le cache retient que ce dossier sert encore (#604 : ménage des dossiers pas
+        // ouverts depuis longtemps), en fond.
+        if let Some(cache) = cache.clone()
+            && let Ok(folder) = std::path::absolute(dir)
+        {
+            let _ = std::thread::Builder::new()
+                .name("tri-cache-use".into())
+                .spawn(move || cache.note_use(&folder));
+        }
         // La position du dossier quitté passe par le fil d'écriture, après les filtres déjà
         // demandés ; le fil d'ouverture attend qu'ils soient tous écrits avant de lire la
         // vue (le même dossier rouvert : sa vue à jour).
@@ -10443,6 +10484,10 @@ impl TriApp {
     /// de la séance pendant la copie (issue n° 40) : un scheduler à part, aux réglages
     /// d'aperçu du moteur (mêmes clés que le dossier ouvert ensuite), sans darktable.
     fn attach_previews(&mut self) {
+        // Les raccourcis de l'application pour sa galerie, même sans moteur.
+        if let Some(dialog) = &mut self.offload {
+            dialog.set_keys(self.keymap.clone());
+        }
         let (Some(dialog), Some(engine)) = (&mut self.offload, &self.engine) else {
             return;
         };
@@ -13840,6 +13885,9 @@ impl TriApp {
         // Palettes : la source retenue se calcule en fond dès l'ouverture (#492).
         if let Some(engine) = &self.engine {
             engine.scheduler.set_palette(self.palette_source);
+            // Ménage (#604), pas dans les tests (dossiers temporaires partagés).
+            #[cfg(not(test))]
+            self.start_purge(engine.cache.clone());
         }
         self.fit_grid_render();
         // Dossier rouvert avec le filtre « Développées » retenu allumé, ses logiciels
@@ -21758,7 +21806,8 @@ impl TriApp {
                 crate::actions::Scope::Metadata => Some(t!("focus-metadata")),
                 crate::actions::Scope::Images
                 | crate::actions::Scope::Histogram
-                | crate::actions::Scope::Crop => None,
+                | crate::actions::Scope::Crop
+                | crate::actions::Scope::Offload => None,
             };
             if let Some(focus) = focus {
                 ui.separator();
@@ -26297,6 +26346,8 @@ impl TriApp {
         match self.effective_focus() {
             Scope::Crop => Place::Crop,
             Scope::Histogram => Place::Histogram,
+            // La galerie de déchargement n'a pas d'aide « ici » à elle.
+            Scope::Offload => Place::Grid,
             Scope::Folders => Place::Folders,
             Scope::Metadata => Place::Metadata,
             Scope::Images => match self.mode {
@@ -26375,7 +26426,7 @@ impl TriApp {
                 self.metadata_panel = true;
                 self.scroll_to_cursor = true;
             }
-            Scope::Images | Scope::Histogram | Scope::Crop => {}
+            Scope::Images | Scope::Histogram | Scope::Crop | Scope::Offload => {}
         }
     }
 
@@ -27547,7 +27598,16 @@ impl TriApp {
                 if let Some(engine) = &self.engine
                     && let Some(window) = self.settings_window.take()
                 {
-                    self.settings_window = Some(window.with_cache(engine.cache.clone()));
+                    let data = self.settings.data_dir();
+                    let purge = crate::cache_panel::PurgeContext {
+                        settings: self.settings.purge.clone(),
+                        history: tri::offload::history_path(
+                            &self.settings.offload,
+                            data.as_deref(),
+                        ),
+                        data,
+                    };
+                    self.settings_window = Some(window.with_cache(engine.cache.clone(), purge));
                 }
             }
             Err(e) => self.file_error = Some(e),
@@ -46098,7 +46158,7 @@ mod tests {
         press(&mut h, Key::A, CMD | Modifiers::SHIFT);
         press(&mut h, Key::Space, Modifiers::NONE);
         assert_eq!(picker(&h).map(|p| p.0), Some(vec![true, false]));
-        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::Space, Modifiers::SHIFT);
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert_eq!(picker(&h).map(|p| p.0), Some(vec![true, true]));
         press(&mut h, Key::Escape, Modifiers::NONE);
@@ -46517,20 +46577,95 @@ mod tests {
         // Remise : deux images connues ; oubliées, elles redeviennent nouvelles.
         open(&mut h);
         h.get_by_label(&t!("offload-forget")).click();
+        h.run_steps(4);
+        // Confirmé dans une petite boîte : Annuler n'oublie rien, puis pour de bon.
+        assert!(h.query_by_label(&t!("offload-forget-tip")).is_some());
+        h.get_all_by_label(&t!("cancel")).last().unwrap().click();
         h.run_steps(2);
-        assert!(
-            h.query_by_label_contains(&t!("offload-forget-confirm", n = 2))
-                .is_some()
-        );
+        assert!(h.query_by_label(&t!("offload-forget-tip")).is_none());
+        assert!(h.query_by_label("Décharger").is_some(), "la boîte reste");
+        h.get_by_label(&t!("offload-forget")).click();
+        h.run_steps(4);
         h.get_all_by_label(&t!("offload-forget"))
             .last()
             .unwrap()
             .click();
         h.run_steps(2);
-        assert!(h.query_by_label(&t!("offload-forgot", n = 2)).is_some());
+        assert!(
+            h.query_by_label_contains("déjà déchargées").is_none(),
+            "plus rien de connu"
+        );
         let history = tri::offload::History::open_configured(&settings, data.as_deref()).unwrap();
         let plan = tri::offload::plan(&dir.path().join("CARTE"), &history).unwrap();
         assert!(plan.items.iter().all(|i| !i.known), "oubliées pour de bon");
+    }
+
+    #[test]
+    fn a_next_card_of_several_sessions_keeps_its_sessions() {
+        // Retour du 26/11/2026 : une carte de deux séances rebranchée après un
+        // déchargement ne montrait plus qu'une séance (« carte suivante », #37).
+        use chrono::TimeZone;
+        let (mut h, dir) = harness();
+        let shots = dir.path().join("CARTE/DCIM/100_TEST");
+        std::fs::create_dir_all(&shots).unwrap();
+        for (name, day) in [("IMG0", 25), ("IMG1", 26)] {
+            let path = shots.join(format!("{name}.jpg"));
+            image::RgbImage::from_pixel(32, 24, image::Rgb([90, 90, 90]))
+                .save(&path)
+                .unwrap();
+            let at: std::time::SystemTime = chrono::Local
+                .with_ymd_and_hms(2026, 11, day, 12, 0, 0)
+                .unwrap()
+                .into();
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_modified(at)
+                .unwrap();
+        }
+        let ctx = h.ctx.clone();
+        let mut dialog = OffloadDialog::new(
+            dir.path().join("CARTE"),
+            CENTRED,
+            h.state().settings.offload.clone(),
+            None,
+            &ctx,
+        );
+        dialog.propose_session(&dir.path().join("Import/2026-11-25_Bruxelles"));
+        h.state_mut().offload = Some(dialog);
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.query_by_label("Décharger").is_none() {
+            assert!(Instant::now() < deadline, "boîte jamais prête");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        settle_dialog(&mut h);
+        assert!(
+            h.query_by_label_contains("2 séances sur la carte")
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn the_copy_says_which_session_it_is_on() {
+        // Retour du 26/11/2026 : une carte de plusieurs séances, « séance 2 / 3 » dans le
+        // titre pendant la copie.
+        let (mut h, dir) = harness();
+        let card = dir.path().join("CARTE");
+        std::fs::create_dir_all(&card).unwrap();
+        let ctx = h.ctx.clone();
+        let mut dialog = OffloadDialog::new(
+            card,
+            CENTRED,
+            h.state().settings.offload.clone(),
+            None,
+            &ctx,
+        );
+        let _keep = dialog.simulate_session(2, 3);
+        h.state_mut().offload = Some(dialog);
+        h.run_steps(3);
+        assert!(h.query_by_label_contains("séance 2 / 3").is_some());
     }
 
     #[test]

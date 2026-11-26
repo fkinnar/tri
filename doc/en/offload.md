@@ -104,7 +104,8 @@ Feedback of the same evening: the dialog no longer has to stay open. Summary clo
 copy done in the background: the application keeps the last finished offload
 (`TriApp::last_offload`: session and the dialog's choices), and a camera card (with a
 `DCIM` folder) plugged in afterwards opens the dialog on it, towards that session
-(`OffloadDialog::propose_session`). Closed without offloading, nothing more is offered.
+(`OffloadDialog::propose_session`) — only if it has a single session: a card of several
+sessions (the same one, plugged in again) keeps its rows (feedback of 2026-11-26). Closed without offloading, nothing more is offered.
 The new card may be mounted **at the same path** as the previous one (two cards of the
 same camera have the same volume name, `/media/…/disk`): it has just appeared, so it is
 another card.
@@ -133,8 +134,7 @@ them, never the rest of the card.
   cache; a RAW+JPEG pair is one photo; adjustable size (slider); a check on each photo,
   all checked at first, "Select all" / "Deselect all" and the count. The grid's gestures:
   click = cursor (it does not uncheck everything, unlike the Finder), Cmd/Ctrl+click
-  toggles, Shift+click checks the range, click on the check; Space toggles, `v` /
-  Shift+Space the visual mode (moving checks), Shift + arrows extend, arrows or hjkl,
+  toggles, Shift+click checks the range, click on the check; Space toggles, Shift+Space the visual mode (moving checks), Shift + arrows extend, arrows or hjkl,
   Cmd/Ctrl+A all, with Shift none. Double-click or Enter: the photo large, fitted (the
   embedded preview, no 1:1), arrows for the next one. Escape leaves the visual mode, the
   large view, then closes without changing anything; OK goes back to the dialog ("Change
@@ -166,7 +166,9 @@ Brussels, the afternoon in Antwerp, two sessions on the same day.
 - **Gallery of the whole card** ("Sessions…" in the dialog, next to the folder or the
   session rows): the sessions one after the other, each on a new row under a header
   (number, day, times, checked photos, why it starts there: new day, pause, chosen cut).
-  With the keyboard, `c` starts a session at the photo under the cursor, or joins it to
+  With the keyboard, `c` (action `core.offload.cut`, configurable in `[keys]` like every
+  key of the gallery, which go through the grid's actions) starts a session at the photo
+  under the cursor, or joins it to
   the one before. With the mouse, as on an editing table (the owner's idea): a toolbar
   always visible at the top, **scissors** (a click between two photos cuts, also after the last photo of a row; the
   aimed cut lights up) and **glue** (a click on a session's header joins it to the one before); the

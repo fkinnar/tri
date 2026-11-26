@@ -121,6 +121,8 @@ pub struct EngineSettings {
     pub exposure: crate::exposure::ExposureSettings,
     /// Déchargement des cartes.
     pub offload: crate::offload::OffloadSettings,
+    /// Ménage de ce qui grandit sans limite (#604).
+    pub purge: crate::purge::PurgeSettings,
     /// Actions sur les fichiers (renommer, supprimer, éditeur externe).
     pub files: crate::files::FileSettings,
     /// Carte de netteté (focus peaking).

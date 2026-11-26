@@ -6,6 +6,7 @@
 //!
 //! Le cache général seulement : celui gardé avec les photos (`.tri/cache`) suit son dossier.
 
+use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver};
 
 use eframe::egui::{self, Ui};
@@ -45,6 +46,29 @@ enum Target {
     All,
 }
 
+/// De quoi faire le ménage (#604) : ses réglages, le dossier de données et l'historique
+/// des déchargements.
+#[derive(Clone, Debug)]
+pub struct PurgeContext {
+    pub settings: tri::purge::PurgeSettings,
+    pub data: Option<PathBuf>,
+    pub history: Option<PathBuf>,
+}
+
+/// Bilan d'un ménage, fait ou à l'essai (`dry_run`).
+pub fn purge_text(report: &tri::purge::Report, dry_run: bool) -> String {
+    t!(
+        if dry_run {
+            "cache-purge-would"
+        } else {
+            "cache-purge-done"
+        },
+        history = report.history,
+        size = size_text(report.cache.bytes),
+        folders = report.folders
+    )
+}
+
 /// Le panneau, gardé par la fenêtre de réglages.
 pub struct CachePanel {
     cache: Cache,
@@ -57,6 +81,11 @@ pub struct CachePanel {
     confirm: Option<Target>,
     /// Bilan du dernier vidage (texte, erreur).
     message: Option<(String, bool)>,
+    /// Ménage (#604) : de quoi le faire, l'essai ou le ménage en cours (vrai : à
+    /// l'essai), et l'essai à confirmer.
+    purge: Option<PurgeContext>,
+    purging: Option<(bool, Receiver<tri::purge::Report>)>,
+    purge_preview: Option<tri::purge::Report>,
 }
 
 impl CachePanel {
@@ -68,7 +97,44 @@ impl CachePanel {
             clearing: None,
             confirm: None,
             message: None,
+            purge: None,
+            purging: None,
+            purge_preview: None,
         }
+    }
+
+    /// Avec « Nettoyer » (#604).
+    pub fn with_purge(mut self, purge: PurgeContext) -> Self {
+        self.purge = Some(purge);
+        self
+    }
+
+    /// Ménage en fond : à l'essai d'abord (ce qui partirait, à confirmer), puis pour de bon.
+    fn start_purge(&mut self, ctx: &egui::Context, dry_run: bool) {
+        let Some(p) = self.purge.clone() else {
+            return;
+        };
+        let (tx, rx) = mpsc::channel();
+        let cache = self.cache.clone();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let report = tri::purge::run(
+                &p.settings,
+                Some(&cache),
+                p.data.as_deref(),
+                p.history.clone(),
+                std::time::SystemTime::now(),
+                dry_run,
+            );
+            if !dry_run && let Some(data) = &p.data {
+                let _ = tri::purge::mark_done(data);
+            }
+            let _ = tx.send(report);
+            ctx.request_repaint();
+        });
+        self.purging = Some((dry_run, rx));
+        self.purge_preview = None;
+        self.message = None;
     }
 
     /// Mesure la place de chaque ligne en fond (des dizaines de milliers de fichiers
@@ -128,6 +194,26 @@ impl CachePanel {
             });
             self.measure(ctx);
         }
+        if let Some((dry_run, rx)) = &self.purging
+            && let Ok(report) = rx.try_recv()
+        {
+            let dry_run = *dry_run;
+            self.purging = None;
+            let error = !report.errors.is_empty();
+            if dry_run && !report.is_empty() {
+                self.purge_preview = Some(report);
+            } else if report.is_empty() && !error {
+                self.message = Some((t!("cache-purge-nothing"), false));
+            } else {
+                let mut text = purge_text(&report, dry_run);
+                for e in &report.errors {
+                    text.push('\n');
+                    text.push_str(e);
+                }
+                self.message = Some((text, error));
+                self.measure(ctx);
+            }
+        }
         if self.usage.is_none() && self.measuring.is_none() {
             self.measure(ctx);
         }
@@ -177,6 +263,42 @@ impl CachePanel {
             }
         }
         ui.weak(t!("cache-general-only"));
+        // Ménage (#604) : ce qui partirait, puis confirmé.
+        if self.purge.is_some() {
+            ui.add_space(6.0);
+            let mut start = None;
+            match (&self.purging, &self.purge_preview) {
+                (Some(_), _) => {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(t!("cache-purging"));
+                    });
+                }
+                (None, Some(preview)) => {
+                    ui.label(purge_text(preview, true));
+                    ui.horizontal(|ui| {
+                        if ui.button(t!("cache-purge")).clicked() {
+                            start = Some(false);
+                        }
+                        if ui.button(t!("cache-clear-cancel")).clicked() {
+                            self.purge_preview = None;
+                        }
+                    });
+                }
+                (None, None) => {
+                    if ui
+                        .add_enabled(!busy, egui::Button::new(t!("cache-purge-ask")))
+                        .on_hover_text(t!("cache-purge-tip"))
+                        .clicked()
+                    {
+                        start = Some(true);
+                    }
+                }
+            }
+            if let Some(dry_run) = start {
+                self.start_purge(&ctx, dry_run);
+            }
+        }
         ui.add_space(8.0);
         if let Some(target) = ask {
             self.confirm = target;
@@ -299,5 +421,52 @@ mod tests {
         let usage = panel.usage.as_ref().unwrap();
         assert_eq!(usage[full].entries, 0);
         assert_eq!(usage[0].entries, 1);
+    }
+
+    #[test]
+    fn clean_up_shows_what_would_go_then_does_it() {
+        // #604 : le cache d'un dossier disparu ; l'essai le montre sans rien toucher, puis
+        // le ménage le supprime et retient la date.
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache")).unwrap();
+        let photos = dir.path().join("photos");
+        std::fs::create_dir_all(&photos).unwrap();
+        std::fs::write(dir.path().join("autre"), b"x").unwrap();
+        let photo = photos.join("x.RAF");
+        std::fs::write(&photo, b"raw").unwrap();
+        let key = tri::cache::Key::new(&photo, Level::Thumbnail, "p").unwrap();
+        cache.put_bytes(&key, &[0; 100]).unwrap();
+        std::fs::remove_dir_all(&photos).unwrap();
+        let data = dir.path().join("data");
+        let mut panel = CachePanel::new(cache.clone()).with_purge(PurgeContext {
+            settings: tri::purge::PurgeSettings::default(),
+            data: Some(data.clone()),
+            history: None,
+        });
+        let ctx = egui::Context::default();
+        let wait = |panel: &mut CachePanel| {
+            for _ in 0..500 {
+                panel.poll(&ctx);
+                if panel.purging.is_none() {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            panic!("jamais fini");
+        };
+        panel.start_purge(&ctx, true);
+        wait(&mut panel);
+        let preview = panel.purge_preview.clone().expect("à confirmer");
+        assert_eq!(preview.cache.entries, 1);
+        assert!(cache.contains(&key), "rien touché à l'essai");
+        panel.start_purge(&ctx, false);
+        wait(&mut panel);
+        assert!(!cache.contains(&key));
+        assert!(panel.message.as_ref().is_some_and(|(_, error)| !error));
+        assert!(!tri::purge::due(
+            &data,
+            &tri::purge::PurgeSettings::default(),
+            std::time::SystemTime::now()
+        ));
     }
 }
