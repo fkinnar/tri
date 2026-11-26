@@ -25,6 +25,12 @@ place. `SortKey::by_notes()` says whether the key depends on the ratings;
   disk. Until they arrive, the order stays that of the names; the grid is sorted again
   once they are all there (and only if a *new* date arrived: refiltering makes the cache
   announce its own again, a trap already met with the "well exposed" filter, issue #10).
+  When the fingerprints are not computed in the background (light mode, where analyses
+  wait for "Compute all"; stacks on demand or off), the interface reads only the dates
+  (`preview::capture_time`: LibRaw opening without decompressing anything for a RAW,
+  EXIF of a flat image), kept in the cache with the fingerprints (a missing date too, so
+  the file is not read again). Before 2026-11-26, the sort stayed on names in a folder
+  in light mode.
 - **Modification dates**: read on the disk when sorting (`modified`).
 - **Ratings**: provided by the caller (`notes(path)`, the folder's book); a pair by its
   RAW, a development by its photo (same key as the dates). `[sort] color_order` (dot

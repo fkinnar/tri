@@ -261,6 +261,12 @@ pub fn grid_key(file: &MediaFile, level: Level, settings: &Settings, side: u32) 
     )
 }
 
+/// Clé de l'heure de prise de vue seule de `file` ([`capture_time`]) : rangée avec les
+/// empreintes de similarité (qui la contiennent aussi), vidée et comptée avec elles.
+pub fn captured_key(file: &MediaFile, settings: &Settings) -> io::Result<Key> {
+    key_with(file, Level::Similarity, settings, ";captured")
+}
+
 /// Paramètres complets de l'entrée de `file` au niveau `level` : ceux des réglages
 /// ([`params`]) et, pour un rendu développé ou sa palette, l'état du développement dans le
 /// sidecar. Ce qui, avec le contenu du fichier, décide de l'entrée (index des palettes,
@@ -303,7 +309,11 @@ pub fn carry(
         for level in Level::ALL {
             let grid = (level.is_image() && level != Level::Thumbnail)
                 .then(|| grid_key(&file, level, settings, side));
-            for key in std::iter::once(key(&file, level, settings)).chain(grid) {
+            let captured = (level == Level::Similarity).then(|| captured_key(&file, settings));
+            for key in std::iter::once(key(&file, level, settings))
+                .chain(grid)
+                .chain(captured)
+            {
                 if let Ok(key) = key
                     && cache.carry(&key, folder, keep).unwrap_or(false)
                 {
@@ -608,6 +618,33 @@ pub fn palette_input(source: crate::palette::Source) -> Level {
     }
 }
 
+/// Heure de prise de vue de `file` (secondes, comme [`crate::similarity::Signature::time`]),
+/// pour le tri par date de prise de vue sans attendre les empreintes (26/11/2026 : en mode
+/// léger, elles attendent « Tout calculer », et le tri restait sur les noms). Lue dans le
+/// cache, sinon dans le fichier — ouverture LibRaw sans rien décompresser pour un RAW,
+/// EXIF d'une image plate — puis rangée, même absente (pas de date : pas relue). `None` :
+/// pas de date, ou fichier illisible.
+pub fn capture_time(cache: &Cache, file: &MediaFile, settings: &Settings) -> Option<i64> {
+    let key = captured_key(file, settings).ok()?;
+    if let Some(bytes) = cache.get_bytes(&key) {
+        match <[u8; 8]>::try_from(bytes.as_slice()) {
+            Ok(b) => return Some(i64::from_le_bytes(b)),
+            Err(_) if bytes.is_empty() => return None,
+            Err(_) => {
+                let _ = cache.remove(&key);
+            }
+        }
+    }
+    let date = match file.kind {
+        MediaKind::Raw => RawFile::open(&file.path).ok()?.shooting_info().date,
+        MediaKind::Flat => crate::metadata::read(file).ok().and_then(|m| m.date),
+    };
+    let time = date.as_deref().and_then(crate::similarity::parse_time);
+    let bytes = time.map(i64::to_le_bytes);
+    let _ = cache.put_bytes(&key, bytes.as_ref().map_or(&[][..], |b| &b[..]));
+    time
+}
+
 /// Palette de `file` tirée de `source`, sans la ranger : l'image d'où elle vient est
 /// prise dans le cache, calculée d'abord si elle manque (sauf un rendu de logiciel, que
 /// le producteur du scheduler fait avant, voir `scheduler::CachedPreviews`).
@@ -701,6 +738,41 @@ pub fn camera_exposure(cache: &Cache, file: &MediaFile, settings: &Settings) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn capture_time_is_read_once_then_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache")).unwrap();
+        let settings = Settings::default();
+        let photo = dir.path().join("IMG_0001.jpg");
+        std::fs::copy(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/exif.jpg"),
+            &photo,
+        )
+        .unwrap();
+        let file = MediaFile {
+            path: photo.clone(),
+            kind: MediaKind::Flat,
+        };
+        let expected = crate::similarity::parse_time("2026:10:16 14:32:05");
+        assert!(expected.is_some());
+        assert_eq!(capture_time(&cache, &file, &settings), expected);
+        assert!(cache.contains(&captured_key(&file, &settings).unwrap()));
+        // Rangée : lue dans le cache (le fichier n'est plus lisible comme image).
+        let key = captured_key(&file, &settings).unwrap();
+        cache.put_bytes(&key, &42i64.to_le_bytes()).unwrap();
+        assert_eq!(capture_time(&cache, &file, &settings), Some(42));
+        // Sans date : rangée vide, pas relue.
+        let plain = dir.path().join("plain.png");
+        image::RgbImage::new(4, 4).save(&plain).unwrap();
+        let plain = MediaFile {
+            path: plain,
+            kind: MediaKind::Flat,
+        };
+        assert_eq!(capture_time(&cache, &plain, &settings), None);
+        let key = captured_key(&plain, &settings).unwrap();
+        assert_eq!(cache.get_bytes(&key).as_deref(), Some(&[][..]));
+    }
 
     #[test]
     fn computed_entries_follow_a_copied_or_moved_image() {

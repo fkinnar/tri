@@ -997,6 +997,8 @@ struct Engine {
     /// Analyses lues dans le cache hors du fil de l'interface ([`crate::bg_read`]) :
     /// empreintes de similarité, scores de netteté, parts saturées / bouchées des badges.
     signature_reads: crate::bg_read::BgReads<PathBuf, tri::similarity::Signature>,
+    /// Heures de prise de vue seules ([`preview::capture_time`]).
+    capture_reads: crate::bg_read::BgReads<PathBuf, Option<i64>>,
     score_reads: crate::bg_read::BgReads<PathBuf, f32>,
     /// Analyse d'exposition de l'image sélectionnée (histogramme).
     exposure_reads: crate::bg_read::BgReads<PathBuf, Arc<Exposure>>,
@@ -1849,6 +1851,9 @@ pub struct TriApp {
     history: tri::history::History,
     /// Empreintes de regroupement lues dans le cache, par image.
     signatures: HashMap<PathBuf, tri::similarity::Signature>,
+    /// Heures de prise de vue lues seules, pour le tri par date quand les empreintes ne
+    /// sont pas calculées en fond (mode léger, piles à la demande) ; `None` : pas de date.
+    captured: HashMap<PathBuf, Option<i64>>,
     /// Piles de la grille : la vue de `files` (couvertures des piles repliées).
     stacks: crate::stacks::Stacks,
     /// Piles à recalculer (dossier, filtre, empreinte, note, seuil changés).
@@ -3047,6 +3052,7 @@ impl TriApp {
             config_path: None,
             history: tri::history::History::new(gui.history),
             signatures: HashMap::new(),
+            captured: HashMap::new(),
             stacks: crate::stacks::Stacks::default(),
             stacks_dirty: true,
             expanded: HashSet::new(),
@@ -4829,6 +4835,7 @@ impl TriApp {
         self.selection.clear();
         self.scores.clear();
         self.signatures.clear();
+        self.captured.clear();
         self.judgements.clear();
         self.blurry_applied.clear();
         self.selected = 0;
@@ -9141,6 +9148,7 @@ impl TriApp {
             // Analyses à reprendre du moteur (gardées sinon : ré-annonces ignorées).
             for image in &images {
                 self.signatures.remove(image);
+                self.captured.remove(image);
                 self.scores.remove(image);
             }
             let selected = self.files.get(self.selected).map(|f| f.path.clone());
@@ -12486,12 +12494,15 @@ impl TriApp {
     /// Trie les images du dossier selon `order` (dates de prise de vue : celles des
     /// empreintes de similarité, déjà lues en fond pour les piles ; inconnues : à la fin).
     fn apply_sort(&mut self) {
-        let signatures = &self.signatures;
+        if self.order.key == tri::sort::SortKey::Captured {
+            self.request_capture_times();
+        }
+        let (signatures, captured) = (&self.signatures, &self.captured);
         let notes = &self.folder.notes;
         tri::sort::sort(
             &mut self.folder.files,
             self.order,
-            |p| signatures.get(p).and_then(|s| s.time),
+            |p| capture_time(signatures, captured, p),
             |p| notes.notes(p).clone(),
             &self.settings.sort,
         );
@@ -12877,6 +12888,34 @@ impl TriApp {
         self.folder_view = Some(view);
     }
 
+    /// Tri par date de prise de vue sans empreintes calculées en fond (mode léger, piles
+    /// à la demande ou coupées : 26/11/2026, le tri restait sur les noms) : les heures de
+    /// prise de vue seules lues en fond, pour les images qui n'en ont pas encore.
+    fn request_capture_times(&mut self) {
+        if self.analyses().stacks == tri::scheduler::Analysis::Background {
+            return; // Les empreintes, qui ont l'heure, arrivent d'elles-mêmes.
+        }
+        let Some(engine) = self.engine.as_mut() else {
+            return;
+        };
+        for file in &self.folder.files {
+            if tri::media::is_development(&file.path)
+                || self.captured.contains_key(&file.path)
+                || self
+                    .signatures
+                    .get(&file.path)
+                    .is_some_and(|s| s.time.is_some())
+                || engine.capture_reads.is_pending(&file.path)
+            {
+                continue;
+            }
+            let (cache, preview, file) = (engine.cache.clone(), engine.preview, file.clone());
+            engine.capture_reads.request(file.path.clone(), move || {
+                Some(preview::capture_time(&cache, &file, &preview))
+            });
+        }
+    }
+
     /// Change l'ordre : la grille suit, la même image reste sélectionnée.
     fn set_order(&mut self, order: tri::sort::Order) {
         // « Proximité » sans recherche : rien à trier.
@@ -12918,7 +12957,7 @@ impl TriApp {
         let reading = self
             .engine
             .as_ref()
-            .is_some_and(|e| !e.signature_reads.idle());
+            .is_some_and(|e| !e.signature_reads.idle() || !e.capture_reads.idle());
         if self.sort_pending
             && self.mode == Mode::Grid
             && !reading
@@ -12979,7 +13018,7 @@ impl TriApp {
         // juste avant et après, et les piles ne se formaient plus : le libellé de la
         // netteté changeait avec le tri).
         let mut files = self.folder.files.clone();
-        let signatures = &self.signatures;
+        let (signatures, captured) = (&self.signatures, &self.captured);
         let notes = &self.folder.notes;
         tri::sort::sort(
             &mut files,
@@ -12987,7 +13026,7 @@ impl TriApp {
                 key: tri::sort::SortKey::Captured,
                 descending: false,
             },
-            |p| signatures.get(p).and_then(|s| s.time),
+            |p| capture_time(signatures, captured, p),
             |p| notes.notes(p).clone(),
             &self.settings.sort,
         );
@@ -14114,6 +14153,7 @@ impl TriApp {
             loader,
             grid_reader,
             signature_reads: crate::bg_read::BgReads::new("tri-signatures", Some(ctx.clone())),
+            capture_reads: crate::bg_read::BgReads::new("tri-captured", Some(ctx.clone())),
             score_reads: crate::bg_read::BgReads::new("tri-scores", Some(ctx.clone())),
             exposure_reads: crate::bg_read::BgReads::newest_first(
                 "tri-exposures",
@@ -14370,6 +14410,12 @@ impl TriApp {
                 engine
                     .signature_reads
                     .request(path, move || preview::signature(&cache, &file, &preview));
+            }
+            for (path, time) in engine.capture_reads.take() {
+                let new = self.captured.insert(path, time.flatten()).is_none();
+                if new && self.order.key == tri::sort::SortKey::Captured {
+                    self.sort_pending = true;
+                }
             }
             for (path, sig) in engine.signature_reads.take() {
                 // Une date nouvelle seulement (comme pour l'exposition, issue n° 10 :
@@ -32163,6 +32209,19 @@ impl StacksMemory {
     }
 }
 
+/// Heure de prise de vue de `path` pour le tri : celle de son empreinte, sinon celle lue
+/// seule ([`TriApp::request_capture_times`]).
+fn capture_time(
+    signatures: &HashMap<PathBuf, tri::similarity::Signature>,
+    captured: &HashMap<PathBuf, Option<i64>>,
+    path: &Path,
+) -> Option<i64> {
+    signatures
+        .get(path)
+        .and_then(|s| s.time)
+        .or_else(|| captured.get(path).copied().flatten())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -36549,6 +36608,64 @@ mod tests {
         // Ne plus le surveiller : retiré de la configuration.
         h.state_mut().toggle_watch(root.clone());
         assert!(!h.state().is_watched(&root));
+    }
+
+    #[test]
+    fn sorting_by_capture_date_in_light_mode_reads_only_the_dates() {
+        // 26/11/2026 : en mode léger, les empreintes (qui portaient les dates) attendent
+        // « Tout calculer », et le tri par date de prise de vue restait sur les noms.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let fixture = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../tests/fixtures/exif.jpg"
+        ))
+        .unwrap();
+        let dated = |date: &str| {
+            let (from, to) = (b"2026:10:16 14:32:05".as_slice(), date.as_bytes());
+            let mut out = Vec::new();
+            let mut rest = fixture.as_slice();
+            while let Some(at) = rest.windows(from.len()).position(|w| w == from) {
+                out.extend_from_slice(&rest[..at]);
+                out.extend_from_slice(to);
+                rest = &rest[at + from.len()..];
+            }
+            out.extend_from_slice(rest);
+            out
+        };
+        for (name, date) in [
+            ("img0.jpg", "2021:05:02 10:00:00"),
+            ("img1.jpg", "2021:05:03 10:00:00"),
+            ("img2.jpg", "2021:05:01 10:00:00"),
+        ] {
+            std::fs::write(photos.join(name), dated(date)).unwrap();
+        }
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "").unwrap();
+        h.state_mut().config_path = Some(config);
+        h.state_mut().toggle_light(photos.clone());
+        run_until(&mut h, |app| {
+            app.light_root.as_deref() == Some(photos.as_path()) && app.folder.files.len() == 3
+        });
+        h.state_mut().set_order(tri::sort::Order {
+            key: tri::sort::SortKey::Captured,
+            descending: false,
+        });
+        let names = |app: &TriApp| -> Vec<String> {
+            app.folder
+                .files
+                .iter()
+                .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+                .collect()
+        };
+        run_until(&mut h, |app| {
+            names(app) == ["img2.jpg", "img0.jpg", "img1.jpg"]
+        });
+        assert!(
+            h.state().signatures.is_empty(),
+            "pas d'empreintes calculées"
+        );
     }
 
     #[test]
