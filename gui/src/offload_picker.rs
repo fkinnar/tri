@@ -822,7 +822,7 @@ impl Picker {
         let begins = self.begins(order)?;
         // Alt, ou Ctrl (Cmd sur macOS) : sous Linux Mint (Cinnamon), Alt+clic déplace la
         // fenêtre et n'arrive jamais à `tri` (retour du 26/11/2026).
-        let alt = ui.input(|i| i.modifiers.alt || i.modifiers.command);
+        let alt = ui.input(|i| i.modifiers.alt || i.modifiers.command || i.modifiers.ctrl);
         let tool = match (self.tool, alt) {
             (Tool::Scissors, false) | (Tool::Glue, true) => Tool::Scissors,
             _ => Tool::Glue,
