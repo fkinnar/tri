@@ -15,6 +15,11 @@ avec les photos.
 | `tuning.json` | Valeurs des curseurs : sévérité des piles, pauses, progression (`group-*`, écart de temps `group-gap` depuis #414), sévérité du flou (`blur-strictness`), de l'exposition (`clip-over-strictness`, `clip-under-strictness`) | `store::value` / `store::set_value` |
 | `choices.json` | Couvertures de piles (`covers`) et développements préférés (`developments`), par **nom de fichier** | `store::chosen` / `store::choose` |
 
+À part, `notes-read.json` (notes lues et date et taille de leurs sources, voir
+[notes.md](notes.md)) est un cache : toujours dans le dossier de données
+(`store::read_local` / `write_local`), quel que soit l'interrupteur ; il suit le dossier
+(`relocate`, `purge_gone`) et part avec son repli quand il n'y reste aucun autre fichier.
+
 Un fichier par sorte : quand deux ordinateurs modifient le même dossier synchronisé, un
 conflit de synchronisation ne touche que le fichier concerné. Des noms de fichiers
 seulement, jamais de chemin absolu : un disque monté en `/Volumes/T7`, `/media/u/T7` ou

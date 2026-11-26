@@ -50,6 +50,18 @@ sidecars): **7 ms** to load (23 ms cold), i.e. ~0.06 ms per image. On an externa
 drive (2026-10-23, 2,820 DNG and their Lightroom sidecars): **15 s**, ~5 ms per image (one
 head seek per file); hence the background reading above.
 
+**Read cache** (2026-11-26, a folder of 2,820 photos on a NAS read again at every
+opening): `notes-read.json`, kept **in the data folder** of `tri` for each folder
+(`store::write_local`: a cache, never written with the photos nor synced). Per image: its
+sources (sidecars, the image itself) with their date and size (`reconcile::Stamp`), the
+sidecars read, a fingerprint of what the ratings memory keeps of it, and the ratings. At
+the next reading, an image whose sources are the same, with the same date and size, and
+whose memory has not moved, takes these ratings back **without opening anything**: only
+the date and size checks remain. A source changed elsewhere (darktable…), added or
+removed, and everything is read and merged as before. Not kept: an unreadable sidecar, a
+conflict, an image without any source (nothing is opened there anyway). Images gone leave
+the cache when the whole folder is read again.
+
 Operations on `xmp::Notes`: `set_stars(n)` (the flag does not change: a rejected photo
 keeps its stars), `toggle_color(c, multiple)` (single colour: another one replaces it,
 the same one removes it; multiple: add / remove, as in darktable), `clear_colors()`.

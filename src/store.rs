@@ -43,6 +43,10 @@ pub const TUNING: &str = "tuning.json";
 /// Couvertures de piles et développements préférés ([`chosen`]).
 pub const CHOICES: &str = "choices.json";
 
+/// Notes lues dans les sidecars et les images, avec la date et la taille de leurs sources
+/// ([`crate::notes`]) : un cache, toujours dans le dossier de données ([`read_local`]).
+pub const NOTES_READ: &str = "notes-read.json";
+
 /// Fichiers de données d'un dossier (ce qui se déplace entre `.tri/` et le repli).
 const FILES: [&str; 4] = [NOTES, VIEW, TUNING, CHOICES];
 /// Dossier des replis, dans le dossier de données.
@@ -178,6 +182,20 @@ pub fn read(data: Option<&Path>, folder: &Path, name: &str) -> Option<Vec<u8>> {
     read_places(data, folder, name)
         .into_iter()
         .find_map(|p| std::fs::read(p).ok())
+}
+
+/// Contenu du fichier `name` gardé pour `folder` dans le dossier de données `data`
+/// seulement ([`write_local`]).
+pub fn read_local(data: &Path, folder: &Path, name: &str) -> Option<Vec<u8>> {
+    std::fs::read(fallback_dir(data, folder).join(name)).ok()
+}
+
+/// Écrit le fichier `name` de `folder` dans le dossier de données `data`, quel que soit
+/// l'interrupteur : pour un cache (26/11/2026, notes lues), qui n'a rien à faire avec les
+/// photos (ni synchronisé, ni écrit sur un NAS). Suit le dossier comme ses autres
+/// fichiers ([`relocate`], [`purge_gone`]) ; effacé avec eux quand il n'en reste aucun.
+pub fn write_local(data: &Path, folder: &Path, name: &str, bytes: &[u8]) -> io::Result<()> {
+    write_fallback(&fallback_dir(data, folder), folder, name, bytes)
 }
 
 /// Écrit (`Some`) ou efface (`None`) le fichier `name` des données de `folder` (absolu) :
