@@ -50,6 +50,28 @@ sidecars): **7 ms** to load (23 ms cold), i.e. ~0.06 ms per image. On an externa
 drive (2026-10-23, 2,820 DNG and their Lightroom sidecars): **15 s**, ~5 ms per image (one
 head seek per file); hence the background reading above.
 
+**Read cache** (2026-11-26, a folder of 2,820 photos on a NAS read again at every
+opening): `notes-read.json`, kept **in the data folder** of `tri` for each folder
+(`store::write_local`: a cache, never written with the photos nor synced). Per image: its
+sources (sidecars, the image itself) with their date and size (`reconcile::Stamp`), the
+sidecars read, a fingerprint of what the ratings memory keeps of it, and the ratings. At
+the next reading, an image whose sources are the same, with the same date and size, and
+whose memory has not moved, takes these ratings back **without opening anything**: only
+the date and size checks remain. A source changed elsewhere (darktable…), added or
+removed, and everything is read and merged as before. Not kept: an unreadable sidecar, a
+conflict, an image without any source (nothing is opened there anyway). Images gone leave
+the cache when the whole folder is read again.
+
+**Shown first, checked afterwards** (report of 2026-11-26 in the log, `notes:` after each
+reading of a folder: on an SMB share through GVFS, 2,820 ratings taken from the cache but
+792 s of date and size checks, competing with the thumbnails). At opening,
+`NoteBook::from_read_cache` gives the kept ratings at once, without checking or opening
+anything; the interface shows them (`seed`, without overwriting an image rated meanwhile)
+while `load_until` checks, then takes the result (`adopt`). The check of the image itself
+is the one all of `tri` keeps (`cache::stamp`, already done for its thumbnails; opening a
+folder forgets those of its files); those of sidecars and of readings after a rating are
+still made on the disk.
+
 Operations on `xmp::Notes`: `set_stars(n)` (the flag does not change: a rejected photo
 keeps its stars), `toggle_color(c, multiple)` (single colour: another one replaces it,
 the same one removes it; multiple: add / remove, as in darktable), `clear_colors()`.

@@ -51,6 +51,29 @@ Mesure (17/10/2026, Mac Apple Silicon, release, copies de 131 vrais sidecars dar
 (23/10/2026, 2 820 DNG et leurs sidecars Lightroom) : **15 s**, ~5 ms par image (un
 déplacement de tête par fichier) ; d'où la lecture en fond ci-dessus.
 
+**Cache de lecture** (26/11/2026, dossier de 2 820 photos sur un NAS relu à chaque
+ouverture) : `notes-read.json`, gardé **dans le dossier de données** de `tri` pour chaque
+dossier (`store::write_local` : un cache, jamais écrit avec les photos ni synchronisé).
+Par image : ses sources (sidecars, image elle-même) avec leur date et leur taille
+(`reconcile::Stamp`), les sidecars lus, une empreinte de ce que la mémoire des notes en
+retient, et les notes. À la lecture suivante, une image dont les sources sont les mêmes,
+à la même date et à la même taille, et dont la mémoire n'a pas bougé, reprend ces notes
+**sans rien ouvrir** : il ne reste que les relevés de date et de taille. Une source
+modifiée ailleurs (darktable…), ajoutée ou retirée, et tout est relu et fusionné comme
+avant. Pas gardé : un sidecar illisible, un conflit, une image sans aucune source (rien
+n'y est ouvert de toute façon). Les images disparues quittent le cache quand tout le
+dossier est relu.
+
+**Montrées d'abord, vérifiées ensuite** (bilan du 26/11/2026 au journal, `notes:` après
+chaque lecture d'un dossier : sur un partage SMB par GVFS, 2 820 notes reprises du cache
+mais 792 s de relevés de date et de taille, en concurrence avec les vignettes). À
+l'ouverture, `NoteBook::from_read_cache` donne aussitôt les notes gardées, sans rien
+vérifier ni ouvrir ; l'interface les montre (`seed`, sans écraser une image notée
+entre-temps) pendant que `load_until` vérifie, puis prend le résultat (`adopt`). Le relevé
+de l'image elle-même est celui que garde tout `tri` (`cache::stamp`, déjà fait pour ses
+vignettes ; l'ouverture d'un dossier oublie ceux de ses fichiers) ; ceux des sidecars et
+des relectures après une note restent faits sur le disque.
+
 Opérations sur `xmp::Notes` : `set_stars(n)` (le drapeau ne change pas : une photo rejetée
 garde ses étoiles), `toggle_color(c, multiple)` (une seule couleur : une autre remplace, la
 même retire ; plusieurs : ajout / retrait, comme darktable), `clear_colors()`.
