@@ -34,7 +34,10 @@ place. `SortKey::by_notes()` says whether the key depends on the ratings;
   (`[scheduler] light_workers`: on a NAS, the time is mostly waiting for the network),
   their progress is shown in the background tasks ("shooting dates i/N"), and the sort no
   longer waits for the stacks' progress when they are not computed in the background (in
-  light mode, it came after all the thumbnails).
+  light mode, it came after all the thumbnails). From `[gui] sort_dates_ask` dates to
+  read (200; 0: never), a box warns first ("Sort by shooting date?", `dates_dialog.rs`,
+  the owner's idea of 2026-11-26): Sort, Cancel (the order does not change), "Don't ask
+  again" (setting set to 0).
 - **Modification dates**: read on the disk when sorting (`modified`).
 - **Ratings**: provided by the caller (`notes(path)`, the folder's book); a pair by its
   RAW, a development by its photo (same key as the dates). `[sort] color_order` (dot

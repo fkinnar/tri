@@ -41,6 +41,7 @@ mod compare;
 mod compute_tasks;
 mod crash;
 mod crop;
+mod dates_dialog;
 mod develop_batch;
 mod display;
 mod export;

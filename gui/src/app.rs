@@ -1144,6 +1144,8 @@ pub struct TriApp {
     camera_raw: HashMap<PathBuf, PathBuf>,
     /// Boîte « Regrouper RAW et JPEG ? » ouverte.
     pairs_dialog: Option<crate::pairs_dialog::PairsDialog>,
+    /// « Trier par date de prise de vue ? » en mode léger ([`crate::dates_dialog`]).
+    dates_dialog: Option<crate::dates_dialog::DatesDialog>,
     /// Cases RAW / RAW+JPEG / JPEG d'un dossier regroupé (#392).
     pair_kinds: tri::pairs::PairKinds,
     /// Dossiers du panneau regroupés par décision (#392 : leur marque), lus une fois, en
@@ -2742,6 +2744,7 @@ impl TriApp {
             pairs_dirs: HashMap::new(),
             camera_raw: HashMap::new(),
             pairs_dialog: None,
+            dates_dialog: None,
             pair_kinds: tri::pairs::PairKinds::default(),
             pairs_marks: HashMap::new(),
             pairs_reads: None,
@@ -12903,12 +12906,7 @@ impl TriApp {
             return;
         };
         for file in &self.folder.files {
-            if tri::media::is_development(&file.path)
-                || self.captured.contains_key(&file.path)
-                || self
-                    .signatures
-                    .get(&file.path)
-                    .is_some_and(|s| s.time.is_some())
+            if !needs_capture_time(file, &self.signatures, &self.captured)
                 || engine.capture_reads.is_pending(&file.path)
             {
                 continue;
@@ -12921,8 +12919,57 @@ impl TriApp {
         }
     }
 
-    /// Change l'ordre : la grille suit, la même image reste sélectionnée.
+    /// Dates de prise de vue à lire avant de trier par date, en mode léger seulement (sur
+    /// un disque rapide, la lecture ne se remarque pas) ; 0 sinon.
+    fn capture_times_to_read(&self) -> usize {
+        if self.light_root.is_none()
+            || self.analyses().stacks == tri::scheduler::Analysis::Background
+        {
+            return 0;
+        }
+        self.folder
+            .files
+            .iter()
+            .filter(|f| needs_capture_time(f, &self.signatures, &self.captured))
+            .count()
+    }
+
+    /// « Trier par date de prise de vue ? » : la réponse.
+    fn dates_dialog(&mut self, ctx: &egui::Context) {
+        let Some(dialog) = &mut self.dates_dialog else {
+            return;
+        };
+        match dialog.show(ctx) {
+            Some(crate::dates_dialog::Request::Sort { always }) => {
+                let order = dialog.order;
+                self.dates_dialog = None;
+                if always {
+                    self.gui.sort_dates_ask = 0;
+                    self.write_setting("gui", "sort_dates_ask", tri::config_edit::Value::Int(0));
+                }
+                self.apply_order(order);
+            }
+            Some(crate::dates_dialog::Request::Close) => self.dates_dialog = None,
+            None => {}
+        }
+    }
+
+    /// Change l'ordre : la grille suit, la même image reste sélectionnée. Par date de prise
+    /// de vue en mode léger, beaucoup de dates à lire : la boîte prévient d'abord
+    /// ([`crate::dates_dialog`]).
     fn set_order(&mut self, order: tri::sort::Order) {
+        if order.key == tri::sort::SortKey::Captured && self.gui.sort_dates_ask > 0 {
+            let count = self.capture_times_to_read();
+            if count >= self.gui.sort_dates_ask {
+                self.dates_dialog = Some(crate::dates_dialog::DatesDialog::new(order, count));
+                return;
+            }
+        }
+        self.apply_order(order);
+    }
+
+    /// Change l'ordre sans demander ([`TriApp::set_order`]).
+    fn apply_order(&mut self, order: tri::sort::Order) {
         // « Proximité » sans recherche : rien à trier.
         if order.key == tri::sort::SortKey::Proximity && !self.palette_searching() {
             self.notice = Some((t!("sort-proximity-none"), false));
@@ -29817,6 +29864,7 @@ impl eframe::App for TriApp {
         self.version_delete_dialog(&ctx);
         self.reset_dialog(&ctx);
         self.pairs_dialog(&ctx);
+        self.dates_dialog(&ctx);
         self.locate_dialog(&ctx);
         self.iptc_dialog(&ctx);
         self.remote_dialog(&ctx);
@@ -32235,6 +32283,18 @@ impl StacksMemory {
             })
             .collect()
     }
+}
+
+/// Vrai si l'heure de prise de vue de `file` est encore à lire seule (ni lue, ni dans son
+/// empreinte ; un développement a celle de sa photo).
+fn needs_capture_time(
+    file: &MediaFile,
+    signatures: &HashMap<PathBuf, tri::similarity::Signature>,
+    captured: &HashMap<PathBuf, Option<i64>>,
+) -> bool {
+    !tri::media::is_development(&file.path)
+        && !captured.contains_key(&file.path)
+        && !signatures.get(&file.path).is_some_and(|s| s.time.is_some())
 }
 
 /// Heure de prise de vue de `path` pour le tri : celle de son empreinte, sinon celle lue
@@ -36636,6 +36696,53 @@ mod tests {
         // Ne plus le surveiller : retiré de la configuration.
         h.state_mut().toggle_watch(root.clone());
         assert!(!h.state().is_watched(&root));
+    }
+
+    #[test]
+    fn sorting_by_capture_date_in_light_mode_warns_first() {
+        // 26/11/2026 (idée de l'utilisateur) : sur le NAS, lire toutes les dates est long.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "").unwrap();
+        h.state_mut().config_path = Some(config.clone());
+        h.state_mut().gui.sort_dates_ask = 2;
+        h.state_mut().toggle_light(photos.clone());
+        run_until(&mut h, |app| {
+            app.light_root.as_deref() == Some(photos.as_path()) && app.folder.files.len() == 3
+        });
+        let by_date = tri::sort::Order {
+            key: tri::sort::SortKey::Captured,
+            descending: false,
+        };
+        h.state_mut().set_order(by_date);
+        h.run_steps(3);
+        assert!(
+            h.state().dates_dialog.is_some(),
+            "3 dates à lire : on prévient"
+        );
+        assert_ne!(h.state().order, by_date, "rien de trié en attendant");
+        assert_eq!(h.state().capture_progress.total, 0, "rien de lu non plus");
+        h.get_by_label(&t!("cancel")).click();
+        h.run_steps(3);
+        assert!(h.state().dates_dialog.is_none());
+        assert_ne!(h.state().order, by_date);
+
+        h.state_mut().set_order(by_date);
+        h.run_steps(3);
+        h.get_by_label(&t!("sort-dates-ask-always")).click();
+        h.run_steps(1);
+        h.get_by_label(&t!("sort-dates-ask-sort")).click();
+        h.run_steps(3);
+        assert!(h.state().dates_dialog.is_none());
+        assert_eq!(h.state().order, by_date);
+        assert_eq!(h.state().gui.sort_dates_ask, 0, "plus de question");
+        assert!(
+            std::fs::read_to_string(&config)
+                .unwrap()
+                .contains("sort_dates_ask = 0")
+        );
     }
 
     #[test]

@@ -2297,6 +2297,14 @@ pairs-ask-text = { $name } a { $n ->
 } (même nom). Les regrouper en une seule photo ?
 pairs-ask-detail = Regroupée, une paire n'est qu'une vignette ; le JPEG du boîtier est rangé avec les développements du RAW (dépliez-les pour le voir). Rien ne change sur le disque. Ce choix est retenu pour ce dossier, et se change dans son menu (clic droit).
 pairs-ask-always = Ne plus demander (ce choix pour tous les dossiers)
+sort-dates-ask-title = Trier par date de prise de vue ?
+sort-dates-ask-text = Il faut lire la date de prise de vue de { $n ->
+    [one] { $n } photo
+   *[other] { $n } photos
+} sur ce disque en mode léger : ça peut prendre du temps.
+sort-dates-ask-detail = La grille reste dans l'ordre actuel pendant la lecture (« dates de prise de vue » dans les tâches de fond), puis se trie d'un coup. Les dates lues sont gardées : la prochaine fois, ce sera immédiat.
+sort-dates-ask-always = Ne plus demander
+sort-dates-ask-sort = Trier
 pairs-group = Regrouper
 pairs-separate = Garder séparées
 pairs-camera-chip = Boîtier
