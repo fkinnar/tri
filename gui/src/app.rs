@@ -12899,9 +12899,9 @@ impl TriApp {
     /// à la demande ou coupées : 26/11/2026, le tri restait sur les noms) : les heures de
     /// prise de vue seules lues en fond, pour les images qui n'en ont pas encore.
     fn request_capture_times(&mut self) {
-        if self.analyses().stacks == tri::scheduler::Analysis::Background {
-            return; // Les empreintes, qui ont l'heure, arrivent d'elles-mêmes.
-        }
+        // Même quand les empreintes (qui ont l'heure) sont calculées en fond : elles
+        // prennent bien plus longtemps que les dates seules (26/11/2026, 2 820 DNG sur un
+        // NAS en NFS : le tri attendait toutes les empreintes).
         let Some(engine) = self.engine.as_mut() else {
             return;
         };
@@ -12922,9 +12922,7 @@ impl TriApp {
     /// Dates de prise de vue à lire avant de trier par date, en mode léger seulement (sur
     /// un disque rapide, la lecture ne se remarque pas) ; 0 sinon.
     fn capture_times_to_read(&self) -> usize {
-        if self.light_root.is_none()
-            || self.analyses().stacks == tri::scheduler::Analysis::Background
-        {
+        if self.light_root.is_none() {
             return 0;
         }
         self.folder
@@ -13001,7 +12999,6 @@ impl TriApp {
     /// arrivées (toutes, pas à chacune), en grille seulement (comme les filtres sur
     /// l'analyse).
     fn sort_refilter(&mut self) {
-        let p = self.progress[5];
         // Les empreintes (leurs dates) lues en fond (`bg_read`) : toutes là d'abord. Sinon
         // chaque arrivée retriait la grille et relançait le moteur sur toute la liste, qui
         // réannonçait tout et revérifiait le cache (trace du 19/11/2026 sur iCloud : une
@@ -13010,15 +13007,10 @@ impl TriApp {
             .engine
             .as_ref()
             .is_some_and(|e| !e.signature_reads.idle() || !e.capture_reads.idle());
-        // Les dates des empreintes : attendre leur calcul de fond, s'il y en a un (en mode
-        // léger, l'analyse « à la demande » passe derrière les vignettes : le tri attendait
-        // toutes les vignettes du NAS, 26/11/2026).
-        let groups_in_background = self.analyses().stacks == tri::scheduler::Analysis::Background;
-        if self.sort_pending
-            && self.mode == Mode::Grid
-            && !reading
-            && (!groups_in_background || p.total == 0 || p.done == p.total)
-        {
+        // Plus d'attente des empreintes en fond (leur progression `p`) : les dates sont
+        // lues seules ([`TriApp::request_capture_times`]) ; avant, le tri attendait toutes
+        // les vignettes (mode léger) ou toutes les empreintes (26/11/2026).
+        if self.sort_pending && self.mode == Mode::Grid && !reading {
             self.sort_pending = false;
             self.apply_sort();
             self.refilter(Reveal::Minimal);
@@ -14484,8 +14476,11 @@ impl TriApp {
                 // Une date nouvelle seulement (comme pour l'exposition, issue n° 10 :
                 // refiltrer fait ré-annoncer celles déjà en cache).
                 let Some(sig) = sig else { continue };
+                // Une date déjà lue seule ne change rien à l'ordre : pas de nouveau tri à
+                // chaque empreinte calculée en fond.
+                let known = self.captured.get(&path).copied().flatten() == sig.time;
                 let new = self.signatures.insert(path, sig).is_none();
-                if new && self.order.key == tri::sort::SortKey::Captured {
+                if new && !known && self.order.key == tri::sort::SortKey::Captured {
                     self.sort_pending = true;
                 }
                 self.stacks_dirty = true;
@@ -36696,6 +36691,66 @@ mod tests {
         // Ne plus le surveiller : retiré de la configuration.
         h.state_mut().toggle_watch(root.clone());
         assert!(!h.state().is_watched(&root));
+    }
+
+    #[test]
+    fn sorting_by_capture_date_reads_the_dates_without_waiting_for_stacks() {
+        // 26/11/2026 : hors mode léger (NAS en NFS), le tri attendait les empreintes de
+        // tout le dossier, qui portaient les dates.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let fixture = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../tests/fixtures/exif.jpg"
+        ))
+        .unwrap();
+        let dated = |date: &str| {
+            let from = b"2026:10:16 14:32:05".as_slice();
+            let at = fixture.windows(from.len()).position(|w| w == from).unwrap();
+            let mut out = fixture.clone();
+            out[at..at + from.len()].copy_from_slice(date.as_bytes());
+            out
+        };
+        for (name, date) in [
+            ("img0.jpg", "2021:05:02 10:00:00"),
+            ("img1.jpg", "2021:05:03 10:00:00"),
+            ("img2.jpg", "2021:05:01 10:00:00"),
+        ] {
+            std::fs::write(photos.join(name), dated(date)).unwrap();
+        }
+        h.state_mut().settings.analysis.stacks = tri::scheduler::Analysis::Background;
+        let analyses = h.state().analyses();
+        if let Some(engine) = &h.state().engine {
+            engine.scheduler.set_analyses(analyses);
+        }
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| {
+            app.folder.files.len() == 3 && app.loading.is_none()
+        });
+        assert_eq!(
+            h.state().analyses().stacks,
+            tri::scheduler::Analysis::Background
+        );
+        h.state_mut().set_order(tri::sort::Order {
+            key: tri::sort::SortKey::Captured,
+            descending: false,
+        });
+        assert!(
+            h.state().dates_dialog.is_none(),
+            "pas en mode léger : rien à dire"
+        );
+        let names = |app: &TriApp| -> Vec<String> {
+            app.folder
+                .files
+                .iter()
+                .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+                .collect()
+        };
+        run_until(&mut h, |app| {
+            names(app) == ["img2.jpg", "img0.jpg", "img1.jpg"]
+        });
+        assert!(h.state().capture_progress.total > 0, "dates lues seules");
     }
 
     #[test]

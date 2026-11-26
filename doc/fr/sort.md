@@ -38,7 +38,10 @@ donne la valeur d'une image.
   les vignettes). À partir de `[gui] sort_dates_ask` dates à lire (200 ; 0 : jamais),
   une boîte prévient d'abord (« Trier par date de prise de vue ? », `dates_dialog.rs`,
   idée de l'utilisateur du 26/11/2026) : Trier, Annuler (l'ordre ne change pas), « Ne
-  plus demander » (réglage mis à 0).
+  plus demander » (réglage mis à 0). Depuis le même jour, les dates sont lues seules
+  **même quand les empreintes sont calculées en fond** (2 820 DNG sur un NAS en NFS :
+  le tri attendait toutes les empreintes, bien plus longues) ; une empreinte qui arrive
+  avec une date déjà lue ne relance pas de tri.
 - **Dates de modification** : lues sur le disque au moment du tri (`modified`).
 - **Notes** : fournies par l'appelant (`notes(chemin)`, le carnet du dossier) ; la paire
   d'après son RAW, un développement d'après sa photo (même clé que les dates).

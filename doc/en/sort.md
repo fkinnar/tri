@@ -37,7 +37,10 @@ place. `SortKey::by_notes()` says whether the key depends on the ratings;
   light mode, it came after all the thumbnails). From `[gui] sort_dates_ask` dates to
   read (200; 0: never), a box warns first ("Sort by shooting date?", `dates_dialog.rs`,
   the owner's idea of 2026-11-26): Sort, Cancel (the order does not change), "Don't ask
-  again" (setting set to 0).
+  again" (setting set to 0). Since the same day, the dates are read alone **even when
+  the fingerprints are computed in the background** (2,820 DNG on a NAS over NFS: the
+  sort waited for all the fingerprints, much longer); a fingerprint arriving with a date
+  already read does not trigger a new sort.
 - **Modification dates**: read on the disk when sorting (`modified`).
 - **Ratings**: provided by the caller (`notes(path)`, the folder's book); a pair by its
   RAW, a development by its photo (same key as the dates). `[sort] color_order` (dot
