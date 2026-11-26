@@ -1227,26 +1227,47 @@ fn relative_name(relative: &Path) -> String {
 /// `from`. Vers un autre disque, copie puis suppression ; une entrée déjà présente dans
 /// `to` (calculée pendant le déplacement) est gardée.
 fn move_entries(from: &Path, to: &Path, source: &str) -> io::Result<Usage> {
+    // Les calculs du dossier peuvent encore écrire ou remplacer des entrées pendant qu'on
+    // les déplace (dossier renommé juste après un déchargement, 26/11/2026 : « No such
+    // file or directory ») : une entrée, ou tout le dossier d'entrées, disparu entre-temps
+    // est passé ; au pire, une image est recalculée.
+    let gone = |e: &io::Error| e.kind() == io::ErrorKind::NotFound;
+    let entries = match fs::read_dir(from) {
+        Ok(entries) => entries,
+        Err(e) if gone(&e) => return Ok(Usage::default()),
+        Err(e) => return Err(e),
+    };
     fs::create_dir_all(to)?;
     fs::write(to.join(SOURCE), source)?;
     let mut moved = Usage::default();
-    for file in fs::read_dir(from)?.flatten() {
+    for file in entries.flatten() {
         let path = file.path();
         if path.extension().is_none_or(|e| e != "jpg" && e != "bin") {
             continue;
         }
         let target = to.join(file.file_name());
-        if !target.exists() {
-            let bytes = file.metadata()?.len();
-            if fs::rename(&path, &target).is_err() {
-                fs::copy(&path, &target)?;
-            }
-            moved.bytes += bytes;
-            moved.entries += 1;
+        if target.exists() {
+            continue;
         }
+        let bytes = match file.metadata() {
+            Ok(meta) => meta.len(),
+            Err(e) if gone(&e) => continue,
+            Err(e) => return Err(e),
+        };
+        if fs::rename(&path, &target).is_err() {
+            match fs::copy(&path, &target) {
+                Ok(_) => {}
+                Err(e) if gone(&e) => continue,
+                Err(e) => return Err(e),
+            }
+        }
+        moved.bytes += bytes;
+        moved.entries += 1;
     }
-    fs::remove_dir_all(from)?;
-    Ok(moved)
+    match fs::remove_dir_all(from) {
+        Err(e) if !gone(&e) => Err(e),
+        _ => Ok(moved),
+    }
 }
 
 struct Entry {
@@ -1531,6 +1552,30 @@ mod tests {
             cache.purge(None, |_| false, false).unwrap(),
             Usage::default()
         );
+    }
+
+    #[test]
+    fn moving_entries_that_vanished_meanwhile_is_not_an_error() {
+        // 26/11/2026 : dossier renommé juste après un déchargement, ses aperçus encore en
+        // calcul ; un dossier d'entrées disparu entre-temps ne fait pas échouer le reste.
+        let dir = tempfile::tempdir().unwrap();
+        let to = dir.path().join("to");
+        let moved = move_entries(&dir.path().join("absent"), &to, "/x").unwrap();
+        assert_eq!(moved, Usage::default());
+        assert!(!to.exists(), "rien créé pour rien");
+        let from = dir.path().join("from");
+        fs::create_dir(&from).unwrap();
+        fs::write(from.join("a.jpg"), b"12").unwrap();
+        fs::write(from.join("a.jpg.tmp-1"), b"en cours").unwrap();
+        let moved = move_entries(&from, &to, "/x").unwrap();
+        assert_eq!(
+            moved,
+            Usage {
+                bytes: 2,
+                entries: 1
+            }
+        );
+        assert!(to.join("a.jpg").is_file() && !from.exists());
     }
 
     #[test]
