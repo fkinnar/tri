@@ -72,6 +72,69 @@ impl Default for IndexSettings {
     }
 }
 
+/// Ce que « Toutes les photos » connaît d'un dossier (26/11/2026, idée de l'utilisateur :
+/// rien ne disait quels dossiers avaient été vus).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Seen {
+    /// Vu, et tous ses sous-dossiers connus aussi.
+    Full,
+    /// Vu sans tous ses sous-dossiers, ou pas vu lui-même mais un dossier dessous.
+    Partly,
+    /// Jamais vu : ses photos ne sont pas dans « Toutes les photos ».
+    Not,
+}
+
+/// Les dossiers vus ([`Index::seen_dirs`]) : (dossier, profondeur vue).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SeenDirs {
+    dirs: Vec<(PathBuf, usize)>,
+}
+
+impl SeenDirs {
+    /// Vrai si les photos de `dir` lui-même ont été vues : il a été vu, ou un dossier
+    /// au-dessus d'assez haut (sa profondeur le couvre).
+    pub fn covers(&self, dir: &Path) -> bool {
+        self.dirs.iter().any(|(seen, depth)| {
+            dir.strip_prefix(seen)
+                .is_ok_and(|rest| rest.components().count() < *depth)
+        })
+    }
+
+    /// Ce que l'on connaît de `dir` : `children` donne ses sous-dossiers s'ils sont connus
+    /// (l'arborescence déjà lue ; `None` : pas lus, jugés comme lui).
+    pub fn state(&self, dir: &Path, children: &dyn Fn(&Path) -> Option<Vec<PathBuf>>) -> Seen {
+        if self.covers(dir) {
+            if self.all_below(dir, children, 32) {
+                Seen::Full
+            } else {
+                Seen::Partly
+            }
+        } else if self
+            .dirs
+            .iter()
+            .any(|(seen, _)| seen != dir && seen.starts_with(dir))
+        {
+            Seen::Partly
+        } else {
+            Seen::Not
+        }
+    }
+
+    /// Vrai si tous les sous-dossiers connus de `dir` sont vus (`levels` : garde-fou).
+    fn all_below(
+        &self,
+        dir: &Path,
+        children: &dyn Fn(&Path) -> Option<Vec<PathBuf>>,
+        levels: usize,
+    ) -> bool {
+        let Some(subs) = children(dir).filter(|_| levels > 0) else {
+            return true;
+        };
+        subs.iter()
+            .all(|sub| self.covers(sub) && self.all_below(sub, children, levels - 1))
+    }
+}
+
 /// Empreinte du contenu d'un fichier : sa taille et un hachage BLAKE3 (tronqué à 16 octets)
 /// de ses `chunk` premiers et derniers octets. Assez pour reconnaître une photo déplacée ou
 /// copiée (une photo modifiée change de taille ou de contenu à l'un des bouts : en-tête
@@ -217,6 +280,34 @@ impl Index {
             )?;
             db.pragma_update(None, "user_version", SCHEMA)?;
         }
+        // Dossiers vus (26/11/2026) : ajoutée sans refaire la base (elle ne sert qu'à
+        // montrer ce que « Toutes les photos » connaît). Créée, elle reprend les dossiers
+        // des photos déjà notées (vus avant elle).
+        let fresh: bool = db
+            .query_row(
+                "SELECT count(*) = 0 FROM sqlite_master WHERE type = 'table' AND name = 'dirs'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(true);
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS dirs (path BLOB PRIMARY KEY, depth INTEGER NOT NULL)",
+            [],
+        )?;
+        if fresh {
+            let parents: std::collections::BTreeSet<Vec<u8>> = {
+                let mut stmt = db.prepare("SELECT path FROM paths")?;
+                stmt.query_map([], |r| r.get::<_, Vec<u8>>(0))?
+                    .filter_map(Result::ok)
+                    .filter_map(|b| bytes_path(&b).parent().map(path_bytes))
+                    .collect()
+            };
+            let mut insert =
+                db.prepare("INSERT OR IGNORE INTO dirs (path, depth) VALUES (?1, 1)")?;
+            for parent in parents {
+                insert.execute(params![parent])?;
+            }
+        }
         Ok(Index { db })
     }
 
@@ -284,8 +375,28 @@ impl Index {
             for (path, size, modified) in photos {
                 upsert.execute(params![path_bytes(path), *size as i64, ns(*modified)])?;
             }
+            // Le dossier vu, et jusqu'où (26/11/2026).
+            tx.execute(
+                "INSERT INTO dirs (path, depth) VALUES (?1, ?2)
+                 ON CONFLICT(path) DO UPDATE SET depth = MAX(depth, ?2)",
+                params![path_bytes(dir), depth as i64],
+            )?;
         }
         tx.commit()
+    }
+
+    /// Les dossiers vus ([`Index::seen`]) et jusqu'où : de quoi dire, dossier par dossier,
+    /// ce que « Toutes les photos » connaît ([`SeenDirs`]).
+    pub fn seen_dirs(&self) -> rusqlite::Result<SeenDirs> {
+        let mut stmt = self.db.prepare("SELECT path, depth FROM dirs")?;
+        let dirs = stmt
+            .query_map([], |r| {
+                let bytes: Vec<u8> = r.get(0)?;
+                let depth: i64 = r.get(1)?;
+                Ok((bytes_path(&bytes), depth.max(0) as usize))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(SeenDirs { dirs })
     }
 
     /// Les photos connues directement dans `dir` (pas ses sous-dossiers) : nom, taille,
@@ -358,6 +469,21 @@ impl Index {
         let tx = self.db.transaction()?;
         let mut moved = 0;
         {
+            // Les dossiers vus suivent aussi (26/11/2026).
+            let mut stmt = tx.prepare("SELECT path FROM dirs WHERE path >= ?1 AND path < ?2")?;
+            let dirs: Vec<Vec<u8>> = stmt
+                .query_map(params![low, high], |r| r.get(0))?
+                .collect::<rusqlite::Result<_>>()?;
+            for bytes in dirs {
+                if let Ok(rest) = bytes_path(&bytes).strip_prefix(from) {
+                    tx.execute(
+                        "INSERT OR REPLACE INTO dirs (path, depth)
+                         SELECT ?2, depth FROM dirs WHERE path = ?1",
+                        params![bytes, path_bytes(&to.join(rest))],
+                    )?;
+                    tx.execute("DELETE FROM dirs WHERE path = ?1", params![bytes])?;
+                }
+            }
             let mut stmt = tx.prepare("SELECT path FROM paths WHERE path >= ?1 AND path < ?2")?;
             let below: Vec<Vec<u8>> = stmt
                 .query_map(params![low, high], |r| r.get(0))?
@@ -1020,6 +1146,62 @@ fn entry(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn folders_seen_say_what_all_photos_knows() {
+        // 26/11/2026 : vu, en partie, pas vu ; les dossiers suivent un déplacement.
+        let mut index = Index::in_memory().unwrap();
+        // Une base d'avant la table : ses dossiers sont repris de ses photos.
+        index.db.execute_batch("DROP TABLE dirs;").unwrap();
+        index
+            .db
+            .execute(
+                "INSERT INTO paths (path, size, modified) VALUES (?1, 1, 1)",
+                params![path_bytes(Path::new("/vieux/A.RAF"))],
+            )
+            .unwrap();
+        let mut index = Index::setup(index.db).unwrap();
+        assert_eq!(
+            index
+                .seen_dirs()
+                .unwrap()
+                .state(Path::new("/vieux"), &|_| None),
+            Seen::Full
+        );
+        let p = |s: &str| PathBuf::from(s);
+        index.seen(&p("/img/import/a"), 1, &[]).unwrap();
+        index.seen(&p("/img/export"), 3, &[]).unwrap();
+        let seen = index.seen_dirs().unwrap();
+        let none = |_: &Path| -> Option<Vec<PathBuf>> { None };
+        assert_eq!(seen.state(&p("/img/import/a"), &none), Seen::Full);
+        assert_eq!(
+            seen.state(&p("/img/import"), &none),
+            Seen::Partly,
+            "un dossier dessous"
+        );
+        assert_eq!(seen.state(&p("/img/autre"), &none), Seen::Not);
+        assert_eq!(
+            seen.state(&p("/img/export/x/y"), &none),
+            Seen::Full,
+            "couvert"
+        );
+        assert_eq!(
+            seen.state(&p("/img/export/x/y/z"), &none),
+            Seen::Not,
+            "trop bas"
+        );
+        // Vu, mais un sous-dossier connu ne l'est pas : en partie.
+        let kids = |d: &Path| -> Option<Vec<PathBuf>> {
+            (d == Path::new("/img/import/a")).then(|| vec![PathBuf::from("/img/import/a/b")])
+        };
+        assert_eq!(seen.state(&p("/img/import/a"), &kids), Seen::Partly);
+        index
+            .relocate(&p("/img/import"), &p("/img/archives"))
+            .unwrap();
+        let seen = index.seen_dirs().unwrap();
+        assert_eq!(seen.state(&p("/img/archives/a"), &none), Seen::Full);
+        assert_eq!(seen.state(&p("/img/import/a"), &none), Seen::Not);
+    }
 
     fn entry(path: &str, fp: u8, source: Source, stamp: &str, palette: &Palette) -> Entry {
         Entry {
