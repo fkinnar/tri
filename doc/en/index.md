@@ -52,6 +52,19 @@ recorded, they are found again by reading the folder. `Index::photos(under)` lis
 without walking any folder. Moving to schema 2 rebuilds the database once: palettes
 already cached are recorded again by themselves.
 
+### Folders taken out of "All photos" (2026-11-26)
+
+The owner's idea: a NAS, archives… not seen in "All photos". **Folders taken out**,
+subfolders included (`[index] all_photos_except`), are left out of it
+(`folder::AllPhotosFilter`, `Folder::all_photos(db, convention, filter)`): right-click
+"Take out of All photos" / "Put back…" (action `core.folders.all_photos`, no key by
+default); an **∅** (empty set) next to the folder, which a click puts back
+(`folder::all_photos_except_toggled`: taking a folder out covers its subfolders already
+out, putting it back also removes the parent that took it out). A "network" switch on the
+"All photos" line was tried then removed: case by case is simpler.
+
+The photos stay in the index (nothing is forgotten): only what is shown changes.
+
 ## Similarity fingerprints (schema 3)
 
 The stacks' fingerprints (`similarity::Signature`, ~70 bytes) are recorded with each path
@@ -168,6 +181,7 @@ out):
 | `enabled` | `true` | record palettes in the index |
 | `fingerprint_kb` | 32 | KB read at the start and end of a file for its fingerprint |
 | `batch` | 256 | palettes recorded per write, at most |
+| `all_photos_except` | `[]` | folders taken out of "All photos", subfolders included |
 
 ## Measurements (2026-11-22)
 

@@ -3607,6 +3607,7 @@ impl TriApp {
             && !self.watch.as_ref().is_some_and(|(w, _, _)| w.dir() == dir);
         let chunk = self.settings.index.fingerprint_kb as usize * 1024;
         let index_on = self.settings.index.enabled && !cfg!(test) || self.index_in_tests;
+        let all_filter = self.all_photos_filter();
         std::thread::spawn(move || {
             writes.flush(Duration::from_secs(30));
             let mut view = remember
@@ -3620,7 +3621,9 @@ impl TriApp {
             // ensuite dossier par dossier (`start_all_photos_completion`).
             let listed = if all_photos {
                 match data.as_deref() {
-                    Some(data) => Folder::all_photos(&data.join("index.sqlite"), convention),
+                    Some(data) => {
+                        Folder::all_photos(&data.join("index.sqlite"), convention, &all_filter)
+                    }
                     None => Err(std::io::ErrorKind::NotFound.into()),
                 }
             } else {
@@ -3801,6 +3804,64 @@ impl TriApp {
             .filter(|p| p.kind == PlaceKind::Network && path.starts_with(&p.path))
             .max_by_key(|p| p.path.components().count())
             .map(|p| p.path.clone())
+    }
+
+    /// Ce que « Toutes les photos » laisse de côté : les dossiers sortis (26/11/2026).
+    fn all_photos_filter(&self) -> tri::folder::AllPhotosFilter {
+        tri::folder::AllPhotosFilter::of(&self.settings.index)
+    }
+
+    /// Écrit `[index] key = value` dans le fichier de configuration (vérifié avant), puis
+    /// relit « Toutes les photos » si elle est ouverte. Faux si l'écriture a échoué (dit
+    /// dans la barre d'état).
+    fn set_index_setting(&mut self, key: &str, value: tri::config_edit::Value) -> bool {
+        let Some(config) = self
+            .config_path
+            .clone()
+            .or_else(tri::settings::default_path)
+        else {
+            self.notice = Some((t!("settings-no-path"), true));
+            return false;
+        };
+        let result = tri::config_edit::ConfigFile::open(&config).and_then(|mut file| {
+            file.set("index", key, &value)?;
+            tri::settings::parse::<AppSettings>(&file.text())?;
+            file.save()
+                .map_err(|e| format!("{} : {e}", config.display()))
+        });
+        if let Err(e) = result {
+            self.notice = Some((e, true));
+            return false;
+        }
+        true
+    }
+
+    /// Sort `path` de « Toutes les photos » (sous-dossiers compris), ou l'y remet.
+    fn toggle_all_photos_folder(&mut self, path: PathBuf) {
+        let out = self.all_photos_filter().excluding(&path).is_none();
+        let list = tri::folder::all_photos_except_toggled(
+            &self.settings.index.all_photos_except,
+            &path,
+            out,
+        );
+        if self.set_index_setting(
+            "all_photos_except",
+            tri::config_edit::Value::Strings(list.clone()),
+        ) {
+            self.settings.index.all_photos_except = list;
+            let name = folder_name(&path);
+            self.notice = Some((
+                if out {
+                    t!("folders-all-photos-out", name = name)
+                } else {
+                    t!("folders-all-photos-in", name = name)
+                },
+                false,
+            ));
+            if tri::folder::is_all_photos(&self.folder.dir) {
+                self.reload_folder(None);
+            }
+        }
     }
 
     /// Racine du mode léger qui s'applique à `path` (#597), `None` hors du mode léger.
@@ -9222,6 +9283,9 @@ impl TriApp {
         let moved =
             ui.input(|i| i.pointer.delta() != Vec2::ZERO) && ui.ctx().dragged_id().is_none();
         let mut hover_point: Option<usize> = None;
+        let all_except = self.all_photos_filter().except;
+        // ∅ cliqué : le dossier à remettre dans « Toutes les photos ».
+        let mut all_toggle: Option<PathBuf> = None;
         // Le résumé du dossier ouvert en bas du panneau (#388) : l'arborescence lui laisse
         // sa hauteur (mesurée à l'image précédente).
         let tree_height = (ui.available_height() - self.summary_height).max(60.0);
@@ -9766,6 +9830,17 @@ impl TriApp {
                                             t!("folder-menu-light-on")
                                         };
                                         entry(ui, Action::FolderLight, light);
+                                        // « Toutes les photos » : sortir ou remettre.
+                                        let all = if self
+                                            .all_photos_filter()
+                                            .excluding(&row.path)
+                                            .is_some()
+                                        {
+                                            t!("folder-menu-all-photos-in")
+                                        } else {
+                                            t!("folder-menu-all-photos-out")
+                                        };
+                                        entry(ui, Action::FolderAllPhotos, all);
                                         // Cache, données, notes, versions au choix (#411).
                                         entry(
                                             ui,
@@ -9842,6 +9917,28 @@ impl TriApp {
                             response.on_hover_text(format!(
                                 "{text}\n{}",
                                 self.action_tip(Action::FolderLight)
+                            ));
+                        }
+                        // Sorti de « Toutes les photos » (26/11/2026) : un ∅, là où
+                        // la sortie commence.
+                        if all_except.contains(&row.path) {
+                            ui.add_space(3.0);
+                            // Cliquable : le remet (retour du 26/11/2026).
+                            let (rect, response) =
+                                ui.allocate_exact_size(vec2(size, size), Sense::click());
+                            let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+                            if response.clicked() {
+                                all_toggle = Some(row.path.clone());
+                            }
+                            let color = ui.visuals().weak_text_color();
+                            marks::empty_set(ui.painter(), rect, color);
+                            let text = t!("folders-all-photos-out-mark");
+                            response.widget_info(|| {
+                                egui::WidgetInfo::labeled(egui::Role::Image, true, &text)
+                            });
+                            response.on_hover_text(format!(
+                                "{text}\n{}",
+                                self.action_tip(Action::FolderAllPhotos)
                             ));
                         }
                         if row.favorite {
@@ -10022,6 +10119,9 @@ impl TriApp {
                 Err(e) => self.file_error = Some(format!("{} : {e}", path.display())),
             }
         }
+        if let Some(path) = all_toggle {
+            self.toggle_all_photos_folder(path);
+        }
         if let Some((path, action)) = menu {
             // Clic droit hors du choix de dossiers (#606) : lui seul.
             if !self.tree.is_selected(&path) {
@@ -10066,6 +10166,7 @@ impl TriApp {
                 // de `folder_edit_action`), corrigé le 20/10/2026.
                 Action::FolderFavorite => self.toggle_favorite(),
                 Action::FolderWatch => self.toggle_watch(path),
+                Action::FolderAllPhotos => self.toggle_all_photos_folder(path),
                 Action::FolderLight => self.toggle_light(path),
                 Action::PairsToggle => self.toggle_pairs(),
                 Action::FolderFavoriteName => self.name_favorite(&ctx),
@@ -14857,6 +14958,11 @@ impl TriApp {
             Action::FolderLight => {
                 if let Some(path) = self.tree.cursor_path() {
                     self.toggle_light(path);
+                }
+            }
+            Action::FolderAllPhotos => {
+                if let Some(path) = self.tree.cursor_path() {
+                    self.toggle_all_photos_folder(path);
                 }
             }
             Action::FolderFavoriteName => self.name_favorite(ctx),
@@ -23957,9 +24063,11 @@ impl TriApp {
         let read = if all_photos {
             // « Toutes les photos » : l'index, puis complété en fond.
             match self.settings.data_dir() {
-                Some(data) => {
-                    Folder::all_photos(&data.join("index.sqlite"), self.settings.xmp.sidecar)
-                }
+                Some(data) => Folder::all_photos(
+                    &data.join("index.sqlite"),
+                    self.settings.xmp.sidecar,
+                    &self.all_photos_filter(),
+                ),
                 None => Err(std::io::ErrorKind::NotFound.into()),
             }
         } else {
@@ -35993,6 +36101,84 @@ mod tests {
                 && app.select_after_open.is_none()
         });
         assert_eq!(h.state().files[h.state().selected].path, green_path);
+    }
+
+    #[test]
+    fn all_photos_leaves_out_folders_taken_out_and_takes_them_back() {
+        // 26/11/2026 : un dossier sorti (clic droit), remis par un clic sur son ∅.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let local = dir.path().join("local");
+        let nas = dir.path().join("nas");
+        for (d, name) in [(&local, "a.jpg"), (&nas, "b.jpg")] {
+            std::fs::create_dir_all(d).unwrap();
+            image::RgbImage::from_pixel(32, 24, image::Rgb([20, 200, 40]))
+                .save(d.join(name))
+                .unwrap();
+        }
+        let stamps = |d: &Path| -> Vec<(PathBuf, u64, u128)> {
+            tri::media::scan(d, 1)
+                .unwrap()
+                .into_iter()
+                .map(|f| {
+                    let m = std::fs::metadata(&f.path).unwrap();
+                    let t = m
+                        .modified()
+                        .unwrap()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap();
+                    (f.path, m.len(), t.as_nanos())
+                })
+                .collect()
+        };
+        {
+            let db = dir.path().join("data").join("index.sqlite");
+            let mut index = tri::index::Index::open(&db).unwrap();
+            index.seen(&local, 1, &stamps(&local)).unwrap();
+            index.seen(&nas, 1, &stamps(&nas)).unwrap();
+        }
+        h.state_mut().tree = Tree::with_places(
+            vec![
+                tri::places::Place {
+                    name: "Test".into(),
+                    path: local.clone(),
+                    kind: tri::places::PlaceKind::Home,
+                },
+                tri::places::Place {
+                    name: "NAS".into(),
+                    path: nas.clone(),
+                    kind: tri::places::PlaceKind::Network,
+                },
+            ],
+            false,
+        );
+        let names = |h: &Harness<'_, TriApp>| -> Vec<String> {
+            let mut n: Vec<String> = h
+                .state()
+                .files
+                .iter()
+                .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+                .collect();
+            n.sort();
+            n
+        };
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::AllPhotos);
+        run_until(&mut h, |app| {
+            tri::folder::is_all_photos(&app.folder.dir)
+                && app.opening.is_none()
+                && app.all_photos_completion.is_none()
+        });
+        assert_eq!(names(&h), ["a.jpg", "b.jpg"]);
+        // Sortir « local » : ses photos partent.
+        h.state_mut().toggle_all_photos_folder(local.clone());
+        run_until(&mut h, |app| app.opening.is_none() && app.files.len() == 1);
+        assert_eq!(names(&h), ["b.jpg"]);
+        // Son ∅ (sur sa ligne d'emplacement) le remet.
+        h.run_steps(2);
+        h.get_by_label(&t!("folders-all-photos-out-mark")).click();
+        run_until(&mut h, |app| app.opening.is_none() && app.files.len() == 2);
+        assert!(h.state().settings.index.all_photos_except.is_empty());
     }
 
     #[test]

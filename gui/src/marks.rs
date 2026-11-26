@@ -1762,6 +1762,16 @@ pub fn glue(painter: &Painter, rect: Rect, color: Color32) {
     ));
 }
 
+/// Ensemble vide (∅) : un dossier sorti de « Toutes les photos » (idée de l'utilisateur,
+/// 26/11/2026 : ni un œil barré, qui ferait « dossier caché », ni un ∀ barré, peu clair).
+pub fn empty_set(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let p = |x: f32, y: f32| rect.center() + vec2((x - 0.5) * s, (y - 0.5) * s);
+    let stroke = Stroke::new((s / 11.0).max(1.2), color);
+    painter.circle_stroke(rect.center(), s * 0.3, stroke);
+    painter.line_segment([p(0.2, 0.84), p(0.8, 0.16)], stroke);
+}
+
 /// Couleurs mesurées (#492, en face de l'œil des couleurs perçues) : quatre pixels, les
 /// valeurs du fichier telles quelles.
 pub fn pixels(painter: &Painter, rect: Rect, color: Color32) {
