@@ -1762,18 +1762,14 @@ pub fn glue(painter: &Painter, rect: Rect, color: Color32) {
     ));
 }
 
-/// « Pour tout » (∀) : « Toutes les photos » ; barré (`cut`), un dossier qui en est sorti
-/// (26/11/2026, idée de l'utilisateur : un œil barré ferait « dossier caché »).
-pub fn for_all(painter: &Painter, rect: Rect, color: Color32, cut: bool) {
+/// Ensemble vide (∅) : un dossier sorti de « Toutes les photos » (idée de l'utilisateur,
+/// 26/11/2026 : ni un œil barré, qui ferait « dossier caché », ni un ∀ barré, peu clair).
+pub fn empty_set(painter: &Painter, rect: Rect, color: Color32) {
     let s = rect.width().min(rect.height());
     let p = |x: f32, y: f32| rect.center() + vec2((x - 0.5) * s, (y - 0.5) * s);
     let stroke = Stroke::new((s / 11.0).max(1.2), color);
-    painter.line_segment([p(0.2, 0.18), p(0.5, 0.86)], stroke);
-    painter.line_segment([p(0.8, 0.18), p(0.5, 0.86)], stroke);
-    painter.line_segment([p(0.31, 0.44), p(0.69, 0.44)], stroke);
-    if cut {
-        painter.line_segment([p(0.12, 0.88), p(0.88, 0.12)], stroke);
-    }
+    painter.circle_stroke(rect.center(), s * 0.3, stroke);
+    painter.line_segment([p(0.2, 0.84), p(0.8, 0.16)], stroke);
 }
 
 /// Couleurs mesurées (#492, en face de l'œil des couleurs perçues) : quatre pixels, les

@@ -9338,7 +9338,7 @@ impl TriApp {
             ui.input(|i| i.pointer.delta() != Vec2::ZERO) && ui.ctx().dragged_id().is_none();
         let mut hover_point: Option<usize> = None;
         let all_except = self.all_photos_filter().except;
-        // ∀ barré cliqué : le dossier à remettre dans « Toutes les photos ».
+        // ∅ cliqué : le dossier à remettre dans « Toutes les photos ».
         let mut all_toggle: Option<PathBuf> = None;
         // Le résumé du dossier ouvert en bas du panneau (#388) : l'arborescence lui laisse
         // sa hauteur (mesurée à l'image précédente).
@@ -9973,7 +9973,7 @@ impl TriApp {
                                 self.action_tip(Action::FolderLight)
                             ));
                         }
-                        // Sorti de « Toutes les photos » (26/11/2026) : un ∀ barré, là où
+                        // Sorti de « Toutes les photos » (26/11/2026) : un ∅, là où
                         // la sortie commence.
                         if all_except.contains(&row.path) {
                             ui.add_space(3.0);
@@ -9985,7 +9985,7 @@ impl TriApp {
                                 all_toggle = Some(row.path.clone());
                             }
                             let color = ui.visuals().weak_text_color();
-                            marks::for_all(ui.painter(), rect, color, true);
+                            marks::empty_set(ui.painter(), rect, color);
                             let text = t!("folders-all-photos-out-mark");
                             response.widget_info(|| {
                                 egui::WidgetInfo::labeled(egui::Role::Image, true, &text)
@@ -36161,7 +36161,7 @@ mod tests {
     fn all_photos_keeps_to_this_machine_and_leaves_out_folders_taken_out() {
         // 26/11/2026 : les photos du réseau cachées par défaut, montrées par l'interrupteur
         // de la ligne « Toutes les photos » ; un dossier sorti (clic droit), remis par un
-        // clic sur son ∀ barré.
+        // clic sur son ∅.
         let (mut h, dir) = harness();
         h.run_steps(3);
         let local = dir.path().join("local");
@@ -36236,7 +36236,7 @@ mod tests {
         h.state_mut().toggle_all_photos_folder(local.clone());
         run_until(&mut h, |app| app.opening.is_none() && app.files.len() == 1);
         assert_eq!(names(&h), ["b.jpg"]);
-        // Son ∀ barré (sur sa ligne d'emplacement) le remet.
+        // Son ∅ (sur sa ligne d'emplacement) le remet.
         h.run_steps(2);
         h.get_by_label(&t!("folders-all-photos-out-mark")).click();
         run_until(&mut h, |app| app.opening.is_none() && app.files.len() == 2);

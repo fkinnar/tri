@@ -62,7 +62,7 @@ The owner's idea: what is on the machine comes before what is on a NAS.
   are hidden) on the "All photos" line of the folders panel;
 - **folders taken out**, subfolders included (`[index] all_photos_except`): right-click
   "Take out of All photos" / "Put back…" (action `core.folders.all_photos`, no key by
-  default); a **crossed ∀** next to the folder, which a click puts back
+  default); an **∅** (empty set) next to the folder, which a click puts back
   (`folder::all_photos_except_toggled`: taking a folder out covers its subfolders already
   out, putting it back also removes the parent that took it out).
 

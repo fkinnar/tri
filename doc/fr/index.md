@@ -64,7 +64,7 @@ de côté :
   elles sont cachées) sur la ligne « Toutes les photos » du panneau des dossiers ;
 - les **dossiers sortis**, sous-dossiers compris (`[index] all_photos_except`) : clic droit
   « Sortir de Toutes les photos » / « Remettre… » (action `core.folders.all_photos`, sans
-  touche par défaut) ; un **∀ barré** à côté du dossier, qu'un clic remet
+  touche par défaut) ; un **∅** (ensemble vide) à côté du dossier, qu'un clic remet
   (`folder::all_photos_except_toggled` : sortir un dossier couvre ses sous-dossiers déjà
   sortis, le remettre retire aussi le parent qui le sortait).
 
