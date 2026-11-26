@@ -9298,9 +9298,11 @@ impl TriApp {
                             t!("all-photos-network-off-tip"),
                         )
                     };
-                    let (rect, response) = marks::icon_toggle(ui, size, &label, &hint, on);
+                    // Sans cadre : la couleur du texte allumée, grisée et barrée éteinte
+                    // (retour du 26/11/2026).
+                    let (rect, response) = marks::icon_toggle(ui, size, &label, &hint, false);
                     let color = if on {
-                        Color32::from(self.gui.title_color())
+                        ui.visuals().text_color()
                     } else {
                         ui.visuals().weak_text_color()
                     };
