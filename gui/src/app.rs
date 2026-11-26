@@ -9041,6 +9041,8 @@ impl TriApp {
         let f = self.gui.folders.clone();
         let mut toggle: Option<usize> = None;
         let mut pointed: Option<usize> = None;
+        // Choix de plusieurs dossiers (#606) : (ligne, plage) — Cmd/Ctrl+clic ou Maj+clic.
+        let mut chose: Option<(usize, bool)> = None;
         let mut open = None;
         let mut eject = None;
         let mut disconnect: Option<PathBuf> = None;
@@ -9277,6 +9279,8 @@ impl TriApp {
                             }
                         }
                         let current = row.path == self.folder.dir;
+                        // Dossier choisi (#606) : surligné comme le dossier ouvert.
+                        let chosen = self.tree.is_selected(&row.path);
                         let label = if device || server {
                             let tip = if row.kind == Some(PlaceKind::Neighbour) {
                                 t!(
@@ -9294,7 +9298,7 @@ impl TriApp {
                             ui.selectable_label(false, egui::RichText::new(&row.name).weak())
                                 .on_hover_text(tip)
                         } else {
-                            ui.selectable_label(current, &row.name)
+                            ui.selectable_label(current || chosen, &row.name)
                         };
                         // Dossier à son propre réglage des notes dans les images : un repère
                         // (à l'accent : toujours ; gris : jamais).
@@ -9350,8 +9354,13 @@ impl TriApp {
                             dropped = Some(((*d).clone(), row.path.clone()));
                         }
                         if label.clicked() {
+                            // Cmd/Ctrl+clic : choisi ou non ; Maj+clic : la plage (#606) ; ni
+                            // l'un ni l'autre n'ouvre le dossier.
+                            let modifiers = ui.input(|i| i.modifiers);
                             pointed = Some(i);
-                            if !current {
+                            if modifiers.command || modifiers.shift {
+                                chose = Some((i, modifiers.shift));
+                            } else if !current {
                                 open = Some(row.path.clone());
                             }
                         }
@@ -9914,6 +9923,14 @@ impl TriApp {
         // Clic sur un dossier : il devient la ligne pointée et le panneau prend le clavier,
         // comme un clic dans les métadonnées (retour du 22/10/2026 : pas cohérent).
         if let Some(i) = pointed {
+            match chose {
+                Some((i, true)) => self.tree.select_range(i),
+                Some((i, false)) => self.tree.toggle_selected(i),
+                // Un clic simple ouvre le dossier : le choix d'avant est fini.
+                None => {
+                    self.tree.clear_selection();
+                }
+            }
             self.tree.set_cursor(i);
             self.focus = crate::actions::Scope::Folders;
         }
@@ -9950,6 +9967,10 @@ impl TriApp {
             }
         }
         if let Some((path, action)) = menu {
+            // Clic droit hors du choix de dossiers (#606) : lui seul.
+            if !self.tree.is_selected(&path) {
+                self.tree.clear_selection();
+            }
             self.tree.point_at(&path);
             let ctx = ui.ctx().clone();
             match action {
@@ -10000,7 +10021,8 @@ impl TriApp {
                     self.compute_action(&ctx, action, crate::compute_tasks::Target::Folder(path))
                 }
                 Action::FolderCopy | Action::FolderMove => {
-                    self.transfer_folder(&ctx, path, action == Action::FolderCopy, None)
+                    let paths = self.folders_for(&path);
+                    self.transfer_folder(&ctx, paths, action == Action::FolderCopy, None)
                 }
                 Action::FolderCreate | Action::FolderRename | Action::FolderDelete => {
                     self.folder_edit_action(&ctx, action)
@@ -10014,7 +10036,10 @@ impl TriApp {
             let ctx = ui.ctx().clone();
             let copy = drag_copies(&ctx);
             match dragged {
-                Dragged::Folder(path) => self.transfer_folder(&ctx, path, copy, Some(&dest)),
+                Dragged::Folder(path) => {
+                    let paths = self.folders_for(&path);
+                    self.transfer_folder(&ctx, paths, copy, Some(&dest))
+                }
                 Dragged::Images(_) if self.refuses_file_action(Action::FileMove) => {}
                 Dragged::Images(paths) => {
                     let mode = if copy {
@@ -14800,10 +14825,9 @@ impl TriApp {
                 }
             }
             Action::FolderCopy | Action::FolderMove => {
-                if let Some(i) = self.tree.cursor() {
-                    let path = self.tree.rows()[i].path.clone();
-                    self.transfer_folder(ctx, path, action == Action::FolderCopy, None);
-                }
+                // Les dossiers choisis (#606), sinon le pointé.
+                let paths = self.tree.acting();
+                self.transfer_folder(ctx, paths, action == Action::FolderCopy, None);
             }
             // Curseur dans les réglages : pas de ligne des EXIF à copier.
             Action::MetaCopy if self.side_cursor.is_some() => {}
@@ -14817,8 +14841,22 @@ impl TriApp {
             }
             // Échap dans un champ de recherche : la recherche d'abord.
             Action::Back if self.search_escape(ctx) => {}
+            // Panneau des dossiers : Échap vide d'abord le choix de dossiers (#606).
+            Action::Back
+                if self.effective_focus() == crate::actions::Scope::Folders
+                    && self.tree.clear_selection() => {}
             Action::Back if self.focus != crate::actions::Scope::Images => {
                 self.focus = crate::actions::Scope::Images;
+            }
+            // Le panneau des dossiers a le clavier : choisir des dossiers (#606), mêmes
+            // touches que dans la grille.
+            Action::SelectToggle if self.effective_focus() == crate::actions::Scope::Folders => {
+                if let Some(i) = self.tree.cursor() {
+                    self.tree.toggle_selected(i);
+                }
+            }
+            Action::SelectVisual if self.effective_focus() == crate::actions::Scope::Folders => {
+                self.tree.toggle_visual();
             }
             Action::Back => {
                 if self.help {
@@ -23265,7 +23303,7 @@ impl TriApp {
         &mut self,
         step: Option<tri::history::Step>,
         point: Option<PathBuf>,
-        renamed: Option<(PathBuf, PathBuf)>,
+        renamed: Vec<(PathBuf, PathBuf)>,
         cache_follows: bool,
         keep_here: bool,
     ) {
@@ -23274,7 +23312,7 @@ impl TriApp {
         }
         // Le cache suit le dossier renommé ou déplacé (sinon, recalculé), et ses données de
         // tri gardées sur la machine (celles de son `.tri/` sont parties avec lui).
-        if cache_follows && let Some((from, to)) = renamed.clone() {
+        for (from, to) in renamed.clone().into_iter().filter(|_| cache_follows) {
             let data = self.settings.data_dir();
             self.cache_job(move |cache| {
                 if let Some(data) = &data {
@@ -26671,6 +26709,27 @@ impl TriApp {
         if self.refuses_file_action(action) {
             return;
         }
+        // Supprimer : les dossiers choisis (#606), sinon le pointé.
+        if action == Action::FolderDelete {
+            let paths = self.tree.acting();
+            if paths.is_empty() {
+                if let Some(i) = self.tree.cursor() {
+                    let name = self.tree.rows()[i].name.clone();
+                    self.notice = Some((t!("folders-place-root", name = name), true));
+                }
+                return;
+            }
+            let contents = paths
+                .iter()
+                .map(|p| tri::files::dir_contents(p))
+                .fold((0, 0), |(f, d), (a, b)| (f + a, d + b));
+            self.file_dialog = Some(crate::files::FileDialog::DeleteFolder {
+                paths,
+                contents,
+                at: CENTRED,
+            });
+            return;
+        }
         let Some(i) = self.tree.cursor() else { return };
         let row = self.tree.rows()[i].clone();
         let at = CENTRED;
@@ -26693,7 +26752,7 @@ impl TriApp {
             },
             _ => crate::files::FileDialog::DeleteFolder {
                 contents: tri::files::dir_contents(&row.path),
-                path: row.path,
+                paths: vec![row.path],
                 at,
             },
         });
@@ -26706,17 +26765,22 @@ impl TriApp {
     fn transfer_folder(
         &mut self,
         _ctx: &egui::Context,
-        path: PathBuf,
+        paths: Vec<PathBuf>,
         copy: bool,
         dest: Option<&Path>,
     ) {
         if self.refuses_file_action(Action::FolderMove) {
             return;
         }
-        if let Some(row) = self.tree.rows().iter().find(|r| r.path == path)
-            && row.depth == 0
+        let rows = self.tree.rows();
+        if let Some(row) = rows
+            .iter()
+            .find(|r| r.depth == 0 && paths.contains(&r.path))
         {
             self.notice = Some((t!("folders-place-root", name = row.name.clone()), true));
+            return;
+        }
+        if paths.is_empty() {
             return;
         }
         let mode = if copy {
@@ -26727,7 +26791,7 @@ impl TriApp {
         let at = CENTRED;
         self.file_dialog = Some(
             crate::files::FileDialog::transfer(
-                crate::files::Source::Folder(path),
+                crate::files::Source::Folders(paths),
                 mode,
                 dest,
                 self.data_dir.as_deref(),
@@ -26735,6 +26799,16 @@ impl TriApp {
             )
             .with_carrier(self.carrier()),
         );
+    }
+
+    /// Les dossiers d'un geste sur la ligne `path` (clic droit, glisser) : tout le choix si
+    /// elle en fait partie (#606), sinon elle seule.
+    fn folders_for(&self, path: &Path) -> Vec<PathBuf> {
+        if self.tree.is_selected(path) {
+            self.tree.acting()
+        } else {
+            vec![path.to_path_buf()]
+        }
     }
 
     /// De quoi reprendre le cache des images copiées ou déplacées (#508) : le cache et
@@ -26800,9 +26874,12 @@ impl TriApp {
     /// Après la création, le renommage ou la suppression d'un dossier (ou leur
     /// annulation) : arborescence relue ; le dossier ouvert suit son renommage, ou se
     /// ferme s'il a disparu.
-    fn after_folder_change(&mut self, renamed: Option<(PathBuf, PathBuf)>, point: Option<PathBuf>) {
+    fn after_folder_change(&mut self, renamed: Vec<(PathBuf, PathBuf)>, point: Option<PathBuf>) {
+        // Le choix de dossiers (#606) est fait : vidé.
+        self.tree.clear_selection();
         // Les favoris suivent un dossier renommé (ou un dossier qui les contient).
-        if let (Some((from, to)), Some(data)) = (&renamed, &self.data_dir) {
+        for (from, to) in renamed.iter() {
+            let Some(data) = &self.data_dir else { break };
             match tri::places::rename_favorites(data, from, to) {
                 Ok(list) => {
                     self.tree.set_favorites(list);
@@ -26817,8 +26894,8 @@ impl TriApp {
         }
         self.tree.reload();
         if !self.folder.is_none() && !self.folder.dir.exists() {
-            let moved = renamed.and_then(|(from, to)| {
-                let rest = self.folder.dir.strip_prefix(&from).ok()?;
+            let moved = renamed.iter().find_map(|(from, to)| {
+                let rest = self.folder.dir.strip_prefix(from).ok()?;
                 Some(to.join(rest))
             });
             match moved.filter(|p| p.is_dir()) {
@@ -27021,7 +27098,7 @@ impl TriApp {
         self.forget_grid_versions();
         self.version_shown = None;
         if applied.iter().any(|a| a.files_changed) {
-            self.after_folder_change(None, None);
+            self.after_folder_change(Vec::new(), None);
         }
         if let Some(last) = applied.last() {
             let show = last
@@ -43705,7 +43782,7 @@ mod tests {
         );
         std::fs::rename(&seance, &to).unwrap();
         h.state_mut()
-            .folder_outcome(None, None, Some((seance.clone(), to.clone())), true, true);
+            .folder_outcome(None, None, vec![(seance.clone(), to.clone())], true, true);
         for _ in 0..400 {
             h.run_steps(1);
             if h.state().cache_jobs.is_empty() {
@@ -44020,6 +44097,87 @@ mod tests {
         );
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
+    }
+
+    #[test]
+    fn several_folders_are_chosen_then_moved_and_deleted_together() {
+        // #606 : Cmd/Ctrl+clic et Maj+clic choisissent sans ouvrir ; Espace et Maj+Espace
+        // au clavier ; déplacés d'un geste (un pas à défaire), puis supprimés d'un coup.
+        use crate::actions::Scope;
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        h.state_mut().settings.files.trash = false;
+        let archive = dir.path().join("archive");
+        std::fs::create_dir(&archive).unwrap();
+        let seances = dir.path().join("séances");
+        for name in ["alice", "bob", "carol"] {
+            std::fs::create_dir_all(seances.join(name)).unwrap();
+            std::fs::write(seances.join(name).join("A.JPG"), b"x").unwrap();
+        }
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        h.state_mut().tree.expand(&seances);
+        h.run_steps(2);
+        let opened = h.state().folder.dir.clone();
+        h.get_by_label("alice").click_modifiers(CMD);
+        h.run_steps(2);
+        h.get_by_label("carol").click_modifiers(Modifiers::SHIFT);
+        h.run_steps(2);
+        assert_eq!(h.state().folder.dir, opened, "rien d'ouvert");
+        assert_eq!(h.state().focus, Scope::Folders);
+        let chosen = |h: &Harness<'_, TriApp>| h.state().tree.acting();
+        let path = |n: &str| seances.join(n);
+        assert_eq!(chosen(&h), [path("alice"), path("bob"), path("carol")]);
+        // Espace (sur carol, pointée) la retire ; Échap vide tout.
+        press(&mut h, Key::Space, Modifiers::NONE);
+        assert_eq!(chosen(&h), [path("alice"), path("bob")]);
+        // Déplacer les deux vers archive, puis annuler d'un coup.
+        press(&mut h, Key::X, CMD);
+        h.run_steps(2);
+        assert!(h.query_by_label_contains("2 dossiers vers").is_some());
+        h.event(UiEvent::Text(archive.display().to_string()));
+        h.run_steps(2);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        for _ in 0..200 {
+            if h.state().file_dialog.is_none() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            h.run_steps(1);
+        }
+        assert!(archive.join("alice/A.JPG").exists() && archive.join("bob/A.JPG").exists());
+        assert!(h.state().tree.selection().is_empty(), "choix fini");
+        press(&mut h, Key::Z, CMD);
+        assert!(path("alice").exists() && path("bob").exists() && !archive.join("bob").exists());
+        // Maj+Espace (mode visuel) depuis alice, une ligne plus bas : alice et bob ;
+        // supprimés d'un coup (définitivement ici).
+        h.state_mut().tree.reload();
+        h.state_mut().tree.point_at(&path("alice"));
+        press(&mut h, Key::Space, Modifiers::SHIFT);
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        assert_eq!(chosen(&h), [path("alice"), path("bob")]);
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::FolderDelete);
+        h.run_steps(3);
+        assert!(
+            h.query_by_label_contains("Supprimer définitivement 2 dossiers")
+                .is_some()
+        );
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(!path("alice").exists() && !path("bob").exists() && path("carol").exists());
+        // Échap vide le choix sans quitter le panneau.
+        h.state_mut().tree.reload();
+        h.state_mut().tree.point_at(&path("carol"));
+        press(&mut h, Key::Space, Modifiers::NONE);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().tree.selection().is_empty());
+        assert_eq!(h.state().focus, Scope::Folders);
     }
 
     #[test]
@@ -46566,7 +46724,7 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().files.len(), 4);
         tri::files::delete_dir(&sub, false).unwrap();
-        h.state_mut().after_folder_change(None, Some(sub));
+        h.state_mut().after_folder_change(Vec::new(), Some(sub));
         assert_eq!(h.state().files.len(), 3, "images du sous-dossier retirées");
     }
 

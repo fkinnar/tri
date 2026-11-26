@@ -233,6 +233,29 @@ In the interface (`TriApp::after_folder_change`), background work follows: open 
 deleted, it closes and its computations stop; subfolder deleted with "Subfolders" on, its
 images leave the list; darktable renders of a deleted folder, interrupted (2026-10-25).
 
+## Several folders at once (#606, 2026-11-26)
+
+Asked by the owner: delete or move several folders without taking them one by one. The
+selection lives in the engine (`places::Tree`: `toggle_selected`, `select_range`,
+`toggle_visual`, `clear_selection`, `acting`); the interface only draws it.
+
+- **Mouse**: Cmd/Ctrl+click adds or removes a folder, Shift+click selects the range from
+  the last one clicked; neither opens the folder. A plain click opens the folder and ends
+  the selection. Chosen folders are highlighted like the open folder.
+- **Keyboard** (the panel has the keyboard, leader then `h`): the same actions as in the
+  grid, `core.select.toggle` (Space) and `core.select.visual` (Shift+Space: moving selects
+  the range); `core.view.back` (Escape) clears the selection first.
+- **What is acted on** (`Tree::acting`): the selection if there is one, otherwise the
+  pointed row; never a place (volume, home folder, favourite at the top); a folder whose
+  parent is also chosen goes with it. Right-click or drag on a chosen folder: the whole
+  selection; on another one: that one only.
+- **Delete**: one confirmation with the names and the total contents, `delete_dirs` (to the
+  trash at once: one undo step, `Step::Trash`).
+- **Copy / move to…** and drag and drop: one dialog ("2 folders to…"), one plan per folder
+  (`plan_transfer_dir`), run one after the other with a single progress; one undo step
+  (`Step::Many`, undone in reverse order). Favourites, cache and sorting data follow each
+  moved folder.
+
 ## Batch rename (#439, 2026-11-14)
 
 Several photos selected (marked), `F2` or "Rename" in the right-click dialog opens the

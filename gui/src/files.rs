@@ -60,9 +60,10 @@ pub enum FileDialog {
     },
     /// Exporter (profil, dossier) : voir [`crate::export`].
     Export(Box<crate::export::ExportDialog>),
-    /// Confirmer la suppression du dossier `path` ; (fichiers, sous-dossiers) dedans.
+    /// Confirmer la suppression des dossiers `paths` (#606 : plusieurs d'un coup) ;
+    /// (fichiers, sous-dossiers) dedans.
     DeleteFolder {
-        path: PathBuf,
+        paths: Vec<PathBuf>,
         contents: (usize, usize),
         at: Pos2,
     },
@@ -72,8 +73,8 @@ pub enum FileDialog {
 pub enum Source {
     /// Des images (paires et sidecars suivent).
     Images(Vec<PathBuf>),
-    /// Un dossier entier (panneau des dossiers).
-    Folder(PathBuf),
+    /// Des dossiers entiers (panneau des dossiers ; plusieurs d'un coup, #606).
+    Folders(Vec<PathBuf>),
 }
 
 /// Reprend le cache des images copiées ou déplacées (#508) : (avant, après) de chaque
@@ -84,7 +85,7 @@ pub type Carrier = Arc<dyn Fn(&[(PathBuf, PathBuf)], bool) + Send + Sync>;
 /// Plan d'une copie ou d'un déplacement, selon la source.
 enum Plan {
     Images(files::Transfer),
-    Folder(files::DirTransfer),
+    Folders(Vec<files::DirTransfer>),
 }
 
 impl Plan {
@@ -98,14 +99,18 @@ impl Plan {
             Source::Images(images) => {
                 files::plan_transfer(images, dest, mode, settings).map(Plan::Images)
             }
-            Source::Folder(dir) => files::plan_transfer_dir(dir, dest, mode).map(Plan::Folder),
+            Source::Folders(dirs) => dirs
+                .iter()
+                .map(|dir| files::plan_transfer_dir(dir, dest, mode))
+                .collect::<Result<Vec<_>, _>>()
+                .map(Plan::Folders),
         }
     }
 
     fn len(&self) -> usize {
         match self {
             Plan::Images(p) => p.len(),
-            Plan::Folder(p) => p.len(),
+            Plan::Folders(p) => p.iter().map(files::DirTransfer::len).sum(),
         }
     }
 
@@ -113,7 +118,16 @@ impl Plan {
     fn run(&self, progress: impl FnMut(usize, usize)) -> Result<(), FileError> {
         match self {
             Plan::Images(p) => files::transfer(p, progress),
-            Plan::Folder(p) => files::transfer_dir(p, progress),
+            Plan::Folders(plans) => {
+                let total = self.len();
+                let mut progress = progress;
+                let mut before = 0;
+                for p in plans {
+                    files::transfer_dir(p, |done, _| progress(before + done, total))?;
+                    before += p.len();
+                }
+                Ok(())
+            }
         }
     }
 
@@ -121,7 +135,7 @@ impl Plan {
     fn files(&self) -> Vec<(PathBuf, PathBuf)> {
         match self {
             Plan::Images(p) => p.files.iter().chain(&p.shared).cloned().collect(),
-            Plan::Folder(p) => p.files.clone(),
+            Plan::Folders(p) => p.iter().flat_map(|p| p.files.iter().cloned()).collect(),
         }
     }
 }
@@ -195,7 +209,7 @@ pub enum Outcome {
     Folder {
         step: Option<tri::history::Step>,
         point: Option<PathBuf>,
-        renamed: Option<(PathBuf, PathBuf)>,
+        renamed: Vec<(PathBuf, PathBuf)>,
         /// Renommé ou déplacé : son cache le suit (case « Emporter le cache »).
         cache_follows: bool,
         /// Et il est gardé avec le dossier à sa nouvelle place ([`CacheGoes::WithFolder`]).
@@ -407,7 +421,7 @@ impl FileDialog {
                         Ok(path) => Outcome::Folder {
                             step: Some(tri::history::Step::CreateDir(path.clone())),
                             point: Some(path),
-                            renamed: None,
+                            renamed: Vec::new(),
                             cache_follows: false,
                             keep_here: false,
                         },
@@ -445,7 +459,7 @@ impl FileDialog {
                         Ok(to) => Outcome::Folder {
                             step: Some(tri::history::Step::RenameDir(path.clone(), to.clone())),
                             point: Some(to.clone()),
-                            renamed: Some((path.clone(), to)),
+                            renamed: vec![(path.clone(), to)],
                             cache_follows: true,
                             keep_here: false,
                         },
@@ -455,9 +469,11 @@ impl FileDialog {
                     None => Outcome::Open,
                 }
             }
-            FileDialog::DeleteFolder { path, contents, at } => {
-                delete_folder_dialog(ctx, settings, path, *contents, *at)
-            }
+            FileDialog::DeleteFolder {
+                paths,
+                contents,
+                at,
+            } => delete_folder_dialog(ctx, settings, paths, *contents, *at),
             FileDialog::NameFavorite {
                 path,
                 name,
@@ -871,21 +887,30 @@ fn name_dialog(
 fn delete_folder_dialog(
     ctx: &egui::Context,
     settings: &FileSettings,
-    path: &Path,
+    paths: &[PathBuf],
     (files_in, dirs_in): (usize, usize),
     at: Pos2,
 ) -> Outcome {
     let (mut confirm, mut cancel) = (false, false);
-    let name = file_name(path);
-    let title = if settings.trash {
-        t!("folder-delete-trash", name = &name)
-    } else {
-        t!("folder-delete-permanently", name = &name)
+    let title = match (paths, settings.trash) {
+        ([one], true) => t!("folder-delete-trash", name = file_name(one)),
+        ([one], false) => t!("folder-delete-permanently", name = file_name(one)),
+        (_, true) => t!("folders-delete-trash", n = paths.len()),
+        (_, false) => t!("folders-delete-permanently", n = paths.len()),
     };
     let modal = crate::app::modal_at("delete_folder", at)
         .title(title)
         .show(ctx, |ui| {
             ui.add_space(6.0);
+            // Plusieurs dossiers : leurs noms (#606).
+            if paths.len() > 1 {
+                for path in paths.iter().take(8) {
+                    ui.label(format!("· {}", file_name(path)));
+                }
+                if paths.len() > 8 {
+                    ui.weak(t!("folders-more", n = paths.len() - 8));
+                }
+            }
             ui.label(t!("folder-contents", files = files_in, dirs = dirs_in));
             library_warning(ui);
             if !settings.trash {
@@ -904,11 +929,11 @@ fn delete_folder_dialog(
         });
     confirm |= ctx.input(|i| i.key_pressed(Key::Enter));
     if confirm {
-        return match files::delete_dir(path, settings.trash) {
+        return match files::delete_dirs(paths, settings.trash) {
             Ok(trashed) => Outcome::Folder {
                 step: settings.trash.then_some(tri::history::Step::Trash(trashed)),
-                point: path.parent().map(Path::to_path_buf),
-                renamed: None,
+                point: paths[0].parent().map(Path::to_path_buf),
+                renamed: Vec::new(),
                 cache_follows: false,
                 keep_here: false,
             },
@@ -939,7 +964,7 @@ impl Transfer {
         }
         let has_pairs = *self.has_pairs.get_or_insert_with(|| match &self.source {
             Source::Images(images) => files::adds_pairs(images),
-            Source::Folder(_) => false,
+            Source::Folders(_) => false,
         });
         let mut pairs = self.pairs.unwrap_or(settings.pairs);
         let settings = &with_pairs(settings, pairs);
@@ -1005,11 +1030,11 @@ impl Transfer {
                             ui.weak(t!("transfer-shared", name = file_name(from)));
                         }
                     }
-                    Ok(Plan::Folder(plan)) => {
+                    Ok(Plan::Folders(plans)) => {
                         ui.label(t!(
                             "folder-contents",
-                            files = plan.files.len(),
-                            dirs = plan.dirs.len() - 1
+                            files = plans.iter().map(|p| p.files.len()).sum::<usize>(),
+                            dirs = plans.iter().map(|p| p.dirs.len() - 1).sum::<usize>()
                         ));
                     }
                     Err(_) if create => {
@@ -1029,7 +1054,7 @@ impl Transfer {
                 }
                 // Images, ou dossier copié : leurs aperçus déjà calculés suivent (#508).
                 let folder_move =
-                    matches!(self.source, Source::Folder(_)) && self.mode == TransferMode::Move;
+                    matches!(self.source, Source::Folders(_)) && self.mode == TransferMode::Move;
                 if !folder_move && self.carrier.is_some() {
                     let mut carry = self.carry.unwrap_or(settings.carry_cache);
                     ui.checkbox(&mut carry, t!("transfer-carry-cache"))
@@ -1044,7 +1069,9 @@ impl Transfer {
                         .on_hover_text(t!("transfer-bring-cache-tip"));
                     // Où il ira, selon où il est et ce que garde la destination (retour du
                     // 19/11/2026 : déplacé d'une clé vers iCloud, il était resté sur le Mac).
-                    if let Ok(Plan::Folder(plan)) = &plan {
+                    if let Ok(Plan::Folders(plans)) = &plan
+                        && let Some(plan) = plans.first()
+                    {
                         let goes = cache_goes(&plan.from, &plan.to);
                         self.keep_here = goes == CacheGoes::WithFolder;
                         let text = match (self.bring_cache, goes) {
@@ -1105,7 +1132,10 @@ impl Transfer {
     fn title(&self) -> String {
         match &self.source {
             Source::Images(images) => t!("transfer-title", n = images.len()),
-            Source::Folder(dir) => t!("transfer-folder-title", name = file_name(dir)),
+            Source::Folders(dirs) => match dirs.as_slice() {
+                [one] => t!("transfer-folder-title", name = file_name(one)),
+                _ => t!("transfer-folders-title", n = dirs.len()),
+            },
         }
     }
 
@@ -1136,7 +1166,7 @@ impl Transfer {
         let (counter, ctx) = (done.clone(), ctx.clone());
         // Un dossier déplacé emmène son cache autrement (« Emporter le cache »).
         let folder_move =
-            matches!(self.source, Source::Folder(_)) && self.mode == TransferMode::Move;
+            matches!(self.source, Source::Folders(_)) && self.mode == TransferMode::Move;
         let carrier = self
             .carrier
             .clone()
@@ -1184,11 +1214,24 @@ impl Transfer {
                         },
                         // Dossier déplacé : comme un renommage (favoris, dossier ouvert
                         // dedans) ; pointé à sa nouvelle place.
-                        Plan::Folder(plan) => Outcome::Folder {
-                            point: Some(plan.to.clone()),
-                            renamed: (plan.mode == TransferMode::Move)
-                                .then(|| (plan.from.clone(), plan.to.clone())),
-                            step: Some(tri::history::transfer_dir_step(plan)),
+                        Plan::Folders(plans) => Outcome::Folder {
+                            point: plans.first().map(|p| p.to.clone()),
+                            renamed: plans
+                                .iter()
+                                .filter(|p| p.mode == TransferMode::Move)
+                                .map(|p| (p.from.clone(), p.to.clone()))
+                                .collect(),
+                            step: {
+                                let mut steps: Vec<tri::history::Step> = plans
+                                    .into_iter()
+                                    .map(tri::history::transfer_dir_step)
+                                    .collect();
+                                match steps.len() {
+                                    0 => None,
+                                    1 => steps.pop(),
+                                    _ => Some(tri::history::Step::Many(steps)),
+                                }
+                            },
                             cache_follows: self.bring_cache,
                             keep_here: self.bring_cache && self.keep_here,
                         },

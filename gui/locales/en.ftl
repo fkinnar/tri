@@ -1398,6 +1398,10 @@ folder-new-title = New folder in "{ $name }"
 folder-new-button = Create
 folder-rename-title = Rename the folder "{ $name }"
 folder-delete-trash = Move the folder "{ $name }" to the trash?
+folders-delete-trash = Move { $n } folders to the trash?
+folders-delete-permanently = Delete { $n } folders permanently?
+folders-more = … and { $n } more
+transfer-folders-title = { $n } folders to…
 folder-delete-permanently = Permanently delete the folder "{ $name }"?
 folder-contents = { $files ->
     [0] Empty folder

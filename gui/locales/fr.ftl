@@ -1398,6 +1398,10 @@ folder-new-title = Nouveau dossier dans « { $name } »
 folder-new-button = Créer
 folder-rename-title = Renommer le dossier « { $name } »
 folder-delete-trash = Mettre le dossier « { $name } » à la corbeille ?
+folders-delete-trash = Mettre { $n } dossiers à la corbeille ?
+folders-delete-permanently = Supprimer définitivement { $n } dossiers ?
+folders-more = … et { $n } autres
+transfer-folders-title = { $n } dossiers vers…
 folder-delete-permanently = Supprimer définitivement le dossier « { $name } » ?
 folder-contents = { $files ->
     [0] Dossier vide
