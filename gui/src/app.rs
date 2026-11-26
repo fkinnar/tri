@@ -36695,7 +36695,11 @@ mod tests {
             "pas d'empreintes calculées"
         );
         let p = h.state().capture_progress;
-        assert_eq!((p.done, p.total), (3, 3), "avancement montré pendant la lecture");
+        assert_eq!(
+            (p.done, p.total),
+            (3, 3),
+            "avancement montré pendant la lecture"
+        );
     }
 
     #[test]
