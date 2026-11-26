@@ -193,6 +193,9 @@ pub enum Action {
     FilterDeveloped,
     /// Filtre « en conflit » : les images dont les notes sont à trancher (issue n° 368).
     FilterConflicts,
+    /// Filtre « illisibles » : les images dont la vignette n'a pas pu être calculée
+    /// (fichier abîmé, lecture ratée sur un partage ; 26/11/2026).
+    FilterUnreadable,
     /// « Palettes proches » de l'image sélectionnée, ou fin de la recherche (#492).
     FilterPalette,
     /// « Contient cette couleur » : la pipette des palettes en plein écran, ou fin de la
@@ -658,7 +661,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 313] = [
+    pub const ALL: [Action; 314] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -693,6 +696,7 @@ impl Action {
         Action::FilterInvert,
         Action::FilterDeveloped,
         Action::FilterConflicts,
+        Action::FilterUnreadable,
         Action::FilterPalette,
         Action::FilterPaletteColour,
         Action::AllPhotos,
@@ -1152,6 +1156,7 @@ impl Action {
             FilterWellExposed => &["panel-filter-exposed"],
             FilterDeveloped => &["panel-filter-developed"],
             FilterConflicts => &["filter-conflicts"],
+            FilterUnreadable => &["filter-unreadable"],
             FilterCycle | FilterKind(_) => &["filter-bar-raw-tip", "filter-bar-flat-tip"],
             // « Recadrer » : l'ancien nom de la nouvelle version (07/11/2026), trouvé en tête.
             Crop => &["version-crop-alias"],
@@ -1190,9 +1195,11 @@ impl Action {
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterStarsTop | FilterFlag(_)
             | FilterColor(_) | FilterColorTop | FilterColorsAll | FilterClear | FilterBlurry
             | FilterWellExposed | FilterStack | FilterInvert | FilterDeveloped
-            | FilterConflicts | FilterPalette | FilterPaletteColour | SetReference
-            | FilterSimilar | FilterRestart | FilterCount | SortNext | SortReverse | SortBy(_)
-            | FilterKind(_) | GridRenderNext | Render(_) => Group::Filters,
+            | FilterConflicts | FilterUnreadable | FilterPalette | FilterPaletteColour
+            | SetReference | FilterSimilar | FilterRestart | FilterCount | SortNext
+            | SortReverse | SortBy(_) | FilterKind(_) | GridRenderNext | Render(_) => {
+                Group::Filters
+            }
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders | AllPhotos => {
                 Group::Panels
@@ -1289,6 +1296,7 @@ impl Action {
                 | FilterInvert
                 | FilterDeveloped
                 | FilterConflicts
+                | FilterUnreadable
                 | FilterPalette
                 | FilterPaletteColour
                 | FilterSimilar
@@ -1332,6 +1340,7 @@ impl Action {
             Action::FilterInvert => "core.filter.invert",
             Action::FilterDeveloped => "core.filter.developed",
             Action::FilterConflicts => "core.filter.conflicts",
+            Action::FilterUnreadable => "core.filter.unreadable",
             Action::FilterPalette => "core.filter.similar_colours",
             Action::FilterPaletteColour => "core.filter.colour",
             Action::AllPhotos => "core.view.all_photos",

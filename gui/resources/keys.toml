@@ -229,6 +229,8 @@ loupe = "none"
 "core.filter.developed" = ["f r"]
 # In conflict (ratings that disagree between programs): "c".
 "core.filter.conflicts" = ["f c"]
+# Unreadable (thumbnail impossible: damaged file, failed read on a share): "e" like error.
+"core.filter.unreadable" = ["f e"]
 # Similar colours: "l" (the former "palette"); contains this colour: "o" like colour.
 "core.filter.similar_colours" = ["f l"]
 "core.filter.colour" = ["f o"]

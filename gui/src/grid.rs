@@ -108,6 +108,7 @@ pub fn navigate(
         | Action::FilterInvert
         | Action::FilterDeveloped
         | Action::FilterConflicts
+        | Action::FilterUnreadable
         | Action::FilterPalette
         | Action::FilterPaletteColour
         | Action::AllPhotos

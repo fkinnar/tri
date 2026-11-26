@@ -1787,6 +1787,34 @@ pub fn empty_set(painter: &Painter, rect: Rect, color: Color32) {
     painter.line_segment([p(0.2, 0.84), p(0.8, 0.16)], stroke);
 }
 
+/// Photo fendue (filtre « illisibles », 26/11/2026 : le triangle d'avertissement se
+/// confondait avec celui de « En conflit ») : un cadre et sa montagne, coupés par une
+/// fissure en zigzag.
+pub fn broken_image(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let p = |x: f32, y: f32| rect.center() + vec2((x - 0.5) * s, (y - 0.5) * s);
+    let stroke = Stroke::new((s / 10.0).max(1.2), color);
+    // Les deux moitiés du cadre, écartées par la fissure.
+    painter.add(egui::Shape::line(
+        vec![p(0.46, 0.14), p(0.1, 0.14), p(0.1, 0.86), p(0.4, 0.86)],
+        stroke,
+    ));
+    painter.add(egui::Shape::line(
+        vec![p(0.62, 0.14), p(0.9, 0.14), p(0.9, 0.86), p(0.56, 0.86)],
+        stroke,
+    ));
+    // La fissure, en zigzag du haut en bas.
+    painter.add(egui::Shape::line(
+        vec![p(0.54, 0.08), p(0.42, 0.4), p(0.6, 0.6), p(0.48, 0.92)],
+        stroke,
+    ));
+    // Une montagne, pour dire « photo ».
+    painter.add(egui::Shape::line(
+        vec![p(0.1, 0.7), p(0.24, 0.5), p(0.38, 0.68)],
+        stroke,
+    ));
+}
+
 /// Couleurs mesurées (#492, en face de l'œil des couleurs perçues) : quatre pixels, les
 /// valeurs du fichier telles quelles.
 pub fn pixels(painter: &Painter, rect: Rect, color: Color32) {

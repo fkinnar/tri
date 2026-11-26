@@ -76,7 +76,16 @@ system one ("cold" measurements, experiments).
   "developed" filter (every active software, or the line's); not rated (no star, flag nor
   colour), with stars, accepted, rejected, with a colour label (any, or one line per
   colour present, feedback from 2026-11-12): the ratings rule; conflicts: the "in
-  conflict" filter. **Grouped folder** (#392, 2026-11-14): "Photos" = pairs + RAW alone +
+  conflict" filter.
+  **Unreadable** (`f e`, `core.filter.unreadable`, 2026-11-26: damaged DNG in a folder of
+  2,820): the images whose thumbnail could not be computed (engine failure: damaged file,
+  or failed read on an SMB share), from the thumbnails' `Failed` events; a line of the
+  Filter panel, like "In conflict", both under "Similar" (feedback of 2026-11-26), shown
+  only when there are some (or when on); icon of a cracked photo (`marks::broken_image`); filtered
+  again once the thumbnails are done. An image computed again successfully leaves it. A photo of All photos whose folder is not found or
+  on an unplugged disk is not unreadable but absent: not in this filter (feedback of
+  2026-11-26).
+  **Grouped folder** (#392, 2026-11-14): "Photos" = pairs + RAW alone +
   JPEG alone, each a line and a box of the three-way filter; under "Developments", also
   "Camera JPEG" (the pairs' JPEG) and "LibRaw". Developments always show two counts, "photos
   shown (developments)", explained by the tooltip (the filter also keeps developed JPEGs,

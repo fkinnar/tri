@@ -1265,6 +1265,13 @@ pub struct TriApp {
     well_exposed: bool,
     /// Filtre « en conflit » (issue n° 368) : les images dont les notes sont à trancher.
     conflicts_only: bool,
+    /// Filtre « illisibles » ([`Action::FilterUnreadable`]).
+    unreadable_only: bool,
+    /// Images dont la vignette n'a pas pu être calculée (échec du moteur), pour ce filtre.
+    unreadable: HashSet<PathBuf>,
+    /// Une image est devenue illisible (ou lisible) pendant que le filtre est allumé : à
+    /// refiltrer une fois les vignettes calculées.
+    unreadable_refilter_pending: bool,
     /// Filtre « développées » allumé (icône de la barre des filtres, `f Maj+D`).
     developed_on: bool,
     /// Logiciels cochés du filtre « développées » ; `None` : tous les installés. Retenus
@@ -2847,6 +2854,9 @@ impl TriApp {
             blur_refilter_pending: false,
             well_exposed: false,
             conflicts_only: false,
+            unreadable_only: false,
+            unreadable: HashSet::new(),
+            unreadable_refilter_pending: false,
             developed_on: false,
             developed_checked: None,
             folder_view_file: None,
@@ -3797,6 +3807,14 @@ impl TriApp {
             }
             None => {}
         }
+    }
+
+    /// Vrai si la vignette de `path` n'a pas pu être calculée alors que son dossier est là
+    /// (filtre « illisibles ») : une photo de « Toutes les photos » dont le dossier est
+    /// introuvable ou sur un disque débranché n'est pas illisible, elle est absente
+    /// (retour du 26/11/2026).
+    fn is_unreadable(&self, path: &Path) -> bool {
+        self.unreadable.contains(path) && self.missing_dir(path).is_none()
     }
 
     /// « Toutes les photos » : le dossier de `path` s'il est injoignable, et vrai si c'est
@@ -4849,6 +4867,7 @@ impl TriApp {
         self.selection.clear();
         self.scores.clear();
         self.signatures.clear();
+        self.unreadable.clear();
         self.captured.clear();
         self.capture_progress = Progress::default();
         self.judgements.clear();
@@ -5588,6 +5607,9 @@ impl TriApp {
                 ui.add_space(self.gui.dialogs.spacing);
             }
         }
+        self.palette_filter_rows(ui);
+        // Filtres secondaires, sous « Semblables » (retour du 26/11/2026), et seulement quand
+        // ils ont quelque chose à montrer (ou qu'ils sont allumés).
         // Notes en conflit (issue n° 368) : un filtre secondaire, ici seulement (pas dans
         // la barre du haut), et seulement quand il y en a (ou qu'il est allumé).
         let conflicts = self.folder.notes.conflicts().len();
@@ -5620,7 +5642,33 @@ impl TriApp {
                 self.perform(&ctx, Action::FilterConflicts);
             }
         }
-        self.palette_filter_rows(ui);
+        // Illisibles : même forme, et seulement quand il y en a (ou qu'il est allumé).
+        if self.unreadable_only || self.unreadable.iter().any(|p| self.is_unreadable(p)) {
+            let tip = t!("filter-unreadable-tip");
+            let size = self.gui.grid.marks + 4.0;
+            let (item, key) = self.side_begin(false);
+            let row = ui.horizontal(|ui| {
+                let mut checked = self.unreadable_only;
+                let check = ui.checkbox(&mut checked, "").on_hover_text(&tip);
+                let (rect, icon) = marks::clickable(ui, size, &tip);
+                let color = if self.unreadable_only {
+                    marks::accent_mark(ui.ctx())
+                } else {
+                    ui.visuals().weak_text_color()
+                };
+                marks::broken_image(ui.painter(), rect.shrink(size * 0.12), color);
+                let label = ui
+                    .add(egui::Label::new(t!("filter-unreadable")).sense(Sense::click()))
+                    .on_hover_text(&tip);
+                check.changed() || icon.clicked() || label.clicked()
+            });
+            let toggled = row.inner || key == Some(SideKey::Activate);
+            self.side_end(ui, item, row.response.rect, row.inner);
+            if toggled {
+                let ctx = ui.ctx().clone();
+                self.perform(&ctx, Action::FilterUnreadable);
+            }
+        }
     }
 
     /// Recherches de palettes (#492), sous les autres filtres (retour du 21/11/2026 : la
@@ -12107,6 +12155,19 @@ impl TriApp {
         } else {
             groups
         };
+        let groups: Vec<Vec<MediaFile>> = if self.unreadable_only {
+            groups
+                .into_iter()
+                .map(|g| {
+                    g.into_iter()
+                        .filter(|f| self.is_unreadable(&f.path))
+                        .collect()
+                })
+                .filter(|g: &Vec<MediaFile>| !g.is_empty())
+                .collect()
+        } else {
+            groups
+        };
         // Recherches de palettes inversées (retour du 21/11/2026 : elles ne l'étaient pas) :
         // appliquées avec les autres filtres sur le contenu, l'inversion garde ce qu'elles
         // écartent, dans l'ordre habituel ; sinon, à la fin (leur tri par ressemblance).
@@ -12485,6 +12546,7 @@ impl TriApp {
             || self.well_exposed
             || self.developed_on
             || self.conflicts_only
+            || self.unreadable_only
             || self.palette_searching()
     }
 
@@ -13091,6 +13153,21 @@ impl TriApp {
     /// Filtre « bien exposées » : grille refiltrée avec les analyses d'exposition arrivées,
     /// pas à chacune (voir [`Self::analysis_refilter_due`]), en grille seulement (comme la
     /// netteté).
+    /// Filtre « illisibles » allumé pendant le calcul des vignettes : refiltré quand elles
+    /// sont toutes passées (pas à chaque échec, comme les filtres sur l'analyse).
+    fn unreadable_refilter(&mut self) {
+        let p = self.progress[0];
+        if self.unreadable_refilter_pending
+            && self.mode == Mode::Grid
+            && self.analysis_refilter_due(p)
+        {
+            self.unreadable_refilter_pending = false;
+            if self.unreadable_only {
+                self.refilter(Reveal::Minimal);
+            }
+        }
+    }
+
     fn exposure_refilter(&mut self) {
         let p = self.progress[3];
         if self.exposure_refilter_pending
@@ -14381,6 +14458,7 @@ impl TriApp {
         self.palette_refilter();
         self.take_colour_pick();
         self.exposure_refilter();
+        self.unreadable_refilter();
         self.sort_refilter();
     }
 
@@ -14417,6 +14495,10 @@ impl TriApp {
                     }
                     // Prête à nouveau (recalculée) : on peut la redemander au chargeur.
                     if let Some(f) = self.files.get(index) {
+                        // Lisible finalement (recalculée après une lecture ratée).
+                        if level == Level::Thumbnail && self.unreadable.remove(&f.path) {
+                            self.unreadable_refilter_pending |= self.unreadable_only;
+                        }
                         self.missing.remove(&(f.path.clone(), level));
                         self.requested.remove(&(f.path.clone(), level));
                     }
@@ -14459,6 +14541,9 @@ impl TriApp {
                 } if g == generation => {
                     if let Some(f) = self.files.get(index) {
                         self.requested.remove(&(f.path.clone(), level));
+                        if level == Level::Thumbnail && self.unreadable.insert(f.path.clone()) {
+                            self.unreadable_refilter_pending |= self.unreadable_only;
+                        }
                     }
                     set(&mut self.status, index, level, Avail::Failed(error))
                 }
@@ -16079,6 +16164,7 @@ impl TriApp {
                 self.well_exposed = false;
                 self.developed_on = false;
                 self.conflicts_only = false;
+                self.unreadable_only = false;
                 self.extension_only = None;
                 self.versions_only = false;
                 self.libraw_only = false;
@@ -16153,6 +16239,10 @@ impl TriApp {
             }
             Action::FilterConflicts => {
                 self.conflicts_only = !self.conflicts_only;
+                self.apply_filter();
+            }
+            Action::FilterUnreadable => {
+                self.unreadable_only = !self.unreadable_only;
                 self.apply_filter();
             }
             // Contient cette couleur (#492) : la pipette, ou fin de la recherche.
@@ -25428,6 +25518,9 @@ impl TriApp {
         }
         if self.conflicts_only {
             parts.push(t!("filter-conflicts"));
+        }
+        if self.unreadable_only {
+            parts.push(t!("filter-unreadable"));
         }
         if self.filter_inverted && self.content_filtered() {
             parts.push(t!("filter-bar-inverted"));
@@ -36747,6 +36840,48 @@ mod tests {
         // Ne plus le surveiller : retiré de la configuration.
         h.state_mut().toggle_watch(root.clone());
         assert!(!h.state().is_watched(&root));
+    }
+
+    #[test]
+    fn the_unreadable_filter_keeps_the_images_without_a_thumbnail() {
+        // 26/11/2026 : des DNG abîmés dans un dossier de 2 820, à retrouver.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        assert!(
+            h.query_by_label(&t!("filter-unreadable")).is_none(),
+            "rien d'illisible : pas de ligne"
+        );
+        let bad = dir.path().join("photos").join("bad.jpg");
+        std::fs::write(&bad, b"not a jpeg at all").unwrap();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.unreadable.contains(&bad));
+        h.state_mut().metadata_panel = true;
+        h.run_steps(2);
+        assert!(
+            h.query_by_label(&t!("filter-unreadable")).is_some(),
+            "dans le panneau"
+        );
+        act(&mut h, Action::FilterUnreadable);
+        h.run_steps(2);
+        assert!(h.state().unreadable_only);
+        let files: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        assert_eq!(files, std::slice::from_ref(&bad));
+        // Au clavier : f e.
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::E, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(!h.state().unreadable_only, "f e");
+        assert_eq!(h.state().files.len(), 4);
+        // Dossier introuvable ou disque débranché (« Toutes les photos ») : absente, pas
+        // illisible (retour du 26/11/2026).
+        let photos = dir.path().join("photos");
+        h.state_mut().missing_dirs.insert(photos, true);
+        h.run_steps(2);
+        assert!(!h.state().is_unreadable(&bad));
+        assert!(
+            h.query_by_label(&t!("filter-unreadable")).is_none(),
+            "plus de ligne"
+        );
     }
 
     #[test]
