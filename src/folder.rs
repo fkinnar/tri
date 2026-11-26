@@ -84,6 +84,77 @@ pub fn all_photos_dir() -> PathBuf {
     PathBuf::from("\0tri-all-photos")
 }
 
+/// Ce que « Toutes les photos » laisse de côté : les photos des emplacements réseau
+/// (`network` : leurs racines, sauf si elles sont montrées) et celles des dossiers sortis
+/// (sous-dossiers compris).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AllPhotosFilter {
+    /// Racines des emplacements réseau dont les photos sont laissées de côté.
+    pub network: Vec<PathBuf>,
+    /// Dossiers sortis (absolus).
+    pub except: Vec<PathBuf>,
+}
+
+impl AllPhotosFilter {
+    /// Le filtre des réglages `[index]` : `network` les racines des emplacements réseau
+    /// connus (gardées si `all_photos_network`).
+    pub fn of(settings: &crate::index::IndexSettings, network: Vec<PathBuf>) -> AllPhotosFilter {
+        AllPhotosFilter {
+            network: if settings.all_photos_network {
+                Vec::new()
+            } else {
+                network
+            },
+            except: settings
+                .all_photos_except
+                .iter()
+                .map(|f| crate::settings::expand_home(f))
+                .collect(),
+        }
+    }
+
+    /// Vrai si la photo `path` est montrée.
+    pub fn keeps(&self, path: &Path) -> bool {
+        !self
+            .network
+            .iter()
+            .chain(&self.except)
+            .any(|root| path.starts_with(root))
+    }
+
+    /// Vrai si le dossier `dir` (ou un dossier au-dessus) est sorti de « Toutes les
+    /// photos » ; renvoie lequel.
+    pub fn excluding(&self, dir: &Path) -> Option<&Path> {
+        self.except
+            .iter()
+            .find(|e| dir.starts_with(e))
+            .map(PathBuf::as_path)
+    }
+}
+
+/// `except` après avoir sorti `dir` de « Toutes les photos » (`out`) ou l'y avoir remis :
+/// remis, le dossier sorti qui le contient (lui ou un parent) est retiré ; sorti, ses
+/// sous-dossiers déjà sortis aussi (il les couvre).
+pub fn all_photos_except_toggled(except: &[String], dir: &Path, out: bool) -> Vec<String> {
+    let path = |s: &String| crate::settings::expand_home(s);
+    let mut list: Vec<String> = except
+        .iter()
+        .filter(|e| {
+            let e = path(e);
+            if out {
+                !e.starts_with(dir)
+            } else {
+                !dir.starts_with(&e)
+            }
+        })
+        .cloned()
+        .collect();
+    if out {
+        list.push(dir.to_string_lossy().into_owned());
+    }
+    list
+}
+
 /// Vrai si `dir` est « Toutes les photos » ([`all_photos_dir`]).
 pub fn is_all_photos(dir: &Path) -> bool {
     dir == all_photos_dir()
@@ -94,9 +165,15 @@ impl Folder {
     /// parcourir de dossier ; notes à lire en fond ([`Loading`]). Leurs tailles et dates
     /// connues servent aux clés du cache sans relevé (vignettes d'un disque lent ou
     /// débranché) ; [`complete_from_disk`] complète ensuite ce qui est joignable.
-    pub fn all_photos(db: &Path, convention: Convention) -> io::Result<Folder> {
+    pub fn all_photos(
+        db: &Path,
+        convention: Convention,
+        filter: &AllPhotosFilter,
+    ) -> io::Result<Folder> {
         let index = crate::index::Index::open(db).map_err(io::Error::other)?;
-        let photos = index.photos(None).map_err(io::Error::other)?;
+        let mut photos = index.photos(None).map_err(io::Error::other)?;
+        // Réseau et dossiers sortis laissés de côté (26/11/2026).
+        photos.retain(|(path, _, _)| filter.keeps(path));
         crate::cache::seed_stamps(
             photos
                 .iter()
@@ -730,6 +807,41 @@ mod tests {
         folder.notes.adopt(loaded.notes);
         assert_eq!(folder.notes.notes(&image).stars, 4);
         assert!(!folder.notes.is_pending());
+    }
+
+    #[test]
+    fn all_photos_leaves_out_the_network_and_folders_taken_out() {
+        // 26/11/2026 : le réseau (sauf s'il est montré) et les dossiers sortis.
+        let settings = crate::index::IndexSettings {
+            all_photos_except: vec!["/photos/vieux".into()],
+            ..Default::default()
+        };
+        let filter = AllPhotosFilter::of(&settings, vec![PathBuf::from("/nas")]);
+        assert!(filter.keeps(Path::new("/photos/2026/A.RAF")));
+        assert!(!filter.keeps(Path::new("/nas/2026/A.RAF")), "réseau");
+        assert!(
+            !filter.keeps(Path::new("/photos/vieux/2001/A.JPG")),
+            "sorti, sous-dossiers compris"
+        );
+        assert_eq!(
+            filter.excluding(Path::new("/photos/vieux/2001")),
+            Some(Path::new("/photos/vieux"))
+        );
+        let shown = AllPhotosFilter::of(
+            &crate::index::IndexSettings {
+                all_photos_network: true,
+                ..settings.clone()
+            },
+            vec![PathBuf::from("/nas")],
+        );
+        assert!(shown.keeps(Path::new("/nas/2026/A.RAF")), "réseau montré");
+        // Sortir un dossier couvre ses sous-dossiers déjà sortis ; le remettre retire
+        // aussi le parent qui le sortait.
+        let except = vec!["/photos/vieux/2001".to_string()];
+        let out = all_photos_except_toggled(&except, Path::new("/photos/vieux"), true);
+        assert_eq!(out, ["/photos/vieux"]);
+        let back = all_photos_except_toggled(&out, Path::new("/photos/vieux/2001"), false);
+        assert!(back.is_empty());
     }
 
     #[test]

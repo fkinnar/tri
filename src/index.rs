@@ -54,6 +54,13 @@ pub struct IndexSettings {
     pub walk_depth: usize,
     /// Pause entre deux dossiers d'un parcours (ms), pour ne rien gêner.
     pub walk_pause_ms: u64,
+    /// « Toutes les photos » montre aussi les photos des emplacements réseau (NAS,
+    /// partages) ; non par défaut : on s'intéresse d'abord à ce qui est sur la machine
+    /// (idée de l'utilisateur, 26/11/2026). Interrupteur sur sa ligne du panneau.
+    pub all_photos_network: bool,
+    /// Dossiers sortis de « Toutes les photos », sous-dossiers compris (`~/…` accepté) ;
+    /// clic droit sur un dossier.
+    pub all_photos_except: Vec<String>,
 }
 
 impl Default for IndexSettings {
@@ -68,6 +75,8 @@ impl Default for IndexSettings {
             walk_idle_minutes: 10,
             walk_depth: 16,
             walk_pause_ms: 2,
+            all_photos_network: false,
+            all_photos_except: Vec::new(),
         }
     }
 }

@@ -53,6 +53,23 @@ une photo modifiée (autre taille ou date) perd son empreinte. Les développemen
 dossier. `Index::photos(sous)` les liste, sans parcourir de dossier. Le passage au
 schéma 2 refait la base une fois : les palettes déjà en cache s'y renotent d'elles-mêmes.
 
+### Ce que « Toutes les photos » laisse de côté (26/11/2026)
+
+Idée de l'utilisateur : on s'intéresse d'abord à ce qui est sur la machine plutôt que sur
+un NAS. `folder::AllPhotosFilter` (`Folder::all_photos(base, convention, filtre)`) laisse
+de côté :
+
+- les photos des **emplacements réseau** (`PlaceKind::Network` : NAS, partages), sauf si
+  `[index] all_photos_network` (non par défaut) ; interrupteur (un serveur, barré quand
+  elles sont cachées) sur la ligne « Toutes les photos » du panneau des dossiers ;
+- les **dossiers sortis**, sous-dossiers compris (`[index] all_photos_except`) : clic droit
+  « Sortir de Toutes les photos » / « Remettre… » (action `core.folders.all_photos`, sans
+  touche par défaut) ; un **∀ barré** à côté du dossier, qu'un clic remet
+  (`folder::all_photos_except_toggled` : sortir un dossier couvre ses sous-dossiers déjà
+  sortis, le remettre retire aussi le parent qui le sortait).
+
+Les photos restent dans l'index (rien n'est oublié) : seul l'affichage change.
+
 ## Empreintes de similitude (schéma 3)
 
 Les empreintes des piles (`similarity::Signature`, ~70 octets) sont notées avec chaque
@@ -172,6 +189,8 @@ disque amovible qu'on branche (`walk_plugged`), **jamais une carte d'appareil** 
 | `enabled` | `true` | noter les palettes dans l'index |
 | `fingerprint_kb` | 32 | Ko lus au début et à la fin d'un fichier pour son empreinte |
 | `batch` | 256 | palettes notées par écriture, au plus |
+| `all_photos_network` | `false` | « Toutes les photos » montre aussi les photos du réseau |
+| `all_photos_except` | `[]` | dossiers sortis de « Toutes les photos », sous-dossiers compris |
 
 ## Mesures (22/11/2026)
 
