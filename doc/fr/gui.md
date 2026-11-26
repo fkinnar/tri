@@ -79,6 +79,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   étoiles, acceptées, rejetées, avec un libellé couleur (n'importe lequel, ou une ligne
   par couleur présente, retour du 12/11/2026) : la règle des notes ; conflits : le filtre
   « en conflit ».
+  **Illisibles** (`f e`, `core.filter.unreadable`, 26/11/2026 : des DNG abîmés dans un
+  dossier de 2 820) : les images dont la vignette n'a pas pu être calculée (échec du
+  moteur : fichier abîmé, ou lecture ratée sur un partage SMB), d'après les événements
+  `Failed` des vignettes ; une ligne du panneau Filtre, comme « En conflit », montrée
+  seulement s'il y en a (ou allumé) ; refiltré une fois les vignettes passées. Une image
+  recalculée avec succès en sort.
   **Dossier regroupé** (#392, 14/11/2026) : « Photos » = paires + RAW seuls + JPEG seuls,
   chacun une ligne et une case du filtre à trois cases ; sous « Développements », aussi
   « JPEG boîtier » (le JPEG des paires) et « LibRaw ». Les développements montrent toujours deux
