@@ -52,6 +52,20 @@ recorded, they are found again by reading the folder. `Index::photos(under)` lis
 without walking any folder. Moving to schema 2 rebuilds the database once: palettes
 already cached are recorded again by themselves.
 
+### What "All photos" knows of a folder (2026-11-26)
+
+The owner's idea: nothing said which folders had been seen. A `dirs` table (each folder seen
+by `Index::seen`, and how deep), added without rebuilding the base and filled when created
+from the folders of the photos already known; it follows a moved folder
+(`Index::relocate`). `Index::seen_dirs` → `SeenDirs::state(folder, known subfolders)`:
+**seen** (it and all its known subfolders), **partly** (seen without all its subfolders,
+or not seen but a folder below is), **not seen**.
+
+In the folders panel (read in the background, at most every 10 s): a folder not seen has
+its **name in grey**, a partly seen one a **◐** after its name (tooltips). **"Add to All
+photos"** on right-click for what is not quite seen (action `core.folders.add_all_photos`):
+walked once in the background, like a watched root but without watching it afterwards.
+
 ## Similarity fingerprints (schema 3)
 
 The stacks' fingerprints (`similarity::Signature`, ~70 bytes) are recorded with each path

@@ -53,6 +53,21 @@ une photo modifiée (autre taille ou date) perd son empreinte. Les développemen
 dossier. `Index::photos(sous)` les liste, sans parcourir de dossier. Le passage au
 schéma 2 refait la base une fois : les palettes déjà en cache s'y renotent d'elles-mêmes.
 
+### Ce que « Toutes les photos » connaît d'un dossier (26/11/2026)
+
+Idée de l'utilisateur : rien ne disait quels dossiers avaient été vus. Table `dirs` (chaque
+dossier vu par `Index::seen`, et jusqu'à quelle profondeur), ajoutée sans refaire la base
+et remplie à sa création à partir des dossiers des photos déjà notées ; elle suit un
+dossier déplacé (`Index::relocate`). `Index::seen_dirs` → `SeenDirs::state(dossier,
+sous-dossiers connus)` : **vu** (lui et tous ses sous-dossiers connus), **en partie** (vu
+sans tous ses sous-dossiers, ou pas vu mais un dossier dessous), **pas vu**.
+
+Dans le panneau des dossiers (relu en fond, au plus toutes les 10 s) : un dossier pas vu
+a son **nom en gris**, un dossier en partie un **◐** après son nom (bulles d'aide).
+**« Ajouter à Toutes les photos »** au clic droit de ce qui n'est pas tout à fait vu
+(action `core.folders.add_all_photos`) : un parcours en fond, une fois, comme une racine
+surveillée mais sans la surveiller ensuite.
+
 ## Empreintes de similitude (schéma 3)
 
 Les empreintes des piles (`similarity::Signature`, ~70 octets) sont notées avec chaque

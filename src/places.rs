@@ -1987,6 +1987,12 @@ impl Tree {
 
     // --- Sélection de plusieurs dossiers (#606) -----------------------------------------
 
+    /// Sous-dossiers de `dir` déjà lus (dossier déplié au moins une fois) ; `None` : pas
+    /// encore lus, ou illisibles.
+    pub fn children_of(&self, dir: &Path) -> Option<Vec<PathBuf>> {
+        self.children.get(dir)?.as_ref().ok().cloned()
+    }
+
     /// Dossiers choisis, dans l'ordre du choix (vide : aucun).
     pub fn selection(&self) -> &[PathBuf] {
         &self.selection

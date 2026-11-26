@@ -1150,7 +1150,7 @@ mod tests {
     #[test]
     fn folders_seen_say_what_all_photos_knows() {
         // 26/11/2026 : vu, en partie, pas vu ; les dossiers suivent un déplacement.
-        let mut index = Index::in_memory().unwrap();
+        let index = Index::in_memory().unwrap();
         // Une base d'avant la table : ses dossiers sont repris de ses photos.
         index.db.execute_batch("DROP TABLE dirs;").unwrap();
         index

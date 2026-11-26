@@ -1762,6 +1762,21 @@ pub fn glue(painter: &Painter, rect: Rect, color: Color32) {
     ));
 }
 
+/// ◐ : un dossier en partie dans « Toutes les photos » (des sous-dossiers pas vus,
+/// 26/11/2026).
+pub fn half_seen(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let (c, r) = (rect.center(), s * 0.3);
+    painter.circle_stroke(c, r, Stroke::new((s / 11.0).max(1.2), color));
+    let half: Vec<Pos2> = (0..=16)
+        .map(|k| {
+            let a = FRAC_PI_2 + PI * k as f32 / 16.0;
+            c + vec2(a.cos(), -a.sin()) * r
+        })
+        .collect();
+    painter.add(Shape::convex_polygon(half, color, Stroke::NONE));
+}
+
 /// Couleurs mesurées (#492, en face de l'œil des couleurs perçues) : quatre pixels, les
 /// valeurs du fichier telles quelles.
 pub fn pixels(painter: &Painter, rect: Rect, color: Color32) {
