@@ -10458,6 +10458,10 @@ impl TriApp {
     /// de la séance pendant la copie (issue n° 40) : un scheduler à part, aux réglages
     /// d'aperçu du moteur (mêmes clés que le dossier ouvert ensuite), sans darktable.
     fn attach_previews(&mut self) {
+        // Les raccourcis de l'application pour sa galerie, même sans moteur.
+        if let Some(dialog) = &mut self.offload {
+            dialog.set_keys(self.keymap.clone());
+        }
         let (Some(dialog), Some(engine)) = (&mut self.offload, &self.engine) else {
             return;
         };
@@ -21763,7 +21767,8 @@ impl TriApp {
                 crate::actions::Scope::Metadata => Some(t!("focus-metadata")),
                 crate::actions::Scope::Images
                 | crate::actions::Scope::Histogram
-                | crate::actions::Scope::Crop => None,
+                | crate::actions::Scope::Crop
+                | crate::actions::Scope::Offload => None,
             };
             if let Some(focus) = focus {
                 ui.separator();
@@ -26302,6 +26307,8 @@ impl TriApp {
         match self.effective_focus() {
             Scope::Crop => Place::Crop,
             Scope::Histogram => Place::Histogram,
+            // La galerie de déchargement n'a pas d'aide « ici » à elle.
+            Scope::Offload => Place::Grid,
             Scope::Folders => Place::Folders,
             Scope::Metadata => Place::Metadata,
             Scope::Images => match self.mode {
@@ -26380,7 +26387,7 @@ impl TriApp {
                 self.metadata_panel = true;
                 self.scroll_to_cursor = true;
             }
-            Scope::Images | Scope::Histogram | Scope::Crop => {}
+            Scope::Images | Scope::Histogram | Scope::Crop | Scope::Offload => {}
         }
     }
 

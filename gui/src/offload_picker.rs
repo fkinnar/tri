@@ -10,7 +10,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver};
 
-use eframe::egui::{self, Color32, ColorImage, Key, Sense, TextureHandle, vec2};
+use crate::actions::{Action, Keymap};
+use eframe::egui::{self, Color32, ColorImage, Sense, TextureHandle, vec2};
 use tri::cache::Level;
 use tri::media::{MediaFile, MediaKind};
 use tri::offload::{CutReason, Item, Plan, Session};
@@ -129,6 +130,8 @@ pub struct Picker {
     raw_only: bool,
     /// Cache du moteur (images de la galerie), s'il y en a un.
     gallery: Option<Gallery>,
+    /// Raccourcis de l'application (`keys.toml`), dans le contexte de la galerie.
+    keymap: Keymap,
 }
 
 /// Cache et réglages d'aperçu du moteur, où la galerie range ses images (#603).
@@ -274,7 +277,14 @@ impl Picker {
             exclude_known,
             raw_only,
             gallery,
+            keymap: gallery_keys(Keymap::from_profiles(&[crate::actions::Profile::Classic])),
         }
+    }
+
+    /// Avec les raccourcis de l'application (`keys.toml`, `[keys]`).
+    pub fn with_keys(mut self, keymap: Keymap) -> Picker {
+        self.keymap = gallery_keys(keymap);
+        self
     }
 
     /// Galerie de toute la carte `plan` rangée en `sessions` (« Séances… », #600) : chaque
@@ -537,10 +547,12 @@ impl Picker {
         }
     }
 
-    /// Clavier, comme la grille : flèches (ou hjkl), Maj + flèches étendent ; Espace coche
-    /// ou décoche, Maj+Espace le mode visuel (pas `v` : les versions dans la grille) ; Cmd/Ctrl+A tout cocher, avec Maj tout
-    /// décocher ; Entrée agrandit ; Échap sort du visuel, de la vue en grand, puis ferme
-    /// (vrai : fermer sans rien changer).
+    /// Clavier, par les actions de `keys.toml` comme la grille (jamais de touche en dur) :
+    /// images précédente / suivante / dessus / dessous, première / dernière ; avec Maj, la
+    /// plage parcourue est cochée ; cocher (`core.select.toggle`), mode visuel
+    /// (`core.select.visual`), tout cocher / décocher, agrandir (`core.view.open`),
+    /// couper (`core.offload.cut`) ; retour (`core.view.back`) : sort de l'outil, du
+    /// visuel, de la vue en grand, puis ferme (vrai : fermer sans rien changer).
     fn keys(&mut self, ctx: &egui::Context) -> bool {
         let n = self.photos.len();
         let mut close = false;
@@ -555,63 +567,91 @@ impl Picker {
             else {
                 continue;
             };
-            let shift = modifiers.shift;
-            let command = modifiers.command;
+            let lookup = |m: egui::Modifiers| {
+                crate::actions::Chord::from_event(key, m).and_then(|c| self.keymap.chord_action(c))
+            };
+            let nav = |a: Option<Action>| {
+                a.filter(|a| {
+                    matches!(
+                        a,
+                        Action::NavPrev
+                            | Action::NavNext
+                            | Action::NavUp
+                            | Action::NavDown
+                            | Action::NavFirst
+                            | Action::NavLast
+                    )
+                })
+            };
+            // Maj + un déplacement : il coche la plage (Maj+flèche a un autre sens ailleurs).
+            let unshifted = egui::Modifiers {
+                shift: false,
+                ..modifiers
+            };
+            let (action, extend) = match nav(lookup(unshifted)) {
+                Some(a) if modifiers.shift && nav(lookup(modifiers)).is_none() => (Some(a), true),
+                _ => (lookup(modifiers), false),
+            };
+            let Some(action) = action else {
+                continue;
+            };
+            if n == 0 {
+                close |= action == Action::Back;
+                continue;
+            }
             let step = if self.enlarged.is_some() {
                 0
             } else {
                 self.columns.max(1)
             };
-            let last = n.saturating_sub(1);
+            let last = n - 1;
             // Gauche / droite dans l'ordre de la galerie (séances regroupées).
             let order = self.order();
             let here = order.iter().position(|&k| k == self.cursor).unwrap_or(0);
-            let moved = match key {
-                Key::ArrowLeft | Key::H if !command => order.get(here.saturating_sub(1)).copied(),
-                Key::ArrowRight | Key::L if !command => order.get((here + 1).min(last)).copied(),
-                Key::ArrowUp | Key::K if !command && step > 0 => Some(
+            let moved = match action {
+                Action::NavPrev => order.get(here.saturating_sub(1)).copied(),
+                Action::NavNext => order.get((here + 1).min(last)).copied(),
+                Action::NavFirst => order.first().copied(),
+                Action::NavLast => order.last().copied(),
+                Action::NavUp if step > 0 => Some(
                     self.vertical(false)
                         .unwrap_or(self.cursor.saturating_sub(step)),
                 ),
-                Key::ArrowDown | Key::J if !command && step > 0 => Some(
+                Action::NavDown if step > 0 => Some(
                     self.vertical(true)
                         .unwrap_or((self.cursor + step).min(last)),
                 ),
                 _ => None,
             };
-            if n == 0 {
-                close |= key == Key::Escape;
-                continue;
-            }
             if let Some(to) = moved {
-                self.move_to(to, shift);
+                self.move_to(to, extend);
                 self.follow = true;
                 if self.enlarged.is_some() {
                     self.enlarge(self.cursor, ctx);
                 }
                 continue;
             }
-            match key {
-                Key::Space if shift => self.toggle_visual(),
-                Key::Space => self.set(self.cursor, !self.checked[self.cursor]),
-                Key::C if !command && self.enlarged.is_none() => self.toggle_cut(self.cursor),
-                Key::A if command => {
-                    let on = !shift;
-                    (0..self.photos.len()).for_each(|i| self.set(i, on));
-                }
-                Key::Enter => match self.enlarged {
+            // Pris ici : la boîte ne se ferme pas avec.
+            let consume = |ctx: &egui::Context| {
+                ctx.input_mut(|i| i.consume_key(modifiers, key));
+            };
+            match action {
+                Action::SelectVisual => self.toggle_visual(),
+                Action::SelectToggle => self.set(self.cursor, !self.checked[self.cursor]),
+                Action::OffloadCut if self.enlarged.is_none() => self.toggle_cut(self.cursor),
+                Action::SelectAll => (0..n).for_each(|i| self.set(i, true)),
+                Action::SelectClear => (0..n).for_each(|i| self.set(i, false)),
+                Action::Open => match self.enlarged {
                     Some(_) => self.enlarged = None,
                     None => self.enlarge(self.cursor, ctx),
                 },
-                Key::Escape if self.tool != Tool::Select => {
-                    // Pris ici : la boîte ne se ferme pas avec.
-                    ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape));
+                Action::Back if self.tool != Tool::Select => {
+                    consume(ctx);
                     self.tool = Tool::Select;
                 }
-                Key::Escape => {
+                Action::Back => {
                     if self.visual.is_some() || self.enlarged.is_some() {
-                        // Pris ici : la boîte ne se ferme pas avec.
-                        ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape));
+                        consume(ctx);
                     }
                     if self.visual.is_some() {
                         self.visual = None;
@@ -1201,6 +1241,13 @@ impl Picker {
     }
 }
 
+/// La table des raccourcis dans le contexte de la galerie : ses touches propres
+/// (`core.offload.cut`) l'emportent.
+fn gallery_keys(mut keymap: Keymap) -> Keymap {
+    keymap.set_focus(crate::actions::Scope::Offload);
+    keymap
+}
+
 /// Les touches qui donnent l'autre outil, pour les bulles d'aide.
 fn inverse_key() -> &'static str {
     if cfg!(target_os = "macos") {
@@ -1486,5 +1533,60 @@ mod tests {
             tri::preview::key(&file(&dest.join("IMG0.jpg")), Level::Thumbnail, &preview).unwrap();
         assert!(cache.contains(&copied), "la séance la retrouve");
         assert!(cache.contains(&on_card), "la carte la garde");
+    }
+
+    #[test]
+    fn the_gallery_keys_come_from_the_keymap() {
+        // Retour du 26/11/2026 : aucun raccourci en dur. `core.offload.cut` changé dans
+        // `[keys]` : la nouvelle touche coupe, l'ancienne plus.
+        use std::time::{Duration, UNIX_EPOCH};
+        crate::i18n::ensure();
+        let mut items = vec![item("A.RAF", false), item("B.RAF", false)];
+        for (k, item) in items.iter_mut().enumerate() {
+            item.modified = UNIX_EPOCH + Duration::from_secs(1_800_000_000 + k as u64 * 60);
+        }
+        let plan = Plan {
+            source: PathBuf::from("/carte"),
+            items,
+            ignored: 0,
+        };
+        let ctx = egui::Context::default();
+        let sessions = plan.sessions_at(&[], 4);
+        let overrides = std::collections::BTreeMap::from([(
+            "core.offload.cut".to_string(),
+            vec!["x".to_string()],
+        )]);
+        let (keys, warnings) =
+            Keymap::from_profiles(&[crate::actions::Profile::Classic]).with_overrides(&overrides);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let mut p =
+            Picker::sessions(&plan, &sessions, None, true, false, None, &ctx).with_keys(keys);
+        p.cursor = 1;
+        let press = |p: &mut Picker, key: egui::Key| {
+            let input = egui::RawInput {
+                events: vec![egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                ..Default::default()
+            };
+            ctx.begin_pass(input);
+            let close = p.keys(&ctx);
+            let mut output = ctx.end_pass();
+            output.textures_delta.clear();
+            close
+        };
+        press(&mut p, egui::Key::C);
+        assert_eq!(p.starts(), Some(vec![None, None]), "c ne coupe plus");
+        press(&mut p, egui::Key::X);
+        assert_eq!(p.starts(), Some(vec![None, Some(CutReason::Chosen)]));
+        // Espace (core.select.toggle) décoche, Échap (core.view.back) ferme.
+        press(&mut p, egui::Key::Space);
+        assert_eq!(p.checked, [true, false]);
+        assert!(press(&mut p, egui::Key::Escape));
+        p.cancel.store(true, Ordering::Relaxed);
     }
 }

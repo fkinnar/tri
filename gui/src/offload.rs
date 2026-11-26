@@ -329,6 +329,8 @@ pub struct OffloadDialog {
     /// sont rangés (la même carte rouverte va plus vite), et suivent les copies (la séance
     /// déchargée les retrouve, comme une copie de `tri`, #592).
     gallery: Option<(tri::cache::Cache, tri::preview::Settings)>,
+    /// Raccourcis de l'application, pour la galerie ([`OffloadDialog::set_keys`]).
+    keymap: Option<crate::actions::Keymap>,
 }
 
 impl OffloadDialog {
@@ -358,7 +360,13 @@ impl OffloadDialog {
             pairs_choice: None,
             picker: None,
             gallery: None,
+            keymap: None,
         }
+    }
+
+    /// Les raccourcis de l'application (`keys.toml`, `[keys]`) pour la galerie.
+    pub fn set_keys(&mut self, keymap: crate::actions::Keymap) {
+        self.keymap = Some(keymap);
     }
 
     /// « Décharger ici » (panneau des dossiers) : la boîte, racine `root` proposée, depuis
@@ -866,6 +874,10 @@ impl OffloadDialog {
                 self.gallery.clone(),
                 ctx,
             );
+            let picker = match &self.keymap {
+                Some(keys) => picker.with_keys(keys.clone()),
+                None => picker,
+            };
             self.picker = Some((WHOLE_CARD, picker));
             return;
         }
@@ -883,6 +895,10 @@ impl OffloadDialog {
                 self.gallery.clone(),
                 ctx,
             );
+            let picker = match &self.keymap {
+                Some(keys) => picker.with_keys(keys.clone()),
+                None => picker,
+            };
             self.picker = Some((i, picker));
         }
     }

@@ -175,7 +175,9 @@ jour.
 - **Galerie de toute la carte** (« Séances… » dans la boîte, à côté du dossier ou des
   lignes de séances) : les séances l'une après l'autre, chacune sur une nouvelle ligne sous
   un bandeau (numéro, jour, heures, photos cochées, pourquoi elle commence là : nouveau
-  jour, pause, coupure choisie). Au clavier, `c` commence une séance à la photo pointée,
+  jour, pause, coupure choisie). Au clavier, `c` (action `core.offload.cut`, réglable dans `[keys]` comme toutes les
+  touches de la galerie, qui passent par les actions de la grille) commence une séance à
+  la photo pointée,
   ou la recoud à la précédente. À la souris, comme sur une table de montage (idée de
   l'utilisateur) : une barre d'outils toujours visible en haut, **ciseaux** (un clic entre
   deux photos coupe, aussi après la dernière photo d'une ligne ; la coupure visée s'allume) et **colle** (un clic sur le bandeau

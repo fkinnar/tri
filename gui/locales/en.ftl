@@ -368,6 +368,7 @@ action-core-folders-favorite = Folders: add to or remove from favourites
 action-core-folders-favorite_name = Folders: name the favourite
 action-core-folders-watch = Folders: watch the folder or stop watching it
 action-core-folders-light = Folders: put the folder in light mode or take it out
+action-core-offload-cut = Offload: start a session at the photo under the cursor, or join it to the one before
 action-core-folders-connect = Folders: connect to a network share
 action-core-folders-forget = Folders: forget the remembered network share
 action-core-folders-cache_clear = Folders: clear the cache kept in the folder or drive

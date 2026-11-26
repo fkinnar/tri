@@ -165,7 +165,9 @@ Brussels, the afternoon in Antwerp, two sessions on the same day.
 - **Gallery of the whole card** ("Sessions…" in the dialog, next to the folder or the
   session rows): the sessions one after the other, each on a new row under a header
   (number, day, times, checked photos, why it starts there: new day, pause, chosen cut).
-  With the keyboard, `c` starts a session at the photo under the cursor, or joins it to
+  With the keyboard, `c` (action `core.offload.cut`, configurable in `[keys]` like every
+  key of the gallery, which go through the grid's actions) starts a session at the photo
+  under the cursor, or joins it to
   the one before. With the mouse, as on an editing table (the owner's idea): a toolbar
   always visible at the top, **scissors** (a click between two photos cuts, also after the last photo of a row; the
   aimed cut lights up) and **glue** (a click on a session's header joins it to the one before); the

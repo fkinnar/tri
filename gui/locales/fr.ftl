@@ -368,6 +368,7 @@ action-core-folders-favorite = Dossiers : ajouter aux favoris ou en retirer
 action-core-folders-favorite_name = Dossiers : nommer le favori
 action-core-folders-watch = Dossiers : surveiller le dossier ou ne plus le surveiller
 action-core-folders-light = Dossiers : mettre le dossier en mode léger ou l'en sortir
+action-core-offload-cut = Déchargement : commencer une séance à la photo pointée, ou la recoudre à la précédente
 action-core-folders-connect = Dossiers : se connecter à un partage réseau
 action-core-folders-forget = Dossiers : oublier le partage réseau mémorisé
 action-core-folders-cache_clear = Dossiers : vider le cache gardé dans le dossier ou le disque
