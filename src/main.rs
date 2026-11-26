@@ -13,6 +13,9 @@
 //!       sharpness, similarity, developed ;
 //!   tri --cache-usage [--cache DOSSIER]
 //!       affiche la taille du cache par niveau ;
+//!   tri --purge [--dry-run]
+//!       fait le ménage selon `[purge]` (historique des déchargements, cache et données
+//!       de tri des dossiers disparus ou pas ouverts depuis longtemps), voir `tri::purge` ;
 //!   tri --check-update
 //!       recherche une version plus récente sur la page Releases (sur demande) ;
 //!   tri <dossier> --exposure [--raw|--flat] [--depth N]
@@ -133,6 +136,8 @@ struct Args {
     previews: bool,
     clear: Option<Option<Level>>,
     usage: bool,
+    /// `--purge` : le ménage (#604).
+    purge: bool,
     check_update: bool,
     /// `--help`, `-h` : l'aide complète.
     help: bool,
@@ -442,6 +447,7 @@ fn parse() -> AnyResult<Args> {
             "--mixed" => args.mixed = true,
             "--cache" => args.cache = Some(value()?.into()),
             "--cache-usage" => args.usage = true,
+            "--purge" => args.purge = true,
             "--cache-here" => args.keep_cache = Some(true),
             "--cache-user" => args.keep_cache = Some(false),
             "--reset" => args.reset = Some(tri::reset::Parts::parse(&value()?).ok_or_else(usage)?),
@@ -871,6 +877,44 @@ fn follow_previews(
         );
     }
     print_usage(&cache)
+}
+
+/// Ménage (#604) : historique des déchargements, cache et données de tri des dossiers
+/// disparus ; `dry_run` : seulement ce qui partirait.
+fn purge(settings: &EngineSettings, dry_run: bool) -> AnyResult<()> {
+    let cache = settings.open_cache()?;
+    let data = settings.data_dir();
+    let history = tri::offload::history_path(&settings.offload, data.as_deref());
+    let report = tri::purge::run(
+        &settings.purge,
+        Some(&cache),
+        data.as_deref(),
+        history,
+        std::time::SystemTime::now(),
+        dry_run,
+    );
+    let key = if dry_run {
+        "cli-purge-would"
+    } else {
+        "cli-purge-done"
+    };
+    println!(
+        "{}",
+        t!(
+            key,
+            history = report.history,
+            mb = format!("{:.0}", report.cache.bytes as f64 / 1e6),
+            entries = report.cache.entries,
+            folders = report.folders
+        )
+    );
+    for e in &report.errors {
+        eprintln!("{e}");
+    }
+    if !dry_run && let Some(data) = &data {
+        let _ = tri::purge::mark_done(data);
+    }
+    Ok(())
 }
 
 /// Déchargement d'une carte, avec progression et bilan ; puis aperçus si demandé.
@@ -2352,6 +2396,9 @@ fn run() -> AnyResult<()> {
     }
     if args.usage {
         return print_usage(&settings.open_cache()?);
+    }
+    if args.purge {
+        return purge(&settings, args.dry_run);
     }
     if let Some(on) = args.keep_cache {
         let dir = args.dir.as_ref().ok_or_else(usage)?;

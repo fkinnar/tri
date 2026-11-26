@@ -87,6 +87,24 @@ impl Default for OffloadSettings {
     }
 }
 
+/// Fichier de l'historique des déchargements : `settings.history`, sinon
+/// `offload-history.tsv` dans le dossier de données `data` ; `None` sans l'un ni l'autre.
+pub fn history_path(settings: &OffloadSettings, data: Option<&Path>) -> Option<PathBuf> {
+    if !settings.history.trim().is_empty() {
+        return Some(crate::settings::expand_home(settings.history.trim()));
+    }
+    Some(data?.join("offload-history.tsv"))
+}
+
+/// Archive de l'historique `history` (#604) : `offload-history-archive.tsv` à côté.
+pub fn archive_path(history: &Path) -> PathBuf {
+    let stem = history
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "offload-history".into());
+    history.with_file_name(format!("{stem}-archive.tsv"))
+}
+
 /// Une image de la carte.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Item {
@@ -214,11 +232,9 @@ impl History {
     /// Historique des réglages : `settings.history`, sinon `offload-history.tsv` dans le
     /// dossier de données `data` (`EngineSettings::data_dir`).
     pub fn open_configured(settings: &OffloadSettings, data: Option<&Path>) -> io::Result<History> {
-        if !settings.history.trim().is_empty() {
-            return History::open(crate::settings::expand_home(settings.history.trim()));
-        }
-        let dir = data.ok_or_else(|| io::Error::other(crate::t!("offload-no-data-dir")))?;
-        History::open(dir.join("offload-history.tsv"))
+        let path = history_path(settings, data)
+            .ok_or_else(|| io::Error::other(crate::t!("offload-no-data-dir")))?;
+        History::open(path)
     }
 
     /// Historique en mémoire seulement (simulation, tests).
@@ -274,6 +290,49 @@ impl History {
             self.known.remove(id);
         }
         Ok(ids.len())
+    }
+
+    /// Archive les entrées des photos prises avant `before` (#604 : une carte qui revient
+    /// avec des photos de plus de quelques semaines est très peu probable) : retirées de
+    /// l'historique (réécrit d'un bloc) et ajoutées au bout de l'archive voisine
+    /// (`offload-history-archive.tsv`, même format, jamais relue). Les lignes illisibles
+    /// restent. `dry_run` : rien n'est écrit. Renvoie le nombre d'entrées archivées.
+    pub fn purge(&mut self, before: SystemTime, dry_run: bool) -> io::Result<usize> {
+        let Some(path) = self.path.clone() else {
+            return Ok(0);
+        };
+        let text = match fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(0),
+            Err(e) => return Err(e),
+        };
+        let limit = nanos(before);
+        let (mut kept, mut old) = (String::new(), String::new());
+        for line in text.lines() {
+            let taken = line
+                .split('\t')
+                .nth(2)
+                .and_then(|t| t.parse::<u128>().ok())
+                .is_some_and(|t| t < limit);
+            let into = if taken { &mut old } else { &mut kept };
+            into.push_str(line);
+            into.push('\n');
+        }
+        let n = old.lines().count();
+        if n == 0 || dry_run {
+            return Ok(n);
+        }
+        let mut archive = File::options()
+            .create(true)
+            .append(true)
+            .open(archive_path(&path))?;
+        archive.write_all(old.as_bytes())?;
+        archive.sync_all()?;
+        let tmp = path.with_extension("tsv.tmp");
+        fs::write(&tmp, kept)?;
+        fs::rename(&tmp, &path)?;
+        *self = History::open(&path)?;
+        Ok(n)
     }
 
     fn contains(&self, item: &Item) -> bool {
@@ -1397,6 +1456,42 @@ mod tests {
         assert!(fs::read_to_string(&path).unwrap().contains("ligne étrange"));
         // Rien à oublier : rien d'écrit.
         assert_eq!(history.forget(&plan.items[..1]).unwrap(), 0);
+    }
+
+    #[test]
+    fn old_history_entries_go_to_the_archive() {
+        // #604 : les entrées des photos plus anciennes que le réglage partent dans
+        // l'archive ; les autres et les lignes illisibles restent.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("offload-history.tsv");
+        let mut history = History::open(&path).unwrap();
+        let old = timed_card(&[("A.RAF", 1, 9, 0)]);
+        let new = timed_card(&[("B.RAF", 25, 9, 0)]);
+        history
+            .record(&old.items[0], Path::new("/copie/A.RAF"))
+            .unwrap();
+        history
+            .record(&new.items[0], Path::new("/copie/B.RAF"))
+            .unwrap();
+        fs::write(
+            &path,
+            fs::read_to_string(&path).unwrap() + "ligne étrange\n",
+        )
+        .unwrap();
+        let before = new.items[0].modified - Duration::from_secs(86400);
+        assert_eq!(history.purge(before, true).unwrap(), 1, "à l'essai");
+        assert!(history.contains(&old.items[0]), "rien touché à l'essai");
+        assert_eq!(history.purge(before, false).unwrap(), 1);
+        assert!(!history.contains(&old.items[0]) && history.contains(&new.items[0]));
+        let archive = fs::read_to_string(archive_path(&path)).unwrap();
+        assert!(archive.starts_with("A.RAF\t") && archive.contains("/copie/A.RAF"));
+        let left = fs::read_to_string(&path).unwrap();
+        assert!(
+            left.contains("B.RAF") && left.contains("ligne étrange") && !left.contains("A.RAF")
+        );
+        // Une seconde fois : rien de plus, l'archive grandit sans rien perdre.
+        assert_eq!(history.purge(before, false).unwrap(), 0);
+        assert_eq!(fs::read_to_string(archive_path(&path)).unwrap(), archive);
     }
 
     thread_local! {

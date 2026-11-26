@@ -560,6 +560,33 @@ split_pause_minutes = 120
 # Beyond that, only day changes then the longest pauses cut.
 max_sessions = 30
 
+[purge]
+# Offload history: keep the entries of photos younger than…
+#
+# A card coming back with photos older than a few weeks is very unlikely: the entries of
+# older photos (shooting date) go to the archive offload-history-archive.tsv, next to it,
+# never read again. "1w", "1m", "3m", "1y", "3y" or "never".
+offload_history = "1y"
+# Cache: delete the previews of folders not opened for…
+#
+# "1w", "1m", "3m", "1y", "3y" or "never". Computing them again takes time: choose
+# according to the space available. Caches kept on a disk (.tri) are never touched.
+cache_unused = "never"
+# Cache: delete the previews of folders that no longer exist.
+#
+# A folder on an unplugged disk, a removed card or an offline NAS has not disappeared: it
+# keeps its cache.
+cache_gone = true
+# Delete the sorting data (filters, sliders…) of folders that no longer exist.
+#
+# The data kept in the .tri of a folder or a disk is never touched.
+folder_data_gone = true
+# Automatic clean-up at most once every so many hours (0: never on its own).
+#
+# In the background, when the interface starts. By hand: "Clean up" in the cache panel,
+# or tri --purge on the command line.
+interval_hours = 24
+
 [files]
 # Renaming, deleting, copying or moving an image: the other image of its RAW+JPEG pair
 # (same name, other extension) follows. Its XMP sidecars always follow.

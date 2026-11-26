@@ -227,6 +227,7 @@ const CATEGORIES: [&[&str]; 6] = [
         "places",
         "watch",
         "light",
+        "purge",
         "remote",
         "neighbourhood",
         "files",
@@ -646,6 +647,7 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
         ("gui.position_bar", "shape") => &["segmented", "split"],
         ("gui.position_bar", "place") => &["overlay", "panel"],
         ("cache", "location") => &["user", "disk", "folder"],
+        ("purge", "offload_history" | "cache_unused") => &["1w", "1m", "3m", "1y", "3y", "never"],
         // Tous les logiciels connus ; la liste n'affiche que ceux installés (`fits`).
         ("develop", "default") => &["auto", "darktable", "rapidraw", "rawtherapee", "art"],
         ("gui.grid", "render") => &[
@@ -890,8 +892,12 @@ impl SettingsWindow {
 
     /// Le cache de l'application : sa place et de quoi le vider, en tête de la section
     /// « Cache ».
-    pub fn with_cache(mut self, cache: tri::cache::Cache) -> SettingsWindow {
-        self.cache = Some(crate::cache_panel::CachePanel::new(cache));
+    pub fn with_cache(
+        mut self,
+        cache: tri::cache::Cache,
+        purge: crate::cache_panel::PurgeContext,
+    ) -> SettingsWindow {
+        self.cache = Some(crate::cache_panel::CachePanel::new(cache).with_purge(purge));
         self
     }
 

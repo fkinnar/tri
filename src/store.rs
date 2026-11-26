@@ -680,6 +680,21 @@ fn fallbacks(data: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Ménage (#604) : supprime du dossier de données `data` les données de tri des dossiers
+/// pour lesquels `gone` est vrai (disparus). Un `.tri/` gardé dans un dossier ou sur un
+/// disque n'est jamais touché. `dry_run` : rien n'est supprimé. Renvoie leur nombre.
+pub fn purge_gone(data: &Path, gone: impl Fn(&Path) -> bool, dry_run: bool) -> usize {
+    let mut n = 0;
+    for folder in fallbacks(data) {
+        if gone(&folder)
+            && (dry_run || std::fs::remove_dir_all(fallback_dir(data, &folder)).is_ok())
+        {
+            n += 1;
+        }
+    }
+    n
+}
+
 /// Après le déplacement (ou le renommage) du dossier `from` en `to` : les replis de ses
 /// données et de celles de ses sous-dossiers suivent (un `.tri/` est déjà parti avec son
 /// dossier).
@@ -758,6 +773,24 @@ mod tests {
         // Revenu au défaut : tout disparaît.
         set_value(Some(&data), &photos, "group-strictness", None).unwrap();
         assert!(!fallback.exists());
+    }
+
+    #[test]
+    fn the_data_of_gone_folders_is_purged() {
+        // #604 : seulement celles des dossiers disparus (`gone`), à l'essai rien ne part.
+        let (_dir, photos, data) = setup();
+        let other = photos.with_file_name("autre");
+        set_value(Some(&data), &photos, "group-strictness", Some(0.4)).unwrap();
+        set_value(Some(&data), &other, "group-strictness", Some(0.4)).unwrap();
+        let gone = |f: &Path| f == other;
+        assert_eq!(purge_gone(&data, gone, true), 1);
+        assert!(
+            fallback_dir(&data, &other).exists(),
+            "rien touché à l'essai"
+        );
+        assert_eq!(purge_gone(&data, gone, false), 1);
+        assert!(!fallback_dir(&data, &other).exists());
+        assert_eq!(value(Some(&data), &photos, "group-strictness"), Some(0.4));
     }
 
     #[test]

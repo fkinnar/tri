@@ -963,6 +963,71 @@ impl Cache {
         result
     }
 
+    /// Note que le dossier `folder` (absolu) vient d'être ouvert (#604) : la date de son repère
+    /// [`SOURCE`] dans chaque niveau, pour [`Cache::purge`] (une petite écriture par
+    /// niveau qui a des entrées, pas par image lue).
+    pub fn note_use(&self, folder: &Path) {
+        for level in Level::ALL {
+            let marker = self.shard(level, folder).0.join(SOURCE);
+            if let Ok(file) = File::options().write(true).open(&marker) {
+                let _ = file.set_modified(SystemTime::now());
+            }
+        }
+    }
+
+    /// Ménage du cache central (#604) : supprime les entrées des dossiers pour lesquels
+    /// `gone` est vrai (disparus), et celles des dossiers pas ouverts depuis `unused`
+    /// (date du repère, [`Cache::note_use`]). Les caches gardés sur un disque (`.tri/`)
+    /// ne sont pas touchés. `dry_run` : rien n'est supprimé, le compte dit ce qui
+    /// partirait.
+    pub fn purge(
+        &self,
+        unused: Option<SystemTime>,
+        gone: impl Fn(&Path) -> bool,
+        dry_run: bool,
+    ) -> io::Result<Usage> {
+        let mut freed = Usage::default();
+        for level in Level::ALL {
+            let Ok(shards) = fs::read_dir(self.level_dir(level)) else {
+                continue;
+            };
+            for shard in shards.flatten() {
+                let dir = shard.path();
+                let marker = dir.join(SOURCE);
+                let Ok(source) = fs::read_to_string(&marker) else {
+                    continue;
+                };
+                let folder = PathBuf::from(source.trim_end());
+                let stale = unused.is_some_and(|before| {
+                    fs::metadata(&marker)
+                        .and_then(|m| m.modified())
+                        .is_ok_and(|used| used < before)
+                });
+                if !(stale || gone(&folder)) {
+                    continue;
+                }
+                let mut usage = Usage::default();
+                for file in fs::read_dir(&dir)?.flatten() {
+                    if let Ok(meta) = file.metadata()
+                        && meta.is_file()
+                        && file
+                            .path()
+                            .extension()
+                            .is_some_and(|e| e == "jpg" || e == "bin")
+                    {
+                        usage.bytes += meta.len();
+                        usage.entries += 1;
+                    }
+                }
+                if !dry_run {
+                    fs::remove_dir_all(&dir)?;
+                }
+                freed.add(usage);
+            }
+        }
+        Ok(freed)
+    }
+
     /// Supprime une entrée (sans erreur si elle n'existe pas).
     pub fn remove(&self, key: &Key) -> io::Result<()> {
         for hash in [&key.hash, &key.earlier] {
@@ -1423,6 +1488,49 @@ mod tests {
         // Retiré sous l'une ou l'autre clé.
         cache.remove(&at(t + 550_000_000)).unwrap();
         assert!(!cache.contains(&at(t)));
+    }
+
+    #[test]
+    fn the_purge_drops_gone_and_unused_folders_only() {
+        // #604 : un dossier disparu perd son cache ; un dossier pas ouvert depuis la date
+        // limite aussi ; ouvrir un dossier ([`Cache::note_use`]) le garde.
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache::open(dir.path()).unwrap();
+        let key = |p: &str| Key::from_parts(p.as_ref(), 1, 1, Level::Thumbnail, "p");
+        for p in ["/a/x.RAF", "/b/x.RAF", "/c/x.RAF"] {
+            cache.put_bytes(&key(p), b"12345").unwrap();
+        }
+        let marker = |p: &str| cache.entry_path(&key(p)).parent().unwrap().join(SOURCE);
+        let long_ago = SystemTime::now() - std::time::Duration::from_secs(400 * 86400);
+        for p in ["/b/x.RAF", "/c/x.RAF"] {
+            File::options()
+                .write(true)
+                .open(marker(p))
+                .unwrap()
+                .set_modified(long_ago)
+                .unwrap();
+        }
+        cache.note_use(Path::new("/c"));
+        let gone = |f: &Path| f == Path::new("/a");
+        let before = Some(SystemTime::now() - std::time::Duration::from_secs(365 * 86400));
+        let dry = cache.purge(before, gone, true).unwrap();
+        assert_eq!(
+            dry,
+            Usage {
+                bytes: 10,
+                entries: 2
+            }
+        );
+        assert!(cache.contains(&key("/a/x.RAF")), "rien touché à l'essai");
+        assert_eq!(cache.purge(before, gone, false).unwrap(), dry);
+        assert!(!cache.contains(&key("/a/x.RAF")), "disparu");
+        assert!(!cache.contains(&key("/b/x.RAF")), "pas ouvert depuis un an");
+        assert!(cache.contains(&key("/c/x.RAF")), "ouvert à l'instant");
+        // Sans date limite : seulement les disparus.
+        assert_eq!(
+            cache.purge(None, |_| false, false).unwrap(),
+            Usage::default()
+        );
     }
 
     #[test]

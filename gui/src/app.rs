@@ -3499,6 +3499,38 @@ impl TriApp {
     /// Ouvre le dossier `dir` à la place du dossier courant (panneau des dossiers). Les
     /// filtres sont gardés ; la sélection repart de la première image. En cas d'erreur, le
     /// message remplace la grille, le panneau reste là pour choisir un autre dossier.
+    /// Ménage automatique (#604) : en fond, un peu après le lancement (l'ouverture du
+    /// dossier d'abord), au plus une fois par `[purge] interval_hours` ; le bilan va dans
+    /// le journal.
+    #[cfg_attr(test, allow(dead_code))]
+    fn start_purge(&self, cache: tri::cache::Cache) {
+        let settings = self.settings.purge.clone();
+        let Some(data) = self.settings.data_dir() else {
+            return;
+        };
+        let history = tri::offload::history_path(&self.settings.offload, Some(&data));
+        let _ = std::thread::Builder::new()
+            .name("tri-purge".into())
+            .spawn(move || {
+                std::thread::sleep(Duration::from_secs(20));
+                let now = std::time::SystemTime::now();
+                if !tri::purge::due(&data, &settings, now) {
+                    return;
+                }
+                let report =
+                    tri::purge::run(&settings, Some(&cache), Some(&data), history, now, false);
+                let _ = tri::purge::mark_done(&data);
+                if !report.is_empty() || !report.errors.is_empty() {
+                    tri::log::write(
+                        tri::log::Level::Info,
+                        "purge",
+                        &crate::cache_panel::purge_text(&report, false),
+                        &report.errors.join("\n"),
+                    );
+                }
+            });
+    }
+
     fn open_folder(&mut self, dir: &Path) {
         // On quitte « Toutes les photos » : sa photo courante, pour y revenir.
         if tri::folder::is_all_photos(&self.folder.dir)
@@ -3524,6 +3556,15 @@ impl TriApp {
         );
         let data = self.settings.data_dir();
         let cache = self.engine.as_ref().map(|e| e.cache.clone());
+        // Le cache retient que ce dossier sert encore (#604 : ménage des dossiers pas
+        // ouverts depuis longtemps), en fond.
+        if let Some(cache) = cache.clone()
+            && let Ok(folder) = std::path::absolute(dir)
+        {
+            let _ = std::thread::Builder::new()
+                .name("tri-cache-use".into())
+                .spawn(move || cache.note_use(&folder));
+        }
         // La position du dossier quitté passe par le fil d'écriture, après les filtres déjà
         // demandés ; le fil d'ouverture attend qu'ils soient tous écrits avant de lire la
         // vue (le même dossier rouvert : sa vue à jour).
@@ -13814,6 +13855,9 @@ impl TriApp {
         // Palettes : la source retenue se calcule en fond dès l'ouverture (#492).
         if let Some(engine) = &self.engine {
             engine.scheduler.set_palette(self.palette_source);
+            // Ménage (#604), pas dans les tests (dossiers temporaires partagés).
+            #[cfg(not(test))]
+            self.start_purge(engine.cache.clone());
         }
         self.fit_grid_render();
         // Dossier rouvert avec le filtre « Développées » retenu allumé, ses logiciels
@@ -27469,7 +27513,16 @@ impl TriApp {
                 if let Some(engine) = &self.engine
                     && let Some(window) = self.settings_window.take()
                 {
-                    self.settings_window = Some(window.with_cache(engine.cache.clone()));
+                    let data = self.settings.data_dir();
+                    let purge = crate::cache_panel::PurgeContext {
+                        settings: self.settings.purge.clone(),
+                        history: tri::offload::history_path(
+                            &self.settings.offload,
+                            data.as_deref(),
+                        ),
+                        data,
+                    };
+                    self.settings_window = Some(window.with_cache(engine.cache.clone(), purge));
                 }
             }
             Err(e) => self.file_error = Some(e),

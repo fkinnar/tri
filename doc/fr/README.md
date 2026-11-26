@@ -51,6 +51,7 @@ existe.
 | [overlay.md](overlay.md) | Module `tri::overlay` : superpositions (grilles, texte, logo, format), plugins écrits en Rust ou fichiers TOML |
 | [send.md](send.md) | Module `tri::send` : plugins d'envoi (AirDrop) |
 | [update.md](update.md) | Module `tri::update` : rechercher une nouvelle version, sur demande |
+| [purge.md](purge.md) | Module `tri::purge` : ménage (historique des déchargements, cache et données de tri des dossiers disparus) |
 | [light.md](light.md) | Module `tri::light` : mode léger (NAS, iCloud : vignettes seules en fond, le reste à la demande) |
 | [watch.md](watch.md) | Module `tri::watch` : surveillance du dossier ouvert (images ajoutées, XMP modifiés ailleurs) |
 | [servers.md](servers.md) | Module `tri::servers` : serveurs réseau rejoints par leur adresse (`\\nas\photo`, `smb://`, `ftp://`, `sftp://`, WebDAV, NFS) |

@@ -930,8 +930,9 @@ impl OffloadDialog {
         }
         let mut pick: Option<usize> = None;
         let mut forget_now = false;
-        // « Oublier cette carte » à confirmer : le nombre d'images connues.
-        let mut ask_forget: Option<usize> = None;
+        // « Oublier cette carte » à confirmer : le nombre d'images connues, et l'erreur
+        // d'un essai précédent.
+        let mut ask_forget: Option<(usize, Option<String>)> = None;
         // Fin de la copie sous les yeux de l'utilisateur : suites cochées, séance ouverte.
         let mut request = self.finish(true);
         let mut start = false;
@@ -1287,12 +1288,18 @@ impl OffloadDialog {
                                             false,
                                             egui::Button::new(t!("offload-forget")),
                                         );
-                                        ask_forget = Some(known);
+                                        ask_forget = Some((known, None));
                                     }
                                     // Fait : la case disparaît, ça suffit (retour du 26/11/2026).
                                     Some(Some(Ok(_))) => {}
+                                    // L'erreur est dans la petite boîte, restée ouverte
+                                    // (retour du 26/11/2026).
                                     Some(Some(Err(e))) => {
-                                        ui.colored_label(ui.visuals().error_fg_color, e.as_str());
+                                        ui.add_enabled(
+                                            false,
+                                            egui::Button::new(t!("offload-forget")),
+                                        );
+                                        ask_forget = Some((known, Some(e.clone())));
                                     }
                                 }
                             });
@@ -1528,12 +1535,16 @@ impl OffloadDialog {
             self.change_source(source, ctx);
         }
         // Confirmé dans une petite boîte au-dessus (retour du 26/11/2026).
-        if let Some(known) = ask_forget {
+        if let Some((known, error)) = ask_forget {
             let (mut yes, mut no) = (false, false);
             let popup = crate::app::modal_at("offload_forget", crate::app::CENTRED)
                 .title(t!("offload-forget-confirm", n = known))
                 .show(ctx, |ui| {
                     ui.label(t!("offload-forget-tip"));
+                    if let Some(e) = &error {
+                        ui.add_space(4.0);
+                        ui.colored_label(ui.visuals().error_fg_color, e.as_str());
+                    }
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
                         yes = ui.button(t!("offload-forget")).clicked();

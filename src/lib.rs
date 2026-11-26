@@ -68,6 +68,7 @@ pub mod places;
 pub mod pp3;
 pub mod preview;
 pub mod process;
+pub mod purge;
 pub mod raw;
 pub mod reconcile;
 pub mod remote;
