@@ -1086,6 +1086,12 @@ filter_bar = true
 # Without a folder argument, reopen the last folder opened (remembered in the data
 # folder: ~/.local/share/tri, ~/Library/Application Support/tri, %APPDATA%\tri).
 reopen_last = true
+# Light mode: before reading the shooting dates of this many photos, warn.
+#
+# Sorting by shooting date in a folder in light mode (NAS, network share) reads the date
+# of every photo that does not have it yet, which can take long: from this number of
+# dates to read, a box warns first. 0: never warn.
+sort_dates_ask = 200
 # An image argument (tri-gui <image>): opened in focus mode (<core.view.focus_mode>), like in a viewer; the
 # --focus argument forces it in every case.
 image_focus = true

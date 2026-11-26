@@ -35,7 +35,16 @@ donne la valeur d'une image.
   temps est surtout l'attente du réseau), leur avancement est montré dans les tâches de
   fond (« dates de prise de vue i/N »), et le tri n'attend plus la progression des piles
   quand elles ne sont pas calculées en fond (en mode léger, elle passait derrière toutes
-  les vignettes).
+  les vignettes). À partir de `[gui] sort_dates_ask` dates à lire (200 ; 0 : jamais),
+  une boîte prévient d'abord (« Trier par date de prise de vue ? », `dates_dialog.rs`,
+  idée de l'utilisateur du 26/11/2026) : Trier, Annuler (l'ordre ne change pas), « Ne
+  plus demander » (réglage mis à 0). Depuis le même jour, les dates sont lues seules
+  **même quand les empreintes sont calculées en fond** (2 820 DNG sur un NAS en NFS :
+  le tri attendait toutes les empreintes, bien plus longues) ; une empreinte qui arrive
+  avec une date déjà lue ne relance pas de tri. Un RAW dont LibRaw n'a pas la date (des
+  DNG de 2021) la prend dans l'EXIF du fichier (`metadata::exif_date`), puis dans celle
+  du JPEG embarqué, enfin dans son XMP (`metadata::xmp_date`). Quand toutes les dates sont lues, la barre d'état dit combien
+  manquent (« … photos sans date »), et le journal les nomme (`sort`).
 - **Dates de modification** : lues sur le disque au moment du tri (`modified`).
 - **Notes** : fournies par l'appelant (`notes(chemin)`, le carnet du dossier) ; la paire
   d'après son RAW, un développement d'après sa photo (même clé que les dates).
