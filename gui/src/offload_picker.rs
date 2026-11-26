@@ -538,7 +538,7 @@ impl Picker {
     }
 
     /// Clavier, comme la grille : flèches (ou hjkl), Maj + flèches étendent ; Espace coche
-    /// ou décoche, `v` / Maj+Espace le mode visuel ; Cmd/Ctrl+A tout cocher, avec Maj tout
+    /// ou décoche, Maj+Espace le mode visuel (pas `v` : les versions dans la grille) ; Cmd/Ctrl+A tout cocher, avec Maj tout
     /// décocher ; Entrée agrandit ; Échap sort du visuel, de la vue en grand, puis ferme
     /// (vrai : fermer sans rien changer).
     fn keys(&mut self, ctx: &egui::Context) -> bool {
@@ -594,7 +594,6 @@ impl Picker {
             match key {
                 Key::Space if shift => self.toggle_visual(),
                 Key::Space => self.set(self.cursor, !self.checked[self.cursor]),
-                Key::V if !command => self.toggle_visual(),
                 Key::C if !command && self.enlarged.is_none() => self.toggle_cut(self.cursor),
                 Key::A if command => {
                     let on = !shift;

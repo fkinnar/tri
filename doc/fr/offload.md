@@ -141,7 +141,7 @@ carte ensuite ne touchent qu'elles, jamais le reste de la carte.
   sur chaque photo, toutes cochées au départ, « Tout sélectionner » / « Tout
   désélectionner » et le compte. Gestes de la grille : clic = curseur (il ne décoche pas
   tout, contrairement au Finder), Cmd/Ctrl+clic bascule, Maj+clic coche la plage, clic sur
-  la coche ; Espace bascule, `v` / Maj+Espace le mode visuel (les déplacements cochent),
+  la coche ; Espace bascule, Maj+Espace le mode visuel (les déplacements cochent),
   Maj + flèches étendent, flèches ou hjkl, Cmd/Ctrl+A tout, avec Maj rien. Double-clic ou
   Entrée : la photo en grand, ajustée (l'aperçu embarqué, pas de 1:1), flèches pour la
   suivante. Échap sort du visuel, de la vue en grand, puis ferme sans rien changer ;

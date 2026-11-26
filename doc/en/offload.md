@@ -133,8 +133,7 @@ them, never the rest of the card.
   cache; a RAW+JPEG pair is one photo; adjustable size (slider); a check on each photo,
   all checked at first, "Select all" / "Deselect all" and the count. The grid's gestures:
   click = cursor (it does not uncheck everything, unlike the Finder), Cmd/Ctrl+click
-  toggles, Shift+click checks the range, click on the check; Space toggles, `v` /
-  Shift+Space the visual mode (moving checks), Shift + arrows extend, arrows or hjkl,
+  toggles, Shift+click checks the range, click on the check; Space toggles, Shift+Space the visual mode (moving checks), Shift + arrows extend, arrows or hjkl,
   Cmd/Ctrl+A all, with Shift none. Double-click or Enter: the photo large, fitted (the
   embedded preview, no 1:1), arrows for the next one. Escape leaves the visual mode, the
   large view, then closes without changing anything; OK goes back to the dialog ("Change

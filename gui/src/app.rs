@@ -45992,7 +45992,7 @@ mod tests {
         press(&mut h, Key::A, CMD | Modifiers::SHIFT);
         press(&mut h, Key::Space, Modifiers::NONE);
         assert_eq!(picker(&h).map(|p| p.0), Some(vec![true, false]));
-        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::Space, Modifiers::SHIFT);
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert_eq!(picker(&h).map(|p| p.0), Some(vec![true, true]));
         press(&mut h, Key::Escape, Modifiers::NONE);
