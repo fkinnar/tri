@@ -104,7 +104,8 @@ Feedback of the same evening: the dialog no longer has to stay open. Summary clo
 copy done in the background: the application keeps the last finished offload
 (`TriApp::last_offload`: session and the dialog's choices), and a camera card (with a
 `DCIM` folder) plugged in afterwards opens the dialog on it, towards that session
-(`OffloadDialog::propose_session`). Closed without offloading, nothing more is offered.
+(`OffloadDialog::propose_session`) — only if it has a single session: a card of several
+sessions (the same one, plugged in again) keeps its rows (feedback of 2026-11-26). Closed without offloading, nothing more is offered.
 The new card may be mounted **at the same path** as the previous one (two cards of the
 same camera have the same volume name, `/media/…/disk`): it has just appeared, so it is
 another card.

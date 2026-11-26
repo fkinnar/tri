@@ -46442,6 +46442,53 @@ mod tests {
     }
 
     #[test]
+    fn a_next_card_of_several_sessions_keeps_its_sessions() {
+        // Retour du 26/11/2026 : une carte de deux séances rebranchée après un
+        // déchargement ne montrait plus qu'une séance (« carte suivante », #37).
+        use chrono::TimeZone;
+        let (mut h, dir) = harness();
+        let shots = dir.path().join("CARTE/DCIM/100_TEST");
+        std::fs::create_dir_all(&shots).unwrap();
+        for (name, day) in [("IMG0", 25), ("IMG1", 26)] {
+            let path = shots.join(format!("{name}.jpg"));
+            image::RgbImage::from_pixel(32, 24, image::Rgb([90, 90, 90]))
+                .save(&path)
+                .unwrap();
+            let at: std::time::SystemTime = chrono::Local
+                .with_ymd_and_hms(2026, 11, day, 12, 0, 0)
+                .unwrap()
+                .into();
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_modified(at)
+                .unwrap();
+        }
+        let ctx = h.ctx.clone();
+        let mut dialog = OffloadDialog::new(
+            dir.path().join("CARTE"),
+            CENTRED,
+            h.state().settings.offload.clone(),
+            None,
+            &ctx,
+        );
+        dialog.propose_session(&dir.path().join("Import/2026-11-25_Bruxelles"));
+        h.state_mut().offload = Some(dialog);
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.query_by_label("Décharger").is_none() {
+            assert!(Instant::now() < deadline, "boîte jamais prête");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        settle_dialog(&mut h);
+        assert!(
+            h.query_by_label_contains("2 séances sur la carte")
+                .is_some()
+        );
+    }
+
+    #[test]
     fn the_copy_says_which_session_it_is_on() {
         // Retour du 26/11/2026 : une carte de plusieurs séances, « séance 2 / 3 » dans le
         // titre pendant la copie.

@@ -639,15 +639,22 @@ impl OffloadDialog {
                 if let Ok(result) = rx.try_recv() {
                     self.stage = match result {
                         Ok((plan, history)) => {
+                            // Carte suivante vers la même séance (issue n° 37) : toute la
+                            // carte en une (sa galerie gardée, retour du 26/11/2026)…
+                            // seulement si elle n'a qu'une séance : une carte de plusieurs
+                            // séances (la même rebranchée, retour du 26/11/2026) n'est pas
+                            // la suite de la précédente, elle a ses lignes.
+                            let proposed = plan.sessions(&self.settings);
+                            if proposed.len() > 1 {
+                                self.folder_here = None;
+                                self.root_here = None;
+                            }
                             let folder = self.folder_here.clone().unwrap_or_else(|| {
                                 offload::suggest_folder(&plan, &self.settings).unwrap_or_default()
                             });
-                            // Carte suivante vers la même séance (issue n° 37) : pas de
-                            // séances à choisir, toute la carte en une (sa galerie
-                            // gardée, retour du 26/11/2026).
                             let sessions = match self.folder_here {
                                 Some(_) => plan.sessions_at(&[], self.settings.day_cut),
-                                None => plan.sessions(&self.settings),
+                                None => proposed,
                             };
                             Stage::Ready {
                                 sessions: session_rows(&plan, sessions),

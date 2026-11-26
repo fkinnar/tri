@@ -111,7 +111,8 @@ Retours du soir même : la boîte n'est pas obligée d'être restée ouverte. Bi
 ou copie faite en arrière-plan : l'application garde le dernier déchargement fini
 (`TriApp::last_offload` : séance et choix de la boîte), et une carte d'appareil (avec un
 dossier `DCIM`) branchée ensuite ouvre la boîte sur elle, vers cette séance
-(`OffloadDialog::propose_session`). Refermée sans décharger, plus rien n'est proposé
+(`OffloadDialog::propose_session`) — seulement si elle n'a qu'une séance : une carte de
+plusieurs séances (la même, rebranchée) garde ses lignes (retour du 26/11/2026). Refermée sans décharger, plus rien n'est proposé
 ensuite. La nouvelle carte peut être montée **au même chemin** que la précédente (deux
 cartes du même boîtier ont le même nom de volume, `/media/…/disk`) : elle vient
 d'apparaître, c'est une autre carte.
