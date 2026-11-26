@@ -47,6 +47,9 @@ pub const CHOICES: &str = "choices.json";
 /// ([`crate::notes`]) : un cache, toujours dans le dossier de données ([`read_local`]).
 pub const NOTES_READ: &str = "notes-read.json";
 
+/// Caches gardés pour un dossier dans le dossier de données seulement ([`write_local`]).
+const LOCAL: [&str; 1] = [NOTES_READ];
+
 /// Fichiers de données d'un dossier (ce qui se déplace entre `.tri/` et le repli).
 const FILES: [&str; 4] = [NOTES, VIEW, TUNING, CHOICES];
 /// Dossier des replis, dans le dossier de données.
@@ -286,8 +289,10 @@ fn remove_empty_own(folder: &Path) {
 }
 
 /// Retire un repli qui ne garde plus rien (seulement son [`FOLDER_FILE`]).
+/// Un cache gardé là ([`write_local`]) le retient : un dossier qui garde ses données avec
+/// les photos le perdait à chaque écriture (notes relues en entier à chaque ouverture).
 fn remove_empty_fallback(dir: &Path) {
-    if FILES.iter().all(|f| !dir.join(f).exists()) {
+    if FILES.iter().chain(&LOCAL).all(|f| !dir.join(f).exists()) {
         let _ = std::fs::remove_dir_all(dir);
     }
 }
@@ -765,6 +770,31 @@ pub fn hide(dir: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_local_cache_survives_the_other_files_moving() {
+        // 26/11/2026 : le cache des notes lues disparaissait avec le repli, vidé à chaque
+        // écriture d'un dossier gardant ses données avec les photos (relu en entier).
+        let dir = tempfile::tempdir().unwrap();
+        let (data, kept_root, plain) = (
+            dir.path().join("data"),
+            dir.path().join("kept"),
+            dir.path().join("plain"),
+        );
+        std::fs::create_dir(&kept_root).unwrap();
+        std::fs::create_dir(&plain).unwrap();
+        keep(Some(&data), &kept_root).unwrap();
+        for folder in [&kept_root, &plain] {
+            write_local(&data, folder, NOTES_READ, b"{}").unwrap();
+            write(Some(&data), folder, VIEW, Some(b"{}")).unwrap();
+            write(Some(&data), folder, VIEW, None).unwrap();
+            assert_eq!(
+                read_local(&data, folder, NOTES_READ).as_deref(),
+                Some(&b"{}"[..]),
+                "{folder:?}"
+            );
+        }
+    }
 
     /// Un dossier de photos et un dossier de données, à part.
     fn setup() -> (tempfile::TempDir, PathBuf, PathBuf) {

@@ -17,7 +17,8 @@ folder (Syncthing, a cloud): everything `tri` needs must travel with the photos.
 Apart from these, `notes-read.json` (ratings read and the date and size of their sources,
 see [notes.md](notes.md)) is a cache: always in the data folder (`store::read_local` /
 `write_local`), whatever the switch; it follows the folder (`relocate`, `purge_gone`) and
-goes with its fallback when no other file is left there.
+keeps its fallback (before, a folder keeping its data with the photos lost it at each of
+their writes, and read all its ratings again at every opening).
 
 One file per kind: when two computers change the same synced folder, a sync conflict
 only touches the file concerned. File names only, never an absolute path: a drive mounted
