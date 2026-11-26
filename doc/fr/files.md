@@ -249,9 +249,9 @@ Demandé par l'utilisateur : supprimer ou déplacer plusieurs dossiers sans les 
 à un. Le choix vit dans le moteur (`places::Tree` : `toggle_selected`, `select_range`,
 `toggle_visual`, `clear_selection`, `acting`) ; l'interface ne fait que le dessiner.
 
-- **Souris** : Cmd/Ctrl+clic ajoute ou retire un dossier (au premier, le dossier où l'on
-  était, ouvert d'un clic, entre aussi dans le choix, comme dans le Finder), Maj+clic choisit la plage depuis
-  le dernier cliqué ; ni l'un ni l'autre n'ouvre le dossier. Un clic simple ouvre le
+- **Souris** : Cmd/Ctrl+clic ajoute ou retire un dossier (au premier, le dossier ouvert,
+  surligné, entre aussi dans le choix, comme dans le Finder), Maj+clic choisit la plage depuis
+  le dernier cliqué (sinon le dossier ouvert) ; ni l'un ni l'autre n'ouvre le dossier. Un clic simple ouvre le
   dossier et finit le choix. Les dossiers choisis sont surlignés comme le dossier ouvert.
 - **Clavier** (le panneau a le clavier, leader puis `h`) : les mêmes actions que dans la
   grille, `core.select.toggle` (Espace) et `core.select.visual` (Maj+Espace : les

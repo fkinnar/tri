@@ -1998,22 +1998,20 @@ impl Tree {
     }
 
     /// Ajoute la ligne `index` au choix, ou l'en retire (Cmd/Ctrl+clic, Espace) ; elle
-    /// devient le départ des plages. La ligne pointée y entre d'abord si rien n'est choisi
-    /// (on part de là où l'on est, comme dans la grille).
-    pub fn toggle_selected(&mut self, index: usize) {
+    /// devient le départ des plages. Au premier choix, le dossier `here` (celui où l'on
+    /// était : le dossier ouvert, surligné) y entre aussi, comme dans le Finder (retour du
+    /// 26/11/2026 : un seul des deux dossiers surlignés partait) ; jamais un emplacement.
+    pub fn toggle_selected(&mut self, index: usize, here: Option<&Path>) {
         let rows = self.rows();
         let Some(path) = rows.get(index).map(|r| r.path.clone()) else {
             return;
         };
-        // Premier choix : le dossier où l'on était (ouvert d'un clic, surligné) y entre
-        // aussi, comme dans le Finder (retour du 26/11/2026 : un seul des deux dossiers
-        // surlignés partait). Jamais un emplacement.
         if self.selection.is_empty()
-            && let Some(here) = self.cursor().and_then(|i| rows.get(i))
-            && here.depth > 0
-            && here.path != path
+            && let Some(here) = here
+            && here != path
+            && rows.iter().any(|r| r.path == here && r.depth > 0)
         {
-            self.selection.push(here.path.clone());
+            self.selection.push(here.to_path_buf());
         }
         if let Some(at) = self.selection.iter().position(|p| *p == path) {
             self.selection.remove(at);
@@ -2023,14 +2021,15 @@ impl Tree {
         self.anchor = Some(path);
     }
 
-    /// Choisit les lignes du départ des plages (sinon la ligne pointée) jusqu'à `index`
-    /// (Maj+clic), à la place du choix d'avant.
-    pub fn select_range(&mut self, index: usize) {
+    /// Choisit les lignes du départ des plages (sinon le dossier `here`, où l'on était,
+    /// sinon la ligne pointée) jusqu'à `index` (Maj+clic), à la place du choix d'avant.
+    pub fn select_range(&mut self, index: usize, here: Option<&Path>) {
         let rows = self.rows();
         let from = self
             .anchor
             .as_ref()
             .and_then(|a| rows.iter().position(|r| r.path == *a))
+            .or_else(|| here.and_then(|h| rows.iter().position(|r| r.path == h)))
             .or_else(|| self.cursor())
             .unwrap_or(index);
         let (lo, hi) = (
@@ -2068,7 +2067,7 @@ impl Tree {
             && let Some(i) = self.cursor()
         {
             self.anchor.clone_from(&self.visual);
-            self.select_range(i);
+            self.select_range(i, None);
         }
     }
 
@@ -2337,26 +2336,26 @@ mod tests {
         tree.set_cursor(at(&tree, "a"));
         assert_eq!(names(tree.acting()), ["a"]);
         // Cmd/Ctrl+clic depuis a (pointée) : a et c ; encore c : retiré.
-        tree.toggle_selected(at(&tree, "c"));
+        tree.toggle_selected(at(&tree, "c"), Some(&dir.path().join("a")));
         assert_eq!(
             names(tree.acting()),
             ["a", "c"],
             "le dossier où l'on était aussi"
         );
         tree.clear_selection();
-        tree.toggle_selected(at(&tree, "a"));
-        tree.toggle_selected(at(&tree, "c"));
+        tree.toggle_selected(at(&tree, "a"), None);
+        tree.toggle_selected(at(&tree, "c"), None);
         assert_eq!(names(tree.acting()), ["a", "c"]);
-        tree.toggle_selected(at(&tree, "c"));
+        tree.toggle_selected(at(&tree, "c"), None);
         assert_eq!(names(tree.acting()), ["a"]);
         // Maj+clic : du dernier dossier cliqué (a) à d.
         tree.clear_selection();
-        tree.toggle_selected(at(&tree, "a"));
-        tree.select_range(at(&tree, "d"));
+        tree.toggle_selected(at(&tree, "a"), None);
+        tree.select_range(at(&tree, "d"), None);
         assert_eq!(names(tree.acting()), ["a", "b", "c", "d"]);
         // Un sous-dossier d'un dossier choisi part avec lui.
         tree.expand(&dir.path().join("b"));
-        tree.toggle_selected(at(&tree, "b/sous"));
+        tree.toggle_selected(at(&tree, "b/sous"), None);
         assert!(tree.is_selected(&dir.path().join("b/sous")));
         assert_eq!(names(tree.acting()), ["a", "b", "c", "d"]);
         // Mode visuel : la plage suit le curseur.
