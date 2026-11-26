@@ -1023,6 +1023,9 @@ impl OffloadDialog {
                             (row.count, row.bytes) =
                                 copy.fold((0, 0), |(n, b), i| (n + 1, b + i.size));
                         }
+                        // Images connues de toute la carte : « Oublier cette carte » les
+                        // oublie toutes, cochées ou non (#602).
+                        let card_known = plan.items.iter().filter(|i| i.known).count();
                         let chosen = targets(plan, sessions, root, folder).ok();
                         let dests: Vec<PathBuf> =
                             chosen.iter().flatten().map(|(_, d)| d.clone()).collect();
@@ -1279,8 +1282,11 @@ impl OffloadDialog {
                         // le bilan.
                         let mut again = !settings.skip_known;
                         let mut skip = false;
-                        if known > 0 || matches!(forget, Some(None | Some(Err(_)))) {
+                        if card_known > 0 || matches!(forget, Some(None | Some(Err(_)))) {
                             ui.horizontal(|ui| {
+                                // Bouton à la hauteur d'une case (retour du 26/11/2026 : mal
+                                // aligné avec le texte, et la ligne plus haute que les autres).
+                                ui.spacing_mut().button_padding.y = 0.0;
                                 if known > 0 {
                                     skip = ui
                                         .checkbox(&mut again, t!("offload-again", n = known))
@@ -1288,7 +1294,7 @@ impl OffloadDialog {
                                         .changed();
                                 }
                                 match forget {
-                                    None => {
+                                    None if card_known > 0 => {
                                         if ui
                                             .button(t!("offload-forget"))
                                             .on_hover_text(t!("offload-forget-tip"))
@@ -1304,10 +1310,10 @@ impl OffloadDialog {
                                             false,
                                             egui::Button::new(t!("offload-forget")),
                                         );
-                                        ask_forget = Some((known, None));
+                                        ask_forget = Some((card_known, None));
                                     }
                                     // Fait : la case disparaît, ça suffit (retour du 26/11/2026).
-                                    Some(Some(Ok(_))) => {}
+                                    None | Some(Some(Ok(_))) => {}
                                     // L'erreur est dans la petite boîte, restée ouverte
                                     // (retour du 26/11/2026).
                                     Some(Some(Err(e))) => {
@@ -1315,7 +1321,7 @@ impl OffloadDialog {
                                             false,
                                             egui::Button::new(t!("offload-forget")),
                                         );
-                                        ask_forget = Some((known, Some(e.clone())));
+                                        ask_forget = Some((card_known, Some(e.clone())));
                                     }
                                 }
                             });
