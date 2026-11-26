@@ -486,6 +486,20 @@ pub fn delete_dir(path: &Path, trash: bool) -> Result<Vec<Trashed>> {
     Ok(Vec::new())
 }
 
+/// Supprime les dossiers `paths` et tout leur contenu d'un coup (#606 : plusieurs
+/// dossiers choisis dans le panneau) : à la corbeille si `trash` (un seul pas à défaire),
+/// sinon définitivement.
+pub fn delete_dirs(paths: &[PathBuf], trash: bool) -> Result<Vec<Trashed>> {
+    if trash {
+        let refs: Vec<&PathBuf> = paths.iter().collect();
+        return to_trash(&refs, &mut |_, _| {});
+    }
+    for path in paths {
+        std::fs::remove_dir_all(path).map_err(|e| FileError::Io(path.clone(), e))?;
+    }
+    Ok(Vec::new())
+}
+
 /// Vrai si `a` et `b` désignent le même fichier (casse différente sur un système de
 /// fichiers insensible à la casse).
 fn same(a: &Path, b: &Path) -> bool {

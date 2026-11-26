@@ -243,6 +243,29 @@ dossier ouvert supprimé, il se ferme et ses calculs s'arrêtent ; sous-dossier 
 « Sous-dossiers » coché, ses images quittent la liste ; rendus darktable d'un dossier
 supprimé, interrompus (25/10/2026).
 
+## Plusieurs dossiers d'un coup (#606, 26/11/2026)
+
+Demandé par l'utilisateur : supprimer ou déplacer plusieurs dossiers sans les reprendre un
+à un. Le choix vit dans le moteur (`places::Tree` : `toggle_selected`, `select_range`,
+`toggle_visual`, `clear_selection`, `acting`) ; l'interface ne fait que le dessiner.
+
+- **Souris** : Cmd/Ctrl+clic ajoute ou retire un dossier, Maj+clic choisit la plage depuis
+  le dernier cliqué ; ni l'un ni l'autre n'ouvre le dossier. Un clic simple ouvre le
+  dossier et finit le choix. Les dossiers choisis sont surlignés comme le dossier ouvert.
+- **Clavier** (le panneau a le clavier, leader puis `h`) : les mêmes actions que dans la
+  grille, `core.select.toggle` (Espace) et `core.select.visual` (Maj+Espace : les
+  déplacements choisissent la plage) ; `core.view.back` (Échap) vide d'abord le choix.
+- **Sur quoi agir** (`Tree::acting`) : le choix s'il y en a un, sinon la ligne pointée ;
+  jamais un emplacement (volume, dossier personnel, favori en tête) ; un dossier dont un
+  parent est aussi choisi part avec lui. Clic droit ou glisser sur un dossier choisi :
+  tout le choix ; sur un autre : lui seul.
+- **Supprimer** : une confirmation avec les noms et le contenu total, `delete_dirs` (à la
+  corbeille d'un coup : un seul pas à défaire, `Step::Trash`).
+- **Copier / déplacer vers…** et glisser-déposer : une boîte (« 2 dossiers vers… »), un
+  plan par dossier (`plan_transfer_dir`), exécutés l'un après l'autre avec une seule
+  progression ; un seul pas à défaire (`Step::Many`, défait dans l'ordre inverse). Les
+  favoris, le cache et les données de tri suivent chaque dossier déplacé.
+
 ## Renommage par lot (#439, 14/11/2026)
 
 Plusieurs photos sélectionnées (marquées), `F2` ou « Renommer » dans la boîte du clic
