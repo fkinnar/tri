@@ -10430,6 +10430,7 @@ impl TriApp {
         dialog.set_previews(crate::offload::SessionPreviews {
             scheduler: scheduler.clone(),
             cache: engine.cache.clone(),
+            preview: engine.preview,
             location: self.settings.cache.location,
             places: self.settings.places.clone(),
         });

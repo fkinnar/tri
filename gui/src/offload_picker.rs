@@ -99,9 +99,37 @@ pub struct Picker {
     pub(crate) exclude_known: bool,
     /// « RAW seulement » de la boîte : ce que la copie prendra de chaque photo.
     raw_only: bool,
+    /// Cache du moteur (images de la galerie), s'il y en a un.
+    gallery: Option<Gallery>,
 }
 
-/// Réglages des images de la galerie : vignettes de 320 px, grand à 1600 px.
+/// Cache et réglages d'aperçu du moteur, où la galerie range ses images (#603).
+pub type Gallery = (tri::cache::Cache, tri::preview::Settings);
+
+/// L'image de `file` au niveau `level` : dans le cache du moteur s'il y en a un (lue, ou
+/// calculée et rangée : la même carte rouverte va plus vite, et la séance déchargée la
+/// retrouve), sinon calculée aux réglages de la galerie.
+fn load(
+    file: &MediaFile,
+    level: Level,
+    gallery: Option<&Gallery>,
+    stop: &AtomicBool,
+) -> Option<tri::bitmap::Bitmap> {
+    let Some((cache, s)) = gallery else {
+        return tri::preview::compute(file, level, &settings(), stop).ok();
+    };
+    let key = tri::preview::key(file, level, s).ok();
+    if let Some(bitmap) = key.as_ref().and_then(|k| cache.get(k)) {
+        return Some(bitmap);
+    }
+    let bitmap = tri::preview::compute(file, level, s, stop).ok()?;
+    if let Some(key) = &key {
+        let _ = cache.put(key, &bitmap);
+    }
+    Some(bitmap)
+}
+
+/// Réglages des images de la galerie sans cache : vignettes de 320 px, grand à 1600 px.
 fn settings() -> tri::preview::Settings {
     let mut s = tri::preview::Settings::default();
     s.sizes.thumbnail = 320;
@@ -131,6 +159,7 @@ impl Picker {
         chosen: Option<&HashSet<PathBuf>>,
         exclude_known: bool,
         raw_only: bool,
+        gallery: Option<Gallery>,
         ctx: &egui::Context,
     ) -> Picker {
         let mut photos: Vec<Photo> = Vec::new();
@@ -181,14 +210,13 @@ impl Picker {
         let cancel = Arc::new(AtomicBool::new(false));
         let (tx, rx) = mpsc::channel();
         let shown: Vec<MediaFile> = photos.iter().map(|p| p.shown.clone()).collect();
-        let (stop, repaint) = (cancel.clone(), ctx.clone());
+        let (stop, repaint, cached) = (cancel.clone(), ctx.clone(), gallery.clone());
         std::thread::spawn(move || {
-            let s = settings();
             for (i, file) in shown.iter().enumerate() {
                 if stop.load(Ordering::Relaxed) {
                     return;
                 }
-                if let Ok(bitmap) = tri::preview::compute(file, Level::Thumbnail, &s, &stop)
+                if let Some(bitmap) = load(file, Level::Thumbnail, cached.as_ref(), &stop)
                     && tx.send((i, to_image(&bitmap))).is_ok()
                 {
                     repaint.request_repaint();
@@ -216,6 +244,7 @@ impl Picker {
             visual: None,
             exclude_known,
             raw_only,
+            gallery,
         }
     }
 
@@ -228,6 +257,7 @@ impl Picker {
         chosen: Option<&HashSet<PathBuf>>,
         exclude_known: bool,
         raw_only: bool,
+        gallery: Option<Gallery>,
         ctx: &egui::Context,
     ) -> Picker {
         let shots = plan.shots();
@@ -235,7 +265,15 @@ impl Picker {
             .iter()
             .flat_map(|s| s.items.iter().map(|&i| &plan.items[i]))
             .collect();
-        let mut picker = Picker::new("card", &items, chosen, exclude_known, raw_only, ctx);
+        let mut picker = Picker::new(
+            "card",
+            &items,
+            chosen,
+            exclude_known,
+            raw_only,
+            gallery,
+            ctx,
+        );
         picker.title = t!("offload-cuts-title");
         let mut starts = vec![None; picker.photos.len()];
         for cut in cuts {
@@ -345,13 +383,13 @@ impl Picker {
         self.big = Some((i, None));
         let file = self.photos[i].shown.clone();
         let (tx, rx) = mpsc::channel();
-        let (stop, repaint) = (self.cancel.clone(), ctx.clone());
+        let (stop, repaint, cached) = (self.cancel.clone(), ctx.clone(), self.gallery.clone());
         std::thread::spawn(move || {
             let level = match file.kind {
                 MediaKind::Raw => Level::Embedded,
                 MediaKind::Flat => Level::Standard,
             };
-            if let Ok(bitmap) = tri::preview::compute(&file, level, &settings(), &stop) {
+            if let Some(bitmap) = load(&file, level, cached.as_ref(), &stop) {
                 let _ = tx.send((i, to_image(&bitmap)));
                 repaint.request_repaint();
             }
@@ -924,7 +962,7 @@ mod tests {
         let items = [item("A.RAF", true), item("B.RAF", false)];
         let refs: Vec<&Item> = items.iter().collect();
         let ctx = egui::Context::default();
-        let mut p = Picker::new("2026-11-25", &refs, None, true, false, &ctx);
+        let mut p = Picker::new("2026-11-25", &refs, None, true, false, None, &ctx);
         assert_eq!(p.checked, [false, true], "déjà copiée : décochée");
         // Exclue : on ne peut pas la cocher, ni seule ni avec toutes.
         p.set(0, true);
@@ -955,11 +993,11 @@ mod tests {
         ];
         let refs: Vec<&Item> = items.iter().collect();
         let ctx = egui::Context::default();
-        let raw_only = Picker::new("2026-11-25", &refs, None, true, true, &ctx);
+        let raw_only = Picker::new("2026-11-25", &refs, None, true, true, None, &ctx);
         assert_eq!(raw_only.checked, [false, true]);
         assert!(raw_only.photos[0].copied(true));
         raw_only.cancel.store(true, Ordering::Relaxed);
-        let all = Picker::new("2026-11-25", &refs, None, true, false, &ctx);
+        let all = Picker::new("2026-11-25", &refs, None, true, false, None, &ctx);
         assert_eq!(all.checked, [true, true], "son JPEG reste à copier");
         assert!(all.photos[0].partly(false));
         assert!(!all.photos[1].partly(false));
@@ -1011,7 +1049,7 @@ mod tests {
         };
         let cuts = plan.proposed_cuts(&tri::offload::OffloadSettings::default());
         let ctx = egui::Context::default();
-        let mut p = Picker::sessions(&plan, &cuts, None, true, false, &ctx);
+        let mut p = Picker::sessions(&plan, &cuts, None, true, false, None, &ctx);
         let names: Vec<&str> = p.photos.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(
             names,
@@ -1035,10 +1073,59 @@ mod tests {
         assert_eq!(sessions[1].items, [0, 3]);
         // La galerie d'une séance n'a pas de coupures.
         let refs: Vec<&Item> = plan.items.iter().collect();
-        let mut one = Picker::new("2026-11-25", &refs, None, true, false, &ctx);
+        let mut one = Picker::new("2026-11-25", &refs, None, true, false, None, &ctx);
         one.toggle_cut(1);
         assert!(one.cuts().is_none());
         p.cancel.store(true, Ordering::Relaxed);
         one.cancel.store(true, Ordering::Relaxed);
+    }
+
+    #[test]
+    fn gallery_thumbnails_are_cached_and_follow_the_copy() {
+        // Idée de l'utilisateur (26/11/2026) : les vignettes de la galerie servent ensuite
+        // à la séance déchargée, et la même carte rouverte va plus vite.
+        let dir = tempfile::tempdir().unwrap();
+        let card = dir.path().join("carte");
+        std::fs::create_dir_all(&card).unwrap();
+        let photo = card.join("IMG0.jpg");
+        image::RgbImage::from_pixel(64, 48, image::Rgb([90, 120, 150]))
+            .save(&photo)
+            .unwrap();
+        let cache = tri::cache::Cache::open(dir.path().join("cache")).unwrap();
+        let preview = tri::preview::Settings::default();
+        let gallery = (cache.clone(), preview);
+        let file = |path: &std::path::Path| MediaFile {
+            path: path.to_path_buf(),
+            kind: MediaKind::Flat,
+        };
+        let stop = AtomicBool::new(false);
+        assert!(load(&file(&photo), Level::Thumbnail, Some(&gallery), &stop).is_some());
+        let on_card = tri::preview::key(&file(&photo), Level::Thumbnail, &preview).unwrap();
+        assert!(cache.contains(&on_card), "rangée dans le cache du moteur");
+        // Le déchargement fait suivre l'entrée, comme la boîte.
+        let history = tri::offload::History::in_memory();
+        let plan = tri::offload::plan(&card, &history).unwrap();
+        let dest = dir.path().join("seance");
+        tri::offload::run(
+            &plan,
+            &dest,
+            &tri::offload::OffloadSettings::default(),
+            &mut tri::offload::History::in_memory(),
+            &stop,
+            |_| {},
+            |source, copy| {
+                tri::preview::carry(
+                    &cache,
+                    &preview,
+                    &[(source.to_path_buf(), copy.to_path_buf())],
+                    true,
+                );
+            },
+            |_| false,
+        );
+        let copied =
+            tri::preview::key(&file(&dest.join("IMG0.jpg")), Level::Thumbnail, &preview).unwrap();
+        assert!(cache.contains(&copied), "la séance la retrouve");
+        assert!(cache.contains(&on_card), "la carte la garde");
     }
 }

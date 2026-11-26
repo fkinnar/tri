@@ -1006,7 +1006,7 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
             );
             let _ = std::io::stdout().flush();
         },
-        |copy| {
+        |_, copy| {
             if let (Some(work), Some(kind)) = (&work, tri::media::kind_of(copy)) {
                 let file = tri::media::MediaFile {
                     path: copy.to_path_buf(),

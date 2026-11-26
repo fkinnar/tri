@@ -21,6 +21,9 @@ pub struct SessionPreviews {
     pub scheduler: Arc<Scheduler>,
     /// Cache à remplir.
     pub cache: tri::cache::Cache,
+    /// Réglages d'aperçu du moteur (clés du cache) : la galerie y range ses vignettes, qui
+    /// suivent les copies (#603).
+    pub preview: tri::preview::Settings,
     /// `[cache] location`, appliqué à la séance avant la copie.
     pub location: tri::cache::Location,
     /// Réglages du panneau des dossiers (disques amovibles, pour `location = "disk"`).
@@ -327,6 +330,10 @@ pub struct OffloadDialog {
     /// Galerie ouverte pour choisir les photos d'une séance (#507) : (rang de la séance,
     /// galerie) ; la boîte de déchargement revient à sa fermeture.
     pub(crate) picker: Option<(usize, crate::offload_picker::Picker)>,
+    /// Cache et réglages d'aperçu du moteur : vignettes et grands aperçus de la galerie y
+    /// sont rangés (la même carte rouverte va plus vite), et suivent les copies (la séance
+    /// déchargée les retrouve, comme une copie de `tri`, #592).
+    gallery: Option<(tri::cache::Cache, tri::preview::Settings)>,
 }
 
 impl OffloadDialog {
@@ -355,6 +362,7 @@ impl OffloadDialog {
             group_pairs: tri::pairs::Grouping::Ask,
             pairs_choice: None,
             picker: None,
+            gallery: None,
         }
     }
 
@@ -378,6 +386,7 @@ impl OffloadDialog {
     /// Calcule les aperçus de la séance pendant la copie avec `previews` (voir
     /// [`SessionPreviews`]).
     pub fn set_previews(&mut self, previews: SessionPreviews) {
+        self.gallery = Some((previews.cache.clone(), previews.preview));
         self.previews = Some(previews);
     }
 
@@ -705,6 +714,9 @@ impl OffloadDialog {
         let mut history = history.take().unwrap_or_default();
         let (settings, stop, repaint) = (self.settings.clone(), cancel.clone(), ctx.clone());
         let previews = self.previews.take().filter(|_| settings.previews);
+        // Ce que la galerie (ou un passage précédent) a déjà mis en cache pour la carte suit
+        // les copies ; déplacé si la carte est vidée ensuite.
+        let carry = self.gallery.clone();
         // « Garder les données de tri » : posé avant la copie, le cache se remplit
         // directement à sa place.
         let keep_choice = self.keep_choice;
@@ -751,7 +763,15 @@ impl OffloadDialog {
                         let _ = progress_tx.send(Message::Progress(p.clone()));
                         progress_ctx.request_repaint();
                     },
-                    |copy| {
+                    |source, copy| {
+                        if let Some((cache, preview)) = &carry {
+                            tri::preview::carry(
+                                cache,
+                                preview,
+                                &[(source.to_path_buf(), copy.to_path_buf())],
+                                !settings.delete_after,
+                            );
+                        }
                         if let (Some(p), Some(kind)) = (&previews, tri::media::kind_of(copy)) {
                             p.scheduler.add_files(vec![tri::media::MediaFile {
                                 path: copy.to_path_buf(),
@@ -853,6 +873,7 @@ impl OffloadDialog {
                 chosen.as_ref(),
                 self.settings.skip_known,
                 self.settings.raw_only,
+                self.gallery.clone(),
                 ctx,
             );
             self.picker = Some((WHOLE_CARD, picker));
@@ -869,6 +890,7 @@ impl OffloadDialog {
                 row.picked.as_ref(),
                 self.settings.skip_known,
                 self.settings.raw_only,
+                self.gallery.clone(),
                 ctx,
             );
             self.picker = Some((i, picker));

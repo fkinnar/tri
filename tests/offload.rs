@@ -92,7 +92,7 @@ fn a_card_is_copied_flat_verified_and_remembered() {
         &mut history,
         &AtomicBool::new(false),
         |_| seen += 1,
-        |copy| copies.push(copy.to_path_buf()),
+        |_, copy| copies.push(copy.to_path_buf()),
         |_| false,
     );
     assert!(seen > 0, "progression signalée");
@@ -142,7 +142,7 @@ fn a_card_is_copied_flat_verified_and_remembered() {
         &mut history,
         &stop,
         |_| {},
-        |_| {},
+        |_, _| {},
         |_| false,
     );
     assert_eq!(report.skipped.len(), 3);
@@ -163,7 +163,7 @@ fn a_card_is_copied_flat_verified_and_remembered() {
         &mut history,
         &stop,
         |_| {},
-        |_| {},
+        |_, _| {},
         |_| false,
     );
     assert_eq!(report.copied.len(), 3, "second endroit");
@@ -174,7 +174,7 @@ fn a_card_is_copied_flat_verified_and_remembered() {
         &mut history,
         &stop,
         |_| {},
-        |_| {},
+        |_, _| {},
         |_| false,
     );
     assert!(report.copied.is_empty());
@@ -200,7 +200,7 @@ fn name_clashes_and_identical_copies() {
         &mut history,
         &AtomicBool::new(false),
         |p| last = Some(p.clone()),
-        |_| {},
+        |_, _| {},
         |_| false,
     );
     assert_eq!(report.skipped, [src.join("DCIM/101_FUJI/DSCF0002.RAF")]);
@@ -235,7 +235,7 @@ fn only_verified_copies_are_deleted_from_the_card() {
         &mut history,
         &AtomicBool::new(false),
         |_| {},
-        |_| {},
+        |_, _| {},
         |_| false,
     );
     assert!(offload::delete_sources(&report).is_empty());
@@ -262,7 +262,7 @@ fn verified_duplicates_are_deleted_too_but_not_history_only_ones() {
         &mut history,
         &stop,
         |_| {},
-        |_| {},
+        |_, _| {},
         |_| false,
     );
     // Seconde fois, même destination : rien de copié, tout « déjà là » et vérifié.
@@ -274,7 +274,7 @@ fn verified_duplicates_are_deleted_too_but_not_history_only_ones() {
         &mut history,
         &stop,
         |_| {},
-        |_| {},
+        |_, _| {},
         |_| false,
     );
     assert!(report.copied.is_empty());
@@ -299,7 +299,7 @@ fn verified_duplicates_are_deleted_too_but_not_history_only_ones() {
         &mut history,
         &stop,
         |_| {},
-        |_| {},
+        |_, _| {},
         |_| false,
     );
     assert_eq!(report.skipped.len(), 3);
@@ -325,7 +325,7 @@ fn cancelling_copies_nothing() {
         &mut history,
         &AtomicBool::new(true),
         |_| {},
-        |_| {},
+        |_, _| {},
         |_| false,
     );
     assert!(report.cancelled);
@@ -357,7 +357,7 @@ fn raw_only_leaves_the_jpegs_on_the_card() {
         &mut history,
         &AtomicBool::new(false),
         |p| counts.push((p.files_done, p.files_total)),
-        |_| {},
+        |_, _| {},
         |_| false,
     );
     assert_eq!(report.copied.len(), 2);
@@ -409,7 +409,7 @@ fn the_root_is_remembered_and_a_known_card_still_gets_a_name() {
         &mut history,
         &stop,
         |_| {},
-        |_| {},
+        |_, _| {},
         |_| false,
     );
     let again = offload::plan(&src, &history).unwrap();
@@ -454,7 +454,7 @@ fn the_session_is_named_after_the_newest_image_to_copy() {
         &mut history,
         &AtomicBool::new(false),
         |_| {},
-        |_| {},
+        |_, _| {},
         |_| false,
     );
     let again = offload::plan(&src, &history).unwrap();

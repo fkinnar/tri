@@ -799,7 +799,7 @@ fn free_space_of(path: &Path) -> io::Result<u64> {
 /// sous-dossiers de la carte, `DCIM/100_FUJI`…, ne sont pas reproduits). Un nom déjà pris
 /// par un *autre* fichier reçoit un suffixe (`DSCF0001-2.RAF`) ; une copie identique déjà
 /// présente est ignorée. `cancel` interrompt entre deux fichiers (la copie en cours est
-/// abandonnée et effacée). `copied` reçoit chaque copie dès qu'elle est faite (et
+/// abandonnée et effacée). `copied` reçoit (fichier de la carte, copie) dès que la copie est faite (et
 /// vérifiée), ou trouvée identique dans la destination : de quoi calculer ses aperçus
 /// pendant la suite de la copie.
 ///
@@ -814,7 +814,7 @@ pub fn run(
     history: &mut History,
     cancel: &AtomicBool,
     mut progress: impl FnMut(&Progress),
-    mut copied: impl FnMut(&Path),
+    mut copied: impl FnMut(&Path, &Path),
     mut full: impl FnMut(&OutOfSpace) -> bool,
 ) -> Report {
     let start = std::time::Instant::now();
@@ -894,12 +894,12 @@ pub fn run(
                             .errors
                             .push((item.source.clone(), format!("historique : {e}")));
                     }
-                    copied(&copy);
+                    copied(&item.source, &copy);
                     report.copied.push((item.source.clone(), copy));
                 }
                 Ok(Outcome::AlreadyThere(copy)) => {
                     let _ = history.record(item, &copy);
-                    copied(&copy);
+                    copied(&item.source, &copy);
                     report.skipped.push(item.source.clone());
                     report.already_there.push((item.source.clone(), copy));
                 }
@@ -1331,7 +1331,7 @@ mod tests {
             &mut History::in_memory(),
             &AtomicBool::new(false),
             |_| {},
-            |_| {
+            |_, _| {
                 copies += 1;
                 if copies == 1 {
                     FULL.with(|f| f.set(2));
@@ -1372,7 +1372,7 @@ mod tests {
                     phases.push(p.phase);
                 }
             },
-            |_| {},
+            |_, _| {},
             |_| false,
         );
         let one = [Phase::Writing, Phase::Syncing, Phase::Verifying];
@@ -1393,7 +1393,7 @@ mod tests {
             &mut History::in_memory(),
             &AtomicBool::new(false),
             |_| {},
-            |_| {
+            |_, _| {
                 copies += 1;
                 FULL.with(|f| f.set(1));
             },
