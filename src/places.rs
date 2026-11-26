@@ -2001,9 +2001,20 @@ impl Tree {
     /// devient le départ des plages. La ligne pointée y entre d'abord si rien n'est choisi
     /// (on part de là où l'on est, comme dans la grille).
     pub fn toggle_selected(&mut self, index: usize) {
-        let Some(path) = self.rows().get(index).map(|r| r.path.clone()) else {
+        let rows = self.rows();
+        let Some(path) = rows.get(index).map(|r| r.path.clone()) else {
             return;
         };
+        // Premier choix : le dossier où l'on était (ouvert d'un clic, surligné) y entre
+        // aussi, comme dans le Finder (retour du 26/11/2026 : un seul des deux dossiers
+        // surlignés partait). Jamais un emplacement.
+        if self.selection.is_empty()
+            && let Some(here) = self.cursor().and_then(|i| rows.get(i))
+            && here.depth > 0
+            && here.path != path
+        {
+            self.selection.push(here.path.clone());
+        }
         if let Some(at) = self.selection.iter().position(|p| *p == path) {
             self.selection.remove(at);
         } else {
@@ -2325,7 +2336,14 @@ mod tests {
         assert!(tree.acting().is_empty(), "pas l'emplacement");
         tree.set_cursor(at(&tree, "a"));
         assert_eq!(names(tree.acting()), ["a"]);
-        // Cmd/Ctrl+clic : a et c ; encore c : retiré.
+        // Cmd/Ctrl+clic depuis a (pointée) : a et c ; encore c : retiré.
+        tree.toggle_selected(at(&tree, "c"));
+        assert_eq!(
+            names(tree.acting()),
+            ["a", "c"],
+            "le dossier où l'on était aussi"
+        );
+        tree.clear_selection();
         tree.toggle_selected(at(&tree, "a"));
         tree.toggle_selected(at(&tree, "c"));
         assert_eq!(names(tree.acting()), ["a", "c"]);

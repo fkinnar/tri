@@ -239,7 +239,8 @@ Asked by the owner: delete or move several folders without taking them one by on
 selection lives in the engine (`places::Tree`: `toggle_selected`, `select_range`,
 `toggle_visual`, `clear_selection`, `acting`); the interface only draws it.
 
-- **Mouse**: Cmd/Ctrl+click adds or removes a folder, Shift+click selects the range from
+- **Mouse**: Cmd/Ctrl+click adds or removes a folder (on the first one, the folder you
+  were on, opened with a click, joins the selection too, as in the Finder), Shift+click selects the range from
   the last one clicked; neither opens the folder. A plain click opens the folder and ends
   the selection. Chosen folders are highlighted like the open folder.
 - **Keyboard** (the panel has the keyboard, leader then `h`): the same actions as in the
