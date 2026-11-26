@@ -46358,11 +46358,15 @@ mod tests {
         // Remise : deux images connues ; oubliées, elles redeviennent nouvelles.
         open(&mut h);
         h.get_by_label(&t!("offload-forget")).click();
+        h.run_steps(4);
+        // Confirmé dans une petite boîte : Annuler n'oublie rien, puis pour de bon.
+        assert!(h.query_by_label(&t!("offload-forget-tip")).is_some());
+        h.get_all_by_label(&t!("cancel")).last().unwrap().click();
         h.run_steps(2);
-        assert!(
-            h.query_by_label_contains(&t!("offload-forget-confirm", n = 2))
-                .is_some()
-        );
+        assert!(h.query_by_label(&t!("offload-forget-tip")).is_none());
+        assert!(h.query_by_label("Décharger").is_some(), "la boîte reste");
+        h.get_by_label(&t!("offload-forget")).click();
+        h.run_steps(4);
         h.get_all_by_label(&t!("offload-forget"))
             .last()
             .unwrap()

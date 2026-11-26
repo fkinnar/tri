@@ -930,6 +930,8 @@ impl OffloadDialog {
         }
         let mut pick: Option<usize> = None;
         let mut forget_now = false;
+        // « Oublier cette carte » à confirmer : le nombre d'images connues.
+        let mut ask_forget: Option<usize> = None;
         // Fin de la copie sous les yeux de l'utilisateur : suites cochées, séance ouverte.
         let mut request = self.finish(true);
         let mut start = false;
@@ -1255,44 +1257,49 @@ impl OffloadDialog {
                         // Ce qui a déjà été déchargé, n'importe où (historique global ;
                         // retour du 12/11/2026) n'est pas recopié ; cochée, si (une même
                         // carte déchargée à deux endroits). Seulement s'il y en a.
+                        // « Décharger à nouveau » et, à sa droite, « Oublier cette carte »
+                        // (#602 ; retour du 26/11/2026) : confirmé sur la même ligne, puis
+                        // le bilan.
                         let mut again = !settings.skip_known;
-                        let skip = known > 0
-                            && ui
-                                .checkbox(&mut again, t!("offload-again", n = known))
-                                .on_hover_text(t!("offload-again-tip"))
-                                .changed();
+                        let mut skip = false;
+                        if known > 0 || forget.is_some() {
+                            ui.horizontal(|ui| {
+                                if known > 0 {
+                                    skip = ui
+                                        .checkbox(&mut again, t!("offload-again", n = known))
+                                        .on_hover_text(t!("offload-again-tip"))
+                                        .changed();
+                                }
+                                match forget {
+                                    None => {
+                                        if ui
+                                            .button(t!("offload-forget"))
+                                            .on_hover_text(t!("offload-forget-tip"))
+                                            .clicked()
+                                        {
+                                            *forget = Some(None);
+                                        }
+                                    }
+                                    Some(None) => {
+                                        // Confirmé dans une petite boîte (retour du
+                                        // 26/11/2026), le bouton reste à sa place.
+                                        ui.add_enabled(
+                                            false,
+                                            egui::Button::new(t!("offload-forget")),
+                                        );
+                                        ask_forget = Some(known);
+                                    }
+                                    Some(Some(Ok(n))) => {
+                                        ui.weak(t!("offload-forgot", n = *n));
+                                    }
+                                    Some(Some(Err(e))) => {
+                                        ui.colored_label(ui.visuals().error_fg_color, e.as_str());
+                                    }
+                                }
+                            });
+                        }
                         if skip {
                             settings.skip_known = !again;
-                        }
-                        // Oublier la carte (#602) : confirmé d'abord, puis le bilan.
-                        match forget {
-                            None if known > 0 => {
-                                if ui
-                                    .button(t!("offload-forget"))
-                                    .on_hover_text(t!("offload-forget-tip"))
-                                    .clicked()
-                                {
-                                    *forget = Some(None);
-                                }
-                            }
-                            Some(None) => {
-                                ui.horizontal(|ui| {
-                                    ui.label(t!("offload-forget-confirm", n = known));
-                                    if ui.button(t!("offload-forget")).clicked() {
-                                        forget_now = true;
-                                    }
-                                    if ui.button(t!("cancel")).clicked() {
-                                        *forget = None;
-                                    }
-                                });
-                            }
-                            Some(Some(Ok(n))) => {
-                                ui.weak(t!("offload-forgot", n = *n));
-                            }
-                            Some(Some(Err(e))) => {
-                                ui.colored_label(ui.visuals().error_fg_color, e.as_str());
-                            }
-                            None => {}
                         }
                         if (raw || skip)
                             && offload::suggest_folder(plan, &before).as_deref()
@@ -1520,6 +1527,27 @@ impl OffloadDialog {
             });
         if let Some(source) = new_source {
             self.change_source(source, ctx);
+        }
+        // Confirmé dans une petite boîte au-dessus (retour du 26/11/2026).
+        if let Some(known) = ask_forget {
+            let (mut yes, mut no) = (false, false);
+            let popup = crate::app::modal_at("offload_forget", crate::app::CENTRED)
+                .title(t!("offload-forget-confirm", n = known))
+                .show(ctx, |ui| {
+                    ui.label(t!("offload-forget-tip"));
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        yes = ui.button(t!("offload-forget")).clicked();
+                        no = ui.button(t!("cancel")).clicked();
+                    });
+                });
+            if yes {
+                forget_now = true;
+            } else if (no || popup.should_close())
+                && let Stage::Ready { forget, .. } = &mut self.stage
+            {
+                *forget = None;
+            }
         }
         if forget_now {
             self.forget_card();
