@@ -64,6 +64,16 @@ avant. Pas gardé : un sidecar illisible, un conflit, une image sans aucune sour
 n'y est ouvert de toute façon). Les images disparues quittent le cache quand tout le
 dossier est relu.
 
+**Montrées d'abord, vérifiées ensuite** (bilan du 26/11/2026 au journal, `notes:` après
+chaque lecture d'un dossier : sur un partage SMB par GVFS, 2 820 notes reprises du cache
+mais 792 s de relevés de date et de taille, en concurrence avec les vignettes). À
+l'ouverture, `NoteBook::from_read_cache` donne aussitôt les notes gardées, sans rien
+vérifier ni ouvrir ; l'interface les montre (`seed`, sans écraser une image notée
+entre-temps) pendant que `load_until` vérifie, puis prend le résultat (`adopt`). Le relevé
+de l'image elle-même est celui que garde tout `tri` (`cache::stamp`, déjà fait pour ses
+vignettes ; l'ouverture d'un dossier oublie ceux de ses fichiers) ; ceux des sidecars et
+des relectures après une note restent faits sur le disque.
+
 Opérations sur `xmp::Notes` : `set_stars(n)` (le drapeau ne change pas : une photo rejetée
 garde ses étoiles), `toggle_color(c, multiple)` (une seule couleur : une autre remplace, la
 même retire ; plusieurs : ajout / retrait, comme darktable), `clear_colors()`.

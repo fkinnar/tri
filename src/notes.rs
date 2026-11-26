@@ -125,6 +125,9 @@ fn read_entries(
     let index = SidecarIndex::new(dir);
     let mut memory = crate::reconcile::Memory::open(dir);
     let mut cache = ReadCache::open(dir);
+    // Tout le dossier, à son ouverture (qui oublie les relevés retenus de ses fichiers) :
+    // les relevés des images partagés avec les vignettes.
+    cache.shared_stamps = done.is_some();
     cache.stats.listing = start.elapsed();
     let entries: Vec<_> = images
         .iter()
@@ -162,6 +165,22 @@ struct ReadCache {
     changed: bool,
     /// Bilan de la lecture, pour le journal ([`ReadCache::report`]).
     stats: ReadStats,
+    /// Relevé d'une image pris dans ceux que garde tout `tri` ([`shared_stamp`]).
+    shared_stamps: bool,
+}
+
+/// Date et taille de l'image `path`, relevées une fois pour tout `tri`
+/// ([`crate::cache::stamp`], les mêmes que pour ses vignettes). Bilan du 26/11/2026 : sur
+/// un partage SMB (GVFS), 2 820 notes reprises du cache, mais 792 s de relevés, chacun en
+/// plus de celui des vignettes. Seulement à l'ouverture du dossier, qui oublie les relevés
+/// de ses fichiers : une image que `tri` vient de réécrire (notes inscrites dedans) n'a
+/// pas d'autre relevé à jour.
+fn shared_stamp(path: &Path) -> Option<crate::reconcile::Stamp> {
+    let (size, modified) = crate::cache::stamp(path)?;
+    Some(crate::reconcile::Stamp {
+        modified: u64::try_from(modified).unwrap_or(u64::MAX),
+        size,
+    })
 }
 
 /// Ce que le cache a donné pendant une lecture (diagnostic du 26/11/2026 : sur le NAS de
@@ -341,7 +360,12 @@ fn read_notes(
         .chain(crate::embedded::supports(image).then_some(Some(image)))
         .map(|p| {
             let p = p?;
-            Some((file_name(p), crate::reconcile::Stamp::of(p).ok()?))
+            let stamp = if cache.shared_stamps && p == image {
+                shared_stamp(p)
+            } else {
+                crate::reconcile::Stamp::of(p).ok()
+            };
+            Some((file_name(p), stamp?))
         })
         .collect();
     cache.stats.stamping += start.elapsed();
@@ -560,6 +584,44 @@ impl NoteBook {
         done: &AtomicUsize,
     ) -> NoteBook {
         NoteBook::load_until(files, convention, done, &AtomicBool::new(false))
+    }
+
+    /// Notes de `files` telles que les a gardées la dernière lecture
+    /// ([`crate::store::NOTES_READ`]), sans rien vérifier ni ouvrir : à montrer en
+    /// attendant la lecture ([`NoteBook::load_until`], qui vérifie), par [`NoteBook::seed`].
+    /// Sur un disque lent, la vérification seule prend des minutes (26/11/2026). Une image
+    /// absente du cache n'y est pas.
+    pub fn from_read_cache(files: &[MediaFile], convention: Convention) -> NoteBook {
+        NoteBook::from_read_cache_in(files, convention, crate::store::data_dir())
+    }
+
+    fn from_read_cache_in(
+        files: &[MediaFile],
+        convention: Convention,
+        data: Option<PathBuf>,
+    ) -> NoteBook {
+        let mut book = NoteBook::pending(files.iter().map(|f| f.path.as_path()), convention);
+        book.touched = None;
+        for (dir, images) in &book.by_dir {
+            let cache = ReadCache::open_in(data.clone(), dir);
+            for image in images {
+                let Some(c) = cache.images.get(&file_name(image)) else {
+                    continue;
+                };
+                let entry = Entry {
+                    notes: Notes {
+                        stars: c.stars,
+                        flag: c.flag,
+                        colors: c.colors.clone(),
+                    },
+                    sidecars: c.sidecars.iter().map(|n| dir.join(n)).collect(),
+                    error: None,
+                    conflict: None,
+                };
+                book.entries.insert(image.clone(), entry);
+            }
+        }
+        book
     }
 
     /// Comme [`NoteBook::load_counting`], arrêtée dès que `stop` passe à vrai (dossier
@@ -848,11 +910,15 @@ impl NoteBook {
     }
 
     /// Notes en attente d'une lecture en fond : celles d'un carnet `known` (le même dossier
-    /// lu avant) en attendant, sans les marquer comme plus fraîches.
+    /// lu avant, ou [`NoteBook::from_read_cache`]) en attendant, sans les marquer comme plus
+    /// fraîches ; celles des images notées depuis le début de la lecture restent.
     pub fn seed(&mut self, known: &NoteBook) {
+        let touched = self.touched.clone().unwrap_or_default();
         for images in self.by_dir.values() {
             for image in images {
-                if let Some(entry) = known.entries.get(image) {
+                if let Some(entry) = known.entries.get(image)
+                    && !touched.contains(image)
+                {
                     self.entries.insert(image.clone(), entry.clone());
                 }
             }
@@ -2205,6 +2271,30 @@ mod tests {
         f.set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(60))
             .unwrap();
         assert_eq!(read(&b).notes.stars, 5, "relu");
+
+        // En attendant la vérification : les notes gardées, sans rien ouvrir (A, illisible
+        // maintenant, garde ses 4 étoiles), montrées dans un carnet en attente sauf pour
+        // une image notée entre-temps.
+        let files: Vec<MediaFile> = [&a, &b]
+            .iter()
+            .map(|p| MediaFile {
+                path: p.to_path_buf(),
+                kind: crate::media::MediaKind::Flat,
+            })
+            .collect();
+        let early = NoteBook::from_read_cache_in(&files, Convention::Darktable, Some(data));
+        assert_eq!(early.notes(&a).stars, 4);
+        assert_eq!(early.notes(&b).stars, 5);
+        assert_eq!(early.sidecar(&b), Some(sidecar));
+        let mut pending = NoteBook::pending([a.as_path(), b.as_path()], Convention::Darktable);
+        pending.touched.as_mut().unwrap().insert(b.clone());
+        pending.seed(&early);
+        assert_eq!(pending.notes(&a).stars, 4);
+        assert_eq!(
+            pending.notes(&b).stars,
+            0,
+            "notée entre-temps : pas écrasée"
+        );
     }
 
     #[test]

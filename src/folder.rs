@@ -264,6 +264,9 @@ pub struct Loading {
     done: Arc<AtomicUsize>,
     total: usize,
     result: Receiver<Loaded>,
+    /// Notes gardées par la dernière lecture, avant leur vérification
+    /// ([`NoteBook::from_read_cache`]).
+    early: Receiver<NoteBook>,
     /// Mis à vrai quand la lecture est abandonnée ([`Drop`]) : le fil s'arrête.
     stop: Arc<AtomicBool>,
 }
@@ -289,10 +292,12 @@ impl Loading {
         let counter = done.clone();
         let stop = Arc::new(AtomicBool::new(false));
         let stopping = stop.clone();
+        let (early_tx, early) = mpsc::channel();
         let spawned = std::thread::Builder::new()
             .name("tri-folder".into())
             .spawn(move || {
                 settle(&dir, &files);
+                let _ = early_tx.send(NoteBook::from_read_cache(&files, convention));
                 let notes = NoteBook::load_until(&files, convention, &counter, &stopping);
                 if stopping.load(Ordering::Relaxed) {
                     return;
@@ -314,6 +319,7 @@ impl Loading {
                 done,
                 total,
                 result: rx,
+                early: mpsc::channel().1,
                 stop,
             };
         }
@@ -321,6 +327,7 @@ impl Loading {
             done,
             total,
             result,
+            early,
             stop,
         }
     }
@@ -336,6 +343,12 @@ impl Loading {
     /// Le résultat, une fois la lecture finie.
     pub fn try_take(&self) -> Option<Loaded> {
         self.result.try_recv().ok()
+    }
+
+    /// Les notes gardées par la dernière lecture, une fois, dès qu'elles sont là : à
+    /// montrer en attendant [`Loading::try_take`] ([`NoteBook::seed`]).
+    pub fn try_take_early(&self) -> Option<NoteBook> {
+        self.early.try_recv().ok()
     }
 }
 

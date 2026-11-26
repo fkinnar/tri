@@ -3314,6 +3314,14 @@ impl TriApp {
         let Some(loading) = &self.loading else {
             return;
         };
+        // Notes gardées par la dernière lecture : montrées tout de suite, vérifiées
+        // ensuite (sur un partage lent, la vérification prend des minutes, 26/11/2026).
+        if let Some(early) = loading.try_take_early() {
+            self.folder.notes.seed(&early);
+            trace(|| format!("notes du cache : {}", early.len()));
+            self.notes_changed();
+            return;
+        }
         let Some(loaded) = loading.try_take() else {
             // Progression dans la barre d'état.
             ctx.request_repaint_after(crate::app::poll_interval(ctx));

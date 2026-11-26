@@ -62,6 +62,16 @@ removed, and everything is read and merged as before. Not kept: an unreadable si
 conflict, an image without any source (nothing is opened there anyway). Images gone leave
 the cache when the whole folder is read again.
 
+**Shown first, checked afterwards** (report of 2026-11-26 in the log, `notes:` after each
+reading of a folder: on an SMB share through GVFS, 2,820 ratings taken from the cache but
+792 s of date and size checks, competing with the thumbnails). At opening,
+`NoteBook::from_read_cache` gives the kept ratings at once, without checking or opening
+anything; the interface shows them (`seed`, without overwriting an image rated meanwhile)
+while `load_until` checks, then takes the result (`adopt`). The check of the image itself
+is the one all of `tri` keeps (`cache::stamp`, already done for its thumbnails; opening a
+folder forgets those of its files); those of sidecars and of readings after a rating are
+still made on the disk.
+
 Operations on `xmp::Notes`: `set_stars(n)` (the flag does not change: a rejected photo
 keeps its stars), `toggle_color(c, multiple)` (single colour: another one replaces it,
 the same one removes it; multiple: add / remove, as in darktable), `clear_colors()`.
