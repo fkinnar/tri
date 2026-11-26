@@ -41,7 +41,8 @@ place. `SortKey::by_notes()` says whether the key depends on the ratings;
   the fingerprints are computed in the background** (2,820 DNG on a NAS over NFS: the
   sort waited for all the fingerprints, much longer); a fingerprint arriving with a date
   already read does not trigger a new sort. A RAW whose date LibRaw lacks (2021 DNG)
-  takes it from the file's EXIF (`metadata::exif_date`), then from the embedded JPEG's.
+  takes it from the file's EXIF (`metadata::exif_date`), then from the embedded JPEG's,
+  then from its XMP (`metadata::xmp_date`).
   Once all the dates are read, the status bar says how many are missing ("… photos
   without a date"), and the log names them (`sort`).
 - **Modification dates**: read on the disk when sorting (`modified`).

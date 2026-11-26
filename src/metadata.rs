@@ -137,7 +137,7 @@ fn read_raw(path: &Path) -> Result<Metadata, MetadataError> {
         }
     }
     if m.date.is_none() {
-        m.date = exif_date(path);
+        m.date = exif_date(path).or_else(|| xmp_date(path));
     }
     Ok(m)
 }
@@ -158,6 +158,49 @@ pub fn exif_date(path: &Path) -> Option<String> {
             .map(|(i, c)| if c == ':' && i < 10 { '-' } else { c })
             .collect(),
     )
+}
+
+/// Date de prise de vue lue dans le paquet XMP embarqué dans le fichier
+/// (`exif:DateTimeOriginal`, `photoshop:DateCreated`, `xmp:CreateDate`), « AAAA-MM-JJ
+/// HH:MM:SS » : dernier repli pour un RAW (26/11/2026 : des DNG dont XnView montre la date
+/// de création dans leur XMP). `None` : pas de paquet, ou pas de date.
+pub fn xmp_date(path: &Path) -> Option<String> {
+    let packet = crate::embedded::read_packet(path).ok()??;
+    [
+        "exif:DateTimeOriginal",
+        "photoshop:DateCreated",
+        "xmp:CreateDate",
+    ]
+    .iter()
+    .find_map(|key| xmp_value(&packet, key))
+    .and_then(|value| normal_date(&value))
+}
+
+/// Valeur de `key` dans un paquet XMP, en attribut (`key="…"`) ou en élément
+/// (`<key>…</key>`).
+fn xmp_value(packet: &str, key: &str) -> Option<String> {
+    let attribute = format!("{key}=\"");
+    if let Some(at) = packet.find(&attribute) {
+        let rest = &packet[at + attribute.len()..];
+        return Some(rest[..rest.find('"')?].to_string());
+    }
+    let open = format!("<{key}>");
+    let at = packet.find(&open)?;
+    let rest = &packet[at + open.len()..];
+    Some(rest[..rest.find('<')?].trim().to_string())
+}
+
+/// « AAAA-MM-JJ HH:MM:SS » d'une date XMP (`2021-01-23T12:38:29+01:00`, secondes
+/// facultatives ; fuseau ignoré, comme l'EXIF qui n'en a pas).
+fn normal_date(value: &str) -> Option<String> {
+    let numbers: Vec<&str> = value
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|p| !p.is_empty())
+        .take(6)
+        .collect();
+    let [y, mo, d, h, mi] = numbers.get(..5)?.try_into().ok()?;
+    let s = numbers.get(5).copied().unwrap_or("00");
+    Some(format!("{y}-{mo}-{d} {h}:{mi}:{s}"))
 }
 
 fn read_flat(path: &Path) -> Metadata {
@@ -547,6 +590,26 @@ mod tests {
             crate::similarity::parse_time("2026:10:16 14:32:05")
         );
         assert_eq!(exif_date(Path::new("/nonexistent.dng")), None);
+    }
+
+    #[test]
+    fn the_shooting_date_is_read_from_the_embedded_xmp() {
+        let attr = r#"<rdf:Description xmp:CreateDate="2021-01-23T12:38:29+01:00"/>"#;
+        assert_eq!(
+            xmp_value(attr, "xmp:CreateDate")
+                .and_then(|v| normal_date(&v))
+                .as_deref(),
+            Some("2021-01-23 12:38:29")
+        );
+        let element = "<photoshop:DateCreated>2021-01-23T12:38</photoshop:DateCreated>";
+        assert_eq!(
+            xmp_value(element, "photoshop:DateCreated")
+                .and_then(|v| normal_date(&v))
+                .as_deref(),
+            Some("2021-01-23 12:38:00")
+        );
+        assert_eq!(xmp_value(element, "xmp:CreateDate"), None);
+        assert_eq!(normal_date("2021"), None);
     }
 
     fn sample() -> Metadata {

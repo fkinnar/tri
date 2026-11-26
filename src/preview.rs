@@ -265,7 +265,7 @@ pub fn grid_key(file: &MediaFile, level: Level, settings: &Settings, side: u32) 
 /// empreintes de similarité (qui la contiennent aussi), vidée et comptée avec elles.
 pub fn captured_key(file: &MediaFile, settings: &Settings) -> io::Result<Key> {
     // « 2 » : relire les dates absentes gardées avant le repli sur l'EXIF (26/11/2026).
-    key_with(file, Level::Similarity, settings, ";captured2")
+    key_with(file, Level::Similarity, settings, ";captured3")
 }
 
 /// Paramètres complets de l'entrée de `file` au niveau `level` : ceux des réglages

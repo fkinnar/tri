@@ -43,7 +43,7 @@ donne la valeur d'une image.
   le tri attendait toutes les empreintes, bien plus longues) ; une empreinte qui arrive
   avec une date déjà lue ne relance pas de tri. Un RAW dont LibRaw n'a pas la date (des
   DNG de 2021) la prend dans l'EXIF du fichier (`metadata::exif_date`), puis dans celle
-  du JPEG embarqué. Quand toutes les dates sont lues, la barre d'état dit combien
+  du JPEG embarqué, enfin dans son XMP (`metadata::xmp_date`). Quand toutes les dates sont lues, la barre d'état dit combien
   manquent (« … photos sans date »), et le journal les nomme (`sort`).
 - **Dates de modification** : lues sur le disque au moment du tri (`modified`).
 - **Notes** : fournies par l'appelant (`notes(chemin)`, le carnet du dossier) ; la paire
