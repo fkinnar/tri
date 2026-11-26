@@ -3,13 +3,14 @@
 //! transmettre les choix.
 
 use crate::cache_panel::size_text;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use eframe::egui::{self, Pos2};
-use tri::offload::{self, History, OffloadSettings, OutOfSpace, Plan, Progress, Report};
+use tri::offload::{self, Cut, History, OffloadSettings, OutOfSpace, Plan, Progress, Report};
 use tri::scheduler::Scheduler;
 
 /// De quoi calculer les aperçus de la séance pendant la copie (issue n° 40) : un
@@ -150,35 +151,18 @@ fn targets(
         .collect()
 }
 
-/// Toute la carte en une seule séance (carte suivante vers la séance d'avant) : pas de
-/// ligne de séance, mais sa galerie.
-fn whole_card(plan: &Plan) -> Vec<SessionRow> {
-    let items: Vec<usize> = (0..plan.items.len()).collect();
-    let Some(first) = plan.sessions(0).into_iter().next() else {
-        return Vec::new();
-    };
-    let session = offload::Session {
-        day: first.day,
-        items,
-    };
-    vec![SessionRow {
-        folder: session.folder(),
-        count: 0,
-        bytes: 0,
-        picked: None,
-        on: true,
-        known: false,
-        session,
-    }]
-}
+/// Galerie de toute la carte (« Séances… », #600), à la place du rang d'une séance dans
+/// [`OffloadDialog::picker`].
+pub(crate) const WHOLE_CARD: usize = usize::MAX;
 
-/// Les séances de `plan` (#507) : une ligne par séance s'il y en a plusieurs ; une seule
-/// séance n'a pas de ligne, mais sa galerie (retour du 25/11/2026 : une carte d'un seul
-/// jour n'avait pas de « Choisir les photos… »). Cochées d'office : celles qui ont du
-/// nouveau (toutes, si la carte est déjà déchargée).
-fn session_rows(plan: &Plan, settings: &OffloadSettings) -> Vec<SessionRow> {
+/// Les séances de `plan` coupé à `cuts` (#507, #600) : une ligne par séance s'il y en a
+/// plusieurs ; une seule séance n'a pas de ligne, mais sa galerie (retour du 25/11/2026 :
+/// une carte d'un seul jour n'avait pas de « Choisir les photos… »). Cochées d'office :
+/// celles qui ont du nouveau (toutes, si la carte est déjà déchargée). Sans coupures :
+/// toute la carte en une séance (carte suivante vers la séance d'avant, issue n° 37).
+fn session_rows(plan: &Plan, cuts: &[Cut], settings: &OffloadSettings) -> Vec<SessionRow> {
     // Comptes remplis par la boîte, selon les choix du moment.
-    let sessions = plan.sessions(settings.day_cut);
+    let sessions = plan.sessions_at(cuts, settings.day_cut);
     let mut rows: Vec<SessionRow> = sessions
         .into_iter()
         .map(|session| {
@@ -200,6 +184,57 @@ fn session_rows(plan: &Plan, settings: &OffloadSettings) -> Vec<SessionRow> {
         }
     }
     rows
+}
+
+/// Les séances après un passage dans la galerie de toute la carte (#600) : coupées à
+/// `cuts`, cochées si l'une de leurs photos l'est (`files`), avec leur choix de photos ;
+/// le dossier tapé à la main d'une séance qui commence toujours au même endroit est
+/// gardé.
+fn rows_after_cuts(
+    plan: &Plan,
+    cuts: &[Cut],
+    settings: &OffloadSettings,
+    before: &[SessionRow],
+    files: &HashSet<PathBuf>,
+) -> Vec<SessionRow> {
+    let mut rows = session_rows(plan, cuts, settings);
+    for row in &mut rows {
+        let sources: Vec<&PathBuf> = row
+            .session
+            .items
+            .iter()
+            .map(|&i| &plan.items[i].source)
+            .collect();
+        let chosen: HashSet<PathBuf> = sources
+            .iter()
+            .filter(|f| files.contains(**f))
+            .map(|f| (*f).clone())
+            .collect();
+        row.on = !chosen.is_empty();
+        row.picked = (chosen.len() < sources.len() && !chosen.is_empty()).then_some(chosen);
+        if let Some(old) = before.iter().find(|old| {
+            old.session.start == row.session.start && old.folder != old.session.folder()
+        }) {
+            row.folder.clone_from(&old.folder);
+        }
+    }
+    rows
+}
+
+/// Les fichiers choisis dans les séances `rows` (cochées, avec leur choix de photos) ;
+/// `None` : toute la carte.
+fn chosen_files(plan: &Plan, rows: &[SessionRow]) -> Option<HashSet<PathBuf>> {
+    if rows.iter().all(|r| r.on && r.picked.is_none()) {
+        return None;
+    }
+    Some(
+        rows.iter()
+            .filter(|r| r.on)
+            .flat_map(|r| r.session.items.iter().map(|&i| &plan.items[i]))
+            .filter(|i| rows.iter().any(|r| r.on && r.keeps(i)))
+            .map(|i| i.source.clone())
+            .collect(),
+    )
 }
 
 enum Stage {
@@ -224,6 +259,12 @@ enum Stage {
         /// Séances de la carte (#507), quand elle en a plusieurs : un dossier par séance
         /// cochée.
         sessions: Vec<SessionRow>,
+        /// Coupures de la carte en séances (#600) : proposées, puis changées dans la
+        /// galerie de toute la carte.
+        cuts: Vec<Cut>,
+        /// « Oublier cette carte » (#602) : confirmation demandée, puis le nombre
+        /// d'images oubliées (ou l'erreur).
+        forget: Option<Option<Result<usize, String>>>,
     },
     /// Copie en cours.
     Running {
@@ -566,12 +607,14 @@ impl OffloadDialog {
                             // Carte suivante vers la même séance (issue n° 37) : pas de
                             // séances à choisir, toute la carte en une (sa galerie
                             // gardée, retour du 26/11/2026).
-                            let sessions = match self.folder_here {
-                                Some(_) => whole_card(&plan),
-                                None => session_rows(&plan, &self.settings),
+                            let cuts = match self.folder_here {
+                                Some(_) => Vec::new(),
+                                None => plan.proposed_cuts(&self.settings),
                             };
                             Stage::Ready {
-                                sessions,
+                                sessions: session_rows(&plan, &cuts, &self.settings),
+                                cuts,
+                                forget: None,
                                 plan,
                                 history: Some(history),
                                 root: self.root_here.clone().unwrap_or_else(|| {
@@ -762,15 +805,66 @@ impl OffloadDialog {
         };
     }
 
-    /// Ouvre la galerie de la séance `i` (« Choisir les photos… », #507).
+    /// Oublie que la carte a été déchargée (#602) : retirée de l'historique, ses images
+    /// redeviennent nouvelles (cochées, copiées) ; les copies faites restent.
+    pub(crate) fn forget_card(&mut self) {
+        if let Stage::Ready {
+            plan,
+            history,
+            sessions,
+            present,
+            forget,
+            ..
+        } = &mut self.stage
+        {
+            let result = match history {
+                Some(history) => history.forget(&plan.items).map_err(|e| e.to_string()),
+                None => Ok(0),
+            };
+            if result.is_ok() {
+                for item in &mut plan.items {
+                    item.known = false;
+                }
+                for row in sessions.iter_mut() {
+                    row.known = false;
+                    row.on = true;
+                }
+                *present = None;
+            }
+            *forget = Some(Some(result));
+        }
+    }
+
+    /// Ouvre la galerie de la séance `i` (« Choisir les photos… », #507), ou de toute la
+    /// carte ([`WHOLE_CARD`], « Séances… », #600).
     pub fn pick_session(&mut self, i: usize, ctx: &egui::Context) {
+        if i == WHOLE_CARD
+            && let Stage::Ready {
+                plan,
+                sessions,
+                cuts,
+                ..
+            } = &self.stage
+        {
+            let chosen = chosen_files(plan, sessions);
+            let picker = crate::offload_picker::Picker::sessions(
+                plan,
+                cuts,
+                chosen.as_ref(),
+                self.settings.skip_known,
+                self.settings.raw_only,
+                ctx,
+            );
+            self.picker = Some((WHOLE_CARD, picker));
+            return;
+        }
         if let Stage::Ready { plan, sessions, .. } = &self.stage
             && let Some(row) = sessions.get(i)
         {
             let items: Vec<&offload::Item> =
                 row.session.items.iter().map(|&k| &plan.items[k]).collect();
             let picker = crate::offload_picker::Picker::new(
-                &row.session.day,
+                row.session.name(),
                 &items,
                 row.picked.as_ref(),
                 self.settings.skip_known,
@@ -790,10 +884,29 @@ impl OffloadDialog {
             let row = *row;
             match outcome {
                 crate::offload_picker::Outcome::Open => return None,
-                crate::offload_picker::Outcome::Done(files, exclude_known) => {
+                crate::offload_picker::Outcome::Done(files, exclude_known, new_cuts) => {
                     // La case de la galerie est celle de la boîte (« Recopier »).
                     self.settings.skip_known = exclude_known;
-                    if let Stage::Ready { sessions, .. } = &mut self.stage
+                    if let Stage::Ready {
+                        plan,
+                        sessions,
+                        cuts,
+                        folder,
+                        ..
+                    } = &mut self.stage
+                        && let Some(new_cuts) = new_cuts
+                    {
+                        // Toute la carte (#600) : les séances refaites, chacune avec son
+                        // choix de photos.
+                        *sessions =
+                            rows_after_cuts(plan, &new_cuts, &self.settings, sessions, &files);
+                        *cuts = new_cuts;
+                        if let [one] = sessions.as_slice()
+                            && self.folder_here.is_none()
+                        {
+                            folder.clone_from(&one.folder);
+                        }
+                    } else if let Stage::Ready { sessions, .. } = &mut self.stage
                         && let Some(r) = sessions.get_mut(row)
                     {
                         let all = r.session.items.len() == files.len();
@@ -806,6 +919,7 @@ impl OffloadDialog {
             }
         }
         let mut pick: Option<usize> = None;
+        let mut forget_now = false;
         // Fin de la copie sous les yeux de l'utilisateur : suites cochées, séance ouverte.
         let mut request = self.finish(true);
         let mut start = false;
@@ -860,6 +974,7 @@ impl OffloadDialog {
                         free,
                         present,
                         sessions,
+                        forget,
                         ..
                     } => {
                         let settings = &mut self.settings;
@@ -981,6 +1096,13 @@ impl OffloadDialog {
                                                 pick = Some(0);
                                             }
                                         }
+                                        if ui
+                                            .button(t!("offload-cuts"))
+                                            .on_hover_text(t!("offload-cuts-tip"))
+                                            .clicked()
+                                        {
+                                            pick = Some(WHOLE_CARD);
+                                        }
                                     });
                                     ui.end_row();
                                 }
@@ -989,12 +1111,32 @@ impl OffloadDialog {
                         // ou non, chacune dans son dossier.
                         if sessions.len() > 1 {
                             ui.add_space(4.0);
-                            ui.label(t!("offload-sessions", n = sessions.len()));
+                            ui.horizontal(|ui| {
+                                ui.label(t!("offload-sessions", n = sessions.len()));
+                                if ui
+                                    .button(t!("offload-cuts"))
+                                    .on_hover_text(t!("offload-cuts-tip"))
+                                    .clicked()
+                                {
+                                    pick = Some(WHOLE_CARD);
+                                }
+                            });
                             egui::Grid::new("offload_sessions")
                                 .num_columns(4)
                                 .show(ui, |ui| {
                                     for (i, row) in sessions.iter_mut().enumerate() {
-                                        ui.checkbox(&mut row.on, row.session.day.as_str());
+                                        let clock = |t| {
+                                            chrono::DateTime::<chrono::Local>::from(t)
+                                                .format("%H:%M")
+                                                .to_string()
+                                        };
+                                        let label = format!(
+                                            "{}  {}–{}",
+                                            row.session.day,
+                                            clock(row.session.start),
+                                            clock(row.session.end)
+                                        );
+                                        ui.checkbox(&mut row.on, label);
                                         // Largeur imposée : dans la grille, le champ se
                                         // réduisait à quelques caractères.
                                         let h = ui.spacing().interact_size.y;
@@ -1111,6 +1253,36 @@ impl OffloadDialog {
                                 .changed();
                         if skip {
                             settings.skip_known = !again;
+                        }
+                        // Oublier la carte (#602) : confirmé d'abord, puis le bilan.
+                        match forget {
+                            None if known > 0 => {
+                                if ui
+                                    .button(t!("offload-forget"))
+                                    .on_hover_text(t!("offload-forget-tip"))
+                                    .clicked()
+                                {
+                                    *forget = Some(None);
+                                }
+                            }
+                            Some(None) => {
+                                ui.horizontal(|ui| {
+                                    ui.label(t!("offload-forget-confirm", n = known));
+                                    if ui.button(t!("offload-forget")).clicked() {
+                                        forget_now = true;
+                                    }
+                                    if ui.button(t!("cancel")).clicked() {
+                                        *forget = None;
+                                    }
+                                });
+                            }
+                            Some(Some(Ok(n))) => {
+                                ui.weak(t!("offload-forgot", n = *n));
+                            }
+                            Some(Some(Err(e))) => {
+                                ui.colored_label(ui.visuals().error_fg_color, e.as_str());
+                            }
+                            None => {}
                         }
                         if (raw || skip)
                             && offload::suggest_folder(plan, &before).as_deref()
@@ -1338,6 +1510,9 @@ impl OffloadDialog {
             });
         if let Some(source) = new_source {
             self.change_source(source, ctx);
+        }
+        if forget_now {
+            self.forget_card();
         }
         // « Choisir les photos… » d'une séance : sa galerie, à la place de la boîte.
         if let Some(i) = pick {

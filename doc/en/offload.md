@@ -112,20 +112,20 @@ another card.
 ## A card of several sessions (2026-11-25, #507)
 
 A card can hold several sessions; often only one is to be offloaded.
-`Plan::sessions(day_cut)` sorts the card by shooting day (the file date, set by the camera,
+`Plan::sessions(&settings)` first cut the card by shooting day (#600: also at pauses, see below) (the file date, set by the camera,
 in local time; a photo taken before `[offload] day_cut` o'clock, 4 by default, counts for
 the day before: an evening ending after midnight stays one session). A RAW+JPEG pair stays
 in the session of its first image. `Plan::subset` restricts the inventory to the chosen
 images: the verified copy, the history and deleting from the card afterwards only touch
 them, never the rest of the card.
 
-- **Dialog**: with several sessions, one row per day (checkbox, folder, number of images
+- **Dialog**: with several sessions, one row per session (checkbox with the day and times, folder, number of images
   and size to copy, or "already offloaded") instead of the "Session folder" field.
   Checked by default: those with something new. **One folder per checked session**
   (`YYYY-MM-DD_` to complete), copied one after the other in the same thread; the reports
   are put end to end (`Report::absorb`), the newest session opened at the end.
 - **Command line**: `tri --offload <card> --session YYYY-MM-DD` only offloads that day
-  (folder named after it); `--dry-run` lists the sessions.
+  (folder named after it; `YYYY-MM-DD_HHMM` when the day has several sessions); `--dry-run` lists the sessions.
 - **Choosing the photos** of a session ("Choose the photos…" on its row,
   `offload_picker.rs`): a gallery instead of the dialog (user's idea, 2026-11-25: simpler
   than `tri`'s grid, which would have had to open on the card and then be given back as it
@@ -139,6 +139,40 @@ them, never the rest of the card.
   embedded preview, no 1:1), arrows for the next one. Escape leaves the visual mode, the
   large view, then closes without changing anything; OK goes back to the dialog ("Change
   the choice…"), only the selection is copied.
+
+## Sessions cut where you want (2026-11-26, #600)
+
+Days are only a special case (the owner's decision): the card is cut into sessions
+**where you want**, and day changes are one of the proposed cuts. Example: the morning in
+Brussels, the afternoon in Antwerp, two sessions on the same day.
+
+- **Proposed cuts** (`Plan::proposed_cuts`): at each change of day (`[offload]
+  split_days`, cut at `day_cut`) and where shooting stopped for at least
+  `split_pause_minutes` (120 by default, 0: never). At most `max_sessions` sessions (30):
+  beyond that, days then the longest pauses.
+- **A cut names its first photo** (`Cut::first`, a file), not a time: a FAT card dates
+  its files to 2 s, the photos of a burst often share the same time. `Plan::shots` gives
+  the photos in shooting order (a RAW+JPEG pair is one photo, never cut);
+  `Plan::sessions_at(&cuts, day_cut)` cuts the card.
+- **Folder names**: the day (`YYYY-MM-DD_`), and the start time when other sessions of the
+  card are on the same day (`2026-11-25_0900_`, `2026-11-25_1300_`).
+- **Gallery of the whole card** ("Sessions…" in the dialog, next to the folder or the
+  session rows): the sessions one after the other, each on a new row under a header
+  (number, day, times, checked photos, why it starts there: new day, pause, chosen cut).
+  `c` (or right-click on a photo) starts a session at the photo under the cursor, or joins
+  it to the one before. Checks, gestures and the large view as in the gallery of one
+  session, which stays on each row. Validating rebuilds the dialog's rows: a session is
+  checked if one of its photos is, with its choice of photos; a folder typed by hand is
+  kept if its session still starts at the same place. Cuts only last while the dialog is
+  open.
+- The gallery's thumbnails are centred in the window (#601).
+
+## Forgetting a card (2026-11-26, #602)
+
+"Forget this card" (offload dialog, when images are already known; confirmed) and
+`tri --offload <card> --forget`: `History::forget` removes the lines of the card's images
+from the history (file rewritten in one go, the other lines kept as they are). The images
+become new again; the copies already made are not touched. Use: reusing a test card.
 
 ## In the background (2026-10-17)
 
@@ -186,12 +220,13 @@ grouping, as when a folder is opened.
 - `suggest_folder(&plan, &settings)`, `destination(racine, nom)`;
 - `run(&plan, destination, &réglages, &mut historique, &annulation, progression,
   copie) -> Report` (`copie`: each copy as soon as it is made, for the previews) (copied, skipped, errors, interrupted, duration); `Progress`: files (without those left on the card) and bytes (a skipped file, already offloaded or already there, counts at once: the bar follows the files), and the current step (`Phase`: preparing, copying, writing to the disk `sync_all`, verifying; #470, to tell a slow copy from a stuck one). The dialog shows the step, the file, the throughput, and "Nothing has moved for n s" after 3 s without progress;
+- `Plan::shots`, `Plan::proposed_cuts`, `Plan::sessions`, `Plan::sessions_at` (`Cut`, `CutReason`, `Session`), `History::forget`;
 - `delete_sources(&report)`.
 
 ## Command line
 
 ```
-tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied] [--eject]
+tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied] [--eject] [--session <name>] [--forget]
 ```
 
 On the command line, nothing happens on the card without an explicit option (`--eject`,

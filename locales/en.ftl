@@ -248,7 +248,12 @@ cli-destination = destination: { $path }
 cli-already-there = { $n } images already in the destination (skipped if identical)
 cli-to-copy = to copy
 cli-offload-session = session { $day }: { $n } images
-cli-offload-no-session = no session on { $day } on the card
+cli-offload-no-session = no session “{ $day }” on the card (day YYYY-MM-DD, or YYYY-MM-DD_HHMM when the day has several)
+cli-offload-forgot = { $n ->
+    [0] nothing to forget: no image of the card in the history
+    [one] { $n } image of the card forgotten from the history
+   *[other] { $n } images of the card forgotten from the history
+}
 cli-offload-progress = { $done }/{ $total } files   { $mb }/{ $total_mb } MB
 cli-rate-bad-stars = invalid number of stars: { $value } (0 to 5)
 cli-rate-bad-color = unknown colour: { $value } (red, yellow, green, blue, purple or none)
@@ -541,7 +546,8 @@ cli-opt-contrast = contrast, in percent
 cli-opt-saturation = saturation, in percent
 cli-opt-mono = black and white: a preset or three percentages r,g,b
 cli-opt-folder = name of the session folder (default: YYYY-MM-DD)
-cli-opt-session = only one session of the card (a shooting day)
+cli-opt-session = only one session of the card (the day, or the day and start time when it has several: YYYY-MM-DD_HHMM)
+cli-opt-forget = forgets that the card was offloaded (history only, the copies stay)
 cli-opt-raw-only = leaves the JPEGs on the card
 cli-opt-previews = then computes thumbnails and previews
 cli-opt-delete-copied = deletes the copied and verified files from the card

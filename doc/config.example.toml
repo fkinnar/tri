@@ -550,6 +550,20 @@ previews = true
 # heure (0 à 23) compte pour la veille, pour qu'une soirée qui finit après minuit reste une
 # séance. 0 : coupure à minuit.
 day_cut = 4
+# Couper la carte en séances à chaque changement de jour.
+#
+# Une coupure proposée parmi d'autres (galerie « Séances… » de la boîte de déchargement) ;
+# false : les jours ne coupent rien, seules les pauses le font.
+split_days = true
+# Couper la carte là où la prise de vue s'est arrêtée au moins tant de minutes.
+#
+# Le matin à Bruxelles, l'après-midi à Anvers : deux séances. Proposée, à garder ou à
+# retirer dans la galerie « Séances… ». 0 : jamais.
+split_pause_minutes = 120
+# Nombre de séances au plus d'une carte.
+#
+# Au-delà, seuls les changements de jour puis les plus longues pauses coupent.
+max_sessions = 30
 
 [files]
 # Renommer, supprimer, copier ou déplacer une image : l'autre image de sa paire RAW+JPEG

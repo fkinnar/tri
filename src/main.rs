@@ -20,15 +20,17 @@
 //!       saturation, pixels saturés et bouchés, voir `tri::exposure` ;
 //!   tri <dossier> --metadata [--raw|--flat] [--depth N]
 //!       métadonnées de prise de vue de chaque image, voir `tri::metadata` ;
-//!   tri --offload <carte> [--session <AAAA-MM-JJ>] [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
+//!   tri --offload <carte> [--session <AAAA-MM-JJ[_HHMM]>] [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject] [--forget]
 //!       décharge une carte : copie vérifiée des images vers <racine>/<nom> (défauts :
 //!       `[offload] destination`, nom proposé AAAA/AAAA-MM-JJ), sans les fichiers déjà
 //!       déchargés ; `--raw-only` laisse les JPEG sur la carte ; `--previews` calcule
 //!       ensuite vignettes et aperçus ; `--delete-copied` supprime de la carte les
 //!       fichiers copiés et vérifiés (`--delete-left` : aussi les JPEG laissés par
 //!       `--raw-only`), `--eject` éjecte la carte ; `--session` ne décharge qu'une
-//!       séance (un jour de prise de vue, `[offload] day_cut`), dont la date nomme le
-//!       dossier ; `--dry-run` liste les séances de la carte ;
+//!       séance (coupée aux changements de jour et aux longues pauses, `[offload]
+//!       split_days`, `split_pause_minutes`), dont le nom nomme le dossier ; `--dry-run`
+//!       liste les séances de la carte ; `--forget` oublie que la carte a été déchargée
+//!       (historique seulement, les copies restent) ;
 //!   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
 //!       recopie les notes (étoiles, couleurs, accepté / rejeté) dans les sidecars de
 //!       l'autre convention (`--dry-run` : sans rien écrire), voir `tri::xmp::convert` ;
@@ -182,6 +184,8 @@ struct Args {
     /// Gabarit des noms d'export (`--name`), à la place de celui du préréglage.
     name: Option<String>,
     raw_only: bool,
+    /// `--forget` : oublier que la carte a été déchargée (#602).
+    forget: bool,
     eject: bool,
     delete_copied: bool,
     delete_left: bool,
@@ -548,6 +552,7 @@ fn parse() -> AnyResult<Args> {
             "--name" => args.name = Some(value()?),
             "--raw-only" => args.raw_only = true,
             "--eject" => args.eject = true,
+            "--forget" => args.forget = true,
             "--delete-copied" => args.delete_copied = true,
             "--delete-left" => args.delete_left = true,
             "--clear-cache" => {
@@ -881,15 +886,25 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
         History::open_configured(s, settings.data_dir().as_deref())?
     };
     let plan = offload::plan(card, &history)?;
+    // Oublier la carte (#602) : retirée de l'historique, rien d'autre (`--dry-run` : compte).
+    if args.forget {
+        let n = if args.dry_run {
+            plan.items.iter().filter(|i| i.known).count()
+        } else {
+            history.forget(&plan.items)?
+        };
+        println!("{}", t!("cli-offload-forgot", n = n));
+        return Ok(());
+    }
     // Séances de la carte (#507) : listées à l'essai, ou une seule déchargée.
-    let sessions = plan.sessions(s.day_cut);
+    let sessions = plan.sessions(s);
     if args.dry_run && sessions.len() > 1 {
         for session in &sessions {
             println!(
                 "{}",
                 t!(
                     "cli-offload-session",
-                    day = session.day.clone(),
+                    day = session.name().to_string(),
                     n = session.items.len()
                 )
             );
@@ -899,7 +914,12 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
         Some(day) => {
             let session = sessions
                 .iter()
-                .find(|x| x.day == *day)
+                .find(|x| x.name() == day.as_str())
+                .or_else(|| {
+                    // Le jour seul, s'il n'a qu'une séance.
+                    let mut of_day = sessions.iter().filter(|x| x.day == *day);
+                    of_day.next().filter(|_| of_day.next().is_none())
+                })
                 .ok_or_else(|| t!("cli-offload-no-session", day = day.clone()))?;
             let chosen: std::collections::HashSet<&std::path::Path> = session
                 .items

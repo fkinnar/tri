@@ -13,7 +13,7 @@ use std::sync::mpsc::{self, Receiver};
 use eframe::egui::{self, Color32, ColorImage, Key, Sense, TextureHandle, vec2};
 use tri::cache::Level;
 use tri::media::{MediaFile, MediaKind};
-use tri::offload::Item;
+use tri::offload::{Cut, CutReason, Item, Plan};
 
 /// Une photo de la séance : une image, ou une paire RAW+JPEG cochée d'un bloc.
 struct Photo {
@@ -24,6 +24,8 @@ struct Photo {
     name: String,
     /// Heure de prise de vue (« 14:32 »).
     time: String,
+    /// Heure de prise de vue (la plus ancienne de la paire).
+    at: std::time::SystemTime,
     size: u64,
     /// Pour chaque fichier de `files` : son type et s'il est déjà déchargé (d'après
     /// l'historique ou la destination).
@@ -52,16 +54,27 @@ impl Photo {
 pub enum Outcome {
     /// Encore ouverte.
     Open,
-    /// Validée : les fichiers des photos cochées, et si les photos déjà déchargées sont
-    /// exclues (la case de la galerie, celle de la boîte de déchargement).
-    Done(HashSet<PathBuf>, bool),
+    /// Validée : les fichiers des photos cochées, si les photos déjà déchargées sont
+    /// exclues (la case de la galerie, celle de la boîte de déchargement), et les
+    /// coupures en séances (galerie de toute la carte, #600).
+    Done(HashSet<PathBuf>, bool, Option<Vec<Cut>>),
     /// Fermée sans rien changer.
     Cancelled,
 }
 
-/// La galerie d'une séance.
+/// La galerie d'une séance, ou de toute la carte coupée en séances (#600).
 pub struct Picker {
     day: String,
+    /// Titre de la boîte.
+    title: String,
+    /// Galerie de toute la carte (#600) : pour chaque photo, si une séance commence là
+    /// (et pourquoi) ; `None` : galerie d'une séance, sans coupures.
+    pub(crate) starts: Option<Vec<Option<CutReason>>>,
+    /// Places des photos dans la galerie à la dernière image (flèches haut / bas, d'une
+    /// ligne à l'autre malgré les bandeaux des séances).
+    places: Vec<egui::Pos2>,
+    /// Faire défiler jusqu'au curseur (déplacé au clavier).
+    follow: bool,
     photos: Vec<Photo>,
     pub(crate) checked: Vec<bool>,
     cursor: usize,
@@ -131,6 +144,7 @@ impl Picker {
                     photo.files.push(item.source.clone());
                     photo.size += item.size;
                     photo.copied.push((item.kind, item.known));
+                    photo.at = photo.at.min(item.modified);
                     if item.kind == MediaKind::Flat {
                         photo.shown = MediaFile {
                             path: item.source.clone(),
@@ -152,6 +166,7 @@ impl Picker {
                         .format("%H:%M")
                         .to_string(),
                     size: item.size,
+                    at: item.modified,
                     copied: vec![(item.kind, item.known)],
                 }),
             }
@@ -182,6 +197,10 @@ impl Picker {
         });
         Picker {
             day: day.to_string(),
+            title: t!("offload-pick-title", day = day.to_string()),
+            starts: None,
+            places: Vec::new(),
+            follow: false,
             thumbs: (0..photos.len()).map(|_| None).collect(),
             photos,
             checked,
@@ -198,6 +217,72 @@ impl Picker {
             exclude_known,
             raw_only,
         }
+    }
+
+    /// Galerie de toute la carte `plan` coupée à `cuts` (« Séances… », #600) : chaque
+    /// séance commence sur une ligne, sous un bandeau ; on coupe et on recoud ici.
+    /// `chosen` : les fichiers déjà choisis, sinon tout est coché.
+    pub fn sessions(
+        plan: &Plan,
+        cuts: &[Cut],
+        chosen: Option<&HashSet<PathBuf>>,
+        exclude_known: bool,
+        raw_only: bool,
+        ctx: &egui::Context,
+    ) -> Picker {
+        let shots = plan.shots();
+        let items: Vec<&Item> = shots
+            .iter()
+            .flat_map(|s| s.items.iter().map(|&i| &plan.items[i]))
+            .collect();
+        let mut picker = Picker::new("card", &items, chosen, exclude_known, raw_only, ctx);
+        picker.title = t!("offload-cuts-title");
+        let mut starts = vec![None; picker.photos.len()];
+        for cut in cuts {
+            if let Some(i) = picker
+                .photos
+                .iter()
+                .position(|p| p.files.contains(&cut.first))
+                && i > 0
+            {
+                starts[i] = Some(cut.reason);
+            }
+        }
+        picker.starts = Some(starts);
+        picker
+    }
+
+    /// Commence une séance à la photo `i`, ou recoud les deux séances si elle en
+    /// commence déjà une (pas avant la première photo).
+    pub(crate) fn toggle_cut(&mut self, i: usize) {
+        if let Some(starts) = &mut self.starts
+            && i > 0
+            && i < starts.len()
+        {
+            starts[i] = match starts[i] {
+                Some(_) => None,
+                None => Some(CutReason::Chosen),
+            };
+        }
+    }
+
+    /// Les coupures de la galerie de toute la carte.
+    pub(crate) fn cuts(&self) -> Option<Vec<Cut>> {
+        let starts = self.starts.as_ref()?;
+        Some(
+            starts
+                .iter()
+                .enumerate()
+                .filter_map(|(i, reason)| {
+                    let photo = &self.photos[i];
+                    reason.map(|reason| Cut {
+                        first: photo.files[0].clone(),
+                        at: photo.at,
+                        reason,
+                    })
+                })
+                .collect(),
+        )
     }
 
     /// Vrai si la photo `i` ne peut pas être cochée (déjà déchargée, exclue).
@@ -320,12 +405,14 @@ impl Picker {
             let moved = match key {
                 Key::ArrowLeft | Key::H if !command => Some(self.cursor.saturating_sub(1)),
                 Key::ArrowRight | Key::L if !command => Some((self.cursor + 1).min(last)),
-                Key::ArrowUp | Key::K if !command && step > 0 => {
-                    Some(self.cursor.saturating_sub(step))
-                }
-                Key::ArrowDown | Key::J if !command && step > 0 => {
-                    Some((self.cursor + step).min(last))
-                }
+                Key::ArrowUp | Key::K if !command && step > 0 => Some(
+                    self.vertical(false)
+                        .unwrap_or(self.cursor.saturating_sub(step)),
+                ),
+                Key::ArrowDown | Key::J if !command && step > 0 => Some(
+                    self.vertical(true)
+                        .unwrap_or((self.cursor + step).min(last)),
+                ),
                 _ => None,
             };
             if n == 0 {
@@ -334,6 +421,7 @@ impl Picker {
             }
             if let Some(to) = moved {
                 self.move_to(to, shift);
+                self.follow = true;
                 if self.enlarged.is_some() {
                     self.enlarge(self.cursor, ctx);
                 }
@@ -343,6 +431,7 @@ impl Picker {
                 Key::Space if shift => self.toggle_visual(),
                 Key::Space => self.set(self.cursor, !self.checked[self.cursor]),
                 Key::V if !command => self.toggle_visual(),
+                Key::C if !command && self.enlarged.is_none() => self.toggle_cut(self.cursor),
                 Key::A if command => {
                     let on = !shift;
                     (0..self.photos.len()).for_each(|i| self.set(i, on));
@@ -368,6 +457,25 @@ impl Picker {
             }
         }
         close
+    }
+
+    /// La photo de la ligne du dessous (`down`) ou du dessus la plus proche du curseur
+    /// en largeur, d'après les places de la dernière image (`None` : pas encore dessinée,
+    /// ou pas de ligne là).
+    fn vertical(&self, down: bool) -> Option<usize> {
+        let here = *self.places.get(self.cursor)?;
+        let row = self
+            .places
+            .iter()
+            .map(|p| p.y)
+            .filter(|&y| if down { y > here.y } else { y < here.y })
+            .reduce(|a, b| if down { a.min(b) } else { a.max(b) })?;
+        self.places
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.y == row)
+            .min_by(|(_, a), (_, b)| (a.x - here.x).abs().total_cmp(&(b.x - here.x).abs()))
+            .map(|(i, _)| i)
     }
 
     /// Entre dans le mode visuel (la photo courante cochée) ou en sort.
@@ -401,7 +509,7 @@ impl Picker {
         let width = (screen.x * 0.8).clamp(360.0, 1400.0);
         let height = (screen.y * 0.7).clamp(240.0, 1000.0);
         let modal = crate::app::modal_at("offload_picker", crate::app::CENTRED)
-            .title(t!("offload-pick-title", day = self.day.clone()))
+            .title(self.title.clone())
             .width(Some(width))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
@@ -453,7 +561,7 @@ impl Picker {
                 });
             });
         if done {
-            Outcome::Done(self.chosen(), self.exclude_known)
+            Outcome::Done(self.chosen(), self.exclude_known, self.cuts())
         } else if cancel || modal.should_close() {
             Outcome::Cancelled
         } else {
@@ -483,6 +591,45 @@ impl Picker {
         response.clicked()
     }
 
+    /// Bandeau d'une séance de la galerie de toute la carte : son numéro, ses heures, son
+    /// nombre de photos (cochées), et pourquoi elle commence là.
+    fn header(&self, first: usize, number: usize) -> String {
+        let starts = self.starts.as_deref().unwrap_or_default();
+        let end = (first + 1..self.photos.len())
+            .find(|&i| starts[i].is_some())
+            .unwrap_or(self.photos.len());
+        let chosen = self.checked[first..end].iter().filter(|c| **c).count();
+        let reason = match starts[first] {
+            _ if first == 0 => String::new(),
+            Some(CutReason::Day) => t!("offload-cut-day"),
+            Some(CutReason::Pause(d)) => {
+                let minutes = d.as_secs() / 60;
+                t!(
+                    "offload-cut-pause",
+                    time = format!("{} h {:02}", minutes / 60, minutes % 60)
+                )
+            }
+            Some(CutReason::Chosen) | None => t!("offload-cut-chosen"),
+        };
+        let day = chrono::DateTime::<chrono::Local>::from(self.photos[first].at)
+            .format("%Y-%m-%d")
+            .to_string();
+        let header = t!(
+            "offload-cuts-header",
+            n = number,
+            day = day,
+            start = self.photos[first].time.clone(),
+            end = self.photos[end - 1].time.clone(),
+            chosen = chosen,
+            count = end - first
+        );
+        if reason.is_empty() {
+            header
+        } else {
+            format!("{header} · {reason}")
+        }
+    }
+
     fn gallery(
         &mut self,
         ui: &mut egui::Ui,
@@ -493,102 +640,153 @@ impl Picker {
         let side = self.side;
         let gap = 8.0;
         let label_h = ui.text_style_height(&egui::TextStyle::Small) + 4.0;
-        self.columns = (((size.x + gap) / (side + gap)).floor() as usize).max(1);
+        let header_h = ui.text_style_height(&egui::TextStyle::Body) + 8.0;
+        let grid = layout(
+            self.photos.len(),
+            self.starts.as_deref(),
+            size.x,
+            vec2(side, side + label_h),
+            gap,
+            header_h,
+        );
+        self.columns = grid.columns;
         let mut open = None;
+        let mut cut = None;
+        let follow = std::mem::take(&mut self.follow);
         egui::ScrollArea::vertical()
             .max_height(size.y)
             .min_scrolled_height(size.y)
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                ui.set_width(size.x);
-                ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing = vec2(gap, gap);
-                    for i in 0..self.photos.len() {
-                        let (cell, response) =
-                            ui.allocate_exact_size(vec2(side, side + label_h), Sense::click());
-                        let image = egui::Rect::from_min_size(cell.min, vec2(side, side));
-                        let painter = ui.painter();
-                        painter.rect_filled(image, 4.0, ui.visuals().extreme_bg_color);
-                        match &self.thumbs[i] {
-                            Some(t) => {
-                                let [w, h] = t.size();
-                                let s = (side / w as f32).min(side / h as f32);
-                                let r = egui::Rect::from_center_size(
-                                    image.center(),
-                                    vec2(w as f32 * s, h as f32 * s),
-                                );
-                                painter.image(
-                                    t.id(),
-                                    r,
-                                    egui::Rect::from_min_max(
-                                        egui::pos2(0.0, 0.0),
-                                        egui::pos2(1.0, 1.0),
-                                    ),
-                                    if self.checked[i] {
-                                        Color32::WHITE
-                                    } else {
-                                        Color32::from_gray(110)
-                                    },
-                                );
-                            }
-                            None => {
-                                egui::Spinner::new().paint_at(
-                                    ui,
-                                    egui::Rect::from_center_size(image.center(), vec2(16.0, 16.0)),
-                                );
-                            }
-                        }
-                        let photo = &self.photos[i];
-                        let state = if photo.copied(self.raw_only) {
-                            Some(t!("offload-pick-known"))
-                        } else if photo.partly(self.raw_only) {
-                            Some(t!("offload-pick-partly"))
-                        } else {
-                            None
-                        };
-                        let caption = match state {
-                            Some(state) => format!("{}  {} · {state}", photo.name, photo.time),
-                            None => format!("{}  {}", photo.name, photo.time),
-                        };
-                        ui.painter().text(
-                            egui::pos2(cell.left(), image.bottom() + 2.0),
-                            egui::Align2::LEFT_TOP,
-                            caption,
-                            egui::TextStyle::Small.resolve(ui.style()),
-                            ui.visuals().text_color(),
-                        );
-                        if i == self.cursor {
-                            ui.painter().rect_stroke(
-                                image,
-                                4.0,
-                                egui::Stroke::new(2.0, accent),
-                                egui::StrokeKind::Outside,
+                let (area, _) = ui.allocate_exact_size(vec2(size.x, grid.height), Sense::hover());
+                let origin = area.min.to_vec2();
+                for (k, &(first, y)) in grid.headers.iter().enumerate() {
+                    let band = egui::Rect::from_min_size(
+                        egui::pos2(area.left() + grid.left, area.top() + y),
+                        vec2(grid.width, header_h),
+                    );
+                    ui.painter()
+                        .rect_filled(band, 4.0, ui.visuals().faint_bg_color);
+                    ui.painter().text(
+                        band.left_center() + vec2(8.0, 0.0),
+                        egui::Align2::LEFT_CENTER,
+                        self.header(first, k + 1),
+                        egui::TextStyle::Body.resolve(ui.style()),
+                        ui.visuals().strong_text_color(),
+                    );
+                }
+                self.places.clone_from(&grid.cells);
+                for i in 0..self.photos.len() {
+                    let cell = egui::Rect::from_min_size(
+                        grid.cells[i] + origin,
+                        vec2(side, side + label_h),
+                    );
+                    let id = ui.scope_id().with(("offload_pick_cell", i));
+                    let response = ui.interact(cell, id, Sense::click());
+                    if follow && i == self.cursor {
+                        ui.scroll_to_rect(cell, None);
+                    }
+                    let image = egui::Rect::from_min_size(cell.min, vec2(side, side));
+                    let painter = ui.painter();
+                    painter.rect_filled(image, 4.0, ui.visuals().extreme_bg_color);
+                    match &self.thumbs[i] {
+                        Some(t) => {
+                            let [w, h] = t.size();
+                            let s = (side / w as f32).min(side / h as f32);
+                            let r = egui::Rect::from_center_size(
+                                image.center(),
+                                vec2(w as f32 * s, h as f32 * s),
+                            );
+                            painter.image(
+                                t.id(),
+                                r,
+                                egui::Rect::from_min_max(
+                                    egui::pos2(0.0, 0.0),
+                                    egui::pos2(1.0, 1.0),
+                                ),
+                                if self.checked[i] {
+                                    Color32::WHITE
+                                } else {
+                                    Color32::from_gray(110)
+                                },
                             );
                         }
-                        let checked = self.check(ui, i, image, accent);
-                        let modifiers = ui.input(|input| input.modifiers);
-                        if checked {
+                        None => {
+                            egui::Spinner::new().paint_at(
+                                ui,
+                                egui::Rect::from_center_size(image.center(), vec2(16.0, 16.0)),
+                            );
+                        }
+                    }
+                    let photo = &self.photos[i];
+                    let state = if photo.copied(self.raw_only) {
+                        Some(t!("offload-pick-known"))
+                    } else if photo.partly(self.raw_only) {
+                        Some(t!("offload-pick-partly"))
+                    } else {
+                        None
+                    };
+                    let caption = match state {
+                        Some(state) => format!("{}  {} · {state}", photo.name, photo.time),
+                        None => format!("{}  {}", photo.name, photo.time),
+                    };
+                    ui.painter().text(
+                        egui::pos2(cell.left(), image.bottom() + 2.0),
+                        egui::Align2::LEFT_TOP,
+                        caption,
+                        egui::TextStyle::Small.resolve(ui.style()),
+                        ui.visuals().text_color(),
+                    );
+                    if i == self.cursor {
+                        ui.painter().rect_stroke(
+                            image,
+                            4.0,
+                            egui::Stroke::new(2.0, accent),
+                            egui::StrokeKind::Outside,
+                        );
+                    }
+                    let checked = self.check(ui, i, image, accent);
+                    let modifiers = ui.input(|input| input.modifiers);
+                    if checked {
+                        self.set(i, !self.checked[i]);
+                        self.cursor = i;
+                        self.anchor = i;
+                    } else if response.double_clicked() {
+                        self.cursor = i;
+                        open = Some(i);
+                    } else if response.clicked() {
+                        // Cmd/Ctrl+clic : bascule ; Maj+clic : la plage ; clic seul : le
+                        // curseur (il ne décoche pas tout, comme le Finder : les photos
+                        // partent toutes cochées).
+                        if modifiers.command {
                             self.set(i, !self.checked[i]);
                             self.cursor = i;
                             self.anchor = i;
-                        } else if response.double_clicked() {
-                            self.cursor = i;
-                            open = Some(i);
-                        } else if response.clicked() {
-                            // Cmd/Ctrl+clic : bascule ; Maj+clic : la plage ; clic seul : le
-                            // curseur (il ne décoche pas tout, comme le Finder : les photos
-                            // partent toutes cochées).
-                            if modifiers.command {
-                                self.set(i, !self.checked[i]);
-                                self.cursor = i;
-                                self.anchor = i;
-                            } else {
-                                self.move_to(i, modifiers.shift);
-                            }
+                        } else {
+                            self.move_to(i, modifiers.shift);
                         }
                     }
-                });
+                    // Galerie de toute la carte : couper ou recoudre au clic droit.
+                    if let Some(starts) = &self.starts
+                        && i > 0
+                    {
+                        let label = if starts[i].is_some() {
+                            t!("offload-cut-remove")
+                        } else {
+                            t!("offload-cut-here")
+                        };
+                        response.context_menu(|ui| {
+                            if ui.button(label).clicked() {
+                                cut = Some(i);
+                                ui.close();
+                            }
+                        });
+                    }
+                }
             });
+        if let Some(i) = cut {
+            self.toggle_cut(i);
+        }
         if let Some(i) = open {
             self.enlarge(i, ctx);
         }
@@ -637,6 +835,66 @@ impl Picker {
                 self.photos.len()
             ));
         });
+    }
+}
+
+/// Places des vignettes de la galerie (#600, #601) : en lignes centrées dans la largeur,
+/// chaque séance (galerie de toute la carte) sur une nouvelle ligne, sous son bandeau.
+struct Grid {
+    columns: usize,
+    /// Marge à gauche des lignes (centrées), et leur largeur.
+    left: f32,
+    width: f32,
+    /// Coin de chaque vignette, depuis le haut à gauche de la galerie.
+    cells: Vec<egui::Pos2>,
+    /// Bandeaux : (première photo de la séance, hauteur).
+    headers: Vec<(usize, f32)>,
+    height: f32,
+}
+
+fn layout(
+    n: usize,
+    starts: Option<&[Option<CutReason>]>,
+    width: f32,
+    cell: egui::Vec2,
+    gap: f32,
+    header_h: f32,
+) -> Grid {
+    let columns = (((width + gap) / (cell.x + gap)).floor() as usize).max(1);
+    // Moins de photos qu'une ligne : centrées quand même (une seule séance).
+    let used = match starts {
+        Some(_) => columns,
+        None => columns.min(n.max(1)),
+    };
+    let row_w = used as f32 * cell.x + (used - 1) as f32 * gap;
+    let left = ((width - row_w) / 2.0).max(0.0);
+    let (mut cells, mut headers) = (Vec::with_capacity(n), Vec::new());
+    let (mut y, mut col) = (0.0, 0);
+    for i in 0..n {
+        let starts_here = starts.is_some_and(|s| i == 0 || s[i].is_some());
+        if starts_here {
+            if col > 0 {
+                y += cell.y + gap;
+                col = 0;
+            }
+            headers.push((i, y));
+            y += header_h + gap;
+        }
+        cells.push(egui::pos2(left + col as f32 * (cell.x + gap), y));
+        col += 1;
+        if col == columns && i + 1 < n {
+            col = 0;
+            y += cell.y + gap;
+        }
+    }
+    let height = if n == 0 { 0.0 } else { y + cell.y };
+    Grid {
+        columns,
+        left,
+        width: row_w,
+        cells,
+        headers,
+        height,
     }
 }
 
@@ -706,5 +964,81 @@ mod tests {
         assert!(all.photos[0].partly(false));
         assert!(!all.photos[1].partly(false));
         all.cancel.store(true, Ordering::Relaxed);
+    }
+
+    #[test]
+    fn the_gallery_is_centred_and_each_session_starts_a_row() {
+        // #601 : centrée ; #600 : une séance par ligne, sous son bandeau.
+        let cell = vec2(100.0, 120.0);
+        let one = layout(2, None, 1000.0, cell, 10.0, 20.0);
+        assert_eq!(one.columns, 9);
+        assert_eq!(
+            one.cells[0].x,
+            (1000.0 - 210.0) / 2.0,
+            "deux photos, centrées"
+        );
+        let starts = [None, None, None, Some(CutReason::Chosen), None];
+        let grid = layout(5, Some(&starts), 340.0, cell, 10.0, 20.0);
+        assert_eq!(grid.columns, 3);
+        assert_eq!(grid.headers, [(0, 0.0), (3, 160.0)]);
+        let ys: Vec<f32> = grid.cells.iter().map(|c| c.y).collect();
+        assert_eq!(ys, [30.0, 30.0, 30.0, 190.0, 190.0]);
+        assert_eq!(
+            grid.cells[3].x, grid.cells[0].x,
+            "la séance repart à gauche"
+        );
+        assert_eq!(grid.height, 310.0);
+    }
+
+    #[test]
+    fn cuts_are_placed_and_removed_in_the_whole_card_gallery() {
+        use std::time::{Duration, UNIX_EPOCH};
+        crate::i18n::ensure();
+        let at = |m: u64| UNIX_EPOCH + Duration::from_secs(1_800_000_000 + m * 60);
+        let mut items = vec![
+            item("B.RAF", false),
+            item("A.RAF", false),
+            item("A.JPG", false),
+            item("C.RAF", false),
+        ];
+        for (item, m) in items.iter_mut().zip([10, 0, 0, 200]) {
+            item.modified = at(m);
+        }
+        let plan = Plan {
+            source: PathBuf::from("/carte"),
+            items,
+            ignored: 0,
+        };
+        let cuts = plan.proposed_cuts(&tri::offload::OffloadSettings::default());
+        let ctx = egui::Context::default();
+        let mut p = Picker::sessions(&plan, &cuts, None, true, false, &ctx);
+        let names: Vec<&str> = p.photos.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["A", "B", "C"],
+            "dans l'ordre de prise de vue, paire d'un bloc"
+        );
+        assert!(matches!(
+            p.starts.as_deref(),
+            Some([None, None, Some(CutReason::Pause(_))])
+        ));
+        // Couper avant B, recoudre avant C ; pas de coupure avant la première.
+        p.toggle_cut(1);
+        p.toggle_cut(2);
+        p.toggle_cut(0);
+        let cuts = p.cuts().unwrap();
+        assert_eq!(cuts.len(), 1);
+        assert_eq!(cuts[0].first, PathBuf::from("/carte/B.RAF"));
+        assert_eq!(cuts[0].reason, CutReason::Chosen);
+        let sessions = plan.sessions_at(&cuts, 4);
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[1].items, [0, 3]);
+        // La galerie d'une séance n'a pas de coupures.
+        let refs: Vec<&Item> = plan.items.iter().collect();
+        let mut one = Picker::new("2026-11-25", &refs, None, true, false, &ctx);
+        one.toggle_cut(1);
+        assert!(one.cuts().is_none());
+        p.cancel.store(true, Ordering::Relaxed);
+        one.cancel.store(true, Ordering::Relaxed);
     }
 }
