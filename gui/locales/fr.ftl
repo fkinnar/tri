@@ -1891,10 +1891,6 @@ offload-forget-confirm = { $n ->
     [one] Oublier la photo déchargée de cette carte ?
    *[other] Oublier les { $n } images déchargées de cette carte ?
 }
-offload-forgot = { $n ->
-    [one] { $n } image oubliée
-   *[other] { $n } images oubliées
-}
 offload-raw-only = RAW seulement
 offload-keep-disk = Garder les données de tri sur ce disque
 offload-keep-folder = Garder les données de tri dans le dossier de la séance

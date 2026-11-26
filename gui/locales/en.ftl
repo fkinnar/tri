@@ -1885,10 +1885,6 @@ offload-forget-confirm = { $n ->
     [one] Forget the offloaded photo of this card?
    *[other] Forget the { $n } offloaded images of this card?
 }
-offload-forgot = { $n ->
-    [one] { $n } image forgotten
-   *[other] { $n } images forgotten
-}
 offload-raw-only = RAW only
 offload-keep-disk = Keep tri's data on this drive
 offload-keep-folder = Keep tri's data in the session folder

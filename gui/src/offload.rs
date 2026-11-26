@@ -1262,7 +1262,7 @@ impl OffloadDialog {
                         // le bilan.
                         let mut again = !settings.skip_known;
                         let mut skip = false;
-                        if known > 0 || forget.is_some() {
+                        if known > 0 || matches!(forget, Some(None | Some(Err(_)))) {
                             ui.horizontal(|ui| {
                                 if known > 0 {
                                     skip = ui
@@ -1289,9 +1289,8 @@ impl OffloadDialog {
                                         );
                                         ask_forget = Some(known);
                                     }
-                                    Some(Some(Ok(n))) => {
-                                        ui.weak(t!("offload-forgot", n = *n));
-                                    }
+                                    // Fait : la case disparaît, ça suffit (retour du 26/11/2026).
+                                    Some(Some(Ok(_))) => {}
                                     Some(Some(Err(e))) => {
                                         ui.colored_label(ui.visuals().error_fg_color, e.as_str());
                                     }

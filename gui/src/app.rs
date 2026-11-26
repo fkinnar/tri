@@ -46372,7 +46372,10 @@ mod tests {
             .unwrap()
             .click();
         h.run_steps(2);
-        assert!(h.query_by_label(&t!("offload-forgot", n = 2)).is_some());
+        assert!(
+            h.query_by_label_contains("déjà déchargées").is_none(),
+            "plus rien de connu"
+        );
         let history = tri::offload::History::open_configured(&settings, data.as_deref()).unwrap();
         let plan = tri::offload::plan(&dir.path().join("CARTE"), &history).unwrap();
         assert!(plan.items.iter().all(|i| !i.known), "oubliées pour de bon");
