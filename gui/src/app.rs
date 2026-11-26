@@ -5607,6 +5607,9 @@ impl TriApp {
                 ui.add_space(self.gui.dialogs.spacing);
             }
         }
+        self.palette_filter_rows(ui);
+        // Filtres secondaires, sous « Semblables » (retour du 26/11/2026), et seulement quand
+        // ils ont quelque chose à montrer (ou qu'ils sont allumés).
         // Notes en conflit (issue n° 368) : un filtre secondaire, ici seulement (pas dans
         // la barre du haut), et seulement quand il y en a (ou qu'il est allumé).
         let conflicts = self.folder.notes.conflicts().len();
@@ -5653,7 +5656,7 @@ impl TriApp {
                 } else {
                     ui.visuals().weak_text_color()
                 };
-                marks::warning(ui.painter(), rect.shrink(size * 0.12), color);
+                marks::broken_image(ui.painter(), rect.shrink(size * 0.12), color);
                 let label = ui
                     .add(egui::Label::new(t!("filter-unreadable")).sense(Sense::click()))
                     .on_hover_text(&tip);
@@ -5666,7 +5669,6 @@ impl TriApp {
                 self.perform(&ctx, Action::FilterUnreadable);
             }
         }
-        self.palette_filter_rows(ui);
     }
 
     /// Recherches de palettes (#492), sous les autres filtres (retour du 21/11/2026 : la

@@ -82,8 +82,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   **Illisibles** (`f e`, `core.filter.unreadable`, 26/11/2026 : des DNG abîmés dans un
   dossier de 2 820) : les images dont la vignette n'a pas pu être calculée (échec du
   moteur : fichier abîmé, ou lecture ratée sur un partage SMB), d'après les événements
-  `Failed` des vignettes ; une ligne du panneau Filtre, comme « En conflit », montrée
-  seulement s'il y en a (ou allumé) ; refiltré une fois les vignettes passées. Une image
+  `Failed` des vignettes ; une ligne du panneau Filtre, comme « En conflit », toutes deux
+  sous « Semblables » (retour du 26/11/2026), montrées seulement s'il y en a (ou allumées) ;
+  icône d'une photo fendue (`marks::broken_image`) ; refiltré une fois les vignettes passées. Une image
   recalculée avec succès en sort. Une photo de « Toutes les photos » dont le dossier est
   introuvable ou sur un disque débranché n'est pas illisible mais absente : pas dans ce
   filtre (retour du 26/11/2026).
