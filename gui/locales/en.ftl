@@ -794,6 +794,7 @@ status-images = { $n ->
 status-selected = { $n } selected
 status-visual-mode = { " " }· visual mode
 progress-notes = ratings
+progress-dates = shooting dates
 progress-thumbnails = thumbnails
 progress-embedded = camera render
 progress-previews = previews

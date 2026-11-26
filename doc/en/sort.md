@@ -30,7 +30,11 @@ place. `SortKey::by_notes()` says whether the key depends on the ratings;
   (`preview::capture_time`: LibRaw opening without decompressing anything for a RAW,
   EXIF of a flat image), kept in the cache with the fingerprints (a missing date too, so
   the file is not read again). Before 2026-11-26, the sort stayed on names in a folder
-  in light mode.
+  in light mode. These readings run on as many threads as light workers
+  (`[scheduler] light_workers`: on a NAS, the time is mostly waiting for the network),
+  their progress is shown in the background tasks ("shooting dates i/N"), and the sort no
+  longer waits for the stacks' progress when they are not computed in the background (in
+  light mode, it came after all the thumbnails).
 - **Modification dates**: read on the disk when sorting (`modified`).
 - **Ratings**: provided by the caller (`notes(path)`, the folder's book); a pair by its
   RAW, a development by its photo (same key as the dates). `[sort] color_order` (dot

@@ -1854,6 +1854,8 @@ pub struct TriApp {
     /// Heures de prise de vue lues seules, pour le tri par date quand les empreintes ne
     /// sont pas calculées en fond (mode léger, piles à la demande) ; `None` : pas de date.
     captured: HashMap<PathBuf, Option<i64>>,
+    /// Avancement de ces lectures, montré dans les tâches de fond.
+    capture_progress: Progress,
     /// Piles de la grille : la vue de `files` (couvertures des piles repliées).
     stacks: crate::stacks::Stacks,
     /// Piles à recalculer (dossier, filtre, empreinte, note, seuil changés).
@@ -3053,6 +3055,7 @@ impl TriApp {
             history: tri::history::History::new(gui.history),
             signatures: HashMap::new(),
             captured: HashMap::new(),
+            capture_progress: Progress::default(),
             stacks: crate::stacks::Stacks::default(),
             stacks_dirty: true,
             expanded: HashSet::new(),
@@ -4836,6 +4839,7 @@ impl TriApp {
         self.scores.clear();
         self.signatures.clear();
         self.captured.clear();
+        self.capture_progress = Progress::default();
         self.judgements.clear();
         self.blurry_applied.clear();
         self.selected = 0;
@@ -12913,6 +12917,7 @@ impl TriApp {
             engine.capture_reads.request(file.path.clone(), move || {
                 Some(preview::capture_time(&cache, &file, &preview))
             });
+            self.capture_progress.total += 1;
         }
     }
 
@@ -12958,10 +12963,14 @@ impl TriApp {
             .engine
             .as_ref()
             .is_some_and(|e| !e.signature_reads.idle() || !e.capture_reads.idle());
+        // Les dates des empreintes : attendre leur calcul de fond, s'il y en a un (en mode
+        // léger, l'analyse « à la demande » passe derrière les vignettes : le tri attendait
+        // toutes les vignettes du NAS, 26/11/2026).
+        let groups_in_background = self.analyses().stacks == tri::scheduler::Analysis::Background;
         if self.sort_pending
             && self.mode == Mode::Grid
             && !reading
-            && (p.total == 0 || p.done == p.total)
+            && (!groups_in_background || p.total == 0 || p.done == p.total)
         {
             self.sort_pending = false;
             self.apply_sort();
@@ -14153,7 +14162,13 @@ impl TriApp {
             loader,
             grid_reader,
             signature_reads: crate::bg_read::BgReads::new("tri-signatures", Some(ctx.clone())),
-            capture_reads: crate::bg_read::BgReads::new("tri-captured", Some(ctx.clone())),
+            // Lectures surtout en attente du disque (NAS) : autant de fils que de workers
+            // légers.
+            capture_reads: crate::bg_read::BgReads::parallel(
+                "tri-captured",
+                Some(ctx.clone()),
+                config.light_workers,
+            ),
             score_reads: crate::bg_read::BgReads::new("tri-scores", Some(ctx.clone())),
             exposure_reads: crate::bg_read::BgReads::newest_first(
                 "tri-exposures",
@@ -14412,6 +14427,7 @@ impl TriApp {
                     .request(path, move || preview::signature(&cache, &file, &preview));
             }
             for (path, time) in engine.capture_reads.take() {
+                self.capture_progress.done += 1;
                 let new = self.captured.insert(path, time.flatten()).is_none();
                 if new && self.order.key == tri::sort::SortKey::Captured {
                     self.sort_pending = true;
@@ -21662,6 +21678,18 @@ impl TriApp {
         // Analyse à la demande (#564, mode léger #597) : rien n'est calculé, le moteur ne
         // fait que chercher dans le cache ce qui l'est déjà ; pas une tâche à montrer
         // (retour du 25/11/2026 : « histogrammes 1/1126 » sur le NAS inquiétait).
+        // Dates de prise de vue lues seules pour le tri (mode léger) : pas une case de
+        // `progress`, montrées à part.
+        let dates = self.capture_progress;
+        if dates.total > 0 && dates.done < dates.total && !waiting {
+            tasks.push(Task {
+                text: format!("{} {}/{}", t!("progress-dates"), dates.done, dates.total),
+                fraction: dates.fraction(),
+                tip: None,
+                click: None,
+                cancel: None,
+            });
+        }
         for (slot, (name, p)) in [
             (t!("progress-notes"), notes),
             (t!("progress-thumbnails"), self.progress[0]),
@@ -36666,6 +36694,8 @@ mod tests {
             h.state().signatures.is_empty(),
             "pas d'empreintes calculées"
         );
+        let p = h.state().capture_progress;
+        assert_eq!((p.done, p.total), (3, 3), "avancement montré pendant la lecture");
     }
 
     #[test]

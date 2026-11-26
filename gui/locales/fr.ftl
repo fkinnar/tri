@@ -797,6 +797,7 @@ status-selected = { $n ->
 }
 status-visual-mode = { " " }· mode visuel
 progress-notes = notes
+progress-dates = dates de prise de vue
 progress-thumbnails = vignettes
 progress-embedded = rendu boîtier
 progress-previews = aperçus
