@@ -9358,7 +9358,8 @@ impl TriApp {
                             // l'un ni l'autre n'ouvre le dossier.
                             let modifiers = ui.input(|i| i.modifiers);
                             pointed = Some(i);
-                            if modifiers.command || modifiers.shift {
+                            // Ctrl aussi : « Commande » n'est pas toujours renseigné avec lui.
+                            if modifiers.command || modifiers.ctrl || modifiers.shift {
                                 chose = Some((i, modifiers.shift));
                             } else if !current {
                                 open = Some(row.path.clone());
