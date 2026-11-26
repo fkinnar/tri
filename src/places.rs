@@ -2003,7 +2003,13 @@ impl Tree {
     /// 26/11/2026 : un seul des deux dossiers surlignés partait) ; jamais un emplacement.
     pub fn toggle_selected(&mut self, index: usize, here: Option<&Path>) {
         let rows = self.rows();
-        let Some(path) = rows.get(index).map(|r| r.path.clone()) else {
+        // Un emplacement (volume, dossier personnel…) ne se choisit pas (retour du
+        // 26/11/2026 : « Images » choisi au clavier écartait ses sous-dossiers choisis).
+        let Some(path) = rows
+            .get(index)
+            .filter(|r| r.depth > 0)
+            .map(|r| r.path.clone())
+        else {
             return;
         };
         if self.selection.is_empty()
@@ -2036,7 +2042,11 @@ impl Tree {
             from.min(index),
             from.max(index).min(rows.len().saturating_sub(1)),
         );
-        self.selection = rows[lo..=hi].iter().map(|r| r.path.clone()).collect();
+        self.selection = rows[lo..=hi]
+            .iter()
+            .filter(|r| r.depth > 0)
+            .map(|r| r.path.clone())
+            .collect();
         self.selection.dedup();
         if self.anchor.is_none() {
             self.anchor = rows.get(from).map(|r| r.path.clone());
@@ -2096,9 +2106,9 @@ impl Tree {
             .filter(|r| r.depth == 0)
             .map(|r| r.path)
             .collect();
+        let chosen: Vec<PathBuf> = chosen.into_iter().filter(|p| !roots.contains(p)).collect();
         chosen
             .iter()
-            .filter(|p| !roots.contains(p))
             .filter(|p| {
                 !chosen
                     .iter()
@@ -2330,9 +2340,22 @@ mod tests {
                 .map(|p| p.strip_prefix(dir.path()).unwrap().display().to_string())
                 .collect()
         };
-        // Rien de choisi : la ligne pointée ; l'emplacement, jamais.
+        // Rien de choisi : la ligne pointée ; l'emplacement, jamais, ni choisi (il
+        // écarterait ses sous-dossiers choisis).
         tree.set_cursor(0);
         assert!(tree.acting().is_empty(), "pas l'emplacement");
+        tree.toggle_selected(0, None);
+        assert!(
+            tree.selection().is_empty(),
+            "un emplacement ne se choisit pas"
+        );
+        tree.select_range(at(&tree, "a"), None);
+        assert_eq!(
+            names(tree.acting()),
+            ["a"],
+            "plage depuis l'emplacement : sans lui"
+        );
+        tree.clear_selection();
         tree.set_cursor(at(&tree, "a"));
         assert_eq!(names(tree.acting()), ["a"]);
         // Cmd/Ctrl+clic depuis a (pointée) : a et c ; encore c : retiré.

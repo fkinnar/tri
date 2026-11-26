@@ -257,7 +257,8 @@ Demandé par l'utilisateur : supprimer ou déplacer plusieurs dossiers sans les 
   grille, `core.select.toggle` (Espace) et `core.select.visual` (Maj+Espace : les
   déplacements choisissent la plage) ; `core.view.back` (Échap) vide d'abord le choix.
 - **Sur quoi agir** (`Tree::acting`) : le choix s'il y en a un, sinon la ligne pointée ;
-  jamais un emplacement (volume, dossier personnel, favori en tête) ; un dossier dont un
+  jamais un emplacement (volume, dossier personnel, favori en tête), qui ne se choisit
+  d'ailleurs pas ; un dossier dont un
   parent est aussi choisi part avec lui. Clic droit ou glisser sur un dossier choisi :
   tout le choix ; sur un autre : lui seul.
 - **Supprimer** : une confirmation avec les noms et le contenu total, `delete_dirs` (à la

@@ -247,7 +247,8 @@ selection lives in the engine (`places::Tree`: `toggle_selected`, `select_range`
   grid, `core.select.toggle` (Space) and `core.select.visual` (Shift+Space: moving selects
   the range); `core.view.back` (Escape) clears the selection first.
 - **What is acted on** (`Tree::acting`): the selection if there is one, otherwise the
-  pointed row; never a place (volume, home folder, favourite at the top); a folder whose
+  pointed row; never a place (volume, home folder, favourite at the top), which cannot be chosen
+  anyway; a folder whose
   parent is also chosen goes with it. Right-click or drag on a chosen folder: the whole
   selection; on another one: that one only.
 - **Delete**: one confirmation with the names and the total contents, `delete_dirs` (to the
