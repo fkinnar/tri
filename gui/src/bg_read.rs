@@ -40,23 +40,57 @@ where
     /// Démarre le fil (`name` : son nom) ; `repaint` réveille l'interface à chaque
     /// résultat. Lectures dans l'ordre des demandes.
     pub fn new(name: &str, repaint: Option<egui::Context>) -> BgReads<K, T> {
-        Self::start(name, repaint, false)
+        Self::start(name, repaint, false, 1)
+    }
+
+    /// Comme [`BgReads::new`], avec `threads` fils (au moins un) : pour des lectures
+    /// dont le temps est surtout l'attente du disque (26/11/2026 : dates de prise de vue
+    /// lues une à une sur un NAS).
+    pub fn parallel(name: &str, repaint: Option<egui::Context>, threads: usize) -> BgReads<K, T> {
+        Self::start(name, repaint, false, threads.max(1))
     }
 
     /// Comme [`BgReads::new`], la dernière demande lue d'abord : pour ce qui suit l'image
     /// sélectionnée (retour du 21/11/2026 : en avançant vite sur un disque lent, l'image
     /// où l'on s'arrête attendait derrière la lecture de toutes celles traversées).
     pub fn newest_first(name: &str, repaint: Option<egui::Context>) -> BgReads<K, T> {
-        Self::start(name, repaint, true)
+        Self::start(name, repaint, true, 1)
     }
 
-    fn start(name: &str, repaint: Option<egui::Context>, newest_first: bool) -> BgReads<K, T> {
+    fn start(
+        name: &str,
+        repaint: Option<egui::Context>,
+        newest_first: bool,
+        threads: usize,
+    ) -> BgReads<K, T> {
         let queue = Arc::new(Queue {
             jobs: Mutex::new((VecDeque::new(), false)),
             ready: Condvar::new(),
         });
         let (outbox, results) = mpsc::channel();
-        let shared = queue.clone();
+        for _ in 0..threads {
+            Self::spawn(
+                name,
+                queue.clone(),
+                outbox.clone(),
+                repaint.clone(),
+                newest_first,
+            );
+        }
+        BgReads {
+            queue,
+            results,
+            pending: HashSet::new(),
+        }
+    }
+
+    fn spawn(
+        name: &str,
+        shared: Arc<Queue<K, T>>,
+        outbox: Sender<(K, Option<T>)>,
+        repaint: Option<egui::Context>,
+        newest_first: bool,
+    ) {
         let _ = std::thread::Builder::new()
             .name(name.into())
             .spawn(move || {
@@ -89,11 +123,6 @@ where
                     }
                 }
             });
-        BgReads {
-            queue,
-            results,
-            pending: HashSet::new(),
-        }
     }
 
     /// Demande la lecture `read` pour `key`, sauf si elle est déjà demandée.

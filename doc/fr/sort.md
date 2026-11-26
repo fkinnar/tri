@@ -25,7 +25,17 @@ donne la valeur d'une image.
   disque. En attendant leur arrivée, l'ordre reste celui des noms ; la grille est triée à
   nouveau une fois toutes là (et seulement si une date *nouvelle* est arrivée : refiltrer
   fait ré-annoncer celles du cache, piège déjà rencontré avec le filtre « bien
-  exposées », issue n° 10).
+  exposées », issue n° 10). Quand les empreintes ne sont pas calculées en fond (mode
+  léger, où les analyses attendent « Tout calculer » ; piles à la demande ou coupées),
+  l'interface lit seulement les dates (`preview::capture_time` : ouverture LibRaw sans
+  rien décompresser pour un RAW, EXIF d'une image plate), gardées dans le cache avec les
+  empreintes (date absente comprise, pour ne pas relire le fichier). Avant le 26/11/2026,
+  le tri restait sur les noms dans un dossier en mode léger. Ces lectures se font sur
+  autant de fils que de workers légers (`[scheduler] light_workers` : sur un NAS, le
+  temps est surtout l'attente du réseau), leur avancement est montré dans les tâches de
+  fond (« dates de prise de vue i/N »), et le tri n'attend plus la progression des piles
+  quand elles ne sont pas calculées en fond (en mode léger, elle passait derrière toutes
+  les vignettes).
 - **Dates de modification** : lues sur le disque au moment du tri (`modified`).
 - **Notes** : fournies par l'appelant (`notes(chemin)`, le carnet du dossier) ; la paire
   d'après son RAW, un développement d'après sa photo (même clé que les dates).
