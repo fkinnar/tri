@@ -34,7 +34,17 @@ place. `SortKey::by_notes()` says whether the key depends on the ratings;
   (`[scheduler] light_workers`: on a NAS, the time is mostly waiting for the network),
   their progress is shown in the background tasks ("shooting dates i/N"), and the sort no
   longer waits for the stacks' progress when they are not computed in the background (in
-  light mode, it came after all the thumbnails).
+  light mode, it came after all the thumbnails). From `[gui] sort_dates_ask` dates to
+  read (200; 0: never), a box warns first ("Sort by shooting date?", `dates_dialog.rs`,
+  the owner's idea of 2026-11-26): Sort, Cancel (the order does not change), "Don't ask
+  again" (setting set to 0). Since the same day, the dates are read alone **even when
+  the fingerprints are computed in the background** (2,820 DNG on a NAS over NFS: the
+  sort waited for all the fingerprints, much longer); a fingerprint arriving with a date
+  already read does not trigger a new sort. A RAW whose date LibRaw lacks (2021 DNG)
+  takes it from the file's EXIF (`metadata::exif_date`), then from the embedded JPEG's,
+  then from its XMP (`metadata::xmp_date`).
+  Once all the dates are read, the status bar says how many are missing ("… photos
+  without a date"), and the log names them (`sort`).
 - **Modification dates**: read on the disk when sorting (`modified`).
 - **Ratings**: provided by the caller (`notes(path)`, the folder's book); a pair by its
   RAW, a development by its photo (same key as the dates). `[sort] color_order` (dot

@@ -1144,6 +1144,8 @@ pub struct TriApp {
     camera_raw: HashMap<PathBuf, PathBuf>,
     /// Boîte « Regrouper RAW et JPEG ? » ouverte.
     pairs_dialog: Option<crate::pairs_dialog::PairsDialog>,
+    /// « Trier par date de prise de vue ? » en mode léger ([`crate::dates_dialog`]).
+    dates_dialog: Option<crate::dates_dialog::DatesDialog>,
     /// Cases RAW / RAW+JPEG / JPEG d'un dossier regroupé (#392).
     pair_kinds: tri::pairs::PairKinds,
     /// Dossiers du panneau regroupés par décision (#392 : leur marque), lus une fois, en
@@ -2749,6 +2751,7 @@ impl TriApp {
             pairs_dirs: HashMap::new(),
             camera_raw: HashMap::new(),
             pairs_dialog: None,
+            dates_dialog: None,
             pair_kinds: tri::pairs::PairKinds::default(),
             pairs_marks: HashMap::new(),
             pairs_reads: None,
@@ -12956,19 +12959,14 @@ impl TriApp {
     /// à la demande ou coupées : 26/11/2026, le tri restait sur les noms) : les heures de
     /// prise de vue seules lues en fond, pour les images qui n'en ont pas encore.
     fn request_capture_times(&mut self) {
-        if self.analyses().stacks == tri::scheduler::Analysis::Background {
-            return; // Les empreintes, qui ont l'heure, arrivent d'elles-mêmes.
-        }
+        // Même quand les empreintes (qui ont l'heure) sont calculées en fond : elles
+        // prennent bien plus longtemps que les dates seules (26/11/2026, 2 820 DNG sur un
+        // NAS en NFS : le tri attendait toutes les empreintes).
         let Some(engine) = self.engine.as_mut() else {
             return;
         };
         for file in &self.folder.files {
-            if tri::media::is_development(&file.path)
-                || self.captured.contains_key(&file.path)
-                || self
-                    .signatures
-                    .get(&file.path)
-                    .is_some_and(|s| s.time.is_some())
+            if !needs_capture_time(file, &self.signatures, &self.captured)
                 || engine.capture_reads.is_pending(&file.path)
             {
                 continue;
@@ -12981,8 +12979,96 @@ impl TriApp {
         }
     }
 
-    /// Change l'ordre : la grille suit, la même image reste sélectionnée.
+    /// Dates de prise de vue à lire avant de trier par date, en mode léger seulement (sur
+    /// un disque rapide, la lecture ne se remarque pas) ; 0 sinon.
+    fn capture_times_to_read(&self) -> usize {
+        if self.light_root.is_none() {
+            return 0;
+        }
+        self.folder
+            .files
+            .iter()
+            .filter(|f| needs_capture_time(f, &self.signatures, &self.captured))
+            .count()
+    }
+
+    /// « Trier par date de prise de vue ? » : la réponse.
+    fn dates_dialog(&mut self, ctx: &egui::Context) {
+        let Some(dialog) = &mut self.dates_dialog else {
+            return;
+        };
+        match dialog.show(ctx) {
+            Some(crate::dates_dialog::Request::Sort { always }) => {
+                let order = dialog.order;
+                self.dates_dialog = None;
+                if always {
+                    self.gui.sort_dates_ask = 0;
+                    self.write_setting("gui", "sort_dates_ask", tri::config_edit::Value::Int(0));
+                }
+                self.apply_order(order);
+            }
+            Some(crate::dates_dialog::Request::Close) => self.dates_dialog = None,
+            None => {}
+        }
+    }
+
+    /// Toutes les dates de prise de vue demandées sont lues : combien manquent, dans la
+    /// barre d'état et au journal (26/11/2026 : « le tri ne se fait pas », sans savoir si
+    /// les dates manquaient ou suivaient l'ordre des noms).
+    fn capture_times_read(&mut self) {
+        let (signatures, captured) = (&self.signatures, &self.captured);
+        let photos: Vec<&MediaFile> = self
+            .folder
+            .files
+            .iter()
+            .filter(|f| !tri::media::is_development(&f.path))
+            .collect();
+        let missing: Vec<&MediaFile> = photos
+            .iter()
+            .copied()
+            .filter(|f| capture_time(signatures, captured, &f.path).is_none())
+            .collect();
+        tri::log::info(
+            "sort",
+            &format!(
+                "shooting dates read in {}: {} photos, {} without a date",
+                self.folder.dir.display(),
+                photos.len(),
+                missing.len()
+            ),
+            &missing
+                .iter()
+                .take(5)
+                .map(|f| f.path.display().to_string())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+        self.notice = Some((
+            t!(
+                "sort-dates-read",
+                n = photos.len() - missing.len(),
+                missing = missing.len()
+            ),
+            false,
+        ));
+    }
+
+    /// Change l'ordre : la grille suit, la même image reste sélectionnée. Par date de prise
+    /// de vue en mode léger, beaucoup de dates à lire : la boîte prévient d'abord
+    /// ([`crate::dates_dialog`]).
     fn set_order(&mut self, order: tri::sort::Order) {
+        if order.key == tri::sort::SortKey::Captured && self.gui.sort_dates_ask > 0 {
+            let count = self.capture_times_to_read();
+            if count >= self.gui.sort_dates_ask {
+                self.dates_dialog = Some(crate::dates_dialog::DatesDialog::new(order, count));
+                return;
+            }
+        }
+        self.apply_order(order);
+    }
+
+    /// Change l'ordre sans demander ([`TriApp::set_order`]).
+    fn apply_order(&mut self, order: tri::sort::Order) {
         // « Proximité » sans recherche : rien à trier.
         if order.key == tri::sort::SortKey::Proximity && !self.palette_searching() {
             self.notice = Some((t!("sort-proximity-none"), false));
@@ -13014,7 +13100,6 @@ impl TriApp {
     /// arrivées (toutes, pas à chacune), en grille seulement (comme les filtres sur
     /// l'analyse).
     fn sort_refilter(&mut self) {
-        let p = self.progress[5];
         // Les empreintes (leurs dates) lues en fond (`bg_read`) : toutes là d'abord. Sinon
         // chaque arrivée retriait la grille et relançait le moteur sur toute la liste, qui
         // réannonçait tout et revérifiait le cache (trace du 19/11/2026 sur iCloud : une
@@ -13023,15 +13108,10 @@ impl TriApp {
             .engine
             .as_ref()
             .is_some_and(|e| !e.signature_reads.idle() || !e.capture_reads.idle());
-        // Les dates des empreintes : attendre leur calcul de fond, s'il y en a un (en mode
-        // léger, l'analyse « à la demande » passe derrière les vignettes : le tri attendait
-        // toutes les vignettes du NAS, 26/11/2026).
-        let groups_in_background = self.analyses().stacks == tri::scheduler::Analysis::Background;
-        if self.sort_pending
-            && self.mode == Mode::Grid
-            && !reading
-            && (!groups_in_background || p.total == 0 || p.done == p.total)
-        {
+        // Plus d'attente des empreintes en fond (leur progression `p`) : les dates sont
+        // lues seules ([`TriApp::request_capture_times`]) ; avant, le tri attendait toutes
+        // les vignettes (mode léger) ou toutes les empreintes (26/11/2026).
+        if self.sort_pending && self.mode == Mode::Grid && !reading {
             self.sort_pending = false;
             self.apply_sort();
             self.refilter(Reveal::Minimal);
@@ -14494,6 +14574,7 @@ impl TriApp {
                 _ => {} // ancien dossier, ou niveau non suivi
             }
         }
+        let mut dates_done = false;
         if let Some(engine) = &mut self.engine {
             for (file, source) in to_paint {
                 let (cache, preview) = (engine.cache.clone(), engine.preview);
@@ -14509,24 +14590,33 @@ impl TriApp {
                     .signature_reads
                     .request(path, move || preview::signature(&cache, &file, &preview));
             }
+            let mut arrived = false;
             for (path, time) in engine.capture_reads.take() {
                 self.capture_progress.done += 1;
+                arrived = true;
                 let new = self.captured.insert(path, time.flatten()).is_none();
                 if new && self.order.key == tri::sort::SortKey::Captured {
                     self.sort_pending = true;
                 }
             }
+            dates_done = arrived && engine.capture_reads.idle();
             for (path, sig) in engine.signature_reads.take() {
                 // Une date nouvelle seulement (comme pour l'exposition, issue n° 10 :
                 // refiltrer fait ré-annoncer celles déjà en cache).
                 let Some(sig) = sig else { continue };
+                // Une date déjà lue seule ne change rien à l'ordre : pas de nouveau tri à
+                // chaque empreinte calculée en fond.
+                let known = self.captured.get(&path).copied().flatten() == sig.time;
                 let new = self.signatures.insert(path, sig).is_none();
-                if new && self.order.key == tri::sort::SortKey::Captured {
+                if new && !known && self.order.key == tri::sort::SortKey::Captured {
                     self.sort_pending = true;
                 }
                 self.stacks_dirty = true;
                 signed = true;
             }
+        }
+        if dates_done {
+            self.capture_times_read();
         }
         if signed && !self.scores.is_empty() {
             self.rejudge();
@@ -29908,6 +29998,7 @@ impl eframe::App for TriApp {
         self.version_delete_dialog(&ctx);
         self.reset_dialog(&ctx);
         self.pairs_dialog(&ctx);
+        self.dates_dialog(&ctx);
         self.locate_dialog(&ctx);
         self.iptc_dialog(&ctx);
         self.remote_dialog(&ctx);
@@ -32326,6 +32417,18 @@ impl StacksMemory {
             })
             .collect()
     }
+}
+
+/// Vrai si l'heure de prise de vue de `file` est encore à lire seule (ni lue, ni dans son
+/// empreinte ; un développement a celle de sa photo).
+fn needs_capture_time(
+    file: &MediaFile,
+    signatures: &HashMap<PathBuf, tri::similarity::Signature>,
+    captured: &HashMap<PathBuf, Option<i64>>,
+) -> bool {
+    !tri::media::is_development(&file.path)
+        && !captured.contains_key(&file.path)
+        && !signatures.get(&file.path).is_some_and(|s| s.time.is_some())
 }
 
 /// Heure de prise de vue de `path` pour le tri : celle de son empreinte, sinon celle lue
@@ -36759,6 +36862,124 @@ mod tests {
         h.run_steps(2);
         assert!(!h.state().unreadable_only, "f e");
         assert_eq!(h.state().files.len(), 4);
+    }
+
+    #[test]
+    fn sorting_by_capture_date_reads_the_dates_without_waiting_for_stacks() {
+        // 26/11/2026 : hors mode léger (NAS en NFS), le tri attendait les empreintes de
+        // tout le dossier, qui portaient les dates.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let fixture = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../tests/fixtures/exif.jpg"
+        ))
+        .unwrap();
+        let dated = |date: &str| {
+            let from = b"2026:10:16 14:32:05".as_slice();
+            let at = fixture.windows(from.len()).position(|w| w == from).unwrap();
+            let mut out = fixture.clone();
+            out[at..at + from.len()].copy_from_slice(date.as_bytes());
+            out
+        };
+        for (name, date) in [
+            ("img0.jpg", "2021:05:02 10:00:00"),
+            ("img1.jpg", "2021:05:03 10:00:00"),
+            ("img2.jpg", "2021:05:01 10:00:00"),
+        ] {
+            std::fs::write(photos.join(name), dated(date)).unwrap();
+        }
+        h.state_mut().settings.analysis.stacks = tri::scheduler::Analysis::Background;
+        let analyses = h.state().analyses();
+        if let Some(engine) = &h.state().engine {
+            engine.scheduler.set_analyses(analyses);
+        }
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| {
+            app.folder.files.len() == 3 && app.loading.is_none()
+        });
+        assert_eq!(
+            h.state().analyses().stacks,
+            tri::scheduler::Analysis::Background
+        );
+        h.state_mut().set_order(tri::sort::Order {
+            key: tri::sort::SortKey::Captured,
+            descending: false,
+        });
+        assert!(
+            h.state().dates_dialog.is_none(),
+            "pas en mode léger : rien à dire"
+        );
+        let names = |app: &TriApp| -> Vec<String> {
+            app.folder
+                .files
+                .iter()
+                .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+                .collect()
+        };
+        run_until(&mut h, |app| {
+            names(app) == ["img2.jpg", "img0.jpg", "img1.jpg"]
+        });
+        // Dates lues seules, sauf si les empreintes (calculées en fond, rapides sur une
+        // machine rapide) les avaient déjà toutes apportées avant le choix du tri.
+        let app = h.state();
+        let from_signatures = app.folder.files.iter().all(|f| {
+            app.signatures
+                .get(&f.path)
+                .is_some_and(|s| s.time.is_some())
+        });
+        assert!(
+            app.capture_progress.total > 0 || from_signatures,
+            "dates lues seules"
+        );
+    }
+
+    #[test]
+    fn sorting_by_capture_date_in_light_mode_warns_first() {
+        // 26/11/2026 (idée de l'utilisateur) : sur le NAS, lire toutes les dates est long.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let config = dir.path().join("config.toml");
+        std::fs::write(&config, "").unwrap();
+        h.state_mut().config_path = Some(config.clone());
+        h.state_mut().gui.sort_dates_ask = 2;
+        h.state_mut().toggle_light(photos.clone());
+        run_until(&mut h, |app| {
+            app.light_root.as_deref() == Some(photos.as_path()) && app.folder.files.len() == 3
+        });
+        let by_date = tri::sort::Order {
+            key: tri::sort::SortKey::Captured,
+            descending: false,
+        };
+        h.state_mut().set_order(by_date);
+        h.run_steps(3);
+        assert!(
+            h.state().dates_dialog.is_some(),
+            "3 dates à lire : on prévient"
+        );
+        assert_ne!(h.state().order, by_date, "rien de trié en attendant");
+        assert_eq!(h.state().capture_progress.total, 0, "rien de lu non plus");
+        h.get_by_label(&t!("cancel")).click();
+        h.run_steps(3);
+        assert!(h.state().dates_dialog.is_none());
+        assert_ne!(h.state().order, by_date);
+
+        h.state_mut().set_order(by_date);
+        h.run_steps(3);
+        h.get_by_label(&t!("sort-dates-ask-always")).click();
+        h.run_steps(1);
+        h.get_by_label(&t!("sort-dates-ask-sort")).click();
+        h.run_steps(3);
+        assert!(h.state().dates_dialog.is_none());
+        assert_eq!(h.state().order, by_date);
+        assert_eq!(h.state().gui.sort_dates_ask, 0, "plus de question");
+        assert!(
+            std::fs::read_to_string(&config)
+                .unwrap()
+                .contains("sort_dates_ask = 0")
+        );
     }
 
     #[test]

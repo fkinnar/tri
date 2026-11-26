@@ -1101,6 +1101,12 @@ filter_bar = true
 # Sans dossier en argument, rouvrir le dernier dossier ouvert (mémorisé dans le dossier de
 # données : ~/.local/share/tri, ~/Library/Application Support/tri, %APPDATA%\tri).
 reopen_last = true
+# Mode léger : avant de lire les dates de prise de vue de tant de photos, prévenir.
+#
+# Trier par date de prise de vue dans un dossier en mode léger (NAS, partage réseau) fait
+# lire la date de chaque photo qui ne l'a pas encore, ce qui peut être long : à partir de
+# ce nombre de dates à lire, une boîte prévient d'abord. 0 : ne jamais prévenir.
+sort_dates_ask = 200
 # Une image en argument (tri-gui <image>) : ouverte en mode concentration (<core.view.focus_mode>), comme dans
 # une visionneuse ; l'argument --focus le force dans tous les cas.
 image_focus = true

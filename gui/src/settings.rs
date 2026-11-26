@@ -285,6 +285,9 @@ pub struct GuiSettings {
     pub filter_bar: bool,
     /// Sans dossier en argument, rouvrir le dernier dossier ouvert.
     pub reopen_last: bool,
+    /// Tri par date de prise de vue en mode léger : à partir de ce nombre de dates à lire,
+    /// prévenir d'abord (longue lecture sur un NAS) ; 0 : jamais.
+    pub sort_dates_ask: usize,
     /// Une image en argument (`tri-gui <image>`) : ouverte en mode concentration (F11),
     /// comme dans une visionneuse (demandé le 31/10/2026) ; `--focus` le force toujours.
     pub image_focus: bool,
@@ -396,6 +399,7 @@ impl Default for GuiSettings {
             bar_icon_size: 24.0,
             filter_bar: true,
             reopen_last: true,
+            sort_dates_ask: 200,
             image_focus: true,
             sort: tri::sort::SortKey::Name,
             sort_descending: false,
