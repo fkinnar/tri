@@ -1147,7 +1147,7 @@ impl Picker {
                         // Cmd/Ctrl+clic : bascule ; Maj+clic : la plage ; clic seul : le
                         // curseur (il ne décoche pas tout, comme le Finder : les photos
                         // partent toutes cochées).
-                        if modifiers.command {
+                        if modifiers.command || modifiers.ctrl {
                             self.set(i, !self.checked[i]);
                             self.cursor = i;
                             self.anchor = i;
