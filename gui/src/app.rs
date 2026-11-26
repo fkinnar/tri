@@ -12952,6 +12952,47 @@ impl TriApp {
         }
     }
 
+    /// Toutes les dates de prise de vue demandées sont lues : combien manquent, dans la
+    /// barre d'état et au journal (26/11/2026 : « le tri ne se fait pas », sans savoir si
+    /// les dates manquaient ou suivaient l'ordre des noms).
+    fn capture_times_read(&mut self) {
+        let (signatures, captured) = (&self.signatures, &self.captured);
+        let photos: Vec<&MediaFile> = self
+            .folder
+            .files
+            .iter()
+            .filter(|f| !tri::media::is_development(&f.path))
+            .collect();
+        let missing: Vec<&MediaFile> = photos
+            .iter()
+            .copied()
+            .filter(|f| capture_time(signatures, captured, &f.path).is_none())
+            .collect();
+        tri::log::info(
+            "sort",
+            &format!(
+                "shooting dates read in {}: {} photos, {} without a date",
+                self.folder.dir.display(),
+                photos.len(),
+                missing.len()
+            ),
+            &missing
+                .iter()
+                .take(5)
+                .map(|f| f.path.display().to_string())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+        self.notice = Some((
+            t!(
+                "sort-dates-read",
+                n = photos.len() - missing.len(),
+                missing = missing.len()
+            ),
+            false,
+        ));
+    }
+
     /// Change l'ordre : la grille suit, la même image reste sélectionnée. Par date de prise
     /// de vue en mode léger, beaucoup de dates à lire : la boîte prévient d'abord
     /// ([`crate::dates_dialog`]).
@@ -14450,6 +14491,7 @@ impl TriApp {
                 _ => {} // ancien dossier, ou niveau non suivi
             }
         }
+        let mut dates_done = false;
         if let Some(engine) = &mut self.engine {
             for (file, source) in to_paint {
                 let (cache, preview) = (engine.cache.clone(), engine.preview);
@@ -14465,13 +14507,16 @@ impl TriApp {
                     .signature_reads
                     .request(path, move || preview::signature(&cache, &file, &preview));
             }
+            let mut arrived = false;
             for (path, time) in engine.capture_reads.take() {
                 self.capture_progress.done += 1;
+                arrived = true;
                 let new = self.captured.insert(path, time.flatten()).is_none();
                 if new && self.order.key == tri::sort::SortKey::Captured {
                     self.sort_pending = true;
                 }
             }
+            dates_done = arrived && engine.capture_reads.idle();
             for (path, sig) in engine.signature_reads.take() {
                 // Une date nouvelle seulement (comme pour l'exposition, issue n° 10 :
                 // refiltrer fait ré-annoncer celles déjà en cache).
@@ -14486,6 +14531,9 @@ impl TriApp {
                 self.stacks_dirty = true;
                 signed = true;
             }
+        }
+        if dates_done {
+            self.capture_times_read();
         }
         if signed && !self.scores.is_empty() {
             self.rejudge();

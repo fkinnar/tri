@@ -2291,6 +2291,11 @@ pairs-ask-text = { $name } has { $n ->
 } (same name). Group each into one photo?
 pairs-ask-detail = Grouped, a pair is a single thumbnail; the camera JPEG is filed with the RAW's developments (unfold them to see it). Nothing changes on disk. The choice is kept for this folder and can be changed from its menu (right-click).
 pairs-ask-always = Don't ask again (this choice for every folder)
+sort-dates-read = Shooting dates read: { $n }{ $missing ->
+    [0] {""}
+    [one] , { $missing } photo without a date (last, in name order)
+   *[other] , { $missing } photos without a date (last, in name order)
+}
 sort-dates-ask-title = Sort by shooting date?
 sort-dates-ask-text = The shooting date of { $n ->
     [one] { $n } photo

@@ -41,7 +41,10 @@ donne la valeur d'une image.
   plus demander » (réglage mis à 0). Depuis le même jour, les dates sont lues seules
   **même quand les empreintes sont calculées en fond** (2 820 DNG sur un NAS en NFS :
   le tri attendait toutes les empreintes, bien plus longues) ; une empreinte qui arrive
-  avec une date déjà lue ne relance pas de tri.
+  avec une date déjà lue ne relance pas de tri. Un RAW dont LibRaw n'a pas la date (des
+  DNG de 2021) la prend dans l'EXIF du fichier (`metadata::exif_date`), puis dans celle
+  du JPEG embarqué. Quand toutes les dates sont lues, la barre d'état dit combien
+  manquent (« … photos sans date »), et le journal les nomme (`sort`).
 - **Dates de modification** : lues sur le disque au moment du tri (`modified`).
 - **Notes** : fournies par l'appelant (`notes(chemin)`, le carnet du dossier) ; la paire
   d'après son RAW, un développement d'après sa photo (même clé que les dates).

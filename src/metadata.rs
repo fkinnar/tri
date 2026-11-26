@@ -136,7 +136,28 @@ fn read_raw(path: &Path) -> Result<Metadata, MetadataError> {
             m.fill_from(&exif);
         }
     }
+    if m.date.is_none() {
+        m.date = exif_date(path);
+    }
     Ok(m)
+}
+
+/// Date de prise de vue (`DateTimeOriginal`, sinon `DateTimeDigitized`) lue dans l'EXIF
+/// du fichier lui-même, « AAAA-MM-JJ HH:MM:SS » : pour un RAW dont LibRaw n'a pas la date
+/// (26/11/2026 : des DNG de 2021, date lue par XnView, absente pour LibRaw ; un DNG est un
+/// TIFF, son EXIF se lit directement). `None` : pas d'EXIF lisible ou pas de date.
+pub fn exif_date(path: &Path) -> Option<String> {
+    let file = fs::File::open(path).ok()?;
+    let exif = exif::Reader::new()
+        .read_from_container(&mut BufReader::new(file))
+        .ok()?;
+    let date =
+        ascii(&exif, Tag::DateTimeOriginal).or_else(|| ascii(&exif, Tag::DateTimeDigitized))?;
+    Some(
+        date.char_indices()
+            .map(|(i, c)| if c == ':' && i < 10 { '-' } else { c })
+            .collect(),
+    )
 }
 
 fn read_flat(path: &Path) -> Metadata {
@@ -513,6 +534,20 @@ fn decimal_text(value: f64, decimals: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_shooting_date_is_read_from_the_file_exif() {
+        let fixture = Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/exif.jpg"
+        ));
+        assert_eq!(exif_date(fixture).as_deref(), Some("2026-10-16 14:32:05"));
+        assert_eq!(
+            crate::similarity::parse_time("2026-10-16 14:32:05"),
+            crate::similarity::parse_time("2026:10:16 14:32:05")
+        );
+        assert_eq!(exif_date(Path::new("/nonexistent.dng")), None);
+    }
 
     fn sample() -> Metadata {
         Metadata {
