@@ -94,7 +94,8 @@ system one ("cold" measurements, experiments).
   looked at yet is left out; the label says how far it is ("Analysed (1,200 / 7,880
   checked)"). The analyses that count are those "on demand" for the photo (settings, or
   light mode of its folder); the engine's `Missing` and `Ready` keep `unanalysed` up to
-  date too, whatever the list. Applied before the analysis filters,
+  date too, whatever the list. An unavailable photo (folder not found, iCloud not
+  mounted, unplugged disk) is not analysed: left out, and not for the Analyse button. Applied before the analysis filters,
   which are then enabled: they judge complete photos only. A line under "Unreadable",
   shown only when analyses are missing (or when on); icon of a ticked photo
   (`marks::analysed`). On its right, centred under the reference photo of Similar, the

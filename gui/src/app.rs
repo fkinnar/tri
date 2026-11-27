@@ -12335,10 +12335,7 @@ impl TriApp {
                 .into_iter()
                 .map(|g| {
                     let (kept, out): (Vec<MediaFile>, Vec<MediaFile>) =
-                        g.into_iter().partition(|f| {
-                            self.analysed_checked.contains(&f.path)
-                                && !self.unanalysed.contains_key(&f.path)
-                        });
+                        g.into_iter().partition(|f| self.is_analysed(&f.path));
                     hidden.extend(out);
                     kept
                 })
@@ -13356,6 +13353,15 @@ impl TriApp {
         }
     }
 
+    /// Vrai si la photo `path` a ses analyses (filtre « analysées ») : regardée, rien ne
+    /// lui manque, et pas indisponible (retour du 27/11/2026 : des photos d'iCloud non
+    /// monté passaient, faute d'analyse à la demande pour elles hors du mode léger).
+    fn is_analysed(&self, path: &Path) -> bool {
+        self.analysed_checked.contains(path)
+            && !self.unanalysed.contains_key(path)
+            && self.missing_dir(path).is_none()
+    }
+
     /// Avancement des recherches du filtre « analysées » (photos du dossier regardées).
     fn analysed_progress(&self) -> Progress {
         Progress {
@@ -13443,15 +13449,18 @@ impl TriApp {
     /// Photos du filtre à qui une analyse manque (bouton du filtre « analysées ») : celles
     /// de la grille, ou, filtre allumé, celles qu'il écarte.
     fn unanalysed_in_filter(&self) -> Vec<MediaFile> {
-        if self.analysed_only {
+        // Une photo indisponible (dossier introuvable, disque débranché) ne se calcule pas.
+        let files: Vec<MediaFile> = if self.analysed_only {
             self.analysed_hidden.clone()
         } else {
-            self.files
-                .iter()
-                .filter(|f| self.unanalysed.contains_key(&f.path))
-                .cloned()
-                .collect()
-        }
+            self.files.clone()
+        };
+        files
+            .into_iter()
+            .filter(|f| {
+                self.unanalysed.contains_key(&f.path) && self.missing_dir(&f.path).is_none()
+            })
+            .collect()
     }
 
     /// Lance le calcul des analyses qui manquent aux photos du filtre, une tâche par
@@ -51914,7 +51923,7 @@ mod tests {
             &ctx,
             Action::FolderCompute(tri::compute::Kind::Sharpness),
             crate::compute_tasks::Target::Images {
-                folder: photos,
+                folder: photos.clone(),
                 files: vec![first.clone()],
             },
         );
@@ -51930,6 +51939,15 @@ mod tests {
         });
         assert_eq!(h.state().files[0].path, first.path);
         assert_eq!(h.state().unanalysed.len(), 2, "gardées hors de la liste");
+        // Son dossier indisponible (iCloud non monté, disque débranché) : écartée aussi,
+        // et pas à calculer.
+        h.state_mut().missing_dirs.insert(photos.clone(), true);
+        h.state_mut().apply_filter();
+        run_until(&mut h, |app| app.files.is_empty());
+        assert!(h.state().unanalysed_in_filter().is_empty());
+        h.state_mut().missing_dirs.clear();
+        h.state_mut().apply_filter();
+        run_until(&mut h, |app| app.files.len() == 1);
         // Le bouton « Analyser » : les deux écartées, calculées, puis reprises.
         h.run_steps(2);
         assert_eq!(h.state().unanalysed_in_filter().len(), 2);

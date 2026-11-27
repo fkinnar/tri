@@ -98,7 +98,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   dit où on en est (« Analysées (1 200 / 7 880 regardées) »). Les analyses qui comptent
   sont celles « à la demande » pour la photo (réglages, ou mode léger de son dossier) ;
   `Missing` et `Ready` du moteur tiennent aussi `unanalysed` à jour, quelle que soit la
-  liste. Appliqué avant les filtres d'analyse, qui se dégrisent alors : ils
+  liste. Une photo indisponible (dossier introuvable, iCloud non monté, disque
+  débranché) n'est pas analysée : écartée, et laissée hors du bouton Analyser. Appliqué avant les filtres d'analyse, qui se dégrisent alors : ils
   ne jugent que des photos complètes. Ligne sous « Illisibles », montrée seulement s'il
   manque des analyses (ou allumée) ; icône d'une photo cochée (`marks::analysed`). À
   droite, centré sous la photo de référence des semblables, le bouton **Analyser**
