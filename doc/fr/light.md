@@ -46,7 +46,8 @@ photos sont en mode léger, `Scheduler::set_light_for`). Les photos du NAS n'ont
 vignettes en fond, les autres gardent tout leur travail de fond. Le moteur reçoit les
 analyses des réglages et ne les lit que dans le cache pour les photos en mode léger ;
 l'interface, elle, montre leurs outils « à la demande » dès qu'une photo y est (grisés
-tant qu'il en manque). Barre d'état : la plume et « léger en partie », les dossiers au
+tant qu'il en manque ; le filtre « Analysées » les dégrise pour les photos calculées, son
+bouton Analyser calcule les autres). Barre d'état : la plume et « léger en partie », les dossiers au
 survol. Avant (retour du 26/11/2026), « Toutes les photos » n'était jamais en mode
 léger : l'ouvrir lançait tous les calculs, NAS compris.
 

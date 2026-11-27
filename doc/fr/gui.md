@@ -88,6 +88,19 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   recalculée avec succès en sort. Une photo de « Toutes les photos » dont le dossier est
   introuvable ou sur un disque débranché n'est pas illisible mais absente : pas dans ce
   filtre (retour du 26/11/2026).
+  **Analysées** (`f a`, `core.filter.analysed`, 27/11/2026 : un NAS en mode léger dans
+  « Toutes les photos » grisait les filtres d'analyse) : seulement les photos dont les
+  analyses à la demande sont dans le cache (`unanalysed`, tenu d'après les événements
+  `Missing` et `Ready`, gardé d'un refiltrage à l'autre puisque le moteur ne cherche que
+  les photos montrées). Appliqué avant les filtres d'analyse, qui se dégrisent alors : ils
+  ne jugent que des photos complètes. Ligne sous « Illisibles », montrée seulement s'il
+  manque des analyses (ou allumée) ; icône d'une photo cochée (`marks::analysed`). À
+  droite, centré sous la photo de référence des semblables, le bouton **Analyser**
+  (`core.file.compute.missing`, sans touche) : calcule en fond les analyses qui manquent
+  aux photos du filtre (celles de la grille, ou, filtre allumé, celles qu'il écarte), une
+  tâche par analyse ; grisé s'il n'y en a pas. À la fin d'un calcul, la marque de cette
+  analyse est retirée et le refiltrage reprend les photos (le cache redit aussitôt s'il en
+  manque encore).
   **Dossier regroupé** (#392, 14/11/2026) : « Photos » = paires + RAW seuls + JPEG seuls,
   chacun une ligne et une case du filtre à trois cases ; sous « Développements », aussi
   « JPEG boîtier » (le JPEG des paires) et « LibRaw ». Les développements montrent toujours deux

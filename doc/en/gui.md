@@ -85,6 +85,18 @@ system one ("cold" measurements, experiments).
   again once the thumbnails are done. An image computed again successfully leaves it. A photo of All photos whose folder is not found or
   on an unplugged disk is not unreadable but absent: not in this filter (feedback of
   2026-11-26).
+  **Analysed** (`f a`, `core.filter.analysed`, 2026-11-27: a NAS in light mode in All
+  photos greyed out the analysis filters): only the photos whose on-demand analyses are in
+  the cache (`unanalysed`, kept from the `Missing` and `Ready` events, across refilters
+  since the engine only looks at the photos shown). Applied before the analysis filters,
+  which are then enabled: they judge complete photos only. A line under "Unreadable",
+  shown only when analyses are missing (or when on); icon of a ticked photo
+  (`marks::analysed`). On its right, centred under the reference photo of Similar, the
+  **Analyse** button (`core.file.compute.missing`, no key): computes in the background the
+  analyses missing from the filter's photos (those of the grid or, filter on, those it
+  leaves out), one task per analysis; greyed out when there are none. At the end of a
+  computation, that analysis's mark is removed and the refilter takes the photos back
+  (the cache says at once if some are still missing).
   **Grouped folder** (#392, 2026-11-14): "Photos" = pairs + RAW alone +
   JPEG alone, each a line and a box of the three-way filter; under "Developments", also
   "Camera JPEG" (the pairs' JPEG) and "LibRaw". Developments always show two counts, "photos

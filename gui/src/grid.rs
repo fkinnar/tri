@@ -109,6 +109,7 @@ pub fn navigate(
         | Action::FilterDeveloped
         | Action::FilterConflicts
         | Action::FilterUnreadable
+        | Action::FilterAnalysed
         | Action::FilterPalette
         | Action::FilterPaletteColour
         | Action::AllPhotos
@@ -199,6 +200,7 @@ pub fn navigate(
         | Action::ImportNotes
         | Action::Compute(_)
         | Action::ComputeAll
+        | Action::ComputeMissing
         | Action::RecreateAll
         | Action::ZoomIn
         | Action::ZoomOut
