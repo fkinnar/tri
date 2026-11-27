@@ -948,8 +948,9 @@ enabled = true
 max_kb = 1024
 # Anciens fichiers gardés (tri.1.log, tri.2.log…) ; 0 : aucun.
 keep = 3
-# Trace détaillée (étapes du chargement des images, images lentes) aussi au journal :
-# pour reproduire un problème à la demande. Volumineux, à couper ensuite.
+# Trace détaillée (étapes du chargement des images, images lentes, lecture des notes)
+# aussi au journal : pour reproduire un problème à la demande. Volumineux, à couper
+# ensuite.
 trace = false
 
 [adjust]

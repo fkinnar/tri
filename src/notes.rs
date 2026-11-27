@@ -242,13 +242,21 @@ impl ReadCache {
         cache
     }
 
-    /// Une ligne au journal sur ce que le cache a donné pour `count` images.
+    /// Une ligne à la trace du journal (`[log] trace`) sur ce que le cache a donné pour
+    /// `count` images.
     fn report(&self, count: usize, written: &Option<String>) {
         let Some((data, dir)) = &self.path else {
             return;
         };
+        // Bilan de diagnostic (lenteurs sur un partage, 26/11/2026) : à la trace
+        // détaillée seulement (`[log] trace`), une entrée par dossier lu encombrerait le
+        // journal (« Toutes les photos » en lit beaucoup).
+        if !crate::log::tracing() {
+            return;
+        }
         let s = &self.stats;
-        crate::log::info(
+        crate::log::write(
+            crate::log::Level::Trace,
             "notes",
             &format!(
                 "{}: {count} images, {} from the read cache, {} read again",

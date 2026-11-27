@@ -65,7 +65,7 @@ n'y est ouvert de toute façon). Les images disparues quittent le cache quand to
 dossier est relu.
 
 **Montrées d'abord, vérifiées ensuite** (bilan du 26/11/2026 au journal, `notes:` après
-chaque lecture d'un dossier : sur un partage SMB par GVFS, 2 820 notes reprises du cache
+chaque lecture d'un dossier, avec `[log] trace = true` : sur un partage SMB par GVFS, 2 820 notes reprises du cache
 mais 792 s de relevés de date et de taille, en concurrence avec les vignettes). À
 l'ouverture, `NoteBook::from_read_cache` donne aussitôt les notes gardées, sans rien
 vérifier ni ouvrir ; l'interface les montre (`seed`, sans écraser une image notée
