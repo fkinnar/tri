@@ -5,7 +5,7 @@
 //! tourner le vrai producteur sur un RAW et une image plate.
 
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use tri::cache::Level;
 use tri::media::{MediaFile, MediaKind};
 use tri::scheduler::{
-    Analysis, Config, Event, Failure, Producer, Progress, RawPreviews, Scheduler,
+    Analysis, Config, Event, Failure, Light, Producer, Progress, RawPreviews, Scheduler,
 };
 
 const LONG: Duration = Duration::from_secs(10);
@@ -536,6 +536,68 @@ fn light_mode_computes_only_thumbnails_and_the_previews_of_what_is_shown() {
     scheduler.set_folder(files(3, MediaKind::Raw));
     assert!(scheduler.wait_idle(LONG));
     assert_eq!(scheduler.progress(Level::Embedded), complete(3));
+}
+
+#[test]
+fn light_mode_per_photo_leaves_the_other_folders_their_background_work() {
+    // #616 : « Toutes les photos » mêle un NAS en mode léger et des dossiers ordinaires.
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let (scheduler, events) = start_with(
+        &fake,
+        Config {
+            light_workers: 2,
+            thumbnails_first: false,
+            raw_previews: RawPreviews::OnDemand,
+            exposure: Analysis::Background,
+            sharpness: Analysis::Off,
+            similarity: Analysis::Off,
+            palettes: Analysis::Off,
+            palette: None,
+        },
+    );
+    let in_dir = |dir: &str, n: usize| -> Vec<MediaFile> {
+        (0..n)
+            .map(|i| MediaFile {
+                path: Path::new(dir).join(format!("img{i}.RAF")),
+                kind: MediaKind::Raw,
+            })
+            .collect()
+    };
+    let mut all = in_dir("nas", 3);
+    all.extend(in_dir("local", 2));
+    scheduler.set_light_for(Light::Folders(HashSet::from([PathBuf::from("nas")])));
+    let generation = scheduler.set_folder(all);
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(scheduler.progress(Level::Thumbnail), complete(5));
+    let sorted = |level| {
+        let mut v = fake.order(level);
+        v.sort();
+        v
+    };
+    let name = |dir: &str, file: &str| Path::new(dir).join(file).to_string_lossy().into_owned();
+    let local = [name("local", "img0.RAF"), name("local", "img1.RAF")];
+    assert_eq!(
+        sorted(Level::Embedded),
+        local,
+        "aperçus en fond hors du NAS"
+    );
+    assert_eq!(
+        sorted(Level::Exposure),
+        local,
+        "analyses en fond hors du NAS"
+    );
+
+    // Une photo du NAS affichée : son aperçu demandé, ses analyses pas en fond.
+    scheduler.set_focus(1);
+    assert!(scheduler.wait_idle(LONG));
+    assert!(ready(&events, generation, Level::Embedded).contains(&1));
+    assert_eq!(sorted(Level::Exposure), local);
+    scheduler.request_all(1);
+    assert!(scheduler.wait_idle(LONG));
+    assert!(
+        fake.order(Level::Exposure)
+            .contains(&name("nas", "img1.RAF"))
+    );
 }
 
 #[test]

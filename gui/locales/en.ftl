@@ -786,6 +786,9 @@ view-hint-flat = <core.view.zoom>: 1:1   <core.view.histogram>: histogram   <cor
 status-no-folder = no folder
 status-light = light
 status-light-tip = Light mode, from { $root }: only thumbnails are computed in the background. An opened image gets its whole cache; "Compute all" on right-click for a folder or a selection.
+status-light-some = partly light
+status-light-some-tip = Light mode for the photos of these folders: only their thumbnails are computed in the background, an opened image gets its whole cache. The other photos keep their usual computations.
+    { $folders }
 status-images = { $n ->
     [one] { $n } image
    *[other] { $n } images

@@ -1480,6 +1480,9 @@ pub struct TriApp {
     /// Racine du mode léger du dossier ouvert (#597) : le dossier choisi ou l'emplacement
     /// réseau ; `None` hors du mode léger.
     light_root: Option<PathBuf>,
+    /// « Toutes les photos » (#616) : les dossiers dont les photos sont en mode léger
+    /// (photo par photo) ; vide ailleurs, où [`TriApp::light_root`] vaut pour tout.
+    light_under: HashSet<PathBuf>,
     /// Dernière image dont tout le cache a été demandé en mode léger (plein écran).
     light_requested: Option<PathBuf>,
     engine: Option<Engine>,
@@ -2481,7 +2484,7 @@ impl TriApp {
         // Mode léger (#597) : le dossier ouvert relu s'il entre ou sort.
         if new.light != self.settings.light {
             self.settings.light = new.light.clone();
-            if self.light_root_of(&self.folder.dir) != self.light_root
+            if self.light_state() != (self.light_root.clone(), self.light_under.clone())
                 && !self.folder.dir.as_os_str().is_empty()
             {
                 self.reload_folder(None);
@@ -2493,7 +2496,7 @@ impl TriApp {
             self.settings.sharpness.background = None;
             self.settings.similarity.background = None;
             if let Some(engine) = &self.engine {
-                engine.scheduler.set_analyses(self.analyses());
+                engine.scheduler.set_analyses(self.settings.analysis());
             }
             crate::actions::set_removed_tools(&self.settings.analysis());
             self.help_lines = None;
@@ -2896,6 +2899,7 @@ impl TriApp {
             progress: [Progress::default(); 7],
             analysis_missing: [0; 7],
             light_root: None,
+            light_under: HashSet::new(),
             light_requested: None,
             engine: None,
             neighbourhood: Default::default(),
@@ -3920,10 +3924,51 @@ impl TriApp {
             .root_of(path, self.network_root(path).as_deref())
     }
 
-    /// Analyses du dossier ouvert : celles des réglages, à la demande en mode léger.
+    /// Mode léger du dossier ouvert : sa racine (tout le dossier), ou, dans « Toutes les
+    /// photos » (#616), les dossiers de ses photos qui y sont.
+    fn light_state(&self) -> (Option<PathBuf>, HashSet<PathBuf>) {
+        if !tri::folder::is_all_photos(&self.folder.dir) {
+            return (self.light_root_of(&self.folder.dir), HashSet::new());
+        }
+        let dirs: HashSet<&Path> = self
+            .folder
+            .files
+            .iter()
+            .filter_map(|f| f.path.parent())
+            .collect();
+        let light = dirs
+            .into_iter()
+            .filter(|dir| self.light_root_of(dir).is_some())
+            .map(Path::to_path_buf)
+            .collect();
+        (None, light)
+    }
+
+    /// Vrai si la photo `path` est en mode léger (#597, photo par photo #616).
+    fn is_light_photo(&self, path: &Path) -> bool {
+        self.light_root.is_some() || path.parent().is_some_and(|d| self.light_under.contains(d))
+    }
+
+    /// Vrai si une photo au moins du dossier ouvert est en mode léger.
+    fn any_light(&self) -> bool {
+        self.light_root.is_some() || !self.light_under.is_empty()
+    }
+
+    /// Mode léger pour le moteur : tout le dossier, ou photo par photo.
+    fn light_for_engine(&self) -> tri::scheduler::Light {
+        if self.light_root.is_some() {
+            tri::scheduler::Light::All
+        } else {
+            tri::scheduler::Light::Folders(self.light_under.clone())
+        }
+    }
+
+    /// Analyses du dossier ouvert, pour l'interface : celles des réglages, à la demande en
+    /// mode léger (dès qu'une photo y est : ses outils restent grisés tant qu'il en
+    /// manque). Le moteur, lui, prend les réglages et décide photo par photo.
     fn analyses(&self) -> tri::scheduler::Analyses {
         let analyses = self.settings.analysis();
-        if self.light_root.is_some() {
+        if self.any_light() {
             tri::light::lighten(analyses)
         } else {
             analyses
@@ -3974,7 +4019,7 @@ impl TriApp {
             },
             false,
         ));
-        if self.light_root_of(&self.folder.dir) != self.light_root
+        if self.light_state() != (self.light_root.clone(), self.light_under.clone())
             && !self.folder.dir.as_os_str().is_empty()
         {
             self.reload_folder(None);
@@ -12261,18 +12306,13 @@ impl TriApp {
         self.grid_levels.clear();
         self.grid_found.clear();
         self.grid_looked.clear();
-        // Mode léger (#597) : seulement les vignettes en fond, les analyses à la demande.
-        // Le moteur n'est prévenu qu'à l'entrée ou à la sortie du mode léger.
-        let was_light = self.light_root.is_some();
-        self.light_root = self.light_root_of(&self.folder.dir);
+        // Mode léger (#597) : seulement les vignettes en fond, les analyses à la demande ;
+        // dans « Toutes les photos », photo par photo (#616).
+        (self.light_root, self.light_under) = self.light_state();
         self.light_requested = None;
-        let light = self.light_root.is_some();
-        let analyses = self.analyses();
+        let light = self.light_for_engine();
         if let Some(engine) = &mut self.engine {
-            if light != was_light {
-                engine.scheduler.set_light(light);
-                engine.scheduler.set_analyses(analyses);
-            }
+            engine.scheduler.set_light_for(light);
             engine.generation = engine.scheduler.set_folder(self.files.clone());
             // Nouvelle liste : les vignettes visibles sont à redire.
             self.visible_sent = None;
@@ -12989,15 +13029,13 @@ impl TriApp {
         }
     }
 
-    /// Dates de prise de vue à lire avant de trier par date, en mode léger seulement (sur
-    /// un disque rapide, la lecture ne se remarque pas) ; 0 sinon.
+    /// Dates de prise de vue à lire avant de trier par date, celles des photos en mode
+    /// léger seulement (sur un disque rapide, la lecture ne se remarque pas).
     fn capture_times_to_read(&self) -> usize {
-        if self.light_root.is_none() {
-            return 0;
-        }
         self.folder
             .files
             .iter()
+            .filter(|f| self.is_light_photo(&f.path))
             .filter(|f| needs_capture_time(f, &self.signatures, &self.captured))
             .count()
     }
@@ -16711,10 +16749,11 @@ impl TriApp {
     /// Mode léger (#597) : une image ouverte en plein écran a tout son cache (aperçus et
     /// analyses), demandé une fois par image.
     fn request_light(&mut self) {
-        if self.light_root.is_none() || self.mode != Mode::View {
+        if !self.any_light() || self.mode != Mode::View {
             return;
         }
         if let Some(file) = self.files.get(self.selected)
+            && self.is_light_photo(&file.path)
             && self.light_requested.as_ref() != Some(&file.path)
             && let Some(engine) = &self.engine
         {
@@ -22250,11 +22289,30 @@ impl TriApp {
                 folder_name(&self.folder.dir)
             });
             // Mode léger (#597) : la plume et le mot, d'où il vient au survol.
-            if let Some(root) = &self.light_root {
+            // « Toutes les photos » (#616) : « en partie », les dossiers concernés au survol.
+            let light_tip = match &self.light_root {
+                Some(root) => Some((
+                    t!("status-light"),
+                    t!("status-light-tip", root = root.display().to_string()),
+                )),
+                None if !self.light_under.is_empty() => {
+                    let mut dirs: Vec<String> = self
+                        .light_under
+                        .iter()
+                        .map(|d| d.display().to_string())
+                        .collect();
+                    dirs.sort();
+                    Some((
+                        t!("status-light-some"),
+                        t!("status-light-some-tip", folders = dirs.join("\n")),
+                    ))
+                }
+                None => None,
+            };
+            if let Some((label, tip)) = light_tip {
                 let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
                 marks::feather(ui.painter(), rect, ui.visuals().weak_text_color(), false);
-                ui.weak(t!("status-light"))
-                    .on_hover_text(t!("status-light-tip", root = root.display().to_string()));
+                ui.weak(label).on_hover_text(tip);
             }
             ui.separator();
             ui.label(t!(
@@ -37113,6 +37171,60 @@ mod tests {
             app.light_root.is_none() && app.progress[2].total == 3
         });
         assert!(!std::fs::read_to_string(&config).unwrap().contains("photos"));
+    }
+
+    #[test]
+    fn all_photos_keeps_light_mode_photo_by_photo() {
+        // #616 : « Toutes les photos » mêle un dossier en mode léger (un NAS) et un
+        // dossier ordinaire : les aperçus en fond pour le second seulement.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let nas = dir.path().join("nas");
+        std::fs::create_dir_all(&nas).unwrap();
+        let mut seen: Vec<(PathBuf, u64, u128)> = Vec::new();
+        for f in tri::media::scan(&photos, 1).unwrap() {
+            let copy = nas.join(f.path.file_name().unwrap());
+            std::fs::copy(&f.path, &copy).unwrap();
+            seen.push((f.path, 1, 1));
+        }
+        {
+            let db = dir.path().join("data").join("index.sqlite");
+            let mut index = tri::index::Index::open(&db).unwrap();
+            index.seen(&photos, 1, &seen).unwrap();
+            let copies: Vec<(PathBuf, u64, u128)> = seen
+                .iter()
+                .map(|(p, _, _)| (nas.join(p.file_name().unwrap()), 1, 1))
+                .collect();
+            index.seen(&nas, 1, &copies).unwrap();
+        }
+        h.state_mut().settings.light.folders = vec![nas.to_string_lossy().into_owned()];
+        press(&mut h, Key::G, Modifiers::NONE);
+        press(&mut h, Key::A, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            tri::folder::is_all_photos(&app.folder.dir)
+                && app.opening.is_none()
+                && app.folder.files.len() == 6
+                && app.progress[0].done == 6
+                && app.progress[2].done == app.progress[2].total
+        });
+        let app = h.state();
+        assert!(app.light_root.is_none());
+        assert_eq!(app.light_under, HashSet::from([nas.clone()]));
+        assert_eq!(app.progress[0].total, 6, "toutes les vignettes");
+        assert_eq!(
+            app.progress[2].total, 3,
+            "aperçus en fond hors du NAS seulement"
+        );
+        assert!(app.is_light_photo(&nas.join("x.jpg")));
+        assert!(!app.is_light_photo(&photos.join("x.jpg")));
+        assert_eq!(
+            app.analyses().exposure,
+            tri::scheduler::Analysis::OnDemand,
+            "outils grisés tant que les photos du NAS manquent"
+        );
+        h.run_steps(2);
+        h.get_by_label(&t!("status-light-some"));
     }
 
     #[test]
