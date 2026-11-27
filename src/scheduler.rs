@@ -565,6 +565,30 @@ struct State {
     outbox: VecDeque<Event>,
     /// Vrai pendant un appel au callback.
     in_callback: bool,
+    /// Ce qu'on sait déjà dans le cache, d'une liste à l'autre (#621) : par photo et
+    /// niveau, le relevé (taille, date) du fichier quand on l'a su. Un refiltrage redit
+    /// aussitôt ces tâches prêtes, sans regarder le disque, tant que le relevé retenu par
+    /// [`crate::cache::stamp`] est le même (il est oublié quand le fichier change) et que
+    /// rien n'a été retiré du cache depuis ([`crate::cache::removals`]).
+    known: HashMap<(PathBuf, Level), (u64, u128)>,
+    /// [`crate::cache::removals`] quand `known` a été rempli.
+    known_removals: u64,
+}
+
+/// Niveaux dont on retient qu'ils sont dans le cache (#621) : ceux du travail de fond qui
+/// ne dépendent que du fichier lui-même (pas d'un sidecar : développés, leurs palettes ;
+/// pas les 1:1, évincés par taille).
+fn rememberable(level: Level) -> bool {
+    match level {
+        Level::Thumbnail
+        | Level::Embedded
+        | Level::Standard
+        | Level::Exposure
+        | Level::Sharpness
+        | Level::Similarity => true,
+        Level::Palette(source) => !matches!(source, crate::palette::Source::Developed(_)),
+        Level::EmbeddedFull | Level::Full | Level::Developed(_) => false,
+    }
 }
 
 impl State {
@@ -797,6 +821,29 @@ impl Scheduler {
             }
         }
         s.running = running;
+        // Déjà su dans le cache (#621) : prêtes tout de suite, sans revérifier le disque
+        // (vidéo du 27/11/2026 : cocher un filtre relançait toutes les vérifications de
+        // 6 737 photos d'un NAS). Un retrait du cache depuis : tout est à revérifier.
+        let removals = crate::cache::removals();
+        if removals != s.known_removals {
+            s.known.clear();
+            s.known_removals = removals;
+        }
+        let mut replayed: Vec<Job> = s
+            .pending
+            .iter()
+            .filter(|&&(i, level)| {
+                let path = &files[i].path;
+                s.known
+                    .get(&(path.clone(), level))
+                    .is_some_and(|&stamp| crate::cache::known_stamp(path) == Some(Some(stamp)))
+            })
+            .copied()
+            .collect();
+        replayed.sort_by_key(|job| job.0);
+        for job in &replayed {
+            s.pending.remove(job);
+        }
         let total = |level: Level| {
             files
                 .iter()
@@ -811,10 +858,36 @@ impl Scheduler {
             done: 0,
             total: total(l),
         });
-        s.files = files;
         let generation = s.generation;
+        for &(index, level) in &replayed {
+            if let Some(i) = tracked_slot(level) {
+                s.progress[i].done += 1;
+            }
+            s.outbox.push_back(Event::Ready {
+                generation,
+                index,
+                path: files[index].path.clone(),
+                level,
+            });
+        }
+        if !replayed.is_empty() {
+            for (i, &level) in TRACKED.iter().enumerate() {
+                if s.progress[i].total > 0 {
+                    let progress = s.progress[i];
+                    s.outbox.push_back(Event::Progress {
+                        generation,
+                        level,
+                        progress,
+                    });
+                }
+            }
+        }
+        s.files = files;
         drop(s);
         self.shared.work.notify_all();
+        if !replayed.is_empty() {
+            deliver(&self.shared);
+        }
         generation
     }
 
@@ -1312,6 +1385,12 @@ fn finish(
         crate::index::note_signature(&file);
     }
     let path = file.path;
+    if result.is_ok()
+        && rememberable(level)
+        && let Some(Some(stamp)) = crate::cache::known_stamp(&path)
+    {
+        s.known.insert((path.clone(), level), stamp);
+    }
     let on_demand = s.on_demand.remove(&(index, level));
     let mut events = match result {
         Ok(()) => vec![Event::Ready {

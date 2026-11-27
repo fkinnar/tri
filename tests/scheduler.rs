@@ -601,6 +601,54 @@ fn light_mode_per_photo_leaves_the_other_folders_their_background_work() {
 }
 
 #[test]
+fn a_new_list_says_at_once_what_is_already_known_in_the_cache() {
+    // #621 (vidéo du 27/11/2026) : chaque filtre relançait la vérification de tout le
+    // cache, photo par photo, sur un NAS. Ce qui est su prêt l'est aussitôt, sans rien
+    // recalculer ni revérifier, tant que le fichier n'a pas changé.
+    let dir = tempfile::tempdir().unwrap();
+    let all: Vec<MediaFile> = (0..4)
+        .map(|i| {
+            let path = dir.path().join(format!("img{i}.JPG"));
+            std::fs::write(&path, format!("photo {i}")).unwrap();
+            assert!(tri::cache::stamp(&path).is_some(), "relevé retenu");
+            MediaFile {
+                path,
+                kind: MediaKind::Flat,
+            }
+        })
+        .collect();
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let (scheduler, events) = start(&fake, 2);
+    scheduler.set_folder(all.clone());
+    assert!(scheduler.wait_idle(LONG));
+    let first = fake.log().len();
+    assert_eq!(first, 8, "vignette et aperçu de 4 images");
+
+    // Une autre liste (un filtre), puis la même : rien n'est refait.
+    scheduler.set_folder(all[..2].to_vec());
+    let generation = scheduler.set_folder(all.clone());
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(fake.log().len(), first, "rien de recalculé");
+    let mut ready = ready(&events, generation, Level::Thumbnail);
+    ready.sort();
+    assert_eq!(ready, [0, 1, 2, 3], "redites prêtes");
+    assert_eq!(scheduler.progress(Level::Thumbnail), complete(4));
+
+    // Un fichier changé (relevé oublié) : le sien est revérifié.
+    tri::cache::forget_stamps([all[1].path.as_path()]);
+    scheduler.set_folder(all.clone());
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(fake.log().len(), first + 2, "img1 seule, ses deux niveaux");
+
+    // Un retrait du cache (vidage) : tout est revérifié.
+    let cache = tri::cache::Cache::open(dir.path().join("cache")).unwrap();
+    cache.clear(None).unwrap();
+    scheduler.set_folder(all.clone());
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(fake.log().len(), first + 2 + 8, "tout revérifié");
+}
+
+#[test]
 fn an_image_opened_in_light_mode_gets_its_whole_cache() {
     let fake = Fake::with_delay(Duration::from_millis(1));
     let (scheduler, _events) = start_with(
