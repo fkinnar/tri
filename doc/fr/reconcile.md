@@ -98,7 +98,9 @@ sources et leurs notes.
 
 - Filtre « En conflit » (`f c`, `core.filter.conflicts`) dans la section Filtres du
   panneau de droite, sous les autres (filtre secondaire : pas dans la barre du haut),
-  seulement quand il y a des conflits (`notes::ConflictFilter`).
+  seulement quand une photo du dossier est en conflit (`notes::ConflictFilter`). Une
+  paire RAW+JPEG regroupée dont le JPEG est en conflit est gardée entière (retour du
+  27/11/2026 : la grille restait vide, le JPEG seul se rangeait sous son RAF écarté).
 - Le triangle et les icônes d'écrêtage de la vignette sont sur une rangée, centrés sur
   la hauteur des marques d'en face.
 

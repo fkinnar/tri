@@ -93,7 +93,9 @@ their ratings.
 
 - "In conflict" filter (`f c`, `core.filter.conflicts`) in the Filters section of the
   right panel, below the others (a secondary filter: not in the top bar), only when
-  there are conflicts (`notes::ConflictFilter`).
+  a photo of the folder is in conflict (`notes::ConflictFilter`). A grouped RAW+JPEG
+  pair whose JPEG is in conflict is kept whole (feedback of 2026-11-27: the grid stayed
+  empty, the JPEG alone went under its RAW, left out).
 - The thumbnail's triangle and clipping icons are on one row, centred on the height of
   the marks opposite.
 
