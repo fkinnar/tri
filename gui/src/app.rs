@@ -5073,9 +5073,10 @@ impl TriApp {
     /// 07/11/2026 ; le suivre demanderait un histogramme RAW recalculé sur la zone).
     fn side_panel_pinned(&mut self, ui: &mut Ui) {
         self.meta_has_histogram = false;
-        // Une recherche de palettes sans résultat garde le haut du panneau tel quel
-        // (retour du 21/11/2026 : l'histogramme et la position partaient, tout remontait).
-        let kept = !self.files.is_empty() || self.palette_searching();
+        // Une recherche ou un filtre sans résultat garde le haut du panneau tel quel
+        // (retours du 21/11/2026 et du 27/11/2026 : l'histogramme et la position
+        // partaient, tout remontait) : leur place, vide. Seul un dossier vide n'en a pas.
+        let kept = !self.folder.files.is_empty() || self.palette_searching();
         // Exposition retirée dans les réglages (#564) : pas d'histogramme.
         if self.gui.metadata.histogram
             && self.histogram
@@ -8365,6 +8366,15 @@ impl TriApp {
     /// l'image. Un clic l'ouvre en grand.
     fn histogram_section(&mut self, ui: &mut Ui) {
         let settings = self.gui.metadata;
+        // Filtre sans résultat : la place de l'histogramme, vide (pas celui d'une image
+        // qui n'est plus montrée).
+        if self.files.is_empty() {
+            ui.allocate_exact_size(
+                vec2(ui.available_width(), settings.histogram_height),
+                Sense::hover(),
+            );
+            return;
+        }
         let current = self.shown_exposure(self.selected).map(|(e, real)| {
             let camera = self.camera_exposure_of(self.selected);
             (e, real, camera)
@@ -22245,9 +22255,16 @@ impl TriApp {
 
     /// Vrai si la case `slot` de `progress` est une analyse à la demande (#564, mode
     /// léger #597) : rien n'y est calculé, le moteur cherche seulement dans le cache.
+    /// « Toutes les photos » léger en partie (#616) : les photos hors du mode léger ont
+    /// leur calcul en fond, une vraie tâche (retour du 27/11/2026 : le PC chauffait, la
+    /// barre d'état ne montrait rien).
     fn analysis_on_demand(&self, slot: usize) -> bool {
         use crate::actions::Tool;
-        let analyses = self.analyses();
+        let analyses = if self.light_root.is_some() {
+            tri::light::lighten(self.settings.analysis())
+        } else {
+            self.settings.analysis()
+        };
         [
             Tool::Exposure,
             Tool::Sharpness,
@@ -37600,6 +37617,10 @@ mod tests {
             tri::scheduler::Analysis::OnDemand,
             "outils grisés tant que les photos du NAS manquent"
         );
+        assert!(
+            !app.analysis_on_demand(3),
+            "les photos locales calculent en fond : une tâche montrée"
+        );
         h.run_steps(2);
         h.get_by_label(&t!("status-light-some"));
     }
@@ -52089,6 +52110,30 @@ mod tests {
         run_until(&mut h, |app| {
             app.files.len() == 8 && (0..app.files.len()).all(|i| app.ready(i, Level::Thumbnail))
         });
+    }
+
+    #[test]
+    fn a_filter_without_result_keeps_the_top_of_the_right_panel() {
+        // Vidéo du 27/11/2026 : « Développées », « En conflit » sans résultat, et
+        // l'histogramme et la position partaient (tout le panneau remontait).
+        let (mut h, _dir) = harness();
+        h.state_mut().metadata_panel = true;
+        h.set_size(vec2(1400.0, 1400.0));
+        h.run_steps(3);
+        let colour = t!("palette-colour");
+        let before = h.query_by_label(&colour).map(|n| n.rect().top());
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::FilterConflicts);
+        h.run_steps(3);
+        assert!(h.state().files.is_empty(), "aucune note en conflit");
+        for title in ["panel-section-histogram", "panel-section-position"] {
+            let title = t!(title).to_uppercase();
+            assert!(h.query_by_label(&title).is_some(), "{title} gardé");
+        }
+        let after = h.query_by_label(&colour).map(|n| n.rect().top());
+        if let (Some(before), Some(after)) = (before, after) {
+            assert!((before - after).abs() < 1.0, "de {before} à {after}");
+        }
     }
 
     #[test]
