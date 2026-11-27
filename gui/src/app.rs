@@ -14699,6 +14699,32 @@ impl TriApp {
             let Ok(event) = engine.events.try_recv() else {
                 break;
             };
+            // Filtre « analysées » : ce que le cache a (ou n'a pas) pour une photo vaut
+            // quelle que soit la liste (retour du 27/11/2026 : un refiltrage pendant les
+            // recherches jetait celles de l'ancienne, et ces photos restaient montrées).
+            match &event {
+                Event::Ready { path, level, .. } => {
+                    if let Some(i) = tracked(*level).filter(|&i| i >= 3)
+                        && let Some(bits) = self.unanalysed.get_mut(path)
+                    {
+                        *bits &= !(1 << i);
+                        if *bits == 0 {
+                            self.unanalysed.remove(path);
+                            self.analysed_refilter_pending |= self.analysed_only;
+                        }
+                    }
+                }
+                Event::Missing { path, level, .. } => {
+                    if let Some(i) = tracked(*level) {
+                        let bits = self.unanalysed.entry(path.clone()).or_insert(0);
+                        if *bits == 0 {
+                            self.analysed_refilter_pending |= self.analysed_only;
+                        }
+                        *bits |= 1 << i;
+                    }
+                }
+                _ => {}
+            }
             match event {
                 Event::Ready {
                     generation: g,
@@ -14717,16 +14743,6 @@ impl TriApp {
                         }
                         self.missing.remove(&(f.path.clone(), level));
                         self.requested.remove(&(f.path.clone(), level));
-                        // Analyse arrivée (calculée, ou trouvée dans le cache).
-                        if let Some(i) = tracked(level).filter(|&i| i >= 3)
-                            && let Some(bits) = self.unanalysed.get_mut(&f.path)
-                        {
-                            *bits &= !(1 << i);
-                            if *bits == 0 {
-                                self.unanalysed.remove(&f.path);
-                                self.analysed_refilter_pending |= self.analysed_only;
-                            }
-                        }
                     }
                     if level == Level::Sharpness {
                         scored.push(index);
@@ -14789,16 +14805,10 @@ impl TriApp {
                 Event::Missing {
                     generation: g,
                     level,
-                    path,
                     ..
                 } if g == generation => {
                     if let Some(i) = tracked(level) {
                         self.analysis_missing[i] += 1;
-                        let bits = self.unanalysed.entry(path).or_insert(0);
-                        if *bits == 0 {
-                            self.analysed_refilter_pending |= self.analysed_only;
-                        }
-                        *bits |= 1 << i;
                     }
                 }
                 Event::Dropped {
@@ -35209,7 +35219,9 @@ mod tests {
             .collect();
         let (mut h, _dir) = harness_images(images);
         h.state_mut().metadata_panel = true;
-        h.set_size(vec2(1400.0, 1400.0));
+        // Assez haute pour la bande de palette sous la ligne « Analysées » (palettes à la
+        // demande : la ligne est là).
+        h.set_size(vec2(1400.0, 1600.0));
         h.run_steps(3);
         choose_palette(&mut h, Some(SourceKind::Camera));
         run_until(&mut h, |app| {
@@ -51791,6 +51803,32 @@ mod tests {
         run_until(&mut h, |app| !app.analysed_only && app.files.len() == 3);
         h.run_steps(2);
         assert!(h.query_by_label(&t!("filter-analysed")).is_none());
+    }
+
+    #[test]
+    fn the_analysed_filter_turned_on_early_still_hides_the_photos_found_missing() {
+        // Retour du 27/11/2026 : allumé avant la fin des recherches dans le cache, le filtre
+        // laissait des photos non analysées.
+        use tri::scheduler::Analysis;
+        let images = (0..6)
+            .map(|i| {
+                let name = ["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg", "f.jpg"][i];
+                let pixel = image::Rgb([(40 * i) as u8, 100, 160]);
+                (name, image::RgbImage::from_pixel(32, 24, pixel))
+            })
+            .collect();
+        let (mut h, _dir) = harness_tuned(images, |s, _| {
+            s.analysis.sharpness = Analysis::OnDemand;
+        });
+        // Allumé tout de suite, et la liste refaite pendant les recherches (chaque refiltrage
+        // relance le moteur sur une nouvelle liste) : rien d'une liste précédente ne se perd.
+        h.state_mut().analysed_only = true;
+        for _ in 0..5 {
+            h.state_mut().apply_filter();
+            h.run_steps(1);
+        }
+        run_until(&mut h, |app| app.files.is_empty());
+        assert_eq!(h.state().unanalysed.len(), 6);
     }
 
     #[test]
