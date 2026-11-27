@@ -13500,14 +13500,19 @@ impl TriApp {
         }
     }
 
-    /// Filtre « analysées » allumé : refiltré quand les recherches dans le cache des
-    /// analyses à la demande sont passées (pas à chaque photo).
+    /// Filtre « analysées » allumé : refiltré quand le cache de toutes les photos du dossier
+    /// a été regardé (pas à chaque photo).
     fn analysed_refilter(&mut self) {
         self.request_analysed_checks();
-        if self.analysed_refilter_pending
-            && self.mode == Mode::Grid
-            && self.analysis_refilter_due(self.analysed_progress())
-        {
+        // Une fois le cache regardé pour tout le dossier seulement (vidéo du 27/11/2026 :
+        // refiltrer toutes les 5 s pendant les recherches relançait le moteur sur chaque
+        // nouvelle liste, les vignettes revenaient une à une et la barre d'état n'affichait
+        // plus rien). Le libellé du filtre dit où en sont les recherches.
+        if !self.analysed_refilter_pending || self.mode != Mode::Grid {
+            return;
+        }
+        let checked = self.analysed_progress();
+        if checked.done >= checked.total {
             self.analysed_refilter_pending = false;
             if self.analysed_only {
                 self.refilter(Reveal::Minimal);

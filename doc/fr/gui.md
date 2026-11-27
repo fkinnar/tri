@@ -94,8 +94,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   chaque photo du dossier (`analysed_reads`, autant de fils que de workers légers) : le
   moteur ne le fait que pour les photos montrées, et après les vignettes (retour du
   27/11/2026 : sur un NAS de 6 000 photos, presque aucune n'était encore regardée, donc
-  toutes passaient pour analysées). Une photo pas encore regardée est écartée ; le libellé
-  dit où on en est (« Analysées (1 200 / 7 880 regardées) »). Les analyses qui comptent
+  toutes passaient pour analysées). Une photo pas encore regardée est écartée ; la grille n'est
+  refiltrée qu'une fois tout le dossier regardé (vidéo du 27/11/2026 : refiltrer toutes
+  les 5 s relançait le moteur sur chaque liste, vignettes revenues une à une, barre d'état
+  vide) ; en attendant, le libellé dit où on en est (« Analysées (1 200 / 7 880
+  regardées) »). Les analyses qui comptent
   sont celles « à la demande » pour la photo (réglages, ou mode léger de son dossier) ;
   `Missing` et `Ready` du moteur tiennent aussi `unanalysed` à jour, quelle que soit la
   liste. Une photo indisponible (dossier introuvable, iCloud non monté, disque
