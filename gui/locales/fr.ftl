@@ -786,6 +786,9 @@ view-hint-flat = <core.view.zoom> : 1:1   <core.view.histogram> : histogramme   
 status-no-folder = aucun dossier
 status-light = léger
 status-light-tip = Mode léger, depuis { $root } : seules les vignettes sont calculées en fond. Une image ouverte a tout son cache ; « Tout calculer » au clic droit pour un dossier ou une sélection.
+status-light-some = léger en partie
+status-light-some-tip = Mode léger pour les photos de ces dossiers : seules leurs vignettes sont calculées en fond, une image ouverte a tout son cache. Les autres photos ont leurs calculs habituels.
+    { $folders }
 status-images = { $n ->
     [one] { $n } image
    *[other] { $n } images

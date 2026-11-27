@@ -291,6 +291,34 @@ impl Analysis {
     }
 }
 
+/// Mode léger (#597) : pour tout le dossier, ou photo par photo (#616 : « Toutes les
+/// photos » mêle des dossiers en mode léger et d'autres).
+///
+/// Une photo en mode léger n'a que sa vignette en fond (et ses analyses seulement lues
+/// dans le cache, [`Analysis::OnDemand`]) ; l'aperçu des images affichées est demandé
+/// ([`Scheduler::set_shown`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum Light {
+    /// Aucune photo.
+    #[default]
+    Off,
+    /// Tout le dossier.
+    All,
+    /// Les photos rangées directement dans l'un de ces dossiers.
+    Folders(HashSet<PathBuf>),
+}
+
+impl Light {
+    /// Vrai si la photo `path` est en mode léger.
+    pub fn covers(&self, path: &Path) -> bool {
+        match self {
+            Light::Off => false,
+            Light::All => true,
+            Light::Folders(dirs) => path.parent().is_some_and(|dir| dirs.contains(dir)),
+        }
+    }
+}
+
 /// Politique de calcul des rendus RAW (aperçus standard des RAW). Les aperçus des images
 /// plates sont toujours calculés en fond : c'est leur seul aperçu plein écran.
 ///
@@ -504,9 +532,9 @@ struct Running {
 struct State {
     thumbnails_first: bool,
     raw_previews: RawPreviews,
-    /// Mode léger du dossier (#597) : en fond, seulement les vignettes et les analyses ;
-    /// les aperçus de l'image affichée et de ses voisines à la demande.
-    light: bool,
+    /// Mode léger (#597, par photo #616) : en fond, seulement les vignettes, les analyses
+    /// lues dans le cache ; les aperçus de l'image affichée et de ses voisines à la demande.
+    light: Light,
     exposure: Analysis,
     sharpness: Analysis,
     similarity: Analysis,
@@ -547,7 +575,7 @@ impl State {
             self.raw_previews,
             (self.exposure, self.sharpness),
         );
-        if self.light {
+        if self.light.covers(&file.path) {
             levels.retain(|l| !matches!(l, Level::Embedded | Level::Standard));
         }
         if self.similarity.is_on() {
@@ -572,6 +600,16 @@ impl State {
             Level::Similarity => self.similarity,
             Level::Palette(_) => self.palettes,
             _ => return false,
+        };
+        // Photo en mode léger : une analyse de fond n'y est que lue dans le cache.
+        let light = self
+            .files
+            .get(job.0)
+            .is_some_and(|f| self.light.covers(&f.path));
+        let mode = if light && mode == Analysis::Background {
+            Analysis::OnDemand
+        } else {
+            mode
         };
         mode == Analysis::OnDemand && !self.on_demand.contains(job)
     }
@@ -790,12 +828,22 @@ impl Scheduler {
         s.palettes = analyses.palettes;
     }
 
-    /// Mode léger du dossier (#597) : en fond, seulement les vignettes (et les analyses
-    /// selon leur réglage) ; l'aperçu de l'image affichée et de ses voisines (boîtier pour
-    /// un RAW, standard pour une image plate) est demandé dès qu'elles sont affichées
-    /// ([`Scheduler::set_shown`]). Vaut au prochain [`Scheduler::set_folder`].
+    /// Mode léger de tout le dossier (#597) : en fond, seulement les vignettes (les
+    /// analyses de fond seulement lues dans le cache) ; l'aperçu de l'image affichée et de
+    /// ses voisines (boîtier pour un RAW, standard pour une image plate) est demandé dès
+    /// qu'elles sont affichées ([`Scheduler::set_shown`]). Vaut au prochain
+    /// [`Scheduler::set_folder`].
     pub fn set_light(&self, light: bool) {
-        self.shared.lock().light = light;
+        self.set_light_for(if light { Light::All } else { Light::Off });
+    }
+
+    /// Mode léger photo par photo (#616), comme [`Scheduler::set_light`] ; un ensemble de
+    /// dossiers vide : aucune photo.
+    pub fn set_light_for(&self, light: Light) {
+        self.shared.lock().light = match light {
+            Light::Folders(dirs) if dirs.is_empty() => Light::Off,
+            light => light,
+        };
     }
 
     /// Change la politique des rendus RAW de fond (la grille montre les rendus LibRaw,
@@ -923,9 +971,9 @@ impl Scheduler {
                 level: job.1,
             });
         }
-        if s.light {
-            // Mode léger : l'aperçu des images affichées n'est pas en fond, il est demandé.
-            for &i in &s.group.clone() {
+        // Mode léger : l'aperçu des images affichées n'est pas en fond, il est demandé.
+        for &i in &s.group.clone() {
+            if s.light.covers(&s.files[i].path) {
                 let level = match s.files[i].kind {
                     MediaKind::Raw => Level::Embedded,
                     MediaKind::Flat => Level::Standard,
@@ -984,7 +1032,7 @@ impl Scheduler {
             let Some(file) = s.files.get(index).cloned() else {
                 return;
             };
-            let light = std::mem::replace(&mut s.light, false);
+            let light = std::mem::take(&mut s.light);
             let levels = s.background_levels(&file);
             s.light = light;
             levels
