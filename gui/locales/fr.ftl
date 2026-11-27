@@ -48,6 +48,8 @@ action-core-filter-count = Filtres en cours et nombre de photos, en grand
 kw-core-filter-count = compter nombre combien résumé filtres restantes total
 action-core-filter-restart = Après un changement de filtre : repartir de la première image (allumé) ou rester sur l'image
 kw-core-filter-unreadable = illisible abîmé corrompu erreur échec vignette fichier
+action-core-filter-analysed = Filtre : analysées (analyses dans le cache)
+kw-core-filter-analysed = analysées calculées analyse cache nas léger plume netteté exposition piles couleurs
 kw-core-filter-conflicts = conflit désaccord notes logiciels trancher
 action-core-filter-similar_colours = Filtre : couleurs proches de celles de la référence (ou fin de la recherche)
 kw-core-filter-similar-colours = palette couleurs proches semblables moodboard teintes
@@ -147,8 +149,8 @@ sort-notice = Ordre : { $key }, { $direction }
 filter-analysis-computing = Analyse en cours ({ $done } / { $total }) : ce filtre sera disponible à la fin du calcul.
 filter-analysis-on-demand = { $missing ->
     [0] Lecture du cache en cours…
-    [one] Analyse à la demande (réglages) : 1 image pas encore calculée. Clic droit sur le dossier, puis Calculer.
-   *[other] Analyse à la demande (réglages) : { $missing } images pas encore calculées. Clic droit sur le dossier, puis Calculer.
+    [one] Analyse à la demande (réglages) : 1 image pas encore calculée. Clic droit sur le dossier, puis Calculer, ou filtre « Analysées ».
+   *[other] Analyse à la demande (réglages) : { $missing } images pas encore calculées. Clic droit sur le dossier, puis Calculer, ou filtre « Analysées ».
 }
 analysis-removed = Outil retiré dans les réglages (Analyses du dossier).
 filter-analysis-partial = Analyses en cours : filtre appliqué aux { $done } / { $total } photos déjà analysées ; la grille se complète au fil du calcul.
@@ -1581,6 +1583,7 @@ action-plugin-rapidraw-compute_image_colours = Calculer les couleurs des rendus 
 action-plugin-rawtherapee-compute_image_colours = Calculer les couleurs des rendus RawTherapee de la sélection
 action-plugin-art-compute_image_colours = Calculer les couleurs des rendus ART de la sélection
 action-core-file-compute-all = Tout calculer pour la sélection (ce qui manque)
+action-core-file-compute-missing = Analyser les photos du filtre qui ne le sont pas
 action-core-file-compute-recreate_all = Tout recalculer pour la sélection, même ce qui est en cache
 compute-images = { $n ->
     [one] 1 image
@@ -1628,6 +1631,15 @@ notes-merged = Notes fusionnées depuis d'autres logiciels pour { $n } images
 filter-conflicts = En conflit
 filter-unreadable = Illisibles
 filter-unreadable-tip = Les images dont la vignette n'a pas pu être calculée : fichier abîmé, ou lecture ratée sur un partage (Calculer les reprend)
+filter-analysed = Analysées
+filter-analysed-compute = Analyser
+filter-analysed-compute-tip = { $n ->
+    [0] Toutes les photos du filtre sont analysées
+    [one] Analyser la photo du filtre qui ne l'est pas, en fond
+   *[other] Analyser les { $n } photos du filtre qui ne le sont pas, en fond
+}
+filter-analysed-checking = Analysées ({ $done } / { $total } regardées)
+filter-analysed-tip = Seulement les photos dont les analyses sont dans le cache : les filtres d'analyse (floues, exposition, piles, couleurs) s'y appliquent sans attendre les autres (photos d'un NAS en mode léger, par exemple)
 filter-conflicts-tip = Les images dont les notes se contredisent d'un logiciel à l'autre, à trancher
 conflict-badge = Notes en désaccord entre leurs sources : cliquer pour trancher
 conflict-title = Notes en désaccord — { $name }

@@ -48,6 +48,8 @@ action-core-filter-count = Filters in use and number of photos, large
 kw-core-filter-count = count number how many summary filters left total
 action-core-filter-restart = After a filter change: start again from the first image (on) or stay on the image
 kw-core-filter-unreadable = unreadable damaged corrupt error failed thumbnail file
+action-core-filter-analysed = Filter: analysed (analyses in the cache)
+kw-core-filter-analysed = analysed computed analysis cache nas light feather sharpness exposure stacks colours
 kw-core-filter-conflicts = conflict disagree ratings programs settle
 action-core-filter-similar_colours = Filter: colours similar to the reference's (or end the search)
 kw-core-filter-similar-colours = palette colours similar close moodboard hues
@@ -147,8 +149,8 @@ sort-notice = Order: { $key }, { $direction }
 filter-analysis-computing = Analysis in progress ({ $done } / { $total }): this filter will be available once it is done.
 filter-analysis-on-demand = { $missing ->
     [0] Reading the cache…
-    [one] Analysis on demand (settings): 1 image not computed yet. Right-click the folder, then Compute.
-   *[other] Analysis on demand (settings): { $missing } images not computed yet. Right-click the folder, then Compute.
+    [one] Analysis on demand (settings): 1 image not computed yet. Right-click the folder, then Compute, or the Analysed filter.
+   *[other] Analysis on demand (settings): { $missing } images not computed yet. Right-click the folder, then Compute, or the Analysed filter.
 }
 analysis-removed = Tool removed in the settings (Folder analyses).
 filter-analysis-partial = Analyses in progress: filter applied to the { $done } / { $total } photos already analysed; the grid fills in as they are computed.
@@ -1580,6 +1582,7 @@ action-plugin-darktable-compute_image_colours = Compute the colours of the Darkt
 action-plugin-rapidraw-compute_image_colours = Compute the colours of the RapidRAW renders of the selection
 action-plugin-rawtherapee-compute_image_colours = Compute the colours of the RawTherapee renders of the selection
 action-plugin-art-compute_image_colours = Compute the colours of the ART renders of the selection
+action-core-file-compute-missing = Analyse the photos of the filter that are not
 action-core-file-compute-all = Compute everything for the selection (what is missing)
 action-core-file-compute-recreate_all = Compute everything again for the selection, even what is cached
 compute-images = { $n ->
@@ -1628,6 +1631,15 @@ notes-merged = Ratings merged from other programs for { $n } images
 filter-conflicts = In conflict
 filter-unreadable = Unreadable
 filter-unreadable-tip = The images whose thumbnail could not be computed: damaged file, or failed read on a share (Compute tries them again)
+filter-analysed = Analysed
+filter-analysed-compute = Analyse
+filter-analysed-compute-tip = { $n ->
+    [0] Every photo of the filter is analysed
+    [one] Analyse the photo of the filter that is not, in the background
+   *[other] Analyse the { $n } photos of the filter that are not, in the background
+}
+filter-analysed-checking = Analysed ({ $done } / { $total } checked)
+filter-analysed-tip = Only the photos whose analyses are in the cache: the analysis filters (blurry, exposure, stacks, colours) apply to them without waiting for the others (photos of a NAS in light mode, for example)
 filter-conflicts-tip = Images whose ratings disagree from one program to another, to settle
 conflict-badge = Ratings disagree between their sources: click to settle
 conflict-title = Ratings disagree — { $name }

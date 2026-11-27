@@ -88,6 +88,29 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   recalculée avec succès en sort. Une photo de « Toutes les photos » dont le dossier est
   introuvable ou sur un disque débranché n'est pas illisible mais absente : pas dans ce
   filtre (retour du 26/11/2026).
+  **Analysées** (`f a`, `core.filter.analysed`, 27/11/2026 : un NAS en mode léger dans
+  « Toutes les photos » grisait les filtres d'analyse) : seulement les photos dont les
+  analyses à la demande sont dans le cache. Le filtre regarde **lui-même** le cache de
+  chaque photo du dossier (`analysed_reads`, autant de fils que de workers légers) : le
+  moteur ne le fait que pour les photos montrées, et après les vignettes (retour du
+  27/11/2026 : sur un NAS de 6 000 photos, presque aucune n'était encore regardée, donc
+  toutes passaient pour analysées). Une photo pas encore regardée est écartée ; la grille n'est
+  refiltrée qu'une fois tout le dossier regardé (vidéo du 27/11/2026 : refiltrer toutes
+  les 5 s relançait le moteur sur chaque liste, vignettes revenues une à une, barre d'état
+  vide) ; en attendant, le libellé dit où on en est (« Analysées (1 200 / 7 880
+  regardées) »). Les analyses qui comptent
+  sont celles « à la demande » pour la photo (réglages, ou mode léger de son dossier) ;
+  `Missing` et `Ready` du moteur tiennent aussi `unanalysed` à jour, quelle que soit la
+  liste. Une photo indisponible (dossier introuvable, iCloud non monté, disque
+  débranché) n'est pas analysée : écartée, et laissée hors du bouton Analyser. Appliqué avant les filtres d'analyse, qui se dégrisent alors : ils
+  ne jugent que des photos complètes. Ligne sous « Illisibles », montrée seulement s'il
+  manque des analyses (ou allumée) ; icône d'une photo cochée (`marks::analysed`). À
+  droite, centré sous la photo de référence des semblables, le bouton **Analyser**
+  (`core.file.compute.missing`, sans touche) : calcule en fond les analyses qui manquent
+  aux photos du filtre (celles de la grille, ou, filtre allumé, celles qu'il écarte), une
+  tâche par analyse ; grisé s'il n'y en a pas. À la fin d'un calcul, la marque de cette
+  analyse est retirée et le refiltrage reprend les photos (le cache redit aussitôt s'il en
+  manque encore).
   **Dossier regroupé** (#392, 14/11/2026) : « Photos » = paires + RAW seuls + JPEG seuls,
   chacun une ligne et une case du filtre à trois cases ; sous « Développements », aussi
   « JPEG boîtier » (le JPEG des paires) et « LibRaw ». Les développements montrent toujours deux

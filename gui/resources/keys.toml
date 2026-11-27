@@ -231,6 +231,8 @@ loupe = "none"
 "core.filter.conflicts" = ["f c"]
 # Unreadable (thumbnail impossible: damaged file, failed read on a share): "e" like error.
 "core.filter.unreadable" = ["f e"]
+# Analysed (analyses in the cache: filter on them without waiting for the others): "a".
+"core.filter.analysed" = ["f a"]
 # Similar colours: "l" (the former "palette"); contains this colour: "o" like colour.
 "core.filter.similar_colours" = ["f l"]
 "core.filter.colour" = ["f o"]
@@ -327,6 +329,7 @@ loupe = "none"
 "core.file.compute.colours_camera" = []
 "core.file.compute.colours_raw" = []
 "core.file.compute.all" = []
+"core.file.compute.missing" = []
 "core.file.compute.recreate_all" = []
 "plugin.darktable.compute_image_colours" = []
 "plugin.rapidraw.compute_image_colours" = []

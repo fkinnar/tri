@@ -1003,6 +1003,9 @@ struct Engine {
     /// Analyse d'exposition de l'image sélectionnée (histogramme).
     exposure_reads: crate::bg_read::BgReads<PathBuf, Arc<Exposure>>,
     clip_reads: crate::bg_read::BgReads<PathBuf, (f64, f64)>,
+    /// Filtre « analysées » : les analyses à la demande qui manquent à chaque photo du
+    /// dossier (un bit par case de `progress`), cherchées dans le cache hors du moteur.
+    analysed_reads: crate::bg_read::BgReads<PathBuf, u8>,
     /// Palettes de couleurs de l'image sélectionnée (#492), par image et source.
     palette_reads: crate::bg_read::BgReads<(PathBuf, tri::palette::Source), Arc<Palette>>,
     /// Logiciels de développement du moteur, remplacés quand `[develop]` change.
@@ -1272,6 +1275,25 @@ pub struct TriApp {
     /// Une image est devenue illisible (ou lisible) pendant que le filtre est allumé : à
     /// refiltrer une fois les vignettes calculées.
     unreadable_refilter_pending: bool,
+    /// Filtre « analysées » ([`Action::FilterAnalysed`]).
+    analysed_only: bool,
+    /// Photos du dossier dont une analyse à la demande manque dans le cache (#564), avec
+    /// les cases de `progress` concernées (un bit par case) : ce que ce filtre écarte.
+    /// Gardé d'un refiltrage à l'autre (le moteur ne cherche que les photos montrées).
+    unanalysed: HashMap<PathBuf, u8>,
+    /// Une photo est devenue analysée (ou non) pendant que le filtre est allumé : à
+    /// refiltrer une fois les recherches dans le cache passées.
+    analysed_refilter_pending: bool,
+    /// Photos que le filtre « analysées » a écartées au dernier refiltrage (celles que son
+    /// bouton fait calculer quand il est allumé).
+    analysed_hidden: Vec<MediaFile>,
+    /// Photos du dossier dont le cache a été regardé pour ce filtre (hors du moteur, qui
+    /// ne regarde que les photos montrées, et après tout le reste : retour du 27/11/2026,
+    /// un NAS de 6 000 photos restait « analysé » faute d'avoir été regardé). Une photo
+    /// pas encore regardée est écartée.
+    analysed_checked: HashSet<PathBuf>,
+    /// Les recherches sont à (re)lancer : filtre allumé, dossier ouvert, calcul fini.
+    analysed_checks_due: bool,
     /// Filtre « développées » allumé (icône de la barre des filtres, `f Maj+D`).
     developed_on: bool,
     /// Logiciels cochés du filtre « développées » ; `None` : tous les installés. Retenus
@@ -2860,6 +2882,12 @@ impl TriApp {
             unreadable_only: false,
             unreadable: HashSet::new(),
             unreadable_refilter_pending: false,
+            analysed_only: false,
+            unanalysed: HashMap::new(),
+            analysed_refilter_pending: false,
+            analysed_hidden: Vec::new(),
+            analysed_checked: HashSet::new(),
+            analysed_checks_due: false,
             developed_on: false,
             developed_checked: None,
             folder_view_file: None,
@@ -4913,6 +4941,9 @@ impl TriApp {
         self.scores.clear();
         self.signatures.clear();
         self.unreadable.clear();
+        self.unanalysed.clear();
+        self.analysed_checked.clear();
+        self.analysed_checks_due = self.analysed_only;
         self.captured.clear();
         self.capture_progress = Progress::default();
         self.judgements.clear();
@@ -5042,9 +5073,10 @@ impl TriApp {
     /// 07/11/2026 ; le suivre demanderait un histogramme RAW recalculé sur la zone).
     fn side_panel_pinned(&mut self, ui: &mut Ui) {
         self.meta_has_histogram = false;
-        // Une recherche de palettes sans résultat garde le haut du panneau tel quel
-        // (retour du 21/11/2026 : l'histogramme et la position partaient, tout remontait).
-        let kept = !self.files.is_empty() || self.palette_searching();
+        // Une recherche ou un filtre sans résultat garde le haut du panneau tel quel
+        // (retours du 21/11/2026 et du 27/11/2026 : l'histogramme et la position
+        // partaient, tout remontait) : leur place, vide. Seul un dossier vide n'en a pas.
+        let kept = !self.folder.files.is_empty() || self.palette_searching();
         // Exposition retirée dans les réglages (#564) : pas d'histogramme.
         if self.gui.metadata.histogram
             && self.histogram
@@ -5712,6 +5744,85 @@ impl TriApp {
             if toggled {
                 let ctx = ui.ctx().clone();
                 self.perform(&ctx, Action::FilterUnreadable);
+            }
+        }
+        // Analysées : même forme, et seulement quand une photo attend ses analyses (ou qu'il
+        // est allumé).
+        if self.analysed_only || !self.unanalysed.is_empty() || self.any_light() {
+            let tip = t!("filter-analysed-tip");
+            // Allumé, tant que le cache n'est pas regardé pour tout le dossier : où on en est.
+            let checking = if self.analysed_only {
+                self.analysed_progress()
+            } else {
+                Progress::default()
+            };
+            let name = if checking.done < checking.total {
+                t!(
+                    "filter-analysed-checking",
+                    done = checking.done,
+                    total = checking.total
+                )
+            } else {
+                t!("filter-analysed")
+            };
+            let size = self.gui.grid.marks + 4.0;
+            // Même géométrie que les recherches (`palette_filter_rows`) : le bouton
+            // « Analyser » centré dans la colonne de la photo de référence.
+            let side = ((self.gui.grid.marks + 4.0) * 2.0 + ui.spacing().item_spacing.y)
+                * self.gui.grid.reference_scale.max(0.5);
+            let gap = ui.spacing().item_spacing.x * 2.0;
+            let target = ui.spacing().interact_size.y;
+            let spacing = ui.spacing().item_spacing.x * 3.0;
+            let left = (ui.available_width() - side - gap - target - spacing).max(60.0);
+            let (item, key) = self.side_begin(false);
+            let outer = ui.horizontal_top(|ui| {
+                let row = ui.vertical(|ui| {
+                    ui.set_width(left);
+                    ui.horizontal(|ui| {
+                        let mut checked = self.analysed_only;
+                        let check = ui.checkbox(&mut checked, "").on_hover_text(&tip);
+                        let (rect, icon) = marks::clickable(ui, size, &tip);
+                        let color = if self.analysed_only {
+                            marks::accent_mark(ui.ctx())
+                        } else {
+                            ui.visuals().weak_text_color()
+                        };
+                        marks::analysed(ui.painter(), rect.shrink(size * 0.12), color);
+                        let label = ui
+                            .add(egui::Label::new(name).sense(Sense::click()))
+                            .on_hover_text(&tip);
+                        check.changed() || icon.clicked() || label.clicked()
+                    })
+                    .inner
+                });
+                ui.add_space(gap + target + ui.spacing().item_spacing.x);
+                ui.add_space(((side - target) / 2.0).max(0.0));
+                // Actif s'il reste des photos à analyser dans le résultat du filtre.
+                let n = self.unanalysed_in_filter().len();
+                let tip = t!("filter-analysed-compute-tip", n = n);
+                let (rect, response) = ui
+                    .add_enabled_ui(n > 0, |ui| {
+                        marks::icon_button(ui, target, &t!("filter-analysed-compute"), &tip)
+                    })
+                    .inner;
+                let color = if n > 0 {
+                    ui.style().interact(&response).fg_stroke.color
+                } else {
+                    ui.visuals().weak_text_color().gamma_multiply(0.4)
+                };
+                marks::analyse_button(ui.painter(), rect.shrink(target * 0.18), color);
+                (row, response.clicked())
+            });
+            let (row, compute) = outer.inner;
+            let toggled = row.inner || key == Some(SideKey::Activate);
+            self.side_end(ui, item, row.response.rect, row.inner);
+            if toggled {
+                let ctx = ui.ctx().clone();
+                self.perform(&ctx, Action::FilterAnalysed);
+            }
+            if compute {
+                let ctx = ui.ctx().clone();
+                self.perform(&ctx, Action::ComputeMissing);
             }
         }
     }
@@ -8255,6 +8366,15 @@ impl TriApp {
     /// l'image. Un clic l'ouvre en grand.
     fn histogram_section(&mut self, ui: &mut Ui) {
         let settings = self.gui.metadata;
+        // Filtre sans résultat : la place de l'histogramme, vide (pas celui d'une image
+        // qui n'est plus montrée).
+        if self.files.is_empty() {
+            ui.allocate_exact_size(
+                vec2(ui.available_width(), settings.histogram_height),
+                Sense::hover(),
+            );
+            return;
+        }
         let current = self.shown_exposure(self.selected).map(|(e, real)| {
             let camera = self.camera_exposure_of(self.selected);
             (e, real, camera)
@@ -11075,10 +11195,24 @@ impl TriApp {
             // Analyse « à la demande » du dossier ouvert (#564) : relue dans le cache, son
             // outil se dégrise s'il ne manque plus rien.
             let analyses = self.analyses();
-            reread |= folder == self.folder.dir
-                && Action::Compute(kind)
-                    .tool()
-                    .is_some_and(|t| t.mode(&analyses) == tri::scheduler::Analysis::OnDemand);
+            let tool = Action::Compute(kind)
+                .tool()
+                .filter(|t| t.mode(&analyses) == tri::scheduler::Analysis::OnDemand);
+            let here = folder == self.folder.dir && tool.is_some();
+            reread |= here;
+            // Filtre « analysées » : le moteur ne cherche que les photos montrées ; celles
+            // qu'il écarte perdent la marque de cette analyse, et le refiltrage les
+            // reprend (le cache dit aussitôt s'il en manque encore).
+            if here && let Some(tool) = tool {
+                let bit = 1u8 << tool.slot();
+                self.unanalysed.retain(|_, bits| {
+                    *bits &= !bit;
+                    *bits != 0
+                });
+                // Regardé à nouveau (les dates et tailles sont déjà connues : rapide).
+                self.analysed_checked.clear();
+                self.analysed_checks_due = self.analysed_only;
+            }
             let what = crate::compute_tasks::kind_label(kind);
             self.notice = Some(match result {
                 Ok(s) if s.cancelled => (
@@ -12065,6 +12199,8 @@ impl TriApp {
     /// place dans la liste (l'image suivante : on vient de rejeter une photo avec « masquer
     /// les rejetées », on passe à la suite).
     fn refilter(&mut self, reveal: Reveal) {
+        // Filtre « analysées » : les photos arrivées depuis (surveillance, chargement) aussi.
+        self.analysed_checks_due |= self.analysed_only;
         self.follow_search_sort();
         self.refiltered_at = Instant::now();
         let selected_path = self.files.get(self.selected).map(|f| f.path.clone());
@@ -12197,6 +12333,26 @@ impl TriApp {
                 book: &self.folder.notes,
             }
             .apply(groups)
+        } else {
+            groups
+        };
+        // Analysées : avant les filtres d'analyse, qui ne jugent alors que des photos
+        // complètes.
+        self.analysed_hidden.clear();
+        let groups: Vec<Vec<MediaFile>> = if self.analysed_only {
+            let mut hidden = Vec::new();
+            let kept = groups
+                .into_iter()
+                .map(|g| {
+                    let (kept, out): (Vec<MediaFile>, Vec<MediaFile>) =
+                        g.into_iter().partition(|f| self.is_analysed(&f.path));
+                    hidden.extend(out);
+                    kept
+                })
+                .filter(|g: &Vec<MediaFile>| !g.is_empty())
+                .collect();
+            self.analysed_hidden = hidden;
+            kept
         } else {
             groups
         };
@@ -12587,6 +12743,7 @@ impl TriApp {
             || self.developed_on
             || self.conflicts_only
             || self.unreadable_only
+            || self.analysed_only
             || self.palette_searching()
     }
 
@@ -13201,6 +13358,173 @@ impl TriApp {
         {
             self.unreadable_refilter_pending = false;
             if self.unreadable_only {
+                self.refilter(Reveal::Minimal);
+            }
+        }
+    }
+
+    /// Vrai si la photo `path` a ses analyses (filtre « analysées ») : regardée, rien ne
+    /// lui manque, et pas indisponible (retour du 27/11/2026 : des photos d'iCloud non
+    /// monté passaient, faute d'analyse à la demande pour elles hors du mode léger).
+    fn is_analysed(&self, path: &Path) -> bool {
+        self.analysed_checked.contains(path)
+            && !self.unanalysed.contains_key(path)
+            && self.missing_dir(path).is_none()
+    }
+
+    /// Avancement des recherches du filtre « analysées » (photos du dossier regardées).
+    fn analysed_progress(&self) -> Progress {
+        Progress {
+            done: self
+                .folder
+                .files
+                .iter()
+                .filter(|f| self.analysed_checked.contains(&f.path))
+                .count(),
+            total: self.folder.files.len(),
+        }
+    }
+
+    /// Analyses qui comptent pour le filtre « analysées » pour `file` : celles « à la
+    /// demande » pour elle (réglages, ou mode léger de sa photo), avec leur case. Une
+    /// analyse « en fond » n'en est pas : le moteur la calcule pour les photos montrées.
+    fn analysed_levels(&self, file: &MediaFile) -> Vec<(usize, Level)> {
+        use crate::actions::Tool;
+        use tri::scheduler::Analysis;
+        let analyses = self.settings.analysis();
+        let light = self.is_light_photo(&file.path);
+        let on_demand = |tool: Tool| match tool.mode(&analyses) {
+            Analysis::OnDemand => true,
+            Analysis::Background => light,
+            Analysis::Off => false,
+        };
+        let mut levels = Vec::new();
+        if on_demand(Tool::Exposure) {
+            levels.push((3, Level::Exposure));
+        }
+        if on_demand(Tool::Sharpness) {
+            levels.push((4, Level::Sharpness));
+        }
+        if on_demand(Tool::Stacks) {
+            levels.push((5, Level::Similarity));
+        }
+        if on_demand(Tool::Palettes)
+            && let Some(source) = self.palette_source.and_then(|k| k.source_for(file))
+        {
+            levels.push((6, Level::Palette(source)));
+        }
+        levels
+    }
+
+    /// Lance les recherches du filtre « analysées » sur les photos du dossier pas encore
+    /// regardées (filtre allumé seulement).
+    fn request_analysed_checks(&mut self) {
+        if !std::mem::take(&mut self.analysed_checks_due) || !self.analysed_only {
+            return;
+        }
+        let wanted: Vec<(MediaFile, Vec<(usize, Level)>)> = self
+            .folder
+            .files
+            .iter()
+            .filter(|f| !self.analysed_checked.contains(&f.path))
+            .map(|f| (f.clone(), self.analysed_levels(f)))
+            .collect();
+        let Some(engine) = &mut self.engine else {
+            return;
+        };
+        let producer = Arc::new(tri::scheduler::CachedPreviews {
+            cache: engine.cache.clone(),
+            settings: engine.preview,
+            developers: engine.developers.clone(),
+        });
+        for (file, levels) in wanted {
+            if levels.is_empty() {
+                self.analysed_checked.insert(file.path.clone());
+                self.unanalysed.remove(&file.path);
+                continue;
+            }
+            let producer = producer.clone();
+            engine.analysed_reads.request(file.path.clone(), move || {
+                use tri::scheduler::Producer;
+                let bits = levels
+                    .iter()
+                    .filter(|(_, level)| !producer.is_done(&file, *level))
+                    .fold(0u8, |bits, (slot, _)| bits | 1 << slot);
+                Some(bits)
+            });
+        }
+        self.analysed_refilter_pending = true;
+    }
+
+    /// Photos du filtre à qui une analyse manque (bouton du filtre « analysées ») : celles
+    /// de la grille, ou, filtre allumé, celles qu'il écarte.
+    fn unanalysed_in_filter(&self) -> Vec<MediaFile> {
+        // Une photo indisponible (dossier introuvable, disque débranché) ne se calcule pas.
+        let files: Vec<MediaFile> = if self.analysed_only {
+            self.analysed_hidden.clone()
+        } else {
+            self.files.clone()
+        };
+        files
+            .into_iter()
+            .filter(|f| {
+                self.unanalysed.contains_key(&f.path) && self.missing_dir(&f.path).is_none()
+            })
+            .collect()
+    }
+
+    /// Lance le calcul des analyses qui manquent aux photos du filtre, une tâche par
+    /// analyse (celles qui leur manquent).
+    fn compute_missing(&mut self) {
+        use tri::compute::Kind;
+        let files = self.unanalysed_in_filter();
+        let bits = files
+            .iter()
+            .filter_map(|f| self.unanalysed.get(&f.path))
+            .fold(0u8, |a, &b| a | b);
+        let mut kinds = Vec::new();
+        for (slot, kind) in [
+            (3, Kind::Exposure),
+            (4, Kind::Sharpness),
+            (5, Kind::Signatures),
+        ] {
+            if bits & (1 << slot) != 0 {
+                kinds.push(kind);
+            }
+        }
+        if bits & (1 << 6) != 0
+            && let Some(source) = self.palette_source
+        {
+            kinds.push(Kind::Palette(source));
+        }
+        if files.is_empty() || kinds.is_empty() {
+            return;
+        }
+        let target = crate::compute_tasks::Target::Images {
+            folder: self.folder.dir.clone(),
+            files,
+        };
+        for kind in kinds {
+            self.compute_pending
+                .push((Action::Compute(kind), target.clone()));
+        }
+    }
+
+    /// Filtre « analysées » allumé : refiltré quand le cache de toutes les photos du dossier
+    /// a été regardé (pas à chaque photo).
+    fn analysed_refilter(&mut self) {
+        self.request_analysed_checks();
+        // Une fois le cache regardé pour tout le dossier seulement (vidéo du 27/11/2026 :
+        // refiltrer toutes les 5 s pendant les recherches relançait le moteur sur chaque
+        // nouvelle liste, les vignettes revenaient une à une et la barre d'état n'affichait
+        // plus rien). Le libellé du filtre dit où en sont les recherches.
+        if !self.analysed_refilter_pending || self.mode != Mode::Grid {
+            return;
+        }
+        let checked = self.analysed_progress();
+        if checked.done >= checked.total {
+            self.analysed_refilter_pending = false;
+            if self.analysed_only {
                 self.refilter(Reveal::Minimal);
             }
         }
@@ -14378,6 +14702,12 @@ impl TriApp {
                 Some(ctx.clone()),
             ),
             clip_reads: crate::bg_read::BgReads::new("tri-clips", Some(ctx.clone())),
+            // Surtout l'attente du disque (dates et tailles des RAW, sur un NAS).
+            analysed_reads: crate::bg_read::BgReads::parallel(
+                "tri-analysed",
+                Some(ctx.clone()),
+                config.light_workers,
+            ),
             palette_reads: crate::bg_read::BgReads::newest_first("tri-palettes", Some(ctx.clone())),
             developers: shared,
         });
@@ -14497,6 +14827,7 @@ impl TriApp {
         self.take_colour_pick();
         self.exposure_refilter();
         self.unreadable_refilter();
+        self.analysed_refilter();
         self.sort_refilter();
     }
 
@@ -14521,6 +14852,39 @@ impl TriApp {
             let Ok(event) = engine.events.try_recv() else {
                 break;
             };
+            // Filtre « analysées » : ce que le cache a pour une photo vaut quelle que soit
+            // la liste (retour du 27/11/2026 : un refiltrage pendant les
+            // recherches jetait celles de l'ancienne, et ces photos restaient montrées).
+            match &event {
+                Event::Ready { path, level, .. } => {
+                    if let Some(i) = tracked(*level).filter(|&i| i >= 3)
+                        && let Some(bits) = self.unanalysed.get_mut(path)
+                    {
+                        *bits &= !(1 << i);
+                        if *bits == 0 {
+                            self.unanalysed.remove(path);
+                            self.analysed_refilter_pending |= self.analysed_only;
+                        }
+                    }
+                }
+                // Seulement de la liste en cours : un « absente » d'avant un calcul, arrivé
+                // après, effaçait ce que le filtre venait de regarder.
+                Event::Missing {
+                    path,
+                    level,
+                    generation: g,
+                    ..
+                } if *g == generation => {
+                    if let Some(i) = tracked(*level) {
+                        let bits = self.unanalysed.entry(path.clone()).or_insert(0);
+                        if *bits == 0 {
+                            self.analysed_refilter_pending |= self.analysed_only;
+                        }
+                        *bits |= 1 << i;
+                    }
+                }
+                _ => {}
+            }
             match event {
                 Event::Ready {
                     generation: g,
@@ -14639,6 +15003,17 @@ impl TriApp {
                     .request(path, move || preview::signature(&cache, &file, &preview));
             }
             let mut arrived = false;
+            // Filtre « analysées » : ce qui manque à chaque photo, regardé hors du moteur.
+            for (path, bits) in engine.analysed_reads.take() {
+                let bits = bits.unwrap_or(0);
+                if bits == 0 {
+                    self.unanalysed.remove(&path);
+                } else {
+                    self.unanalysed.insert(path.clone(), bits);
+                }
+                self.analysed_checked.insert(path);
+                self.analysed_refilter_pending |= self.analysed_only;
+            }
             for (path, time) in engine.capture_reads.take() {
                 self.capture_progress.done += 1;
                 arrived = true;
@@ -16203,6 +16578,7 @@ impl TriApp {
                 self.developed_on = false;
                 self.conflicts_only = false;
                 self.unreadable_only = false;
+                self.analysed_only = false;
                 self.extension_only = None;
                 self.versions_only = false;
                 self.libraw_only = false;
@@ -16283,6 +16659,12 @@ impl TriApp {
                 self.unreadable_only = !self.unreadable_only;
                 self.apply_filter();
             }
+            Action::FilterAnalysed => {
+                self.analysed_only = !self.analysed_only;
+                self.analysed_checks_due |= self.analysed_only;
+                self.apply_filter();
+            }
+            Action::ComputeMissing => self.compute_missing(),
             // Contient cette couleur (#492) : la pipette, ou fin de la recherche.
             Action::FilterPaletteColour => {
                 if self.palette_colour.is_some() {
@@ -21873,9 +22255,16 @@ impl TriApp {
 
     /// Vrai si la case `slot` de `progress` est une analyse à la demande (#564, mode
     /// léger #597) : rien n'y est calculé, le moteur cherche seulement dans le cache.
+    /// « Toutes les photos » léger en partie (#616) : les photos hors du mode léger ont
+    /// leur calcul en fond, une vraie tâche (retour du 27/11/2026 : le PC chauffait, la
+    /// barre d'état ne montrait rien).
     fn analysis_on_demand(&self, slot: usize) -> bool {
         use crate::actions::Tool;
-        let analyses = self.analyses();
+        let analyses = if self.light_root.is_some() {
+            tri::light::lighten(self.settings.analysis())
+        } else {
+            self.settings.analysis()
+        };
         [
             Tool::Exposure,
             Tool::Sharpness,
@@ -25579,6 +25968,9 @@ impl TriApp {
         }
         if self.unreadable_only {
             parts.push(t!("filter-unreadable"));
+        }
+        if self.analysed_only {
+            parts.push(t!("filter-analysed"));
         }
         if self.filter_inverted && self.content_filtered() {
             parts.push(t!("filter-bar-inverted"));
@@ -35006,7 +35398,9 @@ mod tests {
             .collect();
         let (mut h, _dir) = harness_images(images);
         h.state_mut().metadata_panel = true;
-        h.set_size(vec2(1400.0, 1400.0));
+        // Assez haute pour la bande de palette sous la ligne « Analysées » (palettes à la
+        // demande : la ligne est là).
+        h.set_size(vec2(1400.0, 1600.0));
         h.run_steps(3);
         choose_palette(&mut h, Some(SourceKind::Camera));
         run_until(&mut h, |app| {
@@ -37222,6 +37616,10 @@ mod tests {
             app.analyses().exposure,
             tri::scheduler::Analysis::OnDemand,
             "outils grisés tant que les photos du NAS manquent"
+        );
+        assert!(
+            !app.analysis_on_demand(3),
+            "les photos locales calculent en fond : une tâche montrée"
         );
         h.run_steps(2);
         h.get_by_label(&t!("status-light-some"));
@@ -51522,6 +51920,220 @@ mod tests {
             h.state().settings_window.as_ref().unwrap().section_name(),
             "analysis"
         );
+    }
+
+    #[test]
+    fn the_analysed_filter_lets_the_analysis_filters_work_on_the_computed_photos() {
+        // 27/11/2026 : un NAS en mode léger dans « Toutes les photos » grisait les filtres
+        // d'analyse ; « Analysées » garde les photos calculées, et les filtres s'y
+        // appliquent sans attendre les autres.
+        use tri::scheduler::Analysis;
+        let images = (0..3)
+            .map(|i| {
+                let name = ["a.jpg", "b.jpg", "c.jpg"][i];
+                let pixel = image::Rgb([(60 * i) as u8, 100, 160]);
+                (name, image::RgbImage::from_pixel(32, 24, pixel))
+            })
+            .collect();
+        let (mut h, dir) = harness_tuned(images, |s, _| {
+            s.analysis.sharpness = Analysis::OnDemand;
+            // « Analysées » demande toutes les analyses à la demande : la netteté seule ici.
+            s.analysis.stacks = Analysis::Off;
+            s.analysis.palettes = Analysis::Off;
+        });
+        run_until(&mut h, |app| app.analysis_missing[4] == 3);
+        h.run_steps(2);
+        assert!(
+            h.query_by_label(&t!("filter-analysed")).is_some(),
+            "à montrer"
+        );
+        assert!(h.state().action_unusable(Action::FilterBlurry).is_some());
+        // Une photo calculée.
+        let photos = dir.path().join("photos");
+        let first = h.state().files[0].clone();
+        let ctx = h.ctx.clone();
+        h.state_mut().compute_action(
+            &ctx,
+            Action::FolderCompute(tri::compute::Kind::Sharpness),
+            crate::compute_tasks::Target::Images {
+                folder: photos.clone(),
+                files: vec![first.clone()],
+            },
+        );
+        run_until(&mut h, |app| {
+            app.compute_tasks.is_empty() && !app.unanalysed.contains_key(&first.path)
+        });
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::A, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.analysed_only
+                && app.files.len() == 1
+                && app.action_unusable(Action::FilterBlurry).is_none()
+        });
+        assert_eq!(h.state().files[0].path, first.path);
+        assert_eq!(h.state().unanalysed.len(), 2, "gardées hors de la liste");
+        // Son dossier indisponible (iCloud non monté, disque débranché) : écartée aussi,
+        // et pas à calculer.
+        h.state_mut().missing_dirs.insert(photos.clone(), true);
+        h.state_mut().apply_filter();
+        run_until(&mut h, |app| app.files.is_empty());
+        assert!(h.state().unanalysed_in_filter().is_empty());
+        h.state_mut().missing_dirs.clear();
+        h.state_mut().apply_filter();
+        run_until(&mut h, |app| app.files.len() == 1);
+        // Le bouton « Analyser » : les deux écartées, calculées, puis reprises.
+        h.run_steps(2);
+        assert_eq!(h.state().unanalysed_in_filter().len(), 2);
+        h.get_by_label(&t!("filter-analysed-compute")).click();
+        run_until(&mut h, |app| {
+            app.compute_tasks.is_empty() && app.unanalysed.is_empty() && app.files.len() == 3
+        });
+        assert!(h.state().action_unusable(Action::FilterBlurry).is_none());
+        // Éteint : plus rien à analyser, la ligne disparaît.
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::A, Modifiers::NONE);
+        run_until(&mut h, |app| !app.analysed_only && app.files.len() == 3);
+        h.run_steps(2);
+        assert!(h.query_by_label(&t!("filter-analysed")).is_none());
+    }
+
+    #[test]
+    fn the_analysed_filter_turned_on_early_still_hides_the_photos_found_missing() {
+        // Retour du 27/11/2026 : allumé avant la fin des recherches dans le cache, le filtre
+        // laissait des photos non analysées.
+        use tri::scheduler::Analysis;
+        let images = (0..6)
+            .map(|i| {
+                let name = ["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg", "f.jpg"][i];
+                let pixel = image::Rgb([(40 * i) as u8, 100, 160]);
+                (name, image::RgbImage::from_pixel(32, 24, pixel))
+            })
+            .collect();
+        let (mut h, _dir) = harness_tuned(images, |s, _| {
+            s.analysis.sharpness = Analysis::OnDemand;
+        });
+        // Allumé tout de suite, et la liste refaite pendant les recherches (chaque refiltrage
+        // relance le moteur sur une nouvelle liste) : rien d'une liste précédente ne se perd.
+        h.state_mut().analysed_only = true;
+        for _ in 0..5 {
+            h.state_mut().apply_filter();
+            h.run_steps(1);
+        }
+        run_until(&mut h, |app| app.files.is_empty());
+        assert_eq!(h.state().unanalysed.len(), 6);
+    }
+
+    #[test]
+    fn the_analysed_filter_looks_at_the_cache_itself_for_photos_the_engine_has_not_seen() {
+        // Retour du 27/11/2026 (6 000 photos d'un NAS en mode léger) : le moteur regarde le
+        // cache des analyses après tout le reste, et seulement pour les photos montrées ;
+        // le filtre regarde lui-même, et écarte en attendant.
+        use tri::scheduler::Analysis;
+        let images = (0..4)
+            .map(|i| {
+                let name = ["a.jpg", "b.jpg", "c.jpg", "d.jpg"][i];
+                let pixel = image::Rgb([(50 * i) as u8, 100, 160]);
+                (name, image::RgbImage::from_pixel(32, 24, pixel))
+            })
+            .collect();
+        let (mut h, _dir) = harness_tuned(images, |s, _| {
+            s.analysis.sharpness = Analysis::OnDemand;
+            s.analysis.stacks = Analysis::Off;
+            s.analysis.palettes = Analysis::Off;
+        });
+        run_until(&mut h, |app| {
+            app.folder.files.len() == 4 && app.loading.is_none()
+        });
+        // Le moteur ne regarde plus rien, et ce qu'il a dit est oublié.
+        if let Some(engine) = &h.state().engine {
+            engine.scheduler.set_paused(true);
+        }
+        h.state_mut().unanalysed.clear();
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::FilterAnalysed);
+        assert!(
+            h.state().files.is_empty(),
+            "pas encore regardées : écartées"
+        );
+        run_until(&mut h, |app| {
+            app.analysed_checked.len() == 4 && app.unanalysed.len() == 4
+        });
+        assert!(h.state().files.is_empty());
+        assert_eq!(
+            h.state().unanalysed_in_filter().len(),
+            4,
+            "le bouton les analyse"
+        );
+    }
+
+    #[test]
+    fn the_analysed_filter_leaves_every_shown_photo_its_thumbnail() {
+        // Retour du 27/11/2026 : filtre allumé (dossier en mode léger), des vignettes
+        // restaient vides.
+        use tri::scheduler::Analysis;
+        let names: Vec<String> = (0..16).map(|i| format!("img{i:02}.jpg")).collect();
+        let images = names
+            .iter()
+            .enumerate()
+            .map(|(i, n)| {
+                let pixel = image::Rgb([(15 * i) as u8, 100, 160]);
+                (n.as_str(), image::RgbImage::from_pixel(32, 24, pixel))
+            })
+            .collect();
+        let (mut h, dir) = harness_tuned(images, |s, d| {
+            s.analysis.sharpness = Analysis::OnDemand;
+            s.analysis.exposure = Analysis::Off;
+            s.analysis.stacks = Analysis::Off;
+            s.analysis.palettes = Analysis::Off;
+            s.light.folders = vec![d.join("photos").to_string_lossy().into_owned()];
+        });
+        let photos = dir.path().join("photos");
+        run_until(&mut h, |app| {
+            app.folder.files.len() == 16 && app.loading.is_none()
+        });
+        let half: Vec<MediaFile> = h.state().folder.files.iter().step_by(2).cloned().collect();
+        let ctx = h.ctx.clone();
+        h.state_mut().compute_action(
+            &ctx,
+            Action::FolderCompute(tri::compute::Kind::Sharpness),
+            crate::compute_tasks::Target::Images {
+                folder: photos,
+                files: half,
+            },
+        );
+        run_until(&mut h, |app| app.compute_tasks.is_empty());
+        h.state_mut().perform(&ctx, Action::FilterAnalysed);
+        for _ in 0..3 {
+            h.run_steps(2);
+            h.state_mut().apply_filter();
+        }
+        run_until(&mut h, |app| {
+            app.files.len() == 8 && (0..app.files.len()).all(|i| app.ready(i, Level::Thumbnail))
+        });
+    }
+
+    #[test]
+    fn a_filter_without_result_keeps_the_top_of_the_right_panel() {
+        // Vidéo du 27/11/2026 : « Développées », « En conflit » sans résultat, et
+        // l'histogramme et la position partaient (tout le panneau remontait).
+        let (mut h, _dir) = harness();
+        h.state_mut().metadata_panel = true;
+        h.set_size(vec2(1400.0, 1400.0));
+        h.run_steps(3);
+        let colour = t!("palette-colour");
+        let before = h.query_by_label(&colour).map(|n| n.rect().top());
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::FilterConflicts);
+        h.run_steps(3);
+        assert!(h.state().files.is_empty(), "aucune note en conflit");
+        for title in ["panel-section-histogram", "panel-section-position"] {
+            let title = t!(title).to_uppercase();
+            assert!(h.query_by_label(&title).is_some(), "{title} gardé");
+        }
+        let after = h.query_by_label(&colour).map(|n| n.rect().top());
+        if let (Some(before), Some(after)) = (before, after) {
+            assert!((before - after).abs() < 1.0, "de {before} à {after}");
+        }
     }
 
     #[test]

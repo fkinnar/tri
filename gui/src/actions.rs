@@ -196,6 +196,10 @@ pub enum Action {
     /// Filtre « illisibles » : les images dont la vignette n'a pas pu être calculée
     /// (fichier abîmé, lecture ratée sur un partage ; 26/11/2026).
     FilterUnreadable,
+    /// Filtre « analysées » : les photos dont les analyses sont dans le cache, pour filtrer
+    /// sur elles sans attendre les autres (un NAS en mode léger dans « Toutes les
+    /// photos », 27/11/2026).
+    FilterAnalysed,
     /// « Palettes proches » de l'image sélectionnée, ou fin de la recherche (#492).
     FilterPalette,
     /// « Contient cette couleur » : la pipette des palettes en plein écran, ou fin de la
@@ -417,6 +421,10 @@ pub enum Action {
     Compute(tri::compute::Kind),
     /// Calcule tout pour la sélection (ce qui manque au cache).
     ComputeAll,
+    /// Calcule les analyses qui manquent aux photos du filtre (bouton du filtre
+    /// « analysées », 27/11/2026) : celles que la grille montre, ou, filtre allumé, celles
+    /// qu'il écarte.
+    ComputeMissing,
     /// Recalcule tout pour la sélection, même ce qui est en cache.
     RecreateAll,
     /// Recalcule tout pour le dossier pointé, même ce qui est en cache.
@@ -661,7 +669,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 314] = [
+    pub const ALL: [Action; 316] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -697,6 +705,7 @@ impl Action {
         Action::FilterDeveloped,
         Action::FilterConflicts,
         Action::FilterUnreadable,
+        Action::FilterAnalysed,
         Action::FilterPalette,
         Action::FilterPaletteColour,
         Action::AllPhotos,
@@ -904,6 +913,7 @@ impl Action {
             tri::palette::SourceKind::Developed(tri::develop::Engine::Art),
         )),
         Action::ComputeAll,
+        Action::ComputeMissing,
         Action::RecreateAll,
         Action::FolderCopy,
         Action::FolderMove,
@@ -1157,6 +1167,7 @@ impl Action {
             FilterDeveloped => &["panel-filter-developed"],
             FilterConflicts => &["filter-conflicts"],
             FilterUnreadable => &["filter-unreadable"],
+            FilterAnalysed => &["filter-analysed"],
             FilterCycle | FilterKind(_) => &["filter-bar-raw-tip", "filter-bar-flat-tip"],
             // « Recadrer » : l'ancien nom de la nouvelle version (07/11/2026), trouvé en tête.
             Crop => &["version-crop-alias"],
@@ -1195,9 +1206,9 @@ impl Action {
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterStarsTop | FilterFlag(_)
             | FilterColor(_) | FilterColorTop | FilterColorsAll | FilterClear | FilterBlurry
             | FilterWellExposed | FilterStack | FilterInvert | FilterDeveloped
-            | FilterConflicts | FilterUnreadable | FilterPalette | FilterPaletteColour
-            | SetReference | FilterSimilar | FilterRestart | FilterCount | SortNext
-            | SortReverse | SortBy(_) | FilterKind(_) | GridRenderNext | Render(_) => {
+            | FilterConflicts | FilterUnreadable | FilterAnalysed | FilterPalette
+            | FilterPaletteColour | SetReference | FilterSimilar | FilterRestart | FilterCount
+            | SortNext | SortReverse | SortBy(_) | FilterKind(_) | GridRenderNext | Render(_) => {
                 Group::Filters
             }
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
@@ -1207,7 +1218,9 @@ impl Action {
             FileActionsAllow | FileRename | FileDelete | FileReveal | FileShowInFolder
             | FileLocate | FileEdit | FileIptc | FileCopy | FileMove | Sidecars | EmbedNotes
             | ImportNotes | FileDeleteStack | FileDeletePhoto | FileCopyStack | FileExport
-            | ExportReport | Send(_) | Compute(_) | ComputeAll | RecreateAll => Group::Files,
+            | ExportReport | Send(_) | Compute(_) | ComputeAll | ComputeMissing | RecreateAll => {
+                Group::Files
+            }
             Undo | Redo | History => Group::Edit,
             StackToggle | StackOpen | StackClose | StacksAll | GroupingWindow | StackMode
             | StackChoose | StackFirst | StackLast | StackEnterToggle | DevToggle | DevNext
@@ -1297,6 +1310,7 @@ impl Action {
                 | FilterDeveloped
                 | FilterConflicts
                 | FilterUnreadable
+                | FilterAnalysed
                 | FilterPalette
                 | FilterPaletteColour
                 | FilterSimilar
@@ -1341,6 +1355,7 @@ impl Action {
             Action::FilterDeveloped => "core.filter.developed",
             Action::FilterConflicts => "core.filter.conflicts",
             Action::FilterUnreadable => "core.filter.unreadable",
+            Action::FilterAnalysed => "core.filter.analysed",
             Action::FilterPalette => "core.filter.similar_colours",
             Action::FilterPaletteColour => "core.filter.colour",
             Action::AllPhotos => "core.view.all_photos",
@@ -1548,6 +1563,7 @@ impl Action {
                 }
             }
             Action::ComputeAll => "core.file.compute.all",
+            Action::ComputeMissing => "core.file.compute.missing",
             Action::RecreateAll => "core.file.compute.recreate_all",
             Action::FolderComputeAll => "core.folders.compute.all",
             Action::FolderRecreateAll => "core.folders.compute.recreate_all",

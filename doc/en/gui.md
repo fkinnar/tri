@@ -85,6 +85,27 @@ system one ("cold" measurements, experiments).
   again once the thumbnails are done. An image computed again successfully leaves it. A photo of All photos whose folder is not found or
   on an unplugged disk is not unreadable but absent: not in this filter (feedback of
   2026-11-26).
+  **Analysed** (`f a`, `core.filter.analysed`, 2026-11-27: a NAS in light mode in All
+  photos greyed out the analysis filters): only the photos whose on-demand analyses are in
+  the cache. The filter looks at the cache of every photo of the folder **itself**
+  (`analysed_reads`, as many threads as light workers): the engine only does so for the
+  photos shown, and after the thumbnails (feedback of 2026-11-27: on a NAS of 6,000
+  photos, hardly any had been looked at yet, so they all passed as analysed). A photo not
+  looked at yet is left out; the grid is filtered again only once the whole folder is
+  checked (video of 2026-11-27: refiltering every 5 s restarted the engine on each list,
+  thumbnails came back one by one, empty status bar); meanwhile the label says how far it
+  is ("Analysed (1,200 / 7,880 checked)"). The analyses that count are those "on demand" for the photo (settings, or
+  light mode of its folder); the engine's `Missing` and `Ready` keep `unanalysed` up to
+  date too, whatever the list. An unavailable photo (folder not found, iCloud not
+  mounted, unplugged disk) is not analysed: left out, and not for the Analyse button. Applied before the analysis filters,
+  which are then enabled: they judge complete photos only. A line under "Unreadable",
+  shown only when analyses are missing (or when on); icon of a ticked photo
+  (`marks::analysed`). On its right, centred under the reference photo of Similar, the
+  **Analyse** button (`core.file.compute.missing`, no key): computes in the background the
+  analyses missing from the filter's photos (those of the grid or, filter on, those it
+  leaves out), one task per analysis; greyed out when there are none. At the end of a
+  computation, that analysis's mark is removed and the refilter takes the photos back
+  (the cache says at once if some are still missing).
   **Grouped folder** (#392, 2026-11-14): "Photos" = pairs + RAW alone +
   JPEG alone, each a line and a box of the three-way filter; under "Developments", also
   "Camera JPEG" (the pairs' JPEG) and "LibRaw". Developments always show two counts, "photos

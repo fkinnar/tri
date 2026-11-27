@@ -45,7 +45,8 @@ one's folder (`Light::Folders`, the folders whose photos are in light mode,
 the others keep all their background work. The engine takes the analyses from the
 settings and only reads them from the cache for photos in light mode; the interface
 shows their tools "on demand" as soon as one photo is (greyed out while some are
-missing). Status bar: the feather and "partly light", the folders on hover. Before
+missing; the Analysed filter enables them for the computed photos, its Analyse button
+computes the others). Status bar: the feather and "partly light", the folders on hover. Before
 (report of 2026-11-26), All photos was never in light mode: opening it started every
 computation, NAS included.
 

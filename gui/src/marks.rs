@@ -1815,6 +1815,49 @@ pub fn broken_image(painter: &Painter, rect: Rect, color: Color32) {
     ));
 }
 
+/// Filtre « analysées » (27/11/2026) : une photo (cadre et montagne) marquée d'une
+/// coche, ses analyses faites ; distincte de la photo fendue des illisibles.
+pub fn analysed(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let p = |x: f32, y: f32| rect.center() + vec2((x - 0.5) * s, (y - 0.5) * s);
+    let stroke = Stroke::new((s / 10.0).max(1.2), color);
+    // Le cadre, ouvert en bas à droite pour la coche.
+    painter.add(egui::Shape::line(
+        vec![
+            p(0.52, 0.8),
+            p(0.06, 0.8),
+            p(0.06, 0.12),
+            p(0.8, 0.12),
+            p(0.8, 0.46),
+        ],
+        stroke,
+    ));
+    // Une montagne, pour dire « photo ».
+    painter.add(egui::Shape::line(
+        vec![p(0.06, 0.66), p(0.24, 0.42), p(0.42, 0.62)],
+        stroke,
+    ));
+    // La coche, en bas à droite.
+    painter.add(egui::Shape::line(
+        vec![p(0.56, 0.74), p(0.7, 0.88), p(0.96, 0.56)],
+        stroke,
+    ));
+}
+
+/// Bouton « Analyser » du filtre « analysées » : une loupe (analyser) et un éclair de
+/// calcul dedans, simple à reconnaître à petite taille.
+pub fn analyse_button(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let p = |x: f32, y: f32| rect.center() + vec2((x - 0.5) * s, (y - 0.5) * s);
+    let stroke = Stroke::new((s / 10.0).max(1.2), color);
+    painter.circle_stroke(p(0.42, 0.42), s * 0.32, stroke);
+    painter.line_segment([p(0.66, 0.66), p(0.94, 0.94)], stroke);
+    painter.add(egui::Shape::line(
+        vec![p(0.48, 0.22), p(0.34, 0.46), p(0.5, 0.46), p(0.36, 0.64)],
+        Stroke::new((s / 14.0).max(1.0), color),
+    ));
+}
+
 /// Couleurs mesurées (#492, en face de l'œil des couleurs perçues) : quatre pixels, les
 /// valeurs du fichier telles quelles.
 pub fn pixels(painter: &Painter, rect: Rect, color: Color32) {
