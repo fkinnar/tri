@@ -395,7 +395,10 @@ fn network_places(os: &str) -> Vec<Place> {
             .map(|o| network_mounts_macos(&String::from_utf8_lossy(&o.stdout)))
             .unwrap_or_default(),
         "windows" => Vec::new(),
-        _ => network_mounts_linux(&fs::read_to_string("/proc/mounts").unwrap_or_default()),
+        _ => network_mounts_linux(
+            &fs::read_to_string("/proc/mounts").unwrap_or_default(),
+            &fs::read_to_string("/etc/fstab").unwrap_or_default(),
+        ),
     }
     .into_iter()
     .map(|path| Place {
@@ -430,16 +433,40 @@ fn network_mounts_macos(text: &str) -> Vec<PathBuf> {
 }
 
 /// Points de montage réseau dans `/proc/mounts` (Linux ; espaces écrits `\040`).
-fn network_mounts_linux(text: &str) -> Vec<PathBuf> {
-    text.lines()
-        .filter_map(|line| {
-            let mut fields = line.split_whitespace();
-            let (_, point, fs_type) = (fields.next()?, fields.next()?, fields.next()?);
-            NETWORK_FS
-                .contains(&fs_type)
-                .then(|| PathBuf::from(point.replace("\\040", " ")))
-        })
-        .collect()
+///
+/// Un montage automatique (`x-systemd.automount` dans `/etc/fstab`) n'y apparaît qu'en
+/// `autofs` tant que personne n'est entré dans le dossier : il se rangeait alors dans les
+/// périphériques au premier lancement, dans le réseau ensuite (retour du 27/11/2026, NFS).
+/// Un point `autofs` compte donc comme réseau quand `fstab` (texte de `/etc/fstab`) lui
+/// donne un système de fichiers réseau. Un point monté n'est donné qu'une fois (l'`autofs`
+/// reste listé sous le vrai montage).
+fn network_mounts_linux(text: &str, fstab: &str) -> Vec<PathBuf> {
+    let unescape = |point: &str| PathBuf::from(point.replace("\\040", " "));
+    let fields = |line: &str| -> Option<(String, String)> {
+        let line = line.trim();
+        if line.starts_with('#') {
+            return None;
+        }
+        let mut f = line.split_whitespace();
+        let (_, point, fs_type) = (f.next()?, f.next()?, f.next()?);
+        Some((point.to_string(), fs_type.to_string()))
+    };
+    let network_in_fstab: Vec<String> = fstab
+        .lines()
+        .filter_map(fields)
+        .filter(|(_, fs_type)| NETWORK_FS.contains(&fs_type.as_str()))
+        .map(|(point, _)| point)
+        .collect();
+    let mut points: Vec<PathBuf> = Vec::new();
+    for (point, fs_type) in text.lines().filter_map(fields) {
+        let network = NETWORK_FS.contains(&fs_type.as_str())
+            || (fs_type == "autofs" && network_in_fstab.contains(&point));
+        let path = unescape(&point);
+        if network && !points.contains(&path) {
+            points.push(path);
+        }
+    }
+    points
 }
 
 /// Montages GVFS (Nautilus, Nemo…) dans `dir` : `smb-share:server=nas,share=photo` devient
@@ -2682,12 +2709,30 @@ mod tests {
                     fab@srv:/ /home/fab/srv fuse.sshfs rw 0 0\n\
                     gvfsd-fuse /run/user/1000/gvfs fuse.gvfsd-fuse rw 0 0\n";
         assert_eq!(
-            network_mounts_linux(proc),
+            network_mounts_linux(proc, ""),
             [
                 PathBuf::from("/mnt/nas photo"),
                 PathBuf::from("/home/fab/srv")
             ]
         );
+        // Montage automatique pas encore touché : `autofs`, réseau d'après fstab ; une
+        // fois monté, une seule fois. Un `autofs` local (/boot/efi) n'est pas du réseau.
+        let fstab = "# /etc/fstab\n\
+                     UUID=1234 /boot/efi vfat noauto,x-systemd.automount 0 0\n\
+                     nas:/volume1/photo /mnt/photo nfs4 noauto,x-systemd.automount,_netdev 0 0\n";
+        let waiting = "/dev/sda1 / ext4 rw 0 0\n\
+                       systemd-1 /mnt/photo autofs rw,fd=55 0 0\n\
+                       systemd-1 /boot/efi autofs rw,fd=56 0 0\n";
+        assert_eq!(
+            network_mounts_linux(waiting, fstab),
+            [PathBuf::from("/mnt/photo")]
+        );
+        let mounted = format!("{waiting}nas:/volume1/photo /mnt/photo nfs4 rw 0 0\n");
+        assert_eq!(
+            network_mounts_linux(&mounted, fstab),
+            [PathBuf::from("/mnt/photo")]
+        );
+        assert!(network_mounts_linux(waiting, "").is_empty());
         // GVFS : Linux seulement ; « : » est interdit dans un nom de dossier sous Windows.
         if cfg!(windows) {
             return;

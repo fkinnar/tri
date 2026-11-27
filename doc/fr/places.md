@@ -127,7 +127,10 @@ fil que l'éjection : dossier ouvert dessus fermé d'abord, résultat dans la ba
 - **Partages réseau** (`PlaceKind::Network`) : points de montage d'un système de fichiers
   réseau (SMB, AFP, NFS, WebDAV, SSHFS, rclone…), lus dans la sortie de `mount` (macOS)
   ou `/proc/mounts` (Linux) ; un partage monté dans `/Volumes` ou `/media` change de
-  section, les autres (`/etc/fstab`, `~/nas`) s'ajoutent. Sous Linux aussi les montages
+  section, les autres (`/etc/fstab`, `~/nas`) s'ajoutent. Un montage automatique
+  (`x-systemd.automount`) pas encore touché n'est qu'un `autofs` dans `/proc/mounts` : il
+  compte comme partage quand `/etc/fstab` lui donne un système de fichiers réseau (sinon,
+  au premier lancement, il tombait dans les périphériques). Sous Linux aussi les montages
   **GVFS** du gestionnaire de fichiers (`/run/user/<uid>/gvfs` : `smb-share:server=nas,
   share=photo` devient « photo (nas) ») ; un téléphone (`mtp`) ou un appareil photo
   (`gphoto2`) y est un volume. Pas d'éjection proposée pour un partage. Sous Windows,
