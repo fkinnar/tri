@@ -937,8 +937,8 @@ enabled = true
 max_kb = 1024
 # Older files kept (tri.1.log, tri.2.log…); 0: none.
 keep = 3
-# Detailed trace (image loading steps, slow frames) in the log too: to reproduce a
-# problem on request. Large, switch it off afterwards.
+# Detailed trace (image loading steps, slow frames, ratings reading) in the log too: to
+# reproduce a problem on request. Large, switch it off afterwards.
 trace = false
 
 [adjust]

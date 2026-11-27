@@ -37,8 +37,9 @@ pub struct LogSettings {
     pub max_kb: u64,
     /// Anciens fichiers gardés (`tri.1.log`, `tri.2.log`…) ; 0 : aucun.
     pub keep: usize,
-    /// Trace détaillée (étapes du chargement des images, images lentes de l'interface)
-    /// aussi au journal : pour reproduire un problème à la demande. Volumineux.
+    /// Trace détaillée (étapes du chargement des images, images lentes de l'interface,
+    /// lecture des notes d'un dossier) aussi au journal : pour reproduire un problème à la
+    /// demande. Volumineux.
     pub trace: bool,
 }
 
