@@ -5689,8 +5689,9 @@ impl TriApp {
         // ils ont quelque chose à montrer (ou qu'ils sont allumés).
         // Notes en conflit (issue n° 368) : un filtre secondaire, ici seulement (pas dans
         // la barre du haut), et seulement quand il y en a (ou qu'il est allumé).
-        let conflicts = self.folder.notes.conflicts().len();
-        if conflicts > 0 || self.conflicts_only {
+        // Une photo du dossier en conflit, pas une entrée des notes sans photo montrée
+        // (retour du 27/11/2026 : la ligne était là, le filtre ne gardait rien).
+        if self.conflicts_only || self.folder_has_conflicts() {
             // Même forme que les autres filtres : case, icône, libellé (tout se clique).
             let tip = t!("filter-conflicts-tip");
             let size = self.gui.grid.marks + 4.0;
@@ -5825,6 +5826,17 @@ impl TriApp {
                 self.perform(&ctx, Action::ComputeMissing);
             }
         }
+    }
+
+    /// Vrai si une photo du dossier a des notes en conflit (filtre « en conflit »).
+    fn folder_has_conflicts(&self) -> bool {
+        let notes = &self.folder.notes;
+        !notes.conflicts().is_empty()
+            && self
+                .folder
+                .files
+                .iter()
+                .any(|f| notes.conflict(&f.path).is_some())
     }
 
     /// Recherches de palettes (#492), sous les autres filtres (retour du 21/11/2026 : la
@@ -12328,11 +12340,27 @@ impl TriApp {
             .apply(groups),
             None => groups,
         };
+        // En conflit : la photo, ou le JPEG de sa paire (retour du 27/11/2026 : notes
+        // différentes dans le XMP et dans DSCF4021.JPG, la paire regroupée ne montrait que
+        // le RAF et le filtre ne gardait rien).
         let groups = if self.conflicts_only {
-            tri::notes::ConflictFilter {
-                book: &self.folder.notes,
-            }
-            .apply(groups)
+            let conflicted: HashSet<&Path> = self
+                .folder
+                .notes
+                .conflicts()
+                .into_iter()
+                .flat_map(|p| [Some(p), self.camera_raw.get(p).map(PathBuf::as_path)])
+                .flatten()
+                .collect();
+            groups
+                .into_iter()
+                .map(|g| {
+                    g.into_iter()
+                        .filter(|f| conflicted.contains(f.path.as_path()))
+                        .collect::<Vec<MediaFile>>()
+                })
+                .filter(|g| !g.is_empty())
+                .collect()
         } else {
             groups
         };
@@ -50534,6 +50562,38 @@ mod tests {
             "propagée au sidecar"
         );
         assert!(h.state().folder.notes.conflicts().is_empty());
+    }
+
+    #[test]
+    fn the_conflict_filter_keeps_the_pair_whose_jpeg_is_in_conflict() {
+        // Retour du 27/11/2026 : notes différentes dans le XMP et dans DSCF4021.JPG, paire
+        // regroupée : le filtre « en conflit » ne gardait que le JPEG, que la grille
+        // range sous son RAF absent, et la grille restait vide.
+        let (mut h, _dir) = harness();
+        h.run_steps(2);
+        let photos = h.state().folder.dir.clone();
+        std::fs::write(photos.join("img0.RAF"), b"raw").unwrap();
+        h.state_mut().settings.files.group_pairs = tri::pairs::Grouping::Grouped;
+        h.state_mut().open_folder(&photos);
+        run_until(&mut h, |app| app.files.len() == 4 && app.loading.is_none());
+        let (raw, jpeg) = (photos.join("img0.RAF"), photos.join("img0.jpg"));
+        assert!(h.state().camera_raw.contains_key(&jpeg), "paire regroupée");
+        let mut four = tri::xmp::Notes::default();
+        four.set_stars(4);
+        tri::embedded::write(&jpeg, &four).unwrap();
+        let mut two = tri::xmp::Notes::default();
+        two.set_stars(2);
+        tri::xmp::write(&jpeg, &two, tri::xmp::Convention::Darktable).unwrap();
+        h.state_mut().folder.notes.reload();
+        h.run_steps(2);
+        assert!(h.state().folder.notes.conflict(&jpeg).is_some());
+        assert!(h.state().folder_has_conflicts());
+        act(&mut h, Action::FilterConflicts);
+        h.run_steps(2);
+        let shown: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        assert!(shown.contains(&raw), "le RAF de la paire : {shown:?}");
+        assert!(shown.contains(&jpeg));
+        assert_eq!(shown.len(), 2);
     }
 
     #[test]
