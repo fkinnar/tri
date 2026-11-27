@@ -134,6 +134,23 @@ signatures, sharpness and exposures delivered between **0.16 and 0.4 s** instead
 thumbnails unchanged (~0.9 to 1.2 s). Bonus: a 1:1 already cached is delivered while the heavy worker renders
 something else.
 
+## What is already known in the cache, from one list to the next (#621)
+
+Each refilter gives the engine a new list (`set_folder`), which checked the cache again
+for every photo and level (video of 2026-11-27: ticking then unticking a filter in All
+photos restarted the check of 6,737 photos of a NAS, thumbnails came back one by one, the
+PC struggled). The engine now remembers, per photo and level, what it found ready
+(`State::known`), with the file's stamp (size, date) at that time; on the next list, those
+jobs are said ready at once (`Ready` and progress), without the disk. Safeguards:
+
+- the stamp must be the one `cache::stamp` still remembers (`cache::known_stamp`, no disk):
+  a changed file (watching, ratings written into the image, folder opened) is forgotten,
+  so checked again;
+- any removal from the cache since (clearing, recomputing, damaged entry, eviction, move:
+  `cache::removals`) forgets everything;
+- only the levels that depend on the file alone (`rememberable`): not developments nor
+  their palettes (sidecar), not the 1:1 (evicted by size).
+
 ## Measurements
 
 Real folder: 472 images (236 X-T4 RAFs + 236 camera JPEGs), 8-core Apple Silicon Mac,

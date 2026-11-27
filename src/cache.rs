@@ -399,6 +399,30 @@ pub fn seed_stamps<'a>(known: impl IntoIterator<Item = (&'a Path, u64, u128)>) {
     }
 }
 
+/// Relevé retenu de `path` ([`stamp`]) sans jamais toucher au disque : `None` s'il n'est
+/// pas (ou plus) retenu.
+pub fn known_stamp(path: &Path) -> Option<Option<(u64, u128)>> {
+    stamps()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(path)
+        .copied()
+}
+
+/// Entrées retirées du cache depuis le lancement (vidage, entrée abîmée, éviction,
+/// déplacement) : ce qu'on croyait dans le cache ne l'est peut-être plus.
+static REMOVALS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn note_removal() {
+    REMOVALS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Nombre de retraits du cache depuis le lancement : une réponse « dans le cache » retenue
+/// avant un retrait est à revérifier (le moteur, entre deux listes, #621).
+pub fn removals() -> u64 {
+    REMOVALS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Oublie les relevés de `paths` ([`stamp`]) : fichiers changés, ajoutés ou retirés.
 pub fn forget_stamps<'a>(paths: impl IntoIterator<Item = &'a Path>) {
     let mut known = stamps().lock().unwrap_or_else(|e| e.into_inner());
@@ -655,6 +679,7 @@ impl Cache {
     /// ([`crate::store::release`] : les données de tri repartent dans le dossier de
     /// données). Renvoie ce qui a été déplacé.
     pub fn release_disk(&self, root: &Path) -> io::Result<Usage> {
+        note_removal();
         let root = std::path::absolute(root)?;
         if crate::store::holder(&root).as_deref() != Some(root.as_path()) {
             return Ok(Usage::default());
@@ -689,6 +714,7 @@ impl Cache {
     /// comprises ; le choix de l'y garder reste (l'interrupteur demeure). Renvoie l'espace
     /// libéré.
     pub fn clear_disk(&self, root: &Path) -> io::Result<Usage> {
+        note_removal();
         let root = std::path::absolute(root)?;
         if crate::store::holder(&root).as_deref() != Some(root.as_path()) {
             return Ok(Usage::default());
@@ -709,6 +735,7 @@ impl Cache {
     /// celles de ses sous-dossiers suivent (sinon, recalculées). Un cache gardé dans le
     /// dossier lui-même est déjà parti avec lui.
     pub fn relocate(&self, from: &Path, to: &Path) -> io::Result<Usage> {
+        note_removal();
         let (from, to) = (std::path::absolute(from)?, std::path::absolute(to)?);
         let mut shards = self.shards_under(&self.root, None, &from);
         if let Some(holder) = self.disk_of(&from)
@@ -820,6 +847,7 @@ impl Cache {
         let path = self.found_path(key);
         let bytes = fs::read(&path).ok()?;
         let Ok(mut bitmap) = jpeg::decode(&bytes, min_side) else {
+            note_removal();
             let _ = fs::remove_file(&path);
             return None;
         };
@@ -892,6 +920,7 @@ impl Cache {
     /// déplacée dans le rangement du nouveau dossier. Vrai si une entrée a suivi ; rien
     /// n'est écrasé.
     pub fn carry(&self, key: &Key, from_folder: &Path, keep: bool) -> io::Result<bool> {
+        note_removal();
         let source = Key {
             folder: std::path::absolute(from_folder)?,
             ..key.clone()
@@ -986,6 +1015,7 @@ impl Cache {
         gone: impl Fn(&Path) -> bool,
         dry_run: bool,
     ) -> io::Result<Usage> {
+        note_removal();
         let mut freed = Usage::default();
         for level in Level::ALL {
             let Ok(shards) = fs::read_dir(self.level_dir(level)) else {
@@ -1030,6 +1060,7 @@ impl Cache {
 
     /// Supprime une entrée (sans erreur si elle n'existe pas).
     pub fn remove(&self, key: &Key) -> io::Result<()> {
+        note_removal();
         for hash in [&key.hash, &key.earlier] {
             match fs::remove_file(self.entry_file(key, hash)) {
                 Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
@@ -1041,6 +1072,7 @@ impl Cache {
 
     /// Vide un niveau, ou tout le cache si `level` vaut `None`.
     pub fn clear(&self, level: Option<Level>) -> io::Result<()> {
+        note_removal();
         let levels = level.map_or(Level::ALL.to_vec(), |l| vec![l]);
         for level in levels {
             let dir = self.level_dir(level);
@@ -1081,6 +1113,7 @@ impl Cache {
     /// un niveau ou à tous si `level` vaut `None`, quels que soient les réglages avec
     /// lesquels elles ont été calculées. Renvoie l'espace libéré.
     pub fn clear_folder(&self, folder: &Path, level: Option<Level>) -> io::Result<Usage> {
+        note_removal();
         let folder = std::path::absolute(folder)?;
         let levels = level.map_or(Level::ALL.to_vec(), |l| vec![l]);
         let mut freed = Usage::default();
@@ -1121,6 +1154,7 @@ impl Cache {
     /// Supprime les entrées les moins récemment utilisées d'un niveau jusqu'à ce qu'il pèse
     /// au plus `max_bytes`. Renvoie l'espace libéré.
     pub fn evict(&self, level: Level, max_bytes: u64) -> io::Result<Usage> {
+        note_removal();
         let mut entries = self.entries(level)?;
         let mut total: u64 = entries.iter().map(|e| e.bytes).sum();
         entries.sort_by_key(|e| e.used);

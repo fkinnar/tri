@@ -135,6 +135,24 @@ sur 27 RAW, vignettes et aperçus boîtier retirés du cache : empreintes, nette
 expositions livrées entre **0,16 et 0,4 s** au lieu de 2,7 s, vignettes inchangées (~0,9 à 1,2 s). Bonus :
 un 1:1 déjà en cache est livré pendant que le worker lourd rend autre chose.
 
+## Ce qu'on sait déjà dans le cache, d'une liste à l'autre (#621)
+
+Chaque refiltrage donne une nouvelle liste au moteur (`set_folder`), qui revérifiait le
+cache de chaque photo et de chaque niveau (vidéo du 27/11/2026 : cocher puis décocher un
+filtre dans « Toutes les photos » relançait la vérification de 6 737 photos d'un NAS,
+vignettes revenues une à une, PC à la peine). Le moteur retient maintenant, par photo et
+niveau, ce qu'il a su prêt (`State::known`), avec le relevé (taille, date) du fichier à ce
+moment ; à la liste suivante, ces tâches sont redites prêtes aussitôt (`Ready` et
+progression), sans disque. Garde-fous :
+
+- le relevé doit être celui que retient encore `cache::stamp` (`cache::known_stamp`, sans
+  disque) : un fichier changé (surveillance, notes écrites dans l'image, ouverture du
+  dossier) est oublié, donc revérifié ;
+- tout retrait du cache depuis (vidage, recalcul, entrée abîmée, éviction, déplacement :
+  `cache::removals`) fait tout oublier ;
+- seulement les niveaux qui ne dépendent que du fichier (`rememberable`) : pas les
+  développés ni leurs palettes (sidecar), pas les 1:1 (évincés par taille).
+
 ## Mesures
 
 Dossier réel : 472 images (236 RAF X-T4 + 236 JPEG du boîtier), Mac Apple Silicon à
