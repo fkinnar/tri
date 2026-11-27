@@ -14837,8 +14837,8 @@ impl TriApp {
             let Ok(event) = engine.events.try_recv() else {
                 break;
             };
-            // Filtre « analysées » : ce que le cache a (ou n'a pas) pour une photo vaut
-            // quelle que soit la liste (retour du 27/11/2026 : un refiltrage pendant les
+            // Filtre « analysées » : ce que le cache a pour une photo vaut quelle que soit
+            // la liste (retour du 27/11/2026 : un refiltrage pendant les
             // recherches jetait celles de l'ancienne, et ces photos restaient montrées).
             match &event {
                 Event::Ready { path, level, .. } => {
@@ -14852,7 +14852,14 @@ impl TriApp {
                         }
                     }
                 }
-                Event::Missing { path, level, .. } => {
+                // Seulement de la liste en cours : un « absente » d'avant un calcul, arrivé
+                // après, effaçait ce que le filtre venait de regarder.
+                Event::Missing {
+                    path,
+                    level,
+                    generation: g,
+                    ..
+                } if *g == generation => {
                     if let Some(i) = tracked(*level) {
                         let bits = self.unanalysed.entry(path.clone()).or_insert(0);
                         if *bits == 0 {
@@ -52031,6 +52038,52 @@ mod tests {
             4,
             "le bouton les analyse"
         );
+    }
+
+    #[test]
+    fn the_analysed_filter_leaves_every_shown_photo_its_thumbnail() {
+        // Retour du 27/11/2026 : filtre allumé (dossier en mode léger), des vignettes
+        // restaient vides.
+        use tri::scheduler::Analysis;
+        let names: Vec<String> = (0..16).map(|i| format!("img{i:02}.jpg")).collect();
+        let images = names
+            .iter()
+            .enumerate()
+            .map(|(i, n)| {
+                let pixel = image::Rgb([(15 * i) as u8, 100, 160]);
+                (n.as_str(), image::RgbImage::from_pixel(32, 24, pixel))
+            })
+            .collect();
+        let (mut h, dir) = harness_tuned(images, |s, d| {
+            s.analysis.sharpness = Analysis::OnDemand;
+            s.analysis.exposure = Analysis::Off;
+            s.analysis.stacks = Analysis::Off;
+            s.analysis.palettes = Analysis::Off;
+            s.light.folders = vec![d.join("photos").to_string_lossy().into_owned()];
+        });
+        let photos = dir.path().join("photos");
+        run_until(&mut h, |app| {
+            app.folder.files.len() == 16 && app.loading.is_none()
+        });
+        let half: Vec<MediaFile> = h.state().folder.files.iter().step_by(2).cloned().collect();
+        let ctx = h.ctx.clone();
+        h.state_mut().compute_action(
+            &ctx,
+            Action::FolderCompute(tri::compute::Kind::Sharpness),
+            crate::compute_tasks::Target::Images {
+                folder: photos,
+                files: half,
+            },
+        );
+        run_until(&mut h, |app| app.compute_tasks.is_empty());
+        h.state_mut().perform(&ctx, Action::FilterAnalysed);
+        for _ in 0..3 {
+            h.run_steps(2);
+            h.state_mut().apply_filter();
+        }
+        run_until(&mut h, |app| {
+            app.files.len() == 8 && (0..app.files.len()).all(|i| app.ready(i, Level::Thumbnail))
+        });
     }
 
     #[test]
