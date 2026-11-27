@@ -123,7 +123,10 @@ open folder on it is closed first, the result goes to the status bar.
 - **Network shares** (`PlaceKind::Network`): mount points of a network file system (SMB,
   AFP, NFS, WebDAV, SSHFS, rclone…), read from the output of `mount` (macOS) or
   `/proc/mounts` (Linux); a share mounted in `/Volumes` or `/media` changes section, the
-  others (`/etc/fstab`, `~/nas`) are added. On Linux, also the file manager's **GVFS**
+  others (`/etc/fstab`, `~/nas`) are added. An automount (`x-systemd.automount`) nobody
+  has entered yet is only an `autofs` in `/proc/mounts`: it counts as a share when
+  `/etc/fstab` gives it a network file system (otherwise, at the first launch, it fell
+  into the devices). On Linux, also the file manager's **GVFS**
   mounts (`/run/user/<uid>/gvfs`: `smb-share:server=nas,share=photo` becomes
   "photo (nas)"); a phone (`mtp`) or a camera (`gphoto2`) there is a volume. No ejection
   offered for a share. On Windows, a network drive (a letter mapped to a share,
