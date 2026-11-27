@@ -1638,6 +1638,7 @@ filter-analysed-compute-tip = { $n ->
     [one] Analyser la photo du filtre qui ne l'est pas, en fond
    *[other] Analyser les { $n } photos du filtre qui ne le sont pas, en fond
 }
+filter-analysed-checking = Analysées ({ $done } / { $total } regardées)
 filter-analysed-tip = Seulement les photos dont les analyses sont dans le cache : les filtres d'analyse (floues, exposition, piles, couleurs) s'y appliquent sans attendre les autres (photos d'un NAS en mode léger, par exemple)
 filter-conflicts-tip = Les images dont les notes se contredisent d'un logiciel à l'autre, à trancher
 conflict-badge = Notes en désaccord entre leurs sources : cliquer pour trancher

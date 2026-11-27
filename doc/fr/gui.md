@@ -90,9 +90,15 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   filtre (retour du 26/11/2026).
   **Analysées** (`f a`, `core.filter.analysed`, 27/11/2026 : un NAS en mode léger dans
   « Toutes les photos » grisait les filtres d'analyse) : seulement les photos dont les
-  analyses à la demande sont dans le cache (`unanalysed`, tenu d'après les événements
-  `Missing` et `Ready`, gardé d'un refiltrage à l'autre puisque le moteur ne cherche que
-  les photos montrées). Appliqué avant les filtres d'analyse, qui se dégrisent alors : ils
+  analyses à la demande sont dans le cache. Le filtre regarde **lui-même** le cache de
+  chaque photo du dossier (`analysed_reads`, autant de fils que de workers légers) : le
+  moteur ne le fait que pour les photos montrées, et après les vignettes (retour du
+  27/11/2026 : sur un NAS de 6 000 photos, presque aucune n'était encore regardée, donc
+  toutes passaient pour analysées). Une photo pas encore regardée est écartée ; le libellé
+  dit où on en est (« Analysées (1 200 / 7 880 regardées) »). Les analyses qui comptent
+  sont celles « à la demande » pour la photo (réglages, ou mode léger de son dossier) ;
+  `Missing` et `Ready` du moteur tiennent aussi `unanalysed` à jour, quelle que soit la
+  liste. Appliqué avant les filtres d'analyse, qui se dégrisent alors : ils
   ne jugent que des photos complètes. Ligne sous « Illisibles », montrée seulement s'il
   manque des analyses (ou allumée) ; icône d'une photo cochée (`marks::analysed`). À
   droite, centré sous la photo de référence des semblables, le bouton **Analyser**

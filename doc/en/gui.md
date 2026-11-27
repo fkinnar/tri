@@ -87,8 +87,14 @@ system one ("cold" measurements, experiments).
   2026-11-26).
   **Analysed** (`f a`, `core.filter.analysed`, 2026-11-27: a NAS in light mode in All
   photos greyed out the analysis filters): only the photos whose on-demand analyses are in
-  the cache (`unanalysed`, kept from the `Missing` and `Ready` events, across refilters
-  since the engine only looks at the photos shown). Applied before the analysis filters,
+  the cache. The filter looks at the cache of every photo of the folder **itself**
+  (`analysed_reads`, as many threads as light workers): the engine only does so for the
+  photos shown, and after the thumbnails (feedback of 2026-11-27: on a NAS of 6,000
+  photos, hardly any had been looked at yet, so they all passed as analysed). A photo not
+  looked at yet is left out; the label says how far it is ("Analysed (1,200 / 7,880
+  checked)"). The analyses that count are those "on demand" for the photo (settings, or
+  light mode of its folder); the engine's `Missing` and `Ready` keep `unanalysed` up to
+  date too, whatever the list. Applied before the analysis filters,
   which are then enabled: they judge complete photos only. A line under "Unreadable",
   shown only when analyses are missing (or when on); icon of a ticked photo
   (`marks::analysed`). On its right, centred under the reference photo of Similar, the
