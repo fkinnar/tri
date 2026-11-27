@@ -574,8 +574,8 @@ fn light_mode_per_photo_leaves_the_other_folders_their_background_work() {
         v.sort();
         v
     };
-    let local =
-        ["local/img0.RAF", "local/img1.RAF"].map(|p| Path::new(p).to_string_lossy().into_owned());
+    let name = |dir: &str, file: &str| Path::new(dir).join(file).to_string_lossy().into_owned();
+    let local = [name("local", "img0.RAF"), name("local", "img1.RAF")];
     assert_eq!(
         sorted(Level::Embedded),
         local,
@@ -596,7 +596,7 @@ fn light_mode_per_photo_leaves_the_other_folders_their_background_work() {
     assert!(scheduler.wait_idle(LONG));
     assert!(
         fake.order(Level::Exposure)
-            .contains(&Path::new("nas/img1.RAF").to_string_lossy().into_owned())
+            .contains(&name("nas", "img1.RAF"))
     );
 }
 
