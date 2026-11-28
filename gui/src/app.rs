@@ -17254,7 +17254,11 @@ impl TriApp {
         let current = self.selected;
         match self.mode {
             // La loupe de la grille : son image (son 1:1 est demandé).
-            Mode::Grid if self.loupe_on => vec![self.loupe_index],
+            // Liste vidée sous la loupe (filtre sans résultat, retour du 28/11/2026 :
+            // plantage, l'image 5 d'une liste vide) : plus rien.
+            Mode::Grid if self.loupe_on => {
+                [self.loupe_index].into_iter().filter(|&i| i < n).collect()
+            }
             Mode::Grid => Vec::new(),
             Mode::View => [current, current + 1, current.wrapping_sub(1)]
                 .into_iter()
@@ -40188,6 +40192,25 @@ mod tests {
         h.state_mut().settings.export.profiles.0.push(small);
         version.profile = Some("petit".into());
         assert_eq!(shown(&mut h, &version), Some((60, 80)));
+    }
+
+    #[test]
+    fn the_grid_loupe_survives_a_filter_that_empties_the_list() {
+        // Retour du 28/11/2026 (plantage) : loupe allumée en grille sur la 6e image, une
+        // recherche par couleur sans résultat vidait la liste ; `displayed` rendait
+        // toujours l'image 5 (« index out of bounds: the len is 0 but the index is 5 »).
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert_eq!(h.state().mode, Mode::Grid);
+        h.state_mut().loupe_on = true;
+        h.state_mut().loupe_index = 1;
+        // Comme en vrai : la liste vidée pendant les touches (« Valider »), puis les
+        // chargements de la même image, avant que la grille vide n'éteigne la loupe.
+        h.state_mut().files.clear();
+        assert!(h.state().displayed().is_empty());
+        let ctx = h.ctx.clone();
+        h.state_mut().update_loads(&ctx);
+        h.run_steps(3);
     }
 
     #[test]
