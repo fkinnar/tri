@@ -1223,6 +1223,14 @@ settings-keys-probed = { $keys }: { $n ->
 }
 settings-keys-probed-free = { $keys }: free, no action
 settings-keys-probe-all = Show all
+settings-keys-scope-images = Images and everywhere
+settings-keys-scope-crop = Cropping a version
+settings-keys-scope-histogram = Large histogram
+settings-keys-scope-folders = Folders panel
+settings-keys-scope-metadata = Metadata panel
+settings-keys-scope-offload = Offload gallery
+settings-keys-scope-eyedropper = Armed eyedropper
+settings-keys-scope-note = While this window has the keyboard, its keys come before those of the images.
 settings-keys-type-hint = or type: g g
 settings-keys-default = Back to the chosen set's shortcuts
 settings-reset = default

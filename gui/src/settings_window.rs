@@ -1982,15 +1982,33 @@ impl SettingsWindow {
         let only = only.or(probed.as_deref());
         let actions: Vec<Action> = self.matching_actions(only).collect();
         let mut changed = None;
-        let mut group = None;
-        for action in actions {
-            if group != Some(action.group()) {
-                group = Some(action.group());
-                ui.add_space(6.0);
-                ui.strong(action.group().label());
+        // Par fenêtre d'abord (retour du 28/11/2026 : « Grand histogramme : bleu seul »
+        // parmi l'affichage, « b » pris deux fois sans qu'on voie où), puis par thème ; dans
+        // une fenêtre, le libellé sans son nom.
+        for scope in KEY_SCOPES {
+            let here: Vec<Action> = actions
+                .iter()
+                .copied()
+                .filter(|a| a.scope() == scope)
+                .collect();
+            if here.is_empty() {
+                continue;
             }
-            if let Some(s) = self.key_row(ui, action) {
-                changed = Some(s);
+            ui.add_space(10.0);
+            ui.heading(scope_title(scope));
+            if scope.is_some() {
+                ui.weak(t!("settings-keys-scope-note"));
+            }
+            let mut group = None;
+            for action in here {
+                if group != Some(action.group()) {
+                    group = Some(action.group());
+                    ui.add_space(6.0);
+                    ui.strong(action.group().label());
+                }
+                if let Some(s) = self.key_row(ui, action, scope.is_some()) {
+                    changed = Some(s);
+                }
             }
         }
         changed
@@ -1998,7 +2016,7 @@ impl SettingsWindow {
 
     /// Une action : son libellé, ses raccourcis en pastilles (clic : retiré), enregistrer,
     /// taper un raccourci, retour aux raccourcis du profil.
-    fn key_row(&mut self, ui: &mut Ui, action: Action) -> Option<AppSettings> {
+    fn key_row(&mut self, ui: &mut Ui, action: Action, short: bool) -> Option<AppSettings> {
         let id = ("keys".to_string(), action.id().to_string());
         let in_file = self.file.get("keys", action.id()).is_some();
         let specs = self.keymap.specs_for(action);
@@ -2006,7 +2024,13 @@ impl SettingsWindow {
         let mut typed = None;
         let mut reset = false;
         let row = ui.horizontal(|ui| {
-            let name = RichText::new(action.label());
+            // Dans la section de sa fenêtre : sans le nom de la fenêtre (« Bleu seul »).
+            let label = if short {
+                short_label(&action.label())
+            } else {
+                action.label()
+            };
+            let name = RichText::new(label);
             let name = if in_file { name.strong() } else { name };
             ui.allocate_ui_with_layout(
                 vec2(240.0, 18.0),
@@ -3122,6 +3146,51 @@ fn found_targets(schema: &Schema, hits: &[(usize, Found)]) -> Vec<(usize, usize)
     targets
 }
 
+/// Fenêtres de la liste des raccourcis, dans l'ordre : les images (et partout), puis
+/// chaque panneau ou mode dont les touches passent avant (`Action::scope`).
+const KEY_SCOPES: [Option<crate::actions::Scope>; 7] = {
+    use crate::actions::Scope;
+    [
+        None,
+        Some(Scope::Crop),
+        Some(Scope::Histogram),
+        Some(Scope::Folders),
+        Some(Scope::Metadata),
+        Some(Scope::Offload),
+        Some(Scope::Eyedropper),
+    ]
+};
+
+/// Titre de la section d'une fenêtre dans la liste des raccourcis.
+fn scope_title(scope: Option<crate::actions::Scope>) -> String {
+    use crate::actions::Scope;
+    match scope {
+        None | Some(Scope::Images) => t!("settings-keys-scope-images"),
+        Some(Scope::Crop) => t!("settings-keys-scope-crop"),
+        Some(Scope::Histogram) => t!("settings-keys-scope-histogram"),
+        Some(Scope::Folders) => t!("settings-keys-scope-folders"),
+        Some(Scope::Metadata) => t!("settings-keys-scope-metadata"),
+        Some(Scope::Offload) => t!("settings-keys-scope-offload"),
+        Some(Scope::Eyedropper) => t!("settings-keys-scope-eyedropper"),
+    }
+}
+
+/// Libellé d'une action sans le nom de sa fenêtre, déjà en titre (« Grand histogramme :
+/// bleu seul » → « Bleu seul », « Large histogram: blue only » → « Blue only »).
+fn short_label(label: &str) -> String {
+    let rest = label
+        .split_once(" : ")
+        .or_else(|| label.split_once("\u{a0}: "))
+        .or_else(|| label.split_once(": "))
+        .map_or(label, |(_, rest)| rest)
+        .trim();
+    let mut chars = rest.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => label.to_string(),
+    }
+}
+
 /// Une touche suivie de son propre caractère (`3` : la touche, puis le texte « 3 », arrivé
 /// une image plus tard) ne compte qu'une fois, en caractère, comme les raccourcis des
 /// profils (« f 3 »).
@@ -3760,6 +3829,22 @@ mod tests {
                 .unwrap()
                 .contains("\"core.flag.accept\"")
         );
+    }
+
+    #[test]
+    fn a_window_s_shortcuts_drop_its_name_from_their_labels() {
+        // Retour du 28/11/2026 : sous le titre « Grand histogramme », « Bleu seul ».
+        assert_eq!(short_label("Grand histogramme : bleu seul"), "Bleu seul");
+        assert_eq!(short_label("Large histogram: blue only"), "Blue only");
+        assert_eq!(short_label("Sans préfixe"), "Sans préfixe");
+        // Chaque action d'une fenêtre a un libellé « Fenêtre : … » dans les deux langues.
+        for lang in [tri::i18n::Language::Fr, tri::i18n::Language::En] {
+            for action in Action::ALL.into_iter().filter(|a| a.scope().is_some()) {
+                let key = format!("action-{}", action.id().replace('.', "-"));
+                let label = tri::i18n::translate_in(lang, &key, None);
+                assert_ne!(short_label(&label), label.trim(), "{lang:?} {}", action.id());
+            }
+        }
     }
 
     #[test]

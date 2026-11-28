@@ -1248,6 +1248,14 @@ settings-keys-probed = { $keys } : { $n ->
 }
 settings-keys-probed-free = { $keys } : libre, aucune action
 settings-keys-probe-all = Tout afficher
+settings-keys-scope-images = Images et partout
+settings-keys-scope-crop = Recadrage d'une version
+settings-keys-scope-histogram = Grand histogramme
+settings-keys-scope-folders = Panneau des dossiers
+settings-keys-scope-metadata = Panneau des métadonnées
+settings-keys-scope-offload = Galerie du déchargement
+settings-keys-scope-eyedropper = Pipette armée
+settings-keys-scope-note = Tant que cette fenêtre a le clavier, ses touches passent avant celles des images.
 settings-keys-type-hint = ou taper : g g
 settings-keys-default = Revenir aux raccourcis du jeu choisi
 settings-default = valeur par défaut : { $value }

@@ -741,7 +741,12 @@ system one ("cold" measurements, experiments).
   (`Keymap::chords_repeated`, a key followed by its character counted once), and the list
   shows only the actions that use it or start with it (`c`: every `c …`, all panels,
   `Keymap::actions_starting_with`); "free" if none; "Show all" goes back to the whole
-  list.
+  list. The list is sorted **by window** then by theme (feedback of 2026-11-28: "Large
+  histogram: blue only" among the display keys, without seeing where the key works):
+  "Images and everywhere", then cropping a version, the large histogram, the folders and
+  metadata panels, the offload gallery and the armed eyedropper (`Action::scope`,
+  `KEY_SCOPES`), each with a note (its keys come before those of the images) and its
+  labels without the window's name ("Blue only", `short_label`).
 - **Development software settings hidden without it** (2026-11-04: most users have
   none): without darktable, RapidRAW, RawTherapee or ART, the settings window hides
   `[develop] default`, `[gui.grid] develop` and `develop_toast_ms`, `[gui.view]
