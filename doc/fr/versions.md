@@ -48,11 +48,11 @@ acceptés dans `[keys]` (`actions::renamed_id`). Noms internes du code (`crop.rs
 L'interface ne fait que dessiner ; tout le calcul est ici.
 
 - `Rect::fit(ratio, aspect)` : le plus grand cadre d'un rapport, centré.
-- `Rect::with_ratio` : changer de rapport autour du même centre, sans grandir au-delà
-  de l'aire actuelle ni sortir de l'image.
-- `Rect::largest_around` : changer d'orientation, au plus grand cadre qui tienne dans
-  l'image, centré autant que possible sur le centre actuel (retour du 28/11/2026 : à aire
-  égale, chaque quart de tour rapetissait le cadre).
+- `Rect::with_ratio` : changer de forme (morceaux) autour du même centre, sans grandir
+  au-delà de l'aire actuelle ni sortir de l'image.
+- `Rect::largest_around` : changer de rapport ou d'orientation, au plus grand cadre qui
+  tienne dans l'image, centré autant que possible sur le centre actuel (retour du
+  28/11/2026 : à aire égale, chaque choix et chaque quart de tour rapetissaient le cadre).
 - `Rect::drag(handle, dx, dy, ratio, aspect)` :
   - un angle garde l'angle opposé fixe ;
   - un côté garde le côté opposé fixe, et l'autre axe centré si le rapport est fixe ;

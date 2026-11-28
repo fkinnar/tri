@@ -47,11 +47,11 @@ accepted in `[keys]` (`actions::renamed_id`). Internal code names (`crop.rs`,
 The interface only draws; all the computation is here.
 
 - `Rect::fit(ratio, aspect)`: the largest frame of a ratio, centred.
-- `Rect::with_ratio`: change ratio around the same centre, without growing beyond the
-  current area or leaving the image.
-- `Rect::largest_around`: change orientation, to the largest frame that fits in the
-  image, centred on the current centre as far as possible (feedback of 2026-11-28: at an
-  equal area, each quarter turn made the frame smaller).
+- `Rect::with_ratio`: change shape (tiles) around the same centre, without growing
+  beyond the current area or leaving the image.
+- `Rect::largest_around`: change ratio or orientation, to the largest frame that fits in
+  the image, centred on the current centre as far as possible (feedback of 2026-11-28: at
+  an equal area, each choice and each quarter turn made the frame smaller).
 - `Rect::drag(handle, dx, dy, ratio, aspect)`:
   - a corner keeps the opposite corner fixed;
   - a side keeps the opposite side fixed, and the other axis centred if the ratio is fixed;

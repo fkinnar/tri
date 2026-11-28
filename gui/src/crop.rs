@@ -277,8 +277,9 @@ impl Crop {
         self.set_ratio(ratio);
     }
 
-    /// Change de rapport : même centre, au plus grand qui tienne (ou, pour un rapport
-    /// choisi alors que le cadre couvre toute l'image, le plus grand de ce rapport).
+    /// Change de rapport : le plus grand cadre de ce rapport qui tienne dans l'image,
+    /// centré autant que possible sur le centre actuel (retour du 28/11/2026, vidéo :
+    /// à aire égale, 4:5 puis 3:4 puis 1:1 rapetissaient le cadre à chaque choix).
     pub fn set_ratio(&mut self, ratio: Ratio) {
         // Même forme que l'actuel : garder l'orientation choisie.
         let ratio = if ratio.same_shape(self.ratio) {
@@ -287,7 +288,9 @@ impl Crop {
             ratio
         };
         self.ratio = ratio;
-        self.refit();
+        if let Some(aspect) = self.aspect {
+            self.rect = self.rect.largest_around(self.frame(), aspect);
+        }
         self.rename();
     }
 
@@ -1051,6 +1054,18 @@ mod tests {
         // Un rapport tapé reste tel quel.
         wide.set_ratio(Ratio::Fixed(4, 5));
         assert_eq!(wide.ratio, Ratio::Fixed(4, 5));
+        // Changer de rapport aussi : le plus grand qui tienne, jamais plus petit à chaque
+        // choix (vidéo du 28/11/2026 : photo verticale, 4:5, tourné, 3:4, 1:1, 4:5).
+        let mut tall = crop(2.0 / 3.0);
+        let fills = |c: &Crop| (c.rect.w - 1.0).abs() < 1e-9 || (c.rect.h - 1.0).abs() < 1e-9;
+        tall.choose_ratio(Ratio::Fixed(4, 5));
+        assert!(fills(&tall), "{:?}", tall.rect);
+        tall.rotate();
+        assert!(fills(&tall), "{:?}", tall.rect);
+        for ratio in [Ratio::Fixed(4, 3), Ratio::Fixed(1, 1), Ratio::Fixed(5, 4)] {
+            tall.choose_ratio(ratio);
+            assert!(fills(&tall), "{ratio:?} : {:?}", tall.rect);
+        }
     }
 
     #[test]
