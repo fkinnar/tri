@@ -363,6 +363,10 @@ loupe = "none"
 # Offload gallery of the whole card (#600): start a session at the photo under the
 # cursor, or join it to the one before.
 "core.offload.cut" = ["c"]
+# Eyedropper armed (colour search): z alone zooms to 100 % and back, m alone turns the
+# loupe on and off, to aim (z z and z m elsewhere).
+"core.eyedropper.zoom" = ["z"]
+"core.eyedropper.loupe" = ["m"]
 # Connect to a network share: "c" (connect); forget it: Shift+C.
 "core.folders.connect" = ["c"]
 "core.folders.forget" = ["Shift+c"]

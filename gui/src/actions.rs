@@ -626,6 +626,11 @@ pub enum Action {
     /// l'éteint aussi). Elle vient aussi tant qu'on tient `[gui.zoom] loupe_key` s'il y en
     /// a une.
     Loupe,
+    /// Pipette armée (boîte des couleurs) : le zoom à 100 %, sur une seule touche (`z`,
+    /// retour du 28/11/2026 : `z z` depuis #591, peu commode pour viser).
+    EyedropperZoom,
+    /// Pipette armée : la loupe allumée / éteinte, sur une seule touche (`m`).
+    EyedropperLoupe,
     /// Passer en revue les développements (case de la section Vue), cochée ou non.
     ReviewDevelopments,
     /// Autoriser ou non les actions sur les fichiers (case « Actions sur les fichiers »).
@@ -669,7 +674,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 316] = [
+    pub const ALL: [Action; 318] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -976,6 +981,8 @@ impl Action {
         Action::Open,
         Action::ToggleZoom,
         Action::Loupe,
+        Action::EyedropperZoom,
+        Action::EyedropperLoupe,
         Action::LoupeZoomIn,
         Action::LoupeZoomOut,
         Action::LoupeScaleEntry,
@@ -1184,16 +1191,17 @@ impl Action {
         match self {
             NavPrev | NavNext | NavUp | NavDown | NavFirst | NavLast | NavPageUp | NavPageDown
             | Open | Back | Search => Group::Navigation,
-            ToggleZoom | Loupe | LoupeZoomIn | LoupeZoomOut | LoupeScaleEntry | ZoomScaleEntry
-            | ReviewDevelopments | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource
-            | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram | AdjustBeforeAfter
-            | AdjustApply | AdjustCopy | AdjustPaste | HistogramScale | HistogramLarge
-            | PaletteView | ColoursStep(_) | ColoursPerceived | ColoursOnImage | ColoursMasses
-            | ColoursGrey | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue
-            | HistogramAll | HistogramLuminance | HistogramPhoto | HistogramCamera
-            | HistogramAfter | ToggleClipping | TogglePeaking | PeakingColor | SharpnessLenient
-            | SharpnessStrict | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode
-            | Develop | DevelopWith(_) | DevelopFolder => Group::View,
+            ToggleZoom | Loupe | EyedropperZoom | EyedropperLoupe | LoupeZoomIn | LoupeZoomOut
+            | LoupeScaleEntry | ZoomScaleEntry | ReviewDevelopments | ZoomIn | ZoomOut
+            | ZoomFit | Zoom100 | ToggleSource | PanLeft | PanRight | PanUp | PanDown
+            | ToggleHistogram | AdjustBeforeAfter | AdjustApply | AdjustCopy | AdjustPaste
+            | HistogramScale | HistogramLarge | PaletteView | ColoursStep(_) | ColoursPerceived
+            | ColoursOnImage | ColoursMasses | ColoursGrey | HistogramChannel | HistogramRed
+            | HistogramGreen | HistogramBlue | HistogramAll | HistogramLuminance
+            | HistogramPhoto | HistogramCamera | HistogramAfter | ToggleClipping
+            | TogglePeaking | PeakingColor | SharpnessLenient | SharpnessStrict
+            | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode | Develop
+            | DevelopWith(_) | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
             | CropPreset | CropPresetPrev | VersionNext | VersionPrev | VersionRatioNext
             | VersionRatioPrev | VersionTilesNext | VersionTilesPrev | VersionRowsNext
@@ -1649,6 +1657,8 @@ impl Action {
             Action::Help => "core.app.help",
             Action::HelpHere => "core.app.help_here",
             Action::Loupe => "core.view.loupe",
+            Action::EyedropperZoom => "core.eyedropper.zoom",
+            Action::EyedropperLoupe => "core.eyedropper.loupe",
             Action::LoupeZoomIn => "core.view.loupe_zoom_in",
             Action::LoupeZoomOut => "core.view.loupe_zoom_out",
             Action::LoupeScaleEntry => "core.view.loupe_scale",
@@ -1759,6 +1769,9 @@ pub enum Scope {
     /// La galerie de toute la carte (boîte de déchargement, #600) : ses touches propres
     /// (`c` coupe) l'emportent sur celles des images.
     Offload,
+    /// La pipette armée (boîte des couleurs) : `z` et `m` seuls zooment et allument la
+    /// loupe pour viser (retour du 28/11/2026).
+    Eyedropper,
 }
 
 impl Action {
@@ -1787,6 +1800,7 @@ impl Action {
             | HistogramPhoto | HistogramCamera | HistogramAfter | HistogramScale
             | HistogramChannel => Some(Scope::Histogram),
             OffloadCut => Some(Scope::Offload),
+            EyedropperZoom | EyedropperLoupe => Some(Scope::Eyedropper),
             _ => None,
         }
     }

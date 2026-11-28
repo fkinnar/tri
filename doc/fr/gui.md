@@ -301,8 +301,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (sur une vignette ou l'image en plein écran, la couleur moyenne d'une petite zone de
   l'image d'où la palette est tirée, lue en fond ; ailleurs, le pixel de la capture de la
   fenêtre), puis la boîte revient ; sur une image, un **collimateur** montre la zone
-  moyennée (`[colours] pick_area`, 2 % du grand côté), et la loupe (`z m`)
-  l'agrandit pour viser juste (idée de l'utilisateur, 21/11/2026) ; « Valider » garde la recherche.
+  moyennée (`[colours] pick_area`, 2 % du grand côté), et la loupe l'agrandit pour viser
+  juste (idée de l'utilisateur, 21/11/2026) ; pipette armée, `z` seul zoome à 100 % et `m`
+  seul allume la loupe (portée `Eyedropper`, actions `core.eyedropper.zoom` et
+  `core.eyedropper.loupe`, retour du 28/11/2026 : `z z` et `z m` ailleurs) ; « Valider » garde la recherche.
   **Plusieurs couleurs** (#492, idée de l'utilisateur, 23/11/2026) : en haut de la boîte,
   les couleurs cherchées, en pastilles comme les autres (`[gui.colour_search] max`
   emplacements, 5 ; retours du 23/11/2026) : rien par défaut, un « + » dans les vides. Un

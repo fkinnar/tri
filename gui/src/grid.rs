@@ -289,6 +289,8 @@ pub fn navigate(
         | Action::Open
         | Action::ToggleZoom
         | Action::Loupe
+        | Action::EyedropperZoom
+        | Action::EyedropperLoupe
         | Action::LoupeZoomIn
         | Action::LoupeZoomOut
         | Action::LoupeScaleEntry
