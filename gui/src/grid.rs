@@ -307,6 +307,7 @@ pub fn navigate(
         | Action::FileActionsAllow
         | Action::Palette
         | Action::Settings
+        | Action::WhichKey
         | Action::CheckUpdate
         | Action::ReportIssue
         | Action::Log

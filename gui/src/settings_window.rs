@@ -752,6 +752,12 @@ pub struct SettingsWindow {
     /// Raccourci en cours d'enregistrement : l'action, les combinaisons déjà tapées, et
     /// l'instant de la dernière (fini après le délai des séquences sans nouvelle touche).
     recording: Option<(Action, Vec<Chord>, Instant)>,
+    /// À l'écoute d'un raccourci pour dire à quoi il sert (« Quelle action ? »,
+    /// `core.app.which_key`, 28/11/2026) : les combinaisons tapées et l'instant de la
+    /// dernière ; rien n'est déclenché.
+    probing: Option<(Vec<Chord>, Instant)>,
+    /// Le raccourci écouté, une fois fini : la liste ne montre que ses actions.
+    probed: Option<Vec<Chord>>,
     /// Action venue de l'aide, encadrée dans la page des raccourcis.
     highlight: Option<Action>,
     /// Faire défiler jusqu'à elle au prochain dessin.
@@ -860,6 +866,8 @@ impl SettingsWindow {
             keymap,
             key_warnings,
             recording: None,
+            probing: None,
+            probed: None,
             highlight: None,
             highlight_scroll: false,
             section_moved: false,
@@ -1038,7 +1046,22 @@ impl SettingsWindow {
 
     /// Vrai pendant l'enregistrement d'un raccourci (les touches lui reviennent).
     pub fn is_recording(&self) -> bool {
-        self.recording.is_some()
+        self.recording.is_some() || self.probing.is_some()
+    }
+
+    /// Ouvre la page des raccourcis à l'écoute d'un raccourci (« Quelle action ? ») : la
+    /// touche ou la séquence tapée ne déclenche rien, la liste montre ce qu'elle fait.
+    pub fn start_probe(&mut self) {
+        self.query.clear();
+        self.show_section("keys");
+        self.probed = None;
+        self.probing = Some((Vec::new(), Instant::now()));
+    }
+
+    /// Le raccourci écouté par « Quelle action ? », une fois fini.
+    #[cfg(test)]
+    pub fn probed(&self) -> Option<&[Chord]> {
+        self.probed.as_deref()
     }
 
     /// Réglage sans objet tant qu'aucun logiciel de développement (darktable, RapidRAW,
@@ -1792,7 +1815,50 @@ impl SettingsWindow {
     /// pour que ni la fenêtre ni l'application ne les voient) ; fini après le délai des
     /// séquences sans nouvelle touche, il est ajouté aux raccourcis de l'action.
     fn record(&mut self, ctx: &egui::Context) -> Option<AppSettings> {
+        // « Quelle action ? » : les touches tapées, gardées une fois la séquence finie.
+        if self.probing.is_some() {
+            // Lues comme le clavier de l'application les lit (chiffres et caractères
+            // compris), pour trouver les mêmes actions.
+            let (events, modifiers) = ctx.input_mut(|i| {
+                let events = i.events.clone();
+                i.events
+                    .retain(|e| !matches!(e, Event::Key { .. } | Event::Text(_)));
+                (events, i.modifiers)
+            });
+            let typed: Vec<Chord> = self
+                .keymap
+                .chords_repeated(&events, modifiers)
+                .into_iter()
+                .filter(|&(_, repeat)| !repeat)
+                .map(|(c, _)| c)
+                .collect();
+            ctx.request_repaint_after(crate::app::poll_interval(ctx));
+            let (chords, last) = self.probing.as_mut()?;
+            if !typed.is_empty() {
+                chords.extend(typed);
+                *last = Instant::now();
+            }
+            if !chords.is_empty() && last.elapsed() >= self.sequence_timeout {
+                self.probed = Some(merge_typed(std::mem::take(chords)));
+                self.probing = None;
+            }
+            return None;
+        }
         let (action, chords, last) = self.recording.as_mut()?;
+        Self::capture(ctx, chords, last);
+        let now = Instant::now();
+        if chords.is_empty() || now.duration_since(*last) < self.sequence_timeout {
+            return None;
+        }
+        let (action, chords) = (*action, std::mem::take(chords));
+        self.recording = None;
+        self.add_key(action, keys_spec(&chords))
+    }
+
+    /// Les combinaisons tapées depuis la dernière image, ajoutées à `chords` (`last` :
+    /// l'instant de la dernière). Les touches et le texte sont retirés des événements, pour
+    /// que ni la fenêtre ni l'application ne les voient.
+    fn capture(ctx: &egui::Context, chords: &mut Vec<Chord>, last: &mut Instant) {
         let events = ctx.input_mut(|i| {
             let events = i.events.clone();
             i.events
@@ -1832,12 +1898,6 @@ impl SettingsWindow {
             }
         }
         ctx.request_repaint_after(crate::app::poll_interval(ctx));
-        if chords.is_empty() || now.duration_since(*last) < self.sequence_timeout {
-            return None;
-        }
-        let (action, chords) = (*action, std::mem::take(chords));
-        self.recording = None;
-        self.add_key(action, keys_spec(&chords))
     }
 
     /// Ajoute `spec` aux raccourcis de `action` (écrits dans `[keys]`).
@@ -1863,27 +1923,92 @@ impl SettingsWindow {
         })
     }
 
+    /// « Quelle action ? » : le bouton qui se met à l'écoute, ce qu'on a tapé jusque-là,
+    /// puis le raccourci écouté et le nombre de ses actions (`found`), « libre » s'il n'en a
+    /// aucune, et de quoi revenir à toute la liste.
+    fn probe_row(&mut self, ui: &mut Ui, found: Option<usize>) {
+        ui.horizontal(|ui| {
+            if let Some((chords, _)) = &self.probing {
+                let so_far = keys_spec(chords);
+                ui.label(
+                    RichText::new(t!("settings-keys-probing", keys = so_far))
+                        .color(ui.visuals().warn_fg_color),
+                );
+                if ui.small_button(t!("cancel")).clicked() {
+                    self.probing = None;
+                }
+                return;
+            }
+            if ui
+                .button(t!("settings-keys-probe"))
+                .on_hover_text(t!("settings-keys-probe-tip"))
+                .clicked()
+            {
+                self.start_probe();
+            }
+            if let (Some(chords), Some(n)) = (&self.probed, found) {
+                let keys = self.keymap.spec_label(&keys_spec(chords));
+                let text = if n == 0 {
+                    t!("settings-keys-probed-free", keys = keys)
+                } else {
+                    t!("settings-keys-probed", keys = keys, n = n)
+                };
+                ui.strong(text);
+                if ui.small_button(t!("settings-keys-probe-all")).clicked() {
+                    self.probed = None;
+                }
+            }
+        });
+    }
+
     /// Volet des raccourcis : problèmes en tête, puis une ligne par action, par thème ;
     /// `only` : les actions trouvées par une recherche.
     fn keys_entries(&mut self, ui: &mut Ui, only: Option<&[Action]>) -> Option<AppSettings> {
+        // « Quelle action ? » (28/11/2026) : le raccourci écouté ne montre que ses actions.
+        let probed: Option<Vec<Action>> = self
+            .probed
+            .as_ref()
+            .filter(|_| only.is_none())
+            .map(|chords| self.keymap.actions_starting_with(chords));
         if only.is_none() {
             ui.weak(t!("settings-keys-doc"));
+            ui.add_space(4.0);
+            self.probe_row(ui, probed.as_ref().map(Vec::len));
             ui.add_space(4.0);
             for warning in &self.key_warnings {
                 ui.colored_label(ui.visuals().error_fg_color, warning);
             }
         }
+        let only = only.or(probed.as_deref());
         let actions: Vec<Action> = self.matching_actions(only).collect();
         let mut changed = None;
-        let mut group = None;
-        for action in actions {
-            if group != Some(action.group()) {
-                group = Some(action.group());
-                ui.add_space(6.0);
-                ui.strong(action.group().label());
+        // Par fenêtre d'abord (retour du 28/11/2026 : « Grand histogramme : bleu seul »
+        // parmi l'affichage, « b » pris deux fois sans qu'on voie où), puis par thème ; dans
+        // une fenêtre, le libellé sans son nom.
+        for scope in KEY_SCOPES {
+            let here: Vec<Action> = actions
+                .iter()
+                .copied()
+                .filter(|a| a.scope() == scope)
+                .collect();
+            if here.is_empty() {
+                continue;
             }
-            if let Some(s) = self.key_row(ui, action) {
-                changed = Some(s);
+            ui.add_space(10.0);
+            ui.heading(scope_title(scope));
+            if scope.is_some() {
+                ui.weak(t!("settings-keys-scope-note"));
+            }
+            let mut group = None;
+            for action in here {
+                if group != Some(action.group()) {
+                    group = Some(action.group());
+                    ui.add_space(6.0);
+                    ui.strong(action.group().label());
+                }
+                if let Some(s) = self.key_row(ui, action, scope.is_some()) {
+                    changed = Some(s);
+                }
             }
         }
         changed
@@ -1891,7 +2016,7 @@ impl SettingsWindow {
 
     /// Une action : son libellé, ses raccourcis en pastilles (clic : retiré), enregistrer,
     /// taper un raccourci, retour aux raccourcis du profil.
-    fn key_row(&mut self, ui: &mut Ui, action: Action) -> Option<AppSettings> {
+    fn key_row(&mut self, ui: &mut Ui, action: Action, short: bool) -> Option<AppSettings> {
         let id = ("keys".to_string(), action.id().to_string());
         let in_file = self.file.get("keys", action.id()).is_some();
         let specs = self.keymap.specs_for(action);
@@ -1899,7 +2024,13 @@ impl SettingsWindow {
         let mut typed = None;
         let mut reset = false;
         let row = ui.horizontal(|ui| {
-            let name = RichText::new(action.label());
+            // Dans la section de sa fenêtre : sans le nom de la fenêtre (« Bleu seul »).
+            let label = if short {
+                short_label(&action.label())
+            } else {
+                action.label()
+            };
+            let name = RichText::new(label);
             let name = if in_file { name.strong() } else { name };
             ui.allocate_ui_with_layout(
                 vec2(240.0, 18.0),
@@ -3015,6 +3146,68 @@ fn found_targets(schema: &Schema, hits: &[(usize, Found)]) -> Vec<(usize, usize)
     targets
 }
 
+/// Fenêtres de la liste des raccourcis, dans l'ordre : les images (et partout), puis
+/// chaque panneau ou mode dont les touches passent avant (`Action::scope`).
+const KEY_SCOPES: [Option<crate::actions::Scope>; 7] = {
+    use crate::actions::Scope;
+    [
+        None,
+        Some(Scope::Crop),
+        Some(Scope::Histogram),
+        Some(Scope::Folders),
+        Some(Scope::Metadata),
+        Some(Scope::Offload),
+        Some(Scope::Eyedropper),
+    ]
+};
+
+/// Titre de la section d'une fenêtre dans la liste des raccourcis.
+fn scope_title(scope: Option<crate::actions::Scope>) -> String {
+    use crate::actions::Scope;
+    match scope {
+        None | Some(Scope::Images) => t!("settings-keys-scope-images"),
+        Some(Scope::Crop) => t!("settings-keys-scope-crop"),
+        Some(Scope::Histogram) => t!("settings-keys-scope-histogram"),
+        Some(Scope::Folders) => t!("settings-keys-scope-folders"),
+        Some(Scope::Metadata) => t!("settings-keys-scope-metadata"),
+        Some(Scope::Offload) => t!("settings-keys-scope-offload"),
+        Some(Scope::Eyedropper) => t!("settings-keys-scope-eyedropper"),
+    }
+}
+
+/// Libellé d'une action sans le nom de sa fenêtre, déjà en titre (« Grand histogramme :
+/// bleu seul » → « Bleu seul », « Large histogram: blue only » → « Blue only »).
+fn short_label(label: &str) -> String {
+    let rest = label
+        .split_once(" : ")
+        .or_else(|| label.split_once("\u{a0}: "))
+        .or_else(|| label.split_once(": "))
+        .map_or(label, |(_, rest)| rest)
+        .trim();
+    let mut chars = rest.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => label.to_string(),
+    }
+}
+
+/// Une touche suivie de son propre caractère (`3` : la touche, puis le texte « 3 », arrivé
+/// une image plus tard) ne compte qu'une fois, en caractère, comme les raccourcis des
+/// profils (« f 3 »).
+fn merge_typed(chords: Vec<Chord>) -> Vec<Chord> {
+    let mut out: Vec<Chord> = Vec::with_capacity(chords.len());
+    for chord in chords {
+        if let (Some(prev), crate::actions::Trigger::Char(c)) = (out.last(), chord.trigger)
+            && let crate::actions::Trigger::Key(k) = prev.trigger
+            && k.symbol_or_name().eq_ignore_ascii_case(&c.to_string())
+        {
+            out.pop();
+        }
+        out.push(chord);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -3636,6 +3829,79 @@ mod tests {
                 .unwrap()
                 .contains("\"core.flag.accept\"")
         );
+    }
+
+    #[test]
+    fn a_window_s_shortcuts_drop_its_name_from_their_labels() {
+        // Retour du 28/11/2026 : sous le titre « Grand histogramme », « Bleu seul ».
+        assert_eq!(short_label("Grand histogramme : bleu seul"), "Bleu seul");
+        assert_eq!(short_label("Large histogram: blue only"), "Blue only");
+        assert_eq!(short_label("Sans préfixe"), "Sans préfixe");
+        // Chaque action d'une fenêtre a un libellé « Fenêtre : … » dans les deux langues.
+        for lang in [tri::i18n::Language::Fr, tri::i18n::Language::En] {
+            for action in Action::ALL.into_iter().filter(|a| a.scope().is_some()) {
+                let key = format!("action-{}", action.id().replace('.', "-"));
+                let label = tri::i18n::translate_in(lang, &key, None);
+                assert_ne!(
+                    short_label(&label),
+                    label.trim(),
+                    "{lang:?} {}",
+                    action.id()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn which_action_listens_to_a_shortcut_without_running_it() {
+        // Idée de l'utilisateur (28/11/2026) : savoir si un raccourci est pris sans passer
+        // la liste en revue. « f 3 » : le filtre des 3 étoiles ; « f » seul : tous les
+        // filtres ; rien n'est écrit dans la configuration.
+        crate::i18n::ensure();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "[gui]\nkey_sequence_timeout_ms = 300\n").unwrap();
+        let mut w = SettingsWindow::open(&path).unwrap();
+        w.start_probe();
+        let mut h = egui_kittest::Harness::builder()
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, w: &mut SettingsWindow| {
+                    w.show(ui.ctx());
+                },
+                w,
+            );
+        h.run_steps(2);
+        assert!(h.state().is_recording(), "les touches lui reviennent");
+        h.key_press(Key::F);
+        h.run_steps(1);
+        // Un chiffre arrive en touche et en texte, comme d'un vrai clavier.
+        h.event(Event::Key {
+            key: Key::Num3,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.event(Event::Text("3".into()));
+        h.run_steps(1);
+        std::thread::sleep(Duration::from_millis(400));
+        h.run_steps(2);
+        assert!(!h.state().is_recording());
+        let typed = h.state().probed().unwrap().to_vec();
+        assert_eq!(typed.len(), 2);
+        let keymap = &h.state().keymap;
+        let three = Action::from_id("core.filter.stars.3").unwrap();
+        assert_eq!(keymap.actions_starting_with(&typed), vec![three]);
+        let filters = keymap.actions_starting_with(&typed[..1]);
+        assert!(filters.contains(&three) && filters.len() > 5, "{filters:?}");
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "[gui]\nkey_sequence_timeout_ms = 300\n"
+        );
+        // Le résultat dit, et la liste réduite à lui.
+        use egui_kittest::kittest::Queryable;
+        h.get_by_label(&t!("settings-keys-probe-all"));
     }
 
     #[test]
