@@ -368,6 +368,20 @@ impl Rect {
         .clamped()
     }
 
+    /// Le plus grand cadre de forme `frame` qui tienne dans l'image, centré autant que
+    /// possible sur le centre actuel (changement d'orientation, retour du 28/11/2026 :
+    /// garder l'aire réduisait le cadre à chaque quart de tour).
+    pub fn largest_around(self, frame: impl Into<Frame>, aspect: f64) -> Rect {
+        let fit = Rect::fit(frame, aspect);
+        let (cx, cy) = (self.x + self.w / 2.0, self.y + self.h / 2.0);
+        Rect {
+            x: cx - fit.w / 2.0,
+            y: cy - fit.h / 2.0,
+            ..fit
+        }
+        .clamped()
+    }
+
     /// Cadre en pixels (x, y, largeur, hauteur) d'une image de `width` × `height`.
     pub fn pixels(self, width: u32, height: u32) -> (u32, u32, u32, u32) {
         let (fw, fh) = (f64::from(width), f64::from(height));
@@ -826,6 +840,31 @@ pub fn write(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn turning_the_frame_takes_the_largest_one_that_fits() {
+        // Retour du 28/11/2026 : à aire égale, chaque quart de tour rapetissait le cadre.
+        // Image 3:2 ; 16:9 sur toute la largeur, puis 9:16 sur toute la hauteur, puis de
+        // nouveau toute la largeur.
+        let aspect = 1.5;
+        let wide = Rect::fit(Ratio::Fixed(16, 9), aspect);
+        assert!((wide.w - 1.0).abs() < 1e-9, "{wide:?}");
+        let tall = wide.largest_around(Ratio::Fixed(9, 16), aspect);
+        assert!((tall.h - 1.0).abs() < 1e-9, "{tall:?}");
+        assert!((tall.x + tall.w / 2.0 - 0.5).abs() < 1e-9, "centré");
+        let back = tall.largest_around(Ratio::Fixed(16, 9), aspect);
+        assert!((back.w - 1.0).abs() < 1e-9, "{back:?}");
+        // Décentré : le centre gardé autant que possible, sans sortir de l'image.
+        let left = Rect {
+            x: 0.0,
+            y: 0.2,
+            w: 0.3,
+            h: 0.3,
+        };
+        let turned = left.largest_around(Ratio::Fixed(9, 16), aspect);
+        assert_eq!(turned.x, 0.0);
+        assert!((turned.h - 1.0).abs() < 1e-9);
+    }
 
     #[test]
     fn a_custom_ratio_is_read_in_several_forms() {
