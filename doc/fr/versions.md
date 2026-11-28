@@ -48,8 +48,11 @@ acceptés dans `[keys]` (`actions::renamed_id`). Noms internes du code (`crop.rs
 L'interface ne fait que dessiner ; tout le calcul est ici.
 
 - `Rect::fit(ratio, aspect)` : le plus grand cadre d'un rapport, centré.
-- `Rect::with_ratio` : changer de rapport ou d'orientation autour du même centre, sans
-  grandir au-delà de l'aire actuelle ni sortir de l'image.
+- `Rect::with_ratio` : changer de forme (morceaux) autour du même centre, sans grandir
+  au-delà de l'aire actuelle ni sortir de l'image.
+- `Rect::largest_around` : changer de rapport ou d'orientation, au plus grand cadre qui
+  tienne dans l'image, centré autant que possible sur le centre actuel (retour du
+  28/11/2026 : à aire égale, chaque choix et chaque quart de tour rapetissaient le cadre).
 - `Rect::drag(handle, dx, dy, ratio, aspect)` :
   - un angle garde l'angle opposé fixe ;
   - un côté garde le côté opposé fixe, et l'autre axe centré si le rapport est fixe ;
@@ -98,7 +101,10 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   superposition choisie (`o`) se cale sur le cadre.
 - **Barre** sous l'image, en parties titrées d'un libellé à l'accent, comme les autres barres (07/11/2026) : **Version**
   (préréglage) ; **Recadrage** (rapport dans une liste : libre, original, 1:1, 5:4, 3:2,
-  16:9, 4:3, montré dans l'orientation choisie, 4:5 ; un rapport à soi s'y tape,
+  16:9, 4:3 ; celui en cours montré dans l'orientation choisie, 4:5, les autres **dans le
+  sens de l'image**, celui qu'un clic donne : 9:16 sur une photo verticale, 16:9 sur une
+  horizontale (`Crop::natural`, `Crop::choose_ratio`, retour du 28/11/2026 ; un rapport
+  tapé reste tel quel) ; un rapport à soi s'y tape,
   « Personnalisé » : `17:23`, `4/5`, `1.91:1`, `Ratio::parse_custom`, ramené à des entiers
   simplifiés ; puis l'orientation, une icône : le rectangle du cadre, debout ou couché,
   la bulle dit celle d'arrivée) ;
@@ -299,7 +305,9 @@ cadre, Entrée.
   sous l'autre (1 par défaut).
 - **Barre du recadrage** : liste « Préréglage » ; `v` / `Maj+V` ou `Tab` / `Maj+Tab` passe au suivant /
   précédent (`p` jusqu'au 21/10/2026 : c'est aussi la carte de netteté, qui restait
-  affichée ; `p` l'éteint aussi pendant le recadrage).
+  affichée ; `p` l'éteint aussi pendant le recadrage). Pendant le recadrage aussi : `w`
+  les zones d'écrêtage, `<leader> c v` l'image au cran choisi (son cran `<leader> c 0`…`8`,
+  `<leader> c p` les couleurs perçues ; retour du 28/11/2026).
   - Choisir un préréglage applique son rapport **exact**, son nom et son profil.
   - Le profil n'est appliqué que s'il existe et s'applique, et jamais un profil « tel
     quel ».

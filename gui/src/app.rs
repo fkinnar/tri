@@ -15388,7 +15388,14 @@ impl TriApp {
                     // 07/11/2026 : elles ne s'allumaient pas).
                     | Action::TogglePeaking
                     | Action::OverlayNext
-                    | Action::OverlayOrient => self.perform(ctx, action),
+                    | Action::OverlayOrient
+                    // Les zones d'écrêtage (`w`) et l'image au cran choisi (`<leader> c v`,
+                    // son cran, les couleurs perçues), comme la netteté (retour du
+                    // 28/11/2026 : `p` marchait, pas elles).
+                    | Action::ToggleClipping
+                    | Action::ColoursOnImage
+                    | Action::ColoursStep(_)
+                    | Action::ColoursPerceived => self.perform(ctx, action),
                     _ if action.works_over_overlay() => self.perform(ctx, action),
                     _ => {}
                 }
@@ -16086,7 +16093,7 @@ impl TriApp {
                     &mut self.crop,
                     tri::versions::Ratio::PRESETS.get(usize::from(n)),
                 ) {
-                    crop.set_ratio(ratio);
+                    crop.choose_ratio(ratio);
                 }
             }
             Action::CropRotate => {
@@ -50411,6 +50418,26 @@ mod tests {
             assert!(dialog.lists_as_is());
             press(&mut h, Key::Escape, Modifiers::NONE);
         }
+    }
+
+    #[test]
+    fn clipping_and_the_colours_image_work_while_cropping() {
+        // Retour du 28/11/2026 : en recadrant une version, `p` (netteté) marchait, pas
+        // `w` (écrêtage) ni `<leader> c v` (l'image au cran choisi).
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::V, Modifiers::NONE);
+        h.run_steps(3);
+        assert!(h.state().crop.is_some());
+        let clipping = h.state().clipping;
+        press(&mut h, Key::W, Modifiers::NONE);
+        assert_ne!(h.state().clipping, clipping, "w");
+        let image = h.state().colours_on_image;
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::V, Modifiers::NONE);
+        assert_ne!(h.state().colours_on_image, image, "<leader> c v");
+        assert!(h.state().crop.is_some(), "toujours en recadrage");
     }
 
     #[test]
