@@ -15411,8 +15411,12 @@ impl TriApp {
             }
             // Boîte des couleurs : ses touches à elle (`colour_dialog_keys`) ; derrière, la
             // grille ne bouge pas (retour du 23/11/2026).
+            // Pipette armée (la boîte masquée) : `z` et `m` pour viser (retour du
+            // 28/11/2026, vidéo : ils n'arrivaient pas, la boîte gardait le clavier).
             if self.colour_dialog.is_some() {
-                if action.works_over_overlay() && action != Action::Back {
+                let aim = self.palette_eyedropper
+                    && matches!(action, Action::EyedropperZoom | Action::EyedropperLoupe);
+                if aim || (action.works_over_overlay() && action != Action::Back) {
                     self.perform(ctx, action);
                 }
                 continue;
@@ -35352,8 +35356,12 @@ mod tests {
         press(&mut h, Key::Enter, Modifiers::NONE);
         h.run_steps(3);
         assert_eq!(h.state().mode, Mode::View);
+        // Comme en vrai : la boîte des couleurs ouverte, masquée derrière la pipette.
+        h.state_mut().open_colour_dialog();
+        h.run_steps(2);
         h.state_mut().palette_eyedropper = true;
         h.run_steps(2);
+        assert!(h.state().colour_dialog.is_some());
         assert!(h.state().zoom.is_none());
         press(&mut h, Key::Z, Modifiers::NONE);
         h.run_steps(2);
@@ -35368,8 +35376,9 @@ mod tests {
         press(&mut h, Key::M, Modifiers::NONE);
         h.run_steps(2);
         assert!(!h.state().loupe_toggled);
-        // Pipette posée : `z` seul ne fait plus rien (il attend `z z`).
+        // Pipette posée, boîte fermée : `z` seul ne fait plus rien (il attend `z z`).
         h.state_mut().palette_eyedropper = false;
+        h.state_mut().colour_dialog = None;
         h.run_steps(2);
         press(&mut h, Key::Z, Modifiers::NONE);
         h.run_steps(2);
@@ -35408,6 +35417,15 @@ mod tests {
         h.get_by_label(&t!("palette-eyedropper-name")).click();
         h.run_steps(2);
         assert!(h.state().palette_eyedropper, "pipette armée en grille");
+        // Boîte ouverte, masquée derrière la pipette : `m` seul allume la loupe pour
+        // viser, `m` l'éteint (retour du 28/11/2026, vidéo).
+        press(&mut h, Key::M, Modifiers::NONE);
+        h.run_steps(3);
+        assert!(h.state().loupe_toggled, "m : la loupe");
+        assert!(h.state().palette_eyedropper, "toujours armée");
+        press(&mut h, Key::M, Modifiers::NONE);
+        h.run_steps(3);
+        assert!(!h.state().loupe_toggled);
         let img1 = h
             .state()
             .files
