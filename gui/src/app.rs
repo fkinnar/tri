@@ -15126,7 +15126,10 @@ impl TriApp {
         let focus = self.effective_focus();
         // Le grand histogramme prend les touches le temps d'être ouvert ; le panneau actif
         // reste mémorisé pour après.
-        if focus != crate::actions::Scope::Histogram {
+        if !matches!(
+            focus,
+            crate::actions::Scope::Histogram | crate::actions::Scope::Eyedropper
+        ) {
             self.focus = focus;
         }
         self.keymap.set_focus(focus);
@@ -15538,6 +15541,9 @@ impl TriApp {
                 self.loupe_entry = Some((String::new(), Instant::now()));
                 self.notice = Some((self.entry_notice("_"), false));
             }
+            // Pipette armée : `z` et `m` font le zoom et la loupe (retour du 28/11/2026).
+            Action::EyedropperZoom => self.perform(ctx, Action::ToggleZoom),
+            Action::EyedropperLoupe => self.perform(ctx, Action::Loupe),
             // Allumer / éteindre la loupe (`z m`, 25/11/2026) : elle reste jusqu'à `z m` ou
             // Échap.
             Action::Loupe => {
@@ -22795,7 +22801,8 @@ impl TriApp {
                 crate::actions::Scope::Images
                 | crate::actions::Scope::Histogram
                 | crate::actions::Scope::Crop
-                | crate::actions::Scope::Offload => None,
+                | crate::actions::Scope::Offload
+                | crate::actions::Scope::Eyedropper => None,
             };
             if let Some(focus) = focus {
                 ui.separator();
@@ -27346,7 +27353,7 @@ impl TriApp {
             Scope::Offload => Place::Grid,
             Scope::Folders => Place::Folders,
             Scope::Metadata => Place::Metadata,
-            Scope::Images => match self.mode {
+            Scope::Images | Scope::Eyedropper => match self.mode {
                 Mode::Grid => Place::Grid,
                 Mode::View => Place::View,
                 Mode::Compare => Place::Compare,
@@ -27362,6 +27369,10 @@ impl TriApp {
         // Recadrage : le cadre prend les touches (flèches ou hjkl, rapports, x, Entrée).
         if self.crop.is_some() {
             return Scope::Crop;
+        }
+        // Pipette armée : `z` et `m` seuls pour viser (retour du 28/11/2026).
+        if self.palette_eyedropper {
+            return Scope::Eyedropper;
         }
         if self.histogram_large {
             return Scope::Histogram;
@@ -27422,7 +27433,8 @@ impl TriApp {
                 self.metadata_panel = true;
                 self.scroll_to_cursor = true;
             }
-            Scope::Images | Scope::Histogram | Scope::Crop | Scope::Offload => {}
+            Scope::Images | Scope::Histogram | Scope::Crop | Scope::Offload | Scope::Eyedropper => {
+            }
         }
     }
 
@@ -35329,6 +35341,42 @@ mod tests {
         assert_eq!(parse_hex(" 123ABC "), Some([0x12, 0x3a, 0xbc]));
         assert_eq!(parse_hex("#12345"), None);
         assert_eq!(parse_hex("#zzzzzz"), None);
+    }
+
+    #[test]
+    fn the_armed_eyedropper_zooms_with_z_and_turns_the_loupe_on_with_m() {
+        // Retour du 28/11/2026 : depuis #591, le zoom est `z z` et la loupe `z m` ; pour
+        // viser avec la pipette, `z` et `m` seuls (`[common]` de keys.toml).
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(3);
+        assert_eq!(h.state().mode, Mode::View);
+        h.state_mut().palette_eyedropper = true;
+        h.run_steps(2);
+        assert!(h.state().zoom.is_none());
+        press(&mut h, Key::Z, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().zoom.is_some(), "z seul : 100 %");
+        assert!(h.state().palette_eyedropper, "toujours armée");
+        press(&mut h, Key::Z, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().zoom.is_none(), "z encore : ajustée");
+        press(&mut h, Key::M, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().loupe_toggled, "m seul : la loupe");
+        press(&mut h, Key::M, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(!h.state().loupe_toggled);
+        // Pipette posée : `z` seul ne fait plus rien (il attend `z z`).
+        h.state_mut().palette_eyedropper = false;
+        h.run_steps(2);
+        press(&mut h, Key::Z, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().zoom.is_none());
+        press(&mut h, Key::Z, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().zoom.is_some(), "z z ailleurs");
     }
 
     #[test]
