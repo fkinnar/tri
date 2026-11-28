@@ -279,7 +279,9 @@ export preset (Web). You choose the preset, adjust the frame, Enter.
   other (1 by default).
 - **Crop bar**: "Preset" list; `v` / `Shift+V` or `Tab` / `Shift+Tab` moves to the next / previous one
   (`p` until 2026-10-21: it is also the sharpness map, which stayed on; `p` turns it off
-  during cropping too).
+  during cropping too). Also during cropping: `w` the clipping zones, `<leader> c v` the
+  image in the chosen step (its step `<leader> c 0`…`8`, `<leader> c p` the perceived
+  colours; feedback of 2026-11-28).
   - Choosing a preset applies its **exact** ratio, its name and its export preset.
   - The export preset is only applied if it exists and applies, and never an "as is"
     preset.
