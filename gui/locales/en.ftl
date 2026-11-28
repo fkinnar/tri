@@ -449,6 +449,7 @@ action-core-app-help_here = Help here: the shortcuts of where you are
 action-core-view-review_developments = Review the developments: yes / no
 action-core-file-allow_actions = Actions on files (rename, copy, move, delete): allowed / forbidden
 action-core-app-palette = Command palette: find an action or a setting and run it
+action-core-app-which_key = Which action for this shortcut?
 action-core-app-settings = Settings
 action-core-app-check_update = Check for updates
 action-core-adjust-before_after = Adjustments: before / after (images without their adjustments, or with)
@@ -1213,6 +1214,15 @@ settings-keys-remove = Remove “{ $keys }”
 settings-keys-record = record…
 settings-keys-record-tip = Type the shortcut (a sequence: one key after the other, Escape included); it is added once the sequence delay passes with no new key ([gui] key_sequence_timeout_ms).
 settings-keys-recording = type the shortcut… { $keys }
+settings-keys-probe = Which action?
+settings-keys-probe-tip = Type a shortcut (a key or a sequence): nothing runs, the list shows the actions that use it or start with it (g k from the images).
+settings-keys-probing = type the shortcut to look up… { $keys }
+settings-keys-probed = { $keys }: { $n ->
+    [one] one action
+   *[other] { $n } actions
+}
+settings-keys-probed-free = { $keys }: free, no action
+settings-keys-probe-all = Show all
 settings-keys-type-hint = or type: g g
 settings-keys-default = Back to the chosen set's shortcuts
 settings-reset = default
@@ -2157,6 +2167,7 @@ kw-places-fixed = fixed disks eject
 kw-places-exclude = hide volumes exclude
 kw-places-auto-mount = mount automatically card key device
 kw-export-camera-suffix = suffix camera jpeg pair
+kw-core-app-which-key = shortcut key which action test listen free taken conflict
 kw-core-app-settings = preferences configuration options
 kw-core-app-help = shortcuts help keys
 kw-core-app-help-here = help shortcuts keys here context cheat sheet

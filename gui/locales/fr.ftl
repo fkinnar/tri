@@ -449,6 +449,7 @@ action-core-app-help_here = Aide ici : les raccourcis de l'endroit où l'on est
 action-core-view-review_developments = Passer en revue les développements : oui / non
 action-core-file-allow_actions = Actions sur les fichiers (renommer, copier, déplacer, supprimer) : autorisées / interdites
 action-core-app-palette = Palette de commandes : chercher une action ou un réglage et le lancer
+action-core-app-which_key = Quelle action pour ce raccourci ?
 action-core-app-settings = Réglages
 action-core-app-check_update = Rechercher une mise à jour
 action-core-adjust-before_after = Réglages : avant / après (images sans leurs réglages, ou avec)
@@ -1238,6 +1239,15 @@ settings-keys-remove = Retirer « { $keys } »
 settings-keys-record = enregistrer…
 settings-keys-record-tip = Tape le raccourci (une séquence : touche après touche, Échap compris) ; il est ajouté après le délai des séquences sans nouvelle touche ([gui] key_sequence_timeout_ms).
 settings-keys-recording = tape le raccourci… { $keys }
+settings-keys-probe = Quelle action ?
+settings-keys-probe-tip = Tape un raccourci (une touche ou une séquence) : rien n'est déclenché, la liste montre les actions qui l'utilisent ou commencent par lui (g k depuis les images).
+settings-keys-probing = tape le raccourci à identifier… { $keys }
+settings-keys-probed = { $keys } : { $n ->
+    [one] une action
+   *[other] { $n } actions
+}
+settings-keys-probed-free = { $keys } : libre, aucune action
+settings-keys-probe-all = Tout afficher
 settings-keys-type-hint = ou taper : g g
 settings-keys-default = Revenir aux raccourcis du jeu choisi
 settings-default = valeur par défaut : { $value }
@@ -2163,6 +2173,7 @@ kw-places-fixed = disques fixes éjecter
 kw-places-exclude = masquer volumes exclure
 kw-places-auto-mount = monter automatiquement carte clé périphérique
 kw-export-camera-suffix = suffixe jpeg boîtier paire
+kw-core-app-which-key = raccourci touche quelle action tester écouter libre occupé conflit
 kw-core-app-settings = préférences configuration options
 kw-core-app-help = raccourcis aide touches
 kw-core-app-help-here = aide raccourcis touches ici contexte aide-mémoire

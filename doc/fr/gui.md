@@ -762,6 +762,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   « défaut » revient au profil. Les conflits s'affichent en tête et sous l'action.
   `Keymap::specs_for` / `keys_spec` écrivent les raccourcis comme `[keys]` les lit (un
   test vérifie l'aller-retour de tous les raccourcis des profils).
+  **« Quelle action ? »** (idée de l'utilisateur, 28/11/2026 : savoir si un raccourci est
+  pris sans passer la liste en revue ni ouvrir le fichier) : un bouton en tête de la
+  section, ou `g k` depuis les images (`core.app.which_key`), se met à l'écoute ; la touche
+  ou la séquence tapée ne déclenche rien, lue comme le clavier de l'application
+  (`Keymap::chords_repeated`, une touche suivie de son caractère comptée une fois), et la
+  liste ne montre plus que les actions qui l'utilisent ou commencent par elle (`c` :
+  toutes les `c …`, tous panneaux confondus, `Keymap::actions_starting_with`) ; « libre »
+  si aucune ; « Tout afficher » revient à la liste entière.
 - **Réglages des logiciels de développement masqués sans eux** (04/11/2026 : la plupart
   des utilisateurs n'en ont aucun) : sans darktable, RapidRAW, RawTherapee ni ART, la
   fenêtre de réglages cache `[develop] default`, `[gui.grid] develop` et

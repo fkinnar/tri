@@ -15634,6 +15634,13 @@ impl TriApp {
                 }
             }
             Action::Settings => self.open_settings(),
+            // Quelle action pour ce raccourci ? Les réglages, à l'écoute (28/11/2026).
+            Action::WhichKey => {
+                self.open_settings();
+                if let Some(window) = &mut self.settings_window {
+                    window.start_probe();
+                }
+            }
             Action::CheckUpdate => self.check_update(ctx),
             Action::ReportIssue => self.prepare_report(ctx),
             Action::AdjustBeforeAfter => self.toggle_before_after(),

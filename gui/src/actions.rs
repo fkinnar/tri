@@ -650,6 +650,10 @@ pub enum Action {
     Palette,
     /// Fenêtre de réglages.
     Settings,
+    /// Quelle action pour ce raccourci ? Les réglages s'ouvrent sur les raccourcis, à
+    /// l'écoute de la touche ou de la séquence tapée, sans la déclencher (idée de
+    /// l'utilisateur, 28/11/2026).
+    WhichKey,
     /// Rechercher une nouvelle version (sur demande, page Releases).
     CheckUpdate,
     /// Signaler un problème : formulaire de GitHub prérempli (issue n° 7), leader puis `b`.
@@ -674,7 +678,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 318] = [
+    pub const ALL: [Action; 319] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -999,6 +1003,7 @@ impl Action {
         Action::FileActionsAllow,
         Action::Palette,
         Action::Settings,
+        Action::WhichKey,
         Action::CheckUpdate,
         Action::ReportIssue,
         Action::Log,
@@ -1246,9 +1251,8 @@ impl Action {
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare | OffloadCut => {
                 Group::Selection
             }
-            Help | HelpHere | Palette | Settings | CheckUpdate | ReportIssue | Log | Quit => {
-                Group::App
-            }
+            Help | HelpHere | Palette | Settings | WhichKey | CheckUpdate | ReportIssue | Log
+            | Quit => Group::App,
         }
     }
 
@@ -1667,6 +1671,7 @@ impl Action {
             Action::FileActionsAllow => "core.file.allow_actions",
             Action::Palette => "core.app.palette",
             Action::Settings => "core.app.settings",
+            Action::WhichKey => "core.app.which_key",
             Action::CheckUpdate => "core.app.check_update",
             Action::ReportIssue => "core.app.report_issue",
             Action::Log => "core.app.log",
@@ -2696,6 +2701,22 @@ impl Keymap {
             }
         }
         specs
+    }
+
+    /// Actions dont un raccourci est la séquence `typed` ou commence par elle (`c` : toutes
+    /// les `c …`), tous panneaux confondus, sans doublon, dans l'ordre de [`Action::ALL`].
+    pub fn actions_starting_with(&self, typed: &[Chord]) -> Vec<Action> {
+        if typed.is_empty() {
+            return Vec::new();
+        }
+        Action::ALL
+            .into_iter()
+            .filter(|a| {
+                self.bindings
+                    .iter()
+                    .any(|(k, b)| b == a && k.starts_with(typed))
+            })
+            .collect()
     }
 
     /// Raccourcis associés à une action, lisibles (« Flèche gauche », « Maj+g », « gg »...),

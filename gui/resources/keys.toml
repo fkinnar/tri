@@ -93,6 +93,9 @@ loupe = "none"
 "core.adjust.copy" = []
 "core.adjust.paste" = []
 "core.app.settings" = ["Cmd+,"]
+# Which action for a shortcut? The settings open on the shortcuts, listening to the key or
+# sequence typed, without running it. "g k" like "go keys".
+"core.app.which_key" = ["g k"]
 # Zoom steps, like Lightroom: characters, for the top row as well as the numeric
 # keypad, whatever the keyboard layout.
 "core.view.zoom_in" = ["+"]
