@@ -3842,7 +3842,12 @@ mod tests {
             for action in Action::ALL.into_iter().filter(|a| a.scope().is_some()) {
                 let key = format!("action-{}", action.id().replace('.', "-"));
                 let label = tri::i18n::translate_in(lang, &key, None);
-                assert_ne!(short_label(&label), label.trim(), "{lang:?} {}", action.id());
+                assert_ne!(
+                    short_label(&label),
+                    label.trim(),
+                    "{lang:?} {}",
+                    action.id()
+                );
             }
         }
     }
