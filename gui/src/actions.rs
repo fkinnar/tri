@@ -2597,32 +2597,42 @@ impl Keymap {
         // Les filtres aussi après le leader, comme les autres thèmes (retour du
         // 18/11/2026 : « f » manquait dans son menu) : chaque séquence du sous-menu des
         // filtres (« f 3 »), précédée du leader. Le menu sans leader reste le plus court.
-        let filters: Vec<Vec<Chord>> = Defaults::get()
+        // De même les couleurs (« c 3 », 28/11/2026 : `c` comme `f`) : après le leader,
+        // elles passent avant la touche `c` d'un panneau (un morceau de plus en
+        // recadrant).
+        let mirrored_menus: Vec<(Vec<Chord>, String)> = Defaults::get()
             .menus
             .iter()
-            .filter(|(l, _, name)| !*l && name == "filters")
-            .map(|(_, keys, _)| keys.clone())
+            .filter(|(l, _, name)| !*l && (name == "filters" || name == "colours"))
+            .map(|(_, keys, name)| (keys.clone(), name.clone()))
             .collect();
+        let belongs = |name: &str, a: &Action| match name {
+            "filters" => a.group() == Group::Filters,
+            _ => a.id().starts_with("core.colours."),
+        };
         let mirrored: Vec<(Vec<Chord>, Action)> = self
             .bindings
             .iter()
             .filter(|(k, a)| {
-                a.group() == Group::Filters
-                    && filters
+                k.first() != Some(&lead)
+                    && mirrored_menus
                         .iter()
-                        .any(|p| k.len() > p.len() && k.starts_with(p))
+                        .any(|(p, name)| k.len() > p.len() && k.starts_with(p) && belongs(name, a))
             })
             .map(|(k, a)| {
                 let mut sequence = vec![lead];
                 sequence.extend(k.iter().copied());
                 (sequence, *a)
             })
+            .filter(|m| !self.bindings.contains(m))
             .collect();
         self.bindings.extend(mirrored);
-        for keys in filters {
+        for (keys, name) in mirrored_menus {
             let mut sequence = vec![lead];
             sequence.extend(keys);
-            self.menus.push((sequence, "filters".to_string()));
+            if !self.menus.iter().any(|(k, _)| *k == sequence) {
+                self.menus.push((sequence, name));
+            }
         }
         Ok(self)
     }
