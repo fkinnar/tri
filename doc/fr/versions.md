@@ -305,7 +305,9 @@ cadre, Entrée.
   sous l'autre (1 par défaut).
 - **Barre du recadrage** : liste « Préréglage » ; `v` / `Maj+V` ou `Tab` / `Maj+Tab` passe au suivant /
   précédent (`p` jusqu'au 21/10/2026 : c'est aussi la carte de netteté, qui restait
-  affichée ; `p` l'éteint aussi pendant le recadrage).
+  affichée ; `p` l'éteint aussi pendant le recadrage). Pendant le recadrage aussi : `w`
+  les zones d'écrêtage, `<leader> c v` l'image au cran choisi (son cran `<leader> c 0`…`8`,
+  `<leader> c p` les couleurs perçues ; retour du 28/11/2026).
   - Choisir un préréglage applique son rapport **exact**, son nom et son profil.
   - Le profil n'est appliqué que s'il existe et s'applique, et jamais un profil « tel
     quel ».
