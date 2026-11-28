@@ -247,8 +247,39 @@ impl Crop {
         }
     }
 
-    /// Change de rapport : même centre, au plus grand qui tienne (ou, pour un rapport
-    /// choisi alors que le cadre couvre toute l'image, le plus grand de ce rapport).
+    /// `ratio` dans le sens naturel de l'image (retour du 28/11/2026) : en portrait pour
+    /// une image verticale (9:16), en paysage sinon (16:9). Proportions encore inconnues :
+    /// tel quel.
+    pub fn natural(&self, ratio: Ratio) -> Ratio {
+        match (ratio, self.aspect) {
+            (Ratio::Fixed(w, h), Some(aspect)) if w != h => {
+                let (long, short) = (w.max(h), w.min(h));
+                if aspect < 1.0 {
+                    Ratio::Fixed(short, long)
+                } else {
+                    Ratio::Fixed(long, short)
+                }
+            }
+            (Ratio::Original { .. }, Some(_)) => Ratio::Original { flipped: false },
+            _ => ratio,
+        }
+    }
+
+    /// Un rapport pris dans la liste (clic, touches, rapport suivant) : dans le sens
+    /// naturel de l'image ([`Crop::natural`]), sauf la même forme qu'en cours, qui garde
+    /// l'orientation choisie.
+    pub fn choose_ratio(&mut self, ratio: Ratio) {
+        let ratio = if ratio.same_shape(self.ratio) {
+            self.ratio
+        } else {
+            self.natural(ratio)
+        };
+        self.set_ratio(ratio);
+    }
+
+    /// Change de rapport : le plus grand cadre de ce rapport qui tienne dans l'image,
+    /// centré autant que possible sur le centre actuel (retour du 28/11/2026, vidéo :
+    /// à aire égale, 4:5 puis 3:4 puis 1:1 rapetissaient le cadre à chaque choix).
     pub fn set_ratio(&mut self, ratio: Ratio) {
         // Même forme que l'actuel : garder l'orientation choisie.
         let ratio = if ratio.same_shape(self.ratio) {
@@ -257,7 +288,9 @@ impl Crop {
             ratio
         };
         self.ratio = ratio;
-        self.refit();
+        if let Some(aspect) = self.aspect {
+            self.rect = self.rect.largest_around(self.frame(), aspect);
+        }
         self.rename();
     }
 
@@ -318,7 +351,7 @@ impl Crop {
             None if forward => 0,
             None => n - 1,
         };
-        self.set_ratio(list[next]);
+        self.choose_ratio(list[next]);
     }
 
     /// Préréglage d'export suivant (`forward`) ou précédent parmi `profiles`, « aucun »
@@ -350,11 +383,12 @@ impl Crop {
         self.rename();
     }
 
-    /// Portrait ↔ paysage.
+    /// Portrait ↔ paysage, au plus grand qui tienne dans l'image (retour du 28/11/2026 :
+    /// à aire égale, le cadre rapetissait).
     pub fn rotate(&mut self) {
         self.ratio = self.ratio.rotated();
         if let Some(aspect) = self.aspect {
-            self.rect = self.rect.with_ratio(self.frame(), aspect);
+            self.rect = self.rect.largest_around(self.frame(), aspect);
         }
         self.rename();
     }
@@ -623,6 +657,7 @@ impl Crop {
         // sept boutons), puis l'orientation.
         section(ui, &t!("crop-section-frame"), ui.spacing().combo_width);
         let mut chosen = None;
+        let mut typed = None;
         let mut reset = false;
         // `:` : la liste s'ouvre, son champ prend le clavier.
         let focus_custom = self.focus == Some(Focus::CustomRatio);
@@ -638,8 +673,10 @@ impl Crop {
                 // Ceux fournis, puis ceux ajoutés (`[versions] ratios`), sans doublon.
                 for preset in ratio_list(ratios) {
                     let on = preset.same_shape(self.ratio);
-                    // Dans l'orientation choisie (4:5 plutôt que 5:4) pour celui en cours.
-                    let shown = if on { self.ratio } else { preset };
+                    // Dans l'orientation choisie (4:5 plutôt que 5:4) pour celui en cours,
+                    // les autres dans le sens de l'image (retour du 28/11/2026 : 9:16 sur
+                    // une photo verticale), celui qu'un clic donne.
+                    let shown = if on { self.ratio } else { self.natural(preset) };
                     let mut item = ui.selectable_label(on, ratio_name(shown));
                     let original = matches!(preset, Ratio::Original { .. });
                     if original {
@@ -679,7 +716,7 @@ impl Crop {
                         && ui.input(|i| i.key_pressed(egui::Key::Enter))
                     {
                         // Appliqué : la liste le montre, le champ se vide.
-                        chosen = ok;
+                        typed = ok;
                         self.custom.clear();
                         ui.close();
                     }
@@ -689,7 +726,7 @@ impl Crop {
                     if add.clicked()
                         && let Some(r) = ok
                     {
-                        chosen = Some(r);
+                        typed = Some(r);
                         *action = Some(BarAction::AddRatio(r));
                         self.custom.clear();
                         ui.close();
@@ -697,8 +734,12 @@ impl Crop {
                 });
             });
         self.ratio_list_id = Some(list.response.id);
-        if let Some(preset) = chosen {
-            self.set_ratio(preset);
+        // Un rapport tapé reste tel quel (l'orientation voulue) ; un de la liste, dans le
+        // sens de l'image.
+        if let Some(typed) = typed {
+            self.set_ratio(typed);
+        } else if let Some(preset) = chosen {
+            self.choose_ratio(preset);
         }
         if reset {
             self.reset_frame();
@@ -974,6 +1015,58 @@ fn orientation_icon(ui: &egui::Ui, response: &egui::Response, portrait: bool, sq
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_ratio_of_the_list_follows_the_image_and_turning_fills_it() {
+        // Retour du 28/11/2026 : le rapport dans le sens de l'image (9:16 sur une photo
+        // verticale), et un quart de tour au plus grand qui tienne.
+        crate::i18n::ensure();
+        let crop = |aspect: f64| {
+            Crop::new(
+                PathBuf::from("/photos/a.jpg"),
+                Source::Embedded,
+                Some(aspect),
+                Versions::default(),
+            )
+        };
+        let mut tall = crop(2.0 / 3.0);
+        assert_eq!(tall.natural(Ratio::Fixed(16, 9)), Ratio::Fixed(9, 16));
+        assert_eq!(tall.natural(Ratio::Fixed(1, 1)), Ratio::Fixed(1, 1));
+        tall.choose_ratio(Ratio::Fixed(16, 9));
+        assert_eq!(tall.ratio, Ratio::Fixed(9, 16));
+        let mut wide = crop(1.5);
+        assert_eq!(wide.natural(Ratio::Fixed(4, 5)), Ratio::Fixed(5, 4));
+        wide.choose_ratio(Ratio::Fixed(16, 9));
+        assert_eq!(wide.ratio, Ratio::Fixed(16, 9));
+        assert!((wide.rect.w - 1.0).abs() < 1e-9, "toute la largeur");
+        // Tourné : toute la hauteur ; la même forme reprise de la liste garde le sens
+        // choisi.
+        wide.rotate();
+        assert_eq!(wide.ratio, Ratio::Fixed(9, 16));
+        assert!((wide.rect.h - 1.0).abs() < 1e-9, "{:?}", wide.rect);
+        wide.choose_ratio(Ratio::Fixed(16, 9));
+        assert_eq!(wide.ratio, Ratio::Fixed(9, 16));
+        wide.rotate();
+        assert!(
+            (wide.rect.w - 1.0).abs() < 1e-9,
+            "de nouveau toute la largeur"
+        );
+        // Un rapport tapé reste tel quel.
+        wide.set_ratio(Ratio::Fixed(4, 5));
+        assert_eq!(wide.ratio, Ratio::Fixed(4, 5));
+        // Changer de rapport aussi : le plus grand qui tienne, jamais plus petit à chaque
+        // choix (vidéo du 28/11/2026 : photo verticale, 4:5, tourné, 3:4, 1:1, 4:5).
+        let mut tall = crop(2.0 / 3.0);
+        let fills = |c: &Crop| (c.rect.w - 1.0).abs() < 1e-9 || (c.rect.h - 1.0).abs() < 1e-9;
+        tall.choose_ratio(Ratio::Fixed(4, 5));
+        assert!(fills(&tall), "{:?}", tall.rect);
+        tall.rotate();
+        assert!(fills(&tall), "{:?}", tall.rect);
+        for ratio in [Ratio::Fixed(4, 3), Ratio::Fixed(1, 1), Ratio::Fixed(5, 4)] {
+            tall.choose_ratio(ratio);
+            assert!(fills(&tall), "{ratio:?} : {:?}", tall.rect);
+        }
+    }
 
     #[test]
     fn tile_cuts_are_dashes_end_to_end() {
