@@ -2106,6 +2106,10 @@ pub struct TriApp {
     /// Loupe allumée par `z m` (25/11/2026, idée de l'utilisateur), jusqu'à `z m` ou
     /// Échap : comme la touche de loupe tenue.
     loupe_toggled: bool,
+    /// Loupe de la pipette (`m` pipette armée, retour du 28/11/2026) : à part de
+    /// `loupe_toggled`, elle s'éteint avec la pipette (la boîte revenue, les vignettes
+    /// derrière restaient grossies au survol, la loupe par-dessus la boîte).
+    eyedropper_loupe: bool,
     /// Zoom lancé depuis la grille (`z z` sur une vignette) : `z z` ou Échap y ramènent
     /// (25/11/2026) ; sinon, au plein écran ajusté.
     zoom_from_grid: bool,
@@ -3194,6 +3198,7 @@ impl TriApp {
             loupe_since: None,
             loupe_on: false,
             loupe_toggled: false,
+            eyedropper_loupe: false,
             zoom_from_grid: false,
             loupe_point: None,
             loupe_rects: HashMap::new(),
@@ -7673,6 +7678,12 @@ impl TriApp {
     /// capture de la fenêtre. Échap y renonce.
     fn eyedropper_overlay(&mut self, ctx: &egui::Context) {
         if !self.palette_eyedropper {
+            // Pipette posée (couleur relevée, Échap) : sa loupe s'éteint avec elle.
+            if std::mem::take(&mut self.eyedropper_loupe) {
+                self.loupe_on = false;
+                self.loupe_since = None;
+                self.loupe_point = None;
+            }
             return;
         }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
@@ -15551,7 +15562,17 @@ impl TriApp {
             }
             // Pipette armée : `z` et `m` font le zoom et la loupe (retour du 28/11/2026).
             Action::EyedropperZoom => self.perform(ctx, Action::ToggleZoom),
-            Action::EyedropperLoupe => self.perform(ctx, Action::Loupe),
+            // Sa loupe à elle, éteinte avec la pipette (`loupe_wanted`).
+            Action::EyedropperLoupe => {
+                self.eyedropper_loupe = !self.eyedropper_loupe;
+                self.loupe_point = self
+                    .eyedropper_loupe
+                    .then_some((self.selected, vec2(0.5, 0.5)));
+                if !self.eyedropper_loupe {
+                    self.loupe_on = false;
+                    self.loupe_since = None;
+                }
+            }
             // Allumer / éteindre la loupe (`z m`, 25/11/2026) : elle reste jusqu'à `z m` ou
             // Échap.
             Action::Loupe => {
@@ -20777,7 +20798,9 @@ impl TriApp {
     /// Vrai si la loupe est demandée : allumée (`z m`), ou sa touche tenue (`[gui.zoom]
     /// loupe_key`, aucune par défaut depuis le 25/11/2026).
     fn loupe_wanted(&self, input: &egui::InputState) -> bool {
-        self.loupe_toggled || self.keymap.loupe().held(input)
+        self.loupe_toggled
+            || (self.palette_eyedropper && self.eyedropper_loupe)
+            || self.keymap.loupe().held(input)
     }
 
     /// Réglage d'échelle de la barre du bas (07/11/2026, retour de l'utilisateur : un seul
@@ -35380,10 +35403,25 @@ mod tests {
         assert!(h.state().zoom.is_none(), "z encore : ajustée");
         press(&mut h, Key::M, Modifiers::NONE);
         h.run_steps(2);
-        assert!(h.state().loupe_toggled, "m seul : la loupe");
+        assert!(
+            h.state().eyedropper_loupe,
+            "m seul : la loupe de la pipette"
+        );
+        assert!(!h.state().loupe_toggled, "pas celle de `z m`");
         press(&mut h, Key::M, Modifiers::NONE);
         h.run_steps(2);
-        assert!(!h.state().loupe_toggled);
+        assert!(!h.state().eyedropper_loupe);
+        // Allumée puis la pipette posée (retour du 28/11/2026 : la boîte revenue, les
+        // vignettes restaient grossies) : éteinte avec elle.
+        press(&mut h, Key::M, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().eyedropper_loupe);
+        h.state_mut().palette_eyedropper = false;
+        h.run_steps(2);
+        assert!(!h.state().eyedropper_loupe);
+        assert!(!h.state().loupe_on);
+        h.state_mut().palette_eyedropper = true;
+        h.run_steps(2);
         // Pipette posée, boîte fermée : `z` seul ne fait plus rien (il attend `z z`).
         h.state_mut().palette_eyedropper = false;
         h.state_mut().colour_dialog = None;
@@ -35429,11 +35467,11 @@ mod tests {
         // viser, `m` l'éteint (retour du 28/11/2026, vidéo).
         press(&mut h, Key::M, Modifiers::NONE);
         h.run_steps(3);
-        assert!(h.state().loupe_toggled, "m : la loupe");
+        assert!(h.state().eyedropper_loupe, "m : la loupe");
         assert!(h.state().palette_eyedropper, "toujours armée");
         press(&mut h, Key::M, Modifiers::NONE);
         h.run_steps(3);
-        assert!(!h.state().loupe_toggled);
+        assert!(!h.state().eyedropper_loupe);
         let img1 = h
             .state()
             .files

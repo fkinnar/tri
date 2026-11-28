@@ -290,7 +290,9 @@ system one ("cold" measurements, experiments).
   the loupe magnifies it to aim precisely (user's idea, 2026-11-21); with the eyedropper
   armed, `z` alone zooms to 100 % and `m` alone turns the loupe on (`Eyedropper` scope,
   actions `core.eyedropper.zoom` and `core.eyedropper.loupe`, feedback of 2026-11-28:
-  `z z` and `z m` elsewhere); "OK" keeps the
+  `z z` and `z m` elsewhere); this loupe belongs to the eyedropper, apart from the `z m`
+  one, and goes off with it (once the box is back, thumbnails are no longer magnified on
+  hover); "OK" keeps the
   search.
   **Several colours** (#492, user's idea, 2026-11-23): at the top of the box, the colours
   looked for, as swatches like the others (`[gui.colour_search] max` slots, 5; feedback of

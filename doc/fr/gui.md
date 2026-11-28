@@ -304,7 +304,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   moyennée (`[colours] pick_area`, 2 % du grand côté), et la loupe l'agrandit pour viser
   juste (idée de l'utilisateur, 21/11/2026) ; pipette armée, `z` seul zoome à 100 % et `m`
   seul allume la loupe (portée `Eyedropper`, actions `core.eyedropper.zoom` et
-  `core.eyedropper.loupe`, retour du 28/11/2026 : `z z` et `z m` ailleurs) ; « Valider » garde la recherche.
+  `core.eyedropper.loupe`, retour du 28/11/2026 : `z z` et `z m` ailleurs) ; cette loupe est
+  celle de la pipette, à part de celle de `z m`, et s'éteint avec elle (la boîte revenue,
+  les vignettes ne restent pas grossies au survol) ; « Valider » garde la recherche.
   **Plusieurs couleurs** (#492, idée de l'utilisateur, 23/11/2026) : en haut de la boîte,
   les couleurs cherchées, en pastilles comme les autres (`[gui.colour_search] max`
   emplacements, 5 ; retours du 23/11/2026) : rien par défaut, un « + » dans les vides. Un
