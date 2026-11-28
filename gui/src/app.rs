@@ -516,6 +516,10 @@ impl ColourDialog {
                 Some(a) if a > i => Some(a - 1),
                 other => other,
             };
+            // Le dernier vidé : comme « Réinitialiser », rien à chercher tant qu'on ne
+            // retouche rien (retour du 28/11/2026 : « Valider » cherchait encore la
+            // couleur restée sur la roue, une grille vide dont on ne sortait plus).
+            self.blank = self.slots.is_empty();
         }
     }
 
@@ -36382,6 +36386,12 @@ mod tests {
         assert_eq!(dialog.active, None, "plus rien de choisi");
         dialog.set_rgb([1, 2, 3]);
         assert_eq!(dialog.slot_rgb(0), [0, 255, 0], "rien ne suit");
+        // Tous vidés un à un (retour du 28/11/2026) : rien à chercher, même avec une
+        // couleur encore sur la roue ; « Valider » éteint la recherche.
+        let mut emptied = dialog.clone();
+        emptied.clear(0);
+        assert!(emptied.slots.is_empty());
+        assert!(emptied.colours().is_empty(), "{:?}", emptied.colours());
         // Un clic sur la roue remplit le premier vide, le suivant le suivant ; un
         // emplacement choisi exprès le reste (retour du 23/11/2026).
         let mut w = ColourDialog::new(&[]);
