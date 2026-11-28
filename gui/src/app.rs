@@ -15581,9 +15581,7 @@ impl TriApp {
             // Sa loupe à elle, éteinte avec la pipette (`loupe_wanted`).
             Action::EyedropperLoupe => {
                 self.eyedropper_loupe = !self.eyedropper_loupe;
-                self.loupe_point = self
-                    .eyedropper_loupe
-                    .then_some((self.selected, vec2(0.5, 0.5)));
+                self.loupe_point = self.loupe_start().filter(|_| self.eyedropper_loupe);
                 if !self.eyedropper_loupe {
                     self.loupe_on = false;
                     self.loupe_since = None;
@@ -15593,12 +15591,7 @@ impl TriApp {
             // Échap.
             Action::Loupe => {
                 self.loupe_toggled = !self.loupe_toggled;
-                // Allumée : au centre de l'image sélectionnée (retour du 25/11/2026 : au
-                // clavier, elle venait sous le pointeur, sur une autre vignette) ; la
-                // souris qui bouge la reprend.
-                self.loupe_point = self
-                    .loupe_toggled
-                    .then_some((self.selected, vec2(0.5, 0.5)));
+                self.loupe_point = self.loupe_start().filter(|_| self.loupe_toggled);
                 if !self.loupe_toggled {
                     self.loupe_on = false;
                     self.loupe_since = None;
@@ -20813,6 +20806,16 @@ impl TriApp {
 
     /// Vrai si la loupe est demandée : allumée (`z m`), ou sa touche tenue (`[gui.zoom]
     /// loupe_key`, aucune par défaut depuis le 25/11/2026).
+    /// Où la loupe allumée au clavier (`z m`, `m` de la pipette) se pose : au centre de
+    /// l'image sélectionnée (retour du 25/11/2026 : au clavier, elle venait sous le
+    /// pointeur, sur une autre vignette) ; la souris qui bouge la reprend. Curseur de la
+    /// grille masqué (clic dans le vide), rien de sélectionné à l'écran : sous le pointeur
+    /// (retour du 28/11/2026 : le pointeur sur la 3e, la loupe s'ouvrait sur la 2e).
+    fn loupe_start(&self) -> Option<(usize, Vec2)> {
+        (!(self.mode == Mode::Grid && self.cursor_hidden))
+            .then_some((self.selected, vec2(0.5, 0.5)))
+    }
+
     fn loupe_wanted(&self, input: &egui::InputState) -> bool {
         self.loupe_toggled
             || (self.palette_eyedropper && self.eyedropper_loupe)
@@ -45240,6 +45243,38 @@ mod tests {
             app.big.contains(&(file.path.clone(), level))
         });
         assert_eq!(h.state().loupe_index, 2);
+    }
+
+    #[test]
+    fn z_m_with_the_grid_cursor_hidden_opens_the_loupe_under_the_pointer() {
+        // Retour du 28/11/2026 (vidéo) : clic sur la 2e, clic dans le vide (curseur
+        // masqué), pointeur sur la 3e, `z m` : la loupe s'ouvrait sur la 2e.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().selected = 1;
+        h.state_mut().cursor_hidden = true;
+        h.run_steps(2);
+        let rect = h
+            .state()
+            .cell_rects
+            .iter()
+            .find(|c| c.0 == 2)
+            .map(|c| c.1)
+            .expect("3e vignette dessinée");
+        h.event(UiEvent::PointerMoved(rect.center()));
+        h.run_steps(2);
+        press(&mut h, Key::Z, Modifiers::NONE);
+        press(&mut h, Key::M, Modifiers::NONE);
+        assert!(h.state().loupe_toggled);
+        run_until(&mut h, |app| app.loupe_on);
+        assert_eq!(h.state().loupe_index, 2, "sous le pointeur");
+        // Curseur visible : au clavier, sur la sélectionnée (25/11/2026).
+        press(&mut h, Key::Z, Modifiers::NONE);
+        press(&mut h, Key::M, Modifiers::NONE);
+        h.state_mut().cursor_hidden = false;
+        press(&mut h, Key::Z, Modifiers::NONE);
+        press(&mut h, Key::M, Modifiers::NONE);
+        assert_eq!(h.state().loupe_point.map(|p| p.0), Some(1));
     }
 
     #[test]
