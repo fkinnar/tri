@@ -497,6 +497,35 @@ impl Picker {
         }
     }
 
+    /// Un clic sur la photo `i`, comme dans un gestionnaire de fichiers (retour du
+    /// 28/11/2026 : Maj+clic ne se voyait pas, tout part coché) : seul, elle seule
+    /// cochée ; Cmd/Ctrl+clic, elle basculée ; Maj+clic, la plage depuis le dernier clic
+    /// seule cochée ; Cmd/Ctrl+Maj+clic, la plage ajoutée. En mode visuel, le clic
+    /// étend la plage du visuel.
+    fn click(&mut self, i: usize, modifiers: egui::Modifiers) {
+        let add = modifiers.command || modifiers.ctrl;
+        if self.visual.is_some() {
+            self.move_to(i, false);
+            return;
+        }
+        if modifiers.shift {
+            if !add {
+                (0..self.photos.len()).for_each(|k| self.set(k, false));
+            }
+            self.check_range(self.anchor, i);
+            self.cursor = i;
+            return;
+        }
+        if add {
+            self.set(i, !self.checked[i]);
+        } else {
+            (0..self.photos.len()).for_each(|k| self.set(k, false));
+            self.set(i, true);
+        }
+        self.cursor = i;
+        self.anchor = i;
+    }
+
     /// Fichiers des photos cochées.
     fn chosen(&self) -> HashSet<PathBuf> {
         self.photos
@@ -1144,16 +1173,7 @@ impl Picker {
                         self.cursor = i;
                         open = Some(i);
                     } else if response.clicked() {
-                        // Cmd/Ctrl+clic : bascule ; Maj+clic : la plage ; clic seul : le
-                        // curseur (il ne décoche pas tout, comme le Finder : les photos
-                        // partent toutes cochées).
-                        if modifiers.command || modifiers.ctrl {
-                            self.set(i, !self.checked[i]);
-                            self.cursor = i;
-                            self.anchor = i;
-                        } else {
-                            self.move_to(i, modifiers.shift);
-                        }
+                        self.click(i, modifiers);
                     }
                     // Galerie de toute la carte : couper ou recoudre au clic droit.
                     if let Some(begins) = &begins
@@ -1588,5 +1608,66 @@ mod tests {
         assert_eq!(p.checked, [true, false]);
         assert!(press(&mut p, egui::Key::Escape));
         p.cancel.store(true, Ordering::Relaxed);
+    }
+
+    #[test]
+    fn clicks_in_the_gallery_select_like_a_file_manager() {
+        // Retour du 28/11/2026 : Ctrl+clic et Maj+clic « ne marchaient pas » (tout part
+        // coché : Maj+clic ne changeait rien). Clic : elle seule ; Cmd/Ctrl+clic : elle
+        // en plus ; Maj+clic : la plage seule ; Cmd/Ctrl+Maj+clic : la plage en plus.
+        use egui::Modifiers;
+        use egui_kittest::Harness;
+        use egui_kittest::kittest::Queryable;
+        crate::i18n::ensure();
+        let items: Vec<Item> = (0..6)
+            .map(|k| item(&format!("IMG{k}.RAF"), false))
+            .collect();
+        let refs: Vec<&Item> = items.iter().collect();
+        let ctx = egui::Context::default();
+        let picker = Picker::new("2026-11-28", &refs, None, true, false, None, &ctx);
+        let mut h = Harness::builder()
+            .with_size(vec2(1400.0, 1000.0))
+            .build_ui_state(
+                |ui, p: &mut Picker| {
+                    p.show(ui.ctx(), Color32::BLUE);
+                },
+                picker,
+            );
+        h.run_steps(3);
+        // Au milieu de la vignette, pas sur sa coche (en haut à gauche).
+        let click = |h: &mut Harness<'_, Picker>, k: usize, m: Modifiers| {
+            let check = h.get_by_label(&format!("IMG{k}")).rect();
+            let pos = check.center() + vec2(40.0, 40.0);
+            h.event(egui::Event::ModifiersChanged(m));
+            h.event(egui::Event::PointerMoved(pos));
+            for pressed in [true, false] {
+                h.event(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: m,
+                });
+            }
+            h.run_steps(2);
+            h.event(egui::Event::ModifiersChanged(Modifiers::NONE));
+            h.run_steps(1);
+            h.state().checked.clone()
+        };
+        let (o, x) = (true, false);
+        assert_eq!(h.state().checked, [o; 6], "toutes cochées au départ");
+        assert_eq!(click(&mut h, 1, Modifiers::NONE), [x, o, x, x, x, x]);
+        assert_eq!(click(&mut h, 3, Modifiers::COMMAND), [x, o, x, o, x, x]);
+        assert_eq!(click(&mut h, 1, Modifiers::CTRL), [x, x, x, o, x, x]);
+        // Plage depuis le dernier clic (la 2e photo).
+        assert_eq!(click(&mut h, 4, Modifiers::SHIFT), [x, o, o, o, o, x]);
+        assert_eq!(click(&mut h, 2, Modifiers::SHIFT), [x, o, o, x, x, x]);
+        assert_eq!(click(&mut h, 5, Modifiers::COMMAND), [x, o, o, x, x, o]);
+        assert_eq!(
+            click(&mut h, 3, Modifiers::COMMAND | Modifiers::SHIFT),
+            [x, o, o, o, o, o],
+            "la plage de la 6e à la 4e ajoutée"
+        );
+        assert_eq!(h.state().cursor, 3);
+        h.state().cancel.store(true, Ordering::Relaxed);
     }
 }

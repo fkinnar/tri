@@ -132,9 +132,10 @@ them, never the rest of the card.
   than `tri`'s grid, which would have had to open on the card and then be given back as it
   was). Thumbnails from the embedded JPEGs, read in the background on the card without
   cache; a RAW+JPEG pair is one photo; adjustable size (slider); a check on each photo,
-  all checked at first, "Select all" / "Deselect all" and the count. The grid's gestures:
-  click = cursor (it does not uncheck everything, unlike the Finder), Cmd/Ctrl+click
-  toggles, Shift+click checks the range, click on the check; Space toggles, Shift+Space the visual mode (moving checks), Shift + arrows extend, arrows or hjkl,
+  all checked at first, "Select all" / "Deselect all" and the count. The grid's gestures,
+  as in a file manager: click = this photo only, Cmd/Ctrl+click adds or removes it,
+  Shift+click only the range from the last click, Cmd/Ctrl+Shift+click adds the range; a
+  click on the check toggles the photo; Space toggles, Shift+Space the visual mode (moving checks), Shift + arrows extend, arrows or hjkl,
   Cmd/Ctrl+A all, with Shift none. Double-click or Enter: the photo large, fitted (the
   embedded preview, no 1:1), arrows for the next one. Escape leaves the visual mode, the
   large view, then closes without changing anything; OK goes back to the dialog ("Change
