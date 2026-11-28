@@ -187,6 +187,27 @@ loupe = "none"
 # the folder you came from. "g a" like "go all".
 "core.view.all_photos" = ["g a"]
 
+# --- Colours (c) ---
+# Prefix "c", like "f" for the filters (2026-11-28, owner's idea; after the leader only
+# until then); after the leader too: "<leader> c 3". 0 to 8: the number of colours (0 the
+# image, 1 its average); p: perceived colours or not. The view opens if it is closed.
+"core.colours.step.0" = ["c 0"]
+"core.colours.step.1" = ["c 1"]
+"core.colours.step.2" = ["c 2"]
+"core.colours.step.3" = ["c 3"]
+"core.colours.step.4" = ["c 4"]
+"core.colours.step.5" = ["c 5"]
+"core.colours.step.6" = ["c 6"]
+"core.colours.step.7" = ["c 7"]
+"core.colours.step.8" = ["c 8"]
+"core.colours.perceived" = ["c p"]
+# v (voir): the shown image itself in the chosen step (full screen, cropping a version).
+"core.colours.image" = ["c v"]
+# m: "masses" mode, specks taken by their mass and edges smoothed (a map for composition).
+"core.colours.masses" = ["c m"]
+# g: grey ("N&B"), each colour as a grey, black to white in even steps.
+"core.colours.grey" = ["c g"]
+
 # --- Filters (f) ---
 # Prefix "f", followed by the matching rating key. "f f" changes the file type,
 # "f d" clears everything (Escape only closes the menu, as after the leader). After the
@@ -634,24 +655,6 @@ loupe = "none"
 "core.histogram.all" = ["i a"]
 "core.histogram.luminance" = ["i l"]
 "core.histogram.after" = ["i e"]
-# c: the colours in large. 0 to 8: the number of colours (0 the image, 1 its average);
-# p: perceived colours or not. The view opens if it is closed.
-"core.colours.step.0" = ["c 0"]
-"core.colours.step.1" = ["c 1"]
-"core.colours.step.2" = ["c 2"]
-"core.colours.step.3" = ["c 3"]
-"core.colours.step.4" = ["c 4"]
-"core.colours.step.5" = ["c 5"]
-"core.colours.step.6" = ["c 6"]
-"core.colours.step.7" = ["c 7"]
-"core.colours.step.8" = ["c 8"]
-"core.colours.perceived" = ["c p"]
-# v (voir): the shown image itself in the chosen step (full screen, cropping a version).
-"core.colours.image" = ["c v"]
-# m: "masses" mode, specks taken by their mass and edges smoothed (a map for composition).
-"core.colours.masses" = ["c m"]
-# g: grey ("N&B"), each colour as a grey, black to white in even steps.
-"core.colours.grey" = ["c g"]
 # p: the sharpness map. c: its colour; j / k (or Down / Up): more lenient / stricter.
 # z then a number, without Enter: the full-screen zoom (same rules as m below); z again
 # (before any digit): 100 %; / (fit, as without the leader): fitted.
@@ -679,6 +682,7 @@ loupe = "none"
 "y" = "copy"
 "d" = "delete"
 "<leader> i" = "histogram"
+"c" = "colours"
 "<leader> c" = "colours"
 "<leader> p" = "peaking"
 "<leader> r" = "render"

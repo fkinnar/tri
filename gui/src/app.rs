@@ -40272,6 +40272,22 @@ mod tests {
     }
 
     #[test]
+    fn c_starts_the_colour_keys_like_f_the_filters() {
+        // Idée de l'utilisateur (28/11/2026) : `c` comme `f`, un préfixe ; après le leader
+        // aussi (`<leader> c v`, comme avant).
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        let before = h.state().colours_on_image;
+        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::V, Modifiers::NONE);
+        assert_ne!(h.state().colours_on_image, before, "c v");
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::V, Modifiers::NONE);
+        assert_eq!(h.state().colours_on_image, before, "<leader> c v");
+    }
+
+    #[test]
     fn a_toggles_the_focus_point() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
