@@ -16086,7 +16086,7 @@ impl TriApp {
                     &mut self.crop,
                     tri::versions::Ratio::PRESETS.get(usize::from(n)),
                 ) {
-                    crop.set_ratio(ratio);
+                    crop.choose_ratio(ratio);
                 }
             }
             Action::CropRotate => {

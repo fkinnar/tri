@@ -47,8 +47,11 @@ accepted in `[keys]` (`actions::renamed_id`). Internal code names (`crop.rs`,
 The interface only draws; all the computation is here.
 
 - `Rect::fit(ratio, aspect)`: the largest frame of a ratio, centred.
-- `Rect::with_ratio`: change ratio or orientation around the same centre, without growing
-  beyond the current area or leaving the image.
+- `Rect::with_ratio`: change ratio around the same centre, without growing beyond the
+  current area or leaving the image.
+- `Rect::largest_around`: change orientation, to the largest frame that fits in the
+  image, centred on the current centre as far as possible (feedback of 2026-11-28: at an
+  equal area, each quarter turn made the frame smaller).
 - `Rect::drag(handle, dx, dy, ratio, aspect)`:
   - a corner keeps the opposite corner fixed;
   - a side keeps the opposite side fixed, and the other axis centred if the ratio is fixed;
@@ -96,7 +99,10 @@ The interface only draws; all the computation is here.
   (`o`) snaps to the frame.
 - **Bar** under the image, in parts titled by a label in the accent colour, like the other bars (2026-11-07): **Version**
   (preset); **Crop** (ratio in a drop-down: free, original, 1:1, 5:4, 3:2, 16:9, 4:3,
-  shown in the chosen orientation, 4:5; a ratio of one's own is typed there, "Custom":
+  the current one shown in the chosen orientation, 4:5, the others **in the image's
+  orientation**, the one a click gives: 9:16 on a vertical photo, 16:9 on a horizontal
+  one (`Crop::natural`, `Crop::choose_ratio`, feedback of 2026-11-28; a typed ratio stays
+  as typed); a ratio of one's own is typed there, "Custom":
   `17:23`, `4/5`, `1.91:1`, `Ratio::parse_custom`, reduced to simple whole numbers; then
   the orientation, an icon: the frame's rectangle, standing or lying, its tooltip names
   the other one); **Export** (optional

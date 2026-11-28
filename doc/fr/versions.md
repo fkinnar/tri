@@ -48,8 +48,11 @@ acceptés dans `[keys]` (`actions::renamed_id`). Noms internes du code (`crop.rs
 L'interface ne fait que dessiner ; tout le calcul est ici.
 
 - `Rect::fit(ratio, aspect)` : le plus grand cadre d'un rapport, centré.
-- `Rect::with_ratio` : changer de rapport ou d'orientation autour du même centre, sans
-  grandir au-delà de l'aire actuelle ni sortir de l'image.
+- `Rect::with_ratio` : changer de rapport autour du même centre, sans grandir au-delà
+  de l'aire actuelle ni sortir de l'image.
+- `Rect::largest_around` : changer d'orientation, au plus grand cadre qui tienne dans
+  l'image, centré autant que possible sur le centre actuel (retour du 28/11/2026 : à aire
+  égale, chaque quart de tour rapetissait le cadre).
 - `Rect::drag(handle, dx, dy, ratio, aspect)` :
   - un angle garde l'angle opposé fixe ;
   - un côté garde le côté opposé fixe, et l'autre axe centré si le rapport est fixe ;
@@ -98,7 +101,10 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   superposition choisie (`o`) se cale sur le cadre.
 - **Barre** sous l'image, en parties titrées d'un libellé à l'accent, comme les autres barres (07/11/2026) : **Version**
   (préréglage) ; **Recadrage** (rapport dans une liste : libre, original, 1:1, 5:4, 3:2,
-  16:9, 4:3, montré dans l'orientation choisie, 4:5 ; un rapport à soi s'y tape,
+  16:9, 4:3 ; celui en cours montré dans l'orientation choisie, 4:5, les autres **dans le
+  sens de l'image**, celui qu'un clic donne : 9:16 sur une photo verticale, 16:9 sur une
+  horizontale (`Crop::natural`, `Crop::choose_ratio`, retour du 28/11/2026 ; un rapport
+  tapé reste tel quel) ; un rapport à soi s'y tape,
   « Personnalisé » : `17:23`, `4/5`, `1.91:1`, `Ratio::parse_custom`, ramené à des entiers
   simplifiés ; puis l'orientation, une icône : le rectangle du cadre, debout ou couché,
   la bulle dit celle d'arrivée) ;
