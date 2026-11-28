@@ -14630,6 +14630,22 @@ impl TriApp {
         let Some(engine) = &self.engine else { return };
         if self.mode == Mode::Compare {
             engine.scheduler.set_shown(&self.displayed());
+        } else if self.mode == Mode::Grid && self.loupe_on && self.loupe_index < self.files.len() {
+            // Loupe de la grille : l'image visée d'abord, sinon le moteur ignore son 1:1
+            // dès qu'elle n'est pas voisine de la sélectionnée (retour du 28/11/2026 :
+            // « 100 % en cours… » pour toujours).
+            let mut shown = vec![self.loupe_index];
+            let n = self.files.len();
+            for i in [
+                self.selected,
+                self.selected + 1,
+                self.selected.wrapping_sub(1),
+            ] {
+                if i < n && !shown.contains(&i) {
+                    shown.push(i);
+                }
+            }
+            engine.scheduler.set_shown(&shown);
         } else {
             engine.scheduler.set_focus(self.selected);
         }
@@ -21235,6 +21251,7 @@ impl TriApp {
         }
         if !self.loupe_on {
             self.loupe_on = true;
+            self.tell_shown();
             self.request_zoom();
         }
         let Some((rect, pos)) = over else { return };
@@ -45192,6 +45209,37 @@ mod tests {
         run_until(&mut h, |app| app.compute_tasks.is_empty());
         let (text, _) = h.state().notice.clone().unwrap();
         assert!(text.contains(&t!("compute-images", n = 2)), "{text}");
+    }
+
+    #[test]
+    fn the_grid_loupe_gets_its_100_percent_far_from_the_selection() {
+        // Retour du 28/11/2026 (vidéo) : « 100 % en cours… » ne s'effaçait pas sur une
+        // vignette loin de la sélectionnée ; le moteur n'acceptait le 1:1 que pour elle
+        // et ses deux voisines, et ignorait la demande sans rien dire.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert!(h.state().files.len() >= 3);
+        assert_eq!(h.state().selected, 0);
+        h.state_mut().loupe_toggled = true;
+        h.run_steps(2);
+        let rect = h
+            .state()
+            .cell_rects
+            .iter()
+            .find(|c| c.0 == 2)
+            .map(|c| c.1)
+            .expect("3e vignette dessinée");
+        h.event(UiEvent::PointerMoved(rect.center()));
+        run_until(&mut h, |app| {
+            let file = &app.files[2];
+            let level = view::zoom_level(
+                file.kind,
+                app.loupe_source(file),
+                app.developed_level(&file.path),
+            );
+            app.big.contains(&(file.path.clone(), level))
+        });
+        assert_eq!(h.state().loupe_index, 2);
     }
 
     #[test]
